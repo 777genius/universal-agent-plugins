@@ -279,7 +279,11 @@ func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
 						path = b.TargetLocator
 					}
 				}
-				if path == "" || !strings.Contains(out, path) || strings.Contains(out, fixturePersonalAppID) {
+				alreadyLatest := strings.Contains(out, "is already installed") && strings.Contains(out, "You have the latest version.")
+				if path == "" || strings.Contains(out, fixturePersonalAppID) {
+					t.Fatalf("missing usable path or leaked ID: %s", out)
+				}
+				if !alreadyLatest && !strings.Contains(out, path) {
 					t.Fatalf("missing usable path or leaked ID: %s", out)
 				}
 				if _, err := os.Stat(filepath.Join(path, ".agents", "plugins", "marketplace.json")); err != nil {

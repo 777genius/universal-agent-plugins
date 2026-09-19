@@ -27,6 +27,9 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := requireMutationReady(app, opts.dryRun); err != nil {
+				return err
+			}
 			if all {
 				if len(args) > 0 {
 					return fmt.Errorf("choose either one installation or --all")
@@ -64,6 +67,9 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
+				return err
+			}
+			if err := requireMutationReady(app, opts.dryRun); err != nil {
 				return err
 			}
 			if strings.TrimSpace(opts.target) == "" {
@@ -333,6 +339,9 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := requireMutationReady(app, opts.dryRun); err != nil {
+				return err
+			}
 			if strings.TrimSpace(opts.target) == "" && app.Terminal && !opts.purgeData {
 				selection, err := promptBoundTargets(cmd, app, args[0], opts.scope)
 				if err != nil {
@@ -357,7 +366,7 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 			return runRemoveMany(cmd.Context(), cmd, app, opts, args[0], targets)
 		},
 	}
-	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "confirm the selected client plugin was uninstalled manually or was never activated/imported")
+	command.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "confirm a client-side uninstall that agentplugins cannot run itself (ChatGPT, Codex without a CLI, Copilot/VS Code without a CLI)")
 	command.Flags().BoolVar(&opts.purgeData, "purge-data", false, "permanently delete ownership-verified plugin data after removal")
 	return command
 }
@@ -789,7 +798,7 @@ func renderUpdateResult(writer io.Writer, format string, envelope domain.Package
 				return err
 			}
 		}
-		_, _ = fmt.Fprintln(writer, "Already up to date. No changes made.")
+		_, _ = fmt.Fprintln(writer, "Already up to date. You have the latest version.")
 		return nil
 	}
 	if result.Mutated && fullyInstalled(result.Activation) {

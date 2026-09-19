@@ -42,16 +42,22 @@
     }
   },
   "codex": {
-    "Commands": [],
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/codex",
+        "plugin",
+        "remove",
+        "demo@agentplugins-8f97b00da374",
+        "--json"
+      ]
+    ],
     "Error": "",
     "Outcome": {
-      "Activation": "manual_activation_required",
-      "ArtifactRemovalAllowed": false,
-      "ExternalRemovalComplete": false,
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
       "LocalActions": null,
-      "UserActions": [
-        "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
-      ]
+      "UserActions": null
     }
   },
   "copilot": {

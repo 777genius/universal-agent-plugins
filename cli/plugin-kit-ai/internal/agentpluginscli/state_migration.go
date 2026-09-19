@@ -13,7 +13,7 @@ import (
 func newMigrateStateCommand(app App, opts *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "migrate-state",
-		Short: "Explicitly migrate legacy plugin-kit-ai state into Agent Plugins state",
+		Short: "Migrate older Agent Plugins state, or leftover plugin-kit-ai state, to the current schema",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := validateCommonOptions(opts); err != nil {

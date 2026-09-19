@@ -1009,6 +1009,214 @@ func TestAddRejectsSameNativePluginNameFromDifferentSources(t *testing.T) {
 	}
 }
 
+func TestAddOfNewerRevisionRefreshesMaterializedClient(t *testing.T) {
+	t.Parallel()
+	service, store, client := serviceFixture(t)
+	first := addInput(t, client, "https://example.com/one")
+	first.Confirmed = true
+	if _, err := service.Add(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.OperationID = "operation-two"
+	setEnvelopeVersion(t, &second.Envelope, "2.0.0", "sha256:source-tree-v2", "sha256:manifest-v2")
+	result, err := service.Add(context.Background(), second)
+	if err != nil || result.NoChange || !result.Mutated {
+		t.Fatalf("add newer revision = %+v err=%v", result, err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Installations[0].Package.Version != "2.0.0" || onlyBinding(state.Installations[0]).PackageRevision.TreeDigest != "sha256:source-tree-v2" {
+		t.Fatalf("refreshed installation = %+v", state.Installations[0])
+	}
+}
+
+func TestAddOfNewerDirectorySequenceRefreshesMaterializedClient(t *testing.T) {
+	t.Parallel()
+	service, store, client := serviceFixture(t)
+	directory := &domain.DirectoryOrigin{
+		ProductID: "demo", DistributionID: "publisher/demo", DistributionKind: domain.DistributionUpstream,
+		DesiredReleaseSequence: 1, SnapshotSchema: 1, SnapshotSequence: 1, SnapshotDigest: "sha256:snapshot-1",
+	}
+	first := addInput(t, client, "publisher/demo")
+	first.OriginMode, first.DirectoryResolution = domain.OriginModeDirectory, directory
+	first.Envelope.Source.ResolvedRevision = strings.Repeat("d", 40)
+	first.Confirmed = true
+	if _, err := service.Add(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.OperationID = "operation-directory-sequence"
+	next := *directory
+	next.DesiredReleaseSequence = 2
+	next.SnapshotSequence = 2
+	next.SnapshotDigest = "sha256:snapshot-2"
+	second.DirectoryResolution = &next
+	result, err := service.Add(context.Background(), second)
+	if err != nil || result.NoChange || !result.Mutated {
+		t.Fatalf("add newer Directory sequence = %+v err=%v", result, err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Installations[0].Directory == nil || state.Installations[0].Directory.DesiredReleaseSequence != 2 {
+		t.Fatalf("refreshed Directory sequence = %+v", state.Installations[0].Directory)
+	}
+}
+
+func TestAddOfNewerRevisionRefusesWhenSiblingBindingIsNotPreflighted(t *testing.T) {
+	t.Parallel()
+	service, store, cursor := serviceFixture(t)
+	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	if _, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{
+			addInput(t, cursor, "https://example.com/sibling-refresh"),
+			addInput(t, kiro, "https://example.com/sibling-refresh"),
+		},
+		OperationGroupID: "sibling-add", Confirmed: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	next := addInput(t, cursor, "https://example.com/sibling-refresh")
+	next.Confirmed = true
+	next.OperationID = "sibling-cursor-only"
+	setEnvelopeVersion(t, &next.Envelope, "2.0.0", "sha256:source-tree-v2", "sha256:manifest-v2")
+	if _, err := service.Add(context.Background(), next); err == nil || !strings.Contains(err.Error(), "kiro is missing") {
+		t.Fatalf("cursor-only refresh with kiro sibling = %v", err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Installations[0].Package.Version != "1.0.0" || len(state.Installations[0].Clients) != 2 {
+		t.Fatalf("refused sibling refresh mutated state: %+v", state.Installations[0])
+	}
+}
+
+func TestAddNewTargetStillRequiresRecordedPackageBytes(t *testing.T) {
+	t.Parallel()
+	service, store, cursor := serviceFixture(t)
+	first := addInput(t, cursor, "https://example.com/shared")
+	first.Confirmed = true
+	if _, err := service.Add(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	second := addInput(t, kiro, "https://example.com/shared")
+	second.Confirmed = true
+	second.OperationID = "operation-new-target"
+	setEnvelopeVersion(t, &second.Envelope, "2.0.0", "sha256:source-tree-v2", "sha256:manifest-v2")
+	if _, err := service.Add(context.Background(), second); err == nil || !strings.Contains(err.Error(), "recorded desired package bytes") {
+		t.Fatalf("new target at different bytes = %v", err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 || state.Installations[0].Package.Version != "1.0.0" {
+		t.Fatalf("new-target add mutated state: %+v", state.Installations)
+	}
+}
+
+func TestGroupedAddOfNewerRevisionRefreshesInstalledTargets(t *testing.T) {
+	t.Parallel()
+	service, store, cursor := serviceFixture(t)
+	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	cursorAdd := addInput(t, cursor, "https://example.com/grouped-refresh")
+	kiroAdd := addInput(t, kiro, "https://example.com/grouped-refresh")
+	if _, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{cursorAdd, kiroAdd}, OperationGroupID: "group-add", Confirmed: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cursorNext := addInput(t, cursor, "https://example.com/grouped-refresh")
+	kiroNext := addInput(t, kiro, "https://example.com/grouped-refresh")
+	setEnvelopeVersion(t, &cursorNext.Envelope, "2.0.0", "sha256:group-tree-v2", "sha256:group-manifest-v2")
+	setEnvelopeVersion(t, &kiroNext.Envelope, "2.0.0", "sha256:group-tree-v2", "sha256:group-manifest-v2")
+	updated, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{cursorNext, kiroNext}, OperationGroupID: "group-refresh", Confirmed: true,
+	})
+	if err != nil || !updated.Mutated {
+		t.Fatalf("grouped add refresh = %+v err=%v", updated, err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.PackageRevision == nil || binding.PackageRevision.Version != "2.0.0" || binding.PackageRevision.TreeDigest != "sha256:group-tree-v2" {
+			t.Fatalf("grouped refresh binding = %+v", binding)
+		}
+	}
+}
+
+func TestGroupedAddOfNewerDirectorySequenceRefreshesInstalledTargets(t *testing.T) {
+	t.Parallel()
+	service, store, cursor := serviceFixture(t)
+	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	directory := &domain.DirectoryOrigin{
+		ProductID: "demo", DistributionID: "publisher/demo", DistributionKind: domain.DistributionUpstream,
+		DesiredReleaseSequence: 1, SnapshotSchema: 1, SnapshotSequence: 1, SnapshotDigest: "sha256:snapshot-1",
+	}
+	cursorAdd := addInput(t, cursor, "publisher/demo")
+	kiroAdd := addInput(t, kiro, "publisher/demo")
+	cursorAdd.OriginMode, cursorAdd.DirectoryResolution = domain.OriginModeDirectory, directory
+	kiroAdd.OriginMode, kiroAdd.DirectoryResolution = domain.OriginModeDirectory, directory
+	cursorAdd.Envelope.Source.ResolvedRevision = strings.Repeat("d", 40)
+	kiroAdd.Envelope.Source.ResolvedRevision = strings.Repeat("d", 40)
+	if _, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{cursorAdd, kiroAdd}, OperationGroupID: "group-directory-add", Confirmed: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	next := *directory
+	next.DesiredReleaseSequence = 2
+	next.SnapshotSequence = 2
+	next.SnapshotDigest = "sha256:snapshot-2"
+	cursorNext := cursorAdd
+	kiroNext := kiroAdd
+	cursorNext.DirectoryResolution = &next
+	kiroNext.DirectoryResolution = &next
+	updated, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{cursorNext, kiroNext}, OperationGroupID: "group-directory-refresh", Confirmed: true,
+	})
+	if err != nil || !updated.Mutated {
+		t.Fatalf("grouped Directory sequence refresh = %+v err=%v", updated, err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Installations[0].Directory == nil || state.Installations[0].Directory.DesiredReleaseSequence != 2 {
+		t.Fatalf("grouped Directory sequence = %+v", state.Installations[0].Directory)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.PackageRevision == nil || binding.PackageRevision.ReleaseSequence != 2 {
+			t.Fatalf("grouped Directory sequence binding = %+v", binding)
+		}
+	}
+}
+
+func TestAddOfNewerRevisionOnFullSHAStillRequiresSwitch(t *testing.T) {
+	t.Parallel()
+	service, _, client := serviceFixture(t)
+	sha := strings.Repeat("a", 40)
+	first := addInput(t, client, "https://example.com/one@"+sha)
+	first.Confirmed = true
+	if _, err := service.Add(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	second := first
+	second.OperationID = "operation-two"
+	setEnvelopeVersion(t, &second.Envelope, "2.0.0", "sha256:source-tree-v2", "sha256:manifest-v2")
+	if _, err := service.Add(context.Background(), second); err == nil || !strings.Contains(err.Error(), "direct full-SHA installations have no update channel") {
+		t.Fatalf("immutable SHA add = %v", err)
+	}
+}
+
 func TestUpdateReplacesExistingArtifactAndPreservesReceiptHistory(t *testing.T) {
 	t.Parallel()
 	service, store, client := serviceFixture(t)
@@ -1818,7 +2026,7 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	}
 	removed, err := service.Remove(context.Background(), RemoveInput{
 		Selector: installed.InstallationID, Client: client, Scope: domain.ScopeUser,
-		Confirmed: true, ExternalUninstalled: true, BackendExecutable: "/test/bin/codex",
+		Confirmed: true, BackendExecutable: "/test/bin/codex",
 		OperationID: "operation-remove-native-codex",
 	})
 	if err != nil {

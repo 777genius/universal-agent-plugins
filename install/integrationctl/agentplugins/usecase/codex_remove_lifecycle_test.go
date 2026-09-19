@@ -9,17 +9,16 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 // TestCodexRemoveGroupPreservesForeignSiblingAndRefusesRepeatRemove exercises
 // Codex's real removal path (usecase/remove_group.go plus the real
 // providers.Activator.Deactivate branch for domain.ClientCodex) end to end
-// with unmocked production code. No fake CLI runner is required: Codex's
-// Deactivate only invokes its CLI when a managed marketplace entry is found
-// registered in config.toml, and a disposable test ConfigRoot never has one
-// (providers/codex_marketplace_cleanup.go's managedCodexMarketplaceRegistered
-// returns false, nil when config.toml is absent -- confirmed by reading that
-// exact function). This is real, non-mocked proof at the usecase/provider
+// with unmocked production code. No fake CLI runner is required: without a
+// Runner, Deactivate never issues Codex commands, and a disposable test
+// ConfigRoot has no marketplace entry to clean. This is real, non-mocked
+// proof at the usecase/provider
 // level -- explicitly NOT a live-native-Codex-binary proof. A live proof now
 // exists separately (repotests/agentplugins_codex_native_e2e_test.go, run on
 // a genuine non-emulated arm64 Linux Codex binary in a native linux/arm64
@@ -36,16 +35,16 @@ import (
 //
 // TestRemovePlanExposesExternalUninstallAndPreservesCodexArtifactUntilAcknowledged
 // and TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion
-// (service_test.go) already cover Codex remove, the --external-uninstalled
-// gate, and foreign-preservation at the native-config level (a real
-// config.toml with a foreign marketplace entry that survives) through the
-// single-target Service.Remove path -- this file does not repeat that. What
-// is new here: the RemoveGroup path specifically (its refusal contract
-// differs from single Remove -- RemoveGroup returns a hard error without the
-// flag, Remove returns err == nil with Mutated:false), a foreign *sibling
-// directory* surviving on the filesystem (not just a foreign native-config
-// entry), repeat-remove refusal, and an exact assertion on the
-// --external-uninstalled flag text in the returned guidance.
+// (service_test.go) already cover Codex remove, the no-CLI
+// --external-uninstalled gate, and foreign-preservation at the native-config
+// level (a real config.toml with a foreign marketplace entry that survives)
+// through the single-target Service.Remove path -- this file does not repeat
+// that. What is new here: the RemoveGroup path specifically (its no-CLI
+// refusal contract differs from single Remove -- RemoveGroup returns a hard
+// error without the flag, Remove returns err == nil with Mutated:false), a
+// foreign *sibling directory* surviving on the filesystem (not just a
+// foreign native-config entry), repeat-remove refusal, and an exact
+// assertion on the --external-uninstalled flag text in the returned guidance.
 func TestCodexRemoveGroupPreservesForeignSiblingAndRefusesRepeatRemove(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
@@ -156,11 +155,11 @@ func TestCodexRemoveGroupPreservesForeignSiblingAndRefusesRepeatRemove(t *testin
 	}
 }
 
-// TestCodexRemoveGroupRequiresExternalUninstalledFlag confirms Codex's
-// documented remove contract: UAP has no supported Codex CLI verb to
-// silently uninstall a plugin on the user's behalf, so remove without
-// --external-uninstalled must be refused with actionable guidance, leaving
-// the managed directory untouched.
+// TestCodexRemoveGroupRequiresExternalUninstalledFlag confirms Codex remove
+// without a live CLI still needs --external-uninstalled: there is then no
+// supported way to clear Codex's native registry, so the managed directory
+// must stay until the operator attests the client-side uninstall. When a
+// Codex CLI is available, Deactivate uninstalls the managed plugin itself.
 func TestCodexRemoveGroupRequiresExternalUninstalledFlag(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
@@ -218,5 +217,70 @@ func TestCodexRemoveGroupRequiresExternalUninstalledFlag(t *testing.T) {
 	afterClient := onlyBinding(afterState.Installations[0])
 	if beforeClient.Materialization != afterClient.Materialization || len(beforeClient.Receipts) != len(afterClient.Receipts) {
 		t.Fatalf("refused remove changed the client binding: before=%+v after=%+v", beforeClient, afterClient)
+	}
+}
+
+func TestCodexRemoveGroupUninstallsViaCLIWithoutExternalFlag(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	codex := domain.DetectedClient{
+		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
+		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+	}
+	runner := &codexCleanupUsecaseRunner{configRoot: codex.ConfigRoot}
+	service.Activator = providers.Activator{Runner: runner}
+	install := addInput(t, codex, "https://example.com/codex-remove-auto")
+	install.BackendExecutable = "/test/bin/codex"
+	install.Confirmed = true
+	added, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{install}, OperationGroupID: "codex-remove-auto-add", Confirmed: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	managedPath := added.Targets[0].Plan.ActivePath
+	removed, err := service.RemoveGroup(context.Background(), RemoveGroupInput{
+		Selector: added.InstallationID,
+		Targets: []RemoveInput{{
+			Client: codex, Scope: domain.ScopeUser, BackendExecutable: "/test/bin/codex",
+		}},
+		OperationGroupID: "codex-remove-auto", Confirmed: true,
+	})
+	if err != nil {
+		t.Fatalf("CLI-backed remove without --external-uninstalled failed: %v", err)
+	}
+	if !removed.Mutated || removed.Phase != GroupPhaseCompleted {
+		t.Fatalf("CLI-backed remove result = %+v, want mutated/completed", removed)
+	}
+	if _, statErr := os.Stat(managedPath); !os.IsNotExist(statErr) {
+		t.Fatalf("managed directory survived CLI-backed removal: %v", statErr)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 0 {
+		t.Fatalf("CLI-backed remove state = %+v", state.Installations)
+	}
+	foundPluginRemove := false
+	for _, command := range runner.commands {
+		joined := strings.Join(command.Argv, " ")
+		if strings.Contains(joined, "plugin remove ") {
+			foundPluginRemove = true
+			break
+		}
+	}
+	if !foundPluginRemove {
+		t.Fatalf("CLI-backed remove never ran `codex plugin remove`: %#v", argvOf(runner))
+	}
+	foundMarketplaceRemove := false
+	for _, command := range runner.commands {
+		if strings.Contains(strings.Join(command.Argv, " "), "plugin marketplace remove") {
+			foundMarketplaceRemove = true
+			break
+		}
+	}
+	if !foundMarketplaceRemove {
+		t.Fatalf("CLI-backed remove never ran `codex plugin marketplace remove`: %#v", argvOf(runner))
 	}
 }

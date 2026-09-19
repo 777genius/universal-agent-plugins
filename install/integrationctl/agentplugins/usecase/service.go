@@ -176,8 +176,8 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if replace && !existing {
 		return AddResult{}, fmt.Errorf("update source is not bound to an existing installation; use add or rebind")
 	}
-	// Validate identity/release transitions before emitting the more general
-	// "use update" diagnostic. A same-release digest conflict is a supply-chain
+	// Validate identity/release transitions before treating a newer package as
+	// an in-place refresh. A same-release digest conflict is a supply-chain
 	// failure regardless of whether the caller happened to be adding a target.
 	if existing {
 		if err := validatePackageTransition(state.Installations[installationIndex], input.Envelope); err != nil {
@@ -187,11 +187,21 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			return AddResult{}, err
 		}
 	}
-	if existing && !replace && state.Installations[installationIndex].OriginMode == domain.OriginModeDirectory && state.Installations[installationIndex].Directory != nil && input.DirectoryResolution != nil && input.DirectoryResolution.DesiredReleaseSequence != state.Installations[installationIndex].Directory.DesiredReleaseSequence {
-		return AddResult{}, fmt.Errorf("adding a target must use recorded release sequence %d; run update separately", state.Installations[installationIndex].Directory.DesiredReleaseSequence)
-	}
-	if existing && !replace && state.Installations[installationIndex].Source.TreeDigest != input.Envelope.TreeDigest {
-		return AddResult{}, fmt.Errorf("adding a target must use the recorded desired package bytes; run update separately")
+	if existing && !replace {
+		installation := state.Installations[installationIndex]
+		already := clientMaterializedOn(installation, input.Client.ClientID, input.Scope)
+		newerRelease := installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && input.DirectoryResolution != nil && input.DirectoryResolution.DesiredReleaseSequence != installation.Directory.DesiredReleaseSequence
+		newerBytes := installation.Source.TreeDigest != input.Envelope.TreeDigest
+		if already && (newerRelease || newerBytes) {
+			if sibling := unpreflightedMaterializedClient(installation, input.Client.ClientID, input.Scope); sibling != "" {
+				return AddResult{}, fmt.Errorf("update group must preflight every installed physical binding; %s is missing", sibling)
+			}
+			replace = true
+		} else if newerRelease {
+			return AddResult{}, fmt.Errorf("adding a target must use recorded release sequence %d; run update separately", installation.Directory.DesiredReleaseSequence)
+		} else if newerBytes {
+			return AddResult{}, fmt.Errorf("adding a target must use the recorded desired package bytes; run update separately")
+		}
 	}
 	if replace && existing && state.Installations[installationIndex].OriginMode == domain.OriginModeDirect && immutableDirectGit(state.Installations[installationIndex].Source) {
 		return AddResult{}, fmt.Errorf("direct full-SHA installations have no update channel; use switch --to with a new full SHA")
@@ -278,8 +288,10 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 			if err := service.verifyManagedTarget(ctx, input.Client, input.Scope, current, "dry-run"); err != nil {
 				return result, err
 			}
-			if !replace && !packageRevisionMatches(current.PackageRevision, input.Envelope) {
-				return result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", input.Client.ClientID)
+			if !replace && !groupPackageUnchanged(current, input) {
+				replace = true
+				describeMCPRemovals(&plan, managedBinding)
+				result.Plan = plan
 			}
 			result.NoChange = !replace && !registrationMigration && lifecycleConverged(current)
 		}
@@ -293,32 +305,34 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if isMaterialized && !replace && !registrationMigration {
 		current := state.Installations[installationIndex].Clients[clientBindingID]
 		result.Activation = lifecycleOutcome(current)
-		if !packageRevisionMatches(current.PackageRevision, input.Envelope) {
-			return result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", input.Client.ClientID)
-		}
-		if lifecycleConverged(current) {
-			if err := service.verifyManagedTarget(ctx, input.Client, input.Scope, current, "no-change check"); err != nil {
-				return result, err
-			}
-			verified, verifyErr := service.verifyClientReadOnly(ctx, input, result, current)
-			if verifyErr != nil {
-				if verified.Activation != "" && !input.DryRun && (input.Confirmed || input.PersistAuthoritativeObservations && verified.AuthoritativeObservation) {
-					result.Activation = verified
-					changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, current, verified)
-					result.Mutated = changed
-					if updateErr != nil {
-						return result, fmt.Errorf("client verification failed: %v; persist negative verification evidence: %w", verifyErr, updateErr)
-					}
+		if groupPackageUnchanged(current, input) {
+			if lifecycleConverged(current) {
+				if err := service.verifyManagedTarget(ctx, input.Client, input.Scope, current, "no-change check"); err != nil {
+					return result, err
 				}
-				return result, verifyErr
+				verified, verifyErr := service.verifyClientReadOnly(ctx, input, result, current)
+				if verifyErr != nil {
+					if verified.Activation != "" && !input.DryRun && (input.Confirmed || input.PersistAuthoritativeObservations && verified.AuthoritativeObservation) {
+						result.Activation = verified
+						changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, current, verified)
+						result.Mutated = changed
+						if updateErr != nil {
+							return result, errors.Join(fmt.Errorf("client verification failed: %w", verifyErr), fmt.Errorf("persist negative verification evidence: %w", updateErr))
+						}
+					}
+					return result, verifyErr
+				}
+				if verified.Activation != "" && !sameLifecycleOutcome(verified, lifecycleOutcome(current)) {
+					return service.persistObservedLifecycle(input, result, installationID, clientBindingID, verified)
+				}
+				result.NoChange = true
+				return result, nil
 			}
-			if verified.Activation != "" && !sameLifecycleOutcome(verified, lifecycleOutcome(current)) {
-				return service.persistObservedLifecycle(input, result, installationID, clientBindingID, verified)
-			}
-			result.NoChange = true
-			return result, nil
+			return service.resume(ctx, input, result, installationID, clientBindingID, current)
 		}
-		return service.resume(ctx, input, result, installationID, clientBindingID, current)
+		replace = true
+		describeMCPRemovals(&plan, managedBinding)
+		result.Plan = plan
 	}
 	if replace && !isMaterialized {
 		return result, fmt.Errorf("plugin is not materialized for %s; use add", input.Client.ClientID)
@@ -333,7 +347,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 		if err := service.observeNativeIdentity(ctx, input.Client, plan, managedBinding); err != nil {
 			return result, err
 		}
-		if !requiresComponentRemoval(plan) && packageRevisionMatches(previousClient.PackageRevision, input.Envelope) && previousClient.PackageRevision.ResolvedRevision == input.Envelope.Source.ResolvedRevision {
+		if !requiresComponentRemoval(plan) && groupPackageUnchanged(previousClient, input) {
 			if lifecycleConverged(previousClient) {
 				verified, verifyErr := service.verifyClientReadOnly(ctx, input, result, previousClient)
 				if verifyErr != nil {
@@ -342,7 +356,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 						changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, previousClient, verified)
 						result.Mutated = changed
 						if updateErr != nil {
-							return result, fmt.Errorf("client verification failed: %v; persist negative verification evidence: %w", verifyErr, updateErr)
+							return result, errors.Join(fmt.Errorf("client verification failed: %w", verifyErr), fmt.Errorf("persist negative verification evidence: %w", updateErr))
 						}
 					}
 					return result, verifyErr
@@ -1141,6 +1155,45 @@ func materializedClient(installation domain.Installation, clientBindingID string
 	return ok && client.Materialization != domain.MaterializationAbsent
 }
 
+func clientMaterializedOn(installation domain.Installation, clientID domain.ClientID, scope domain.InstallScope) bool {
+	for _, binding := range installation.Clients {
+		if binding.Scope != string(scope) || binding.Materialization == domain.MaterializationAbsent {
+			continue
+		}
+		if sameNativeBackend(domain.ClientID(binding.ClientID), clientID) {
+			return true
+		}
+		for _, surface := range binding.AffectedSurfaces {
+			if sameNativeBackend(domain.ClientID(surface), clientID) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func unpreflightedMaterializedClient(installation domain.Installation, clientID domain.ClientID, scope domain.InstallScope) string {
+	for _, binding := range installation.Clients {
+		if binding.Scope != string(scope) || binding.Materialization == domain.MaterializationAbsent {
+			continue
+		}
+		if sameNativeBackend(domain.ClientID(binding.ClientID), clientID) {
+			continue
+		}
+		covered := false
+		for _, surface := range binding.AffectedSurfaces {
+			if sameNativeBackend(domain.ClientID(surface), clientID) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return binding.ClientID
+		}
+	}
+	return ""
+}
+
 func rejectNativeNameCollision(state domain.StateFileV2, installationID, declaredName string, clientID domain.ClientID) error {
 	for _, installation := range state.Installations {
 		if installation.InstallationID == installationID || installation.DeclaredName != declaredName {
@@ -1312,7 +1365,10 @@ func (service Service) observeNativeIdentity(ctx context.Context, client domain.
 	if err != nil {
 		return fmt.Errorf("observe native identity for %s: %w", client.ClientID, err)
 	}
-	return validateNativeIdentityObservation(observation, managed)
+	if err := validateNativeIdentityObservation(observation, managed); err != nil {
+		return fmt.Errorf("%s: %w", client.ClientID, err)
+	}
+	return nil
 }
 
 func (service Service) observePreparedIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) error {
@@ -1320,7 +1376,10 @@ func (service Service) observePreparedIdentity(ctx context.Context, client domai
 	if err != nil {
 		return fmt.Errorf("observe prepared identity for %s: %w", client.ClientID, err)
 	}
-	return validateNativeIdentityObservation(observation, managed)
+	if err := validateNativeIdentityObservation(observation, managed); err != nil {
+		return fmt.Errorf("%s: %w", client.ClientID, err)
+	}
+	return nil
 }
 
 func validateNativeIdentityObservation(observation domain.NativeIdentityObservation, managed *domain.ClientBinding) error {

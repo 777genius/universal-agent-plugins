@@ -438,4 +438,62 @@ func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 			t.Fatalf("attention lost multiline detail: %s", body)
 		}
 	})
+	t.Run("already installed latest version", func(t *testing.T) {
+		noChange := usecase.AddResult{
+			NoChange:   true,
+			GroupPhase: usecase.GroupTargetExternalCompleted,
+			Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Verification: domain.VerificationInstalled},
+		}
+		result := addMultiResult{
+			Plugin: "demo", Succeeded: 2, Targets: []addTargetResult{
+				{Target: "codex", displayName: "OpenAI Codex", Status: string(usecase.GroupTargetExternalCompleted), Output: addResultData{Result: noChange}},
+				{Target: "kiro", displayName: "Kiro", Status: string(usecase.GroupTargetExternalCompleted), Output: addResultData{Result: noChange}},
+			},
+		}
+		if classifyBatchPresentation(result.Targets[0]) != batchPresentationUpToDate {
+			t.Fatalf("no-change presentation = %s", classifyBatchPresentation(result.Targets[0]))
+		}
+		var out bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetOut(&out)
+		if err := renderAddMultiResult(cmd, &options{format: "human"}, result, domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "demo"}}); err != nil {
+			t.Fatal(err)
+		}
+		body := out.String()
+		if !strings.Contains(body, "demo is already installed") || !strings.Contains(body, "You have the latest version.") || !strings.Contains(body, "Up to date") {
+			t.Fatalf("already-latest summary = %s", body)
+		}
+		if strings.Contains(body, "Needs attention") {
+			t.Fatalf("latest install listed under needs attention: %s", body)
+		}
+	})
+	t.Run("already installed latest version with pending auth", func(t *testing.T) {
+		noChange := usecase.AddResult{
+			NoChange:   true,
+			GroupPhase: usecase.GroupTargetExternalCompleted,
+			Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationPending, Verification: domain.VerificationInstalled},
+		}
+		result := addMultiResult{
+			Plugin: "context7", Succeeded: 2, Targets: []addTargetResult{
+				{Target: "codex", displayName: "OpenAI Codex", Status: string(usecase.GroupTargetExternalCompleted), Output: addResultData{Result: noChange}},
+				{Target: "claude", displayName: "Claude Code", Status: string(usecase.GroupTargetExternalCompleted), Output: addResultData{Result: noChange}},
+			},
+		}
+		if classifyBatchPresentation(result.Targets[0]) != batchPresentationUpToDate {
+			t.Fatalf("no-change pending-auth presentation = %s", classifyBatchPresentation(result.Targets[0]))
+		}
+		var out bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetOut(&out)
+		if err := renderAddMultiResult(cmd, &options{format: "human"}, result, domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "context7"}}); err != nil {
+			t.Fatal(err)
+		}
+		body := out.String()
+		if !strings.Contains(body, "context7 is already installed") || !strings.Contains(body, "You have the latest version.") || !strings.Contains(body, "Up to date") {
+			t.Fatalf("already-latest pending-auth summary = %s", body)
+		}
+		if strings.Contains(body, "Sign-in required") || strings.Contains(body, "Needs attention") {
+			t.Fatalf("pending auth stole the already-latest summary: %s", body)
+		}
+	})
 }

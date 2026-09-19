@@ -18,6 +18,21 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
+type mutationReadyGuard interface {
+	RequireMutationReady() error
+}
+
+func requireMutationReady(app App, dryRun bool) error {
+	if dryRun || app.StateStore == nil {
+		return nil
+	}
+	guard, ok := app.StateStore.(mutationReadyGuard)
+	if !ok {
+		return nil
+	}
+	return guard.RequireMutationReady()
+}
+
 type DirectoryClient interface {
 	Load(context.Context, uint64) (directoryv1.VerifiedBundle, error)
 }

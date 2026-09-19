@@ -1590,6 +1590,104 @@ func TestRepeatedAddResumesManualLifecycleWithoutAnotherReceipt(t *testing.T) {
 	}
 }
 
+func TestCLIAddOfNewerRevisionUpdatesWithoutAskingForUpdate(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor"); err != nil {
+		t.Fatal(err)
+	}
+	rewriteCLIPluginVersion(t, plugin, "2.0.0")
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "cursor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stdout, "use update") || strings.Contains(errString(err), "update separately") {
+		t.Fatalf("add asked to run update: stdout=%q err=%v", stdout, err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Installations[0].Package.Version != "2.0.0" {
+		t.Fatalf("refreshed package = %+v", state.Installations[0].Package)
+	}
+}
+
+func TestCLIAddOfSameRevisionSaysAlreadyLatest(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, binding := range state.Installations[0].Clients {
+		binding.Activation = domain.ActivationActive
+		binding.Authentication = domain.AuthenticationNotRequired
+		binding.Verification = domain.VerificationInstalled
+		state.Installations[0].Clients[key] = binding
+	}
+	if err := fixture.store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "cursor")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "Already installed. You have the latest version.") {
+		t.Fatalf("same-revision add = %q", stdout)
+	}
+}
+
+func TestCLIGroupedAddOfSameRevisionSaysAlreadyLatest(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro)})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor,kiro"); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "cursor,kiro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout, "is already installed") || !strings.Contains(stdout, "You have the latest version.") {
+		t.Fatalf("grouped same-revision add = %q", stdout)
+	}
+}
+
+func TestCLIGroupedAddOfNewerRevisionUpdatesInstalledTargets(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro)})
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor,kiro"); err != nil {
+		t.Fatal(err)
+	}
+	rewriteCLIPluginVersion(t, plugin, "2.0.0")
+	stdout, _, err := fixture.execute(false, "add", plugin, "--target", "cursor,kiro")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(stdout, "update separately") || strings.Contains(errString(err), "update separately") {
+		t.Fatalf("grouped add asked to run update: stdout=%q err=%v", stdout, err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Installations[0].Package.Version != "2.0.0" {
+		t.Fatalf("grouped refresh package = %+v", state.Installations[0].Package)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.PackageRevision == nil || binding.PackageRevision.Version != "2.0.0" {
+			t.Fatalf("grouped refresh binding = %+v", binding)
+		}
+	}
+}
+
 func TestExplicitInteractiveAddTreatsCommandAsConsentBeforeLifecycle(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
@@ -2835,6 +2933,89 @@ func TestMigrateStateExplicitlyMigratesAuthoritativeSchemaTwoAndThree(t *testing
 	}
 }
 
+func TestMutatingCommandsRefuseStaleStateBeforePackageAcquire(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	if err := os.MkdirAll(filepath.Dir(fixture.store.Path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fixture.store.Path, []byte("{\"schema_version\":2,\"installations\":[]}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	counter := &countingSourceAcquirer{delegate: fixture.app.SourceAcquirer}
+	fixture.app.SourceAcquirer = counter
+	plugin := writeCLIPlugin(t)
+	for _, args := range [][]string{
+		{"add", plugin, "--target", "cursor"},
+		{"update", "demo", "--target", "cursor"},
+		{"repair", "demo", "--target", "cursor"},
+		{"remove", "demo", "--target", "cursor", "--external-uninstalled"},
+		{"switch", "demo", "--to", plugin},
+	} {
+		t.Run(args[0], func(t *testing.T) {
+			before := counter.calls
+			_, _, err := fixture.execute(false, args...)
+			if err == nil || !strings.Contains(err.Error(), "migrate-state") {
+				t.Fatalf("%v error = %v", args, err)
+			}
+			if strings.Contains(err.Error(), "group apply returned") {
+				t.Fatalf("wrapped empty apply: %v", err)
+			}
+			if counter.calls != before {
+				t.Fatalf("%s acquired the package %d times", args[0], counter.calls-before)
+			}
+		})
+	}
+}
+
+func TestDryRunAddStillPlansAgainstStaleState(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	if err := os.MkdirAll(filepath.Dir(fixture.store.Path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte("{\"schema_version\":2,\"installations\":[]}\n")
+	if err := os.WriteFile(fixture.store.Path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plugin := writeCLIPlugin(t)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "cursor", "--dry-run"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(fixture.store.Path)
+	if err != nil || !bytes.Equal(after, original) {
+		t.Fatalf("dry-run rewrote stale state: %q, %v", after, err)
+	}
+}
+
+func TestWrapGroupApplyCountKeepsEmptyApplyError(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("state schema 2 requires explicit migration; run agentplugins migrate-state --dry-run, then agentplugins migrate-state")
+	got := wrapGroupApplyCount(0, 2, cause)
+	if !errors.Is(got, cause) {
+		t.Fatalf("empty apply wrap = %v", got)
+	}
+	wrapped := wrapGroupApplyCount(1, 2, cause)
+	if wrapped == nil || !strings.Contains(wrapped.Error(), "group apply returned 1 targets") || !strings.Contains(wrapped.Error(), cause.Error()) {
+		t.Fatalf("partial apply wrap = %v", wrapped)
+	}
+	if missing := wrapGroupApplyCount(1, 2, nil); missing == nil || !strings.Contains(missing.Error(), "group apply returned 1 targets") {
+		t.Fatalf("missing apply wrap = %v", missing)
+	}
+}
+
+func TestAnnotateDirectoryResolveErrorHintsDevelopmentVersion(t *testing.T) {
+	t.Parallel()
+	cause := fmt.Errorf("%w for %q: installer version is below 0.1.51", domain.ErrDirectoryIneligible, "context7")
+	got := annotateDirectoryResolveError("0.1.0-development", cause)
+	if !errors.Is(got, domain.ErrDirectoryIneligible) || !strings.Contains(got.Error(), "local binary reports version 0.1.0-development") {
+		t.Fatalf("development hint = %v", got)
+	}
+	if released := annotateDirectoryResolveError("0.1.53", cause); released.Error() != cause.Error() {
+		t.Fatalf("released version annotated = %v", released)
+	}
+}
+
 func TestReadOnlyCommandsLoadLegacyV2WithoutPersistingMigration(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, nil)
@@ -3195,6 +3376,29 @@ func writeCLIPlugin(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func rewriteCLIPluginVersion(t *testing.T, root, version string) {
+	t.Helper()
+	path := filepath.Join(root, "plugin.json")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.Replace(string(body), `"version": "1.0.0"`, `"version": "`+version+`"`, 1)
+	if updated == string(body) {
+		t.Fatalf("plugin.json did not contain version 1.0.0: %s", body)
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func writeCLIMCP(t *testing.T, root string) {

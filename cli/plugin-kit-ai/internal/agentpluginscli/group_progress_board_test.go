@@ -93,6 +93,24 @@ func TestGroupProgressBoardMarksFailedActivate(t *testing.T) {
 	}
 }
 
+func TestGroupProgressBoardFailUnfinishedMarksIncompleteFailed(t *testing.T) {
+	t.Parallel()
+	var stderr bytes.Buffer
+	board := newGroupProgressBoard(&stderr, []domain.DetectedClient{
+		{ClientID: domain.ClientClaude, DisplayName: "Claude Code"},
+		{ClientID: domain.ClientCodex, DisplayName: "OpenAI Codex"},
+	}, true)
+	board.set(domain.ClientClaude, groupProgressCopied)
+	board.failUnfinished()
+	got := stderr.String()
+	if !strings.Contains(got, "failed") {
+		t.Fatalf("unfinished board = %q", got)
+	}
+	if strings.Count(got, "failed") < 2 {
+		t.Fatalf("expected both unfinished rows to show failed: %q", got)
+	}
+}
+
 func TestProgressPipelineChangesStepColors(t *testing.T) {
 	t.Parallel()
 	theme := terminaltheme.Theme{Enabled: true}
@@ -111,6 +129,10 @@ func TestProgressPipelineChangesStepColors(t *testing.T) {
 	failed := progressPipeline(theme, groupProgressRow{step: groupProgressActivating, failed: true})
 	if !strings.Contains(failed, "failed") || strings.Contains(failed, "installing") {
 		t.Fatalf("failed pipeline = %q", failed)
+	}
+	copiedFailed := progressPipeline(theme, groupProgressRow{step: groupProgressCopied, failed: true})
+	if !strings.Contains(copiedFailed, "failed") || !strings.Contains(copiedFailed, "copied") {
+		t.Fatalf("copied-failed pipeline = %q", copiedFailed)
 	}
 	current := progressToken(theme, "copying", markCurrent)
 	complete := progressToken(theme, "copying", markDone)

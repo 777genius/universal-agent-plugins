@@ -6,6 +6,23 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+func TestBackendExecutableUsesCopilotForVSCodeAndStaysEmptyWithoutIt(t *testing.T) {
+	t.Parallel()
+	vscode := domain.DetectedClient{ClientID: domain.ClientVSCode, ExecutablePath: "/test/bin/code"}
+	if got := backendExecutable(vscode, map[domain.ClientID]domain.DetectedClient{
+		domain.ClientCopilot: {ClientID: domain.ClientCopilot, ExecutablePath: "/test/bin/copilot"},
+		domain.ClientVSCode:  vscode,
+	}); got != "/test/bin/copilot" {
+		t.Fatalf("shared backend = %q", got)
+	}
+	if got := backendExecutable(vscode, map[domain.ClientID]domain.DetectedClient{
+		domain.ClientVSCode:  vscode,
+		domain.ClientCopilot: {ClientID: domain.ClientCopilot},
+	}); got != "" {
+		t.Fatalf("vscode-only backend = %q, want empty so remove requires --external-uninstalled", got)
+	}
+}
+
 // TestNormalizeTargetContract pins the exact --target vocabulary: eleven
 // canonical ids, six aliases, case and whitespace folding, and the lenient
 // pass-through that turns an unknown name into a lowercased ClientID instead of

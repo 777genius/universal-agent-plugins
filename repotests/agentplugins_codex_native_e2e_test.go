@@ -674,10 +674,9 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	}
 	nativeJSON(t, filepath.Join(f.Package, "mcp.json"), partialMCP)
 	nativeAttempt(stages, "remove", "remove-installer.json")
-	// Codex has no supported CLI verb for UAP to silently uninstall a plugin
-	// on the user's behalf (see usecase/remove.go and remove_group.go); every
-	// real remove against Codex must be an acknowledged external uninstall.
-	nativeInstaller(t, f, installer, client, "remove", "remove", "native-proof", "--external-uninstalled")
+	// Codex with a live CLI uninstalls itself during remove. The flag is a
+	// no-op on this path, same as Claude, and remains valid for no-CLI hosts.
+	nativeInstaller(t, f, installer, client, "remove", "remove", "native-proof")
 	// UAP's own directory removal must be immediate and independent of
 	// whatever a later fresh app-server session reports; this isolates that
 	// claim from the app-server-level check below (nativeAssertAbsent), which

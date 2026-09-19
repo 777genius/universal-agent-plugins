@@ -214,14 +214,29 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 				return GroupResult{}, err
 			}
 		}
+		newerRelease := installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && first.DirectoryResolution != nil && first.DirectoryResolution.DesiredReleaseSequence != installation.Directory.DesiredReleaseSequence
+		newerBytes := installation.Source.TreeDigest != first.Envelope.TreeDigest
+		if !replace && (newerRelease || newerBytes) {
+			already := true
+			for _, target := range input.Targets {
+				if !clientMaterializedOn(installation, target.Client.ClientID, target.Scope) {
+					already = false
+					break
+				}
+			}
+			if already {
+				replace = true
+				if len(input.CompatibilityChecks) == 0 {
+					input.CompatibilityChecks = append([]AddInput(nil), input.Targets...)
+				}
+			} else if newerRelease {
+				return GroupResult{}, fmt.Errorf("adding targets must retain recorded release sequence %d; update separately", installation.Directory.DesiredReleaseSequence)
+			} else {
+				return GroupResult{}, fmt.Errorf("adding targets must use recorded desired package bytes; update separately")
+			}
+		}
 		if replace && !input.Switch && !input.Repair && installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) {
 			return GroupResult{}, fmt.Errorf("direct full-SHA installations require explicit switch")
-		}
-		if !replace && installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && first.DirectoryResolution != nil && first.DirectoryResolution.DesiredReleaseSequence != installation.Directory.DesiredReleaseSequence {
-			return GroupResult{}, fmt.Errorf("adding targets must retain recorded release sequence %d; update separately", installation.Directory.DesiredReleaseSequence)
-		}
-		if !replace && installation.Source.TreeDigest != first.Envelope.TreeDigest {
-			return GroupResult{}, fmt.Errorf("adding targets must use recorded desired package bytes; update separately")
 		}
 	} else if replace {
 		return GroupResult{}, fmt.Errorf("update requires an existing installation")
@@ -727,7 +742,10 @@ func (service Service) observeGroupNativeIdentity(ctx context.Context, client do
 	if err != nil {
 		return fmt.Errorf("observe native identity for %s: %w", client.ClientID, err)
 	}
-	return validateGroupNativeIdentityObservation(observation, managed)
+	if err := validateGroupNativeIdentityObservation(observation, managed); err != nil {
+		return fmt.Errorf("%s: %w", client.ClientID, err)
+	}
+	return nil
 }
 
 func (service Service) observeGroupPreparedIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding, repair bool) error {
@@ -738,7 +756,10 @@ func (service Service) observeGroupPreparedIdentity(ctx context.Context, client 
 	if err != nil {
 		return fmt.Errorf("observe prepared identity for %s: %w", client.ClientID, err)
 	}
-	return validateGroupNativeIdentityObservation(observation, managed)
+	if err := validateGroupNativeIdentityObservation(observation, managed); err != nil {
+		return fmt.Errorf("%s: %w", client.ClientID, err)
+	}
+	return nil
 }
 
 func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObservation, managed *domain.ClientBinding) error {
