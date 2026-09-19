@@ -49,7 +49,7 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 	if err != nil {
 		return err
 	}
-	requests, err := openCodeMCPRequests(prepared.projection, prepared.previous, prepared.desired)
+	requests, err := openCodeMCPRequests(prepared.kernel, prepared.projection, prepared.previous, prepared.desired)
 	if err != nil {
 		return err
 	}

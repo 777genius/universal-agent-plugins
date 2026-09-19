@@ -13,7 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership) error {
+func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	projection := OpenCodeProjection{}
 	if len(OpenCodeObjects(objects)) > 0 && activePath != "" {
 		var err error
@@ -26,21 +26,21 @@ func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain
 		}
 	}
 	for _, object := range OpenCodeObjects(objects) {
-		if err := verifyOpenCodeObject(configRoot, projection, object); err != nil {
+		if err := verifyOpenCodeObject(configRoot, projection, object, kernel); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func verifyOpenCodeObject(configRoot string, projection OpenCodeProjection, object domain.NativeObjectOwnership) error {
+func verifyOpenCodeObject(configRoot string, projection OpenCodeProjection, object domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
 		return err
 	}
 	if object.Kind == openCodeSkillKind {
 		return verifyOpenCodeSkill(object)
 	}
-	return verifyOpenCodeMCP(projection, object)
+	return verifyOpenCodeMCP(projection, object, kernel)
 }
 
 func verifyOpenCodeSkill(object domain.NativeObjectOwnership) error {
@@ -51,9 +51,9 @@ func verifyOpenCodeSkill(object domain.NativeObjectOwnership) error {
 	return nil
 }
 
-func verifyOpenCodeMCP(projection OpenCodeProjection, object domain.NativeObjectOwnership) error {
+func verifyOpenCodeMCP(projection OpenCodeProjection, object domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	receipt := receiptFromOpenCodeObject(object)
-	present, exactlyOwned, err := nativeconfig.New().Inspect(nativeconfig.Paths{JSON: projection.ConfigJSON, JSONC: projection.ConfigJSONC}, nativeconfig.CodecOpenCode, object.LogicalName, &receipt)
+	present, exactlyOwned, err := kernel.Inspect(nativeconfig.Paths{JSON: projection.ConfigJSON, JSONC: projection.ConfigJSONC}, nativeconfig.CodecOpenCode, object.LogicalName, &receipt)
 	if err != nil {
 		return fmt.Errorf("verify managed OpenCode MCP server %q: %w", object.LogicalName, err)
 	}
@@ -75,11 +75,10 @@ func validateOpenCodeProjection(configRoot, activePath string, projection OpenCo
 	return nil
 }
 
-func openCodeMCPRequests(projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
+func openCodeMCPRequests(kernel nativeconfig.Kernel, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) ([]nativeconfig.Request, error) {
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	paths := openCodeMCPPaths(projection, previous)
 	placeholders := nativeconfig.Placeholders{PackageRoot: projection.PackageRoot, DataRoot: projection.DataRoot}
-	kernel := nativeconfig.New()
 	previousRequests, err := openCodeMCPPreviousRequests(kernel, paths, placeholders, projection, previousByID, desiredByID)
 	if err != nil {
 		return nil, err

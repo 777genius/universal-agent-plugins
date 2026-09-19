@@ -361,7 +361,7 @@ func TestClineTamperedReceiptFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	desired[0].ManagedDigest = "sha256:00"
-	if err := cline.VerifyClineNativeObjects(configRoot, desired, false); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
+	if err := cline.VerifyClineNativeObjects(configRoot, desired, false, nativeconfig.New()); !errors.Is(err, nativeconfig.ErrNotOwned) && !strings.Contains(err.Error(), "changed outside") {
 		t.Fatalf("tamper was not rejected: %v", err)
 	}
 }

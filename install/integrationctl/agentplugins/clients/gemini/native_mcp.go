@@ -44,7 +44,7 @@ func geminiMCPRequest(prepared *geminiNativeApply, id string) (nativeconfig.Requ
 		return geminiMCPUpsertRequest(prepared, prior, next, hadPrior)
 	}
 	if hadPrior {
-		return geminiMCPRemoveRequest(prepared.configRoot, prior)
+		return geminiMCPRemoveRequest(prepared.kernel, prepared.configRoot, prior)
 	}
 	return nativeconfig.Request{}, false, nil
 }
@@ -58,7 +58,7 @@ func geminiMCPUpsertRequest(prepared *geminiNativeApply, prior, next domain.Nati
 	if err != nil {
 		return nativeconfig.Request{}, false, err
 	}
-	present, owned, err := inspectOwnedGeminiMCP(prepared.configRoot, prior, hadPrior)
+	present, owned, err := inspectOwnedGeminiMCP(prepared.kernel, prepared.configRoot, prior, hadPrior)
 	if err != nil {
 		return nativeconfig.Request{}, false, err
 	}
@@ -78,15 +78,15 @@ func geminiMCPUpsertRequest(prepared *geminiNativeApply, prior, next domain.Nati
 	}, true, nil
 }
 
-func inspectOwnedGeminiMCP(configRoot string, prior domain.NativeObjectOwnership, hadPrior bool) (bool, bool, error) {
+func inspectOwnedGeminiMCP(kernel nativeconfig.Kernel, configRoot string, prior domain.NativeObjectOwnership, hadPrior bool) (bool, bool, error) {
 	if !hadPrior {
 		return false, false, nil
 	}
-	return nativeconfig.New().Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, GeminiReceipt(prior))
+	return kernel.Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, GeminiReceipt(prior))
 }
 
-func geminiMCPRemoveRequest(configRoot string, prior domain.NativeObjectOwnership) (nativeconfig.Request, bool, error) {
-	present, owned, err := nativeconfig.New().Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, GeminiReceipt(prior))
+func geminiMCPRemoveRequest(kernel nativeconfig.Kernel, configRoot string, prior domain.NativeObjectOwnership) (nativeconfig.Request, bool, error) {
+	present, owned, err := kernel.Inspect(GeminiConfigPaths(configRoot), nativeconfig.CodecGemini, prior.LogicalName, GeminiReceipt(prior))
 	if err != nil {
 		return nativeconfig.Request{}, false, err
 	}

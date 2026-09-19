@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -30,6 +31,7 @@ type NativeIdentityObserver struct {
 	Stager           packageVerifier
 	Runner           ports.CommandRunner
 	DiscoveryTimeout time.Duration
+	NativeConfig     *nativeconfig.Kernel
 	// Registry supplies the client adapters that inspect native identity. It is
 	// injected by the composition root and never defaulted to "every client".
 	Registry *clients.Registry
@@ -56,7 +58,14 @@ func (observer NativeIdentityObserver) requireRegistry() error {
 }
 
 func (observer NativeIdentityObserver) env() clients.Env {
-	return clients.Env{Runner: observer.Runner}
+	return clients.Env{Runner: observer.Runner, NativeConfig: observer.nativeConfigKernel()}
+}
+
+func (observer NativeIdentityObserver) nativeConfigKernel() nativeconfig.Kernel {
+	if observer.NativeConfig != nil {
+		return *observer.NativeConfig
+	}
+	return nativeconfig.New()
 }
 
 func (observer NativeIdentityObserver) ObserveNativeIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {

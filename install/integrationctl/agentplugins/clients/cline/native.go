@@ -59,8 +59,7 @@ func applyClineNativeMutationWithKernelAndRename(configRoot, activePath string, 
 	return ApplyClineNativeMutationWithKernelRenameAndCapacity(configRoot, activePath, previous, desired, kernel, rename, shared.CheckedCombinedCapacity)
 }
 
-func VerifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
-	kernel := nativeconfig.New()
+func VerifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
 	for _, object := range ClineObjects(objects) {
 		if err := validateClineObject(configRoot, object); err != nil {
 			return err

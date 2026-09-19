@@ -32,7 +32,7 @@ func ApplyWindsurfNativeMutation(configRoot, activePath string, previous, desire
 	return applyWindsurfNativeMutationWithKernel(configRoot, activePath, previous, desired, nativeconfig.New())
 }
 
-func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, allowMissing bool) error {
+func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
 	objectMap, err := windsurfObjectMap(configRoot, objects)
 	if err != nil {
 		return err
@@ -48,7 +48,6 @@ func VerifyWindsurfNativeObjects(configRoot, activePath string, objects []domain
 	if err != nil {
 		return err
 	}
-	kernel := nativeconfig.New()
 	for name, object := range objectMap {
 		if err := verifyWindsurfNativeObject(kernel, configPath, servers, name, object, allowMissing); err != nil {
 			return err
@@ -80,7 +79,7 @@ func verifyWindsurfNativeObject(kernel nativeconfig.Kernel, configPath string, s
 	return nil
 }
 
-func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
 	if strings.TrimSpace(plan.NativeRegistryRoot) == "" {
 		return clients.RegistryClear, nil
 	}
@@ -89,18 +88,17 @@ func InspectWindsurfRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 		return clients.RegistryIndeterminate, err
 	}
 	if managed != nil {
-		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, false); err != nil {
+		if err := VerifyWindsurfNativeObjects(plan.NativeRegistryRoot, plan.ActivePath, managed.NativeObjects, false, kernel); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
 		if len(WindsurfObjects(managed.NativeObjects)) > 0 {
 			return clients.RegistryExpected, nil
 		}
 	}
-	return inspectWindsurfPlannedServers(configPath, plan)
+	return inspectWindsurfPlannedServers(configPath, plan, kernel)
 }
 
-func inspectWindsurfPlannedServers(configPath string, plan domain.DeliveryPlan) (clients.RegistryFinding, error) {
-	kernel := nativeconfig.New()
+func inspectWindsurfPlannedServers(configPath string, plan domain.DeliveryPlan, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
 	for _, component := range plan.Components {
 		if component.Kind != domain.ComponentMCPServer || component.Support == domain.SupportUnsupported {
 			continue
