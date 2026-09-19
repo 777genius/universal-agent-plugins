@@ -317,7 +317,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 						changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, current, verified)
 						result.Mutated = changed
 						if updateErr != nil {
-							return result, fmt.Errorf("client verification failed: %w; persist negative verification evidence: %v", verifyErr, updateErr)
+							return result, errors.Join(fmt.Errorf("client verification failed: %w", verifyErr), fmt.Errorf("persist negative verification evidence: %w", updateErr))
 						}
 					}
 					return result, verifyErr
@@ -356,7 +356,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 						changed, updateErr := service.persistAuthoritativeObservation(ctx, input, installationID, clientBindingID, previousClient, verified)
 						result.Mutated = changed
 						if updateErr != nil {
-							return result, fmt.Errorf("client verification failed: %w; persist negative verification evidence: %v", verifyErr, updateErr)
+							return result, errors.Join(fmt.Errorf("client verification failed: %w", verifyErr), fmt.Errorf("persist negative verification evidence: %w", updateErr))
 						}
 					}
 					return result, verifyErr
