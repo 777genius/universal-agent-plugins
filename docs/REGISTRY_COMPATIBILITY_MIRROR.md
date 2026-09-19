@@ -50,12 +50,12 @@ fresh without a product-repo code change. It runs:
 - or manually.
 
 The Pages deploy workflow uses the same `github-pages` concurrency group, so a
-docs push and a feed refresh cannot overwrite each other with a partial site.
-Both workflows take the previous marker from the deployed product
-`MIRROR_METADATA.json`, then verify the feeds before generating the landing
-site, stage the exact bytes under the Pages artifact, and deploy only the
-resulting artifact. A failed fetch, signature, trust-anchor, rollback, or build
-leaves the previous deployment untouched.
+docs push and a feed refresh queue as complete artifact deploys instead of
+cancelling each other. Both workflows take the previous marker from the deployed
+product `MIRROR_METADATA.json`, then verify the feeds before generating the
+landing site, stage the exact bytes under the Pages artifact, and deploy only
+the resulting artifact. A failed fetch, signature, trust-anchor, rollback, or
+build leaves the previous deployment untouched.
 
 The workflow defaults to the renamed catalog repository
 `777genius/universal-agent-plugins-registry` and its Pages origin. Event and

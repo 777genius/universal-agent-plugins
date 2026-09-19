@@ -30,6 +30,7 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	mustContain(t, workflow, "pnpm run build:pages")
 	mustContain(t, workflow, "path: .pages-dist")
 	mustContain(t, workflow, "group: github-pages")
+	mustContain(t, workflow, "cancel-in-progress: false")
 	mustContain(t, workflow, "PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/")
 	mustContain(t, workflow, "NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/")
 
@@ -254,6 +255,7 @@ func TestRegistryCompatibilityMirror_RefreshesFeedsOnSchedule(t *testing.T) {
 	mustContain(t, workflow, `cron: "27 */12 * * *"`)
 	mustContain(t, workflow, "registry-published")
 	mustContain(t, workflow, "group: github-pages")
+	mustContain(t, workflow, "cancel-in-progress: false")
 	mustContain(t, workflow, "PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/")
 	mustContain(t, workflow, "NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/")
 	mustContain(t, workflow, "go run ./cmd/agentplugins-registry-mirror")
