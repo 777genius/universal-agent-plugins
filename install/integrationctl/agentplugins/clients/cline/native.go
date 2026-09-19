@@ -143,7 +143,7 @@ func validateClineObject(configRoot string, object domain.NativeObjectOwnership)
 		}
 	case ClineMCPObjectKind:
 		if !filepath.IsAbs(object.Path) || !shared.SameCleanPath(object.Path, ClineMCPSettingsPath(configRoot)) {
-			return fmt.Errorf("cline MCP ownership path changed")
+			return fmt.Errorf("the Cline MCP ownership path changed")
 		}
 	default:
 		return fmt.Errorf("unsupported Cline native object kind %q", object.Kind)

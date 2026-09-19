@@ -216,7 +216,7 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership)
 	}
 	if object.Kind == GeminiSkillObjectKind {
 		if _, err := os.Lstat(object.Path); err == nil {
-			return fmt.Errorf("gemini skill %q already exists without agentplugins ownership", object.LogicalName)
+			return fmt.Errorf("the Gemini skill %q already exists without agentplugins ownership", object.LogicalName)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
@@ -227,7 +227,7 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership)
 		return err
 	}
 	if present {
-		return fmt.Errorf("gemini MCP server %q already exists without agentplugins ownership", object.LogicalName)
+		return fmt.Errorf("the Gemini MCP server %q already exists without agentplugins ownership", object.LogicalName)
 	}
 	return nil
 }
@@ -243,7 +243,7 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
-		return fmt.Errorf("gemini native object %q has an untrusted path", object.LogicalName)
+		return fmt.Errorf("the Gemini native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(root, object.Path)
 }
