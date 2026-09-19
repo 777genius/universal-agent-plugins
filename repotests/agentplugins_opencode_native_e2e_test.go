@@ -675,6 +675,19 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		t.Fatalf("installed skill file changed despite the refused MCP entry write: %s -> %s", beforeCollisionSkillDigest, afterCollisionUpdateSkillDigest)
 	}
 
+	// Update refused before commit, so 3.0.0 never became the applied
+	// revision. Restore the applied tree into the fixture source so repair
+	// preflight observes the foreign host key instead of a revision mismatch.
+	if err := os.RemoveAll(f.PackageRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(f.PackageRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.CopyFS(f.PackageRoot, os.DirFS(managedDir)); err != nil {
+		t.Fatal(err)
+	}
+
 	// The managed key is still foreign-occupied: repair must refuse this too
 	// (it only reconstructs absent managed objects, never adopts a foreign
 	// one -- same ownership discipline as C3), verified with a real repair
