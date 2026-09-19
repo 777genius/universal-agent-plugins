@@ -26,8 +26,6 @@ on:
 
 permissions:
   contents: read
-  # Passed through to the reusable lint workflow, which reads the PR diff.
-  pull-requests: read
 
 concurrency:
   group: core-fast-${{ github.ref }}
@@ -36,6 +34,8 @@ concurrency:
 jobs:
   lint:
     uses: ./.github/workflows/lint.yml
+    with:
+      lint-base: origin/${{ github.base_ref || 'main' }}
 
   test-core:
     name: test-core

@@ -15,14 +15,13 @@ jobs:
   # Separate job rather than a step in `test`: `test` is the 9-27 min critical
   # path, while the three lint matrix legs finish in a few minutes in parallel.
   lint:
-    # The repository default is contents:read only. lint.yml asks for
-    # pull-requests:read (only-new-issues reads the PR diff), and a called
-    # workflow cannot request more than its caller holds, so the caller has to
-    # grant it here or the run fails at startup.
     permissions:
       contents: read
-      pull-requests: read
     uses: ./.github/workflows/lint.yml
+    with:
+      # pull_request → origin/<base>; push → origin/main so architecture
+      # pushes are scored the same way as the WIP PR into main.
+      lint-base: origin/${{ github.base_ref || 'main' }}
 
   test:
     runs-on: ubuntu-latest
