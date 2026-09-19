@@ -29,6 +29,13 @@ func (activator Activator) requireRegistry() error {
 	return nil
 }
 
+func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel) error {
+	if domain.ClientTraitsFor(id).LifecycleKind != domain.LifecycleNativeConfig {
+		return nil
+	}
+	return kernel.RequireFileIO()
+}
+
 func (activator Activator) env() clients.Env {
 	return clients.Env{Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
 }
@@ -82,6 +89,9 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 	if err := activator.requireRegistry(); err != nil {
 		return domain.DeactivationOutcome{}, err
 	}
+	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel()); err != nil {
+		return domain.DeactivationOutcome{}, err
+	}
 	if lifecycle, ok := clients.As[clients.Lifecycle](activator.Registry, request.Client.ClientID); ok {
 		return lifecycle.Deactivate(ctx, activator.env(), request)
 	}
@@ -93,6 +103,9 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		return domain.ActivationOutcome{}, err
 	}
 	if err := activator.requireRegistry(); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel()); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {

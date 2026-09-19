@@ -14,6 +14,9 @@ import (
 )
 
 func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	projection := OpenCodeProjection{}
 	if len(OpenCodeObjects(objects)) > 0 && activePath != "" {
 		var err error

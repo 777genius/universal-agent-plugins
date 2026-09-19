@@ -12,6 +12,16 @@ import (
 	"time"
 )
 
+func TestRequireFileIORejectsZeroKernel(t *testing.T) {
+	t.Parallel()
+	if err := (Kernel{}).RequireFileIO(); err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("zero Kernel was not fail-closed: %v", err)
+	}
+	if err := New().RequireFileIO(); err != nil {
+		t.Fatalf("production Kernel rejected FileIO: %v", err)
+	}
+}
+
 func TestMCPServersAddPreservesUnrelatedConfigAndResolvesExplicitPaths(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "client.json")

@@ -402,6 +402,22 @@ func TestOpenCodeActivatorTreatsCommittedUnlockFailureAsSuccessfulLifecycle(t *t
 
 func TestActivatorRejectsNativeConfigMutationWithoutKernel(t *testing.T) {
 	_, _, _, request := openCodeActivationFixture(t, "docs")
+	assertActivatorRejectsMissingKernel(t, request)
+}
+
+func TestActivatorRejectsSkillOnlyNativeConfigMutationWithoutKernel(t *testing.T) {
+	configRoot, _, _, request := openCodeSkillOnlyActivationFixture(t)
+	assertActivatorRejectsMissingKernel(t, request)
+	if _, err := os.Lstat(filepath.Join(configRoot, "skills", "docs")); !os.IsNotExist(err) {
+		t.Fatalf("OpenCode skill tree mutated without kernel: %v", err)
+	}
+
+	request.VerifyOnly = true
+	assertActivatorRejectsMissingKernel(t, request)
+}
+
+func assertActivatorRejectsMissingKernel(t *testing.T, request domain.ActivationRequest) {
+	t.Helper()
 	_, err := Activator{Registry: all.Default()}.Activate(context.Background(), request)
 	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
 		t.Fatalf("missing NativeConfig was not fail-closed: %v", err)
@@ -414,6 +430,32 @@ func openCodeActivationFixture(t *testing.T, skillText string) (string, string, 
 	configRoot := filepath.Join(root, "xdg", "opencode")
 	active := filepath.Join(root, "managed", "demo")
 	envelope, plan := openCodeTestPackage(t, active, configRoot, skillText)
+	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := domain.ActivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: configRoot},
+		Plan:   plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientOpenCode, OwnedBase: filepath.Dir(active), ActivePath: active, NativeObjects: objects}, DeclaredName: "demo",
+	}
+	return configRoot, active, objects, request
+}
+
+func openCodeSkillOnlyActivationFixture(t *testing.T) (string, string, []domain.NativeObjectOwnership, domain.ActivationRequest) {
+	t.Helper()
+	root := t.TempDir()
+	configRoot := filepath.Join(root, "xdg", "opencode")
+	active := filepath.Join(root, "managed", "demo")
+	writeOpenCodeTestFile(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "# docs")
+	envelope := domain.PackageEnvelope{
+		Skills: map[string]domain.Skill{"docs": {Name: "docs", RelativePath: "skills/docs/SKILL.md"}},
+	}
+	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active, Components: []domain.ComponentDecision{
+		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportPrepared},
+	}}
+	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(filepath.Dir(active), "data")); err != nil {
+		t.Fatal(err)
+	}
 	objects, err := opencode.BuildOpenCodeNativeObjects(active, envelope, plan)
 	if err != nil {
 		t.Fatal(err)

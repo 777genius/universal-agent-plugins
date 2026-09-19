@@ -90,6 +90,9 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 	if err := observer.requireRegistry(); err != nil {
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
 	}
+	if err := requireNativeConfigKernel(client.ClientID, observer.nativeConfigKernel()); err != nil {
+		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
+	}
 	prepared, preparedErr := observer.inspectPreparedRegistry(client.ClientID, plan, name, managed != nil)
 	if preparedErr != nil {
 		prepared = registryIndeterminate

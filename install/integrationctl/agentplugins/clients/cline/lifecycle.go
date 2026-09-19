@@ -58,6 +58,9 @@ type clineNativeApply struct {
 }
 
 func prepareClineNativeApply(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename clineRenameFunc, capacity shared.CombinedCapacityFunc) (*clineNativeApply, error) {
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
+	}
 	if rename == nil {
 		return nil, fmt.Errorf("the Cline rename operation is unavailable")
 	}

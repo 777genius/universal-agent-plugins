@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -44,6 +45,15 @@ func TestNativeIdentityFailsClosedWithoutRegistry(t *testing.T) {
 	_, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
 	if !errors.Is(err, clients.ErrRegistryRequired) {
 		t.Fatalf("err = %v, want %v", err, clients.ErrRegistryRequired)
+	}
+}
+
+func TestNativeIdentityFailsClosedWithoutKernelForNativeConfigClient(t *testing.T) {
+	t.Parallel()
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	_, err := (NativeIdentityObserver{Registry: all.Default()}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("missing NativeConfig was not fail-closed: %v", err)
 	}
 }
 

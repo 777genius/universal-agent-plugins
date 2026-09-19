@@ -60,6 +60,9 @@ func applyClineNativeMutationWithKernelAndRename(configRoot, activePath string, 
 }
 
 func VerifyClineNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	for _, object := range ClineObjects(objects) {
 		if err := validateClineObject(configRoot, object); err != nil {
 			return err
