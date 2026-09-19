@@ -28,8 +28,11 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 
 // Activate either records a prepared personal mapping or leaves ChatGPT as a
 // remote manual install. There is no managed executable.
-func (*Adapter) Activate(_ context.Context, _ clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (*Adapter) Activate(_ context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := (*Adapter)(nil).PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	outcome := shared.StartedActivation(request)

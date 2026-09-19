@@ -37,6 +37,20 @@ func ClientTraitsFor(id ClientID) ClientTraits {
 	return definition.Traits
 }
 
+// RequiresNativeProjector reports whether staging this client must produce
+// native object ownership through a Projector. A missing projector is
+// fail-closed: empty native objects would look like a successful stage.
+func RequiresNativeProjector(id ClientID) bool {
+	definition, ok := ClientDefinitionFor(id)
+	if !ok {
+		return false
+	}
+	if definition.Capabilities.PackageMode == PackageNative || definition.Traits.LifecycleKind == LifecycleNativeConfig {
+		return true
+	}
+	return id == ClientVSCode
+}
+
 // Allows reports whether this client's table lists the intent. Validate still
 // accepts historical empty automatic intent even when the slice omits it;
 // callers that need that exception must go through Validate.

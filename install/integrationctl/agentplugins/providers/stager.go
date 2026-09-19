@@ -287,6 +287,9 @@ func (stager Stager) project(
 ) ([]domain.NativeObjectOwnership, error) {
 	projector, ok := clients.As[clients.Projector](stager.Registry, plan.ClientID)
 	if !ok {
+		if domain.RequiresNativeProjector(plan.ClientID) {
+			return nil, fmt.Errorf("client %q requires a native projector", plan.ClientID)
+		}
 		return nil, nil
 	}
 	return projector.Project(ctx, clients.ProjectionInput{

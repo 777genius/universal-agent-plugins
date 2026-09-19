@@ -40,6 +40,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if err := (*Adapter)(nil).PreflightActivation(env, request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
 	outcome := shared.StartedActivation(request)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return shared.FailedActivation(outcome, "install Claude Code CLI and retry exact @skills-dir verification", fmt.Errorf("trusted Claude Code CLI is required"))

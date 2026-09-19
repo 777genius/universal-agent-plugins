@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -562,6 +563,18 @@ func TestStagerVerifyRejectsMarkersExcludedFromPortableSnapshotDigest(t *testing
 				t.Fatalf("verify error = %v", err)
 			}
 		})
+	}
+}
+
+func TestStagerRejectsMissingProjectorForNativeConfigClient(t *testing.T) {
+	t.Parallel()
+	registry, err := clients.NewRegistry(&claude.Adapter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = testStager(Stager{Registry: registry}).Stage(context.Background(), stagingEnvelope(t), stagingPlan(t, domain.ClientGemini, domain.PackageNative), "operation-gemini", domain.CompatibilityHints{})
+	if err == nil || !strings.Contains(err.Error(), "requires a native projector") {
+		t.Fatalf("missing Gemini projector was not fail-closed: %v", err)
 	}
 }
 

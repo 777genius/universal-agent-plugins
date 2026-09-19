@@ -100,5 +100,15 @@ func traitParityRequirements() []contracttest.CapabilityRequirement {
 				return ok
 			},
 		},
+		{
+			Name: "native projector",
+			Holds: func(definition domain.ClientDefinition) bool {
+				return domain.RequiresNativeProjector(definition.ID)
+			},
+			Implements: func(adapter clients.Adapter) bool {
+				_, ok := adapter.(clients.Projector)
+				return ok
+			},
+		},
 	}
 }
