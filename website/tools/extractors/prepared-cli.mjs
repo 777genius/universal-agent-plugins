@@ -161,7 +161,8 @@ async function releaseAdapterOverlay(checkout, parent) {
   }
   // Current factoryPins track this checkout. The released command tree is
   // compiled from v0.1.65, so remaining pins must attest that tag's bytes, and
-  // pins for files the tag does not have (nested agentplugins go.mod) drop out.
+  // pins for files the tag does not have drop out (nested agentplugins go.mod
+  // and current-only construction such as domain/planning.go).
   const pinLine = /^\s*\{"([^"]+)", "[0-9a-f]{64}"\},$/;
   const attested = new Map();
   for (const line of source.split("\n")) {
