@@ -39,6 +39,9 @@ func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.Deacti
 }
 
 func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	for _, object := range GeminiObjects(objects) {
 		if err := validateGeminiObject(configRoot, object); err != nil {
 			return err

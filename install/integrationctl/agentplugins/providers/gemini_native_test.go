@@ -207,6 +207,42 @@ func TestGeminiTransportProjection(t *testing.T) {
 	}
 }
 
+func TestGeminiRejectsSkillMutationWithoutKernel(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".gemini")
+	active, desired := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
+	var skills []domain.NativeObjectOwnership
+	for _, object := range desired {
+		if object.Kind == gemini.GeminiSkillObjectKind {
+			skills = append(skills, object)
+		}
+	}
+	err := gemini.ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, active, nil, skills, nativeconfig.Kernel{}, shared.RenameDirectoryExclusive, shared.CheckedCombinedCapacity)
+	if err == nil || !strings.Contains(err.Error(), "native config file IO is required") {
+		t.Fatalf("missing kernel was not fail-closed: %v", err)
+	}
+	if _, statErr := os.Lstat(filepath.Join(configRoot, "skills")); !os.IsNotExist(statErr) {
+		t.Fatalf("Gemini skill tree mutated without kernel: %v", statErr)
+	}
+}
+
+func TestActivatorRejectsGeminiNativeMutationWithoutKernel(t *testing.T) {
+	configRoot := filepath.Join(t.TempDir(), ".gemini")
+	active, desired := geminiNativeFixture(t, configRoot, "v1", "https://docs.test/v1")
+	request := domain.ActivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientGemini, Status: domain.DetectionDetected, ConfigRoot: configRoot},
+		Plan: domain.DeliveryPlan{ClientID: domain.ClientGemini, ActivePath: active, Components: []domain.ComponentDecision{
+			{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportPrepared},
+			{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared},
+		}},
+		Delivery:     domain.StagedDelivery{ClientID: domain.ClientGemini, OwnedBase: filepath.Dir(active), ActivePath: active, NativeObjects: desired},
+		DeclaredName: "demo",
+	}
+	assertActivatorRejectsMissingKernel(t, request)
+	if _, err := os.Lstat(filepath.Join(configRoot, "skills")); !os.IsNotExist(err) {
+		t.Fatalf("Gemini skill tree mutated without kernel: %v", err)
+	}
+}
+
 func geminiNativeFixture(t *testing.T, configRoot, marker, url string) (string, []domain.NativeObjectOwnership) {
 	t.Helper()
 	active := filepath.Join(t.TempDir(), "active")

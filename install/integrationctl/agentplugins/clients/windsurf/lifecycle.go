@@ -25,6 +25,9 @@ type windsurfNativeState struct {
 }
 
 func applyWindsurfNativeMutationWithKernel(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
+	if err := kernel.RequireFileIO(); err != nil {
+		return err
+	}
 	state, err := loadWindsurfNativeState(configRoot, activePath, previous, desired)
 	if err != nil {
 		return err

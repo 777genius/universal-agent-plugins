@@ -77,6 +77,9 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 }
 
 func prepareGeminiNativeApply(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (*geminiNativeApply, error) {
+	if err := kernel.RequireFileIO(); err != nil {
+		return nil, err
+	}
 	if rename == nil {
 		return nil, fmt.Errorf("the Gemini rename operation is unavailable")
 	}
