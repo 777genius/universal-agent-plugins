@@ -825,7 +825,7 @@ function generatedFiles(lane) {
   if (stdio) {
     // Existing source-frozen embedded npm fixtures; never install or resolve them.
     for (const name of ['package.json', 'package-lock.json']) {
-      const bytes = c.readFile(path.resolve(__dirname, '../../../cli/plugin-kit-ai/internal/authoring/scaffold/templates', name), LIMIT).toString('utf8');
+      const bytes = c.readFile(path.resolve(__dirname, '../../../cli/internal/authoring/scaffold/templates', name), LIMIT).toString('utf8');
       const needle = name === 'package.json' ? '"name":"agent-plugin-template"' : '"name": "agent-plugin-template"';
       agree(bytes.split(needle).length - 1, name === 'package.json' ? 1 : 2, 'fixed embedded root names');
       files[name] = bytes.split(needle).join(needle.replace('agent-plugin-template', lane));

@@ -21,7 +21,7 @@ Contract-sensitive examples:
 
 ## Validate Failure Families
 
-`cli/plugin-kit-ai/internal/validate` exposes stable failure kinds for:
+`cli/internal/validate` exposes stable failure kinds for:
 
 - `unknown_platform`
 - `cannot_infer_platform`
@@ -33,7 +33,7 @@ The exact build tool output may vary, but the failure kind and the leading `go b
 
 ## Install Failure Families
 
-`install/plugininstall/domain.ExitCode` is the stable CLI-facing class surface:
+`plugininstall/domain.ExitCode` is the stable CLI-facing class surface:
 
 - `ExitUsage`
 - `ExitRelease`

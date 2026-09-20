@@ -85,7 +85,19 @@ func (service Service) resume(
 	if activationErr != nil {
 		return result, activationErr
 	}
+	result.NoChange = !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
 	return result, nil
+}
+
+// Unchecked authentication is not an outstanding action by itself. Report
+// an unchanged verified registration without manufacturing an auth attestation.
+func (service Service) verifiedRegistrationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, outcome domain.ActivationOutcome) bool {
+	return service.clientVerifierAvailable(input, plan) &&
+		client.Materialization == domain.MaterializationMaterialized &&
+		outcome.Activation == domain.ActivationActive && outcome.Verification == domain.VerificationInstalled &&
+		outcome.Authentication == domain.AuthenticationNotChecked &&
+		(plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationNotRequired) &&
+		!input.AuthComplete && !outcome.AuthenticationAttested && len(outcome.UserActions) == 0
 }
 
 // clientVerifierAvailable asks the activator whether an exact client-side

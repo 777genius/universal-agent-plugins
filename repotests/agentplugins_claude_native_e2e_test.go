@@ -472,17 +472,12 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 		}
 	}
 	if runtime.GOOS == "windows" {
-		claudeAssertNoWindowsStdio(t, f.Root, installPath, "local")
-		if strings.Contains(mcpList, "plugin:claude-native-proof:local:") {
-			t.Fatal("unsupported local stdio exposed by Claude")
-		}
-		stages["stdio_discovery"] = claudeNativeStage{Status: "observed_unsupported", Reason: "managed_stdio_platform_unsupported"}
-	} else {
-		if !strings.Contains(mcpList, "plugin:claude-native-proof:local:") {
-			t.Fatal("missing local stdio discovery")
-		}
-		stages["stdio_discovery"] = claudeNativeStage{Status: "passed", Reason: "local stdio enumerated by native CLI; no successful tool call claimed"}
+		claudeAssertWindowsStdio(t, f.Root, installPath, "local")
 	}
+	if !strings.Contains(mcpList, "plugin:claude-native-proof:local:") {
+		t.Fatal("missing local stdio discovery")
+	}
+	stages["stdio_discovery"] = claudeNativeStage{Status: "passed", Reason: "local stdio enumerated by native CLI; no successful tool call claimed"}
 	stages["mcp_transport_discovery"] = claudeNativeStage{Status: "passed", Reason: "claude mcp list classified remote-http as (HTTP) and remote-sse as (SSE) and attempted a real (loopback-refused) connection to each, distinct from plugin details' shallow key enumeration; no live tool call or successful connection claimed"}
 
 	// version update
@@ -569,7 +564,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 		t.Fatalf("claude plugin details after repair did not attribute the restored MCP inventory: %s", repairDetails)
 	}
 	if runtime.GOOS == "windows" {
-		claudeAssertNoWindowsStdio(t, f.Root, installPath, "local")
+		claudeAssertWindowsStdio(t, f.Root, installPath, "local")
 	}
 	// Known, pre-existing, non-Codex-specific audit-trail gap (not
 	// introduced or fixed by this checkpoint): repair's recorded
@@ -648,13 +643,10 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 }
 
 func claudeExpectedMCPInventory() string {
-	if runtime.GOOS == "windows" {
-		return "MCP servers (2)"
-	}
 	return "MCP servers (3)"
 }
 
-// Assert the exact product limitation, never infer unsupported from absent tools.
+// Windows has the same projected stdio contract as the POSIX clients.
 func claudeWindowsStdioPlan(r map[string]any, names ...string) error {
 	data, _ := r["data"].(map[string]any)
 	targets, _ := data["targets"].([]any)
@@ -675,19 +667,19 @@ func claudeWindowsStdioPlan(r map[string]any, names ...string) error {
 			c, _ := raw.(map[string]any)
 			if c["kind"] == "mcp_server" && c["name"] == name {
 				count++
-				if c["support"] != "unsupported" || c["reason"] != "managed_stdio_platform_unsupported" {
+				if c["support"] != "projected" || (c["reason"] != nil && c["reason"] != "") {
 					return fmt.Errorf("unexpected stdio classification: %+v", c)
 				}
 			}
 		}
 		if count != 1 {
-			return fmt.Errorf("expected exactly one unsupported stdio component %q, got %d", name, count)
+			return fmt.Errorf("expected exactly one projected stdio component %q, got %d", name, count)
 		}
 	}
 	return nil
 }
 
-func claudeAssertNoWindowsStdio(t *testing.T, root, installPath string, names ...string) {
+func claudeAssertWindowsStdio(t *testing.T, root, installPath string, names ...string) {
 	t.Helper()
 	nativeRequireContained(t, root, installPath)
 	body, err := os.ReadFile(filepath.Join(installPath, ".mcp.json"))
@@ -697,30 +689,32 @@ func claudeAssertNoWindowsStdio(t *testing.T, root, installPath string, names ..
 	if err := claudeWindowsMCPProjection(body, names...); err != nil {
 		t.Fatal(err)
 	}
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.Name() == "managed-stdio-v1" {
-			return fmt.Errorf("unsupported managed stdio helper exists: %s", path)
-		}
-		return nil
-	})
-	if err != nil {
+	var servers map[string]struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(body, &servers); err != nil {
 		t.Fatal(err)
+	}
+	for _, name := range names {
+		command := servers[name].Command
+		nativeRequireContained(t, installPath, command)
+		if st, err := os.Stat(command); err != nil || !st.Mode().IsRegular() {
+			t.Fatalf("missing managed stdio helper %q: %v", command, err)
+		}
 	}
 }
 
 func TestClaudeWindowsStdioPlan(t *testing.T) {
-	const fixture = `{"data":{"targets":[{"target":"claude","output":{"result":{"plan":{"client_id":"claude","components":[{"kind":"mcp_server","name":"default","support":"unsupported","reason":"managed_stdio_platform_unsupported"},{"kind":"mcp_server","name":"explicit","support":"unsupported","reason":"managed_stdio_platform_unsupported"}]}}}}]}}`
+	const fixture = `{"data":{"targets":[{"target":"claude","output":{"result":{"plan":{"client_id":"claude","components":[{"kind":"mcp_server","name":"default","support":"projected"},{"kind":"mcp_server","name":"explicit","support":"projected"}]}}}}]}}`
 	for _, tc := range []struct {
 		name, input string
 		wantError   bool
 	}{
 		{"exact", fixture, false},
-		{"wrong support", strings.Replace(fixture, `"unsupported"`, `"projected"`, 1), true},
-		{"wrong reason", strings.Replace(fixture, "managed_stdio_platform_unsupported", "command_not_found", 1), true},
+		{"wrong support", strings.Replace(fixture, `"projected"`, `"unsupported"`, 1), true},
+		{"wrong reason", strings.Replace(fixture, `"support":"projected"`, `"support":"projected","reason":"managed_stdio_platform_unsupported"`, 1), true},
 		{"missing explicit", strings.Replace(fixture, `"explicit"`, `"other"`, 1), true},
+		{"duplicate default", strings.Replace(fixture, `"explicit"`, `"default"`, 1), true},
 		{"wrong client", strings.Replace(fixture, `"client_id":"claude"`, `"client_id":"codex"`, 1), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -736,8 +730,9 @@ func TestClaudeWindowsStdioPlan(t *testing.T) {
 }
 
 // Claude's generated .mcp.json is a flat server-name map, not the portable
-// package mcp.json envelope. Fail closed on wrappers and non-network entries.
-func claudeWindowsMCPProjection(body []byte, excluded ...string) error {
+// package mcp.json envelope. Require the private managed launcher for every
+// expected stdio server, preserving the independent network transport checks.
+func claudeWindowsMCPProjection(body []byte, expected ...string) error {
 	var servers map[string]map[string]any
 	if err := json.Unmarshal(body, &servers); err != nil {
 		return err
@@ -745,12 +740,31 @@ func claudeWindowsMCPProjection(body []byte, excluded ...string) error {
 	if len(servers) == 0 {
 		return fmt.Errorf("missing projected HTTP inventory")
 	}
-	for _, name := range excluded {
-		if _, ok := servers[name]; ok {
-			return fmt.Errorf("unsupported stdio projected: %s", name)
+	stdio := map[string]bool{}
+	for _, name := range expected {
+		server, ok := servers[name]
+		if !ok {
+			return fmt.Errorf("missing projected stdio: %s", name)
 		}
+		command, _ := server["command"].(string)
+		args, _ := server["args"].([]any)
+		if !strings.HasSuffix(strings.ReplaceAll(command, `\`, "/"), "/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins.exe") || len(args) < 7 || args[0] != "--internal-stdio-v1" || args[5] != "--" || server["cwd"] != nil || server["url"] != nil || (server["type"] != nil && server["type"] != "stdio") {
+			return fmt.Errorf("invalid managed stdio projection: %s %+v", name, server)
+		}
+		for _, value := range args {
+			if _, ok := value.(string); !ok {
+				return fmt.Errorf("non-string stdio argument: %s", name)
+			}
+		}
+		if args[1] == "" || args[2] == "" || args[3] == "" || args[6] == "" || (args[4] != "plugin" && args[4] != "data") {
+			return fmt.Errorf("invalid managed stdio roots/anchor/command: %s", name)
+		}
+		stdio[name] = true
 	}
 	for name, server := range servers {
+		if stdio[name] {
+			continue
+		}
 		if server["command"] != nil || server["args"] != nil || server["type"] == "stdio" {
 			return fmt.Errorf("stdio command projected: %s %+v", name, server)
 		}
@@ -759,31 +773,36 @@ func claudeWindowsMCPProjection(body []byte, excluded ...string) error {
 			return fmt.Errorf("invalid projected network server: %s %+v", name, server)
 		}
 	}
-	if strings.Contains(string(body), "--internal-stdio-v1") {
-		return fmt.Errorf("managed stdio launcher projected")
-	}
 	return nil
 }
 
 func TestClaudeWindowsMCPProjection(t *testing.T) {
 	// Exact flat shape written by projectClaudeMCP; streamable-http becomes http.
 	const httpProjection = `{"http":{"type":"http","url":"http://127.0.0.1:1234/mcp"}}`
+	const projection = `{"default":{"command":"C:/fixture/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins.exe","args":["--internal-stdio-v1","C:/fixture","C:/data","C:/fixture","plugin","--","node","opaque"]},"http":{"type":"http","url":"http://127.0.0.1:1234/mcp"}}`
 	for _, tc := range []struct {
 		name, body string
 		wantError  bool
 	}{
-		{"flat generated HTTP", httpProjection, false},
-		{"flat generated HTTP and SSE", `{"remote-http":{"type":"http","url":"http://127.0.0.1:9/mcp"},"remote-sse":{"type":"sse","url":"http://127.0.0.1:9/sse"}}`, false},
+		{"projected stdio and HTTP", projection, false},
+		{"projected stdio HTTP and SSE", strings.TrimSuffix(projection, "}") + `,"sse":{"type":"sse","url":"http://127.0.0.1:9/sse"}}`, false},
+		{"missing stdio", httpProjection, true},
+		{"wrong mode", strings.Replace(projection, "--internal-stdio-v1", "--help", 1), true},
+		{"wrong helper", strings.Replace(projection, "managed-stdio-v1/agentplugins.exe", "other/agentplugins.exe", 1), true},
+		{"wrong anchor", strings.Replace(projection, `"plugin"`, `"unknown"`, 1), true},
+		{"wrong separator", strings.Replace(projection, `"--"`, `"-"`, 1), true},
+		{"non-string argv", strings.Replace(projection, `"opaque"`, `7`, 1), true},
+		{"missing data", strings.Replace(projection, `"C:/data"`, `""`, 1), true},
 		{"portable wrapper", `{"mcpServers":` + httpProjection + `}`, true},
 		{"empty", `{}`, true},
-		{"excluded stdio name", `{"default":{"type":"http","url":"http://127.0.0.1/mcp"}}`, true},
-		{"implicit stdio", `{"other":{"command":"sh","args":["-c","cat"]}}`, true},
-		{"explicit stdio", `{"other":{"type":"stdio"}}`, true},
-		{"hidden command", `{"http":{"type":"http","url":"http://127.0.0.1/mcp","command":"sh"}}`, true},
-		{"helper reference", `{"http":{"type":"http","url":"http://127.0.0.1/--internal-stdio-v1"}}`, true},
+		{"stdio replaced with network", `{"default":{"type":"http","url":"http://127.0.0.1/mcp"}}`, true},
+		{"unexpected implicit stdio", strings.TrimSuffix(projection, "}") + `,"other":{"command":"sh","args":["-c","cat"]}}`, true},
+		{"unexpected explicit stdio", strings.TrimSuffix(projection, "}") + `,"other":{"type":"stdio"}}`, true},
+		{"hidden network command", strings.Replace(projection, `"type":"http"`, `"type":"http","command":"sh"`, 1), true},
+		{"missing network URL", strings.Replace(projection, `"http://127.0.0.1:1234/mcp"`, `""`, 1), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := claudeWindowsMCPProjection([]byte(tc.body), "default", "explicit", "local"); (err != nil) != tc.wantError {
+			if err := claudeWindowsMCPProjection([]byte(tc.body), "default"); (err != nil) != tc.wantError {
 				t.Fatalf("projection error = %v, wantError = %v", err, tc.wantError)
 			}
 		})

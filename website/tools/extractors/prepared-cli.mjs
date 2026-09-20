@@ -118,13 +118,13 @@ export async function consumePreparedCLI(root, expectedSHA) {
 }
 
 async function releaseAdapterOverlay(checkout, parent) {
-  const sourceName = "cli/plugin-kit-ai/tools/authoring-docs/source.go";
+  const sourceName = "cli/tools/authoring-docs/source.go";
   let source = await fs.readFile(path.join(repoRoot, sourceName), "utf8");
   const releasePins = new Map([
-    ["cli/plugin-kit-ai/cmd/agentplugins/release_root.go", "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"],
-    ["cli/plugin-kit-ai/internal/authoring/commands/commands.go", "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"],
-    ["cli/plugin-kit-ai/internal/authoring/commands/public_contract.go", "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"],
-    ["cli/plugin-kit-ai/internal/authoring/commands/version.go", "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"]
+    ["cli/cmd/agentplugins/release_root.go", "c0465f90903c7ad3fcdc2283c241558d1b73bd9633f0e6af247ccd692a0e155e"],
+    ["cli/internal/authoring/commands/commands.go", "9ed49814d6145f61e28ac8c5b914383749f06d946dcece15db2c1059fd290220"],
+    ["cli/internal/authoring/commands/public_contract.go", "39c79f491f0733d352ffc0fa3a8ff4eaa169612e8876e92e5fb74c856663ec65"],
+    ["cli/internal/authoring/commands/version.go", "ffe6cfef352faeb9a3c00722a628a2093876c14120cd6725131b3e105fda6b29"]
   ]);
   for (const [name, digest] of releasePins) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -132,18 +132,18 @@ async function releaseAdapterOverlay(checkout, parent) {
     if (!pattern.test(source)) throw new Error(`Released authoring adapter pin missing: ${name}`);
     source = source.replace(pattern, `{"${name}", "${digest}"}`);
   }
-  const devPin = /^\s*\{"cli\/plugin-kit-ai\/internal\/authoring\/commands\/dev_session\.go", "[0-9a-f]{64}"\},\n/m;
+  const devPin = /^\s*\{"cli\/internal\/authoring\/commands\/dev_session\.go", "[0-9a-f]{64}"\},\n/m;
   if (!devPin.test(source)) throw new Error("Released authoring adapter projection lost the Phase 7 boundary");
   source = source.replace(devPin, "");
   // Phase 8A is present only in current source. The released command tree is
   // compiled from v0.1.65, so its overlaid source inventory must not require
   // current-only packages or broaden the immutable release attestation.
   for (const prefix of [
-    "cli/plugin-kit-ai/internal/authoring/commands/maintenance.go",
-    "cli/plugin-kit-ai/internal/authoring/jsonmaint/",
-    "cli/plugin-kit-ai/internal/authoring/nativeimport/",
-    "cli/plugin-kit-ai/internal/authoring/report/",
-    "cli/plugin-kit-ai/internal/authoring/scaffold/"
+    "cli/internal/authoring/commands/maintenance.go",
+    "cli/internal/authoring/jsonmaint/",
+    "cli/internal/authoring/nativeimport/",
+    "cli/internal/authoring/report/",
+    "cli/internal/authoring/scaffold/"
   ]) {
     let found = false;
     source = source.split("\n").filter((line) => {
@@ -155,7 +155,7 @@ async function releaseAdapterOverlay(checkout, parent) {
     if (!found) throw new Error(`Current-only authoring adapter pin missing: ${prefix}`);
   }
   for (const dir of ["jsonmaint", "nativeimport", "report", "scaffold"]) {
-    const line = `\t"cli/plugin-kit-ai/internal/authoring/${dir}",\n`;
+    const line = `\t"cli/internal/authoring/${dir}",\n`;
     if (!source.includes(line)) throw new Error(`Current-only authoring adapter directory missing: ${dir}`);
     source = source.replace(line, "");
   }
@@ -163,6 +163,9 @@ async function releaseAdapterOverlay(checkout, parent) {
   // compiled from v0.1.65, so remaining pins must attest that tag's bytes, and
   // pins for files the tag does not have drop out (nested agentplugins go.mod
   // and current-only construction such as domain/planning.go).
+  // The immutable release still uses the historical module directory. Only
+  // this overlay translates current source paths back to that release layout.
+  source = source.replaceAll('"cli/', '"cli/plugin-kit-ai/');
   const pinLine = /^\s*\{"([^"]+)", "[0-9a-f]{64}"\},$/;
   const attested = new Map();
   for (const line of source.split("\n")) {
@@ -187,7 +190,8 @@ async function releaseAdapterOverlay(checkout, parent) {
   const projected = path.join(parent, "agentplugins-v0.1.65-source.go");
   const overlay = path.join(parent, "agentplugins-v0.1.65-overlay.json");
   await fs.writeFile(projected, source, { flag: "wx" });
-  await fs.writeFile(overlay, JSON.stringify({ Replace: { [path.join(checkout, sourceName)]: projected } }) + "\n", { flag: "wx" });
+  const historicalSourceName = sourceName.replace("cli/", "cli/plugin-kit-ai/");
+  await fs.writeFile(overlay, JSON.stringify({ Replace: { [path.join(checkout, historicalSourceName)]: projected } }) + "\n", { flag: "wx" });
   return overlay;
 }
 

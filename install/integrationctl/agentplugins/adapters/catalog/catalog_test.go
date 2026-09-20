@@ -210,7 +210,7 @@ func TestCatalogRejectsAnyCompatibilityMatrixDeviation(t *testing.T) {
 
 func TestEmbeddedCatalogV2LoadsAllEntries(t *testing.T) {
 	t.Parallel()
-	body, err := os.ReadFile("../../../../../cli/plugin-kit-ai/cmd/agentplugins/catalog-v2.json")
+	body, err := os.ReadFile("../../../../../cli/cmd/agentplugins/catalog-v2.json")
 	if err != nil {
 		t.Fatal(err)
 	}

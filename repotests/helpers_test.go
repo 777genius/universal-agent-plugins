@@ -76,7 +76,7 @@ func buildPluginKitAI(t *testing.T) string {
 	t.Helper()
 	pluginKitAIBuildOnce.Do(func() {
 		root := RepoRoot(t)
-		cliDir := filepath.Join(root, "cli", "plugin-kit-ai")
+		cliDir := filepath.Join(root, "cli")
 		pluginKitAIBuildPath, pluginKitAIBuildErr = buildGoBinaryForTests(cliDir, "plugin-kit-ai", nil, "./cmd/plugin-kit-ai")
 	})
 	if pluginKitAIBuildErr != nil {
@@ -88,7 +88,7 @@ func buildPluginKitAI(t *testing.T) string {
 func buildPluginKitAIWithVersion(t *testing.T, cliVersion string) string {
 	t.Helper()
 	root := RepoRoot(t)
-	cliDir := filepath.Join(root, "cli", "plugin-kit-ai")
+	cliDir := filepath.Join(root, "cli")
 	pluginKitAIBin, err := buildGoBinaryForTests(cliDir, "plugin-kit-ai", []string{"-ldflags", "-X main.version=" + cliVersion}, "./cmd/plugin-kit-ai")
 	if err != nil {
 		t.Fatalf("build plugin-kit-ai with version: %v", err)

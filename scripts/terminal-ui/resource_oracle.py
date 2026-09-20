@@ -120,7 +120,7 @@ def run_native(binary, root, evidence, result):
 def source_identity(repo):
     command = ['git', 'rev-parse', 'HEAD']
     commit = subprocess.check_output(command, cwd=repo, text=True, timeout=15).strip()
-    paths = subprocess.check_output(['git', 'ls-files', '--', 'cli/plugin-kit-ai'],
+    paths = subprocess.check_output(['git', 'ls-files', '--', 'cli'],
                                     cwd=repo, text=True, timeout=15).splitlines()
     paths += ['scripts/terminal-ui/' + name for name in
               ('resource_oracle.py', 'windows_conpty.py', 'windows_job.py', 'harness.py')]
@@ -151,7 +151,7 @@ def main():
         build_env = dict(os.environ, GOWORK='off', GOTOOLCHAIN='local', CGO_ENABLED='0',
                          GOPROXY='off', GOSUMDB='off')
         with (evidence / 'build.log').open('wb') as log:
-            build = subprocess.run(command, cwd=repo / 'cli/plugin-kit-ai', env=build_env,
+            build = subprocess.run(command, cwd=repo / 'cli', env=build_env,
                                    stdout=log, stderr=subprocess.STDOUT, timeout=180)
         check(build.returncode == 0, 'test executable build failed; see build.log')
         result['test_binary_sha256'] = digest(binary)

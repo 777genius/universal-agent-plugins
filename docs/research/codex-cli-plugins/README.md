@@ -164,11 +164,11 @@
 
 Рендер цели **codex** вызывает генерацию управляемого манифеста и конфига в адаптере:
 
-- `cli/plugin-kit-ai/internal/platformexec/codex.go` — `Generate` пишет `.codex-plugin/plugin.json`, `.codex/config.toml`, копирует target-артефакты (`commands/`, `contexts/` и т.д. по состоянию пакета)
+- `cli/internal/platformexec/codex.go` — `Generate` пишет `.codex-plugin/plugin.json`, `.codex/config.toml`, копирует target-артефакты (`commands/`, `contexts/` и т.д. по состоянию пакета)
 
 Общая логика полей **`skills`** → `"./skills/"` и **`mcpServers`** → `"./.mcp.json"` с эмитом **`.mcp.json`** при наличии portable MCP:
 
-- `cli/plugin-kit-ai/internal/pluginmanifest/manifest.go` — функция **`renderManagedPluginArtifacts`** (около строк 1359–1388 в текущем дереве)
+- `cli/internal/pluginmanifest/manifest.go` — функция **`renderManagedPluginArtifacts`** (около строк 1359–1388 в текущем дереве)
 
 Импорт существующего Codex-плагина нормализует пути skills/MCP к управляемым `./skills/` и `./.mcp.json` (см. предупреждения в `codex.go` при импорте).
 

@@ -93,7 +93,7 @@ namespace contract, not protection against a hostile concurrent same-UID writer.
      UAP_PACKED_INSTALLER_CONFIG_SHA256="$BRIDGE_SHA256" \
      UAP_PACKED_INSTALLER_COMMIT="$FINAL_COMMIT" \
      UAP_PACKED_INSTALLER_OUTPUT=/absolute/bridge-results/completion.json \
-     "$GO" test -p=2 -tags=packedci ./cli/plugin-kit-ai/internal/authoring/commands \
+     "$GO" test -p=2 -tags=packedci ./cli/internal/authoring/commands \
        -run '^TestPackedGeneratedPackagesReachExistingInstallerPlanner$' -count=1 -v
    ```
 
@@ -129,7 +129,7 @@ stub only for intake consistency; restoring the real helper and a separate CLI
 process both reject them. No stub is reachable from the production verifier CLI.
 Fixtures are retained under private TMPDIR for diagnosis.
 
-`go test -p=2 ./cli/plugin-kit-ai/internal/authoring/commands -run
+`go test -p=2 ./cli/internal/authoring/commands -run
 '^TestPackedInstallerSourceHarness$' -count=1 -v` generates five labelled source
 fixtures using the existing public authoring test helper, including extra-skill,
 and exercises the same planner seam for 15 plans. It writes no packed result.

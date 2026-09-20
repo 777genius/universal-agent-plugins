@@ -19,7 +19,7 @@ func BuildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return nil, fmt.Errorf("the Gemini config root is unavailable")
 	}
-	objects := make([]domain.NativeObjectOwnership, 0, len(envelope.Skills)+len(envelope.MCP.Servers))
+	objects := make([]domain.NativeObjectOwnership, 0, len(plan.Components))
 	for _, component := range plan.Components {
 		object, err := geminiPlannedOwnership(stagingRoot, configRoot, envelope, plan, pluginDataPath, component)
 		if err != nil {

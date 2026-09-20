@@ -17,6 +17,11 @@ const native = require("../scripts/authoring-native-qualification");
 const promotion = require("../scripts/authoring-promotion");
 const moduleFile = path.resolve(__dirname, "../scripts/authoring-native-qualification.js");
 const hash = s => c.digest(Buffer.from(s));
+function duplicateRootKey(bytes) {
+  const body = bytes.toString();
+  assert.equal(body[0], "{");
+  return Buffer.from(`{"schema":"duplicate",${body.slice(1)}`);
+}
 const ID = { repository: c.REPOSITORY, commit: "a".repeat(40), engine_revision: "a".repeat(40),
   versions: { agentplugins: "0.1.54", "plugin-kit-ai": "2.0.1" } };
 const invocation = workflow => ({ repository: c.REPOSITORY, workflow, source: ID.commit,
@@ -463,7 +468,7 @@ for (const kind of ["missing", "attempt", "workflow", "source", "duplicate-key",
       let v=JSON.parse(c.readFile(file));
       if(kind==="future-qualification")v.qualification_sha256=hash("future");
       if(kind==="subject")v.subjects.pop();
-      let bytes=c.encode(v);if(kind==="duplicate-key")bytes=Buffer.from(bytes.toString().replace('{','{"schema":"duplicate",'));
+      let bytes=c.encode(v);if(kind==="duplicate-key")bytes=duplicateRootKey(bytes);
       fs.chmodSync(file,0o600);fs.writeFileSync(file,bytes);f.options.preparation.sha256=c.digest(bytes);
     }
     assert.throws(()=>native.readPreparation(f.root,f.pins,f.options.preparation));noTerminal(f);
@@ -485,7 +490,7 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
   const rows = JSON.parse(fs.readFileSync(path.join(f.options.output, "transcripts.json"))).installer;
   const info = rows.find(row => row.id === "info"), value = JSON.parse(info.stdout).data;
   const registered = Object.values(JSON.parse(info.before.state_document).installations[0].clients)[0];
-  const go = fs.readFileSync(path.resolve(__dirname, "../../../cli/plugin-kit-ai/internal/agentpluginscli/read.go"), "utf8");
+  const go = fs.readFileSync(path.resolve(__dirname, "../../../cli/internal/agentpluginscli/read.go"), "utf8");
   const shape = go.split("type publicClient struct {")[1].split("\n}")[0];
   const fields = [...shape.matchAll(/`json:"([^",]+)[^"]*"`/g)].map(m => m[1]).filter(k => k !== "-");
   assert.match(shape, /BindingID[^\n]+`json:"-"`/);
@@ -765,7 +770,7 @@ test("closed reader rejects terminal and evidence mutations independently", { sk
       if(scenario==='evidence-digest')v.evidence[0].sha256=hash('wrong transcript');
       if(scenario==='traversal')v.evidence[0].file='../transcripts.json';
       let bytes=c.encode(v);
-      if(scenario==='duplicate-key')bytes=Buffer.from(bytes.toString().replace('{','{"schema":"duplicate",'));
+      if(scenario==='duplicate-key')bytes=duplicateRootKey(bytes);
       if(scenario==='noncanonical')bytes=Buffer.from(JSON.stringify(v));
       put(file,bytes);
       if(scenario==='extra-evidence'){special=path.join(root,'extra.json');fs.writeFileSync(special,'{}');}

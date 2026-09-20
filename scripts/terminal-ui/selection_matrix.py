@@ -149,12 +149,17 @@ def installed(fixture, selected):
 def prepare_codex_registry(fixture):
     """Synthetic controlled native registry protocol, not a real Codex executable."""
     stub = fixture.bin / 'codex'
-    stub.write_text('#!' + sys.executable + '\n' + r'''import json, os, sys
+    # Bind fixture paths into the generated executable: production native calls
+    # intentionally strip arbitrary environment variables (including STUB_LOG).
+    stub.write_text('#!' + sys.executable + '\n'
+                    + 'FIXTURE_DATA = ' + repr(str(fixture.data)) + '\n'
+                    + 'FIXTURE_LOG = ' + repr(str(fixture.root / 'stub.log')) + '\n'
+                    + r'''import json, sys
 from pathlib import Path
 args = sys.argv[1:]
-root = Path(os.environ['AGENTPLUGINS_HOME'])
+root = Path(FIXTURE_DATA)
 registry = root / 'synthetic-codex-registry.json'
-with open(os.environ['STUB_LOG'], 'a') as log:
+with open(FIXTURE_LOG, 'a') as log:
     log.write(sys.argv[0] + ' ' + ' '.join(args) + '\n')
 state = json.loads(registry.read_text()) if registry.exists() else {}
 if args == ['--version']:
@@ -323,7 +328,7 @@ def main():
         args.binary = args.artifacts.resolve() / 'source-agentplugins'
         with (args.artifacts / 'build.log').open('wb') as log:
             subprocess.run([str(args.build_go.resolve()), 'build', '-o', str(args.binary), './cmd/agentplugins'],
-                           cwd=repo / 'cli/plugin-kit-ai', stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+                           cwd=repo / 'cli', stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
         check(source_digest(repo) == source_before, 'tracked source changed during build')
         args.binary_sha256 = digest(args.binary)
     else:

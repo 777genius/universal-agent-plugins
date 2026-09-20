@@ -25,7 +25,7 @@ jobs:
           go-version: '1.25.13'
           cache: false
       - name: Focused native contracts
-        working-directory: cli/plugin-kit-ai
+        working-directory: cli
         run: go test -count=1 ./internal/promptio ./internal/terminalprompts ./internal/agentpluginscli/prompt > "$RUNNER_TEMP/diagnostic-go.log" 2>&1 || { tail -c 6000 "$RUNNER_TEMP/diagnostic-go.log"; exit 1; }
       - name: Cleanup reporting regressions
         run: python -B -m unittest discover -s scripts/terminal-ui -p test_windows_cleanup.py

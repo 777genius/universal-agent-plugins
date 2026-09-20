@@ -19,15 +19,15 @@ Historical maintainer references live in:
 |-------|----------|------|
 | SDK runtime | `sdk/plugin_kit_ai.go` | Platform-neutral composition root that wires the generic engine, generated descriptor lookup, middleware, and platform registrars |
 | SDK generator | `cmd/plugin-kit-ai-gen/main.go` | Generates descriptor-derived runtime, scaffold, validate, and docs artifacts |
-| Plugin install library | `install/plugininstall/install.go` | Public install facade that wires use case and concrete adapters |
-| CLI | `cli/plugin-kit-ai/cmd/plugin-kit-ai/main.go` | Process entrypoint; commands parse flags and call `internal/app`, `internal/scaffold`, and `internal/validate` |
+| Plugin install library | `plugininstall/install.go` | Public install facade that wires use case and concrete adapters |
+| CLI | `cli/cmd/plugin-kit-ai/main.go` | Process entrypoint; commands parse flags and call `internal/app`, `internal/scaffold`, and `internal/validate` |
 
 Rule: the CLI must not construct `plugininstall` adapters directly. It uses the `plugininstall` facade.
 
 ## Agent Plugins Core: Layering, Import Rules, Size Limits
 
 The `agentplugins` install core spans three packages: `install/integrationctl/agentplugins/...`,
-`cli/plugin-kit-ai/internal/agentpluginscli/...` and `cli/plugin-kit-ai/cmd/agentplugins`.
+`cli/internal/agentpluginscli/...` and `cli/cmd/agentplugins`.
 `install/integrationctl/agentplugins` is its own Go module
 (`github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins`), listed in
 `go.work`. Import paths are unchanged. The parent `install/integrationctl` module
@@ -43,6 +43,7 @@ point inward.
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `libraries-take-an-injected-registry` |
+| Installer facade | `agentplugins/installer` | public DTOs plus the layers above through one composition boundary; injected registry only | yes, `libraries-take-an-injected-registry` and the client-id ratchet |
 | CLI | `agentpluginscli` | the public facades of the layers above, never providers or pathpolicy | yes, `cli-no-core-internals` |
 | Composition root | `cmd/agentplugins`, `cmd/plugin-kit-ai` | everything, and nothing imports them | yes: they are the production importers of `clients/all` |
 
@@ -81,6 +82,12 @@ construct `planner.Planner{}`. Detection is request-scoped:
 `pathpolicy`. The CLI may still import the thin public planner facade
 (`Capabilities`, `ApplyInstallIntent`, and the rest) because those names are a
 stable API for authoring, not a second composition root.
+
+`agentplugins/installer` is the public embedding boundary. It owns concrete
+composition but receives the supported client registry from the executable;
+it does not import `clients/all`, branch on client constants, or export its raw
+Store/Kernel. The production CLI gives this facade the qualified Claude/Codex
+subset while its existing discovery and catalog paths keep the full registry.
 
 Detection is the first capability to live behind the contract: each
 `clients/<id>` implements `HostDetector` and reports the surfaces it observed
@@ -192,12 +199,12 @@ Current runtime carriers:
 
 ## CLI Application Layer
 
-`cli/plugin-kit-ai/internal/app` keeps Cobra out of install/init application logic:
+`cli/internal/app` keeps Cobra out of install/init application logic:
 
 - `InstallRunner` delegates to `plugininstall.Install`
 - `InitRunner` resolves generated scaffold definitions and delegates generating to `scaffold`
 
-`cli/plugin-kit-ai/internal/validate` enforces generated platform rules for scaffolded projects.
+`cli/internal/validate` enforces generated platform rules for scaffolded projects.
 
 ## Generated Sources
 
@@ -222,7 +229,7 @@ Generator drift is enforced by tests in `sdk/generator`.
 ## Tests
 
 - `sdk/...`: runtime, descriptors, generator drift, examples
-- `cli/plugin-kit-ai/...`: app and scaffold coverage
+- `cli/...`: app and scaffold coverage
 - `repotests/...`: generated project integration and installer integration
 
 Note: installer integration tests create a local `httptest` server and require loopback bind permissions.

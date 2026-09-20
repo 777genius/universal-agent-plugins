@@ -817,7 +817,7 @@ The intended architecture is:
 4. Adapters
 5. Composition roots
 
-This should match the style already used by `install/plugininstall`.
+This should match the style already used by `plugininstall`.
 
 ### Proposed code layout
 
@@ -842,8 +842,8 @@ install/integrationctl/
 
 CLI composition remains outside the module:
 
-- `cli/plugin-kit-ai/internal/app`
-- `cli/plugin-kit-ai/cmd/plugin-kit-ai/...`
+- `cli/internal/app`
+- `cli/cmd/plugin-kit-ai/...`
 
 Rule:
 

@@ -96,7 +96,7 @@ def main(root, sha):
         'tools': {k: {'path': str(p), 'sha256': proof.digest(p)} for k, p in dict(go=go, node=node, npm=npm).items()},
         'identity': identity, 'release_eligible': False, 'platform_acceptance': False, 'attested': False})
     run('warmup', [go, 'list', '-p=2', '-deps', '-test', proof.PACKAGE_PATH,
-        './cli/plugin-kit-ai/cmd/agentplugins', './cli/plugin-kit-ai/cmd/plugin-kit-ai'])
+        './cli/cmd/agentplugins', './cli/cmd/plugin-kit-ai'])
     env.update(GOPROXY='off', GOSUMDB='off', GOVCS='*:off')
     work = root / 'work'; work.mkdir()
     stage = dict(candidate=True, repo=str(repo), output=str(root / 'candidate'), workParent=str(work),

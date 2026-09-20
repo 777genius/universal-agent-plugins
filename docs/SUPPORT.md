@@ -332,11 +332,11 @@ Declared release review:
 These areas are not supported as public dependencies:
 
 - `sdk/internal/...`
-- `cli/plugin-kit-ai/internal/...`
-- `install/plugininstall/internal/...`
-- `install/plugininstall/adapters/...`
-- `install/plugininstall/domain/...`
-- `install/plugininstall/ports/...`
+- `cli/internal/...`
+- `plugininstall/internal/...`
+- `plugininstall/adapters/...`
+- `plugininstall/domain/...`
+- `plugininstall/ports/...`
 - generator implementation details and generated package internals
 
 ## Current Public-Experimental Surfaces

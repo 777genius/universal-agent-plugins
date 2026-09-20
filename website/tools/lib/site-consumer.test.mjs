@@ -172,6 +172,7 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     }
   }
   const parent = bundle.pages.find((page) => page.relativePath.endsWith("prepared-authoring-v2-agentplugins-author.md"));
+  // The released adapter predates the CLI relocation; its pinned source URL is immutable.
   assert.match(parent.content, new RegExp(`https://github.com/777genius/universal-agent-plugins/blob/${sourceSHA}/cli/plugin-kit-ai/internal/agentpluginscli/root.go`));
   assert.match(parent.content, /--accept-security-risk/);
   assert.match(parent.content, /installer-only\nand rejected here/);
@@ -295,7 +296,7 @@ test("configured canonical base and new source links retain their identities", (
     process.env.DOCS_HOSTNAME || "https://777genius.github.io",
   ).toString();
   assert.equal(docsBaseUrl, expectedDocsBase);
-  assert.equal(repoBrowserUrl("cli:x"), "https://github.com/777genius/universal-agent-plugins/tree/main/cli/plugin-kit-ai");
+  assert.equal(repoBrowserUrl("cli:x"), "https://github.com/777genius/universal-agent-plugins/tree/main/cli");
 });
 
 

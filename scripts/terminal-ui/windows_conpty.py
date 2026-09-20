@@ -412,7 +412,7 @@ def run_case(name, args):
             terminal.wait('OWNER_READY_' + nonce)
             if args.powershell:
                 terminal.wait('POWERSHELL_LAUNCH_' + nonce)
-            terminal.wait(r'Choose targets[^\r\n]*:')
+            terminal.wait(r'Choose one or more by number or id, comma-separated \[Enter keeps defaults\]:')
             check('codex' in clean(terminal.raw).lower() and 'cursor' in clean(terminal.raw).lower(),
                   'expected both config-only clients')
             fixture.unchanged()

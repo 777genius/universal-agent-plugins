@@ -72,7 +72,7 @@ jobs:
 
       - name: Run Agent Plugins loader conformance
         run: |
-          go build -o "$RUNNER_TEMP/agentplugins-conformance-adapter" ./cli/plugin-kit-ai/cmd/agentplugins-conformance-adapter
+          go build -o "$RUNNER_TEMP/agentplugins-conformance-adapter" ./cli/cmd/agentplugins-conformance-adapter
           node .ci/agent-plugins-conformance-kit/dist/cli.js verify
           node .ci/agent-plugins-conformance-kit/dist/cli.js run \
             --adapter "$RUNNER_TEMP/agentplugins-conformance-adapter" \

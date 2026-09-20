@@ -114,17 +114,39 @@ class EvidenceTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == 'posix', 'shell client fixture is Unix only')
     def test_registry_protocol_is_strict_and_read_only(self):
-        with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory(prefix="registry é's ") as root:
             fixture = Fixture(root)
             prepare_codex_registry(fixture)
             for argv, code, output in [(['plugin', 'list', '--json'], 0, '{"installed": []}'),
                                        (['plugin', 'install', 'anything'], 97, ''),
                                        (['plugin', 'list', '--json', 'extra'], 97, '')]:
                 result = subprocess.run([str(fixture.bin / 'codex'), *argv],
-                                        env=fixture.env, capture_output=True, text=True, timeout=3)
+                                        env={}, capture_output=True, text=True, timeout=3)
                 self.assertEqual(result.returncode, code)
                 self.assertEqual(result.stdout.strip(), output)
                 fixture.unchanged()
+
+    @unittest.skipUnless(os.name == 'posix', 'shell client fixture is Unix only')
+    def test_registry_activation_with_isolated_environment(self):
+        with tempfile.TemporaryDirectory(prefix="registry é's ") as root:
+            fixture = Fixture(root)
+            prepare_codex_registry(fixture)
+            market = fixture.data / 'managed/clients/codex/test-market'
+            manifest = market / '.agents/plugins/marketplace.json'
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(json.dumps({'name': 'test-market'}))
+            commands = [(['plugin', 'marketplace', 'add', str(fixture.package), '--json'], 97),
+                        (['plugin', 'marketplace', 'add', str(market), '--json'], 0),
+                        (['plugin', 'add', 'pty-synthetic@test-market', '--json'], 0),
+                        (['plugin', 'list', '--json'], 0)]
+            for argv, code in commands:
+                result = subprocess.run([str(fixture.bin / 'codex'), *argv], env={},
+                                        capture_output=True, text=True, timeout=3)
+                self.assertEqual(result.returncode, code, result.stderr)
+            installed_plugins = json.loads(result.stdout)['installed']
+            self.assertEqual(installed_plugins[0]['pluginId'], 'pty-synthetic@test-market')
+            self.assertTrue(installed_plugins[0]['enabled'])
+            self.assertEqual(len((fixture.root / 'stub.log').read_text().splitlines()), 4)
 
     def test_eof_covers_both_prompts_and_partial_confirmation(self):
         for name in ('selection-eof', 'confirmation-eof', 'confirmation-partial-eof'):

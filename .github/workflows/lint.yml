@@ -22,8 +22,8 @@ jobs:
         include:
           - name: root
             module: ""
-          - name: cli/plugin-kit-ai
-            module: cli/plugin-kit-ai
+          - name: cli
+            module: cli
           - name: install/integrationctl
             module: install/integrationctl
           - name: install/integrationctl/agentplugins

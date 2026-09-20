@@ -124,7 +124,7 @@ func TestMalformedMissingAndEscapeFailWithoutStdout(t *testing.T) {
 	}
 }
 func TestPlatformGate(t *testing.T) {
-	want := runtime.GOOS == "darwin" || runtime.GOOS == "linux"
+	want := runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "windows"
 	if Supported() != want {
 		t.Fatal("unsupported platform claimed")
 	}

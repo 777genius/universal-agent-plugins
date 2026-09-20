@@ -193,11 +193,14 @@ func TestNativeIdentityQualifiedPreparedMarketplaceCoexistsOnlyWithPositiveNames
 }
 
 func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
+	profile := filepath.Join(t.TempDir(), "codex-profile")
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = profile
 	plan.NativeRegistryExecutable = "/test/bin/codex"
 	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(`{"installed":[{"pluginId":"demo@foreign","name":"demo","marketplaceName":"foreign","installed":true,"enabled":true}]}`)}}
-	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: profile}
+	observation, err := (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), client, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("foreign namespace observation = %+v, err = %v", observation, err)
 	}
@@ -206,7 +209,7 @@ func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
 	}
 
 	runner.result.Stdout = []byte(`{"installed":[{"pluginId":"demo@` + marketplace + `","name":"demo","marketplaceName":"` + marketplace + `","installed":true,"enabled":true}]}`)
-	observation, err = (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCodex}, plan, nil)
+	observation, err = (testObserver(NativeIdentityObserver{Runner: runner})).ObserveNativeIdentity(context.Background(), client, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("occupied managed namespace observation = %+v, err = %v", observation, err)
 	}
@@ -222,11 +225,13 @@ func TestNativeIdentityCodexUsesExactCLIRegistryIdentity(t *testing.T) {
 // CLI's own output for diagnosis.
 func TestNativeIdentityCodexAbsentRecoveryMatchesRealCLIFailureThenSucceedsAfterRestoration(t *testing.T) {
 	t.Parallel()
+	profile := filepath.Join(t.TempDir(), "codex-profile")
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryRoot = profile
 	plan.NativeRegistryExecutable = "/test/bin/codex"
 	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
-	client := domain.DetectedClient{ClientID: domain.ClientCodex}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: profile}
 
 	failingRunner := &identityRunner{result: legacyports.CommandResult{ExitCode: 1, Stderr: []byte("Error: failed to load marketplace snapshot for " + marketplace + "\n")}}
 	observer := testObserver(NativeIdentityObserver{Runner: failingRunner, Stager: acceptingPackageVerifier{}})

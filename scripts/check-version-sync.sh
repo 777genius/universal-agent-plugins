@@ -57,7 +57,7 @@ check_rg_matches() {
 
 go_sdk_files=(
   README.md
-  cli/plugin-kit-ai/README.md
+  cli/README.md
   sdk/README.md
   examples/starters/README.md
   examples/starters/codex-go-starter/README.md
@@ -70,30 +70,30 @@ go_sdk_files=(
   examples/plugins/codex-basic-prod/go.sum
   examples/plugins/claude-basic-prod/go.mod
   examples/plugins/claude-basic-prod/go.sum
-  cli/plugin-kit-ai/internal/scaffold/version_contract.go
-  cli/plugin-kit-ai/internal/scaffold/templates/go.mod.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/codex.go.mod.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/README.md.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/codex-runtime.README.md.tmpl
+  cli/internal/scaffold/version_contract.go
+  cli/internal/scaffold/templates/go.mod.tmpl
+  cli/internal/scaffold/templates/codex.go.mod.tmpl
+  cli/internal/scaffold/templates/README.md.tmpl
+  cli/internal/scaffold/templates/codex-runtime.README.md.tmpl
 )
 
 runtime_package_files=(
   README.md
-  cli/plugin-kit-ai/README.md
+  cli/README.md
   docs/CHOOSING_HELPER_DELIVERY_MODE.md
   examples/starters/README.md
   examples/starters/codex-python-runtime-package-starter/README.md
   examples/starters/codex-python-runtime-package-starter/requirements.txt
   examples/starters/claude-node-typescript-runtime-package-starter/README.md
   examples/starters/claude-node-typescript-runtime-package-starter/package.json
-  cli/plugin-kit-ai/internal/scaffold/version_contract.go
-  cli/plugin-kit-ai/internal/scaffold/templates/python.requirements.txt.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/node.package.json.tmpl
+  cli/internal/scaffold/version_contract.go
+  cli/internal/scaffold/templates/python.requirements.txt.tmpl
+  cli/internal/scaffold/templates/node.package.json.tmpl
 )
 
 check_rg_matches "Go SDK direct module refs" 'github\.com/777genius/plugin-kit-ai/sdk@v[0-9]+\.[0-9]+\.[0-9]+' "github.com/777genius/plugin-kit-ai/sdk@${GO_SDK_VERSION}" "${go_sdk_files[@]}"
 check_rg_matches "Go SDK go.mod refs" 'github\.com/777genius/plugin-kit-ai/sdk v[0-9]+\.[0-9]+\.[0-9]+' "github.com/777genius/plugin-kit-ai/sdk ${GO_SDK_VERSION}" "${go_sdk_files[@]}"
-check_rg_matches "Runtime package command pins" '--runtime-package-version [0-9]+\.[0-9]+\.[0-9]+' "--runtime-package-version ${RUNTIME_PACKAGE_VERSION}" README.md cli/plugin-kit-ai/README.md docs/CHOOSING_HELPER_DELIVERY_MODE.md
+check_rg_matches "Runtime package command pins" '--runtime-package-version [0-9]+\.[0-9]+\.[0-9]+' "--runtime-package-version ${RUNTIME_PACKAGE_VERSION}" README.md cli/README.md docs/CHOOSING_HELPER_DELIVERY_MODE.md
 check_rg_matches "Runtime package pip pins" 'plugin-kit-ai-runtime==[0-9]+\.[0-9]+\.[0-9]+' "plugin-kit-ai-runtime==${RUNTIME_PACKAGE_VERSION}" "${runtime_package_files[@]}"
 check_rg_matches "Runtime package npm pins" 'plugin-kit-ai-runtime@[0-9]+\.[0-9]+\.[0-9]+' "plugin-kit-ai-runtime@${RUNTIME_PACKAGE_VERSION}" "${runtime_package_files[@]}"
 check_rg_matches "Runtime package package.json pins" '"plugin-kit-ai-runtime": "[0-9]+\.[0-9]+\.[0-9]+"' "\"plugin-kit-ai-runtime\": \"${RUNTIME_PACKAGE_VERSION}\"" "${runtime_package_files[@]}"

@@ -8,7 +8,7 @@
 | Статус документа | Финальная версия плана после адверсариальной критики (read-only анализ кода; код не менялся) |
 | Дата | 2026-09-17 |
 
-Сокращения: `ap/…` = `install/integrationctl/agentplugins/…`; `cli/…` = `cli/plugin-kit-ai/internal/agentpluginscli/…`; `cmd` = `cli/plugin-kit-ai/cmd/agentplugins`. Ядро инсталла = три пакета: `ap/*`, `cli/*`, `cmd`.
+Сокращения: `ap/…` = `install/integrationctl/agentplugins/…`; `cli/…` = `cli/internal/agentpluginscli/…`; `cmd` = `cli/cmd/agentplugins`. Ядро инсталла = три пакета: `ap/*`, `cli/*`, `cmd`.
 
 Цель: довести ядро инсталла минимум до паритета с конкурентом (аудит: наше ядро 5.8/10, конкурент 7.4/10 по SOLID / DRY / Clean Architecture / Модульность / Качество кода), не хуже по каждому критерию, с контрактом, который позже можно развить до полноценной модульности без разрушительного передела.
 
@@ -53,8 +53,8 @@
 - **O-5** — archtest пишется на stdlib `go/parser` (режим `ImportsOnly` для границ + `go/ast` для бюджета), а **не** на `golang.org/x/tools/go/packages`: VERIFIED `x/tools` отсутствует во всех `go.mod`, и в репозитории уже есть прецедент на stdlib — `agentplugins/conformance/architecture_test.go:TestConformanceHasNoEffectDependencies`. Новая зависимость не добавляется.
 - **O-6** — `repotests/agentplugins_native_fixture_test.go` держит `planner.Planner{}` (root-модуль) — учтено в объёме Part 1 и в `vet-all`.
 - **C-3/C-4** — вариант A CI honestly помечен: до post-merge пропускает `generated-check`, conformance-kit adapter, `npm test`, vet ×5 (частично закрыт новым `vet-all`). Финальный PR в `main` получает больше гейтов, чем перечислялось: VERIFIED дополнительно `agentplugins-native-clients.yml` (`pull_request` на `main`, `paths=agentplugins/**`, матрица codex/claude/opencode × macos-15 + windows-2025, 5-13 мин), `dependency-review.yml`, `coverage.yml`, `codeql.yml`. Платформенных build-тегов в ядре 39 файлов (§10).
-- **R-2** — внешних потребителей SDK нет (`sdk` и `install/plugininstall` не импортируют `agentplugins`), но внутренних — 16+ файлов вне ядра; совместимость реальна, просто не публичная.
-- **1.4** — `go.work` содержит **5** модулей (`.`, `./cli/plugin-kit-ai`, `./install/integrationctl`, `./install/plugininstall`, `./sdk`), не 3. Lint-матрица остаётся из 3 модулей (там весь код ядра), `go vet` — по 5.
+- **R-2** — внешних потребителей SDK нет (`sdk` и `plugininstall` не импортируют `agentplugins`), но внутренних — 16+ файлов вне ядра; совместимость реальна, просто не публичная.
+- **1.4** — `go.work` содержит **5** модулей (`.`, `./cli`, `./install/integrationctl`, `./plugininstall`, `./sdk`), не 3. Lint-матрица остаётся из 3 модулей (там весь код ядра), `go vet` — по 5.
 - **1.5** — длительность Required по `gh run list` (15 run): 9, 11, 13, 9, 14, 12, 19, 27, 15, 16, 17 мин — хвост до **27** мин на push в `main`, а не «9-15».
 - **1.6** — gofmt-дрейф не в 3, а в **7** файлах (§2.1, факт 5) — прогон B и formatters идут по модулю целиком.
 - **1.9** — `go test -count=1 ./agentplugins/...` = **62.6 с** wall (usecase 55.2 с, providers 19.3 с); CLI = 56 с.
@@ -83,7 +83,7 @@
 | 3 | `activator.go` — god object | Подтверждено | Реально 1247 строк. Ветвления по `ClientID` в 5 методах (`AutomaticallyActivates`, `PreflightActivation`, `Deactivate`, `Activate`, `activationObservable`) + парсеры вывода трёх CLI (`codexPluginStatus`, `claudePluginStatus`, `copilotPluginStatus`/`copilotLivePluginStatus`) + приватные типы статусов на клиента. |
 | 4 | Ветвления по ClientID разбросаны | Подтверждено, **числа не фиксируем вручную** | Затронутые файлы (порядок по убыванию плотности): `providers/activator.go`, `planner/planner.go`, `providers/stager.go`, `providers/native_identity.go`, `adapters/clientdetect/detector.go`, `usecase/{service,repair,intent,group,component_readiness}.go`, `planner/compatibility.go`, `providers/managed_selection.go`, `planner/intent.go`, `domain/{clients,install_intent,directory,directory_context7_preparation}.go`, CLI `add.go` (включая 11-case switch `normalizeTarget` в `add.go:426-449`, дублирующий `domain.ClientDefinitions()`), `prepare.go`, `interactive_targets.go`, `source.go`, `read_reconciliation.go`, `update_multi.go`, `preflight.go`, `read.go`, `add_multi.go`, `lifecycle.go`. **Абсолютные значения бюджета берутся из первого прогона archtest (Part 0b, §7.2), а не из ручного подсчёта:** три разных способа счёта (selector-выражения / `case`-метки / `==`+`!=`) дают три разных набора чисел, и ручные оценки черновика не воспроизводятся ни одним из них. |
 | 5 | Нет golangci-lint | Подтверждено | `gofmt -l` показывает дрейф в **7** файлах в трёх модулях: `ap/adapters/packageview/source_unsupported.go`, `ap/adapters/packageview/source_windows_test.go`, `cmd/release_workflow_test.go`, `ap/adapters/evidence/registry.go`, `cli/cmd/plugin-kit-ai/publication_doctor_run.go`, `cli/internal/authoring/scaffold/apply_test.go`, `cli/internal/platformexec/gemini_generate_render_outputs.go`. `go vet ./agentplugins/...` чист. Локально установлен `golangci-lint v1.64.8` (формат конфига v2 несовместим; v1.64.8 не знает правило `file-length-limit` — проверено эмпирически, правило не срабатывает ни в одном написании аргументов). |
-| 6 | Go-версии | Подтверждено + уточнение | root `go 1.22`, `install/integrationctl` `go 1.25.0`, `cli/plugin-kit-ai` `go 1.25.8`, toolchain везде `go1.25.13`. `go.work` (`go 1.25.8`) содержит **5** модулей: `.`, `./cli/plugin-kit-ai`, `./install/integrationctl`, `./install/plugininstall`, `./sdk`; root `go.mod` без `require`. `sdk` и `install/plugininstall` не импортируют `agentplugins`. Lint-матрица — 3 модуля (там весь код ядра), `go vet` в `core-fast` — по всем 5. |
+| 6 | Go-версии | Подтверждено + уточнение | root `go 1.22`, `install/integrationctl` `go 1.25.0`, `cli` `go 1.25.8`, toolchain везде `go1.25.13`. `go.work` (`go 1.25.8`) содержит **5** модулей: `.`, `./cli`, `./install/integrationctl`, `./plugininstall`, `./sdk`; root `go.mod` без `require`. `sdk` и `plugininstall` не импортируют `agentplugins`. Lint-матрица — 3 модуля (там весь код ядра), `go vet` в `core-fast` — по всем 5. |
 | 7 | CI Required 10-14 мин | Подтверждено + следствие | По `gh run list --workflow=ci.yml` (15 run): 9, 11, 13, 9, 14, 12, 19, 27, 15, 16, 17 мин — типично 9-17, **хвост до 27 мин** на push в `main`. `ci.yml` триггерится на `pull_request` только для `branches: [main, master]` → PR в `refactor/**` не запускают ни Required, ни Coverage. Единственный job — `test`. Branch protection на `main` отсутствует (404), rulesets пусты, `allow_auto_merge: false`, squash/merge/rebase разрешены. Локальный `go test -count=1 ./agentplugins/...` = **62.6 с** wall (usecase 55.2 с, providers 19.3 с, остальные < 5 с); CLI-пакет = 56 с — ядро дешёвое; дорого всё остальное в Required (root `./...` с `repotests`, `npm test`, сборка conformance-kit, `generated-check`, vet ×5 модулей). |
 | 8 | Тестовое покрытие и стоимость смены сигнатур | Подтверждено, цифры исправлены | providers 8030 prod / 7185 test строк, usecase 4428 / 6736, planner 825 / 967, clientdetect 681 / 761, transaction 874 / 646, domain 2164 / 1080 (ядро ≈ 91 % test/prod). Все тесты внутренние (`package providers` и т.д.), testify не используется. Тест-дубли портов: `ports.DeliveryPlanner` — 1 фейк (`usecase/codex_sse_lifecycle_test.go`); типов с методом `Detect()` — **4**; типов с `Activate()` — **9**; `ports.PackageStager` — 0. Конструкций конкретных структур: `providers.Activator{}` — 105; `clientdetect.Detector{}` — **1 литерал** (+ хелпер `testDetector(...)` 25 вызовов, `NewOS(` 2); `usecase.Service{}` — **23**; `Planner{}` — **32 строки**. **Требование «структуры остаются zero-value-friendly» СНЯТО** (см. F-6 в §0.1): для `Paths` вводится fail-fast, ≈55-62 места обновляются через test-helper'ы. Для остальных полей zero-value остаётся (в частности 105 `Activator{}` не ломаются — `Registry` инжектируется через тот же helper). |
 
@@ -510,7 +510,7 @@ linters:
         #   files: ["**/agentplugins/providers/**", "**/agentplugins/planner/**", "**/agentplugins/adapters/clientdetect/**", "!$test"]
         #   deny: clients/claude, clients/codex, …, И clients/all (allow: clients, clients/shared)
         # Part 10 добавит cli-no-core-internals:
-        #   files: ["**/cli/plugin-kit-ai/internal/agentpluginscli/**", "!$test"]; deny: providers, pathpolicy
+        #   files: ["**/cli/internal/agentpluginscli/**", "!$test"]; deny: providers, pathpolicy
         #   (planner НЕ в deny: CLI продолжает пользоваться тонким публичным фасадом, см. §3.5)
   exclusions:
     generated: lax
@@ -575,7 +575,7 @@ jobs:
       matrix:
         include:
           - { name: root, module: "" }
-          - { name: cli/plugin-kit-ai, module: cli/plugin-kit-ai }
+          - { name: cli, module: cli }
           - { name: install/integrationctl, module: install/integrationctl }
           - { name: install/integrationctl/agentplugins, module: install/integrationctl/agentplugins }
     steps:
@@ -602,7 +602,7 @@ jobs:
         run: bash scripts/check-lint-baseline.sh "$LINT_BASE"
 ```
 
-Матрица покрывает модули с кодом ядра (включая nested `install/integrationctl/agentplugins`); `install/plugininstall` и `sdk` из `go.work` линтом не покрываются (не меняются планом), но покрываются `go vet` в `core-fast` (§10).
+Матрица покрывает модули с кодом ядра (включая nested `install/integrationctl/agentplugins`); `plugininstall` и `sdk` из `go.work` линтом не покрываются (не меняются планом), но покрываются `go vet` в `core-fast` (§10).
 
 `ci.yml` / `core-fast.yml` передают `lint-base: origin/${{ github.base_ref || 'main' }}` — caller видит `github.base_ref`, called workflow на `workflow_call` его не имеет. Почему отдельный job, а не шаг в `test`: `test` — критический путь 9-27 мин; lint в четырёх параллельных матричных job ожидаемо 3-5 мин и не удлиняет путь; при этом он в том же workflow «Required», т.е. входит в required-гейт.
 
@@ -885,8 +885,8 @@ CodeQL, govulncheck) `cd` into the nested module. Coverage collects
 |---|---|---|
 | `lint` | через `lint.yml`, матрица модулей с кодом ядра (включая nested `install/integrationctl/agentplugins`) | 3-5 мин |
 | `test-core` | `make test-core` (те же пакеты, что в локальном preflight); отдельным информационным шагом `go test -cover` с процентами в job summary | 2-4 мин |
-| `cross-build` | `GOOS=windows\|darwin\|linux go build ./...` в `install/integrationctl`, `install/integrationctl/agentplugins` и `cli/plugin-kit-ai` | 1-2 мин |
-| **`vet-all`** (новый, правка C-1) | `go vet ./...` в каждом модуле `go.work`: `.`, `cli/plugin-kit-ai`, `install/integrationctl`, `install/integrationctl/agentplugins`, `install/plugininstall`, `sdk` | 1-2 мин |
+| `cross-build` | `GOOS=windows\|darwin\|linux go build ./...` в `install/integrationctl`, `install/integrationctl/agentplugins` и `cli` | 1-2 мин |
+| **`vet-all`** (новый, правка C-1) | `go vet ./...` в каждом модуле `go.work`: `.`, `cli`, `install/integrationctl`, `install/integrationctl/agentplugins`, `plugininstall`, `sdk` | 1-2 мин |
 
 Wall 4-6 мин. Это merge-gate для каждой части.
 
@@ -925,7 +925,7 @@ Wall 5-7 мин и для `main`. Полезно, но меняет общий C
 
 ## 11. Definition of Done всего рефакторинга
 
-**Скоуп DoD (сужен явно, правка O-1).** DoD относится к «ядру инсталла» в том смысле, в каком его оценивал аудит: пакеты `ap/domain`, `ap/ports`, `ap/usecase`, `ap/planner`, `ap/providers`, `ap/adapters/clientdetect`, `ap/clients/*`, `cli/plugin-kit-ai/internal/agentpluginscli` (файлы прямой композиции инсталла), `cli/plugin-kit-ai/cmd/agentplugins`.
+**Скоуп DoD (сужен явно, правка O-1).** DoD относится к «ядру инсталла» в том смысле, в каком его оценивал аудит: пакеты `ap/domain`, `ap/ports`, `ap/usecase`, `ap/planner`, `ap/providers`, `ap/adapters/clientdetect`, `ap/clients/*`, `cli/internal/agentpluginscli` (файлы прямой композиции инсталла), `cli/cmd/agentplugins`.
 
 **Явно ВНЕ скоупа** (остаются в LEGACY SIZE BASELINE как отдельная будущая задача, не блокируют DoD):
 `ap/adapters/{transaction, statev2, statemigration, directoryv1, discoveryv1, packageview, packagedigest, loader, catalog, evidence, sourceacquisition, …}`, `ap/conformance/*`, `ap/transaction/kernel.go`, `ap/domain/directory.go` (файл целиком — режется только в части ветвлений по ClientID, размер остаётся), CLI-файлы вне прямой композиции инсталла: `source.go`, `add_multi.go`, `lifecycle.go`, `read.go`, `search.go`.

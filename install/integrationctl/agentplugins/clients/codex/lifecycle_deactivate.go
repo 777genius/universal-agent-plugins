@@ -39,11 +39,16 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return deactivateCodexWithoutCLI(outcome, request, marketplace, registered, pluginEntryPresent)
 	}
-	if err := removeCodexPlugin(ctx, env, request.BackendExecutable, request.DeclaredName+"@"+marketplace); err != nil {
+	profileRoot := request.Client.ConfigRoot
+	if err := validateProfile(profileRoot, ""); err != nil {
+		return outcome, err
+	}
+	request.Client.ConfigRoot = profileRoot
+	if err := removeCodexPlugin(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, request.DeclaredName+"@"+marketplace); err != nil {
 		return outcome, err
 	}
 	if registered {
-		if err := removeCodexMarketplace(ctx, env, request.BackendExecutable, marketplace); err != nil {
+		if err := removeCodexMarketplace(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, marketplace); err != nil {
 			return outcome, err
 		}
 	}
@@ -62,16 +67,16 @@ func deactivateCodexWithoutCLI(outcome domain.DeactivationOutcome, request domai
 	return outcome, nil
 }
 
-func removeCodexMarketplace(ctx context.Context, env clients.Env, executable, marketplace string) error {
-	remove, err := runCodex(ctx, env, executable, "plugin", "marketplace", "remove", marketplace, "--json")
+func removeCodexMarketplace(ctx context.Context, env clients.Env, root, executable, marketplace string) error {
+	remove, err := runCodex(ctx, env, root, executable, "plugin", "marketplace", "remove", marketplace, "--json")
 	if err != nil && !shared.CommandOutputContains(remove, "not configured or installed") {
 		return fmt.Errorf("remove managed Codex marketplace %s: %w", marketplace, err)
 	}
 	return nil
 }
 
-func removeCodexPlugin(ctx context.Context, env clients.Env, executable, pluginSpec string) error {
-	remove, err := runCodex(ctx, env, executable, "plugin", "remove", pluginSpec, "--json")
+func removeCodexPlugin(ctx context.Context, env clients.Env, root, executable, pluginSpec string) error {
+	remove, err := runCodex(ctx, env, root, executable, "plugin", "remove", pluginSpec, "--json")
 	if err != nil && !shared.CommandOutputContains(remove, "not configured or installed") {
 		return fmt.Errorf("remove managed Codex plugin %s: %w", pluginSpec, err)
 	}

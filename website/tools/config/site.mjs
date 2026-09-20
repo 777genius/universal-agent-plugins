@@ -51,7 +51,7 @@ export function repoBrowserUrl(sourceRef) {
     return "";
   }
   if (sourceRef.startsWith("cli:")) {
-    return "https://github.com/777genius/universal-agent-plugins/tree/main/cli/plugin-kit-ai";
+    return "https://github.com/777genius/universal-agent-plugins/tree/main/cli";
   }
 
   const mode = /\.[a-z0-9]+$/i.test(sourceRef) ? "blob" : "tree";

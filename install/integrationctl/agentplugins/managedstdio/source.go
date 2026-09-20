@@ -29,7 +29,7 @@ func readExecutable(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
+	if !executableFile(info, path) {
 		return nil, fmt.Errorf("launcher source is not executable")
 	}
 	return os.ReadFile(path)

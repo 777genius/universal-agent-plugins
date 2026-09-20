@@ -48,7 +48,7 @@ def main():
     Path(env["HOME"]).mkdir()
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         tar.extractall(work, filter="data")
-    module = work / "cli/plugin-kit-ai"
+    module = work / "cli"
     adapters = module / "internal/terminalprompts"
     manifest = {"candidate_sha": candidate, "candidate_input": args.candidate or "HEAD",
                 "proof_script_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

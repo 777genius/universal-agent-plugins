@@ -21,7 +21,7 @@ function temporaryRoot(t) {
 }
 
 test("npm notice copy matches the canonical production notices", (t) => {
-  const canonical = path.resolve(packageRoot, "../../cli/plugin-kit-ai", noticeName);
+  const canonical = path.resolve(packageRoot, "../../cli", noticeName);
   if (!fs.existsSync(canonical)) return t.skip("detached npm package has no source tree");
   assert.deepEqual(notices, fs.readFileSync(canonical));
 });

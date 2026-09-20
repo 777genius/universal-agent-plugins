@@ -16,7 +16,7 @@ LANES = ('skill', 'mcp-remote', 'mcp-stdio', 'hybrid-remote', 'hybrid-stdio')
 TARGETS = ('cursor', 'codex', 'claude')
 NAME = 'TestPackedGeneratedPackagesReachExistingInstallerPlanner'
 REGEX = '^' + NAME + '$'
-PACKAGE_PATH = './cli/plugin-kit-ai/internal/authoring/commands'
+PACKAGE_PATH = './cli/internal/authoring/commands'
 PACKAGE = 'github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands'
 CANDIDATE_TEST = 'actual controlled Linux pair: offline verification, engine reports, frozen journeys and negative proof'
 NATIVE_TESTS = ['native retirement oracle preserves original format tails and rejects output mismatches',
@@ -218,7 +218,7 @@ def check(root, sha):
     invocations = read(root / 'native/invocations.json')
     invocation_rows(invocations, native['invocations'])
     require(cfg['stage']['repo'] == str(repo), 'wrong terminal checkout')
-    require(native['inventory_sha256'] == digest(repo / 'cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go'), 'same-SHA inventory')
+    require(native['inventory_sha256'] == digest(repo / 'cli/cmd/plugin-kit-ai/release_compat.go'), 'same-SHA inventory')
     request = sealed['request']
     require(request == read(root / 'bridge-config/request.json') and request['expectedCommit'] == sha and
         request['nativeConfigSha256'] == digest(root / 'npm-native.json') and
@@ -512,7 +512,7 @@ def authenticated_source():
     repo = Path(__file__).absolute().parent.parent
     files = []
     for directory in ('.github', 'scripts', 'npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib',
-                      'cli/plugin-kit-ai/internal/authoring/scaffold/templates'):
+                      'cli/internal/authoring/scaffold/templates'):
         def walk(folder):
             require(folder.resolve() == folder and stat.S_ISDIR(folder.lstat().st_mode), 'trusted source directory')
             for file in sorted(folder.iterdir()):

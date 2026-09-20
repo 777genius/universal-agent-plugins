@@ -278,7 +278,8 @@ test("offline controlled snapshot matches exact HEAD blobs and rejects a differe
   const git = (...args) => cp.execFileSync("/usr/bin/git", args, { cwd: repo, env: context.env, encoding: "utf8" }).trim();
   const commit = git("rev-parse", "HEAD");
   assert.match(producer.sourceSnapshot(repo, commit, context), /^[0-9a-f]{64}$/);
-  for (const file of ["go.work", "cli/plugin-kit-ai/cmd/agentplugins/main.go", "cli/plugin-kit-ai/cmd/plugin-kit-ai/main.go"]) {
+  for (const file of ["go.work", "cli/cmd/agentplugins/main.go", "cli/cmd/plugin-kit-ai/main.go",
+    "plugininstall/go.mod", "plugininstall/install.go", "plugininstall/usecase/installer.go"]) {
     const expected = cp.execFileSync("/usr/bin/git", ["show", `${commit}:${file}`], { cwd: repo, env: context.env });
     assert.deepEqual(fs.readFileSync(path.join(context.root, "source", file)), expected);
   }

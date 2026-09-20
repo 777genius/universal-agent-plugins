@@ -4,7 +4,7 @@ run:
   timeout: 6m
   tests: true
   # Paths in exclusions are matched from the git root: the linter runs once per
-  # module (".", "cli/plugin-kit-ai", "install/integrationctl", "install/integrationctl/agentplugins") and without this
+  # module (".", "cli", "install/integrationctl", "install/integrationctl/agentplugins") and without this
   # the same file would need a different pattern in every module.
   relative-path-mode: gitroot
 
@@ -215,7 +215,7 @@ linters:
             - "**/install/integrationctl/agentplugins/providers/**"
             - "**/install/integrationctl/agentplugins/planner/**"
             - "**/install/integrationctl/agentplugins/adapters/clientdetect/**"
-            - "**/cli/plugin-kit-ai/internal/**"
+            - "**/cli/internal/**"
             - "!$test"
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all
@@ -260,7 +260,7 @@ linters:
           # public facade, never providers or the path-policy adapter. Tests
           # may still assemble those internals.
           files:
-            - "**/cli/plugin-kit-ai/internal/agentpluginscli/**"
+            - "**/cli/internal/agentpluginscli/**"
             - "!$test"
           deny:
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers
@@ -295,219 +295,216 @@ linters:
       # and *_windows.go file. The first generation happened on macOS and missed
       # six of them; CI lints on ubuntu and went red on the linux one.
       # 137 files.
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/compat\.go$
+      - path: ^cli/cmd/plugin-kit-ai/compat\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/dev\.go$
+      - path: ^cli/cmd/plugin-kit-ai/dev\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/init_success\.go$
+      - path: ^cli/cmd/plugin-kit-ai/init_success\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/integrations_commands\.go$
+      - path: ^cli/cmd/plugin-kit-ai/integrations_commands\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/integrations_report\.go$
+      - path: ^cli/cmd/plugin-kit-ai/integrations_report\.go$
         linters: [revive, gocyclo, gocognit]
         text: 'file length is|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/integrations_run\.go$
+      - path: ^cli/cmd/plugin-kit-ai/integrations_run\.go$
         linters: [gocyclo, gocognit]
         text: 'cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/publication_cmd_materialize\.go$
+      - path: ^cli/cmd/plugin-kit-ai/publication_cmd_materialize\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat\.go$
+      - path: ^cli/cmd/plugin-kit-ai/release_compat\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: '^error-strings:|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/cmd/plugin-kit-ai/test\.go$
+      - path: ^cli/cmd/plugin-kit-ai/test\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/add_multi\.go$
+      - path: ^cli/internal/agentpluginscli/add_multi\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/lifecycle\.go$
+      - path: ^cli/internal/agentpluginscli/lifecycle\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/read\.go$
+      - path: ^cli/internal/agentpluginscli/read\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/search\.go$
+      - path: ^cli/internal/agentpluginscli/search\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/agentpluginscli/source\.go$
+      - path: ^cli/internal/agentpluginscli/source\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/app/bootstrap\.go$
+      - path: ^cli/internal/app/bootstrap\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/app/bootstrap_node\.go$
+      - path: ^cli/internal/app/bootstrap_node\.go$
         linters: [gocognit]
         text: 'cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/app/bootstrap_python\.go$
+      - path: ^cli/internal/app/bootstrap_python\.go$
         linters: [gocognit]
         text: 'cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/app/export_service_context_runtime\.go$
+      - path: ^cli/internal/app/export_service_context_runtime\.go$
         linters: [revive]
         text: '^indent-error-flow:'
-      - path: ^cli/plugin-kit-ai/internal/app/publication_context_load_channel_target\.go$
+      - path: ^cli/internal/app/publication_context_load_channel_target\.go$
         linters: [revive]
         text: '^error-strings:'
-      - path: ^cli/plugin-kit-ai/internal/authoring/bootstrap/bootstrap\.go$
+      - path: ^cli/internal/authoring/bootstrap/bootstrap\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: '^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/commands/commands\.go$
+      - path: ^cli/internal/authoring/commands/commands\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|is too long|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/commands/dev_session\.go$
+      - path: ^cli/internal/authoring/commands/dev_session\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: '^error-return:|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/commands/public_contract\.go$
+      - path: ^cli/internal/authoring/commands/public_contract\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/commands/skills\.go$
+      - path: ^cli/internal/authoring/commands/skills\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/jsonmaint/json\.go$
+      - path: ^cli/internal/authoring/jsonmaint/json\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/mcpruntime/runtime\.go$
+      - path: ^cli/internal/authoring/mcpruntime/runtime\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|is too long|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/nativeimport/native\.go$
+      - path: ^cli/internal/authoring/nativeimport/native\.go$
         linters: [funlen, gocyclo]
         text: 'too many statements|cyclomatic complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/project/project\.go$
+      - path: ^cli/internal/authoring/project/project\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/readiness/doctor\.go$
+      - path: ^cli/internal/authoring/readiness/doctor\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/report/public\.go$
+      - path: ^cli/internal/authoring/report/public\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/report/report\.go$
+      - path: ^cli/internal/authoring/report/report\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/apply\.go$
+      - path: ^cli/internal/authoring/scaffold/apply\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/paths\.go$
+      - path: ^cli/internal/authoring/scaffold/paths\.go$
         linters: [gocyclo, gocognit]
         text: 'cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/plan\.go$
+      - path: ^cli/internal/authoring/scaffold/plan\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/rename_windows\.go$
+      - path: ^cli/internal/authoring/scaffold/rename_windows\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/scaffold/skill_plan\.go$
+      - path: ^cli/internal/authoring/scaffold/skill_plan\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoring/skills/skills\.go$
+      - path: ^cli/internal/authoring/skills/skills\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoringcli/flags\.go$
+      - path: ^cli/internal/authoringcli/flags\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/authoringcli/release\.go$
+      - path: ^cli/internal/authoringcli/release\.go$
         linters: [gocyclo, gocognit]
         text: 'cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/codexmanifest/manifest_import_decode\.go$
+      - path: ^cli/internal/codexmanifest/manifest_import_decode\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/geminimanifest/manifest_decode\.go$
+      - path: ^cli/internal/geminimanifest/manifest_decode\.go$
         linters: [funlen]
         text: 'too many statements'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/claude_generate\.go$
+      - path: ^cli/internal/platformexec/claude_generate\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/claude_import\.go$
+      - path: ^cli/internal/platformexec/claude_import\.go$
         linters: [revive]
         text: '^indent-error-flow:'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/claude_import_native\.go$
+      - path: ^cli/internal/platformexec/claude_import_native\.go$
         linters: [revive]
         text: '^indent-error-flow:'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/codex_validate_package_contracts\.go$
+      - path: ^cli/internal/platformexec/codex_validate_package_contracts\.go$
         linters: [revive]
         text: '^indent-error-flow:'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/codex_validate_runtime\.go$
+      - path: ^cli/internal/platformexec/codex_validate_runtime\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/cursor_package\.go$
+      - path: ^cli/internal/platformexec/cursor_package\.go$
         linters: [revive]
         text: '^error-strings:'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/cursor_workspace_validate\.go$
+      - path: ^cli/internal/platformexec/cursor_workspace_validate\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/gemini_validate_extension_settings\.go$
+      - path: ^cli/internal/platformexec/gemini_validate_extension_settings\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/gemini_validate_extension_themes\.go$
+      - path: ^cli/internal/platformexec/gemini_validate_extension_themes\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_import_inline_agent\.go$
+      - path: ^cli/internal/platformexec/opencode_import_inline_agent\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate\.go$
+      - path: ^cli/internal/platformexec/opencode_validate\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate_config\.go$
+      - path: ^cli/internal/platformexec/opencode_validate_config\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'is too long|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate_plugin_files\.go$
+      - path: ^cli/internal/platformexec/opencode_validate_plugin_files\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/platformexec/opencode_validate_tools\.go$
+      - path: ^cli/internal/platformexec/opencode_validate_tools\.go$
         linters: [funlen, gocognit]
         text: 'is too long|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/discover\.go$
+      - path: ^cli/internal/pluginmanifest/discover\.go$
         linters: [funlen]
         text: 'is too long'
-      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/import\.go$
+      - path: ^cli/internal/pluginmanifest/import\.go$
         linters: [revive, funlen]
         text: '^indent-error-flow:|is too long'
-      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/parse_save\.go$
+      - path: ^cli/internal/pluginmanifest/parse_save\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/parse_schema\.go$
+      - path: ^cli/internal/pluginmanifest/parse_schema\.go$
         linters: [gocognit]
         text: 'cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/render\.go$
+      - path: ^cli/internal/pluginmanifest/render\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/pluginmanifest/render_targets\.go$
+      - path: ^cli/internal/pluginmanifest/render_targets\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/pluginmodel/mcp_native\.go$
+      - path: ^cli/internal/pluginmodel/mcp_native\.go$
         linters: [funlen]
         text: 'too many statements'
-      - path: ^cli/plugin-kit-ai/internal/pluginmodel/mcp_validate\.go$
+      - path: ^cli/internal/pluginmodel/mcp_validate\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/promptio/cancel_windows\.go$
+      - path: ^cli/internal/promptio/cancel_windows\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/runtimecheck/runtimecheck_python_detect\.go$
+      - path: ^cli/internal/runtimecheck/runtimecheck_python_detect\.go$
         linters: [funlen]
         text: 'too many statements'
-      - path: ^cli/plugin-kit-ai/internal/skills/adapters/generate/claude\.go$
+      - path: ^cli/internal/skills/adapters/generate/claude\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/internal/skills/adapters/generate/codex\.go$
+      - path: ^cli/internal/skills/adapters/generate/codex\.go$
         linters: [dupl]
         text: 'lines are duplicate of'
-      - path: ^cli/plugin-kit-ai/internal/skills/app/service_generate\.go$
+      - path: ^cli/internal/skills/app/service_generate\.go$
         linters: [funlen, gocognit]
         text: 'too many statements|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/terminalprompts/huh\.go$
+      - path: ^cli/internal/terminalprompts/huh\.go$
         linters: [funlen, gocyclo, gocognit]
         text: 'too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^cli/plugin-kit-ai/internal/validate/validate_paths\.go$
+      - path: ^cli/internal/validate/validate_paths\.go$
         linters: [funlen]
         text: 'too many statements'
-      - path: ^cli/plugin-kit-ai/tools/authoring-docs/source\.go$
-        linters: [gocognit]
-        text: 'cognitive complexity'
       - path: ^cmd/agentplugins-registry-mirror/main\.go$
         linters: [revive, funlen, gocognit]
         text: 'file length is|too many statements|cognitive complexity'

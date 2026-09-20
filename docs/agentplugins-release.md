@@ -99,7 +99,7 @@ companion remain readable; this does not qualify their notice delivery.
 
 The npm file list includes the complete notice text even with pack scripts
 disabled. Its checked-in copy must match
-`cli/plugin-kit-ai/THIRD_PARTY_NOTICES.txt`; the npm tests enforce this in the
+`cli/THIRD_PARTY_NOTICES.txt`; the npm tests enforce this in the
 source tree. When updating production dependency notices, copy the canonical
 file to the npm package too. Staging requires the verified companion before any
 staging mutations and checks the npm copy against it. Historical releases without

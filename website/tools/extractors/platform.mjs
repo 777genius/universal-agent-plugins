@@ -20,7 +20,7 @@ export async function extractLegacyPlatformData() {
     "go",
     [
       "run",
-      "./cli/plugin-kit-ai/cmd/plugin-kit-ai",
+      "./cli/cmd/plugin-kit-ai",
       "__docs",
       "export-support",
       "--events-path",

@@ -16,9 +16,9 @@ jobs:
           - name: root
             dir: .
           - name: cli
-            dir: cli/plugin-kit-ai
+            dir: cli
           - name: plugininstall
-            dir: install/plugininstall
+            dir: plugininstall
           - name: integrationctl
             dir: install/integrationctl
           - name: agentplugins

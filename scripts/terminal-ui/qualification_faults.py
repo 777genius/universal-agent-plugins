@@ -149,7 +149,7 @@ def main():
     binary = artifacts / ('qualification.test.exe' if native_windows else 'qualification.test')
     package = './internal/promptio' if native_windows else './internal/terminalprompts'
     command = [args.go, 'test', '-c', '-o', str(binary), package]
-    build = subprocess.run(command, cwd=repo / 'cli/plugin-kit-ai', stdout=subprocess.PIPE,
+    build = subprocess.run(command, cwd=repo / 'cli', stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, timeout=180)
     (artifacts / 'build.log').write_text(build.stdout)
     check(build.returncode == 0, 'test helper build failed; see build.log')

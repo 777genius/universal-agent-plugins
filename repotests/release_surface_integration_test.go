@@ -111,7 +111,7 @@ func TestReleaseSurface_RetiredImplementationsAndSourceArePreserved(t *testing.T
 		mustContain(t, readRepoFile(t, root, "docs", "history", "plugin-kit-ai-release-workflows", name), marker)
 	}
 	for _, path := range []string{
-		"cli/plugin-kit-ai/cmd/plugin-kit-ai/main.go",
+		"cli/cmd/plugin-kit-ai/main.go",
 		"npm/plugin-kit-ai/lib/install.js",
 		"python/plugin-kit-ai/src/plugin_kit_ai/install.py",
 	} {

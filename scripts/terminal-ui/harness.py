@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real Unix PTY evidence; Python 3.10+ stdlib, no downloads or agent runtimes.
 
-Build (from cli/plugin-kit-ai):
+Build (from cli):
   GOTOOLCHAIN=local GOMODCACHE=/tmp/uap-go-modcache GOCACHE=/tmp/uap-go-buildcache \
     /tmp/uap-go-toolchain/go/bin/go build -o /tmp/agentplugins-ui ./cmd/agentplugins
 Run baseline fixture proof:

@@ -57,7 +57,7 @@ jobs:
       - name: Prepare disposable second NTFS filesystem on Windows ARM64
         if: matrix.os == 'windows' && matrix.arch == 'arm64'
         shell: pwsh
-        run: ./cli/plugin-kit-ai/internal/authoring/commands/testdata/windows_arm64_volume.ps1 -Mode Setup
+        run: ./cli/internal/authoring/commands/testdata/windows_arm64_volume.ps1 -Mode Setup
       - name: Native offline tests and actual entrypoint builds
         run: |
           set -euo pipefail
@@ -102,18 +102,18 @@ jobs:
             ./install/integrationctl/agentplugins/adapters/packagedigest
             ./install/integrationctl/agentplugins/conformance
             ./install/integrationctl/agentplugins/adapters/loader
-            ./cli/plugin-kit-ai/internal/authoringcli
-            ./cli/plugin-kit-ai/internal/authoring/...)
+            ./cli/internal/authoringcli
+            ./cli/internal/authoring/...)
           go list -p 2 "${packages[@]}" > "$NATIVE_ROOT/evidence/packages.txt"
           # Resolve only lane/build Go dependencies before offline execution.
-          go list -p 2 -deps -test "${packages[@]}" ./cli/plugin-kit-ai/cmd/{agentplugins,plugin-kit-ai} > "$NATIVE_ROOT/evidence/dependencies.txt"
+          go list -p 2 -deps -test "${packages[@]}" ./cli/cmd/{agentplugins,plugin-kit-ai} > "$NATIVE_ROOT/evidence/dependencies.txt"
           export GOPROXY=off GOSUMDB=off
           suffix=""; if [[ "$EXPECTED_OS" == windows ]]; then suffix=.exe; fi
           build_vcs=true
           if [[ "$EXPECTED_OS" == windows && "${{ inputs.windows_diagnostics }}" == true ]]; then
             # Generate outside checkout; apply to these actual binaries and tests,
             # never to a post-failure rerun. Preserve exact overlay with evidence.
-            go run ./cli/plugin-kit-ai/internal/authoring/commands/testdata/native_diagnostics.go "$GITHUB_WORKSPACE" "$NATIVE_ROOT/evidence/diagnostics"
+            go run ./cli/internal/authoring/commands/testdata/native_diagnostics.go "$GITHUB_WORKSPACE" "$NATIVE_ROOT/evidence/diagnostics"
             export GOFLAGS="-overlay=$NATIVE_ROOT/evidence/diagnostics/overlay.json"
             # Fail the existing clean-VCS proof gate transparently for diagnostic
             # builds; an overlay must never masquerade as clean production proof.
@@ -122,7 +122,7 @@ jobs:
           command_package=github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands
           for entry in agentplugins plugin-kit-ai; do
             go build -p 2 -buildvcs="$build_vcs" -trimpath -ldflags "-X $command_package.Enabled=vertical-slice-v1 -X $command_package.Revision=$EXPECTED_HEAD" \
-              -o "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" "./cli/plugin-kit-ai/cmd/$entry"
+              -o "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" "./cli/cmd/$entry"
             go version -m -json "$AUTHORING_NATIVE_BIN_DIR/$entry$suffix" > "$NATIVE_ROOT/evidence/$entry-build.json"
           done
           go test -p 2 -json -list '^Test' "${packages[@]}" > "$NATIVE_ROOT/evidence/test-discovery.json"
@@ -156,7 +156,7 @@ jobs:
       - name: Detach and remove only the owned Windows ARM64 VHDX
         if: always() && matrix.os == 'windows' && matrix.arch == 'arm64'
         shell: pwsh
-        run: ./cli/plugin-kit-ai/internal/authoring/commands/testdata/windows_arm64_volume.ps1 -Mode Cleanup
+        run: ./cli/internal/authoring/commands/testdata/windows_arm64_volume.ps1 -Mode Cleanup
       - name: Preserve disposable volume setup and cleanup evidence
         if: always() && matrix.os == 'windows' && matrix.arch == 'arm64' && env.AUTHORING_VOLUME_FIXTURE != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

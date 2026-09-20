@@ -113,7 +113,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cliReadme, err := os.ReadFile(filepath.Join(root, "cli", "plugin-kit-ai", "README.md"))
+	cliReadme, err := os.ReadFile(filepath.Join(root, "cli", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,9 +298,9 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	mustContain(t, string(cliReadme), "## Already Have Native Config")
 	mustContain(t, string(cliReadme), "| local notify/runtime plugin in your repo | `codex-runtime` |")
 	mustContain(t, string(cliReadme), "| Cursor plugin package lane | `cursor` |")
-	mustContain(t, string(cliReadme), "Fast starter repos: [../../examples/starters/README.md](../../examples/starters/README.md)")
-	mustContain(t, string(cliReadme), "Reference repos: [../../examples/local/README.md](../../examples/local/README.md)")
-	mustContain(t, string(cliReadme), "Helper delivery modes: [../../docs/CHOOSING_HELPER_DELIVERY_MODE.md](../../docs/CHOOSING_HELPER_DELIVERY_MODE.md)")
+	mustContain(t, string(cliReadme), "Fast starter repos: [../examples/starters/README.md](../examples/starters/README.md)")
+	mustContain(t, string(cliReadme), "Reference repos: [../examples/local/README.md](../examples/local/README.md)")
+	mustContain(t, string(cliReadme), "Helper delivery modes: [../docs/CHOOSING_HELPER_DELIVERY_MODE.md](../docs/CHOOSING_HELPER_DELIVERY_MODE.md)")
 	mustContain(t, string(cliReadme), "Official starter templates:")
 	mustContain(t, string(cliReadme), "https://github.com/777genius/plugin-kit-ai-starter-codex-go")
 	mustContain(t, string(cliReadme), "https://github.com/777genius/plugin-kit-ai-starter-codex-python")
@@ -316,8 +316,8 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	mustContain(t, string(cliReadme), "`plugin-kit-ai bootstrap` is the stable repo-local first-run helper for `python` and `node` launcher-based projects on `codex-runtime` and `claude`")
 	mustContain(t, string(cliReadme), "`plugin-kit-ai doctor` is the stable read-only readiness check for `python` and `node` launcher-based projects on `codex-runtime` and `claude`")
 	mustContain(t, string(cliReadme), "`plugin-kit-ai validate --format json` emits the versioned `plugin-kit-ai/validate-report` contract")
-	mustContain(t, string(cliReadme), "[../../docs/VALIDATE_JSON_CONTRACT.md](../../docs/VALIDATE_JSON_CONTRACT.md)")
-	mustContain(t, string(cliReadme), "[../../docs/CODEX_TARGET_BOUNDARY.md](../../docs/CODEX_TARGET_BOUNDARY.md)")
+	mustContain(t, string(cliReadme), "[../docs/VALIDATE_JSON_CONTRACT.md](../docs/VALIDATE_JSON_CONTRACT.md)")
+	mustContain(t, string(cliReadme), "[../docs/CODEX_TARGET_BOUNDARY.md](../docs/CODEX_TARGET_BOUNDARY.md)")
 	mustContain(t, string(cliReadme), "requires `.codex-plugin/` to contain only `plugin.json`")
 	mustContain(t, string(cliReadme), "keeps `.app.json` / `.mcp.json` as managed root sidecars only when `.codex-plugin/plugin.json` references them")
 	mustContain(t, string(cliReadme), "`plugin-kit-ai export` is the stable portable handoff surface for `python` and `node` launcher-based projects on `codex-runtime` and `claude`")

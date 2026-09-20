@@ -15,19 +15,89 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 var _ clients.RegistryInspector = (*Adapter)(nil)
+var _ clients.PreparedRegistryInspector = (*Adapter)(nil)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return true }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+// InspectPreparedRegistry is intentionally limited to the exact planned
+// package path. Codex's complete registry is global and can only be observed
+// by its CLI; scanning every sibling directory during a dry-run would turn an
+// unrelated fixture or installation into a false indeterminate result.
+func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, error) {
+	if strings.TrimSpace(plan.ActivePath) == "" {
+		return clients.RegistryClear, nil
+	}
+	if _, err := os.Lstat(plan.ActivePath); os.IsNotExist(err) {
+		return inspectPreparedSiblings(plan, name, clients.RegistryClear)
+	} else if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	manifestName, _, _, err := shared.NativeManifestIdentity(plan.ActivePath)
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	if manifestName != name {
+		return clients.RegistryClear, nil
+	}
+	if owned {
+		return inspectPreparedSiblings(plan, name, clients.RegistryExpected)
+	}
+	return clients.RegistryCollision, nil
+}
+
+func inspectPreparedSiblings(plan domain.DeliveryPlan, name string, fallback clients.RegistryFinding) (clients.RegistryFinding, error) {
+	entries, err := os.ReadDir(filepath.Dir(plan.ActivePath))
+	if os.IsNotExist(err) {
+		return fallback, nil
+	}
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	expectedNamespace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
+	for _, entry := range entries {
+		path := filepath.Join(filepath.Dir(plan.ActivePath), entry.Name())
+		// The installer stages the candidate package as a sibling of the
+		// eventual active path.  That disposable directory is owned by this
+		// transaction, not a competing Codex namespace, so it must not be
+		// classified as a collision while the pre-commit observer runs.
+		if path == plan.ActivePath || strings.HasPrefix(entry.Name(), ".agentplugins-staging-") || !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		siblingName, qualified, namespace, siblingErr := shared.NativeManifestIdentity(path)
+		if siblingErr != nil || siblingName != name {
+			continue
+		}
+		if qualified && namespace != expectedNamespace {
+			continue
+		}
+		return clients.RegistryCollision, nil
+	}
+	return fallback, nil
+}
+
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
+	profileRoot := client.ConfigRoot
+	if profileRoot == "" {
+		profileRoot = plan.NativeRegistryRoot
+	}
 	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
+		if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		plan.NativeRegistryRoot = profileRoot
 		return inspectCodexCLI(ctx, env, plan, managed)
+	}
+	if profileRoot != "" {
+		if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		plan.NativeRegistryRoot = profileRoot
 	}
 	return inspectCodexFiles(plan, managed)
 }
@@ -36,7 +106,11 @@ func inspectCodexCLI(ctx context.Context, env clients.Env, plan domain.DeliveryP
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
-	result, err := shared.RunNativeRegistry(ctx, env.Runner, legacyports.Command{Argv: []string{plan.NativeRegistryExecutable, "plugin", "list", "--json"}})
+	command, err := codexCommand(plan.NativeRegistryRoot, plan.NativeRegistryExecutable, os.Environ(), "plugin", "list", "--json")
+	if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	result, err := shared.RunNativeRegistry(ctx, env.Runner, command)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return clients.RegistryIndeterminate, ctxErr

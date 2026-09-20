@@ -37,7 +37,7 @@ pnpm run docs:check
 
 The repository is linted by [golangci-lint](https://golangci-lint.run) **v2.13.2**
 or newer. A single `.golangci.yml` at the root covers the modules that hold
-Go code in the install core: `.`, `cli/plugin-kit-ai`, `install/integrationctl`,
+Go code in the install core: `.`, `cli`, `install/integrationctl`,
 and `install/integrationctl/agentplugins`.
 
 ```bash
@@ -140,7 +140,7 @@ why in the message:
 
 ```bash
 UPDATE_GOLDEN=1 go test -count=1 ./install/integrationctl/agentplugins/...
-cd cli/plugin-kit-ai && UPDATE_GOLDEN=1 go test -count=1 ./internal/agentpluginscli/...
+cd cli && UPDATE_GOLDEN=1 go test -count=1 ./internal/agentpluginscli/...
 ```
 
 `internal/archtest` counts how often each core package names a client identity
