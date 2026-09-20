@@ -748,7 +748,7 @@ func claudeWindowsMCPProjection(body []byte, expected ...string) error {
 		}
 		command, _ := server["command"].(string)
 		args, _ := server["args"].([]any)
-		if !strings.HasSuffix(strings.ReplaceAll(command, `\`, "/"), "/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins") || len(args) < 7 || args[0] != "--internal-stdio-v1" || args[5] != "--" || server["cwd"] != nil || server["url"] != nil || (server["type"] != nil && server["type"] != "stdio") {
+		if !strings.HasSuffix(strings.ReplaceAll(command, `\`, "/"), "/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins.exe") || len(args) < 7 || args[0] != "--internal-stdio-v1" || args[5] != "--" || server["cwd"] != nil || server["url"] != nil || (server["type"] != nil && server["type"] != "stdio") {
 			return fmt.Errorf("invalid managed stdio projection: %s %+v", name, server)
 		}
 		for _, value := range args {
@@ -779,7 +779,7 @@ func claudeWindowsMCPProjection(body []byte, expected ...string) error {
 func TestClaudeWindowsMCPProjection(t *testing.T) {
 	// Exact flat shape written by projectClaudeMCP; streamable-http becomes http.
 	const httpProjection = `{"http":{"type":"http","url":"http://127.0.0.1:1234/mcp"}}`
-	const projection = `{"default":{"command":"C:/fixture/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins","args":["--internal-stdio-v1","C:/fixture","C:/data","C:/fixture","plugin","--","node","opaque"]},"http":{"type":"http","url":"http://127.0.0.1:1234/mcp"}}`
+	const projection = `{"default":{"command":"C:/fixture/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins.exe","args":["--internal-stdio-v1","C:/fixture","C:/data","C:/fixture","plugin","--","node","opaque"]},"http":{"type":"http","url":"http://127.0.0.1:1234/mcp"}}`
 	for _, tc := range []struct {
 		name, body string
 		wantError  bool
@@ -788,7 +788,7 @@ func TestClaudeWindowsMCPProjection(t *testing.T) {
 		{"projected stdio HTTP and SSE", strings.TrimSuffix(projection, "}") + `,"sse":{"type":"sse","url":"http://127.0.0.1:9/sse"}}`, false},
 		{"missing stdio", httpProjection, true},
 		{"wrong mode", strings.Replace(projection, "--internal-stdio-v1", "--help", 1), true},
-		{"wrong helper", strings.Replace(projection, "managed-stdio-v1/agentplugins", "other/agentplugins", 1), true},
+		{"wrong helper", strings.Replace(projection, "managed-stdio-v1/agentplugins.exe", "other/agentplugins.exe", 1), true},
 		{"wrong anchor", strings.Replace(projection, `"plugin"`, `"unknown"`, 1), true},
 		{"wrong separator", strings.Replace(projection, `"--"`, `"-"`, 1), true},
 		{"non-string argv", strings.Replace(projection, `"opaque"`, `7`, 1), true},

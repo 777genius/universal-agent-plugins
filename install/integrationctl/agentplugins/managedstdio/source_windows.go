@@ -4,6 +4,8 @@ package managedstdio
 
 import "os"
 
+const ExecutableName = "agentplugins.exe"
+
 // Windows does not expose POSIX execute bits. Trust is established by the
 // caller-provided absolute path and byte digest; CreateProcess performs the
 // platform executable validation when the helper is launched.

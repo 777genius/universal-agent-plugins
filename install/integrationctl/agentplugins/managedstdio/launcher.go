@@ -15,7 +15,6 @@ import (
 
 const Mode = "--internal-stdio-v1"
 const RelativeDirectory = "io.github.777genius.agentplugins/managed-stdio-v1"
-const ExecutableName = "agentplugins"
 
 // Arguments uses positional fields so child flags and empty arguments remain opaque.
 func Arguments(plugin, data, cwd string, anchor pathcontract.Anchor, command string, args []string) []string {
