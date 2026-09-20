@@ -329,6 +329,12 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 	if req.InstallationID == "" {
 		return []usecase.AddInput{target}, nil
 	}
+	// A group request owns all of its explicit targets. The group use case
+	// performs the cross-target reconciliation itself; do not reinterpret it
+	// as a single-target update that needs host facts for the same siblings.
+	if req.ClientID == "" && len(req.Targets) > 0 {
+		return []usecase.AddInput{target}, nil
+	}
 	state, err := e.store.Load()
 	if err != nil {
 		return nil, fmt.Errorf("%w: load owned state: %v", ErrTargetFactsUnavailable, err)
@@ -336,6 +342,10 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 	installation, ok := findInstall(state, req.InstallationID)
 	if !ok {
 		return []usecase.AddInput{target}, nil
+	}
+	selected := make(map[string]struct{}, len(req.Targets))
+	for _, candidate := range req.Targets {
+		selected[candidate.ClientID] = struct{}{}
 	}
 	known, err := e.knownTargetIndex(req.KnownTargets)
 	if err != nil {
@@ -346,12 +356,19 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 		if binding.Materialization == domain.MaterializationAbsent {
 			continue
 		}
+		// Group operations already carry explicit request-scoped facts for every
+		// selected target. Only bindings outside that group need KnownTargets;
+		// treating selected siblings as unknown would make a valid two-client
+		// repair/update impossible when ClientID is intentionally empty.
+		if _, ok := selected[binding.ClientID]; ok {
+			continue
+		}
 		configRoot := req.ClientConfigRoot
 		executable := req.ClientExecutable
 		if binding.ClientID != req.ClientID {
 			facts, ok := known[binding.ClientID]
 			if !ok {
-				return nil, fmt.Errorf("%w: binding %s (%s) has no host facts", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID)
+				return nil, fmt.Errorf("%w: binding %s (%s) has no host facts (client=%q targets=%d)", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, req.ClientID, len(req.Targets))
 			}
 			if facts.BindingID != binding.ClientBindingID {
 				return nil, fmt.Errorf("%w: binding %s (%s) does not match host binding %s", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, facts.BindingID)
