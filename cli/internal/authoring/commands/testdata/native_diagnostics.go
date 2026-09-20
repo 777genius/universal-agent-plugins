@@ -44,7 +44,7 @@ func main() {
 	replacements := map[string]string{}
 	packages := map[string]string{
 		"install/integrationctl/agentplugins/adapters/packageview": "packageview",
-		"cli/plugin-kit-ai/internal/authoring/scaffold":            "scaffold",
+		"cli/internal/authoring/scaffold":            "scaffold",
 	}
 	files := map[string][]string{
 		"packageview": {"source_windows.go", "scratch_windows.go"},

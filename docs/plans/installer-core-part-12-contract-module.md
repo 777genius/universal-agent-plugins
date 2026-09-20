@@ -26,7 +26,7 @@
 | 3 | Фактическая ошибка: «из правила для `clients` удаляется разрешение на `adapters/nativeconfig`» | §12.5 и критерий приёмки 7 переписаны: такого разрешения в `.golangci.yml` **нет**; `clients-no-upward` и `clients-no-concrete-clients` — deny-списки. A-2 существует только прозой в `clients/clients.go:13-16` и `docs/ARCHITECTURE.md:106-114` | Нельзя удалить то, чего нет; вместо этого 12a **добавляет** deny-правило, которого сегодня не хватает |
 | 4 | Критерий «импорт `contracttest` из `clients/all/registry_test.go` доказывает пригодность для out-of-tree» | Заменён на машинную проверку `GOWORK=off` (§12.8, критерий 10) | Импорт внутри одного коммита доказывает только работу `go.work` + `replace`, а не отвязываемость модуля |
 | 5 | CI-поверхности после выноса молча перестают видеть контракт | §12.5 «Пять CI-поверхностей» — конкретная правка для каждой: `Makefile` (`test-required`, `test-core`, `LINT_MODULES`, `vet`), `coverage.yml`, `core-fast.yml` (paths-фильтр), `agentplugins-release.yml`, `codeql.yml`/`govulncheck.yml` | Эмпирически подтверждено: `go list ./...` в корне видит **только 6 пакетов root-модуля**, ни одного из workspace-модулей. Без явной строки 1171 LOC тестов контракта выпадают из Required молча |
-| 6 | Числовые неточности | 296 → **302** ссылки `nativeconfig.*`; baseline-записи на строках **674 и 677** (не 443/446); «16 файлов компилируются без правок» → **15** (шестнадцатый — сам `ports/runner.go`, который правится); добавлены **14 ссылок `ports.Command*` в 4 файлах `cli/`** | Собственная разбивка черновика суммировалась в 302; ссылки в `cli/` — причина, по которой `cli/plugin-kit-ai/go.mod` получает `require`/`replace` |
+| 6 | Числовые неточности | 296 → **302** ссылки `nativeconfig.*`; baseline-записи на строках **674 и 677** (не 443/446); «16 файлов компилируются без правок» → **15** (шестнадцатый — сам `ports/runner.go`, который правится); добавлены **14 ссылок `ports.Command*` в 4 файлах `cli/`** | Собственная разбивка черновика суммировалась в 302; ссылки в `cli/` — причина, по которой `cli/go.mod` получает `require`/`replace` |
 | 7 | `go.mod` нового модуля копировал `go 1.25.0` у соседей | §12.3 «Версия Go»: объявлять **минимальную** версию, под которой контракт реально компилируется; процедура эмпирического бисекта + риск смены семантики loop-переменной на границе 1.21/1.22 | Завышенный `go`-директив отсекает потребителей — прямо против цели части |
 | 8 | Правило «мерджится в тот же день» было только у 12b | §12.3: правило распространено на **12a** | 12a трогает `providers/activator.go` — самый горячий файл проекта (23 правки в `main` за 60 дней) и все четыре `*_native.go` |
 | 9 | Требование к Part 7c дублировалось в Part 12 | §12.1 Находка 3: текст удалён, дана ссылка на **§8.7 основного плана**, куда требование уже перенесено | Один источник правды; требование живёт там, где его будут исполнять |
@@ -278,7 +278,7 @@ PATH и от режима workspace, а в CI это лишняя поверхн
 
 - собрать импорты только трёх пакетов `domain`/`ports`/`clients` (не рекурсивно — файлы, лежащие прямо в
   каталоге, `parser.ParseFile` с `parser.ImportsOnly` через `os.ReadDir`, без `filepath.WalkDir`/
-  `parser.ParseDir` по всему `install/integrationctl`/`cli/plugin-kit-ai` — обход всего дерева не нужен: для
+  `parser.ParseDir` по всему `install/integrationctl`/`cli` — обход всего дерева не нужен: для
   инвариантов 2-3 достаточно BFS от уже найденных исходящих рёбер по производственным (non-test) импортам
   каждого следующего пакета до фиксированной точки, что на порядок дешевле полного обхода при тех же
   гарантиях);
@@ -566,10 +566,10 @@ type CommandResult = coreports.CommandResult
   claude_probe}.go` + 5 тестов `providers`, `adapters/sourceacquisition/acquirer.go`, 3 теста `usecase`);
   шестнадцатый — сам `ports/runner.go`, который и есть место правки. Черновик писал «16 файлов без правок» —
   ошибка на единицу;
-- **дополнительно (в черновике отсутствовало): 14 ссылок в 4 файлах `cli/plugin-kit-ai`** —
+- **дополнительно (в черновике отсутствовало): 14 ссылок в 4 файлах `cli`** —
   `internal/authoring/bootstrap/bootstrap.go:495`, `internal/authoring/mcpruntime/runtime.go:323`,
   `internal/agentpluginscli/idempotent_update_test.go` (3), `internal/agentpluginscli/cli_test.go` (9).
-  Они тоже компилируются без правок (alias), **но именно из-за них** `cli/plugin-kit-ai/go.mod` обязан
+  Они тоже компилируются без правок (alias), **но именно из-за них** `cli/go.mod` обязан
   получить `require`/`replace` на новый модуль: он транзитивно называет типы, объявленные там.
 
 `adapters/process.OS{}` продолжает удовлетворять и legacy `ports.ProcessRunner`, и `coreports.CommandRunner`.
@@ -726,7 +726,7 @@ can later move to its own repository») каталог переезжает це
 использует.
 
 Соседние модули репозитория, для калибровки (VERIFIED): root `go 1.22`, `install/plugininstall` `go 1.22`,
-`sdk` `go 1.22`, `install/integrationctl` `go 1.25.0`, `cli/plugin-kit-ai` `go 1.25.8`. Единого стандарта
+`sdk` `go 1.22`, `install/integrationctl` `go 1.25.0`, `cli` `go 1.25.8`. Единого стандарта
 нет — копировать «как у соседа» бессмысленно.
 
 **Что реально нужно контракту (VERIFIED по исходникам):**
@@ -786,12 +786,12 @@ loop-семантикой и отказ от `toolchain`-директивы (о�
 
 | Что | Файлов | Строк |
 |---|---|---|
-| Смена путей импорта `domain`/`ports`/`clients` | **294** (202 в `install/integrationctl`, 91 в `cli/plugin-kit-ai`, 1 в `repotests/`) | ~360 строк импортов (285 `domain` + 34 `ports` + 41 `clients`) |
+| Смена путей импорта `domain`/`ports`/`clients` | **294** (202 в `install/integrationctl`, 91 в `cli`, 1 в `repotests/`) | ~360 строк импортов (285 `domain` + 34 `ports` + 41 `clients`) |
 | Переезд файлов контракта (`git mv`) | 28 non-test + 11 test | 4252 LOC перемещения |
 | Разделение `nativeconfig` (A1, пересчитано) | ~17 | **~240** (см. таблицу в §12.2.A1) |
 | Alias `Command`/`CommandResult` (B1) | 2 | ~10 |
 | Переезд `identity_portable_test.go` (D1) | 2 | 71 перемещения + ~5 |
-| `go.mod` нового модуля, `go.work`, `require`/`replace` в `install/integrationctl/go.mod` и `cli/plugin-kit-ai/go.mod` | 4 | ~15 |
+| `go.mod` нового модуля, `go.work`, `require`/`replace` в `install/integrationctl/go.mod` и `cli/go.mod` | 4 | ~15 |
 | `.golangci.yml`: depguard-globы, `pkg:`-префиксы, новое deny-правило для `clients` | 1 | ~65 |
 | `internal/archtest/archtest.go`: `domainImportPath`, `legacyPortsPath`, `domainDir`, `clientsRoot`, список scan-баз (строки 19, 24-25, 33-35, 104, 164, 167) + baseline guard-теста §12.1.G | 2 | ~25 |
 | CI: `Makefile`, `lint.yml`, `core-fast.yml`, `coverage.yml`, `agentplugins-release.yml`, `codeql.yml`, `govulncheck.yml` (§12.5) | 7 | ~35 |
@@ -955,7 +955,7 @@ Out-of-tree автор адаптера делает `go get …/agentplugins-co
 
 ```
 $ go list ./...            # в корне репозитория, workspace активен
-→ 6 пакетов, все из root-модуля. Ни одного из install/integrationctl, cli/plugin-kit-ai, sdk, plugininstall.
+→ 6 пакетов, все из root-модуля. Ни одного из install/integrationctl, cli, sdk, plugininstall.
 
 $ go list ./install/integrationctl/...
 → 70 пакетов.
@@ -972,7 +972,7 @@ $ go list ./install/integrationctl/...
 ```make
 test-required:
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...
-	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/plugin-kit-ai/...
+	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/integrationctl/...
 	...
 ```
@@ -981,7 +981,7 @@ test-required:
 Без неё `./install/integrationctl/...` перестаёт видеть `domain`/`ports`/`clients`, и **1171 LOC тестов
 контракта уходят из Required-гейта без единого сообщения**.
 
-Там же: `LINT_MODULES` (строка 13) `. cli/plugin-kit-ai install/integrationctl` → **4 модуля**;
+Там же: `LINT_MODULES` (строка 13) `. cli install/integrationctl` → **4 модуля**;
 `vet` (строка 206) получает `cd agentplugins-core && go vet ./...`; `test-core` (строка 47) получает
 `./agentplugins-core/...`.
 
@@ -1014,7 +1014,7 @@ go test -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage/agentplug
 paths:
   - 'install/integrationctl/agentplugins/**'
   - 'install/integrationctl/adapters/pathpolicy/**'
-  - 'cli/plugin-kit-ai/internal/agentpluginscli/**'
+  - 'cli/internal/agentpluginscli/**'
   ...
 ```
 
@@ -1025,7 +1025,7 @@ paths:
 Правка: добавить `- 'agentplugins-core/**'`.
 
 Там же: `cross-build` (строка ~103) — добавить модуль в цикл сборки по трём GOOS (сейчас цикл
-`for module in install/integrationctl cli/plugin-kit-ai`); `vet-all` (строка ~125) — через обновлённый
+`for module in install/integrationctl cli`); `vet-all` (строка ~125) — через обновлённый
 `make vet`.
 
 #### (d) `.github/workflows/agentplugins-release.yml` — релиз перестаёт тестировать контракт
@@ -1063,7 +1063,7 @@ paths:
 (Part 5-11) закончил меняться и у которого **нет ни одного внешнего потребителя**, значит принять
 обязательство раньше, чем появилась причина. Nested-модуль в `go.work` работает без тегов; потребители
 внутри репозитория используют `require v0.0.0` + `replace` — ровно та конвенция, которая уже действует для
-`install/integrationctl`, `plugininstall` и `sdk` в `cli/plugin-kit-ai/go.mod` (VERIFIED). Ранний тег, кроме
+`install/integrationctl`, `plugininstall` и `sdk` в `cli/go.mod` (VERIFIED). Ранний тег, кроме
 того, потребует решить вопрос синхронизации версии контракта с релизами `plugin-kit-ai` — а это уже работа
 другого масштаба.
 
@@ -1107,7 +1107,7 @@ paths:
 - Legacy-движок `plugin.yaml` (`install/integrationctl/{adapters,usecase,domain}` вне `agentplugins`)
   затрагивается **ровно двумя строками alias** в `ports/interfaces_runtime.go` (вариант B1). Заявить это явно
   в описании PR 12a — требование §5.1(g) и AGENTS.md репозитория.
-- `cli/plugin-kit-ai` получает `require`/`replace` на новый модуль — не из-за прямых импортов контракта, а
+- `cli` получает `require`/`replace` на новый модуль — не из-за прямых импортов контракта, а
   из-за 14 ссылок `ports.Command*` в 4 файлах (§12.2.B1), которые после alias указывают на типы нового
   модуля.
 - Переходные алиасы `providers.CommandRunner` и `providers.ManagedMarketplaceName` к Part 12 уже удалены
@@ -1205,7 +1205,7 @@ paths:
 10. **`require`/`replace` у потребителей.** Root-модуль сегодня вообще не имеет `require` на
     `install/integrationctl` и полагается на `go.work` (VERIFIED: root `go.mod` состоит из трёх строк).
     Скорее всего, для него ничего добавлять не придётся, но это надо подтвердить компиляцией `repotests`, а
-    не предположением. Для `cli/plugin-kit-ai` правка нужна точно (§12.7). Уровень: **низкий**.
+    не предположением. Для `cli` правка нужна точно (§12.7). Уровень: **низкий**.
 11. **Релизные workflow.** `agentplugins-release.yml` перечисляет модули явно (строка 124) — правка описана
     в §12.5(d). `agentplugins-npm-publish.yml` и `agentplugins-platform-proof.yml` не смотрел (§12.11).
     Уровень: **низкий**.
@@ -1286,5 +1286,5 @@ paths:
 | `.github/workflows/codeql.yml` | строки 43-67 — поимённая сборка модулей |
 | `.github/workflows/govulncheck.yml` | строки 11-25 — матрица модулей |
 | `go.work` | список `use` (5 → 6) |
-| `cli/plugin-kit-ai/go.mod` | образец конвенции `require v0.0.0` + `replace`; получает новую запись |
+| `cli/go.mod` | образец конвенции `require v0.0.0` + `replace`; получает новую запись |
 | `docs/plans/installer-core-clean-architecture-plan.md` | §8.7 — требование к Part 7c (не дублировать здесь); §5.2 — правило синхронизации |

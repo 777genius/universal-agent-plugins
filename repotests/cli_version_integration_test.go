@@ -26,7 +26,7 @@ func TestPluginKitAIVersionCommand_UsesInjectedReleaseVersion(t *testing.T) {
 	root := RepoRoot(t)
 	outPath := filepath.Join(t.TempDir(), "plugin-kit-ai")
 	build := exec.Command("go", "build", "-ldflags", "-X main.version=v1.0.1", "-o", outPath, "./cmd/plugin-kit-ai")
-	build.Dir = filepath.Join(root, "cli", "plugin-kit-ai")
+	build.Dir = filepath.Join(root, "cli")
 	buildOut, err := build.CombinedOutput()
 	if err != nil {
 		t.Fatalf("build plugin-kit-ai with injected version: %v\n%s", err, buildOut)

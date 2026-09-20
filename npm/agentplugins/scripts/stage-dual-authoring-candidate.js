@@ -129,7 +129,7 @@ function stageCandidate(options) {
   // Old revisions accept arbitrary -X strings even when their routing does not
   // implement that mode. Refuse that source before compiling or labelling bytes.
   if (mode === "release-cli-contract-v1") {
-    const selection = c.readFile(path.join(context.root, "source", "cli/plugin-kit-ai/internal/authoring/commands/commands.go")).toString();
+    const selection = c.readFile(path.join(context.root, "source", "cli/internal/authoring/commands/commands.go")).toString();
     if (!/^const ReleaseMode = "release-cli-contract-v1"$/m.test(selection)) {
       throw new Error("frozen source does not declare the requested release authoring mode");
     }
@@ -159,7 +159,7 @@ function stageCandidate(options) {
         // trimpath. Preserve the exact embedded version/engine linker settings
         // for byte inspection. Reproducibility is a later, separate gate.
         const args = ["build", "-p", "2", "-buildvcs=false", "-mod=readonly", "-ldflags", c.linkerFlags(product, id, mode),
-          "-o", binaryPath, `./cli/plugin-kit-ai/cmd/${product}`];
+          "-o", binaryPath, `./cli/cmd/${product}`];
         run(options.go, args, { cwd: path.join(context.root, "source"), env: { ...env, GOOS: os, GOARCH: arch } });
         inspectBinary(options.go, binaryPath, product, target, id, env, mode);
         const binary = c.readFile(binaryPath);

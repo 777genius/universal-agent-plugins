@@ -144,7 +144,7 @@ func render(sha string, pins []sourcePin, roots []*cobra.Command) (map[string][]
 			// explicit source link rather than an invented local installer reference.
 			link := func(target string) string {
 				if target == "agentplugins.md" {
-					return "https://github.com/777genius/universal-agent-plugins/blob/" + sha + "/cli/plugin-kit-ai/internal/agentpluginscli/root.go"
+					return "https://github.com/777genius/universal-agent-plugins/blob/" + sha + "/cli/internal/agentpluginscli/root.go"
 				}
 				return target
 			}
@@ -214,7 +214,7 @@ func exportTrees(checkout, sha, out string, load func() ([]*cobra.Command, error
 // Hash the actual deterministic rendered facts, with fixed provenance rather
 // than caller SHA/host paths. Length framing and sorted names bind every byte.
 // This is a reviewed golden, never regenerated automatically during export.
-const reviewedProjection = "63e299ed76263369094e744c5088df02f2984eddaf4503a88b2a2ad6e1a23991"
+const reviewedProjection = "2e5ce60d5be2990d4a325a8f7a5b55d867b4ff247dea316394d02ae827093772"
 
 func projectionFingerprint(roots []*cobra.Command) (string, error) {
 	files, err := render("SOURCE_SHA", nil, roots)

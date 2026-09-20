@@ -21,7 +21,7 @@ Contract-sensitive examples:
 
 ## Validate Failure Families
 
-`cli/plugin-kit-ai/internal/validate` exposes stable failure kinds for:
+`cli/internal/validate` exposes stable failure kinds for:
 
 - `unknown_platform`
 - `cannot_infer_platform`

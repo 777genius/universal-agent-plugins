@@ -25,7 +25,7 @@ updates:
       include: "scope"
 
   - package-ecosystem: "gomod"
-    directory: "/cli/plugin-kit-ai"
+    directory: "/cli"
     schedule:
       interval: "weekly"
       day: "monday"

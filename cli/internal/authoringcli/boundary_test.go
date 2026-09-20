@@ -16,12 +16,12 @@ import (
 // Follow local production imports so a benign helper cannot hide a legacy edge.
 func TestStandardAuthoringImportBoundary(t *testing.T) {
 	_, file, _, _ := runtime.Caller(0)
-	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
+	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
 	if err := checkFactsBoundary(repo); err != nil {
 		t.Fatal(err)
 	}
 	const base = "github.com/777genius/plugin-kit-ai"
-	modules := map[string]string{base + "/cli": "cli/plugin-kit-ai", base + "/install/integrationctl/agentplugins": "install/integrationctl/agentplugins", base + "/install/integrationctl": "install/integrationctl", base + "/plugininstall": "install/plugininstall", base + "/sdk": "sdk", base: "."}
+	modules := map[string]string{base + "/cli": "cli", base + "/install/integrationctl/agentplugins": "install/integrationctl/agentplugins", base + "/install/integrationctl": "install/integrationctl", base + "/plugininstall": "install/plugininstall", base + "/sdk": "sdk", base: "."}
 	resolve := func(path string) string {
 		// Longest prefix wins over the root module.
 		best := ""
@@ -78,7 +78,7 @@ func TestStandardAuthoringImportBoundary(t *testing.T) {
 		}
 	}
 	for _, sub := range []string{"authoringcli", "authoring"} {
-		root := filepath.Join(repo, "cli/plugin-kit-ai/internal", sub)
+		root := filepath.Join(repo, "cli/internal", sub)
 		if _, err := os.Stat(root); os.IsNotExist(err) {
 			continue
 		}

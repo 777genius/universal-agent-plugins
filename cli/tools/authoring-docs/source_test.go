@@ -56,7 +56,7 @@ func committedFixture(t *testing.T) string {
 }
 func newSourceFixture(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs("../../../..")
+	root, err := filepath.Abs("../../..")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func newSourceFixture(t *testing.T) string {
 		paths = append(paths, pin.Path)
 	}
 	for _, name := range adapterFiles {
-		paths = append(paths, "cli/plugin-kit-ai/tools/authoring-docs/"+name)
+		paths = append(paths, "cli/tools/authoring-docs/"+name)
 	}
 	for _, path := range paths {
 		b, e := os.ReadFile(filepath.Join(root, path))
@@ -157,20 +157,20 @@ func TestSourceDriftRejections(t *testing.T) {
 	}{
 		{name: "unstaged", path: "docs/PHASE6_CLI_EXPORTER_PREPARATION.md", body: "dirty", want: "tracked checkout"},
 		{name: "staged", path: "docs/PHASE6_CLI_EXPORTER_PREPARATION.md", body: "dirty", want: "tracked checkout", stage: true},
-		{name: "factory-root", path: "cli/plugin-kit-ai/internal/agentpluginscli/root.go", body: "package agentpluginscli\n", want: "source input mismatch", commit: true},
-		{name: "factory-flags", path: "cli/plugin-kit-ai/internal/authoringcli/flags.go", body: "package authoringcli\n", want: "source input mismatch", commit: true},
-		{name: "target-helper", path: "cli/plugin-kit-ai/internal/agentpluginscli/target_batch.go", body: "package agentpluginscli\n", want: "source input mismatch", commit: true},
+		{name: "factory-root", path: "cli/internal/agentpluginscli/root.go", body: "package agentpluginscli\n", want: "source input mismatch", commit: true},
+		{name: "factory-flags", path: "cli/internal/authoringcli/flags.go", body: "package authoringcli\n", want: "source input mismatch", commit: true},
+		{name: "target-helper", path: "cli/internal/agentpluginscli/target_batch.go", body: "package agentpluginscli\n", want: "source input mismatch", commit: true},
 		{name: "client-registry", path: "install/integrationctl/agentplugins/domain/clients.go", body: "package domain\n", want: "source input mismatch", commit: true},
-		{name: "workspace-replace", path: "go.work", body: "go 1.25.0\nuse ./cli/plugin-kit-ai\nreplace github.com/spf13/pflag => ./override\n", want: "source input mismatch", commit: true},
+		{name: "workspace-replace", path: "go.work", body: "go 1.25.0\nuse ./cli\nreplace github.com/spf13/pflag => ./override\n", want: "source input mismatch", commit: true},
 		{name: "workspace-module-dependency", path: "install/integrationctl/go.mod", body: "module github.com/777genius/plugin-kit-ai/install/integrationctl\ngo 1.25.0\nrequire github.com/spf13/pflag v1.0.8\n", want: "source input mismatch", commit: true},
-		{name: "missing-factory", path: "cli/plugin-kit-ai/internal/agentpluginscli/target_batch.go", remove: true, want: "source input unavailable", commit: true},
-		{name: "new-committed-go", path: "cli/plugin-kit-ai/internal/authoringcli/new.go", body: "package authoringcli\nfunc init() {}\n", want: "unexpected Go input", commit: true},
-		{name: "untracked-go", path: "cli/plugin-kit-ai/internal/authoringcli/new.go", body: "package authoringcli\n", want: "unexpected Go input"},
-		{name: "ignored-go", path: "cli/plugin-kit-ai/internal/authoringcli/ignored.go", body: "package authoringcli\n", want: "unexpected Go input"},
-		{name: "adapter-go", path: "cli/plugin-kit-ai/tools/authoring-docs/new.go", body: "package main\n", want: "unexpected Go input"},
-		{name: "ignored-adapter-go", path: "cli/plugin-kit-ai/tools/authoring-docs/ignored.go", body: "package main\n", want: "unexpected Go input"},
-		{name: "missing-adapter", path: "cli/plugin-kit-ai/tools/authoring-docs/main.go", remove: true, want: "adapter input unavailable", commit: true},
-		{name: "nested-workspace", path: "cli/plugin-kit-ai/go.work", body: "go 1.25.0\nuse .\n", want: "unexpected dependency control"},
+		{name: "missing-factory", path: "cli/internal/agentpluginscli/target_batch.go", remove: true, want: "source input unavailable", commit: true},
+		{name: "new-committed-go", path: "cli/internal/authoringcli/new.go", body: "package authoringcli\nfunc init() {}\n", want: "unexpected Go input", commit: true},
+		{name: "untracked-go", path: "cli/internal/authoringcli/new.go", body: "package authoringcli\n", want: "unexpected Go input"},
+		{name: "ignored-go", path: "cli/internal/authoringcli/ignored.go", body: "package authoringcli\n", want: "unexpected Go input"},
+		{name: "adapter-go", path: "cli/tools/authoring-docs/new.go", body: "package main\n", want: "unexpected Go input"},
+		{name: "ignored-adapter-go", path: "cli/tools/authoring-docs/ignored.go", body: "package main\n", want: "unexpected Go input"},
+		{name: "missing-adapter", path: "cli/tools/authoring-docs/main.go", remove: true, want: "adapter input unavailable", commit: true},
+		{name: "nested-workspace", path: "cli/go.work", body: "go 1.25.0\nuse .\n", want: "unexpected dependency control"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -243,7 +243,7 @@ func TestEffectiveDependencyDrift(t *testing.T) {
 			writeFixture(t, dir, control, body)
 			sha := commitFixture(t, dir)
 			cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "list", "-m", "-json", "github.com/spf13/pflag")
-			cmd.Dir = filepath.Join(dir, "cli/plugin-kit-ai")
+			cmd.Dir = filepath.Join(dir, "cli")
 			cmd.Env = append(os.Environ(), "GOWORK="+filepath.Join(dir, "go.work"), "GOFLAGS=", "GOENV=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off", "GOMAXPROCS=2")
 			selected, err := cmd.CombinedOutput()
 			if err != nil {

@@ -4,7 +4,7 @@ toolchain go1.25.13
 
 use (
 	.
-	./cli/plugin-kit-ai
+	./cli
 	./install/integrationctl
 	./install/integrationctl/agentplugins
 	./install/plugininstall

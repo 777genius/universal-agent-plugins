@@ -12,7 +12,7 @@ func TestPluginKitAIInitGeneratesBuildableModule(t *testing.T) {
 	for _, platform := range []string{"claude", "codex-runtime", "codex-package", "gemini", "opencode", "cursor"} {
 		t.Run(platform, func(t *testing.T) {
 			root := RepoRoot(t)
-			cliDir := filepath.Join(root, "cli", "plugin-kit-ai")
+			cliDir := filepath.Join(root, "cli")
 
 			binDir := t.TempDir()
 			bin := filepath.Join(binDir, "plugin-kit-ai")

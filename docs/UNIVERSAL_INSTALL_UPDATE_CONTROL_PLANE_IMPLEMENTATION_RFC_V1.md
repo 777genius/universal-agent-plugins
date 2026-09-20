@@ -137,8 +137,8 @@ install/integrationctl/
 Public CLI wiring stays outside:
 
 ```text
-cli/plugin-kit-ai/internal/app/
-cli/plugin-kit-ai/cmd/plugin-kit-ai/
+cli/internal/app/
+cli/cmd/plugin-kit-ai/
 ```
 
 ## Public Facade

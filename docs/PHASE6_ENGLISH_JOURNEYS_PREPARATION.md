@@ -71,7 +71,7 @@ public parsing from inherited installer flags. Scaffold `plan.go` and
 `templates.go` establish actual files, required URL/runtime inputs, Node >=22,
 Skill names, optional license inputs, and the absence of install/execution.
 `cmd/plugin-kit-ai/release_compat.go` supplies retirement and migration context.
-Paths in this paragraph are beneath `cli/plugin-kit-ai/` at the future pin.
+Paths in this paragraph are beneath `cli/` at the future pin.
 
 Tutorials use explicit names, descriptions, destinations and required template
 inputs. `--mcp-template` is the public hybrid flag. All authoring command families

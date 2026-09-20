@@ -42,7 +42,7 @@ class CandidateTests(unittest.TestCase):
         data = io.BytesIO()
         with tarfile.open(fileobj=data, mode="w") as archive:
             for name in ("internal/terminalprompts/mode.go", "go.mod", "go.sum"):
-                entry = tarfile.TarInfo("cli/plugin-kit-ai/" + name)
+                entry = tarfile.TarInfo("cli/" + name)
                 archive.addfile(entry, io.BytesIO())
         with tempfile.TemporaryDirectory() as directory:
             with patch.object(sys, "argv", ["proof", "--artifacts", directory]), \

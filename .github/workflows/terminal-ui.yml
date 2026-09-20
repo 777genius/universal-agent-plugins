@@ -43,7 +43,7 @@ jobs:
           cache: false
       - name: Focused contracts and frozen release build
         id: build
-        working-directory: cli/plugin-kit-ai
+        working-directory: cli
         run: |
           go test ./internal/agentpluginscli/prompt ./internal/promptio ./internal/terminalprompts
           go build -o "$RUNNER_TEMP/agentplugins.exe" ./cmd/agentplugins
@@ -91,7 +91,7 @@ jobs:
       # Run it after console proof so legacy fixture failures cannot hide ConPTY.
       - name: Broad existing CLI contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        working-directory: cli/plugin-kit-ai
+        working-directory: cli
         run: go test ./internal/agentpluginscli ./cmd/agentplugins/...
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()

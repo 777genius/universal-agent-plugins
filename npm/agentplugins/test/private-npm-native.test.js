@@ -220,7 +220,7 @@ test("NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and 
   }));
   assert.deepEqual(sharedReports[0], sharedReports[1]); assert.deepEqual(trees.agentplugins, trees["plugin-kit-ai"]);
   // Reuse B's exact committed inventory as data; do not maintain a second list.
-  const inventory = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go`], o.repo);
+  const inventory = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/cmd/plugin-kit-ai/release_compat.go`], o.repo);
   const rows = [...inventory.matchAll(/\{"([^"]+)", "([^"]*)", (true|false)\}/g)]; assert.ok(rows.length >= 50);
   for (const [, command, flags, retained] of rows) if (retained === "false") {
     const tails = [[], ["--help"], ["--unknown=credential-fixture", "--help"]];
@@ -240,7 +240,7 @@ test("NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and 
   }
   // Replay A's committed parser matrix directly, keeping its expected statuses
   // and operation IDs. This is packed-process proof of the same accepted data.
-  const parserSource = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/plugin-kit-ai/internal/authoring/commands/public_contract_test.go`], o.repo);
+  const parserSource = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/internal/authoring/commands/public_contract_test.go`], o.repo);
   const parserBlock = parserSource.split("func TestPublicParserAndHelpParity")[1].split("for _, tc := range cases")[0];
   const parserRows = [...parserBlock.matchAll(/\{(?:\[\]string\{([^}]*)\}|nil), "(author[^"]*)", ([012])\}/g)];
   assert.ok(parserRows.length >= 30);
@@ -257,7 +257,7 @@ test("NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and 
     }
   }
   // B's retained-command legacy-flag exemptions come from its accepted test.
-  const compatSource = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat_test.go`], o.repo);
+  const compatSource = checked("/usr/bin/git", ["show", `${o.identity.commit}:cli/cmd/plugin-kit-ai/release_compat_test.go`], o.repo);
   const mapBody = compatSource.split("retained := map[string]string{")[1].split("}")[0];
   const retainedFlags = Object.fromEntries([...mapBody.matchAll(/"([^"]+)": "([^"]*)"/g)].map(m => [m[1], m[2].split(" ")]));
   for (const [, command, flags, retained] of rows) if (retained === "true") {

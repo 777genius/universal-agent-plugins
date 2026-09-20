@@ -48,11 +48,11 @@ AUDIT_MATRIX = {
     'collision:reject': {
         'case': 'collision:reject', 'classification': 'human diagnostic bug',
         'reason': 'Ownership rejection must retain remediation and selected-target context.',
-        'source': 'cli/plugin-kit-ai/internal/agentpluginscli/add_multi.go:runAddManyLoaded'},
+        'source': 'cli/internal/agentpluginscli/add_multi.go:runAddManyLoaded'},
     'empty:all-ten': {
         'case': 'empty:all-ten', 'classification': 'human display ambiguity',
         'reason': 'Outer JSON targets are logical IDs; inner plans may share the Copilot physical owner. Show selected identities and explain shared delivery.',
-        'source': 'cli/plugin-kit-ai/internal/agentpluginscli/cli_test.go:TestCopilotAndVSCodeShareOneGroupedPhysicalMutation'},
+        'source': 'cli/internal/agentpluginscli/cli_test.go:TestCopilotAndVSCodeShareOneGroupedPhysicalMutation'},
 }
 
 

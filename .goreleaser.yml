@@ -2,7 +2,7 @@ version: 2
 
 builds:
   - id: plugin-kit-ai
-    dir: cli/plugin-kit-ai
+    dir: cli
     main: ./cmd/plugin-kit-ai
     binary: plugin-kit-ai
     env:

@@ -14,8 +14,8 @@ func renderArtifacts(m model) []Artifact {
 		{Path: "sdk/internal/descriptors/gen/support_gen_gemini.go", Content: mustGo(renderSupportBucket(m, "gemini"))},
 		{Path: "sdk/internal/descriptors/gen/support_gen_codex.go", Content: mustGo(renderSupportBucket(m, "codex"))},
 		{Path: "sdk/internal/descriptors/gen/completeness_gen_test.go", Content: mustGo(renderCompletenessTest(m))},
-		{Path: "cli/plugin-kit-ai/internal/scaffold/platforms_gen.go", Content: mustGo(renderScaffoldPlatforms(m))},
-		{Path: "cli/plugin-kit-ai/internal/validate/rules_gen.go", Content: mustGo(renderValidateRules(m))},
+		{Path: "cli/internal/scaffold/platforms_gen.go", Content: mustGo(renderScaffoldPlatforms(m))},
+		{Path: "cli/internal/validate/rules_gen.go", Content: mustGo(renderValidateRules(m))},
 		{Path: "docs/generated/support_matrix.md", Content: []byte(renderSupportMatrix(m))},
 		{Path: "docs/generated/target_support_matrix.md", Content: []byte(renderTargetSupportMatrix(m))},
 	}

@@ -316,7 +316,7 @@ Other supported CLI install methods:
 - pipx (`public-beta`, only when that release is published to PyPI): `pipx install plugin-kit-ai`
 - fallback installer: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh`
 - fallback one-shot command: `curl -fsSL https://raw.githubusercontent.com/777genius/plugin-kit-ai/main/scripts/install.sh | sh -s -- add notion --dry-run`
-- source build for maintainers of this repo: `go build -o bin/plugin-kit-ai ./cli/plugin-kit-ai/cmd/plugin-kit-ai`
+- source build for maintainers of this repo: `go build -o bin/plugin-kit-ai ./cli/cmd/plugin-kit-ai`
 
 ## Keep This Rule In Mind
 
@@ -442,7 +442,7 @@ Common commands from repo root:
 
 ```bash
 go run ./cmd/plugin-kit-ai-gen
-go build -o bin/plugin-kit-ai ./cli/plugin-kit-ai/cmd/plugin-kit-ai
+go build -o bin/plugin-kit-ai ./cli/cmd/plugin-kit-ai
 ./bin/plugin-kit-ai version
 make test-polyglot-smoke
 go test ./...
@@ -453,7 +453,7 @@ go test ./...
 Main repo areas:
 
 - `sdk`
-- `cli/plugin-kit-ai`
+- `cli`
 - `install/plugininstall`
 - `examples/starters`
 - `examples/local`

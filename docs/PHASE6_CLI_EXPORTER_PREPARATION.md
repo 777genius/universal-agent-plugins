@@ -3,7 +3,7 @@
 Status: prepared reference only; not a public release. Source baseline:
 `070663efb27f69ecae8609e6b839f86f843efbb0`.
 
-The separate executable lives at `cli/plugin-kit-ai/tools/authoring-docs` in
+The separate executable lives at `cli/tools/authoring-docs` in
 module `github.com/777genius/plugin-kit-ai/cli`, allowing existing internal
 imports. It adds no runtime registration and changes no production factory.
 The old `__docs` exporter, website extraction, navigation, and generated v1

@@ -34,8 +34,8 @@ Local repository sources:
 - `docs/research/gemini-cli-extensions/README.md`
 - `examples/plugins/opencode-basic/README.md`
 - `docs/generated/target_support_matrix.md`
-- `cli/plugin-kit-ai/internal/pluginmanifest/manifest.go`
-- `cli/plugin-kit-ai/internal/platformexec/{claude,codex,gemini,opencode,cursor}.go`
+- `cli/internal/pluginmanifest/manifest.go`
+- `cli/internal/platformexec/{claude,codex,gemini,opencode,cursor}.go`
 
 Official vendor docs reviewed during this proposal pass:
 

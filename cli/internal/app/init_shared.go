@@ -77,7 +77,7 @@ func defaultGoSDKReplacePath() string {
 	if !ok {
 		return ""
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 	sdkDir := filepath.Join(root, "sdk")
 	if _, err := os.Stat(filepath.Join(sdkDir, "go.mod")); err != nil {
 		return ""

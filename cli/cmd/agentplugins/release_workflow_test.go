@@ -22,7 +22,7 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 	if !ok {
 		t.Fatal("locate release workflow test")
 	}
-	workflowPath := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", "..", "..", ".github", "workflows", "agentplugins-release.yml"))
+	workflowPath := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", "..", ".github", "workflows", "agentplugins-release.yml"))
 	body, err := os.ReadFile(workflowPath)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		"go run ./cmd/agentplugins/bootstrapgen",
 		"(cd install/integrationctl/agentplugins && go test ./...)",
 		"(cd install/integrationctl && go test ./adapters/dirswap ./adapters/source)",
-		"(cd cli/plugin-kit-ai && go test ./internal/agentpluginscli ./cmd/agentplugins/...)",
+		"(cd cli && go test ./internal/agentpluginscli ./cmd/agentplugins/...)",
 		"Prove production binary excludes Directory conformance overrides",
 		"go test ./cmd/agentplugins -run '^TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride$' -count=1",
 		"-snapshot cmd/agentplugins/directory_bootstrap_inputs/snapshot.json",
@@ -107,7 +107,7 @@ type releaseWorkflow struct {
 func parseReleaseWorkflow(t *testing.T, name string) releaseWorkflow {
 	t.Helper()
 	_, source, _, _ := runtime.Caller(0)
-	body, err := os.ReadFile(filepath.Join(filepath.Dir(source), "../../../../.github/workflows", name))
+	body, err := os.ReadFile(filepath.Join(filepath.Dir(source), "../../../.github/workflows", name))
 	if err != nil {
 		t.Fatal(err)
 	}

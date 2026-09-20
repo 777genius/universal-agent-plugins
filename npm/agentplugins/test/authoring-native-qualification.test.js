@@ -485,7 +485,7 @@ test("fixed production orchestration and closed reader with subprocess fixtures 
   const rows = JSON.parse(fs.readFileSync(path.join(f.options.output, "transcripts.json"))).installer;
   const info = rows.find(row => row.id === "info"), value = JSON.parse(info.stdout).data;
   const registered = Object.values(JSON.parse(info.before.state_document).installations[0].clients)[0];
-  const go = fs.readFileSync(path.resolve(__dirname, "../../../cli/plugin-kit-ai/internal/agentpluginscli/read.go"), "utf8");
+  const go = fs.readFileSync(path.resolve(__dirname, "../../../cli/internal/agentpluginscli/read.go"), "utf8");
   const shape = go.split("type publicClient struct {")[1].split("\n}")[0];
   const fields = [...shape.matchAll(/`json:"([^",]+)[^"]*"`/g)].map(m => m[1]).filter(k => k !== "-");
   assert.match(shape, /BindingID[^\n]+`json:"-"`/);

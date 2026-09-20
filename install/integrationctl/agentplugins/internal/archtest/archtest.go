@@ -31,8 +31,8 @@ const (
 // expressed as repository-relative directories.
 var coreRoots = []string{
 	"install/integrationctl/agentplugins",
-	"cli/plugin-kit-ai/internal/agentpluginscli",
-	"cli/plugin-kit-ai/cmd/agentplugins",
+	"cli/internal/agentpluginscli",
+	"cli/cmd/agentplugins",
 }
 
 // clientSelectorPattern is the shape the refactor plan specifies for a client

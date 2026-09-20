@@ -3,13 +3,13 @@
 package installerui
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -45,21 +45,30 @@ type Confirmation struct {
 type Config struct {
 	Input  io.Reader
 	Output io.Writer
+	// ReadLine supplies optional platform-aware cancellation without prefetching.
+	ReadLine func(context.Context, io.Reader) (string, error)
+	// Style may add trusted formatting to already sanitized labels.
+	Style func(string) string
 }
 
 type UI struct {
-	in  *bufio.Reader
-	out io.Writer
+	in       io.Reader
+	out      io.Writer
+	readLine func(context.Context, io.Reader) (string, error)
+	style    func(string) string
 }
 
 func New(cfg Config) (*UI, error) {
 	if cfg.Input == nil || cfg.Output == nil {
 		return nil, ErrUnavailable
 	}
-	return &UI{in: bufio.NewReader(cfg.Input), out: cfg.Output}, nil
+	return &UI{in: cfg.Input, out: checkedWriter{cfg.Output}, readLine: cfg.ReadLine, style: cfg.Style}, nil
 }
 
 func (u *UI) SelectOne(ctx context.Context, req SelectRequest) (Selection, error) {
+	if err := ctx.Err(); err != nil {
+		return Selection{}, err
+	}
 	if err := validate(req, false); err != nil {
 		return Selection{}, err
 	}
@@ -84,6 +93,9 @@ func (u *UI) SelectOne(ctx context.Context, req SelectRequest) (Selection, error
 }
 
 func (u *UI) SelectMany(ctx context.Context, req SelectRequest) (Selection, error) {
+	if err := ctx.Err(); err != nil {
+		return Selection{}, err
+	}
 	if err := validate(req, true); err != nil {
 		return Selection{}, err
 	}
@@ -108,6 +120,9 @@ func (u *UI) SelectMany(ctx context.Context, req SelectRequest) (Selection, erro
 }
 
 func (u *UI) Confirm(ctx context.Context, req ConfirmRequest) (Confirmation, error) {
+	if err := ctx.Err(); err != nil {
+		return Confirmation{}, err
+	}
 	if strings.TrimSpace(req.Title) == "" {
 		return Confirmation{}, errors.New("confirmation title is required")
 	}
@@ -116,11 +131,11 @@ func (u *UI) Confirm(ctx context.Context, req ConfirmRequest) (Confirmation, err
 			return Confirmation{}, err
 		}
 	}
-	defaultValue := "N"
+	hint := "y/N"
 	if req.Default {
-		defaultValue = "Y"
+		hint = "Y/n"
 	}
-	if _, err := fmt.Fprintf(u.out, "%s [y/N] ", clean(req.Title)); err != nil {
+	if _, err := fmt.Fprintf(u.out, "%s [%s] ", u.label(req.Title), hint); err != nil {
 		return Confirmation{}, err
 	}
 	line, err := u.read(ctx)
@@ -132,7 +147,7 @@ func (u *UI) Confirm(ctx context.Context, req ConfirmRequest) (Confirmation, err
 	}
 	line = strings.ToLower(strings.TrimSpace(line))
 	if line == "" {
-		line = defaultValue
+		return Confirmation{Accepted: req.Default}, nil
 	}
 	return Confirmation{Accepted: line == "y" || line == "yes"}, nil
 }
@@ -141,21 +156,42 @@ func (u *UI) read(ctx context.Context) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	line, err := u.in.ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return "", err
+	if u.readLine != nil {
+		return u.readLine(ctx, u.in)
 	}
-	if errors.Is(err, io.EOF) && line == "" {
-		return "", io.EOF
+	var line strings.Builder
+	var b [1]byte
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		n, err := u.in.Read(b[:])
+		if e := ctx.Err(); e != nil {
+			return "", e
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return "", err
+		}
+		if n > 0 {
+			if b[0] == '\n' {
+				return strings.TrimSpace(line.String()), nil
+			}
+			if line.Len() >= 4096 {
+				return "", errors.New("prompt answer exceeds 4096 bytes")
+			}
+			line.WriteByte(b[0])
+		}
+		if err != nil {
+			return "", err
+		}
+		if n == 0 {
+			return "", io.ErrNoProgress
+		}
 	}
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(line), nil
 }
 
 func (u *UI) render(req SelectRequest, many bool) error {
-	if _, err := fmt.Fprintln(u.out, clean(req.Title)); err != nil {
+	if _, err := fmt.Fprintln(u.out, u.label(req.Title)); err != nil {
 		return err
 	}
 	for i, option := range req.Options {
@@ -168,10 +204,10 @@ func (u *UI) render(req SelectRequest, many bool) error {
 		}
 	}
 	if many {
-		_, err := fmt.Fprint(u.out, "Choose one or more by number or id, comma-separated [Enter keeps defaults]: ")
+		_, err := fmt.Fprint(u.out, u.label("Choose one or more by number or id, comma-separated [Enter keeps defaults]: "))
 		return err
 	}
-	_, err := fmt.Fprint(u.out, "Choose one by number or id [Enter keeps the default]: ")
+	_, err := fmt.Fprint(u.out, u.label("Choose one by number or id [Enter keeps the default]: "))
 	return err
 }
 
@@ -270,9 +306,27 @@ func unique(values []string) []string {
 
 func clean(value string) string {
 	return strings.Map(func(r rune) rune {
-		if r < 0x20 || r == 0x7f {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
 			return -1
 		}
 		return r
 	}, value)
+}
+
+func (u *UI) label(text string) string {
+	text = clean(text)
+	if u.style != nil {
+		return u.style(text)
+	}
+	return text
+}
+
+type checkedWriter struct{ io.Writer }
+
+func (w checkedWriter) Write(p []byte) (int, error) {
+	n, err := w.Writer.Write(p)
+	if err == nil && n != len(p) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }

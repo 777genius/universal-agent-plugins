@@ -23,8 +23,8 @@ compensation, not a substitute for a module boundary.
 
 Client-specific behavior lives in `install/integrationctl/agentplugins/clients/<id>`.
 The production composition roots that import `clients/all` are
-`cli/plugin-kit-ai/cmd/agentplugins` (installer CLI) and
-`cli/plugin-kit-ai/cmd/plugin-kit-ai` (authoring CLI). Generic packages receive
+`cli/cmd/agentplugins` (installer CLI) and
+`cli/cmd/plugin-kit-ai` (authoring CLI). Generic packages receive
 a `clients.Registry` and fail closed when it is nil.
 
 Invariants:

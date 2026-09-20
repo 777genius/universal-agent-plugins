@@ -369,11 +369,11 @@ Current fields:
 
 Current validation is implemented in:
 
-- [pluginmodel/model.go](../cli/plugin-kit-ai/internal/pluginmodel/model.go)
+- [pluginmodel/model.go](../cli/internal/pluginmodel/model.go)
 
 Current scaffold template:
 
-- [plugin.yaml.tmpl](../cli/plugin-kit-ai/internal/scaffold/templates/plugin.yaml.tmpl)
+- [plugin.yaml.tmpl](../cli/internal/scaffold/templates/plugin.yaml.tmpl)
 
 This means the new direction is evolutionary, not a greenfield rewrite. We are already close to the desired end state.
 

@@ -368,7 +368,7 @@ def main():
         elif args.release_tag:
             installer, identity["installer_release"] = prepared if prepared is not None else provision_release(source, binary_dir, args.target, args.release_tag, args.release_commit, args.release_repo)
         else:
-            commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli/plugin-kit-ai"))
+            commands.insert(0, (["go", "build", "-trimpath", "-o", str(installer), "./cmd/agentplugins"], source / "cli"))
         project = scratch / "project"
         project.mkdir()
         evidence_root = scratch / "evidence"

@@ -27,7 +27,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 
 	for _, want := range []string{
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...",
-		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/plugin-kit-ai/...",
+		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/...",
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/integrationctl/...",
 		"cd install/integrationctl/agentplugins && go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...",
 		"cd install/integrationctl/agentplugins && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./...",
@@ -51,7 +51,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		}
 	}
 	for _, preserved := range []string{
-		"cli/plugin-kit-ai",
+		"cli",
 		"npm/plugin-kit-ai",
 		"python/plugin-kit-ai",
 		"npm/agentplugins/scripts/publish-paired-authoring-npm.js",

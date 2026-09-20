@@ -20,14 +20,14 @@ Historical maintainer references live in:
 | SDK runtime | `sdk/plugin_kit_ai.go` | Platform-neutral composition root that wires the generic engine, generated descriptor lookup, middleware, and platform registrars |
 | SDK generator | `cmd/plugin-kit-ai-gen/main.go` | Generates descriptor-derived runtime, scaffold, validate, and docs artifacts |
 | Plugin install library | `install/plugininstall/install.go` | Public install facade that wires use case and concrete adapters |
-| CLI | `cli/plugin-kit-ai/cmd/plugin-kit-ai/main.go` | Process entrypoint; commands parse flags and call `internal/app`, `internal/scaffold`, and `internal/validate` |
+| CLI | `cli/cmd/plugin-kit-ai/main.go` | Process entrypoint; commands parse flags and call `internal/app`, `internal/scaffold`, and `internal/validate` |
 
 Rule: the CLI must not construct `plugininstall` adapters directly. It uses the `plugininstall` facade.
 
 ## Agent Plugins Core: Layering, Import Rules, Size Limits
 
 The `agentplugins` install core spans three packages: `install/integrationctl/agentplugins/...`,
-`cli/plugin-kit-ai/internal/agentpluginscli/...` and `cli/plugin-kit-ai/cmd/agentplugins`.
+`cli/internal/agentpluginscli/...` and `cli/cmd/agentplugins`.
 `install/integrationctl/agentplugins` is its own Go module
 (`github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins`), listed in
 `go.work`. Import paths are unchanged. The parent `install/integrationctl` module
@@ -199,12 +199,12 @@ Current runtime carriers:
 
 ## CLI Application Layer
 
-`cli/plugin-kit-ai/internal/app` keeps Cobra out of install/init application logic:
+`cli/internal/app` keeps Cobra out of install/init application logic:
 
 - `InstallRunner` delegates to `plugininstall.Install`
 - `InitRunner` resolves generated scaffold definitions and delegates generating to `scaffold`
 
-`cli/plugin-kit-ai/internal/validate` enforces generated platform rules for scaffolded projects.
+`cli/internal/validate` enforces generated platform rules for scaffolded projects.
 
 ## Generated Sources
 
@@ -229,7 +229,7 @@ Generator drift is enforced by tests in `sdk/generator`.
 ## Tests
 
 - `sdk/...`: runtime, descriptors, generator drift, examples
-- `cli/plugin-kit-ai/...`: app and scaffold coverage
+- `cli/...`: app and scaffold coverage
 - `repotests/...`: generated project integration and installer integration
 
 Note: installer integration tests create a local `httptest` server and require loopback bind permissions.

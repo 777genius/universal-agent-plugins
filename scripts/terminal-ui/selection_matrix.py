@@ -323,7 +323,7 @@ def main():
         args.binary = args.artifacts.resolve() / 'source-agentplugins'
         with (args.artifacts / 'build.log').open('wb') as log:
             subprocess.run([str(args.build_go.resolve()), 'build', '-o', str(args.binary), './cmd/agentplugins'],
-                           cwd=repo / 'cli/plugin-kit-ai', stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
+                           cwd=repo / 'cli', stdout=log, stderr=subprocess.STDOUT, check=True, timeout=180)
         check(source_digest(repo) == source_before, 'tracked source changed during build')
         args.binary_sha256 = digest(args.binary)
     else:

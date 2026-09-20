@@ -141,7 +141,7 @@ Claude is ported later as a peer platform on the same architecture, not as the b
 
 ### Phase 3. Descriptor-driven CLI on top of Codex
 
-- Rewrite `cli/plugin-kit-ai` around real use cases such as `init`, `validate`, `capabilities`, and `install`.
+- Rewrite `cli` around real use cases such as `init`, `validate`, `capabilities`, and `install`.
 - Make scaffold an adapter over template/file-system ports instead of mixed application logic plus `os` plus embed assumptions.
 - Add `plugin-kit-ai validate` for manifest correctness, supported event set, unified capability support, and scaffold consistency.
 

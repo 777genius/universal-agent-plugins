@@ -10,7 +10,7 @@ REQUIRED_TEST_TIMEOUT ?= 20m
 
 # Modules that carry the agentplugins install core; the single root .golangci.yml
 # applies to all of them.
-LINT_MODULES ?= . cli/plugin-kit-ai install/integrationctl install/integrationctl/agentplugins
+LINT_MODULES ?= . cli install/integrationctl install/integrationctl/agentplugins
 GOLANGCI_LINT ?= golangci-lint
 LINT_BASE ?= origin/main
 
@@ -49,14 +49,14 @@ test-core:
 	# ports.PathPolicy implementation, so the fast gate has to run it too.
 	cd install/integrationctl && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./adapters/pathpolicy/...
 	cd install/integrationctl/agentplugins && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./...
-	cd cli/plugin-kit-ai && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
+	cd cli && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./internal/agentpluginscli/... ./cmd/agentplugins/...
 
 test:
 	$(MAKE) test-required
 
 test-required:
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...
-	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/plugin-kit-ai/...
+	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./cli/...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/integrationctl/...
 	cd install/integrationctl/agentplugins && go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...
 	go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/plugininstall/...
@@ -78,10 +78,10 @@ test-extended:
 	go test -count=1 -run '^TestOpenCodeCLIPluginLoadSmoke$$' ./repotests $(EXTENDED_TEST_ARGS)
 
 test-polyglot-smoke:
-	go test -count=1 -run 'TestRenderTemplate_(PythonLauncherWindowsFallbackOrder|ShellLauncherWindowsRequiresBash)$$' ./cli/plugin-kit-ai/internal/scaffold
-	go test -count=1 -run 'Test(FindPython_UsesPlatformAwareLookupOrder|Validate_ManifestProject_WindowsCmdLauncherAccepted|Validate_ManifestProject_ShellRequiresBashOnWindows|ValidateNodeRuntimeTarget_MissingBuiltOutputShowsRecoveryGuidance|ValidateRuntimeTargetExecutable_NonExecutableScriptFails|ShellLauncherPassthrough)$$' ./cli/plugin-kit-ai/internal/validate
-	go test -count=1 -run 'TestPluginService(DoctorReadyNeedsBootstrapNeedsBuildAndBlocked|DoctorPoetryManagerOwnedEnvIsReady|BootstrapPythonCreatesVenvAndInstallsRequirements|BootstrapPoetryReportsManagerOwnedEnv|BootstrapNodePNPMTypeScriptRunsInstallAndBuild|ExportPythonBundleExcludesProjectVenv|ExportShellBundlePreservesScripts|ExportRejectsGoRuntime|BundleInstallInstallsPythonBundleIntoDestination|BundleInstallRejectsRemoteURL|BundleFetchURLInstallsPythonBundleWithExplicitChecksum|BundleFetchURLUsesSidecarChecksum|BundleFetchURLRejectsHTTP|BundleFetchURLFailsChecksumMismatch|BundleFetchGitHubInstallsNodeBundleFromChecksumsTxt|BundleFetchGitHubFallsBackToSidecarChecksum|BundleFetchGitHubUsesLatestRelease|BundleFetchGitHubRejectsMetadataMismatch|BundlePublishCreatesPublishedReleaseByDefault|BundlePublishCreatesDraftReleaseWhenRequested|BundlePublishPromotesExistingDraftReleaseToPublished|BundlePublishReusesExistingDraftReleaseWhenRequested|BundlePublishReusesExistingPublishedReleaseWithForce|BundlePublishFailsWhenAssetExistsWithoutForce|BundlePublishRejectsShellRuntime)$$|TestSelectBundleReleaseAsset(RejectsAmbiguous|UsesPlatformRuntime|UsesExactAssetName)$$' ./cli/plugin-kit-ai/internal/app
-	go test -count=1 -run 'TestBundle(Install(HelpIncludesLocalTarballLanguage|WritesRunnerOutput)|Fetch(HelpIncludesURLAndGitHubLanguage|WritesRunnerOutput)|Publish(HelpIncludesGitHubLanguage|WritesRunnerOutput))$$' ./cli/plugin-kit-ai/cmd/plugin-kit-ai
+	go test -count=1 -run 'TestRenderTemplate_(PythonLauncherWindowsFallbackOrder|ShellLauncherWindowsRequiresBash)$$' ./cli/internal/scaffold
+	go test -count=1 -run 'Test(FindPython_UsesPlatformAwareLookupOrder|Validate_ManifestProject_WindowsCmdLauncherAccepted|Validate_ManifestProject_ShellRequiresBashOnWindows|ValidateNodeRuntimeTarget_MissingBuiltOutputShowsRecoveryGuidance|ValidateRuntimeTargetExecutable_NonExecutableScriptFails|ShellLauncherPassthrough)$$' ./cli/internal/validate
+	go test -count=1 -run 'TestPluginService(DoctorReadyNeedsBootstrapNeedsBuildAndBlocked|DoctorPoetryManagerOwnedEnvIsReady|BootstrapPythonCreatesVenvAndInstallsRequirements|BootstrapPoetryReportsManagerOwnedEnv|BootstrapNodePNPMTypeScriptRunsInstallAndBuild|ExportPythonBundleExcludesProjectVenv|ExportShellBundlePreservesScripts|ExportRejectsGoRuntime|BundleInstallInstallsPythonBundleIntoDestination|BundleInstallRejectsRemoteURL|BundleFetchURLInstallsPythonBundleWithExplicitChecksum|BundleFetchURLUsesSidecarChecksum|BundleFetchURLRejectsHTTP|BundleFetchURLFailsChecksumMismatch|BundleFetchGitHubInstallsNodeBundleFromChecksumsTxt|BundleFetchGitHubFallsBackToSidecarChecksum|BundleFetchGitHubUsesLatestRelease|BundleFetchGitHubRejectsMetadataMismatch|BundlePublishCreatesPublishedReleaseByDefault|BundlePublishCreatesDraftReleaseWhenRequested|BundlePublishPromotesExistingDraftReleaseToPublished|BundlePublishReusesExistingDraftReleaseWhenRequested|BundlePublishReusesExistingPublishedReleaseWithForce|BundlePublishFailsWhenAssetExistsWithoutForce|BundlePublishRejectsShellRuntime)$$|TestSelectBundleReleaseAsset(RejectsAmbiguous|UsesPlatformRuntime|UsesExactAssetName)$$' ./cli/internal/app
+	go test -count=1 -run 'TestBundle(Install(HelpIncludesLocalTarballLanguage|WritesRunnerOutput)|Fetch(HelpIncludesURLAndGitHubLanguage|WritesRunnerOutput)|Publish(HelpIncludesGitHubLanguage|WritesRunnerOutput))$$' ./cli/cmd/plugin-kit-ai
 	go test -count=1 -run 'TestPluginKitAI(Init(GoRuntimeLauncherFlow|PythonRuntimeLauncherFlow|PythonRuntimeWithRequirementsDoctorBootstrapFlow|PythonRuntimeBrokenVenvFailsValidate|ShellRuntimeLauncherFlow|ShellRuntimeNonExecutableTargetFailsValidate|NodeRuntimeSupportsTypeScriptBuildThroughLauncher|NodeRuntimePNPMDoctorBootstrapFlow|NodeRuntimeMissingBuiltOutputFailsValidate)|RuntimeABIPassthrough|PythonLauncherPrefersProjectVenvOnWindows)$$' ./repotests
 	go test -count=1 -run 'TestPluginKitAI(BootstrapScriptInstallsLatestRelease|BootstrapScriptSupportsExplicitVersion|BootstrapScriptRejectsChecksumMismatch|InitExtras(PythonEmitsBundleReleaseWorkflow|NodeTypeScriptEmitsBundleReleaseWorkflow))$$|TestSetupPluginKitAIActionUsesInstallScript$$' ./repotests
 	go test -count=1 -run 'Test(HomebrewFormulaGeneratorFromChecksums|NPMCLIPackageContractFiles|PythonCLIPackageContractFiles|NPMRuntimePackage(ContractFiles|ClaudeAndCodexSmoke)|PythonRuntimePackage(ContractFiles|ClaudeAndCodexSmoke)|StarterRepos_(LayoutAndReadmesStayAligned|Smoke)|StarterTemplate(SyncContractFilesStayAligned|SyncScriptSupportsLocalMirror|RepoLinksResolveToCurrentOwnerNaming)|ReleaseSurface_MakefileDocsAndWorkflowsStayAligned|ContractClarity_RuntimeMetadataAndDocsStayAligned)$$' ./repotests
@@ -108,8 +108,8 @@ test-gemini-live:
 
 test-gemini-runtime:
 	go test -count=1 ./sdk/... $(EXTENDED_TEST_ARGS)
-	go test -count=1 -run 'TestInitRunner_geminiGoRuntimeStarter' ./cli/plugin-kit-ai/internal/app $(EXTENDED_TEST_ARGS)
-	go test -count=1 -run 'TestInspectTextShowsLauncherAndGeminiGuidance' ./cli/plugin-kit-ai/cmd/plugin-kit-ai $(EXTENDED_TEST_ARGS)
+	go test -count=1 -run 'TestInitRunner_geminiGoRuntimeStarter' ./cli/internal/app $(EXTENDED_TEST_ARGS)
+	go test -count=1 -run 'TestInspectTextShowsLauncherAndGeminiGuidance' ./cli/cmd/plugin-kit-ai $(EXTENDED_TEST_ARGS)
 	go test -count=1 -run 'TestPluginKitAIInitGeminiGoRuntimeLauncherFlow|TestGeneratedConfigCanaries_GeminiRuntimeContract|TestGeminiE2ETracePreservesOriginalRequestName|TestGeminiE2ETraceCapturesModelAndToolSelectionPayloads|TestGeminiE2ETraceCapturesRuntimeLifecycleHooks|TestGeminiE2ETraceCapturesRuntimeControlSemantics|TestGeminiE2ETraceCapturesRuntimeTransformSemantics|TestContractClarity_GeminiRuntimeDocsStayAligned' ./repotests $(EXTENDED_TEST_ARGS)
 
 test-gemini-runtime-live:
@@ -196,7 +196,7 @@ test-e2e-live: test-install-live
 
 test-govulncheck-local:
 	GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
-	cd cli/plugin-kit-ai && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+	cd cli && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 	cd install/plugininstall && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 	cd install/integrationctl && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 	cd install/integrationctl/agentplugins && GOTOOLCHAIN=$(SECURITY_GOTOOLCHAIN) go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
@@ -207,7 +207,7 @@ test-security: test-govulncheck-local
 # Root module is workspace-only; submodules are vetted explicitly.
 vet:
 	go vet ./...
-	cd cli/plugin-kit-ai && go vet ./...
+	cd cli && go vet ./...
 	cd install/integrationctl && go vet ./...
 	cd install/integrationctl/agentplugins && go vet ./...
 	cd install/plugininstall && go vet ./...
@@ -236,4 +236,4 @@ release-rehearsal: release-gate
 	@echo "Release rehearsal deterministic checks complete. Record dependency-review, CodeQL, extended/live evidence (including OpenCode smoke when refreshing that stable boundary), audit updates, release notes draft, artifact attestations, and any waiver notes tied to the candidate commit SHA."
 
 build-plugin-kit-ai:
-	go build -o bin/plugin-kit-ai ./cli/plugin-kit-ai/cmd/plugin-kit-ai
+	go build -o bin/plugin-kit-ai ./cli/cmd/plugin-kit-ai

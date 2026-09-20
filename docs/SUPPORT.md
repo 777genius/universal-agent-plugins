@@ -332,7 +332,7 @@ Declared release review:
 These areas are not supported as public dependencies:
 
 - `sdk/internal/...`
-- `cli/plugin-kit-ai/internal/...`
+- `cli/internal/...`
 - `install/plugininstall/internal/...`
 - `install/plugininstall/adapters/...`
 - `install/plugininstall/domain/...`

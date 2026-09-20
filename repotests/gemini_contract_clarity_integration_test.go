@@ -87,7 +87,7 @@ func TestContractClarity_GeminiRuntimeDocsStayAligned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	geminiStarterReadme, err := os.ReadFile(filepath.Join(root, "cli", "plugin-kit-ai", "internal", "scaffold", "templates", "gemini.README.go.md.tmpl"))
+	geminiStarterReadme, err := os.ReadFile(filepath.Join(root, "cli", "internal", "scaffold", "templates", "gemini.README.go.md.tmpl"))
 	if err != nil {
 		t.Fatal(err)
 	}

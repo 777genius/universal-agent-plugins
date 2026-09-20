@@ -13,7 +13,7 @@ fi
 
 files=(
   README.md
-  cli/plugin-kit-ai/README.md
+  cli/README.md
   sdk/README.md
   docs/CHOOSING_HELPER_DELIVERY_MODE.md
   examples/starters/README.md
@@ -31,13 +31,13 @@ files=(
   examples/plugins/codex-basic-prod/go.sum
   examples/plugins/claude-basic-prod/go.mod
   examples/plugins/claude-basic-prod/go.sum
-  cli/plugin-kit-ai/internal/scaffold/version_contract.go
-  cli/plugin-kit-ai/internal/scaffold/templates/go.mod.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/codex.go.mod.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/README.md.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/codex-runtime.README.md.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/python.requirements.txt.tmpl
-  cli/plugin-kit-ai/internal/scaffold/templates/node.package.json.tmpl
+  cli/internal/scaffold/version_contract.go
+  cli/internal/scaffold/templates/go.mod.tmpl
+  cli/internal/scaffold/templates/codex.go.mod.tmpl
+  cli/internal/scaffold/templates/README.md.tmpl
+  cli/internal/scaffold/templates/codex-runtime.README.md.tmpl
+  cli/internal/scaffold/templates/python.requirements.txt.tmpl
+  cli/internal/scaffold/templates/node.package.json.tmpl
 )
 
 perl_expr=(

@@ -9,8 +9,8 @@ after="$(mktemp)"
 trap 'rm -f "$before" "$after"' EXIT
 
 generated_files=(
-  "cli/plugin-kit-ai/internal/scaffold/platforms_gen.go"
-  "cli/plugin-kit-ai/internal/validate/rules_gen.go"
+  "cli/internal/scaffold/platforms_gen.go"
+  "cli/internal/validate/rules_gen.go"
   "sdk/internal/descriptors/gen/completeness_gen_test.go"
   "sdk/internal/descriptors/gen/registry_gen.go"
   "sdk/internal/descriptors/gen/resolvers_gen.go"

@@ -33,7 +33,7 @@ function fixture(t, mode) {
     // this is not a real source or native candidate proof.
     const read = c.readFile;
     t.mock.method(c, "readFile", function(file, ...rest) {
-      if (file.endsWith("/source/cli/plugin-kit-ai/internal/authoring/commands/commands.go"))
+      if (file.endsWith("/source/cli/internal/authoring/commands/commands.go"))
         return Buffer.from('const ReleaseMode = "release-cli-contract-v1"\n');
       return read(file, ...rest);
     });

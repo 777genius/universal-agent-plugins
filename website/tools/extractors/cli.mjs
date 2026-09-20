@@ -26,7 +26,7 @@ export async function extractLegacyCLI() {
     "go",
     [
       "run",
-      "./cli/plugin-kit-ai/cmd/plugin-kit-ai",
+      "./cli/cmd/plugin-kit-ai",
       "__docs",
       "export-cli",
       "--out-dir",
@@ -160,7 +160,7 @@ export async function extractLegacyCLI() {
           editLink: false,
           stability: "public-stable",
           maturity: "stable",
-          sourceRef: "cli/plugin-kit-ai",
+          sourceRef: "cli",
           translationRequired: false
         },
         `# ${heading}\n\n${summary}\n\n${guidance.map((line) => `- ${line}`).join("\n")}\n\n${sections}`

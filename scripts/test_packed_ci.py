@@ -170,7 +170,7 @@ class TerminalControls(unittest.TestCase):
         put('npm-native.json', dict(stage=dict(repo=str(ROOT)), completionDigest=completion_pin))
         native = dict(kind='actual-linux-private-npm-pair', identity=identity, candidate_sha256=candidate_pin, completion_sha256=completion_pin,
             packs=packs, tools=pack_tools, invocations=741,
-            inventory_sha256=p.digest(ROOT / 'cli/plugin-kit-ai/cmd/plugin-kit-ai/release_compat.go'), **claims)
+            inventory_sha256=p.digest(ROOT / 'cli/cmd/plugin-kit-ai/release_compat.go'), **claims)
         put('native/native-completion.json', native)
         put('native/invocations.json', invocation_fixture())
         request = dict(expectedCommit=sha, nativeConfigSha256=p.digest(root / 'npm-native.json'),
@@ -558,7 +558,7 @@ class C3bProvisionControls(unittest.TestCase):
         source = root / 'scripts/check-packed-ci.py'; source.write_text('SYNTHETIC SOURCE\n')
         (root / 'scripts/run-packed-ci.py').write_text('SYNTHETIC RUNNER\n')
         for folder in ('npm/agentplugins/scripts', 'npm/agentplugins/lib', 'npm/plugin-kit-ai/lib',
-                       'cli/plugin-kit-ai/internal/authoring/scaffold/templates'):
+                       'cli/internal/authoring/scaffold/templates'):
             (root / folder).mkdir(parents=True); (root / folder / 'source.js').write_text('SYNTHETIC SOURCE\n')
         value = p.read_provisioning(); file = root / '.github/authoring-public-tools.json'
         tool = root / 'node'; tool.write_text('SYNTHETIC TOOL\n')
@@ -651,7 +651,7 @@ class C3bProvisionControls(unittest.TestCase):
 
     def test_generated_validator_templates_are_in_source_seal(self):
         root, source, file, tool, value = self.fixture()
-        template = root / 'cli/plugin-kit-ai/internal/authoring/scaffold/templates/package.json'
+        template = root / 'cli/internal/authoring/scaffold/templates/package.json'
         template.write_text('SYNTHETIC TEMPLATE\n')
         with patch.object(p, '__file__', str(source)):
             before = p.authenticated_source()

@@ -113,7 +113,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cliReadme, err := os.ReadFile(filepath.Join(root, "cli", "plugin-kit-ai", "README.md"))
+	cliReadme, err := os.ReadFile(filepath.Join(root, "cli", "README.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

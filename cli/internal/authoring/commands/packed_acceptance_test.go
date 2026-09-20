@@ -34,7 +34,7 @@ func TestPackedGeneratedPackagesReachExistingInstallerPlanner(t *testing.T) {
 		t.Fatal("packed bridge requires Linux amd64")
 	}
 	_, file, _, _ := runtime.Caller(0)
-	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../.."))
+	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
 	script := filepath.Join(repo, "npm/agentplugins/scripts/packed-installer-bridge.js")
 	node, digest, commit, output := os.Getenv("UAP_PACKED_INSTALLER_NODE"), os.Getenv("UAP_PACKED_INSTALLER_CONFIG_SHA256"), os.Getenv("UAP_PACKED_INSTALLER_COMMIT"), os.Getenv("UAP_PACKED_INSTALLER_OUTPUT")
 	if !filepath.IsAbs(node) || !filepath.IsAbs(config) || !filepath.IsAbs(output) || filepath.Clean(output) != output || len(digest) != 64 || len(commit) != 40 {

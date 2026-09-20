@@ -80,8 +80,8 @@ func TestLayerBoundaries(t *testing.T) {
 		// readiness package reached for the default registry here and pulled
 		// every adapter into the authoring binary, which is the cost this rule
 		// exists to keep visible in the mains that choose to pay it.
-		{pkg: "cli/plugin-kit-ai/internal", deny: injectedRegistry},
-		{pkg: "cli/plugin-kit-ai/internal/agentpluginscli", deny: []string{
+		{pkg: "cli/internal", deny: injectedRegistry},
+		{pkg: "cli/internal/agentpluginscli", deny: []string{
 			modulePath + "/install/integrationctl/agentplugins/providers",
 			modulePath + "/install/integrationctl/adapters/pathpolicy",
 		}},

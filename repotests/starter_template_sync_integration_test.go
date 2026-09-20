@@ -15,7 +15,7 @@ func TestStarterTemplateSyncContractFilesStayAligned(t *testing.T) {
 	runtimePackageMapping := readRepoFile(t, root, "examples", "starters", "runtime-package-template-repos.txt")
 	script := readRepoFile(t, root, "scripts", "update-starter-template.sh")
 	workflow := readRepoFile(t, root, ".github", "workflows", "starter-templates.yml")
-	cliReadme := readRepoFile(t, root, "cli", "plugin-kit-ai", "README.md")
+	cliReadme := readRepoFile(t, root, "cli", "README.md")
 	startersReadme := readRepoFile(t, root, "examples", "starters", "README.md")
 
 	expected := map[string]string{

@@ -243,7 +243,7 @@
 ## 11. Связь с plugin-kit-ai
 
 - Пример пакета: **`examples/plugins/claude-basic-prod/.claude-plugin/plugin.json`**
-- Рендер цели **claude**: `cli/plugin-kit-ai/internal/platformexec/claude.go` — `Generate` вызывает **`renderManagedPluginArtifacts`** для `.claude-plugin/plugin.json`, опционально копирует hooks/commands/agents из `targets/claude/`
+- Рендер цели **claude**: `cli/internal/platformexec/claude.go` — `Generate` вызывает **`renderManagedPluginArtifacts`** для `.claude-plugin/plugin.json`, опционально копирует hooks/commands/agents из `targets/claude/`
 
 ---
 

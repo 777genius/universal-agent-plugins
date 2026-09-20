@@ -46,7 +46,7 @@ jobs:
         run: |
           go build ./...
           (
-            cd cli/plugin-kit-ai
+            cd cli
             export GOWORK=off
             go build ./...
           )

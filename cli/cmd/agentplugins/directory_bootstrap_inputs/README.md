@@ -10,7 +10,7 @@ Stable release validation requires three exact files in this directory:
 - `trusted-keys.json`: the reviewed schema-1 trust document from exact source
   commit `20f8f0b85a38e7291d6e9c133c548a5316e314c8`.
 
-Do not edit or reserialize these files. From `cli/plugin-kit-ai`, reproduce the
+Do not edit or reserialize these files. From `cli`, reproduce the
 compiled Go bootstrap only from these publication-ledger artifacts:
 
 ```sh

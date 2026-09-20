@@ -77,7 +77,7 @@ func TestMarkdownStaysInSyncWithGeneratedDoc(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
 	body, err := os.ReadFile(filepath.Join(root, "docs", "generated", "target_support_matrix.md"))
 	if err != nil {
 		t.Fatal(err)
