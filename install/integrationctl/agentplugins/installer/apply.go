@@ -368,7 +368,7 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 		if binding.ClientID != req.ClientID {
 			facts, ok := known[binding.ClientID]
 			if !ok {
-				return nil, fmt.Errorf("%w: binding %s (%s) has no host facts (client=%q targets=%d)", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, req.ClientID, len(req.Targets))
+				return nil, fmt.Errorf("%w: binding %s (%s) has no host facts", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID)
 			}
 			if facts.BindingID != binding.ClientBindingID {
 				return nil, fmt.Errorf("%w: binding %s (%s) does not match host binding %s", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, facts.BindingID)
