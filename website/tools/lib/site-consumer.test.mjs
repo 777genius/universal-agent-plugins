@@ -172,7 +172,8 @@ test("actual accepted adapter envelope preserves all commands/flags/provenance a
     }
   }
   const parent = bundle.pages.find((page) => page.relativePath.endsWith("prepared-authoring-v2-agentplugins-author.md"));
-  assert.match(parent.content, new RegExp(`https://github.com/777genius/universal-agent-plugins/blob/${sourceSHA}/cli/internal/agentpluginscli/root.go`));
+  // The released adapter predates the CLI relocation; its pinned source URL is immutable.
+  assert.match(parent.content, new RegExp(`https://github.com/777genius/universal-agent-plugins/blob/${sourceSHA}/cli/plugin-kit-ai/internal/agentpluginscli/root.go`));
   assert.match(parent.content, /--accept-security-risk/);
   assert.match(parent.content, /installer-only\nand rejected here/);
   const skill = bundle.pages.find((page) => page.relativePath.endsWith("agentplugins-author-skills-init.md"));
