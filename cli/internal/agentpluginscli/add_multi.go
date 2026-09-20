@@ -112,7 +112,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err := authorizeSecurityAssessment(cmd, app, opts, &loaded); err != nil {
 		return err
 	}
-	if useInstallerFacadeForLocalAdd(app, opts, loaded, targets, activationComplete, authComplete, needsInstallConfirmation) {
+	if useInstallerFacadeForLocalAdd(app, opts, loaded, targets, activationComplete, authComplete, needsInstallConfirmation, clients) {
 		return runInstallerFacadeLocalAdd(ctx, cmd, app, opts, loaded, clients)
 	}
 	deferredChatGPT := loaded.chatGPTPreparation && loaded.localChatGPTMapping == nil && containsPersonalMappingTarget(targets)

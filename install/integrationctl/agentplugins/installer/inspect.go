@@ -58,7 +58,7 @@ func (e *Engine) observe() (Inspection, error) {
 }
 
 func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, map[string]observedBinding) {
-	var installations []InspectedInstallation
+	installations := make([]InspectedInstallation, 0, len(state.Installations))
 	bindingIndex := map[string]observedBinding{}
 	for _, installation := range state.Installations {
 		item := InspectedInstallation{
@@ -213,7 +213,7 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 		if result.Reason == "" {
 			result.Reason = err.Error()
 		}
-		return result, fmt.Errorf("%w: %v", ErrRecoveryRequired, err)
+		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
 	}
 	if live.Recovery.Reason != "" {
 		return Result{Outcome: OutcomeRecovery, Reason: live.Recovery.Reason, Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, ErrRecoveryRequired)}, ErrRecoveryRequired
@@ -232,7 +232,7 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 	}
 	if err := svc.Kernel.Recover(ctx); err != nil {
 		after, afterErr := e.observe()
-		return Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}, fmt.Errorf("%w: %v", ErrRecoveryRequired, err)
+		return Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
 	}
 	after, afterErr := e.observe()
 	if afterErr != nil || after.Recovery.Required {
@@ -318,6 +318,7 @@ func liveClientResult(binding domain.ClientBinding, required []string, fallbackD
 		Materialization:    string(binding.Materialization),
 		Activation:         string(binding.Activation),
 		Authentication:     string(binding.Authentication),
+		Policy:             string(binding.Policy),
 		Verification:       string(binding.Verification),
 		RequiredComponents: append([]string(nil), required...),
 	}

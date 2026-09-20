@@ -60,6 +60,23 @@ func snapshotLocalPackage(ctx context.Context, tempRoot, packageRoot string) (do
 	return snapshot, nil
 }
 
+func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (domain.PackageSnapshot, error) {
+	if req.ExecutableFiles == nil {
+		return snapshotLocalPackage(ctx, tempRoot, req.PackageRoot)
+	}
+	for _, relative := range req.ExecutableFiles {
+		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
+			return domain.PackageSnapshot{}, fmt.Errorf("%w: invalid snapshot executable path", ErrInvalidRequest)
+		}
+		info, err := os.Lstat(filepath.Join(req.PackageRoot, filepath.FromSlash(relative)))
+		if err != nil || !info.Mode().IsRegular() {
+			return domain.PackageSnapshot{}, fmt.Errorf("%w: snapshot executable is not a regular package file", ErrInvalidRequest)
+		}
+	}
+	source := domain.SourceIdentity{RequestedSource: req.PackageRoot, CanonicalSource: req.PackageRoot, SourceBindingHint: "direct-local"}
+	return (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, source, req.ExecutableFiles)
+}
+
 func declaredPackageExecutables(root string) ([]string, error) {
 	seen := map[string]struct{}{}
 	var out []string
@@ -168,7 +185,7 @@ func (e *Engine) assessSnapshot(ctx context.Context, snapshot domain.PackageSnap
 	if e.cfg.Assess != nil {
 		got, err := e.cfg.Assess(ctx, snapshot.Root, snapshot.TreeDigest)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrAssessmentRejected, err)
+			return fmt.Errorf("%w: %w", ErrAssessmentRejected, err)
 		}
 		decisions = append(decisions, got)
 	}
@@ -205,7 +222,7 @@ func (e *Engine) refuseRecordedDigestRewrite(installationID, desired string) err
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return nil
+		return fmt.Errorf("read installation state: %w", err)
 	}
 	installation, ok := findInstall(state, installationID)
 	if !ok {
@@ -224,7 +241,7 @@ func (e *Engine) refuseRepairRevisionRewrite(installationID, clientID, desired s
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return nil
+		return fmt.Errorf("read installation state: %w", err)
 	}
 	installation, ok := findInstall(state, installationID)
 	if !ok {
@@ -286,12 +303,12 @@ func wrapLifecycleError(err error) error {
 		strings.Contains(msg, "at a different revision; use update") ||
 		strings.Contains(msg, "differs from the installed revision; use update") ||
 		strings.Contains(msg, "use switch to change source") {
-		return fmt.Errorf("%w: %v", ErrUpdateRequired, err)
+		return fmt.Errorf("%w: %w", ErrUpdateRequired, err)
 	}
 	if strings.Contains(msg, "is not bound to an existing installation") ||
 		strings.Contains(msg, "resolved source is not bound to an installation") ||
 		strings.Contains(msg, "plugin is not materialized") {
-		return fmt.Errorf("%w: %v", ErrNotInstalled, err)
+		return fmt.Errorf("%w: %w", ErrNotInstalled, err)
 	}
 	return err
 }

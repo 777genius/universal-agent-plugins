@@ -74,7 +74,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 			ClientConfigRoot: fact.ConfigRoot, ClientExecutable: fact.Executable,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%w: %v", ErrTargetFactsUnavailable, err)
+			return nil, fmt.Errorf("%w: %w", ErrTargetFactsUnavailable, err)
 		}
 		if err := add(client); err != nil {
 			return nil, err

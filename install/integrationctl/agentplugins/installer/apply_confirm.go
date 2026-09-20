@@ -17,7 +17,7 @@ func (e *Engine) confirmPreparedPlan(ctx context.Context, prepared *PreparedOper
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return nil
+		return fmt.Errorf("read installation state: %w", err)
 	}
 	installation, ok := findInstall(state, plan.InstallationID)
 	if !ok {
@@ -51,7 +51,7 @@ func (e *Engine) confirmInstallTarget(ctx context.Context, prepared *PreparedOpe
 		if prepared.artifact != "" {
 			target, err := e.planner().ResolveTarget(ctx, prepared.client, domain.ScopeUser, prepared.artifact)
 			if err != nil {
-				return fmt.Errorf("%w: %v", ErrPlanChanged, err)
+				return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 			}
 			if plan.TargetPath != "" && target.ActivePath != plan.TargetPath {
 				return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)

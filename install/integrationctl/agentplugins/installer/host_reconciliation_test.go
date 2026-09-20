@@ -76,7 +76,11 @@ func TestHostReconciliationRepeat(t *testing.T) {
 				if err != nil {
 					return Result{}, err
 				}
-				defer p.Close()
+				defer func() {
+					if err := p.Close(); err != nil {
+						t.Errorf("close prepared operation: %v", err)
+					}
+				}()
 				return eng.Apply(ctx, p, Decision{Confirmed: true})
 			}
 			first, err := apply()

@@ -108,7 +108,7 @@ func (e *Engine) loadGroupPackages(ctx context.Context, handle *PreparedOperatio
 func (e *Engine) requireGroupBindings(req Request, clients []domain.DetectedClient) error {
 	if req.Operation == OpUpdate || req.Operation == OpRepair {
 		for _, client := range clients {
-			if _, _, err := e.requireExistingBinding(Request{
+			if err := e.requireExistingBinding(Request{
 				InstallationID: req.InstallationID, ClientID: string(client.ClientID),
 				ClientConfigRoot: client.ConfigRoot, ClientExecutable: client.ExecutablePath,
 				Operation: req.Operation,

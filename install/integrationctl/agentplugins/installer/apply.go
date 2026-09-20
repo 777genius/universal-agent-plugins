@@ -9,7 +9,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
-// Apply executes a prepared operation. A cancelled decision returns before usecase
+// Apply executes a prepared operation. A canceled decision returns before usecase
 // mutation, recovery, and callbacks. Result is populated even when err != nil.
 // Close during Apply returns ErrHandleBusy without releasing the snapshot.
 func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decision Decision) (result Result, err error) {
@@ -19,7 +19,7 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 	op, err := prepared.beginApply(decision)
 	if err != nil {
 		if errors.Is(err, ErrCancelled) {
-			return Result{Operation: op, Outcome: OutcomeCancelled, Reason: "host cancelled"}, err
+			return Result{Operation: op, Outcome: OutcomeCancelled, Reason: "host canceled"}, err
 		}
 		return Result{}, err
 	}
@@ -144,7 +144,8 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		BackendExecutable: prepared.req.ClientExecutable,
 	})
 	err = wrapLifecycleError(err)
-	result := Result{Operation: prepared.req.Operation, InstallationID: added.InstallationID, Binding: prepared.facts}
+	result := Result{Operation: prepared.req.Operation, InstallationID: added.InstallationID, Binding: prepared.facts,
+		Mutated: added.Mutated, RequiresConfirmation: added.RequiresConfirmation}
 	if added.Activation.UserActions != nil {
 		result.ManualActions = append([]string(nil), added.Activation.UserActions...)
 	}
@@ -337,7 +338,7 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return nil, fmt.Errorf("%w: load owned state: %v", ErrTargetFactsUnavailable, err)
+		return nil, fmt.Errorf("%w: load owned state: %w", ErrTargetFactsUnavailable, err)
 	}
 	installation, ok := findInstall(state, req.InstallationID)
 	if !ok {
@@ -381,7 +382,7 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 			ClientExecutable: executable,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%w: binding %s (%s): %v", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
+			return nil, fmt.Errorf("%w: binding %s (%s): %w", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
 		}
 		check := target
 		check.Client = client

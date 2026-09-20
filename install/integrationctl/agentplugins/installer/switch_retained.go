@@ -20,13 +20,13 @@ func (e *Engine) SwitchRetained(ctx context.Context, req Request, decision Decis
 		return result, err
 	}
 	if !decision.Confirmed {
-		return Result{Operation: OpUpdate, InstallationID: req.InstallationID, Outcome: OutcomeCancelled, Reason: "host cancelled"}, ErrCancelled
+		return Result{Operation: OpUpdate, InstallationID: req.InstallationID, Outcome: OutcomeCancelled, Reason: "host canceled"}, ErrCancelled
 	}
 	if err := os.MkdirAll(e.cfg.TempRoot, 0700); err != nil {
 		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	e.report(ProgressPrepare)
-	snapshot, err := snapshotLocalPackage(ctx, e.cfg.TempRoot, req.PackageRoot)
+	snapshot, err := snapshotRequestPackage(ctx, e.cfg.TempRoot, req)
 	if err != nil {
 		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
@@ -94,7 +94,7 @@ func (e *Engine) recordedTreeDigest(ctx context.Context, installationID string) 
 func switchRetainedError(installationID string, err error) (Result, error) {
 	reason := err.Error()
 	if strings.Contains(reason, "active installation switch requires SwitchGroup") {
-		return Result{Operation: OpUpdate, InstallationID: installationID, Outcome: OutcomeConflict, Reason: "active_installation"}, fmt.Errorf("%w: %v", ErrUnsupported, err)
+		return Result{Operation: OpUpdate, InstallationID: installationID, Outcome: OutcomeConflict, Reason: "active_installation"}, fmt.Errorf("%w: %w", ErrUnsupported, err)
 	}
 	if strings.Contains(reason, "preserve manifest identity") {
 		return Result{Operation: OpUpdate, InstallationID: installationID, Outcome: OutcomeConflict, Reason: "package_identity"}, err
@@ -131,7 +131,7 @@ func (e *Engine) preflightRetainedSwitch(ctx context.Context, req Request) (Resu
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return Result{}, fmt.Errorf("%w: %v", ErrNotInstalled, err)
+		return Result{}, fmt.Errorf("%w: %w", ErrNotInstalled, err)
 	}
 	installation, ok := findInstall(state, req.InstallationID)
 	if !ok {

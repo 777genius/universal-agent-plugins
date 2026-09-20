@@ -20,7 +20,7 @@ const (
 	OutcomeIncomplete Outcome = "incomplete"
 	OutcomeRecovery   Outcome = "recovery_required"
 	OutcomeConflict   Outcome = "conflict"
-	OutcomeCancelled  Outcome = "cancelled"
+	OutcomeCancelled  Outcome = "cancelled" //nolint:misspell // Preserve the public outcome wire value.
 )
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
@@ -29,7 +29,12 @@ type Request struct {
 	PackageRoot string
 	// SourceRoot is the stable absolute local source identity when PackageRoot
 	// points at a host-owned sealed snapshot. Empty means PackageRoot itself.
-	SourceRoot         string
+	SourceRoot string
+	// ExecutableFiles preserves a host-acquired snapshot's logical file modes.
+	// Nil infers local package executables; a non-nil empty slice means none.
+	// Supported for single-target requests only. Assessment still has to match
+	// the resulting complete tree digest.
+	ExecutableFiles    []string
 	ClientID           string
 	ClientConfigRoot   string
 	ClientExecutable   string
@@ -86,21 +91,37 @@ type BindingFacts struct {
 // Plan is an immutable copy for presentation. Operational paths are included
 // because the embedding host already chose explicit roots.
 type Plan struct {
-	Operation       Operation
-	SourceRoot      string
-	TreeDigest      string
-	DigestAlgorithm string
-	ClientID        string
-	ConfigRoot      string
-	TargetPath      string
-	InstallationID  string
-	BindingID       string
-	HelperVersion   string
-	HelperDigest    string
-	RequiredMissing []string
-	NoChange        bool
-	Targets         []PlanTarget
+	Operation            Operation
+	SourceRoot           string
+	TreeDigest           string
+	DigestAlgorithm      string
+	ClientID             string
+	ConfigRoot           string
+	TargetPath           string
+	InstallationID       string
+	BindingID            string
+	HelperVersion        string
+	HelperDigest         string
+	RequiredMissing      []string
+	NoChange             bool
+	Targets              []PlanTarget
+	Delivery             DeliveryPlan
+	Client               ClientResult
+	RequiresConfirmation bool
 }
+
+// DeliveryPlan is the provider's presentation snapshot, without mutation APIs.
+// LocalActions may contain host paths and are for private human output only.
+type DeliveryPlan struct {
+	Status, PackageMode, InstallIntent, PhysicalArtifactID string
+	Activation, Authentication, Policy, Verification       string
+	Components                                             []ComponentDecision
+	UserActions, LocalActions, Warnings                    []string
+	Diagnostics                                            []PlanDiagnostic
+}
+
+type ComponentDecision struct{ Kind, Name, Support, Reason string }
+type PlanDiagnostic struct{ Severity, Boundary, Code, Path, Item, Message string }
 
 // PlanTarget is one client's prepared identity in a group handle.
 type PlanTarget struct {
@@ -110,17 +131,19 @@ type PlanTarget struct {
 
 // Result is returned together with an error when part of the work already happened.
 type Result struct {
-	Operation      Operation
-	InstallationID string
-	Outcome        Outcome
-	Binding        BindingFacts
-	ManualActions  []string
-	Reason         string
-	NoChange       bool
-	DataRetained   bool
-	Client         ClientResult
-	Targets        []ClientResult
-	NextActions    []NextAction
+	Operation            Operation
+	InstallationID       string
+	Outcome              Outcome
+	Binding              BindingFacts
+	ManualActions        []string
+	Reason               string
+	NoChange             bool
+	Mutated              bool
+	RequiresConfirmation bool
+	DataRetained         bool
+	Client               ClientResult
+	Targets              []ClientResult
+	NextActions          []NextAction
 	// Recovery classifies observed receipts after Recover. Apply leaves it empty.
 	Recovery RecoveryReport
 }
@@ -141,9 +164,9 @@ type NextAction struct {
 
 // ClientResult is the public per-client lifecycle view. Mapping is not a bool.
 type ClientResult struct {
-	ClientID, BindingID, TreeDigest                           string
-	Materialization, Activation, Authentication, Verification string
-	RequiredComponents                                        []string
+	ClientID, BindingID, TreeDigest                                   string
+	Materialization, Activation, Authentication, Policy, Verification string
+	RequiredComponents                                                []string
 }
 
 // Assessment is a digest-bound content verdict. It is not a filesystem plan.

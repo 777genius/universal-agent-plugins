@@ -10,7 +10,7 @@ import (
 func (e *Engine) reconcileGroupHostHandoff(ctx context.Context, prepared *PreparedOperation, result *Result) (bool, error) {
 	state, err := e.store.Load()
 	if err != nil {
-		return false, nil
+		return false, fmt.Errorf("read installation state: %w", err)
 	}
 	installationID := firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID)
 	installation, ok := findInstall(state, installationID)
@@ -101,7 +101,7 @@ func (e *Engine) confirmGroupPlan(ctx context.Context, prepared *PreparedOperati
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return nil
+		return fmt.Errorf("read installation state: %w", err)
 	}
 	installation, ok := findInstall(state, plan.InstallationID)
 	if !ok {
@@ -137,7 +137,7 @@ func (e *Engine) confirmMutatingGroupTarget(ctx context.Context, prepared *Prepa
 		client := prepared.clients[i]
 		resolved, resolveErr := e.planner().ResolveTarget(ctx, client, domain.ScopeUser, prepared.artifact)
 		if resolveErr != nil {
-			return fmt.Errorf("%w: %v", ErrPlanChanged, resolveErr)
+			return fmt.Errorf("%w: %w", ErrPlanChanged, resolveErr)
 		}
 		if target.TargetPath != "" && resolved.ActivePath != target.TargetPath {
 			return fmt.Errorf("%w: live target does not match confirmed plan", ErrPlanChanged)

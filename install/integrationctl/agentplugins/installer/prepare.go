@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
@@ -36,6 +37,8 @@ type PreparedOperation struct {
 func (p *PreparedOperation) Plan() Plan {
 	out := p.plan
 	out.RequiredMissing = append([]string(nil), p.plan.RequiredMissing...)
+	out.Delivery = cloneDeliveryPlan(p.plan.Delivery)
+	out.Client.RequiredComponents = slices.Clone(p.plan.Client.RequiredComponents)
 	if len(p.plan.Targets) > 0 {
 		out.Targets = append([]PlanTarget(nil), p.plan.Targets...)
 	}
@@ -80,8 +83,12 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: context is required", ErrInvalidRequest)
 	}
+	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
+		return nil, fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
+	}
 	copied := req
 	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
+	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
 	copied.Targets = append([]ClientTarget(nil), req.Targets...)
 	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
 	if req.Assessment != nil {
@@ -112,7 +119,7 @@ func (e *Engine) prepareInstall(ctx context.Context, req Request) (*PreparedOper
 }
 
 func (e *Engine) prepareUpdate(ctx context.Context, req Request) (*PreparedOperation, error) {
-	if _, _, err := e.requireExistingBinding(req); err != nil {
+	if err := e.requireExistingBinding(req); err != nil {
 		return nil, err
 	}
 	return e.prepareMutatingPackage(ctx, req, OpUpdate, true, func(svc usecase.Service, in usecase.AddInput) (usecase.AddResult, error) {
@@ -121,7 +128,7 @@ func (e *Engine) prepareUpdate(ctx context.Context, req Request) (*PreparedOpera
 }
 
 func (e *Engine) prepareRepair(ctx context.Context, req Request) (*PreparedOperation, error) {
-	if _, _, err := e.requireExistingBinding(req); err != nil {
+	if err := e.requireExistingBinding(req); err != nil {
 		return nil, err
 	}
 	return e.prepareMutatingPackage(ctx, req, OpRepair, false, func(svc usecase.Service, in usecase.AddInput) (usecase.AddResult, error) {
@@ -129,27 +136,27 @@ func (e *Engine) prepareRepair(ctx context.Context, req Request) (*PreparedOpera
 	})
 }
 
-func (e *Engine) requireExistingBinding(req Request) (domain.Installation, domain.ClientBinding, error) {
+func (e *Engine) requireExistingBinding(req Request) error {
 	client, err := e.detectedClient(req)
 	if err != nil {
-		return domain.Installation{}, domain.ClientBinding{}, err
+		return err
 	}
 	if req.InstallationID == "" {
-		return domain.Installation{}, domain.ClientBinding{}, fmt.Errorf("%w: InstallationID is required", ErrInvalidRequest)
+		return fmt.Errorf("%w: InstallationID is required", ErrInvalidRequest)
 	}
 	state, err := e.store.Load()
 	if err != nil {
-		return domain.Installation{}, domain.ClientBinding{}, fmt.Errorf("%w: %v", ErrNotInstalled, err)
+		return fmt.Errorf("%w: %w", ErrNotInstalled, err)
 	}
 	installation, ok := findInstall(state, req.InstallationID)
 	if !ok {
-		return domain.Installation{}, domain.ClientBinding{}, fmt.Errorf("%w: installation %s", ErrNotInstalled, req.InstallationID)
+		return fmt.Errorf("%w: installation %s", ErrNotInstalled, req.InstallationID)
 	}
-	binding, _, ok := findBinding(installation, client.ClientID)
+	_, _, ok = findBinding(installation, client.ClientID)
 	if !ok {
-		return domain.Installation{}, domain.ClientBinding{}, fmt.Errorf("%w: client %s", ErrNotInstalled, req.ClientID)
+		return fmt.Errorf("%w: client %s", ErrNotInstalled, req.ClientID)
 	}
-	return installation, binding, nil
+	return nil
 }
 
 func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Operation, allowDigestRewrite bool, dry func(usecase.Service, usecase.AddInput) (usecase.AddResult, error)) (*PreparedOperation, error) {
@@ -168,7 +175,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		return nil, err
 	}
 	e.report(ProgressPrepare)
-	snapshot, err := snapshotLocalPackage(ctx, e.cfg.TempRoot, req.PackageRoot)
+	snapshot, err := snapshotRequestPackage(ctx, e.cfg.TempRoot, req)
 	if err != nil {
 		return nil, err
 	}
@@ -268,19 +275,19 @@ func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedCli
 	}
 	target, err := e.planner().ResolveTarget(ctx, client, domain.ScopeUser, binding.PhysicalArtifact)
 	if err != nil {
-		return fmt.Errorf("%w: resolve managed removal target: %v", ErrInvalidRequest, err)
+		return fmt.Errorf("%w: resolve managed removal target: %w", ErrInvalidRequest, err)
 	}
 	if err := pathpolicy.RequireExactPath(target.ActivePath, binding.TargetLocator); err != nil {
-		return fmt.Errorf("%w: refuse removal from untrusted persisted target: %v", ErrInvalidRequest, err)
+		return fmt.Errorf("%w: refuse removal from untrusted persisted target: %w", ErrInvalidRequest, err)
 	}
 	if err := (providers.Stager{}).Verify(ctx, binding.TargetLocator, digest); err != nil {
-		return fmt.Errorf("%w: managed package was changed or is missing; refusing silent removal: %v", ErrInvalidRequest, err)
+		return fmt.Errorf("%w: managed package was changed or is missing; refusing silent removal: %w", ErrInvalidRequest, err)
 	}
 	if receipt.DataReceiptID == "" {
 		return nil
 	}
 	if err := (providers.PluginDataManager{Base: e.cfg.PluginDataBase}).ValidateData(ctx, receipt); err != nil {
-		return fmt.Errorf("%w: required PLUGIN_DATA is missing or unreadable; refusing silent removal: %v", ErrInvalidRequest, err)
+		return fmt.Errorf("%w: required PLUGIN_DATA is missing or unreadable; refusing silent removal: %w", ErrInvalidRequest, err)
 	}
 	return nil
 }
@@ -351,6 +358,10 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		BindingID:      domain.ComputeClientBindingID(firstNonEmpty(req.InstallationID, preview.InstallationID), string(preview.Plan.ClientID), string(preview.Plan.Scope), preview.Plan.ActivePath),
 		HelperVersion:  helperVersion, HelperDigest: helperDigest,
 		RequiredMissing: missing, NoChange: preview.NoChange,
+		Delivery: deliveryPlan(preview.Plan),
+		Client: ClientResult{ClientID: string(client.ClientID), Activation: string(preview.Activation.Activation),
+			Authentication: string(preview.Activation.Authentication), Policy: string(preview.Activation.Policy), Verification: string(preview.Activation.Verification)},
+		RequiresConfirmation: preview.RequiresConfirmation,
 	}
 	handle.facts = BindingFacts{
 		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,

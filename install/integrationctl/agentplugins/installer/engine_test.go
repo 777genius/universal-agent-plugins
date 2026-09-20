@@ -47,7 +47,7 @@ func main() { json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true}) }
 		name = "probe.exe"
 	}
 	out := filepath.Join(dir, name)
-	cmd := exec.Command("go", "build", "-o", out, src)
+	cmd := exec.CommandContext(testCtx(t), "go", "build", "-o", out, src)
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if body, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build probe: %s %v", body, err)
@@ -101,7 +101,7 @@ func main() {
 		name += ".exe"
 	}
 	out := filepath.Join(dir, name)
-	cmd := exec.Command("go", "build", "-o", out, src)
+	cmd := exec.CommandContext(testCtx(t), "go", "build", "-o", out, src)
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build Codex probe: %s %v", output, err)
@@ -584,12 +584,12 @@ func TestInstallInspectRepeatRemove(t *testing.T) {
 	if _, err := os.ReadFile(foreign); err != nil {
 		t.Fatal("prepare mutated foreign client file")
 	}
-	cancelled, err := eng.Apply(ctx, prepared, Decision{})
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled || cancelled.Reason != "host cancelled" {
-		t.Fatalf("cancelled apply: %+v %v", cancelled, err)
+	canceled, err := eng.Apply(ctx, prepared, Decision{})
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled || canceled.Reason != "host canceled" {
+		t.Fatalf("canceled apply: %+v %v", canceled, err)
 	}
 	if _, err := os.Lstat(eng.cfg.StateFile); !os.IsNotExist(err) {
-		t.Fatal("cancelled apply wrote state")
+		t.Fatal("canceled apply wrote state")
 	}
 	result, err := eng.Apply(ctx, prepared, Decision{Confirmed: true})
 	if err != nil {
@@ -1301,8 +1301,9 @@ func inspectedBinding(t *testing.T, view Inspection, clientID string) InspectedB
 	return InspectedBinding{}
 }
 
-func knownTargetFacts(t *testing.T, eng *Engine, clientID, configRoot, executable string) []TargetFacts {
+func knownTargetFacts(t *testing.T, eng *Engine, configRoot, executable string) []TargetFacts {
 	t.Helper()
+	const clientID = "claude"
 	view, err := eng.Inspect(testCtx(t))
 	if err != nil {
 		t.Fatal(err)
@@ -1341,7 +1342,17 @@ func bothClientTargets(codexConfig, claudeConfig, probe string) []ClientTarget {
 	}
 }
 
-func newBothClientSandbox(t *testing.T) (context.Context, *Engine, *capturingRunner, string, string, string, string) {
+type bothClientSandbox struct {
+	ctx          context.Context
+	engine       *Engine
+	runner       *capturingRunner
+	pkg          string
+	probe        string
+	codexConfig  string
+	claudeConfig string
+}
+
+func newBothClientSandbox(t *testing.T) bothClientSandbox {
 	t.Helper()
 	skipWindowsLauncherExecuteBit(t)
 	ctx := testCtx(t)
@@ -1366,7 +1377,7 @@ func newBothClientSandbox(t *testing.T) (context.Context, *Engine, *capturingRun
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ctx, eng, runner, pkg, probe, codexConfig, claudeConfig
+	return bothClientSandbox{ctx: ctx, engine: eng, runner: runner, pkg: pkg, probe: probe, codexConfig: codexConfig, claudeConfig: claudeConfig}
 }
 
 func installBothClients(ctx context.Context, t *testing.T, eng *Engine, pkg, probe, id, op string, targets []ClientTarget) Result {
@@ -1462,7 +1473,8 @@ func TestRecoverAfterPartialGroupDoesNotInvokeHostCallback(t *testing.T) {
 }
 
 func TestPrepareGroupDeniedApplyWritesNoState(t *testing.T) {
-	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.runner, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	called := false
 	eng.cfg.OnCommittedBinding = func(context.Context, BindingFacts) error {
 		called = true
@@ -1484,9 +1496,9 @@ func TestPrepareGroupDeniedApplyWritesNoState(t *testing.T) {
 		t.Fatal("group prepare acquired mutation lock")
 	}
 	before := len(runner.calls)
-	cancelled, err := eng.Apply(ctx, prepared, Decision{})
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled || cancelled.Reason != "host cancelled" {
-		t.Fatalf("denied group apply: %+v %v", cancelled, err)
+	canceled, err := eng.Apply(ctx, prepared, Decision{})
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled || canceled.Reason != "host canceled" {
+		t.Fatalf("denied group apply: %+v %v", canceled, err)
 	}
 	if called {
 		t.Fatal("denied group apply invoked committed-binding callback")
@@ -1514,7 +1526,8 @@ func discoveredClient(t *testing.T, clients []ClientMetadata, clientID string) C
 }
 
 func TestDiscoverReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c2"
 	installBothClients(ctx, t, eng, pkg, probe, id, "group-discover", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := os.ReadFile(eng.cfg.StateFile)
@@ -1546,7 +1559,8 @@ func TestDiscoverReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T
 }
 
 func TestInspectReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T) {
-	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.runner, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c7"
 	installBothClients(ctx, t, eng, pkg, probe, id, "group-inspect", bothClientTargets(codexConfig, claudeConfig, probe))
 	beforeCalls := len(runner.calls)
@@ -1604,7 +1618,8 @@ func TestInspectReportsBothClientsAfterGroupInstallWithoutMutating(t *testing.T)
 }
 
 func TestPrepareRemoveGroupDoesNotDeactivateBeforeApply(t *testing.T) {
-	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.runner, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c3"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
 	installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-preview", targets)
@@ -1631,9 +1646,9 @@ func TestPrepareRemoveGroupDoesNotDeactivateBeforeApply(t *testing.T) {
 	if err != nil || len(view.Installations) != 1 || len(view.Installations[0].Bindings) != 2 {
 		t.Fatalf("prepare remove mutated bindings: %+v %v", view, err)
 	}
-	cancelled, err := eng.Apply(ctx, rm, Decision{})
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled {
-		t.Fatalf("denied group remove: %+v %v", cancelled, err)
+	canceled, err := eng.Apply(ctx, rm, Decision{})
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled {
+		t.Fatalf("denied group remove: %+v %v", canceled, err)
 	}
 	if len(runner.calls) != before {
 		t.Fatalf("denied group remove ran helper: %d -> %d", before, len(runner.calls))
@@ -1645,7 +1660,8 @@ func TestPrepareRemoveGroupDoesNotDeactivateBeforeApply(t *testing.T) {
 }
 
 func TestPrepareRemoveGroupRejectsCorruptArtifactBeforeDeactivate(t *testing.T) {
-	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.runner, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000e4"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
 	installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-corrupt-install", targets)
@@ -1679,7 +1695,8 @@ func TestPrepareRemoveGroupRejectsCorruptArtifactBeforeDeactivate(t *testing.T) 
 }
 
 func TestApplyStaleGroupRemovePlanChangedPreservesSibling(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c4"
 	installBothClients(ctx, t, eng, pkg, probe, id, "group-stale-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	stale, err := eng.Prepare(ctx, Request{
@@ -1726,7 +1743,8 @@ func TestApplyStaleGroupRemovePlanChangedPreservesSibling(t *testing.T) {
 }
 
 func TestRemoveGroupOneAlreadyAbsentRemovesOnlyLive(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c5"
 	installBothClients(ctx, t, eng, pkg, probe, id, "group-mixed-remove-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	live, err := eng.Prepare(ctx, Request{
@@ -2248,9 +2266,9 @@ func TestPrepareDoesNotPersistWhenObservationSeamEnabled(t *testing.T) {
 	if _, err := os.Lstat(eng.cfg.StateFile); !os.IsNotExist(err) {
 		t.Fatal("inspect persisted authoritative observations")
 	}
-	cancelled, err := eng.Apply(ctx, prepared, Decision{})
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled {
-		t.Fatalf("denied apply: %+v %v", cancelled, err)
+	canceled, err := eng.Apply(ctx, prepared, Decision{})
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled {
+		t.Fatalf("denied apply: %+v %v", canceled, err)
 	}
 	if called {
 		t.Fatal("denied apply invoked committed-binding callback")
@@ -2711,14 +2729,14 @@ func TestSwitchRetainedReportsMetadataProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	phases = nil
-	cancelled, err := eng.SwitchRetained(ctx, Request{
+	canceled, err := eng.SwitchRetained(ctx, Request{
 		PackageRoot: other, InstallationID: id, OperationID: "retained-progress-cancel",
 	}, Decision{})
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled {
-		t.Fatalf("cancelled switch: %+v %v", cancelled, err)
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled {
+		t.Fatalf("canceled switch: %+v %v", canceled, err)
 	}
 	if len(phases) != 0 {
-		t.Fatalf("cancelled switch reported progress: %v", phases)
+		t.Fatalf("canceled switch reported progress: %v", phases)
 	}
 	switched, err := eng.SwitchRetained(ctx, Request{
 		PackageRoot: other, InstallationID: id, OperationID: "retained-progress-apply",
@@ -3411,7 +3429,7 @@ func TestUpdateOneClientKeepsSibling(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "sibling-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3439,7 +3457,8 @@ func TestUpdateOneClientKeepsSibling(t *testing.T) {
 }
 
 func TestRepairOneClientKeepsSibling(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c8"
 	installBothClients(ctx, t, eng, pkg, probe, id, "repair-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := eng.Inspect(ctx)
@@ -3482,7 +3501,8 @@ func TestRepairOneClientKeepsSibling(t *testing.T) {
 }
 
 func TestRepairOlderSiblingAfterSubsetUpdate(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d2"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -3494,7 +3514,7 @@ func TestRepairOlderSiblingAfterSubsetUpdate(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "older-sibling-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3556,7 +3576,8 @@ func TestRepairOlderSiblingAfterSubsetUpdate(t *testing.T) {
 }
 
 func TestRepairGroupIntactReportsBothTargets(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c9"
 	installBothClients(ctx, t, eng, pkg, probe, id, "repair-group-intact-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := eng.Inspect(ctx)
@@ -3611,7 +3632,8 @@ func TestRepairGroupIntactReportsBothTargets(t *testing.T) {
 }
 
 func TestRepairGroupMixedRevisionsUsesPerTargetPackage(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d1"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -3623,7 +3645,7 @@ func TestRepairGroupMixedRevisionsUsesPerTargetPackage(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "mixed-repair-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3708,7 +3730,8 @@ func TestRepairGroupMixedRevisionsUsesPerTargetPackage(t *testing.T) {
 }
 
 func TestRepairGroupMixedRevisionsAssessesEachSnapshot(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d2"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -3720,7 +3743,7 @@ func TestRepairGroupMixedRevisionsAssessesEachSnapshot(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "mixed-repair-assess-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3787,7 +3810,8 @@ func TestRepairGroupMixedRevisionsAssessesEachSnapshot(t *testing.T) {
 }
 
 func TestRepairGroupMixedRevisionsAssessDigestMismatch(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d5"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -3799,7 +3823,7 @@ func TestRepairGroupMixedRevisionsAssessDigestMismatch(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "mixed-repair-mismatch-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3848,7 +3872,8 @@ func TestRepairGroupMixedRevisionsAssessDigestMismatch(t *testing.T) {
 }
 
 func TestRepairGroupSameRootAssessesOnce(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d6"
 	installBothClients(ctx, t, eng, pkg, probe, id, "same-root-assess-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	calls := 0
@@ -3883,7 +3908,8 @@ func TestRepairGroupSameRootAssessesOnce(t *testing.T) {
 }
 
 func TestRepairMixedRevisionRematerializesDeletedOlderSibling(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000ed"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -3895,7 +3921,7 @@ func TestRepairMixedRevisionRematerializesDeletedOlderSibling(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "mixed-repair-delete-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3948,7 +3974,8 @@ func TestRepairMixedRevisionRematerializesDeletedOlderSibling(t *testing.T) {
 }
 
 func TestRepairGroupSamePackageRefusesOlderSibling(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d3"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -3960,7 +3987,7 @@ func TestRepairGroupSamePackageRefusesOlderSibling(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "same-root-mixed-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -3989,7 +4016,8 @@ func TestRepairGroupSamePackageRefusesOlderSibling(t *testing.T) {
 }
 
 func TestRepairGroupMixedRevisionsIncompleteOlderPackage(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000d4"
 	r1 := filepath.Join(filepath.Dir(pkg), "package-r1")
 	copyPackage(t, pkg, r1)
@@ -4016,7 +4044,7 @@ func TestRepairGroupMixedRevisionsIncompleteOlderPackage(t *testing.T) {
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, InstallationID: id, OperationID: "mixed-repair-incomplete-codex-update",
 		RequiredComponents: []string{"mcp", "skills"},
-		KnownTargets:       knownTargetFacts(t, eng, "claude", claudeConfig, probe),
+		KnownTargets:       knownTargetFacts(t, eng, claudeConfig, probe),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -4048,7 +4076,8 @@ func TestRepairGroupMixedRevisionsIncompleteOlderPackage(t *testing.T) {
 }
 
 func TestUpdateOneClientRefusesWhenSiblingFactsMissing(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000c6"
 	installBothClients(ctx, t, eng, pkg, probe, id, "sibling-profile-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	view, err := eng.Inspect(ctx)
@@ -4081,7 +4110,8 @@ func TestUpdateOneClientRefusesWhenSiblingFactsMissing(t *testing.T) {
 }
 
 func TestUpdateOneClientRefusesStaleSiblingBindingFactsWithoutMutation(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000e1"
 	installBothClients(ctx, t, eng, pkg, probe, id, "stale-sibling-install", bothClientTargets(codexConfig, claudeConfig, probe))
 	before, err := os.ReadFile(eng.cfg.StateFile)
@@ -4091,7 +4121,7 @@ func TestUpdateOneClientRefusesStaleSiblingBindingFactsWithoutMutation(t *testin
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	facts := knownTargetFacts(t, eng, "claude", claudeConfig, probe)
+	facts := knownTargetFacts(t, eng, claudeConfig, probe)
 	facts[0].BindingID = "client_stale_host_binding"
 	_, err = eng.Prepare(ctx, Request{
 		Operation: OpUpdate, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: codexConfig,
@@ -4108,7 +4138,8 @@ func TestUpdateOneClientRefusesStaleSiblingBindingFactsWithoutMutation(t *testin
 }
 
 func TestCompatibilityChecksUseEachSiblingExecutable(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000e2"
 	installBothClients(ctx, t, eng, pkg, probe, id, "sibling-executable-install", bothClientTargets(codexConfig, claudeConfig, probe))
 
@@ -4119,7 +4150,7 @@ func TestCompatibilityChecksUseEachSiblingExecutable(t *testing.T) {
 	if err := os.Link(probe, claudeProbe); err != nil {
 		t.Fatal(err)
 	}
-	facts := knownTargetFacts(t, eng, "claude", claudeConfig, claudeProbe)
+	facts := knownTargetFacts(t, eng, claudeConfig, claudeProbe)
 	req := Request{
 		InstallationID: id, ClientID: "codex", ClientConfigRoot: codexConfig,
 		ClientExecutable: probe, KnownTargets: facts,
@@ -4194,14 +4225,14 @@ func TestUpdateAndRepairCancelledBeforeMutation(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cancelled, err := eng.Apply(ctx, prepared, Decision{})
+			canceled, err := eng.Apply(ctx, prepared, Decision{})
 			_ = prepared.Close()
-			if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled {
-				t.Fatalf("cancelled %s: %+v %v", tc.op, cancelled, err)
+			if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled {
+				t.Fatalf("canceled %s: %+v %v", tc.op, canceled, err)
 			}
 			after, err := os.ReadFile(eng.cfg.StateFile)
 			if err != nil || !bytes.Equal(before, after) {
-				t.Fatalf("cancelled %s mutated state: %v", tc.op, err)
+				t.Fatalf("canceled %s mutated state: %v", tc.op, err)
 			}
 		})
 	}
@@ -4519,15 +4550,15 @@ func TestPrepareMarksBinExecutableWithoutHostExecuteBits(t *testing.T) {
 		}
 	}
 	plain := filepath.Join(base, "plain")
-	exec := filepath.Join(base, "exec")
+	executablePackage := filepath.Join(base, "exec")
 	writePackageMode(t, plain, probe, 0644)
-	writePackageMode(t, exec, probe, 0755)
+	writePackageMode(t, executablePackage, probe, 0755)
 	plainPrep, err := eng.Prepare(ctx, req(plain))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = plainPrep.Close() }()
-	execPrep, err := eng.Prepare(ctx, req(exec))
+	execPrep, err := eng.Prepare(ctx, req(executablePackage))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -4914,7 +4945,8 @@ func TestPrepareRemoveRejectsMissingPluginDataBeforeDeactivate(t *testing.T) {
 }
 
 func TestPrepareRemoveGroupRejectsMissingPluginDataBeforeDeactivate(t *testing.T) {
-	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.runner, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000e8"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
 	installed := installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-data-install", targets)
@@ -4942,7 +4974,8 @@ func TestPrepareRemoveGroupRejectsMissingPluginDataBeforeDeactivate(t *testing.T
 }
 
 func TestApplyRemoveGroupRepeatsPluginDataPreflightBeforeDeactivate(t *testing.T) {
-	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, runner, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.runner, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	id := "00000000-0000-4000-8000-0000000000ec"
 	targets := bothClientTargets(codexConfig, claudeConfig, probe)
 	installed := installBothClients(ctx, t, eng, pkg, probe, id, "group-remove-data-apply-install", targets)
@@ -6036,7 +6069,8 @@ func TestProgressReportsCoarsePhases(t *testing.T) {
 }
 
 func TestProgressReportsGroupCoarsePhases(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	var phases []ProgressPhase
 	eng.cfg.Progress = func(event ProgressEvent) { phases = append(phases, event.Phase) }
 	id := "00000000-0000-4000-8000-0000000000d7"
@@ -6081,10 +6115,10 @@ func TestCancelledApplyDoesNotReportMutationPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err := eng.Apply(ctx, prepared, Decision{})
+	canceled, err := eng.Apply(ctx, prepared, Decision{})
 	_ = prepared.Close()
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled {
-		t.Fatalf("cancelled apply: %+v %v", cancelled, err)
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled {
+		t.Fatalf("canceled apply: %+v %v", canceled, err)
 	}
 	joined := ""
 	for _, phase := range phases {
@@ -6095,13 +6129,14 @@ func TestCancelledApplyDoesNotReportMutationPhases(t *testing.T) {
 	}
 	for _, blocked := range []ProgressPhase{ProgressStage, ProgressCommit, ProgressActivate, ProgressVerify, ProgressComplete} {
 		if strings.Contains(joined, string(blocked)+",") {
-			t.Fatalf("cancelled apply reported %s: %s", blocked, joined)
+			t.Fatalf("canceled apply reported %s: %s", blocked, joined)
 		}
 	}
 }
 
 func TestCancelledGroupApplyDoesNotReportMutationPhases(t *testing.T) {
-	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	sandbox := newBothClientSandbox(t)
+	ctx, eng, pkg, probe, codexConfig, claudeConfig := sandbox.ctx, sandbox.engine, sandbox.pkg, sandbox.probe, sandbox.codexConfig, sandbox.claudeConfig
 	var phases []ProgressPhase
 	eng.cfg.Progress = func(event ProgressEvent) { phases = append(phases, event.Phase) }
 	prepared, err := eng.Prepare(ctx, Request{
@@ -6112,10 +6147,10 @@ func TestCancelledGroupApplyDoesNotReportMutationPhases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cancelled, err := eng.Apply(ctx, prepared, Decision{})
+	canceled, err := eng.Apply(ctx, prepared, Decision{})
 	_ = prepared.Close()
-	if !errors.Is(err, ErrCancelled) || cancelled.Outcome != OutcomeCancelled {
-		t.Fatalf("cancelled group apply: %+v %v", cancelled, err)
+	if !errors.Is(err, ErrCancelled) || canceled.Outcome != OutcomeCancelled {
+		t.Fatalf("canceled group apply: %+v %v", canceled, err)
 	}
 	joined := ""
 	for _, phase := range phases {
@@ -6126,7 +6161,7 @@ func TestCancelledGroupApplyDoesNotReportMutationPhases(t *testing.T) {
 	}
 	for _, blocked := range []ProgressPhase{ProgressStage, ProgressCommit, ProgressActivate, ProgressVerify, ProgressComplete} {
 		if strings.Contains(joined, string(blocked)+",") {
-			t.Fatalf("cancelled group apply reported %s: %s", blocked, joined)
+			t.Fatalf("canceled group apply reported %s: %s", blocked, joined)
 		}
 	}
 }
@@ -6682,7 +6717,7 @@ func TestCancelAfterManagedCommitKeepsBinding(t *testing.T) {
 		t.Fatalf("cancel after commit: %+v %v", result, err)
 	}
 	if result.Outcome == OutcomeCancelled {
-		t.Fatal("after-effect cancel rolled back to cancelled")
+		t.Fatal("after-effect cancel rolled back to canceled")
 	}
 	if result.Client.Materialization == "" || result.Client.Materialization == string(domain.MaterializationAbsent) {
 		t.Fatalf("after-effect cancel dropped materialization: %+v", result.Client)
