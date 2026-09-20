@@ -32,7 +32,10 @@ func TestNativeIdentityTimeoutReapsAuthoritativeDiscoveryChild(t *testing.T) {
 	plan := identityPlan(filepath.Join(root, "prepared"))
 	plan.NativeRegistryExecutable = executable
 	observation, err := (testObserver(NativeIdentityObserver{
-		Runner: processadapter.OS{}, DiscoveryTimeout: 500 * time.Millisecond,
+		// Give the disposable shell enough time to create its PID handshake even
+		// when the full package suite is saturating the host. The observed failure
+		// is still the runner deadline, not a test-side kill.
+		Runner: processadapter.OS{}, DiscoveryTimeout: 3 * time.Second,
 	})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
 	if !errors.Is(err, context.DeadlineExceeded) || observation.State != domain.NativeIdentityIndeterminate {
 		t.Fatalf("observation = %+v, err = %v", observation, err)

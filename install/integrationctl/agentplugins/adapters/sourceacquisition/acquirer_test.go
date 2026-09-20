@@ -456,6 +456,11 @@ func commit(t *testing.T, root string) string {
 func runGit(t *testing.T, args ...string) string {
 	t.Helper()
 	command := exec.Command("git", args...)
+	command.Env = append(os.Environ(),
+		"GIT_CONFIG_NOSYSTEM=1",
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_TERMINAL_PROMPT=0",
+	)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, output)
