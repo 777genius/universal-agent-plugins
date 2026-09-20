@@ -16,10 +16,10 @@ require (
 	charm.land/bubbles/v2 v2.0.0
 	charm.land/bubbletea/v2 v2.0.2
 	charm.land/huh/v2 v2.0.3
-	github.com/777genius/plugin-kit-ai/install/integrationctl v0.0.0
-	github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins v0.0.0
-	github.com/777genius/plugin-kit-ai/plugininstall v0.0.0
-	github.com/777genius/plugin-kit-ai/sdk v0.0.0
+	github.com/777genius/plugin-kit-ai/install/integrationctl v0.0.0-20260920081413-a5644312f7af
+	github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins v0.0.0-20260920081413-a5644312f7af
+	github.com/777genius/plugin-kit-ai/plugininstall v0.0.0-20260920081413-a5644312f7af
+	github.com/777genius/plugin-kit-ai/sdk v1.1.1-0.20260920081413-a5644312f7af
 	github.com/charmbracelet/colorprofile v0.4.2
 	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8
 	github.com/charmbracelet/x/ansi v0.11.6
