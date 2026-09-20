@@ -134,6 +134,12 @@ func facadePlanAddResult(plan installer.Plan, envelope domain.PackageEnvelope) u
 }
 
 func facadeResultAddResult(plan installer.Plan, result installer.Result, envelope domain.PackageEnvelope) usecase.AddResult {
+	// Prepare is a preview: Apply may allocate a new identity and resolve
+	// platform readiness. Publish the lifecycle's actual decisions when present.
+	if result.Delivery != nil {
+		plan.Delivery = *result.Delivery
+		plan.TargetPath = result.Delivery.ActivePath
+	}
 	out := facadePlanAddResult(plan, envelope)
 	out.InstallationID = firstNonEmptyCLI(result.InstallationID, plan.InstallationID)
 	out.NoChange = result.NoChange || result.Outcome == installer.OutcomeUnchanged

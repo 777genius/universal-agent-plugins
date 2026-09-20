@@ -69,6 +69,23 @@ func TestInstallerFacadeApplyFailurePresentation(t *testing.T) {
 	}
 }
 
+func TestInstallerFacadeAppliedDeliverySupersedesPreview(t *testing.T) {
+	preview := installer.Plan{ClientID: "claude", TargetPath: "/preview", Delivery: installer.DeliveryPlan{
+		PhysicalArtifactID: "preview-artifact", Components: []installer.ComponentDecision{{Kind: "mcp_server", Name: "local", Support: "projected"}},
+	}}
+	actual := installer.DeliveryPlan{ActivePath: "/applied", PhysicalArtifactID: "applied-artifact", Components: []installer.ComponentDecision{{Kind: "mcp_server", Name: "local", Support: "unsupported", Reason: "managed_stdio_platform_unsupported"}}}
+	for _, mutated := range []bool{false, true} {
+		got := facadeResultAddResult(preview, installer.Result{Delivery: &actual, Mutated: mutated}, domain.PackageEnvelope{})
+		if got.Plan.PhysicalArtifactID != actual.PhysicalArtifactID || got.Plan.ActivePath != actual.ActivePath || len(got.Plan.Components) != 1 || string(got.Plan.Components[0].Support) != "unsupported" || got.Plan.Components[0].Reason != "managed_stdio_platform_unsupported" {
+			t.Fatalf("applied delivery was replaced by preview (mutated=%v): %+v", mutated, got.Plan)
+		}
+	}
+	early := facadeResultAddResult(preview, installer.Result{}, domain.PackageEnvelope{})
+	if early.Plan.PhysicalArtifactID != preview.Delivery.PhysicalArtifactID || early.Plan.ActivePath != preview.TargetPath {
+		t.Fatalf("failure before planning lost preview: %+v", early.Plan)
+	}
+}
+
 func TestExplicitLocalCodexAddUsesInstallerFacade(t *testing.T) {
 	testExplicitLocalAddUsesInstallerFacade(t, domain.ClientCodex)
 }
@@ -167,6 +184,9 @@ func testExplicitLocalAddUsesInstallerFacade(t *testing.T, clientID domain.Clien
 	}
 	if installedClient.ClientID != string(clientID) {
 		t.Fatalf("facade add client = %+v", installedClient)
+	}
+	if added.Plan.PhysicalArtifactID != installedClient.PhysicalArtifact {
+		t.Fatalf("facade output disagrees with committed artifact: plan=%+v binding=%+v", added.Plan, installedClient)
 	}
 	// The first non-interactive Codex add truthfully stops at manual activation.
 	// Model the user completing that out-of-process step before asserting the

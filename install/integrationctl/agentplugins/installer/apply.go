@@ -146,6 +146,10 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	err = wrapLifecycleError(err)
 	result := Result{Operation: prepared.req.Operation, InstallationID: added.InstallationID, Binding: prepared.facts,
 		Mutated: added.Mutated, RequiresConfirmation: added.RequiresConfirmation}
+	if added.Plan.ClientID != "" {
+		delivery := deliveryPlan(added.Plan)
+		result.Delivery = &delivery
+	}
 	if added.Activation.UserActions != nil {
 		result.ManualActions = append([]string(nil), added.Activation.UserActions...)
 	}

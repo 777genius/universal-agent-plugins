@@ -113,6 +113,7 @@ type Plan struct {
 // DeliveryPlan is the provider's presentation snapshot, without mutation APIs.
 // LocalActions may contain host paths and are for private human output only.
 type DeliveryPlan struct {
+	ActivePath                                             string
 	Status, PackageMode, InstallIntent, PhysicalArtifactID string
 	Activation, Authentication, Policy, Verification       string
 	Components                                             []ComponentDecision
@@ -131,6 +132,8 @@ type PlanTarget struct {
 
 // Result is returned together with an error when part of the work already happened.
 type Result struct {
+	// Delivery is the actual lifecycle plan, absent when Apply stopped before planning.
+	Delivery             *DeliveryPlan
 	Operation            Operation
 	InstallationID       string
 	Outcome              Outcome
