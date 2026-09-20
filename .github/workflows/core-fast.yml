@@ -10,8 +10,8 @@ on:
       - 'install/integrationctl/agentplugins/**'
       # The only ports.PathPolicy implementation lives here.
       - 'install/integrationctl/adapters/pathpolicy/**'
-      - 'cli/plugin-kit-ai/internal/agentpluginscli/**'
-      - 'cli/plugin-kit-ai/cmd/agentplugins/**'
+      - 'cli/internal/agentpluginscli/**'
+      - 'cli/cmd/agentplugins/**'
       - 'go.mod'
       - 'go.sum'
       - 'go.work'
@@ -32,6 +32,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  managed-stdio-windows:
+    name: managed-stdio-windows
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+      - name: Qualify native Windows managed stdio process-tree ownership
+        working-directory: install/integrationctl/agentplugins
+        run: go test -count=1 -timeout=3m -v ./managedstdio -run '^TestWindows(JobTreeCleanup|AssignFailureKillsSuspendedProcessBeforeWait)$'
+
   lint:
     uses: ./.github/workflows/lint.yml
     with:
@@ -66,7 +82,7 @@ jobs:
           (cd install/integrationctl/agentplugins && go list ./... \
             | grep -v '/adapters/clientdetect$' \
             | xargs go test -count=1 -cover) > core-cover.log 2>&1 || true
-          (cd cli/plugin-kit-ai && go test -count=1 -cover ./internal/agentpluginscli/... ./cmd/agentplugins/...) >> core-cover.log 2>&1 || true
+          (cd cli && go test -count=1 -cover ./internal/agentpluginscli/... ./cmd/agentplugins/...) >> core-cover.log 2>&1 || true
           cat core-cover.log
           {
             echo '### Install core coverage'
@@ -100,7 +116,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
         run: |
           set -e
-          for module in install/integrationctl install/integrationctl/agentplugins cli/plugin-kit-ai; do
+          for module in install/integrationctl install/integrationctl/agentplugins cli; do
             echo "==> $module"
             (cd "$module" && go build ./...)
           done

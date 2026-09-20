@@ -13,6 +13,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+var assignProcessToJobObject = windows.AssignProcessToJobObject
+
 // Windows cannot replace the current process with execve. A private Job
 // Object gives the managed helper equivalent process-tree ownership: the
 // launched runtime is created suspended, attached before it can execute, then
@@ -49,8 +51,11 @@ func replaceProcess(command string, args []string, cwd string) error {
 		return fmt.Errorf("open managed stdio process: %w", err)
 	}
 	defer windows.CloseHandle(process)
-	if err := windows.AssignProcessToJobObject(job, process); err != nil {
-		_ = windows.TerminateJobObject(job, 1)
+	if err := assignProcessToJobObject(job, process); err != nil {
+		// Assignment failed, so the suspended process is not owned by the job
+		// and TerminateJobObject cannot stop it. Kill it directly before Wait;
+		// otherwise this error path can wait forever on a never-resumed thread.
+		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		return fmt.Errorf("assign managed stdio process: %w", err)
 	}
