@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/777genius/plugin-kit-ai/install/integrationctl v0.0.0-20260919103549-148794ac5947
-	github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins v0.0.0-20260919180746-a16f125e5eb6
+	github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins v0.0.0-20260920065041-10a6e7329418
 )
 
 require (
