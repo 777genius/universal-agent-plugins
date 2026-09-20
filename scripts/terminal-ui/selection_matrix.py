@@ -149,12 +149,17 @@ def installed(fixture, selected):
 def prepare_codex_registry(fixture):
     """Synthetic controlled native registry protocol, not a real Codex executable."""
     stub = fixture.bin / 'codex'
-    stub.write_text('#!' + sys.executable + '\n' + r'''import json, os, sys
+    # Bind fixture paths into the generated executable: production native calls
+    # intentionally strip arbitrary environment variables (including STUB_LOG).
+    stub.write_text('#!' + sys.executable + '\n'
+                    + 'FIXTURE_DATA = ' + repr(str(fixture.data)) + '\n'
+                    + 'FIXTURE_LOG = ' + repr(str(fixture.root / 'stub.log')) + '\n'
+                    + r'''import json, sys
 from pathlib import Path
 args = sys.argv[1:]
-root = Path(os.environ['AGENTPLUGINS_HOME'])
+root = Path(FIXTURE_DATA)
 registry = root / 'synthetic-codex-registry.json'
-with open(os.environ['STUB_LOG'], 'a') as log:
+with open(FIXTURE_LOG, 'a') as log:
     log.write(sys.argv[0] + ' ' + ' '.join(args) + '\n')
 state = json.loads(registry.read_text()) if registry.exists() else {}
 if args == ['--version']:
