@@ -312,21 +312,25 @@ def run_case(case, binary, evidence, timeout=8):
             check('Target: codex' not in text, 'unselected target entered plan')
             fixture.unchanged()
             if kind in ('skill', 'mixed'):
-                check('skill guide: native' in text, 'skill support decision missing')
+                check(re.search(r'Skill:\s+guide\s+·\s+native', text),
+                      'skill support decision missing')
             if kind == 'mixed':
-                check(all(value in text for value in ('mcp_server fixture: unsupported',
-                      'stdio_runtime_unavailable', 'uap-fixture-missing-runtime', 'install it explicitly',
-                      'components_skipped_local_readiness')), 'MCP skipped reason/remediation missing')
+                check(re.search(r'MCP server:\s+fixture\s+·\s+unsupported', text) and
+                      all(value in text for value in ('stdio_runtime_unavailable',
+                      'uap-fixture-missing-runtime', 'install it explicitly',
+                      'Some components were skipped because local requirements are not ready.')),
+                      'MCP skipped reason/remediation missing')
             if kind in ('mixed', 'http-auth'):
-                check('Authentication: not_checked' in text, 'auth uncertainty label lost')
-                check('Verification: package_validated' in text, 'verification overstated')
+                check('Authentication: not checked' in text, 'auth uncertainty label lost')
+                check('Verification: package validated' in text, 'verification overstated')
                 check('Installed and verified' not in text and 'Ready' not in text, 'plan falsely claimed usability')
             if kind == 'http-auth':
-                check('mcp_server fixture: native' in text, 'HTTP support decision missing')
-                check('Authentication: not_checked' in text, 'HTTP auth status overstated')
+                check(re.search(r'MCP server:\s+fixture\s+·\s+native', text),
+                      'HTTP support decision missing')
+                check('Authentication: not checked' in text, 'HTTP auth status overstated')
                 check(re.search(r'(?i)verify.*authentication', text), 'missing actionable auth guidance')
             if kind in ('empty', 'unsupported'):
-                check(not re.search(r'  - (skill|mcp_server|hook|command) ', text),
+                check(not re.search(r'\b(?:Skill|MCP server|Hook|Command):', text),
                       'loader invented portable components')
             if action in ('default-no', 'partial-plan', 'auth-unknown'):
                 send(session, b'\r')

@@ -93,9 +93,13 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 		}
 	}
 	separator := "\n"
-	if !terminaltheme.IsTerminal(p.Output) {
-		// Queued input can complete a non-terminal form before its first render.
-		// Keep one visible question in logs and deterministic adapter tests.
+	switch {
+	case len(queued) > 0:
+		// Queued input can complete the form before its first render. Keep one
+		// visible question without duplicating the normal interactive view.
+		separator = "\n" + prompt.SafeText(r.Title) + " (No by default)\n"
+	case !terminaltheme.IsTerminal(p.Output):
+		// Non-terminal forms may not render a stable interactive question.
 		separator = prompt.SafeText(r.Title) + "\n"
 	}
 	if err := promptio.WriteText(p.Output, separator); err != nil {
