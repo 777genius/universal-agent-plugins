@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -15,7 +14,7 @@ import (
 
 func fixtureGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	c := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	c := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
 	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Docs Fixture", "GIT_AUTHOR_EMAIL=docs@example.invalid", "GIT_COMMITTER_NAME=Docs Fixture", "GIT_COMMITTER_EMAIL=docs@example.invalid")
 	b, e := c.CombinedOutput()
 	if e != nil {
@@ -242,7 +241,7 @@ func TestEffectiveDependencyDrift(t *testing.T) {
 			body = append(body, []byte("\nreplace github.com/spf13/pflag => ./docs-pflag-replacement\n")...)
 			writeFixture(t, dir, control, body)
 			sha := commitFixture(t, dir)
-			cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "list", "-m", "-json", "github.com/spf13/pflag")
+			cmd := exec.CommandContext(t.Context(), "go", "list", "-m", "-json", "github.com/spf13/pflag")
 			cmd.Dir = filepath.Join(dir, "cli")
 			cmd.Env = append(os.Environ(), "GOWORK="+filepath.Join(dir, "go.work"), "GOFLAGS=", "GOENV=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off", "GOMAXPROCS=2")
 			selected, err := cmd.CombinedOutput()

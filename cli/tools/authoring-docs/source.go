@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -20,7 +21,7 @@ type sourcePin struct {
 }
 
 func git(checkout string, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", append([]string{"-C", checkout}, args...)...)
+	cmd := exec.CommandContext(context.Background(), "git", append([]string{"-C", checkout}, args...)...)
 	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	body, err := cmd.Output()
 	if err != nil {
@@ -55,26 +56,34 @@ func validateSource(checkout, sha string) ([]sourcePin, error) {
 	}
 	pins := make([]sourcePin, 0, len(factoryPins))
 	for _, pin := range factoryPins {
-		info, err := os.Lstat(filepath.Join(checkout, filepath.FromSlash(pin.Path)))
-		if err != nil {
-			return nil, fmt.Errorf("source input unavailable: %s", pin.Path)
-		}
-		if !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("source input is not a regular file: %s", pin.Path)
-		}
-		if _, err := git(checkout, "ls-files", "--error-unmatch", "--", pin.Path); err != nil {
-			return nil, fmt.Errorf("source input not tracked: %s", pin.Path)
-		}
-		body, err := os.ReadFile(filepath.Join(checkout, filepath.FromSlash(pin.Path)))
-		if err != nil {
-			return nil, fmt.Errorf("source input unavailable: %s", pin.Path)
-		}
-		if fmt.Sprintf("%x", sha256.Sum256(body)) != pin.SHA256 {
-			return nil, fmt.Errorf("source input mismatch: %s", pin.Path)
+		if err := validateSourcePin(checkout, pin); err != nil {
+			return nil, err
 		}
 		pins = append(pins, pin)
 	}
 	return pins, nil
+}
+
+func validateSourcePin(checkout string, pin sourcePin) error {
+	path := filepath.Join(checkout, filepath.FromSlash(pin.Path))
+	info, err := os.Lstat(path)
+	if err != nil {
+		return fmt.Errorf("source input unavailable: %s", pin.Path)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("source input is not a regular file: %s", pin.Path)
+	}
+	if _, err := git(checkout, "ls-files", "--error-unmatch", "--", pin.Path); err != nil {
+		return fmt.Errorf("source input not tracked: %s", pin.Path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("source input unavailable: %s", pin.Path)
+	}
+	if fmt.Sprintf("%x", sha256.Sum256(body)) != pin.SHA256 {
+		return fmt.Errorf("source input mismatch: %s", pin.Path)
+	}
+	return nil
 }
 
 // Pins cover the release-selected construction packages (all non-test Go files,
@@ -84,10 +93,10 @@ func validateSource(checkout, sha string) ([]sourcePin, error) {
 var factoryPins = []sourcePin{
 	{"cli/cmd/agentplugins/release_root.go", "4a7dc6735325c1f1cd65d063f349e04716d36ab7c9eaeb4749ec4f5bcb03cd28"},
 	{"cli/cmd/plugin-kit-ai/release_compat.go", "d2f11a845c116160114ddd1b0ba8b825e9e5a4794354742749db7122c0c674c8"},
-	{"cli/go.mod", "7083f039ee39bc5acc02cfcd9974eb131493b1ef7ea9768e7915deafc9dc4bbf"},
+	{"cli/go.mod", "4afb0ed9c7c843f32721af26917539e8cceb0e108075461e8ff445e6cba6e7c0"},
 	{"cli/go.sum", "ea4cb8206732d6b715288572b619b2c679aefe1a66d84a08d226d5c8daa73b98"},
 	{"cli/internal/agentpluginscli/add.go", "822590f48d58f94154ae846844e01570265ffcaf57fcc3b4f4ddf1f6ab78b69f"},
-	{"cli/internal/agentpluginscli/add_multi.go", "48d7549789a5c0877e018c6226618356a5d02f7406725b00f05cdc7781ddbcc9"},
+	{"cli/internal/agentpluginscli/add_multi.go", "886776145e1c48bc391d37a61f872979316d8ffe927f954314ac588d0369e523"},
 	{"cli/internal/agentpluginscli/app.go", "92292a21b1439655c60f15715aa13814492b3545ca6d2a35aa09304c02dc58fe"},
 	{"cli/internal/agentpluginscli/binding.go", "d642368e4f4d0ef8f228a6939fcf011751ce8d7804506c6fbffd5cb6fbfd0842"},
 	{"cli/internal/agentpluginscli/chatgpt_guidance.go", "7dacf7fcb0581cfff8f7aabfc85cd21cef15b93486376f31eba25ad39711e19a"},
@@ -206,21 +215,8 @@ func validateInventory(checkout string) error {
 		allowed[adapter+"/"+name] = true
 	}
 	for _, dir := range append(append([]string{}, constructionDirs...), adapter) {
-		entries, err := os.ReadDir(filepath.Join(checkout, filepath.FromSlash(dir)))
-		if err != nil {
-			return fmt.Errorf("source directory unavailable: %s", dir)
-		}
-		for _, e := range entries {
-			name := dir + "/" + e.Name()
-			if !strings.HasSuffix(e.Name(), ".go") {
-				continue
-			}
-			if dir != adapter && strings.HasSuffix(e.Name(), "_test.go") {
-				continue
-			}
-			if !allowed[name] || e.Type()&os.ModeSymlink != 0 || e.IsDir() {
-				return fmt.Errorf("unexpected Go input: %s", name)
-			}
+		if err := validateSourceDirectory(checkout, dir, dir == adapter, allowed); err != nil {
+			return err
 		}
 	}
 	for _, name := range adapterFiles {
@@ -232,14 +228,39 @@ func validateInventory(checkout string) error {
 			return fmt.Errorf("adapter input not tracked: %s", path)
 		}
 	}
+	return validateDependencyControls(checkout, allowed)
+}
+
+func validateSourceDirectory(checkout, dir string, includeTests bool, allowed map[string]bool) error {
+	entries, err := os.ReadDir(filepath.Join(checkout, filepath.FromSlash(dir)))
+	if err != nil {
+		return fmt.Errorf("source directory unavailable: %s", dir)
+	}
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		if !includeTests && strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		name := dir + "/" + entry.Name()
+		if !allowed[name] || entry.Type()&os.ModeSymlink != 0 || entry.IsDir() {
+			return fmt.Errorf("unexpected Go input: %s", name)
+		}
+	}
+	return nil
+}
+
+func validateDependencyControls(checkout string, allowed map[string]bool) error {
 	// Absent control files are also part of the effective workspace contract.
 	for _, dir := range []string{"", "cli/", "install/integrationctl/", "install/integrationctl/agentplugins/", "plugininstall/", "sdk/"} {
 		for _, name := range []string{"go.mod", "go.sum", "go.work", "go.work.sum", "vendor"} {
 			path := dir + name
-			if !allowed[path] {
-				if _, err := os.Lstat(filepath.Join(checkout, path)); !os.IsNotExist(err) {
-					return fmt.Errorf("unexpected dependency control: %s", path)
-				}
+			if allowed[path] {
+				continue
+			}
+			if _, err := os.Lstat(filepath.Join(checkout, path)); !os.IsNotExist(err) {
+				return fmt.Errorf("unexpected dependency control: %s", path)
 			}
 		}
 	}

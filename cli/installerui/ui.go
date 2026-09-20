@@ -14,7 +14,7 @@ import (
 
 var (
 	ErrUnavailable = errors.New("installer ui unavailable")
-	ErrCancelled   = errors.New("installer ui cancelled")
+	ErrCancelled   = errors.New("installer ui cancelled") //nolint:misspell // Preserve the public sentinel's existing error text.
 )
 
 type Option struct{ ID, Label string }
@@ -28,7 +28,7 @@ type SelectRequest struct {
 type Selection struct {
 	IDs       []string
 	Accepted  bool
-	Cancelled bool
+	Cancelled bool //nolint:misspell // Preserve the exported result field for API compatibility.
 }
 
 type ConfirmRequest struct {
@@ -39,7 +39,7 @@ type ConfirmRequest struct {
 
 type Confirmation struct {
 	Accepted  bool
-	Cancelled bool
+	Cancelled bool //nolint:misspell // Preserve the exported result field for API compatibility.
 }
 
 type Config struct {
@@ -80,7 +80,7 @@ func (u *UI) SelectOne(ctx context.Context, req SelectRequest) (Selection, error
 		return Selection{}, err
 	}
 	if isCancel(line) {
-		return Selection{Cancelled: true}, nil
+		return Selection{Cancelled: true}, nil //nolint:misspell // Use the existing public result field.
 	}
 	if strings.TrimSpace(line) == "" && len(req.Defaults) != 0 {
 		return Selection{IDs: []string{req.Defaults[0]}, Accepted: true}, nil
@@ -107,7 +107,7 @@ func (u *UI) SelectMany(ctx context.Context, req SelectRequest) (Selection, erro
 		return Selection{}, err
 	}
 	if isCancel(line) {
-		return Selection{Cancelled: true}, nil
+		return Selection{Cancelled: true}, nil //nolint:misspell // Use the existing public result field.
 	}
 	if strings.TrimSpace(line) == "" {
 		return Selection{IDs: unique(req.Defaults), Accepted: true}, nil
@@ -143,7 +143,7 @@ func (u *UI) Confirm(ctx context.Context, req ConfirmRequest) (Confirmation, err
 		return Confirmation{}, err
 	}
 	if isCancel(line) {
-		return Confirmation{Cancelled: true}, nil
+		return Confirmation{Cancelled: true}, nil //nolint:misspell // Use the existing public result field.
 	}
 	line = strings.ToLower(strings.TrimSpace(line))
 	if line == "" {

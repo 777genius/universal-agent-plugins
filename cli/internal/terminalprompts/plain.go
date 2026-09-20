@@ -54,7 +54,7 @@ func (p PlainPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelecti
 	if err != nil {
 		return prompt.TargetSelectionResult{}, fmt.Errorf("invalid client multiselect: %w", err)
 	}
-	if result.Cancelled {
+	if result.Cancelled { //nolint:misspell // Read installerui's existing public result field.
 		return prompt.TargetSelectionResult{}, prompt.ErrPromptCanceled
 	}
 	ids := make([]domain.ClientID, len(result.IDs))
@@ -81,7 +81,7 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
-	if result.Cancelled {
+	if result.Cancelled { //nolint:misspell // Read installerui's existing public result field.
 		return prompt.ConfirmationResult{}, prompt.ErrPromptCanceled
 	}
 	return prompt.ConfirmationResult{Accepted: result.Accepted}, nil

@@ -505,9 +505,6 @@ linters:
       - path: ^cli/internal/validate/validate_paths\.go$
         linters: [funlen]
         text: 'too many statements'
-      - path: ^cli/tools/authoring-docs/source\.go$
-        linters: [gocognit]
-        text: 'cognitive complexity'
       - path: ^cmd/agentplugins-registry-mirror/main\.go$
         linters: [revive, funlen, gocognit]
         text: 'file length is|too many statements|cognitive complexity'
