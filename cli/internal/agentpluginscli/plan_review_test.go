@@ -9,11 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/charmbracelet/x/ansi"
 )
 
 func TestInstallReviewCardsFitAndDeduplicateSharedFacts(t *testing.T) {
@@ -74,6 +75,20 @@ func TestInstallReviewUsesDefaultForegroundForEssentialText(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("background-specific foreground leaked: %q", forbidden)
 		}
+	}
+}
+
+func TestInstallReviewPreservesThemeThroughPlanWriter(t *testing.T) {
+	envelope, results := installReviewFixture()
+	var output bytes.Buffer
+	format := "human"
+	policy := terminaltheme.Policy{Mode: "always", Explicit: true}
+	writer := &planWriter{writer: terminaltheme.Wrap(&output, &policy, &format)}
+	if err := renderInstallReviewAtWidth(writer, envelope, results[:1], 120); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "\x1b[") {
+		t.Fatalf("semantic theme was lost through planWriter: %q", output.String())
 	}
 }
 

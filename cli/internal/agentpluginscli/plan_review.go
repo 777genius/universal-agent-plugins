@@ -3,18 +3,15 @@ package agentpluginscli
 import (
 	"fmt"
 	"io"
-	"net/url"
-	"os"
-	"regexp"
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/charmbracelet/x/ansi"
-	"golang.org/x/term"
 )
 
 const (
@@ -24,11 +21,6 @@ const (
 	catalogNotTestedWarning        = "catalog_not_tested"
 	catalogRuntimeNotTestedWarning = "catalog_runtime_not_tested"
 	verifySelectedClientAction     = "verify the plugin in the selected client before relying on it"
-)
-
-var (
-	githubNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
-	gitCommitPattern  = regexp.MustCompile(`^(?:[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$`)
 )
 
 type installReviewStyles struct {
@@ -53,7 +45,7 @@ func renderInstallReview(writer io.Writer, envelope domain.PackageEnvelope, resu
 
 func renderInstallReviewAtWidth(writer io.Writer, envelope domain.PackageEnvelope, results []usecase.AddResult, width int) error {
 	checked := &planWriter{writer: writer}
-	renderer := newInstallReviewRenderer(width, terminaltheme.For(writer).Enabled)
+	renderer := newInstallReviewRenderer(width, terminaltheme.For(unwrapPlanWriters(writer)).Enabled)
 	_, err := fmt.Fprintln(checked, renderer.render(envelope, results))
 	if err != nil {
 		return err
@@ -82,7 +74,7 @@ func (r installReviewRenderer) render(envelope domain.PackageEnvelope, results [
 	b.WriteString(r.styles.title.Render("Install plan"))
 	b.WriteString("\n\n")
 
-	identity := strings.TrimSpace(prompt.SafeText(string(envelope.Manifest.Name)) + " " + prompt.SafeText(string(envelope.Manifest.Version)))
+	identity := strings.TrimSpace(prompt.SafeText(envelope.Manifest.Name) + " " + prompt.SafeText(envelope.Manifest.Version))
 	if identity == "" {
 		identity = "Plugin"
 	}
@@ -167,9 +159,19 @@ func (r installReviewRenderer) card(result usecase.AddResult) string {
 	clientName = ansi.Truncate(prompt.SafeText(clientName), nameWidth, "…")
 	headerName := r.styles.title.Render(clientName)
 	headerGap := max(1, innerWidth-ansi.StringWidth(headerName)-ansi.StringWidth(status))
-	lines := []string{headerName + strings.Repeat(" ", headerGap) + statusStyle.Render(status)}
+	lines := make([]string, 0, 5+len(plan.Components)*2+len(plan.Diagnostics)*2+len(plan.Warnings)+len(plan.UserActions)+len(plan.LocalActions))
+	lines = append(lines, headerName+strings.Repeat(" ", headerGap)+statusStyle.Render(status))
+	lines = append(lines, r.cardSummaryRows(plan, innerWidth)...)
+	lines = append(lines, r.cardComponentRows(plan.Components, innerWidth)...)
+	lines = append(lines, r.cardDiagnosticRows(plan, innerWidth)...)
 
-	lines = append(lines, r.cardLabeledRows("Target", prompt.SafeText(string(plan.ClientID)), innerWidth)...)
+	body := strings.Join(lines, "\n")
+	style := lipgloss.NewStyle().Width(styleWidth).Padding(0, 1).Border(lipgloss.RoundedBorder())
+	return style.Render(body)
+}
+
+func (r installReviewRenderer) cardSummaryRows(plan domain.DeliveryPlan, width int) []string {
+	lines := r.cardLabeledRows("Target", prompt.SafeText(string(plan.ClientID)), width)
 	packageValue := strings.TrimSuffix(reviewPackageMode(plan.PackageMode), " package")
 	if components := reviewComponentSummary(plan.Components); components != "" {
 		if packageValue != "" {
@@ -178,19 +180,27 @@ func (r installReviewRenderer) card(result usecase.AddResult) string {
 		packageValue += components
 	}
 	if packageValue != "" {
-		lines = append(lines, r.cardLabeledRows("Package", packageValue, innerWidth)...)
+		lines = append(lines, r.cardLabeledRows("Package", packageValue, width)...)
 	}
-	lines = append(lines, r.cardLabeledRows("Authentication", reviewStateName(string(plan.Authentication)), innerWidth)...)
-	lines = append(lines, r.cardLabeledRows("Verification", reviewStateName(string(plan.Verification)), innerWidth)...)
+	lines = append(lines, r.cardLabeledRows("Authentication", reviewStateName(string(plan.Authentication)), width)...)
+	lines = append(lines, r.cardLabeledRows("Verification", reviewStateName(string(plan.Verification)), width)...)
+	return lines
+}
 
-	for _, component := range plan.Components {
+func (r installReviewRenderer) cardComponentRows(components []domain.ComponentDecision, width int) []string {
+	var lines []string
+	for _, component := range components {
 		componentLine := prompt.SafeText(component.Name) + "  ·  " + reviewSupport(component.Support)
-		lines = append(lines, r.cardLabeledRows(reviewComponentKind(component.Kind), componentLine, innerWidth)...)
+		lines = append(lines, r.cardLabeledRows(reviewComponentKind(component.Kind), componentLine, width)...)
 		if component.Reason != "" {
-			lines = append(lines, r.cardLabeledRows("Reason", prompt.SafeText(component.Reason), innerWidth)...)
+			lines = append(lines, r.cardLabeledRows("Reason", prompt.SafeText(component.Reason), width)...)
 		}
 	}
+	return lines
+}
 
+func (r installReviewRenderer) cardDiagnosticRows(plan domain.DeliveryPlan, width int) []string {
+	var lines []string
 	diagnosticCodes := make(map[string]bool, len(plan.Diagnostics))
 	for _, diagnostic := range plan.Diagnostics {
 		diagnosticCodes[diagnostic.Code] = true
@@ -199,31 +209,29 @@ func (r installReviewRenderer) card(result usecase.AddResult) string {
 		if message == "" {
 			message = prompt.SafeText(diagnostic.Code)
 		}
-		lines = append(lines, r.cardLabeledRows(r.diagnosticLabel(diagnostic.Severity), message, innerWidth)...)
+		lines = append(lines, r.cardLabeledRows(r.diagnosticLabel(diagnostic.Severity), message, width)...)
 		if diagnostic.Code != "" && diagnostic.Message != "" {
-			lines = append(lines, r.cardLabeledRows("Code", prompt.SafeText(diagnostic.Code), innerWidth)...)
+			lines = append(lines, r.cardLabeledRows("Code", prompt.SafeText(diagnostic.Code), width)...)
 		}
 	}
 	for _, warning := range plan.Warnings {
 		if diagnosticCodes[warning] {
 			continue
 		}
-		lines = append(lines, r.cardLabeledRows("Warning", reviewWarningText(warning), innerWidth)...)
+		lines = append(lines, r.cardLabeledRows("Warning", reviewWarningText(warning), width)...)
 	}
 	for _, action := range append(append([]string(nil), plan.UserActions...), plan.LocalActions...) {
-		lines = append(lines, r.cardLabeledRows("Next", prompt.SafeText(action), innerWidth)...)
+		lines = append(lines, r.cardLabeledRows("Next", prompt.SafeText(action), width)...)
 	}
-
-	body := strings.Join(lines, "\n")
-	style := lipgloss.NewStyle().Width(styleWidth).Padding(0, 1).Border(lipgloss.RoundedBorder())
-	return style.Render(body)
+	return lines
 }
 
 func (r installReviewRenderer) cardLabeledRows(label, value string, width int) []string {
 	styled := r.styles.label.Render(label) + ": "
-	if label == "Warning" {
+	switch label {
+	case "Warning":
 		styled = r.styles.warning.Render("!") + " " + r.styles.label.Render(label) + ": "
-	} else if label == "Error" {
+	case "Error":
 		styled = r.styles.failure.Render("✗") + " " + r.styles.label.Render(label) + ": "
 	}
 	prefixWidth := ansi.StringWidth(styled)
@@ -457,154 +465,4 @@ func reviewStateName(value string) string {
 
 func reviewSupport(value domain.SupportLevel) string {
 	return reviewStateName(string(value))
-}
-
-func reviewWarningText(code string) string {
-	if message, ok := map[string]string{
-		"authentication_not_catalog_verified":                          "Authentication requirements are not verified by catalog evidence.",
-		"authentication_requirement_unknown":                           "Authentication requirements are unknown.",
-		"client_compatibility_not_catalog_verified":                    "Client compatibility is not verified by catalog evidence.",
-		"components_skipped_local_readiness":                           "Some components were skipped because local requirements are not ready.",
-		"no_supported_components":                                      "No supported components are available for this client.",
-		"managed_component_removal_required":                           "Existing managed components must be removed before this plan can proceed.",
-		"direct_source_digest_matches_known_revoked_directory_release": "This direct source matches a known revoked Directory release.",
-		"catalog_client_unsupported":                                   "The catalog does not list this client as supported.",
-		"catalog_package_mode_mismatch":                                "The catalog package mode does not match the generated package.",
-		"trusted_claude_cli_required":                                  "A trusted Claude CLI installation is required.",
-		"personal_registration_requires_account_install":               "Personal registration must be completed in the target account.",
-		"chatgpt_app_binding_required":                                 "A registered ChatGPT app connection is required.",
-		"windsurf_skills_prepared_only":                                "Windsurf skills are prepared for manual activation only.",
-	}[code]; ok {
-		return message
-	}
-	return reviewStateName(code)
-}
-
-func reviewComponentKind(kind domain.ComponentKind) string {
-	switch kind {
-	case domain.ComponentMCPServer:
-		return "MCP server"
-	case domain.ComponentSkill:
-		return "Skill"
-	case domain.ComponentApp:
-		return "App"
-	case domain.ComponentExtension:
-		return "Extension"
-	default:
-		return reviewStateName(string(kind))
-	}
-}
-
-func reviewComponentSummary(components []domain.ComponentDecision) string {
-	if len(components) == 0 {
-		return ""
-	}
-	counts := make(map[domain.ComponentKind]int)
-	var order []domain.ComponentKind
-	for _, component := range components {
-		if counts[component.Kind] == 0 {
-			order = append(order, component.Kind)
-		}
-		counts[component.Kind]++
-	}
-	var summary []string
-	for _, kind := range order {
-		count := counts[kind]
-		label := reviewComponentKind(kind)
-		if count != 1 {
-			switch kind {
-			case domain.ComponentMCPServer:
-				label = "MCP servers"
-			default:
-				label = strings.ToLower(label) + "s"
-			}
-		}
-		summary = append(summary, fmt.Sprintf("%d %s", count, label))
-	}
-	return strings.Join(summary, " · ")
-}
-
-func wrapReviewText(value string, width, indent int) []string {
-	width = max(8, width)
-	prefix := strings.Repeat(" ", indent)
-	wrapped := ansi.Wrap(value, max(8, width-indent), " ")
-	lines := strings.Split(wrapped, "\n")
-	for index := range lines {
-		lines[index] = prefix + lines[index]
-	}
-	return lines
-}
-
-func shortReviewDigest(value string) string {
-	value = prompt.SafeText(strings.TrimSpace(value))
-	value = strings.TrimPrefix(value, "sha256:")
-	runes := []rune(value)
-	if len(runes) > 12 {
-		return string(runes[:12])
-	}
-	return value
-}
-
-func githubReviewLink(source domain.SourceIdentity) (target, label string, ok bool) {
-	repository := strings.Trim(source.Repository, "/")
-	parts := strings.Split(repository, "/")
-	if len(parts) != 2 || !githubNamePattern.MatchString(parts[0]) || !githubNamePattern.MatchString(parts[1]) || parts[0] == "." || parts[0] == ".." || parts[1] == "." || parts[1] == ".." {
-		return "", "", false
-	}
-
-	labelParts := []string{"github.com", parts[0], parts[1]}
-	if subpath := validGithubSubpath(source.PackageSubpath); len(subpath) > 0 {
-		labelParts = append(labelParts, subpath...)
-	}
-	label = strings.Join(labelParts, "/")
-
-	revision := strings.TrimSpace(source.ResolvedRevision)
-	if !gitCommitPattern.MatchString(revision) {
-		return "", label, false
-	}
-	pathParts := []string{parts[0], parts[1], "tree", revision}
-	if subpath := validGithubSubpath(source.PackageSubpath); len(subpath) > 0 {
-		pathParts = append(pathParts, subpath...)
-	}
-
-	targetURL := url.URL{Scheme: "https", Host: "github.com", Path: "/" + strings.Join(pathParts, "/")}
-	return targetURL.String(), label, true
-}
-
-func validGithubSubpath(value string) []string {
-	value = strings.Trim(value, "/")
-	if value == "" {
-		return nil
-	}
-	parts := strings.Split(value, "/")
-	for _, part := range parts {
-		if part == "" || part == "." || part == ".." || strings.ContainsAny(part, "\\\x00\r\n") {
-			return nil
-		}
-	}
-	return parts
-}
-
-func installReviewWidth(writer io.Writer) int {
-	for {
-		if sized, ok := writer.(interface{ InstallReviewWidth() int }); ok && sized.InstallReviewWidth() > 0 {
-			return sized.InstallReviewWidth()
-		}
-		if checked, ok := writer.(*planWriter); ok {
-			writer = checked.writer
-			continue
-		}
-		unwrapped := terminaltheme.Unwrap(writer)
-		if unwrapped != writer {
-			writer = unwrapped
-			continue
-		}
-		break
-	}
-	if file, ok := writer.(*os.File); ok {
-		if width, _, err := term.GetSize(int(file.Fd())); err == nil && width > 0 {
-			return max(minimumInstallReviewWidth, width-1)
-		}
-	}
-	return defaultInstallReviewWidth
 }

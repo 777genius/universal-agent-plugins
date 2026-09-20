@@ -306,7 +306,8 @@ def run_case(case, binary, evidence, timeout=8):
             session.wait(CONFIRM, 'confirmation', after=offset)
             session.wait(r'(?s)Yes.*?No.*?enter submit', 'confirmation-ready', after=offset)
             text = clean(session.raw[offset:])
-            check(all(value in text for value in ('pty-synthetic', '1.0.0', 'Target: cursor', 'Planned action:')),
+            check(all(value in text for value in ('Install plan', 'pty-synthetic 1.0.0',
+                                                  'Target: cursor', 'Authentication:', 'Verification:')),
                   'full client-specific plan missing before consent')
             check('Target: codex' not in text, 'unselected target entered plan')
             fixture.unchanged()
