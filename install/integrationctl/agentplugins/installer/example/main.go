@@ -70,7 +70,7 @@ func runDemo(registry *clients.Registry, state, pkg, config, helper, client stri
 	defer cancel()
 	eng, err := uapinstaller.New(uapinstaller.Config{
 		StateRoot: state, HelperExecutable: helper, Registry: registry,
-		Runner: processadapter.OS{}, TrustedLocalPackages: true,
+		Runner: processadapter.OS{}, EnableNativeObserver: true, TrustedLocalPackages: true,
 	})
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func runGroupDemo(registry *clients.Registry, state, pkg, config, claudeConfig, 
 	defer cancel()
 	eng, err := uapinstaller.New(uapinstaller.Config{
 		StateRoot: state, HelperExecutable: helper, Registry: registry,
-		Runner: processadapter.OS{}, TrustedLocalPackages: true,
+		Runner: processadapter.OS{}, EnableNativeObserver: true, TrustedLocalPackages: true,
 	})
 	if err != nil {
 		return err

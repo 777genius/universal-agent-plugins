@@ -89,6 +89,7 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
 		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
 		HelperExecutable: helperExecutable, HelperVersion: version, Registry: installerRegistry, Runner: runner,
+		EnableNativeObserver: true,
 	})
 	if err != nil {
 		return agentpluginscli.App{}, err

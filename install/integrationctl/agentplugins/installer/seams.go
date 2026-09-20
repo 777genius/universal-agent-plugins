@@ -148,6 +148,10 @@ func (a seamActivator) AutomaticallyActivates(request domain.ActivationRequest) 
 	return a.inner.AutomaticallyActivates(request)
 }
 
+func (a seamActivator) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, executable string) bool {
+	return a.inner.VerifierAvailable(client, plan, executable)
+}
+
 func (a seamActivator) PreflightActivation(request domain.ActivationRequest) error {
 	return a.inner.PreflightActivation(request)
 }

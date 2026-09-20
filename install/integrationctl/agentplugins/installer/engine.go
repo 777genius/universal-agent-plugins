@@ -62,16 +62,20 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		facts:       facts,
 	}
 	inner := providers.Activator{Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
+	var observer usecase.NativeIdentityObserver
+	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {
+		observer = providers.NativeIdentityObserver{
+			Stager: stager, Runner: e.cfg.Runner, NativeConfig: &nativeKernel, Registry: e.cfg.Registry,
+		}
+	}
 	return usecase.Service{
 		StateStore: e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager,
-		Detected:   detected,
-		Activator:  seamActivator{inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
-		PluginData: providers.PluginDataManager{Base: e.cfg.PluginDataBase},
-		Lock:       processlock.Lock{Path: e.cfg.LockFile},
-		Kernel:     transaction.Kernel{StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
-		// NativeObserver stays unset unless a future host injects a live client
-		// identity check. The default observer queries the selected executable as
-		// Claude/Codex and blocks mutation when that identity is indeterminate.
+		Detected:       detected,
+		Activator:      seamActivator{inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
+		PluginData:     providers.PluginDataManager{Base: e.cfg.PluginDataBase},
+		Lock:           processlock.Lock{Path: e.cfg.LockFile},
+		Kernel:         transaction.Kernel{StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
+		NativeObserver: observer,
 	}
 }
 

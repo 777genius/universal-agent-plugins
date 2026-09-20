@@ -85,6 +85,14 @@ func (service Service) resume(
 	if activationErr != nil {
 		return result, activationErr
 	}
+	// Unchecked authentication is not an outstanding action by itself. Report
+	// an unchanged verified registration without manufacturing an auth attestation.
+	result.NoChange = !changed && service.clientVerifierAvailable(input, result.Plan) &&
+		client.Materialization == domain.MaterializationMaterialized &&
+		outcome.Activation == domain.ActivationActive && outcome.Verification == domain.VerificationInstalled &&
+		outcome.Authentication == domain.AuthenticationNotChecked &&
+		(result.Plan.Authentication == domain.AuthenticationNotChecked || result.Plan.Authentication == domain.AuthenticationNotRequired) &&
+		!input.AuthComplete && !outcome.AuthenticationAttested && len(outcome.UserActions) == 0
 	return result, nil
 }
 

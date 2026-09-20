@@ -8,7 +8,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 const codexCLIName = "Codex CLI"
@@ -42,6 +41,14 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
 		return outcome, nil
 	}
+	profileRoot := request.Client.ConfigRoot
+	if profileRoot == "" {
+		profileRoot = request.Plan.NativeRegistryRoot
+	}
+	if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	request.Client.ConfigRoot = profileRoot
 	return completeCodexActivation(ctx, env, request, outcome)
 }
 
@@ -73,9 +80,9 @@ func activateCodexPlugin(ctx context.Context, env clients.Env, request domain.Ac
 		return err
 	}
 	pluginSpec := request.DeclaredName + "@" + marketplace
-	if _, err := runCodex(ctx, env, request.BackendExecutable, "plugin", "add", pluginSpec, "--json"); err != nil {
+	if _, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "add", pluginSpec, "--json"); err != nil {
 		if !request.Replacing {
-			_, _ = runCodex(ctx, env, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace, "--json")
+			_, _ = runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace, "--json")
 		}
 		return fmt.Errorf("activate Codex plugin: %w", err)
 	}
@@ -84,14 +91,14 @@ func activateCodexPlugin(ctx context.Context, env clients.Env, request domain.Ac
 
 func registerCodexMarketplace(ctx context.Context, env clients.Env, request domain.ActivationRequest, marketplace string) error {
 	if request.Replacing {
-		if _, err := runCodex(ctx, env, request.BackendExecutable, "plugin", "marketplace", "update", marketplace, "--json"); err != nil {
-			if _, fallbackErr := runCodex(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"); fallbackErr != nil {
+		if _, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "update", marketplace, "--json"); err != nil {
+			if _, fallbackErr := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"); fallbackErr != nil {
 				return fmt.Errorf("refresh Codex marketplace: %w; fallback registration: %w", err, fallbackErr)
 			}
 		}
 		return nil
 	}
-	if _, err := runCodex(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"); err != nil {
+	if _, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"); err != nil {
 		return fmt.Errorf("register Codex marketplace: %w", err)
 	}
 	return nil
@@ -100,7 +107,7 @@ func registerCodexMarketplace(ctx context.Context, env clients.Env, request doma
 func verifyCodexPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	pluginSpec := request.DeclaredName + "@" + marketplace
-	listed, err := runCodex(ctx, env, request.BackendExecutable, "plugin", "list", "--json")
+	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
 	if err != nil {
 		return fmt.Errorf("verify Codex plugin listing: %w", err)
 	}
@@ -122,8 +129,4 @@ func manualCodexVerification(outcome domain.ActivationOutcome, request domain.Ac
 	outcome.UserActions = []string{"confirm the managed plugin is installed and enabled in Codex"}
 	outcome.LocalActions = []string{fmt.Sprintf("the `%s plugin list --json` output contract was not recognized; inspect %s manually", request.BackendExecutable, request.DeclaredName)}
 	return outcome
-}
-
-func runCodex(ctx context.Context, env clients.Env, executable string, args ...string) (legacyports.CommandResult, error) {
-	return shared.RunClientCommand(ctx, env.Runner, codexCLIName, executable, args...)
 }

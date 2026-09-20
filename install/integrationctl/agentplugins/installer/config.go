@@ -23,12 +23,19 @@ type Config struct {
 	// Registry is the explicit set of client adapters supported by this
 	// executable. Nil is rejected rather than silently enabling every client.
 	Registry *clients.Registry
-	Runner   ports.CommandRunner
+	// EnableNativeObserver composes the namespace-aware client observer for
+	// repair and recovery. Callers that provide a real command runner should
+	// enable it; leaving it off retains the filesystem-only compatibility path.
+	EnableNativeObserver bool
+	Runner               ports.CommandRunner
 	// ServerName selects the declared MCP server whose args the host may replace.
 	ServerName string
 	// ProjectArgs replaces args of ServerName. It is host-owned and must be
 	// deterministic. A missing declared server or a callback error fails staging.
-	ProjectArgs        func(BindingFacts) ([]string, error)
+	ProjectArgs func(BindingFacts) ([]string, error)
+	// OnCommittedBinding runs after the package commit and before activation.
+	// Failed handoffs can be retried for the same binding and digest. Hosts must
+	// make effects idempotent using those identities, not the attempt OperationID.
 	OnCommittedBinding func(context.Context, BindingFacts) error
 	// Assess is optional and digest-bound. The constructor does not start a
 	// download scanner. When set, block and unavailable never become allow.

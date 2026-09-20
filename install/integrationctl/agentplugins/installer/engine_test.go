@@ -21,6 +21,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -50,6 +51,60 @@ func main() { json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true}) }
 	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if body, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build probe: %s %v", body, err)
+	}
+	return out
+}
+
+func buildCodexProbe(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "codex_probe.go")
+	body := `package main
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+)
+func main() {
+	root := os.Getenv("CODEX_HOME")
+	marker := filepath.Join(root, ".uap-test-plugin")
+	args := os.Args[1:]
+	if len(args) >= 2 && args[0] == "plugin" && args[1] == "list" {
+		spec, err := os.ReadFile(marker)
+		if err != nil {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"installed": []any{}})
+			return
+		}
+		name, marketplace, ok := strings.Cut(string(spec), "@")
+		if !ok {
+			os.Exit(2)
+		}
+		entry := map[string]any{"pluginId": string(spec), "name": name, "marketplaceName": marketplace, "installed": true, "enabled": true}
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"installed": []any{entry}})
+		return
+	}
+	if len(args) >= 3 && args[0] == "plugin" && args[1] == "add" {
+		_ = os.MkdirAll(root, 0700)
+		if err := os.WriteFile(marker, []byte(args[2]), 0600); err != nil { os.Exit(2) }
+	} else if len(args) >= 3 && args[0] == "plugin" && args[1] == "remove" {
+		_ = os.Remove(marker)
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true})
+}
+`
+	if err := os.WriteFile(src, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	name := "codex-probe"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	out := filepath.Join(dir, name)
+	cmd := exec.Command("go", "build", "-o", out, src)
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build Codex probe: %s %v", output, err)
 	}
 	return out
 }
@@ -4052,6 +4107,43 @@ func TestUpdateOneClientRefusesStaleSiblingBindingFactsWithoutMutation(t *testin
 	}
 }
 
+func TestCompatibilityChecksUseEachSiblingExecutable(t *testing.T) {
+	ctx, eng, _, pkg, probe, codexConfig, claudeConfig := newBothClientSandbox(t)
+	id := "00000000-0000-4000-8000-0000000000e2"
+	installBothClients(ctx, t, eng, pkg, probe, id, "sibling-executable-install", bothClientTargets(codexConfig, claudeConfig, probe))
+
+	claudeProbe := filepath.Join(t.TempDir(), "claude-probe")
+	if runtime.GOOS == "windows" {
+		claudeProbe += ".exe"
+	}
+	if err := os.Link(probe, claudeProbe); err != nil {
+		t.Fatal(err)
+	}
+	facts := knownTargetFacts(t, eng, "claude", claudeConfig, claudeProbe)
+	req := Request{
+		InstallationID: id, ClientID: "codex", ClientConfigRoot: codexConfig,
+		ClientExecutable: probe, KnownTargets: facts,
+	}
+	target := usecase.AddInput{
+		Client:            domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: codexConfig, ExecutablePath: probe},
+		BackendExecutable: probe,
+	}
+	checks, err := eng.compatibilityChecks(req, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[domain.ClientID]string{}
+	for _, check := range checks {
+		seen[check.Client.ClientID] = check.BackendExecutable
+		if check.BackendExecutable != check.Client.ExecutablePath {
+			t.Fatalf("%s compatibility check used executable %q, want %q", check.Client.ClientID, check.BackendExecutable, check.Client.ExecutablePath)
+		}
+	}
+	if seen[domain.ClientCodex] != probe || seen[domain.ClientClaude] != claudeProbe {
+		t.Fatalf("sibling executables = %#v", seen)
+	}
+}
+
 func TestUpdateAndRepairCancelledBeforeMutation(t *testing.T) {
 	skipWindowsLauncherExecuteBit(t)
 	for _, tc := range []struct {
@@ -5021,6 +5113,7 @@ func TestExampleFlaggedPathRunsAgainstLocalModule(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	probe := buildProbe(t)
+	clientProbe := buildCodexProbe(t)
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -5072,7 +5165,7 @@ func TestExampleFlaggedPathRunsAgainstLocalModule(t *testing.T) {
 	}
 	run := exec.CommandContext(ctx, bin,
 		"-state", state, "-package", pkg, "-config", config,
-		"-helper", probe, "-client-exe", probe,
+		"-helper", probe, "-client-exe", clientProbe,
 	)
 	out, err := run.CombinedOutput()
 	if err != nil {

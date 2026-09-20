@@ -368,6 +368,7 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 		}
 		check := target
 		check.Client = client
+		check.BackendExecutable = client.ExecutablePath
 		checks = append(checks, check)
 	}
 	return checks, nil
