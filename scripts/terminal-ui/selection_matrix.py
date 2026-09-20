@@ -43,7 +43,12 @@ def choices(text):
 
 
 def plan_ids(text):
-    return re.findall(r'^[ \t]*│?[ \t]*Target:[ \t]+([a-z0-9-]+)[ \t]*│?[ \t]*$', text, re.M)
+    ids = []
+    for line in text.splitlines():
+        match = re.match(r'^[ \t]*│?[ \t]*Target:[ \t]+([a-z0-9-]+)\b', line)
+        if match:
+            ids.append(match.group(1))
+    return ids
 
 
 class Keyboard(Session):
