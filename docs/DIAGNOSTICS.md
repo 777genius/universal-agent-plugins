@@ -33,7 +33,7 @@ The exact build tool output may vary, but the failure kind and the leading `go b
 
 ## Install Failure Families
 
-`install/plugininstall/domain.ExitCode` is the stable CLI-facing class surface:
+`plugininstall/domain.ExitCode` is the stable CLI-facing class surface:
 
 - `ExitUsage`
 - `ExitRelease`

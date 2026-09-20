@@ -84,7 +84,7 @@ func validateSource(checkout, sha string) ([]sourcePin, error) {
 var factoryPins = []sourcePin{
 	{"cli/cmd/agentplugins/release_root.go", "4a7dc6735325c1f1cd65d063f349e04716d36ab7c9eaeb4749ec4f5bcb03cd28"},
 	{"cli/cmd/plugin-kit-ai/release_compat.go", "d2f11a845c116160114ddd1b0ba8b825e9e5a4794354742749db7122c0c674c8"},
-	{"cli/go.mod", "5091b7f79095578adf23fc114127fa2e203fdb65e8a91fbd7b79e828df90142c"},
+	{"cli/go.mod", "7083f039ee39bc5acc02cfcd9974eb131493b1ef7ea9768e7915deafc9dc4bbf"},
 	{"cli/go.sum", "ea4cb8206732d6b715288572b619b2c679aefe1a66d84a08d226d5c8daa73b98"},
 	{"cli/internal/agentpluginscli/add.go", "822590f48d58f94154ae846844e01570265ffcaf57fcc3b4f4ddf1f6ab78b69f"},
 	{"cli/internal/agentpluginscli/add_multi.go", "48d7549789a5c0877e018c6226618356a5d02f7406725b00f05cdc7781ddbcc9"},
@@ -157,7 +157,7 @@ var factoryPins = []sourcePin{
 	{"cli/internal/authoringcli/flags.go", "5f745c810e90586899cff2170433dbc58483ba17496167738387388f29be49c0"},
 	{"cli/internal/authoringcli/release.go", "45cb7a7000a31bb8477d1301fc70ce4521140b9f2a4760d5f84da3283134877f"},
 	{"go.mod", "352e528c2b2c34df21276c1f9b54c32f79656dad42c310da6b551f022119ce8c"},
-	{"go.work", "8fb5439867ace1c379ba69e539a3f3dbb1a55f4c6be91269973b52858878587f"},
+	{"go.work", "9b5094963d3524c4e0ad36b99a86ddb1a66d7a4cdaa6615e1c1e4621a45ba579"},
 	{"go.work.sum", "806569ceb74454bbf59a2f7a5de9513276726c204c4972ce303779bad40fba25"},
 	{"install/integrationctl/agentplugins/domain/acquisition.go", "ea60178232db888d8df99a7b6722bb26b7a3f1a23776a6be041cf9c84f7a2cb3"},
 	{"install/integrationctl/agentplugins/domain/catalog.go", "e70853260635bed305ce77fef0c420e2028a57d77a9ce0565ab9cf8b275a98bc"},
@@ -177,7 +177,7 @@ var factoryPins = []sourcePin{
 	{"install/integrationctl/agentplugins/go.sum", "eaa9c28f77e14588df8cdb02b4435a8329edad015f10277008a6f769ab9fc12d"},
 	{"install/integrationctl/go.mod", "b79f0e7afac7734397b834940dfd7f6d27120301013c826ca2bdd4b35043ec2a"},
 	{"install/integrationctl/go.sum", "91d17efbf1fb87ffc6512b7632b5db5024363cc9d48e5ce5b74139de887763e9"},
-	{"install/plugininstall/go.mod", "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"},
+	{"plugininstall/go.mod", "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"},
 	{"sdk/go.mod", "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"},
 }
 
@@ -233,7 +233,7 @@ func validateInventory(checkout string) error {
 		}
 	}
 	// Absent control files are also part of the effective workspace contract.
-	for _, dir := range []string{"", "cli/", "install/integrationctl/", "install/integrationctl/agentplugins/", "install/plugininstall/", "sdk/"} {
+	for _, dir := range []string{"", "cli/", "install/integrationctl/", "install/integrationctl/agentplugins/", "plugininstall/", "sdk/"} {
 		for _, name := range []string{"go.mod", "go.sum", "go.work", "go.work.sum", "vendor"} {
 			path := dir + name
 			if !allowed[path] {

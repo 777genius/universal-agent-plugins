@@ -333,10 +333,10 @@ These areas are not supported as public dependencies:
 
 - `sdk/internal/...`
 - `cli/internal/...`
-- `install/plugininstall/internal/...`
-- `install/plugininstall/adapters/...`
-- `install/plugininstall/domain/...`
-- `install/plugininstall/ports/...`
+- `plugininstall/internal/...`
+- `plugininstall/adapters/...`
+- `plugininstall/domain/...`
+- `plugininstall/ports/...`
 - generator implementation details and generated package internals
 
 ## Current Public-Experimental Surfaces

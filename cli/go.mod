@@ -10,7 +10,7 @@ replace github.com/777genius/plugin-kit-ai/install/integrationctl => ../install/
 
 replace github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins => ../install/integrationctl/agentplugins
 
-replace github.com/777genius/plugin-kit-ai/plugininstall => ../install/plugininstall
+replace github.com/777genius/plugin-kit-ai/plugininstall => ../plugininstall
 
 require (
 	charm.land/bubbles/v2 v2.0.0

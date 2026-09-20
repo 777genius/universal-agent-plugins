@@ -34,8 +34,8 @@ This RFC does not define:
 Current composition roots already separate facade, use case, and ports:
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [install.go](../install/plugininstall/install.go)
-- [installer.go](../install/plugininstall/usecase/installer.go)
+- [install.go](../plugininstall/install.go)
+- [installer.go](../plugininstall/usecase/installer.go)
 
 V1 should follow the same style:
 

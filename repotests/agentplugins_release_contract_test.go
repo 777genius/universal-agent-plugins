@@ -32,7 +32,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"cd install/integrationctl/agentplugins && go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./...",
 		"cd install/integrationctl/agentplugins && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./...",
 		"cd install/integrationctl && $(CORE_TEST_GIT_ENV) go test -count=1 -timeout=$(CORE_TEST_TIMEOUT) ./adapters/pathpolicy/...",
-		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./install/plugininstall/...",
+		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./plugininstall/...",
 		"go test -count=1 -timeout=$(REQUIRED_TEST_TIMEOUT) ./sdk/...",
 		"cd npm/agentplugins && npm test && npm pack --dry-run --ignore-scripts",
 		"cd install/integrationctl && go vet ./...",

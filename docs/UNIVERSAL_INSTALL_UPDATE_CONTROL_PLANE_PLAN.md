@@ -817,7 +817,7 @@ The intended architecture is:
 4. Adapters
 5. Composition roots
 
-This should match the style already used by `install/plugininstall`.
+This should match the style already used by `plugininstall`.
 
 ### Proposed code layout
 

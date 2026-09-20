@@ -18,7 +18,7 @@ jobs:
           - name: cli
             dir: cli
           - name: plugininstall
-            dir: install/plugininstall
+            dir: plugininstall
           - name: integrationctl
             dir: install/integrationctl
           - name: agentplugins

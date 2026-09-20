@@ -37,7 +37,7 @@ updates:
       include: "scope"
 
   - package-ecosystem: "gomod"
-    directory: "/install/plugininstall"
+    directory: "/plugininstall"
     schedule:
       interval: "weekly"
       day: "monday"

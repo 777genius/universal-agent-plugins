@@ -4,7 +4,7 @@
 
 ## Что здесь
 
-- **Guard:** `TestSDKModule`, `TestCLIModule`, `TestPlugininstallModule` — подпроцессом гоняют `go test ./...` в `sdk`, `cli`, `install/plugininstall`.
+- **Guard:** `TestSDKModule`, `TestCLIModule`, `TestPlugininstallModule` — подпроцессом гоняют `go test ./...` в `sdk`, `cli`, `plugininstall`.
 - **Интеграция:** `plugin-kit-ai install` с моком GitHub (`plugin-kit-ai_install_integration_test.go`), install compatibility matrix (`plugin-kit-ai_install_compatibility_test.go`), `plugin-kit-ai init` + сгенерированный модуль (`cli_init_integration_test.go`).
 - **Plugin manifest lifecycle:** CLI workflow `import -> normalize -> generate -> validate --strict` для package-standard проектов и current native target imports.
 - **CLI introspection:** `plugin-kit-ai capabilities` integration check.

@@ -454,7 +454,7 @@ Main repo areas:
 
 - `sdk`
 - `cli`
-- `install/plugininstall`
+- `plugininstall`
 - `examples/starters`
 - `examples/local`
 - `examples/plugins`

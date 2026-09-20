@@ -21,7 +21,7 @@ func TestStandardAuthoringImportBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	const base = "github.com/777genius/plugin-kit-ai"
-	modules := map[string]string{base + "/cli": "cli", base + "/install/integrationctl/agentplugins": "install/integrationctl/agentplugins", base + "/install/integrationctl": "install/integrationctl", base + "/plugininstall": "install/plugininstall", base + "/sdk": "sdk", base: "."}
+	modules := map[string]string{base + "/cli": "cli", base + "/install/integrationctl/agentplugins": "install/integrationctl/agentplugins", base + "/install/integrationctl": "install/integrationctl", base + "/plugininstall": "plugininstall", base + "/sdk": "sdk", base: "."}
 	resolve := func(path string) string {
 		// Longest prefix wins over the root module.
 		best := ""

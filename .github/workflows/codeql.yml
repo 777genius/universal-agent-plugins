@@ -51,7 +51,7 @@ jobs:
             go build ./...
           )
           (
-            cd install/plugininstall
+            cd plugininstall
             export GOWORK=off
             go build ./...
           )
