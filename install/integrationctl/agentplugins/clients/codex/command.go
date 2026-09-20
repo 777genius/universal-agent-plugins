@@ -16,13 +16,13 @@ import (
 // must use the very same explicit profile spelling.
 func validateProfile(root, planned string) error {
 	if !cleanAbsolute(root) || root == filepath.VolumeName(root)+string(filepath.Separator) {
-		return fmt.Errorf("Codex config root must be an explicit clean absolute directory")
+		return fmt.Errorf("codex config root must be an explicit clean absolute directory")
 	}
 	if planned != "" && planned != root {
-		return fmt.Errorf("Codex planned registry root differs from client config root")
+		return fmt.Errorf("codex planned registry root differs from client config root")
 	}
 	if info, err := os.Stat(root); err == nil && !info.IsDir() {
-		return fmt.Errorf("Codex config root is not a directory")
+		return fmt.Errorf("codex config root is not a directory")
 	} else if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("inspect Codex config root: %w", err)
 	}
@@ -39,7 +39,7 @@ func codexCommand(root, executable string, ambient []string, args ...string) (le
 		return legacyports.Command{}, err
 	}
 	if !cleanAbsolute(executable) {
-		return legacyports.Command{}, fmt.Errorf("Codex executable must be an explicit clean absolute path")
+		return legacyports.Command{}, fmt.Errorf("codex executable must be an explicit clean absolute path")
 	}
 	environment, err := codexEnvironment(root, ambient)
 	if err != nil {
@@ -63,7 +63,7 @@ func codexEnvironment(root string, ambient []string) ([]string, error) {
 	for _, entry := range ambient {
 		size += len(entry)
 		if size > 128*1024 || len(ambient) > 4096 {
-			return nil, fmt.Errorf("Codex ambient environment exceeds limit")
+			return nil, fmt.Errorf("codex ambient environment exceeds limit")
 		}
 		key, value, ok := strings.Cut(entry, "=")
 		canonical := strings.ToUpper(key)
@@ -71,7 +71,8 @@ func codexEnvironment(root string, ambient []string) ([]string, error) {
 			return nil, fmt.Errorf("malformed or duplicate Codex environment entry")
 		}
 		for i, ch := range key {
-			if !(ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch == '_' || i > 0 && ch >= '0' && ch <= '9') {
+			valid := ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch == '_' || i > 0 && ch >= '0' && ch <= '9'
+			if !valid {
 				return nil, fmt.Errorf("malformed Codex environment name")
 			}
 		}

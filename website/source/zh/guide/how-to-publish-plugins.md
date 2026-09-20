@@ -158,7 +158,7 @@ plugin-kit-ai publish ./my-plugin --all --dry-run --format json
 
 ## 进一步阅读
 
-- [CLI 自述文件发布部分](https://github.com/777genius/plugin-kit-ai/tree/main/cli)
+- [CLI 自述文件发布部分](https://github.com/777genius/plugin-kit-ai/tree/main/cli/plugin-kit-ai)
 - [`plugin-kit-ai publish`](/zh/api/cli/plugin-kit-ai-publish)
 - [`plugin-kit-ai publication`](/zh/api/cli/plugin-kit-ai-publication)
 - [`plugin-kit-ai publication doctor`](/zh/api/cli/plugin-kit-ai-publication-doctor)

@@ -158,7 +158,7 @@ plugin-kit-ai publish ./my-plugin --all --dry-run --format json
 
 ## Lectures complémentaires
 
-- [CLI Section de publication README](https://github.com/777genius/plugin-kit-ai/tree/main/cli)
+- [CLI Section de publication README](https://github.com/777genius/plugin-kit-ai/tree/main/cli/plugin-kit-ai)
 - [`plugin-kit-ai publish`](/fr/api/cli/plugin-kit-ai-publish)
 - [`plugin-kit-ai publication`](/fr/api/cli/plugin-kit-ai-publication)
 - [`plugin-kit-ai publication doctor`](/fr/api/cli/plugin-kit-ai-publication-doctor)
