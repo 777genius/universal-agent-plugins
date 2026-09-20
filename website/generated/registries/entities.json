@@ -601,10 +601,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -959,10 +955,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -1315,10 +1307,6 @@
       {
         "path": "install/integrationctl/go.sum",
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
-      },
-      {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
       },
       {
         "path": "sdk/go.mod",
@@ -1689,10 +1677,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -2061,10 +2045,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -2417,10 +2397,6 @@
       {
         "path": "install/integrationctl/go.sum",
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
-      },
-      {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
       },
       {
         "path": "sdk/go.mod",
@@ -2850,10 +2826,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -3222,10 +3194,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -3580,10 +3548,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -3936,10 +3900,6 @@
       {
         "path": "install/integrationctl/go.sum",
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
-      },
-      {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
       },
       {
         "path": "sdk/go.mod",
@@ -4309,10 +4269,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -4672,10 +4628,6 @@
       {
         "path": "install/integrationctl/go.sum",
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
-      },
-      {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
       },
       {
         "path": "sdk/go.mod",
@@ -5046,10 +4998,6 @@
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
       },
       {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
-      },
-      {
         "path": "sdk/go.mod",
         "sha256": "79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
       }
@@ -5416,10 +5364,6 @@
       {
         "path": "install/integrationctl/go.sum",
         "sha256": "55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
-      },
-      {
-        "path": "install/plugininstall/go.mod",
-        "sha256": "7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
       },
       {
         "path": "sdk/go.mod",

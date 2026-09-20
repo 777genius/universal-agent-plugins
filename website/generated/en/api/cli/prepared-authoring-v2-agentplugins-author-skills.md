@@ -74,7 +74,6 @@ sources:
   - "install/integrationctl/agentplugins/domain/types.go: 5428390af193ec99661203ea07fd103b7ed3823318c249592c2d6dcbd6722442"
   - "install/integrationctl/go.mod: 17c94b7bcbace5f9e4ee6164e0ff8499b7994923105c9430c84de7964b416116"
   - "install/integrationctl/go.sum: 55d21b3e3f4a7928cf9064f7ccd06cf54b643097cb13c1b776b07a6449b85458"
-  - "install/plugininstall/go.mod: 7d0745754d1ae04fb31d5056cbd2f4fa82d711d0536c1c868f40452cf5e6bb53"
   - "sdk/go.mod: 79e8f3d4903364c498fffcf34e9394f84437ae198dcefcd1c0c99cb41c80ba5a"
 stability: "public-stable"
 maturity: "stable"
