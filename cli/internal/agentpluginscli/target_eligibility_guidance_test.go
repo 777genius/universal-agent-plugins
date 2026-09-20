@@ -39,7 +39,7 @@ func TestSkippedReasonsSurviveZeroSingleAndMultipleChoices(t *testing.T) {
 			if (err != nil) != (count == 0) {
 				t.Fatalf("output=%q err=%v", stdout, err)
 			}
-			for _, want := range []string{"kiro: this CLI cannot automatically check MCP connections", "Nothing was installed in Kiro", "chatgpt: this package is not ready for ChatGPT", "registered connection mapping (.app.json)", "You do not need to create this file", "https://developers.openai.com/plugins/build/plugins"} {
+			for _, want := range []string{"Kiro: this CLI cannot automatically check MCP connections", "Nothing was installed in Kiro", "ChatGPT: this package is not ready for ChatGPT", "registered connection mapping (.app.json)", "You do not need to create this file", "https://developers.openai.com/plugins/build/plugins"} {
 				if !strings.Contains(stdout, want) {
 					t.Fatalf("missing %q: %q", want, stdout)
 				}
@@ -86,7 +86,7 @@ func TestDirectoryZeroChoicesExplainReleaseSelection(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
 	rollout.cli.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)}}
 	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "rollout-demo", "--dry-run")
-	if err == nil || !strings.Contains(stdout, "codex: the catalog has no compatible release") || !strings.Contains(stdout, "--target codex") || strings.Contains(stdout, "verification preflight failed") {
+	if err == nil || !strings.Contains(stdout, "OpenAI Codex: the catalog has no compatible release") || !strings.Contains(stdout, "--target codex") || strings.Contains(stdout, "verification preflight failed") {
 		t.Fatalf("output=%q err=%v", stdout, err)
 	}
 	if rollout.acquirer.verifiedCalls != 0 {

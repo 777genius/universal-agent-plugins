@@ -16,6 +16,7 @@ require (
 	charm.land/bubbles/v2 v2.0.0
 	charm.land/bubbletea/v2 v2.0.2
 	charm.land/huh/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.1
 	github.com/777genius/plugin-kit-ai/install/integrationctl v0.0.0-20260920081413-a5644312f7af
 	github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins v0.0.0-20260920081413-a5644312f7af
 	github.com/777genius/plugin-kit-ai/plugininstall v0.0.0-20260920081413-a5644312f7af
@@ -35,7 +36,6 @@ require (
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.1 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
 	github.com/charmbracelet/x/exp/ordered v0.1.0 // indirect

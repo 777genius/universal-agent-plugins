@@ -86,6 +86,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	if err != nil {
 		return err
 	}
+	writeProgress(app, opts.format, "Checking selected agents and preparing the install plan...")
 	if preloaded != nil && preloaded.cleanup != nil {
 		defer func() { _ = preloaded.cleanup() }()
 	}
@@ -255,7 +256,11 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 		request.DefaultIDs = append(request.DefaultIDs, c.ClientID)
 	}
 	for _, c := range skipped {
-		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(string(c.Client)+": "+c.Reason))
+		label := string(c.Client)
+		if definition, ok := domain.ClientDefinitionFor(c.Client); ok {
+			label = definition.DisplayName
+		}
+		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(label+": "+c.Reason))
 	}
 	if len(detected) > 0 {
 		if err := prompt.ValidateRequest(request); err != nil {
@@ -264,8 +269,8 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 	}
 	personalPreparationChoice := len(detected) == 1 && requiresPersonalMapping(detected[0].ClientID) && strings.Contains(detected[0].DisplayName, "prepare personal marketplace")
 	if len(detected) <= 1 && !personalPreparationChoice {
-		for _, label := range request.SkippedLabels {
-			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped (not installed in this attempt): "+label); err != nil {
+		if notice := prompt.SkippedClientsNotice(request.SkippedLabels); notice != "" {
+			if _, err := fmt.Fprint(reviewWriter(cmd, app), notice); err != nil {
 				return nil, nil, err
 			}
 		}

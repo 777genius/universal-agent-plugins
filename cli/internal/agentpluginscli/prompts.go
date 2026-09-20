@@ -7,6 +7,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/spf13/cobra"
 )
@@ -36,21 +37,12 @@ func confirmInstall(ctx context.Context, cmd *cobra.Command, app App, loaded loa
 		return false, prompt.ErrPromptUnavailable
 	}
 	writer := &planWriter{writer: reviewWriter(cmd, app)}
-	if _, err := fmt.Fprintf(writer, "%s: %s\n%s: user\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Source"), prompt.SafeText(publicPackageSource(loaded.envelope.Source)), terminaltheme.For(writer).Text(terminaltheme.Label, "Scope")); err != nil {
-		return false, err
-	}
-	if loaded.envelope.Source.ResolvedRevision != "" {
-		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Label, "Revision")+": "+prompt.SafeText(loaded.envelope.Source.ResolvedRevision)); err != nil {
+	if rich, ok := app.Prompter.(interface{ RichReview() bool }); ok && rich.RichReview() {
+		if err := renderInstallReview(writer, loaded.envelope, results); err != nil {
 			return false, err
 		}
-	}
-	if loaded.envelope.TreeDigest != "" {
-		if _, err := fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Label, "Tree")+": "+prompt.SafeText(loaded.envelope.TreeDigest)); err != nil {
-			return false, err
-		}
-	}
-	for _, result := range results {
-		if err := renderHumanPlan(writer, loaded.envelope, result); err != nil {
+	} else {
+		if err := renderLegacyInstallReview(writer, loaded.envelope, results); err != nil {
 			return false, err
 		}
 	}
@@ -62,6 +54,29 @@ func confirmInstall(ctx context.Context, cmd *cobra.Command, app App, loaded loa
 		return false, err
 	}
 	return answer.Accepted, nil
+}
+
+func renderLegacyInstallReview(writer io.Writer, envelope domain.PackageEnvelope, results []usecase.AddResult) error {
+	checked := &planWriter{writer: writer}
+	if _, err := fmt.Fprintf(checked, "%s: %s\n%s: user\n", terminaltheme.For(checked).Text(terminaltheme.Label, "Source"), prompt.SafeText(publicPackageSource(envelope.Source)), terminaltheme.For(checked).Text(terminaltheme.Label, "Scope")); err != nil {
+		return err
+	}
+	if envelope.Source.ResolvedRevision != "" {
+		if _, err := fmt.Fprintln(checked, terminaltheme.For(checked).Text(terminaltheme.Label, "Revision")+": "+prompt.SafeText(envelope.Source.ResolvedRevision)); err != nil {
+			return err
+		}
+	}
+	if envelope.TreeDigest != "" {
+		if _, err := fmt.Fprintln(checked, terminaltheme.For(checked).Text(terminaltheme.Label, "Tree")+": "+prompt.SafeText(envelope.TreeDigest)); err != nil {
+			return err
+		}
+	}
+	for _, result := range results {
+		if err := renderHumanPlan(checked, envelope, result); err != nil {
+			return err
+		}
+	}
+	return checked.err
 }
 
 // planWriter tracks output errors; callers sanitize values before formatting.

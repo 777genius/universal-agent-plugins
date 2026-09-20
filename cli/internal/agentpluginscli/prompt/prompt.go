@@ -11,6 +11,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+const SkippedClientsHeading = "Not available for automatic install"
+
 var (
 	ErrPromptCanceled    = errors.New("prompt canceled")
 	ErrPromptUnavailable = errors.New("prompt unavailable; use --target and explicit flags")
@@ -84,6 +86,33 @@ func SafeText(s string) string {
 		}
 		b.WriteRune(r)
 		n++
+	}
+	return b.String()
+}
+
+// SkippedClientsNotice renders one compact, sanitized block while preserving
+// the installer-owned reason for every unavailable detected client.
+func SkippedClientsNotice(labels []string) string {
+	seen := make(map[string]bool, len(labels))
+	clean := make([]string, 0, len(labels))
+	for _, label := range labels {
+		label = SafeText(strings.TrimSpace(label))
+		if label == "" || seen[label] {
+			continue
+		}
+		seen[label] = true
+		clean = append(clean, label)
+	}
+	if len(clean) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(SkippedClientsHeading)
+	b.WriteString(":\n")
+	for _, label := range clean {
+		b.WriteString("  - ")
+		b.WriteString(label)
+		b.WriteString("\n")
 	}
 	return b.String()
 }

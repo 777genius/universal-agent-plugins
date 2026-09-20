@@ -44,7 +44,7 @@ func TestSyntheticColorSelectionDemo(t *testing.T) {
 	if err != nil || len(selected.IDs) != 1 || selected.IDs[0] != "cursor" {
 		t.Fatal(selected, err)
 	}
-	if !strings.Contains(out.String(), "\x1b[33mSkipped") || !strings.Contains(out.String(), "\x1b[36mChoose") {
+	if !strings.Contains(out.String(), "\x1b[33mNot available for automatic install") || !strings.Contains(out.String(), "\x1b[36mChoose") {
 		t.Fatal("missing semantic selection colors")
 	}
 	t.Log("Synthetic selection; input is the in-memory line 1, not a live terminal session.\n" + out.String())

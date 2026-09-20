@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 
 	"charm.land/bubbles/v2/key"
@@ -27,6 +28,9 @@ type HuhPrompter struct {
 	NoColor bool
 }
 
+// RichReview reports that this adapter can present the structured install plan.
+func (HuhPrompter) RichReview() bool { return true }
+
 func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
 	if p.Input == nil || p.Output == nil {
 		return prompt.TargetSelectionResult{}, prompt.ErrPromptUnavailable
@@ -42,8 +46,10 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 	for _, c := range r.Choices {
 		choices = append(choices, huh.NewOption(prompt.SafeText(c.Label)+" ("+prompt.SafeText(string(c.ID))+")", c.ID))
 	}
-	for _, label := range r.SkippedLabels {
-		if err := promptio.WriteText(p.Output, (terminaltheme.Theme{Enabled: !p.NoColor}).Text(terminaltheme.Warning, "Skipped (not installed in this attempt)")+": "+prompt.SafeText(label)+"\n"); err != nil {
+	if notice := prompt.SkippedClientsNotice(r.SkippedLabels); notice != "" {
+		heading := (terminaltheme.Theme{Enabled: !p.NoColor}).Text(terminaltheme.Warning, prompt.SkippedClientsHeading)
+		notice = strings.Replace(notice, prompt.SkippedClientsHeading, heading, 1)
+		if err := promptio.WriteText(p.Output, notice); err != nil {
 			return prompt.TargetSelectionResult{}, err
 		}
 	}
@@ -80,16 +86,22 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
-	if err := promptio.WriteText(p.Output, fmt.Sprintf("%s (No by default; arrows/Space choose, Enter submits)\n", prompt.SafeText(r.Title))); err != nil {
-		return prompt.ConfirmationResult{}, err
-	}
 	accepted := false
 	for _, s := range r.Summary {
 		if err := promptio.WriteText(p.Output, prompt.SafeText(s)+"\n"); err != nil {
 			return prompt.ConfirmationResult{}, err
 		}
 	}
-	field := huh.NewConfirm().Title(prompt.SafeText(r.Title)).Affirmative("Yes").Negative("No").Value(&accepted)
+	separator := "\n"
+	if !terminaltheme.IsTerminal(p.Output) {
+		// Queued input can complete a non-terminal form before its first render.
+		// Keep one visible question in logs and deterministic adapter tests.
+		separator = prompt.SafeText(r.Title) + "\n"
+	}
+	if err := promptio.WriteText(p.Output, separator); err != nil {
+		return prompt.ConfirmationResult{}, err
+	}
+	field := huh.NewConfirm().Title(prompt.SafeText(r.Title)).Affirmative("Yes").Negative("No").Inline(true).Value(&accepted)
 	if err := p.run(ctx, huh.NewForm(huh.NewGroup(field)), formInput{queued: queued}); err != nil {
 		return prompt.ConfirmationResult{}, err
 	}

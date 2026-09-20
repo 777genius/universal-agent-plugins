@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/installerui"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
@@ -16,6 +17,8 @@ type PlainPrompter struct {
 	Input  io.Reader
 	Output io.Writer
 }
+
+func (PlainPrompter) RichReview() bool { return false }
 
 func (p PlainPrompter) ui() (*installerui.UI, error) {
 	if p.Input == nil || p.Output == nil {
@@ -38,8 +41,10 @@ func (p PlainPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelecti
 	if err := prompt.ValidateRequest(r); err != nil {
 		return prompt.TargetSelectionResult{}, err
 	}
-	for _, label := range r.SkippedLabels {
-		if err := promptio.WriteText(p.Output, terminaltheme.For(p.Output).Text(terminaltheme.Warning, "Skipped (not installed in this attempt)")+": "+prompt.SafeText(label)+"\n"); err != nil {
+	if notice := prompt.SkippedClientsNotice(r.SkippedLabels); notice != "" {
+		heading := terminaltheme.For(p.Output).Text(terminaltheme.Warning, prompt.SkippedClientsHeading)
+		notice = strings.Replace(notice, prompt.SkippedClientsHeading, heading, 1)
+		if err := promptio.WriteText(p.Output, notice); err != nil {
 			return prompt.TargetSelectionResult{}, err
 		}
 	}

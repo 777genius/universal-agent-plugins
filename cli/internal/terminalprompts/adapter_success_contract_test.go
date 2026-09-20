@@ -59,7 +59,7 @@ func TestAdapterSuccessContract(t *testing.T) {
 						if err != nil || !reflect.DeepEqual(got.IDs, tc.want) {
 							t.Fatalf("selection = %+v, %v; want %v", got, err, tc.want)
 						}
-						if !strings.Contains(output.String(), "Skipped (not installed in this attempt): kiro: this CLI cannot automatically check MCP connections; retry --target kiro") || strings.Contains(output.String(), "\u202e") {
+						if !strings.Contains(output.String(), "Not available for automatic install:\n  - kiro: this CLI cannot automatically check MCP connections; retry --target kiro") || strings.Contains(output.String(), "\u202e") {
 							t.Fatalf("missing or unsafe skipped guidance: %q", output.String())
 						}
 						if !reflect.DeepEqual(req, before) {

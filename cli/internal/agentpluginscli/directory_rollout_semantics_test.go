@@ -352,7 +352,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Skipped (not installed in this attempt): codex: the catalog has no compatible release") {
+	if !strings.Contains(stdout, "Not available for automatic install:\n  - OpenAI Codex: the catalog has no compatible release") {
 		t.Fatalf("package-aware Directory output = %q", stdout)
 	}
 	if rollout.acquirer.verifiedCalls != 1 {

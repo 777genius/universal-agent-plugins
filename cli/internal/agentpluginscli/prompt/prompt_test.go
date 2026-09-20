@@ -39,3 +39,17 @@ func TestSafeText(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestSkippedClientsNoticeSanitizesAndDeduplicatesReasons(t *testing.T) {
+	got := SkippedClientsNotice([]string{
+		" ChatGPT: no compatible release\x1b\u202e ",
+		"ChatGPT: no compatible release",
+		"Kiro: manual activation required",
+	})
+	want := "Not available for automatic install:\n" +
+		"  - ChatGPT: no compatible release\n" +
+		"  - Kiro: manual activation required\n"
+	if got != want {
+		t.Fatalf("notice = %q, want %q", got, want)
+	}
+}
