@@ -135,16 +135,12 @@ def verify_fixtures(bodies, record, client, target):
         found.append(key)
         stages = data.get('stages', {})
         required = list(STAGES[kind])
-        windows_claude = client == 'claude' and target == 'windows-amd64'
-        if kind == 'claude-lifecycle' and windows_claude:
-            required.remove('stdio_discovery')
-            require(stages.get('stdio_discovery') == {'status': 'observed_unsupported', 'reason': 'managed_stdio_platform_unsupported'}, 'Windows Claude stdio boundary mismatch')
         if kind == 'opencode-collision' and key == ('api/server',):
             required += 'version-update same-version-refresh repair remove foreign_config_preservation'.split()
         require(all((stages.get(k, {}).get('status') if isinstance(stages.get(k), dict) else stages.get(k)) == 'passed' for k in required), 'missing/failed fixture stage: ' + path)
         for stage_name, stage in stages.items():
             status = stage.get('status') if isinstance(stage, dict) else stage
-            require(status in ('passed', 'not_evaluated', 'not_proven', 'not_applicable') or (windows_claude and stage_name == 'stdio_discovery' and status == 'observed_unsupported'), 'failed fixture stage: ' + path)
+            require(status in ('passed', 'not_evaluated', 'not_proven', 'not_applicable'), 'failed fixture stage: ' + path)
             for ref in stage.get('artifacts', []) if isinstance(stage, dict) else []:
                 safe_name(ref)
                 require(str(PurePosixPath(path).parent / ref) in bodies, 'missing stage artifact')
@@ -166,7 +162,7 @@ def verify_fixtures(bodies, record, client, target):
             require(data.get('probe_sha256') == record['harness_build_sha256']['native-probe' + suffix] and data.get('status') == 'passed' and data.get('provider') == 'scripted_loopback_no_real_model', 'extended fixture identity mismatch')
         if kind == 'claude-runtime':
             require(data.get('provider') == 'scripted_loopback' and data.get('real_model') == data.get('oauth') == 'not_evaluated' and data.get('installer_data_retention') == 'passed', 'Claude runtime boundary mismatch')
-            expected_stdio = ('observed_unsupported', 'not_evaluated', 'HTTP+installed-skill') if windows_claude else ('passed', 'passed', 'stdio_default+stdio_explicit+HTTP+skill')
+            expected_stdio = ('passed', 'passed', 'stdio_default+stdio_explicit+HTTP+skill')
             require((data.get('stdio_runtime'), data.get('stdio_cwd_argv_env_data'), data.get('runtime_scope')) == expected_stdio, 'Claude stdio scope mismatch')
         hashes = data.get('transcript_sha256', data.get('artifact_sha256', {}))
         require(isinstance(hashes, dict) and hashes, 'missing fixture transcripts')

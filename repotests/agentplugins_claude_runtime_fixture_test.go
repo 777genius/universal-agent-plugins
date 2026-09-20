@@ -35,7 +35,7 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 		if len(entries) != 1 {
 			t.Fatalf("expected one projection: %+v", entries)
 		}
-		claudeAssertNoWindowsStdio(t, cf.Root, entries[0].InstallPath, "default", "explicit")
+		claudeAssertWindowsStdio(t, cf.Root, entries[0].InstallPath, "default", "explicit")
 	}
 	g := &claudeGateway{results: map[string]json.RawMessage{}, calls: map[string]string{}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -153,9 +153,6 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 		t.Fatal("installed selected skill body was not observed in outgoing provider context")
 	}
 	expectedTools := 3
-	if runtime.GOOS == "windows" {
-		expectedTools = 1
-	}
 	if len(g.results) != expectedTools {
 		t.Fatalf("expected %d platform-supported tools returned through native client, got %d; see gateway evidence", expectedTools, len(g.results))
 	}
@@ -190,7 +187,11 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 			seen["http"] = true
 			continue
 		}
-		markerPath = filepath.Join(facts.Data, "native-marker.txt")
+		currentMarker := filepath.Join(facts.Data, "native-marker.txt")
+		if markerPath != "" && markerPath != currentMarker {
+			t.Fatal("stdio tools do not share PLUGIN_DATA")
+		}
+		markerPath = currentMarker
 		expected := facts.Root
 		if strings.Contains(name, "explicit") {
 			expected = filepath.Join(expected, "skills")
@@ -200,11 +201,11 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 		} else {
 			t.Fatalf("unexpected fixture tool: %s", name)
 		}
-		if facts.CWD != expected || facts.Literal != "literal ${UNKNOWN} $HOME" || facts.Once != facts.Root+"/${UNKNOWN}" || len(facts.Argv) != 3 || facts.Argv[1] != facts.Root+"/argument" {
+		if facts.CWD != expected || facts.Literal != "literal ${UNKNOWN} $HOME" || facts.Once != facts.Root+"/${UNKNOWN}" || len(facts.Argv) != 3 || facts.Argv[0] != "argument with spaces" || facts.Argv[1] != facts.Root+"/argument" || facts.Argv[2] != "${UNKNOWN}" {
 			t.Fatalf("runtime semantics: %+v", facts)
 		}
 	}
-	if !seen["http"] || (runtime.GOOS != "windows" && (!seen["default"] || !seen["explicit"])) || (runtime.GOOS == "windows" && (seen["default"] || seen["explicit"])) {
+	if !seen["http"] || !seen["default"] || !seen["explicit"] {
 		t.Fatal("native tool inventory does not match platform contract")
 	}
 	return markerPath
@@ -238,9 +239,6 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 	evidence["stdio_runtime"] = "not_evaluated"
 	evidence["stdio_cwd_argv_env_data"] = "not_evaluated"
 	evidence["runtime_scope"] = "stdio_default+stdio_explicit+HTTP+skill"
-	if runtime.GOOS == "windows" {
-		evidence["runtime_scope"] = "HTTP+installed-skill"
-	}
 	evidence["scanner"] = nativeProvisionScanner(t, f)
 	version := claudeVersionString(t, cf, client)
 	evidence["client_version"] = version
@@ -255,8 +253,7 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 			t.Fatal("first add did not use local scanner")
 		}
 		if label == "remove" {
-			// Final-binding removal calls EnsureData even when Windows excluded
-			// every stdio component. This proves ownership retention, not stdio data use.
+			// Final-binding removal preserves data used by both stdio tools.
 			if err := claudeRetainedRemovalResult(r); err != nil {
 				t.Fatal(err)
 			}
@@ -267,8 +264,6 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 			if err := claudeWindowsStdioPlan(r, "default", "explicit"); err != nil {
 				t.Fatal(err)
 			}
-			evidence["stdio_runtime"] = "observed_unsupported"
-			evidence["stdio_reason"] = "managed_stdio_platform_unsupported"
 		}
 		if d["status"] != "completed" {
 			t.Fatalf("%s: %+v", label, r)
@@ -285,17 +280,21 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 		t.Fatalf("installed attribution: %+v", entries)
 	}
 	stages["runtime_A"] = "failed"
-	claudeRuntimeSession(t, f, cf, client, "runtime-A", "A", "write")
+	initialMarker := claudeRuntimeSession(t, f, cf, client, "runtime-A", "A", "write")
 	stages["runtime_A"] = "passed"
 	stages["runtime_B"] = "failed"
 	f.writePackage(t, "B", "2.0.0")
 	run("update", "update", "native-proof", "--target", "claude")
-	claudeRuntimeSession(t, f, cf, client, "runtime-B", "B", "read")
+	if got := claudeRuntimeSession(t, f, cf, client, "runtime-B", "B", "read"); got != initialMarker {
+		t.Fatal("version update changed PLUGIN_DATA identity")
+	}
 	stages["runtime_B"] = "passed"
 	stages["same_version_refresh"] = "failed"
 	f.writePackage(t, "C", "2.0.0")
 	run("same-version-update", "update", "native-proof", "--target", "claude")
-	claudeRuntimeSession(t, f, cf, client, "runtime-C", "C", "read")
+	if got := claudeRuntimeSession(t, f, cf, client, "runtime-C", "C", "read"); got != initialMarker {
+		t.Fatal("same-version refresh changed PLUGIN_DATA identity")
+	}
 	stages["same_version_refresh"] = "passed"
 	stages["repair"] = "failed"
 	nativeRequireContained(t, f.Root, entries[0].InstallPath)
@@ -304,12 +303,12 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 	}
 	run("repair", "repair", "native-proof", "--target", "claude")
 	markerPath := claudeRuntimeSession(t, f, cf, client, "runtime-repair", "C", "read")
-	markerDigest := ""
-	if runtime.GOOS != "windows" {
-		markerDigest = nativeSHA(t, markerPath)
-		evidence["stdio_runtime"] = "passed"
-		evidence["stdio_cwd_argv_env_data"] = "passed"
+	if markerPath != initialMarker {
+		t.Fatal("repair changed PLUGIN_DATA identity")
 	}
+	markerDigest := nativeSHA(t, markerPath)
+	evidence["stdio_runtime"] = "passed"
+	evidence["stdio_cwd_argv_env_data"] = "passed"
 	stages["repair"] = "passed"
 	stages["remove"] = "failed"
 	run("remove", "remove", "native-proof", "--target", "claude")
@@ -319,7 +318,7 @@ func TestAgentpluginsClaudeNativeRuntimeLifecycle(t *testing.T) {
 	if _, err := os.Stat(entries[0].InstallPath); !os.IsNotExist(err) {
 		t.Fatalf("managed artifact survived remove: %v", err)
 	}
-	if runtime.GOOS != "windows" && nativeSHA(t, markerPath) != markerDigest {
+	if nativeSHA(t, markerPath) != markerDigest {
 		t.Fatal("safe remove changed retained marker")
 	}
 	stages["remove"] = "passed"

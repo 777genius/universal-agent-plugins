@@ -70,10 +70,6 @@ class EvidenceTests(unittest.TestCase):
                 stages=stages,transcript_sha256={'command.log':proof.digest(transcript)},**extra)
             data['client_version_measured' if kind in ('claude-lifecycle','opencode-lifecycle') else 'client_version'] = {'codex':'0.153.4','claude':'2.1.263 (Claude Code)','opencode':'1.18.29'}[client]
             if kind == 'claude-runtime': data['stages'] = {k:'passed' for k in proof.STAGES[kind]}
-            if target == 'windows-amd64' and kind == 'claude-lifecycle':
-                data['stages']['stdio_discovery'] = {'status':'observed_unsupported','reason':'managed_stdio_platform_unsupported'}
-            if target == 'windows-amd64' and kind == 'claude-runtime':
-                data.update(stdio_runtime='observed_unsupported',stdio_cwd_argv_env_data='not_evaluated',runtime_scope='HTTP+installed-skill')
             (directory/name).write_text(json.dumps(data))
         for path in folder.rglob('*'):
             if path.is_file(): record['artifact_sha256'][path.relative_to(folder).as_posix()] = proof.digest(path.read_bytes())
@@ -99,6 +95,31 @@ class EvidenceTests(unittest.TestCase):
         for change in (lambda r:r['client_asset'].update(archive_integrity='sha256:'+'0'*64),lambda r:r['scanner_asset'].update(version='bad'),lambda r:r['installer_release']['attestations'].update({'checksums.txt':[{'verificationResult':{}}]})):
             self.record_path.write_bytes(original);self.mutate(change)
             with self.assertRaises(ValueError):self.verify()
+
+    def test_windows_claude_requires_positive_stdio_evidence(self):
+        self.record_path = self.root / 'released-native-client-claude-windows-amd64' / 'runner-evidence.json'
+        self.verify()
+        for fixture in self.record_path.parent.rglob('evidence.json'):
+            original = fixture.read_bytes()
+            runtime = 'runtime_scope' in json.loads(original)
+            changes = (
+                lambda r:r.update(stdio_runtime='observed_unsupported'),
+                lambda r:r.update(stdio_cwd_argv_env_data='not_evaluated'),
+                lambda r:r.update(runtime_scope='HTTP+installed-skill'),
+                lambda r:r.update(installer_data_retention='not_evaluated'),
+            ) if runtime else (
+                lambda r:r['stages'].update(stdio_discovery={'status':'observed_unsupported','reason':'managed_stdio_platform_unsupported'}),
+                lambda r:r['stages'].pop('stdio_discovery'),
+            )
+            for change in changes:
+                data = json.loads(original)
+                change(data)
+                fixture.write_text(json.dumps(data))
+                self.refresh_hashes()
+                with self.assertRaises(ValueError):
+                    self.verify()
+            fixture.write_bytes(original)
+            self.refresh_hashes()
 
     def test_literal_token_safe_but_traversal_not_safe(self):
         proof.safe_name('fixture-${PLUGIN_DATA}/extended-runtime-evidence.json')
