@@ -36,7 +36,7 @@ func BuildNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, pla
 	if configRoot == "" {
 		return nil, kiroErrorf("Kiro config root is unavailable")
 	}
-	objects := make([]domain.NativeObjectOwnership, 0, len(envelope.Skills)+len(envelope.MCP.Servers))
+	objects := make([]domain.NativeObjectOwnership, 0, len(plan.Components))
 	for _, component := range plan.Components {
 		if component.Support == domain.SupportUnsupported {
 			continue
