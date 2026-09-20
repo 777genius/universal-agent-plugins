@@ -155,6 +155,8 @@ class EvidenceTests(unittest.TestCase):
     def test_plan_ignores_labels_but_retains_wrong_and_duplicate_ids(self):
         self.assertEqual(plan_ids('OpenAI Codex (codex)\nTarget: cursor\nTarget: codex\n'),
                          ['cursor', 'codex'])
+        self.assertEqual(plan_ids('│ Target: cursor  │\n│ Target: codex   │\n'),
+                         ['cursor', 'codex'])
         self.assertEqual(plan_ids('Target: cursor\nTarget: cursor\n'), ['cursor', 'cursor'])
 
     def test_display_order_and_selection_are_independent_assertions(self):

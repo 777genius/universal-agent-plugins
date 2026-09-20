@@ -43,7 +43,7 @@ def choices(text):
 
 
 def plan_ids(text):
-    return re.findall(r'^Target: ([a-z0-9-]+)\s*$', text, re.M)
+    return re.findall(r'^[ \t]*│?[ \t]*Target:[ \t]+([a-z0-9-]+)[ \t]*│?[ \t]*$', text, re.M)
 
 
 class Keyboard(Session):
@@ -255,7 +255,9 @@ def run_case(name, binary, evidence, timeout):
                     fixture.unchanged()
                     plan = plan_ids(clean(session.raw[offset:]))
                     check(plan == list(selected), f'plan targets {plan}, expected {list(selected)}')
-                    check('Plugin: pty-synthetic 1.0.0' in clean(session.raw[offset:]), 'plan identity missing')
+                    check('Install plan' in clean(session.raw[offset:]) and
+                          'pty-synthetic 1.0.0' in clean(session.raw[offset:]),
+                          'plan identity missing')
                     session.frame('plan-verified')
                     if name.startswith('confirmation-'):
                         session.send(b'\x1b' if name.endswith('escape') else b'\x03')
