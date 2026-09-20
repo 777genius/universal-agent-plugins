@@ -9,7 +9,7 @@ const path = require("node:path");
 const cp = require("node:child_process");
 const c = require("./dual-authoring-candidate");
 
-const SOURCE_PATHS = ["go.mod", "go.work", "go.work.sum", "cli", "install", "sdk"];
+const SOURCE_PATHS = ["go.mod", "go.work", "go.work.sum", "cli", "install", "plugininstall", "sdk"];
 const GO_VERSION = "go1.25.13";
 
 function run(command, args, options = {}) {
