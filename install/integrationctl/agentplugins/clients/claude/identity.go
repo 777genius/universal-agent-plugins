@@ -73,7 +73,7 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	if root == "" {
 		return clients.RegistryIndeterminate, nil
 	}
-	entries, err := os.ReadDir(root)
+	entries, err := readClaudePreparedEntries(root)
 	if os.IsNotExist(err) {
 		return clients.RegistryClear, nil
 	}
@@ -83,11 +83,7 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	finding := clients.RegistryClear
 	for _, entry := range entries {
 		path, isDirectory, entryErr := claudePreparedEntry(root, entry)
-		if errors.Is(entryErr, errClaudeSkillSymlinkDangling) && !shared.SameCleanPath(path, plan.ActivePath) {
-			// Stale links to removed shared skills are common and cannot claim a
-			// plugin identity while their target is absent. They are unrelated to
-			// this mutation, so do not let one block every grouped install. A
-			// dangling link at the planned active path still fails closed below.
+		if ignoreUnrelatedDanglingClaudeSkill(entryErr, path, plan.ActivePath) {
 			continue
 		}
 		if entryErr != nil {
@@ -128,16 +124,40 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	return finding, nil
 }
 
+func readClaudePreparedEntries(root string) ([]os.DirEntry, error) {
+	entries, err := os.ReadDir(root)
+	if !os.IsNotExist(err) {
+		return entries, err
+	}
+	// ReadDir follows a dangling skills directory and reports ENOENT, which
+	// looks like an unused root. The symlink still occupies the path, so a
+	// later install cannot create the directory without removing it first.
+	if _, lerr := os.Lstat(root); lerr == nil {
+		return nil, fmt.Errorf("%w: %s", errClaudeSkillSymlinkDangling, root)
+	}
+	return nil, err
+}
+
+func ignoreUnrelatedDanglingClaudeSkill(err error, path, activePath string) bool {
+	return errors.Is(err, errClaudeSkillSymlinkDangling) && !shared.SameCleanPath(path, activePath)
+}
+
 func claudePreparedEntry(root string, entry os.DirEntry) (string, bool, error) {
 	path := filepath.Join(root, entry.Name())
-	if entry.Type()&os.ModeSymlink == 0 {
-		return path, entry.IsDir(), nil
+	meta, err := os.Lstat(path)
+	if err != nil {
+		return path, false, err
+	}
+	if meta.Mode()&os.ModeSymlink == 0 {
+		return path, meta.IsDir(), nil
 	}
 	// Claude Code skills are commonly shared through symlinks. Follow the link
 	// for read-only identity classification so a normal linked skill does not
-	// block every unrelated plugin install. The caller ignores a dangling link
-	// only when it is unrelated to the planned active path; all other unresolved
-	// or non-directory links remain fail-closed.
+	// block every unrelated plugin install. Classify via Lstat first so a host
+	// that omits directory-entry types still fail-closes a dangling active path.
+	// The caller ignores a dangling link only when it is unrelated to the
+	// planned active path; all other unresolved or non-directory links remain
+	// fail-closed.
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return path, false, fmt.Errorf("%w: %s", errClaudeSkillSymlinkDangling, path)
