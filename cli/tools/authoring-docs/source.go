@@ -117,7 +117,7 @@ var factoryPins = []sourcePin{
 	{"cli/internal/agentpluginscli/read.go", "2323b837f267575c8b9e9d3d47e9ecb763ea3f4b1522f4548936615a6c15e542"},
 	{"cli/internal/agentpluginscli/read_directory.go", "a2ba8aa03cd1e8efc2a8b3b9aa8718aceb13822bb19d083d6fa32a76e316b9d1"},
 	{"cli/internal/agentpluginscli/read_reconciliation.go", "155d8f1cadda8bf0aadac97100d1991433fd547a74d53992f6b5239df94e22ef"},
-	{"cli/internal/agentpluginscli/remove_multi.go", "e19c36ceb731205c4e13ee793ad164365ae84e910da8956731b12f70dc86e3b0"},
+	{"cli/internal/agentpluginscli/remove_multi.go", "35b5c172e546c28277029783025b62c98f7e179620a47191180fb3c2d8806b6f"},
 	{"cli/internal/agentpluginscli/repair_multi.go", "b4c1d9a953da6f59175b4c97b3fd2ddd6a36e7e9bbbb94975357c18d07f382f3"},
 	{"cli/internal/agentpluginscli/root.go", "04a77692a6950c85afa6ba06ea3efb81becf0ddfab21220f00e3dba242e39118"},
 	{"cli/internal/agentpluginscli/search.go", "d954c3b68d6bcfe6b821855aed6c14e712b9ff0eff0bf67206a1191f714fa998"},

@@ -157,7 +157,9 @@ func (session *removeManySession) plan() error {
 				session.result.Targets[index].Status = "not_applied"
 			}
 		}
-		_ = renderRemoveMultiResult(session.cmd, session.opts, session.result)
+		if err := renderRemoveMultiResult(session.cmd, session.opts, session.result); err != nil {
+			return fmt.Errorf("render grouped removal result: %w", err)
+		}
 		return fmt.Errorf("removal requires a manual client step for %v; complete the displayed uninstall step, then rerun with --external-uninstalled; no target was changed", blocked)
 	}
 	return nil

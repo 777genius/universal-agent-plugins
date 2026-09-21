@@ -463,6 +463,33 @@ func TestMultiTargetRemoveStopsBeforeMutationWhenManualStepIsRequired(t *testing
 	}
 }
 
+func TestMultiTargetRemoveReturnsManualStepOutputFailure(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{
+		fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientVSCode),
+	})
+	if _, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,vscode"); err != nil {
+		t.Fatal(err)
+	}
+	fixture.app.Lifecycle.Activator = &manualRemovePreflightActivator{}
+	app := fixture.app
+	app.Output = alwaysErrorWriter{}
+	app.ErrorOutput = io.Discard
+	command := NewRoot(app)
+	command.SetArgs([]string{"remove", "demo", "--target", "cursor,vscode"})
+	err := command.ExecuteContext(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "render grouped removal result") || !strings.Contains(err.Error(), "synthetic output failure") {
+		t.Fatalf("grouped remove output error = %v", err)
+	}
+	state, loadErr := fixture.store.Load()
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 {
+		t.Fatalf("output-failed grouped remove mutated state: %+v", state)
+	}
+}
+
 func TestMultiTargetAddResolvesOnePackageAndUsesDeterministicOrder(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{
