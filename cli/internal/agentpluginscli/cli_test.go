@@ -963,6 +963,37 @@ func TestGroupedDryRunAcceptsClaudeSymlinkedSkills(t *testing.T) {
 	}
 }
 
+func TestGroupedDryRunAcceptsUnrelatedDanglingClaudeSkillSymlink(t *testing.T) {
+	t.Parallel()
+	claude := fixtureClient(t, domain.ClientClaude)
+	claude.ExecutablePath = "/test/bin/claude"
+	root := filepath.Join(claude.ConfigRoot, "skills")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "removed-skill"), filepath.Join(root, "stale-skill")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation is unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), claude})
+	fixture.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{
+		Stager: providerstest.NewStager(providers.Stager{}),
+	})
+	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,claude", "--dry-run")
+	if err != nil {
+		t.Fatalf("grouped dry-run rejected an unrelated dangling Claude skill symlink: %v", err)
+	}
+	if !strings.Contains(stdout, "Targets: cursor,claude") || !strings.Contains(stdout, "No changes made (dry run).") {
+		t.Fatalf("grouped dry-run output = %s", stdout)
+	}
+	state, loadErr := fixture.store.Load()
+	if loadErr != nil || len(state.Installations) != 0 {
+		t.Fatalf("grouped dry-run mutated state: %+v, %v", state, loadErr)
+	}
+}
+
 func TestInteractiveAddDefaultsDetectedMultiselectToAll(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{

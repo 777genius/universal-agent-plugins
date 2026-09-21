@@ -538,6 +538,59 @@ func TestClaudePreparedIdentityAcceptsSymlinkedSkill(t *testing.T) {
 	}
 }
 
+func TestClaudePreparedIdentityIgnoresUnrelatedDanglingSkillSymlink(t *testing.T) {
+	t.Parallel()
+	config := filepath.Join(t.TempDir(), "claude-config")
+	root := filepath.Join(config, "skills")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(t.TempDir(), "removed-shared-skill")
+	if err := os.Symlink(missing, filepath.Join(root, "stale-skill")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation is unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientClaude, DeclaredName: "demo", TargetAnchor: config, TargetRoot: root,
+		ActivePath: filepath.Join(root, "managed-demo"),
+	}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObservePreparedIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil,
+	)
+	if err != nil || observation.State != domain.NativeIdentityAbsent {
+		t.Fatalf("dangling unrelated skill observation=%+v err=%v", observation, err)
+	}
+}
+
+func TestClaudePreparedIdentityRejectsDanglingSymlinkAtActivePath(t *testing.T) {
+	t.Parallel()
+	config := filepath.Join(t.TempDir(), "claude-config")
+	root := filepath.Join(config, "skills")
+	active := filepath.Join(root, "managed-demo")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing-active-package"), active); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation is unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientClaude, DeclaredName: "demo", TargetAnchor: config, TargetRoot: root,
+		ActivePath: active,
+	}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObservePreparedIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil,
+	)
+	if err == nil || observation.State != domain.NativeIdentityIndeterminate ||
+		!strings.Contains(err.Error(), "symlink target does not exist") {
+		t.Fatalf("dangling active-path observation=%+v err=%v", observation, err)
+	}
+}
+
 func TestClaudePreparedIdentityRejectsAmbiguousSymlink(t *testing.T) {
 	t.Parallel()
 	config := filepath.Join(t.TempDir(), "claude-config")

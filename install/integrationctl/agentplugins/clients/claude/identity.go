@@ -13,7 +13,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-var errClaudeSkillSymlinkNotDirectory = errors.New("claude skill symlink does not resolve to a directory")
+var (
+	errClaudeSkillSymlinkDangling     = errors.New("claude skill symlink target does not exist")
+	errClaudeSkillSymlinkNotDirectory = errors.New("claude skill symlink does not resolve to a directory")
+)
 
 var (
 	_ clients.RegistryInspector         = (*Adapter)(nil)
@@ -80,6 +83,13 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	finding := clients.RegistryClear
 	for _, entry := range entries {
 		path, isDirectory, entryErr := claudePreparedEntry(root, entry)
+		if errors.Is(entryErr, errClaudeSkillSymlinkDangling) && !shared.SameCleanPath(path, plan.ActivePath) {
+			// Stale links to removed shared skills are common and cannot claim a
+			// plugin identity while their target is absent. They are unrelated to
+			// this mutation, so do not let one block every grouped install. A
+			// dangling link at the planned active path still fails closed below.
+			continue
+		}
 		if entryErr != nil {
 			return clients.RegistryIndeterminate, entryErr
 		}
@@ -125,9 +135,13 @@ func claudePreparedEntry(root string, entry os.DirEntry) (string, bool, error) {
 	}
 	// Claude Code skills are commonly shared through symlinks. Follow the link
 	// for read-only identity classification so a normal linked skill does not
-	// block every unrelated plugin install. A broken link or a link to anything
-	// other than a directory remains fail-closed.
+	// block every unrelated plugin install. The caller ignores a dangling link
+	// only when it is unrelated to the planned active path; all other unresolved
+	// or non-directory links remain fail-closed.
 	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return path, false, fmt.Errorf("%w: %s", errClaudeSkillSymlinkDangling, path)
+	}
 	if err != nil {
 		return path, false, err
 	}

@@ -106,6 +106,9 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
 	applyLoadedGuidedIntents(opts, loaded, targets)
+	if err := revalidateLoadedTargetIntents(ctx, app, opts, loaded, targets, clients); err != nil {
+		return err
+	}
 	if opts.chatGPTAppID != "" && !loaded.chatGPTPreparation {
 		return fmt.Errorf("--chatgpt-app-id requires the signed Context7 Directory source and --target chatgpt")
 	}
@@ -295,6 +298,41 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, inputs[0].Envelope, applied.Targets[0])
 	}
 	return nil
+}
+
+// revalidateLoadedTargetIntents closes the gap between read-only discovery and
+// the selected-target lifecycle probe. The latter can discover an executable
+// that makes automatic activation applicable while also exposing a host
+// capability failure. Re-run package-aware preflight with that exact evidence
+// so preparation-capable clients such as Kiro are downgraded before the atomic
+// group preflight instead of aborting every selected target.
+func revalidateLoadedTargetIntents(
+	ctx context.Context,
+	app App,
+	opts *options,
+	loaded loadedPackage,
+	targets []domain.ClientID,
+	clients []domain.DetectedClient,
+) error {
+	selected, _, err := preflightSelectedTargets(ctx, app, targets, clients, false)
+	if err != nil {
+		return err
+	}
+	preparationCandidates := make([]domain.DetectedClient, 0, len(selected))
+	for _, client := range selected {
+		if allowsHostedPrepare(client.ClientID) && opts.installIntents[client.ClientID] != domain.InstallIntentPrepare {
+			preparationCandidates = append(preparationCandidates, client)
+		}
+	}
+	if len(preparationCandidates) == 0 {
+		return nil
+	}
+	_, rejected := app.compatibleLoadedTargets(ctx, loaded, preparationCandidates, opts.installIntents)
+	if len(rejected) == 0 {
+		return nil
+	}
+	first := rejected[0]
+	return fmt.Errorf("selected target %s is not available for this package: %s; no target was changed", first.Client, first.Reason)
 }
 
 func containsClientID(targets []domain.ClientID, wanted domain.ClientID) bool {

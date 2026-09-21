@@ -100,6 +100,41 @@ func TestDetectedKiroOffersExplicitPreparationWithoutChangingOtherTargets(t *tes
 	}
 }
 
+func TestLateKiroExecutableDiscoveryDowngradesToPreparation(t *testing.T) {
+	kiro := fixtureClient(t, domain.ClientKiro)
+	kiro.ExecutablePath = ""
+	cursor := fixtureClient(t, domain.ClientCursor)
+	fixture := newCLIFixture(t, []domain.DetectedClient{kiro, cursor})
+	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: &cliRunOnlyRunner{}})
+	plugin := writeCLIPlugin(t)
+	writeCLIMCP(t, plugin)
+	loaded, err := fixture.app.loadPackageFor(context.Background(), plugin, fixture.app.addResolutionRequest(plugin, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.cleanup != nil {
+		defer loaded.cleanup()
+	}
+	loaded.origin = domain.OriginModeDirectory
+	intents := map[domain.ClientID]domain.InstallIntent{}
+	eligible, skipped := fixture.app.compatibleLoadedTargets(context.Background(), loaded, []domain.DetectedClient{kiro, cursor}, intents)
+	if len(eligible) != 2 || len(skipped) != 0 || intents[domain.ClientKiro] != "" {
+		t.Fatalf("read-only eligibility unexpectedly chose an intent: eligible=%+v skipped=%+v intents=%+v", eligible, skipped, intents)
+	}
+
+	kiro.ExecutablePath = "/fixture/kiro-cli"
+	opts := &options{installIntents: intents}
+	if err := revalidateLoadedTargetIntents(
+		context.Background(), fixture.app, opts, loaded,
+		[]domain.ClientID{domain.ClientKiro, domain.ClientCursor}, []domain.DetectedClient{kiro, cursor},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if intents[domain.ClientKiro] != domain.InstallIntentPrepare || intents[domain.ClientCursor] != "" {
+		t.Fatalf("late exact lifecycle evidence did not preserve the selected group safely: %+v", intents)
+	}
+}
+
 func TestInteractiveKiroPreparationPersistsThroughConfirmedSelection(t *testing.T) {
 	kiro := fixtureClient(t, domain.ClientKiro)
 	kiro.ExecutablePath = "/fixture/kiro-cli"
