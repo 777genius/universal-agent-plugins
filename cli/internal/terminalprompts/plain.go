@@ -59,7 +59,7 @@ func (p PlainPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelecti
 	result, err := u.SelectMany(ctx, req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return prompt.TargetSelectionResult{}, prompt.ErrPromptCanceled
+			return prompt.TargetSelectionResult{}, canceledPrompt(err)
 		}
 		return prompt.TargetSelectionResult{}, fmt.Errorf("invalid client multiselect: %w", err)
 	}
@@ -92,7 +92,7 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	result, err := u.Confirm(ctx, installerui.ConfirmRequest{Title: title, Summary: summary})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return prompt.ConfirmationResult{}, prompt.ErrPromptCanceled
+			return prompt.ConfirmationResult{}, canceledPrompt(err)
 		}
 		return prompt.ConfirmationResult{}, err
 	}

@@ -84,6 +84,9 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 	}
 	queued, err := confirmationInput(ctx, p.Input)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return prompt.ConfirmationResult{}, canceledPrompt(err)
+		}
 		return prompt.ConfirmationResult{}, err
 	}
 	accepted := false
@@ -224,7 +227,7 @@ func (p HuhPrompter) run(ctx context.Context, form *huh.Form, configs ...formInp
 		return fmt.Errorf("write prompt: %w", outputErr)
 	}
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return canceledPrompt(ctx.Err())
 	}
 	if resizeErr != nil {
 		return fmt.Errorf("query terminal size: %w", resizeErr)

@@ -75,11 +75,16 @@ func TestPlainUserCancellationIsNotReportedAsInvalidInput(t *testing.T) {
 		DefaultIDs: []domain.ClientID{"cursor"},
 	}
 	p := PlainPrompter{Input: canceledReader{}, Output: io.Discard}
-	if _, err := p.SelectTargets(context.Background(), req); !errors.Is(err, prompt.ErrPromptCanceled) || strings.Contains(err.Error(), "invalid client multiselect") {
+	if _, err := p.SelectTargets(context.Background(), req); !errors.Is(err, prompt.ErrPromptCanceled) || !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "invalid client multiselect") {
 		t.Fatalf("selection cancellation = %v", err)
 	}
-	if _, err := p.Confirm(context.Background(), prompt.ConfirmationRequest{Title: "Apply?"}); !errors.Is(err, prompt.ErrPromptCanceled) {
+	if _, err := p.Confirm(context.Background(), prompt.ConfirmationRequest{Title: "Apply?"}); !errors.Is(err, prompt.ErrPromptCanceled) || !errors.Is(err, context.Canceled) {
 		t.Fatalf("confirmation cancellation = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := p.SelectTargets(ctx, req); !errors.Is(err, context.Canceled) {
+		t.Fatalf("caller-canceled selection = %v", err)
 	}
 }
 func TestModePolicy(t *testing.T) {
