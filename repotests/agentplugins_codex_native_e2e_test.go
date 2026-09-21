@@ -989,7 +989,7 @@ func nativeRepairGuardResult(stdout, stderr []byte, commandErr error) error {
 	return nativeUnmutatedPreflightResult(stdout)
 }
 func nativeCollisionGuardResult(stdout, stderr []byte, commandErr error) error {
-	const expected = "agentplugins: group repair preflight failed; no target was changed: observe prepared identity for codex: native package has no recognized authoritative manifest"
+	const expected = "agentplugins: group repair preflight failed; no target was changed: target codex identity preflight: observe prepared identity for codex: native package has no recognized authoritative manifest"
 	lines := strings.Split(strings.TrimSpace(string(stderr)), "\n")
 	if commandErr == nil || lines[len(lines)-1] != expected {
 		return fmt.Errorf("expected manifest-less foreign-directory refusal, got %v; %s", commandErr, stderr)

@@ -511,6 +511,62 @@ func TestClaudePreparedIdentityDoesNotIgnoreWatchedStagingDirectory(t *testing.T
 	}
 }
 
+func TestClaudePreparedIdentityAcceptsSymlinkedSkill(t *testing.T) {
+	t.Parallel()
+	config := filepath.Join(t.TempDir(), "claude-config")
+	root := filepath.Join(config, "skills")
+	linkedSkill := filepath.Join(t.TempDir(), "linked-skill")
+	writeIdentityFile(t, filepath.Join(linkedSkill, "SKILL.md"), "# Linked skill\n")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(linkedSkill, filepath.Join(root, "linked-skill")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation is unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientClaude, DeclaredName: "demo", TargetAnchor: config, TargetRoot: root,
+		ActivePath: filepath.Join(root, "managed-demo"),
+	}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObservePreparedIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil,
+	)
+	if err != nil || observation.State != domain.NativeIdentityAbsent {
+		t.Fatalf("symlinked skill observation=%+v err=%v", observation, err)
+	}
+}
+
+func TestClaudePreparedIdentityRejectsAmbiguousSymlink(t *testing.T) {
+	t.Parallel()
+	config := filepath.Join(t.TempDir(), "claude-config")
+	root := filepath.Join(config, "skills")
+	ambiguous := filepath.Join(t.TempDir(), "ambiguous")
+	if err := os.MkdirAll(ambiguous, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(ambiguous, filepath.Join(root, "ambiguous")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation is unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	plan := domain.DeliveryPlan{
+		ClientID: domain.ClientClaude, DeclaredName: "demo", TargetAnchor: config, TargetRoot: root,
+		ActivePath: filepath.Join(root, "managed-demo"),
+	}
+	observation, err := (testObserver(NativeIdentityObserver{})).ObservePreparedIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil,
+	)
+	if err != nil || observation.State != domain.NativeIdentityIndeterminate {
+		t.Fatalf("ambiguous symlink observation=%+v err=%v", observation, err)
+	}
+}
+
 func claudeListing(name, installPath string, enabled bool) string {
 	return fmt.Sprintf(`[{"id":%q,"version":"1.0.0","scope":"user","enabled":%t,"installPath":%q,"mcpServers":{}}]`, name+"@skills-dir", enabled, installPath)
 }

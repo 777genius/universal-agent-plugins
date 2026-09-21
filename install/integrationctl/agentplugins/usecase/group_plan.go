@@ -128,7 +128,7 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	session.result.Targets[targetIndex].Plan = plan
 	recovering, err := session.observePlannedGroupTarget(target, plan, managed)
 	if err != nil {
-		return err
+		return fmt.Errorf("target %s identity preflight: %w", target.Client.ClientID, err)
 	}
 	noChange := !requiresComponentRemoval(plan) && managed != nil && !session.input.Repair && !session.input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
 	if noChange {

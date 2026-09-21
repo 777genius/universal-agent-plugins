@@ -821,7 +821,7 @@ func nativeScriptedProvider(t *testing.T, f *nativeFixture) string {
 
 func TestAgentpluginsNativeFixtureForeignCollisionClassification(t *testing.T) {
 	good := []byte(`{"result":"failure","data":{"status":"preflight_failed","targets":[{"output":{"result":{"mutated":false}}}]}}`)
-	stderr := []byte("Resolving and validating each unique exact installed package revision once...\nagentplugins: group repair preflight failed; no target was changed: observe prepared identity for codex: native package has no recognized authoritative manifest\n")
+	stderr := []byte("Resolving and validating each unique exact installed package revision once...\nagentplugins: group repair preflight failed; no target was changed: target codex identity preflight: observe prepared identity for codex: native package has no recognized authoritative manifest\n")
 	if err := nativeCollisionGuardResult(good, stderr, fmt.Errorf("exit 1")); err != nil {
 		t.Fatal(err)
 	}

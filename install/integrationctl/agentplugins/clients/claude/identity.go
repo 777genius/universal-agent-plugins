@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+var errClaudeSkillSymlinkNotDirectory = errors.New("claude skill symlink does not resolve to a directory")
 
 var (
 	_ clients.RegistryInspector         = (*Adapter)(nil)
@@ -76,10 +79,11 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	}
 	finding := clients.RegistryClear
 	for _, entry := range entries {
-		if entry.Type()&os.ModeSymlink != 0 {
-			return clients.RegistryIndeterminate, nil
+		path, isDirectory, entryErr := claudePreparedEntry(root, entry)
+		if entryErr != nil {
+			return clients.RegistryIndeterminate, entryErr
 		}
-		if !entry.IsDir() {
+		if !isDirectory {
 			// A plain file cannot contain the .claude-plugin/plugin.json this
 			// scheme requires, so it can never claim a competing plugin
 			// identity. OS-generated artifacts such as .DS_Store are common
@@ -87,7 +91,6 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 			// other plugin's repair/update.
 			continue
 		}
-		path := filepath.Join(root, entry.Name())
 		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
 		manifestName, readErr := shared.ReadJSONManifestName(manifest)
 		if os.IsNotExist(readErr) {
@@ -113,4 +116,23 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 		return clients.RegistryCollision, nil
 	}
 	return finding, nil
+}
+
+func claudePreparedEntry(root string, entry os.DirEntry) (string, bool, error) {
+	path := filepath.Join(root, entry.Name())
+	if entry.Type()&os.ModeSymlink == 0 {
+		return path, entry.IsDir(), nil
+	}
+	// Claude Code skills are commonly shared through symlinks. Follow the link
+	// for read-only identity classification so a normal linked skill does not
+	// block every unrelated plugin install. A broken link or a link to anything
+	// other than a directory remains fail-closed.
+	info, err := os.Stat(path)
+	if err != nil {
+		return path, false, err
+	}
+	if !info.IsDir() {
+		return path, false, errClaudeSkillSymlinkNotDirectory
+	}
+	return path, true, nil
 }

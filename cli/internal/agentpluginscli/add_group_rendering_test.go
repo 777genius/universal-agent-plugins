@@ -48,6 +48,7 @@ func TestGroupCollisionErrorIncludesSelectedTargetContext(t *testing.T) {
 	f.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientCursor}
 	_, _, err := f.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,kiro")
 	if err == nil || !strings.Contains(err.Error(), "selected targets: [cursor kiro]") ||
+		!strings.Contains(err.Error(), "target cursor identity preflight") ||
 		!strings.Contains(err.Error(), "unmanaged") || !strings.Contains(err.Error(), "no target was changed") {
 		t.Fatalf("collision error: %v", err)
 	}

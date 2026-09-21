@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -921,6 +922,44 @@ func TestThirdTargetNativeCollisionFailsBeforeAnyGroupedMutation(t *testing.T) {
 	}
 	if entries, readErr := os.ReadDir(fixture.app.ManagedRoot); readErr == nil && len(entries) != 0 {
 		t.Fatalf("third-target collision staged managed files: %v", entries)
+	}
+}
+
+func TestGroupedDryRunAcceptsClaudeSymlinkedSkills(t *testing.T) {
+	t.Parallel()
+	claude := fixtureClient(t, domain.ClientClaude)
+	claude.ExecutablePath = "/test/bin/claude"
+	root := filepath.Join(claude.ConfigRoot, "skills")
+	linkedSkill := filepath.Join(t.TempDir(), "linked-skill")
+	if err := os.MkdirAll(linkedSkill, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(linkedSkill, "SKILL.md"), []byte("# Linked fixture skill\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(linkedSkill, filepath.Join(root, "linked-skill")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation is unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), claude})
+	fixture.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{
+		Stager: providerstest.NewStager(providers.Stager{}),
+	})
+	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,claude", "--dry-run")
+	if err != nil {
+		t.Fatalf("grouped dry-run rejected a normal Claude symlinked skill: %v", err)
+	}
+	if !strings.Contains(stdout, "Targets: cursor,claude") || !strings.Contains(stdout, "No changes made (dry run).") {
+		t.Fatalf("grouped dry-run output = %s", stdout)
+	}
+	state, loadErr := fixture.store.Load()
+	if loadErr != nil || len(state.Installations) != 0 {
+		t.Fatalf("grouped dry-run mutated state: %+v, %v", state, loadErr)
 	}
 }
 
@@ -2962,6 +3001,10 @@ func (observer selectiveNativeObserver) ObserveNativeIdentity(_ context.Context,
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityUnmanaged}, nil
 	}
 	return domain.NativeIdentityObservation{State: domain.NativeIdentityAbsent}, nil
+}
+
+func (observer selectiveNativeObserver) ObservePreparedIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
+	return observer.ObserveNativeIdentity(ctx, client, plan, managed)
 }
 
 type fixtureNativeObserver struct{}
