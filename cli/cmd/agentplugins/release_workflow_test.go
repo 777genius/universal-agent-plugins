@@ -78,6 +78,33 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 	}
 }
 
+func TestPlatformProofPinsNodeAndRunsHermeticStagedPackageTests(t *testing.T) {
+	_, source, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate platform proof workflow test")
+	}
+	workflowPath := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", "..", ".github", "workflows", "agentplugins-platform-proof.yml"))
+	body, err := os.ReadFile(workflowPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(body)
+	if strings.Count(workflow, "node-version: \"22.21.1\"") != 2 {
+		t.Fatal("platform proof must pin Node 22.21.1 in prepare and native runtime jobs")
+	}
+	if strings.Contains(workflow, "node-version: 22\n") || strings.Contains(workflow, "node-version: 22\r") {
+		t.Fatal("platform proof must not resolve a moving Node 22 release")
+	}
+	for _, required := range []string{
+		"AGENTPLUGINS_STAGED_TEST_CHILD=1",
+		"AGENTPLUGINS_DETACHED_ASSERT_ROOT=\"${stage}\"",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Fatalf("platform proof staged package test lacks %q", required)
+		}
+	}
+}
+
 // releaseWorkflow is intentionally small: it parses only the reusable security
 // boundary that these tests own. Product-specific staging internals are tested
 // by the scripts that implement them.
