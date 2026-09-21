@@ -79,29 +79,36 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 }
 
 func TestPlatformProofPinsNodeAndRunsHermeticStagedPackageTests(t *testing.T) {
-	_, source, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("locate platform proof workflow test")
-	}
-	workflowPath := filepath.Clean(filepath.Join(filepath.Dir(source), "..", "..", "..", ".github", "workflows", "agentplugins-platform-proof.yml"))
-	body, err := os.ReadFile(workflowPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	workflow := string(body)
-	if strings.Count(workflow, "node-version: \"22.21.1\"") != 2 {
-		t.Fatal("platform proof must pin Node 22.21.1 in prepare and native runtime jobs")
-	}
-	if strings.Contains(workflow, "node-version: 22\n") || strings.Contains(workflow, "node-version: 22\r") {
-		t.Fatal("platform proof must not resolve a moving Node 22 release")
-	}
-	for _, required := range []string{
-		"AGENTPLUGINS_STAGED_TEST_CHILD=1",
-		"AGENTPLUGINS_DETACHED_ASSERT_ROOT=\"${stage}\"",
-	} {
-		if !strings.Contains(workflow, required) {
-			t.Fatalf("platform proof staged package test lacks %q", required)
+	workflow := parseReleaseWorkflow(t, "agentplugins-platform-proof.yml")
+	for _, jobName := range []string{"prepare", "native-runtime"} {
+		job, ok := workflow.Jobs[jobName]
+		if !ok {
+			t.Fatalf("platform proof lacks %s job", jobName)
 		}
+		setupNode := 0
+		for _, step := range job.Steps {
+			if strings.HasPrefix(step.Uses, "actions/setup-node@") {
+				setupNode++
+				if step.With["node-version"] != "22.21.1" {
+					t.Fatalf("platform proof %s job must pin Node 22.21.1, got %v", jobName, step.With["node-version"])
+				}
+			}
+		}
+		if setupNode != 1 {
+			t.Fatalf("platform proof %s job must have exactly one setup-node step", jobName)
+		}
+	}
+
+	var prepareRun string
+	for _, step := range workflow.Jobs["prepare"].Steps {
+		if step.ID == "prepare" {
+			prepareRun = step.Run
+			break
+		}
+	}
+	stagedTest := regexp.MustCompile(`(?m)AGENTPLUGINS_STAGED_TEST_CHILD=1\s*\\\s*\n\s*AGENTPLUGINS_DETACHED_ASSERT_ROOT="\$\{stage\}"\s*\\\s*\n\s*npm test`)
+	if !stagedTest.MatchString(prepareRun) {
+		t.Fatal("platform proof prepare step must apply both detached-package variables to staged npm test")
 	}
 }
 
@@ -129,9 +136,12 @@ type releaseWorkflow struct {
 		With        map[string]any    `yaml:"with"`
 		Permissions map[string]string `yaml:"permissions"`
 		Steps       []struct {
+			ID       string            `yaml:"id"`
+			Name     string            `yaml:"name"`
 			If       string            `yaml:"if"`
 			Continue bool              `yaml:"continue-on-error"`
 			Uses     string            `yaml:"uses"`
+			Run      string            `yaml:"run"`
 			With     map[string]any    `yaml:"with"`
 			Env      map[string]string `yaml:"env"`
 		} `yaml:"steps"`
