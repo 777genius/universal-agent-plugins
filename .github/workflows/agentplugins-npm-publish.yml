@@ -81,7 +81,12 @@ jobs:
           mkdir -p "${stage}"
           cp -R npm/agentplugins/. "${stage}/"
           node "${stage}/scripts/stage-release.js" "${stage}" "${RUNNER_TEMP}/release-assets" "${version}" "$(git rev-parse HEAD)" --evidence-root "${GITHUB_WORKSPACE}/docs"
-          (cd "${stage}" && npm test)
+          (
+            cd "${stage}"
+            AGENTPLUGINS_STAGED_TEST_CHILD=1 \
+              AGENTPLUGINS_DETACHED_ASSERT_ROOT="${stage}" \
+              npm test
+          )
           mkdir -p "${RUNNER_TEMP}/npm-tarball"
           (cd "${stage}" && npm pack --ignore-scripts --json --pack-destination "${RUNNER_TEMP}/npm-tarball" > "${RUNNER_TEMP}/npm-tarball/pack.json")
           tarball_file="$(jq -er 'if length == 1 then .[0].filename else error("expected one tarball") end' "${RUNNER_TEMP}/npm-tarball/pack.json")"

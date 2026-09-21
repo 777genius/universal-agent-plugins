@@ -173,10 +173,14 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"Verify exact public release identity and attestations",
 		"release-assets.js verify",
 		"stage-release.js",
+		"AGENTPLUGINS_STAGED_TEST_CHILD=1",
+		`AGENTPLUGINS_DETACHED_ASSERT_ROOT="${stage}"`,
 		"npm-public-contract.js stage-outputs",
 	} {
 		mustContain(t, npmPrepareJob, want)
 	}
+	mustAppearBefore(t, npmPrepareJob, "stage-release.js", "AGENTPLUGINS_STAGED_TEST_CHILD=1")
+	mustAppearBefore(t, npmPrepareJob, "AGENTPLUGINS_STAGED_TEST_CHILD=1", "npm pack --ignore-scripts")
 	for _, want := range []string{
 		"needs: prepare",
 		"environment: npm-agentplugins",

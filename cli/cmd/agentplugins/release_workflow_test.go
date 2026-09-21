@@ -112,6 +112,31 @@ func TestPlatformProofPinsNodeAndRunsHermeticStagedPackageTests(t *testing.T) {
 	}
 }
 
+func TestNPMPublishRunsHermeticStagedPackageTests(t *testing.T) {
+	workflow := parseReleaseWorkflow(t, "agentplugins-npm-publish.yml")
+	prepare, ok := workflow.Jobs["prepare"]
+	if !ok {
+		t.Fatal("npm publish workflow lacks prepare job")
+	}
+
+	var stageRun string
+	for _, step := range prepare.Steps {
+		if step.ID == "stage" {
+			stageRun = step.Run
+			break
+		}
+	}
+	stagedTest := regexp.MustCompile(`(?m)AGENTPLUGINS_STAGED_TEST_CHILD=1\s*\\\s*\n\s*AGENTPLUGINS_DETACHED_ASSERT_ROOT="\$\{stage\}"\s*\\\s*\n\s*npm test`)
+	match := stagedTest.FindStringIndex(stageRun)
+	if match == nil {
+		t.Fatal("npm publish prepare step must apply both detached-package variables to staged npm test")
+	}
+	packIndex := strings.Index(stageRun, "npm pack --ignore-scripts")
+	if packIndex < match[1] {
+		t.Fatal("npm publish prepare step must test the detached staged package before packing it")
+	}
+}
+
 // releaseWorkflow is intentionally small: it parses only the reusable security
 // boundary that these tests own. Product-specific staging internals are tested
 // by the scripts that implement them.
