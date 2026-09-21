@@ -267,7 +267,8 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		mustContain(t, platformPrepareJob, want)
 	}
 	mustAppearBefore(t, platformPrepareJob, "git -C release-source diff --quiet HEAD --", "stage-release.js")
-	mustAppearBefore(t, platformPrepareJob, "stage-release.js", "npm test && npm pack --dry-run --ignore-scripts")
+	mustAppearBefore(t, platformPrepareJob, "stage-release.js", "AGENTPLUGINS_STAGED_TEST_CHILD=1")
+	mustAppearBefore(t, platformPrepareJob, "AGENTPLUGINS_STAGED_TEST_CHILD=1", "npm pack --dry-run --ignore-scripts")
 	for _, want := range []string{
 		"ref: ${{ inputs.expected_commit }}",
 		`test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"`,
