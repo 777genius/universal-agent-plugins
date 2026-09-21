@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22.23.2"
+          node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Verify exact public release identity and attestations
@@ -123,7 +123,7 @@ jobs:
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22.23.2"
+          node-version: "22.21.1"
           package-manager-cache: false
       - name: Use an empty npm config for OIDC publish
         run: |
@@ -172,7 +172,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "22.23.2"
+          node-version: "22.21.1"
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: Verify metadata, signatures, provenance, and isolated lifecycle

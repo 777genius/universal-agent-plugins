@@ -114,10 +114,26 @@ func TestPlatformProofPinsNodeAndRunsHermeticStagedPackageTests(t *testing.T) {
 
 func TestNPMPublishRunsHermeticStagedPackageTests(t *testing.T) {
 	workflow := parseReleaseWorkflow(t, "agentplugins-npm-publish.yml")
-	prepare, ok := workflow.Jobs["prepare"]
-	if !ok {
-		t.Fatal("npm publish workflow lacks prepare job")
+	for _, jobName := range []string{"prepare", "publish", "verify-public"} {
+		job, ok := workflow.Jobs[jobName]
+		if !ok {
+			t.Fatalf("npm publish workflow lacks %s job", jobName)
+		}
+		setupNode := 0
+		for _, step := range job.Steps {
+			if strings.HasPrefix(step.Uses, "actions/setup-node@") {
+				setupNode++
+				if step.With["node-version"] != "22.21.1" {
+					t.Fatalf("npm publish %s job must pin Node 22.21.1, got %v", jobName, step.With["node-version"])
+				}
+			}
+		}
+		if setupNode != 1 {
+			t.Fatalf("npm publish %s job must have exactly one setup-node step", jobName)
+		}
 	}
+
+	prepare := workflow.Jobs["prepare"]
 
 	var stageRun string
 	for _, step := range prepare.Steps {
