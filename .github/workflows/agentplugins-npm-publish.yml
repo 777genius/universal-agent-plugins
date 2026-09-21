@@ -194,15 +194,17 @@ jobs:
           export HOME="${root}/home" USERPROFILE="${root}/home" XDG_CONFIG_HOME="${root}/config" XDG_CACHE_HOME="${root}/cache" AGENTPLUGINS_HOME="${root}/state" AGENTPLUGINS_CACHE_DIR="${root}/binary-cache" NPM_CONFIG_CACHE="${root}/npm-cache" NPM_CONFIG_USERCONFIG="${root}/home/.npmrc" TMPDIR="${root}/tmp" GIT_CONFIG_GLOBAL="${root}/home/.gitconfig" GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
           printf '%s\n' 'registry=https://registry.npmjs.org/' > "${NPM_CONFIG_USERCONFIG}"
           cd "${root}/project"
-          for attempt in 1 2 3 4 5 6 7 8; do
+          # npm may acknowledge trusted publication before the version is
+          # readable from every registry replica. Bound propagation at 5m30s.
+          for attempt in {1..12}; do
             if npm install --ignore-scripts --no-audit --no-fund --save-exact "${PACKAGE_NAME}@${VERSION}"; then
               break
             fi
-            if [[ "${attempt}" == 8 ]]; then
+            if [[ "${attempt}" == 12 ]]; then
               echo "published npm version was not readable after bounded retries" >&2
               exit 1
             fi
-            sleep "$((attempt * 2))"
+            sleep "$((attempt * 5))"
           done
           npm view "${PACKAGE_NAME}@${VERSION}" --json > "${root}/metadata.json"
           integrity="$(jq -er 'if type == "array" and length == 1 then .[0].dist.integrity elif type == "object" then .dist.integrity else error("expected one metadata record") end' "${root}/metadata.json")"

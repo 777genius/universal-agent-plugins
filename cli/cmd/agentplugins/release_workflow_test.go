@@ -156,6 +156,23 @@ func TestNPMPublishRunsHermeticStagedPackageTests(t *testing.T) {
 	if packIndex < match[1] {
 		t.Fatal("npm publish prepare step must test the detached staged package before packing it")
 	}
+
+	var publicVerificationRun string
+	for _, step := range workflow.Jobs["verify-public"].Steps {
+		if strings.Contains(step.Name, "Verify metadata, signatures, provenance") {
+			publicVerificationRun = step.Run
+			break
+		}
+	}
+	for _, required := range []string{
+		"for attempt in {1..12}; do",
+		`if [[ "${attempt}" == 12 ]]; then`,
+		`sleep "$((attempt * 5))"`,
+	} {
+		if !strings.Contains(publicVerificationRun, required) {
+			t.Fatalf("npm public verification lacks bounded registry propagation contract %q", required)
+		}
+	}
 }
 
 // releaseWorkflow is intentionally small: it parses only the reusable security
