@@ -432,6 +432,37 @@ func TestMultiTargetRemoveHumanOutputExplainsHowToPurgeRetainedData(t *testing.T
 	}
 }
 
+func TestMultiTargetRemoveStopsBeforeMutationWhenManualStepIsRequired(t *testing.T) {
+	t.Parallel()
+	fixture := newCLIFixture(t, []domain.DetectedClient{
+		fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientVSCode),
+	})
+	if _, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,vscode"); err != nil {
+		t.Fatal(err)
+	}
+	activator := &manualRemovePreflightActivator{}
+	fixture.app.Lifecycle.Activator = activator
+	stdout, _, err := fixture.execute(false, "remove", "demo", "--target", "cursor,vscode")
+	if err == nil || !strings.Contains(err.Error(), "rerun with --external-uninstalled") || !strings.Contains(err.Error(), "no target was changed") {
+		t.Fatalf("grouped remove error = %v", err)
+	}
+	for _, want := range []string{"Remove demo: manual_step_required", "cursor: not_applied", "vscode: blocked", "Next: uninstall the plugin in Visual Studio Code"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("grouped remove output %q omitted %q", stdout, want)
+		}
+	}
+	if activator.confirmedCalls != 0 {
+		t.Fatalf("grouped remove performed %d confirmed deactivation calls", activator.confirmedCalls)
+	}
+	state, loadErr := fixture.store.Load()
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 {
+		t.Fatalf("blocked grouped remove mutated state: %+v", state)
+	}
+}
+
 func TestMultiTargetAddResolvesOnePackageAndUsesDeterministicOrder(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{
@@ -3161,6 +3192,27 @@ type cliObservedActivator struct {
 
 type failSecondCLIGroupActivator struct {
 	calls int
+}
+
+type manualRemovePreflightActivator struct {
+	confirmedCalls int
+}
+
+func (*manualRemovePreflightActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	return domain.ActivationOutcome{}, errors.New("unexpected activation")
+}
+
+func (activator *manualRemovePreflightActivator) Deactivate(_ context.Context, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.Confirmed {
+		activator.confirmedCalls++
+	}
+	outcome := domain.DeactivationOutcome{Activation: domain.ActivationNotRequired, ArtifactRemovalAllowed: true}
+	if request.Client.ClientID == domain.ClientVSCode && !request.ExternalUninstalled {
+		outcome.Activation = domain.ActivationManual
+		outcome.ArtifactRemovalAllowed = false
+		outcome.UserActions = []string{"uninstall the plugin in Visual Studio Code, then rerun remove with `--external-uninstalled`"}
+	}
+	return outcome, nil
 }
 
 func (activator *failSecondCLIGroupActivator) Activate(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error) {

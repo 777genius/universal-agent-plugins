@@ -149,7 +149,28 @@ func (session *removeManySession) plan() error {
 		_ = renderRemoveMultiResult(session.cmd, session.opts, session.result)
 		return fmt.Errorf("group remove preflight failed; no target was changed: %w", planErr)
 	}
+	blocked := session.blockedRemovalTargets(plannedGroup.Targets)
+	if len(blocked) > 0 && !session.opts.dryRun {
+		session.result.Status, session.result.Failed, session.result.Succeeded = "manual_step_required", len(session.inputs), 0
+		for index := range session.result.Targets {
+			if session.result.Targets[index].Status == "planned" {
+				session.result.Targets[index].Status = "not_applied"
+			}
+		}
+		_ = renderRemoveMultiResult(session.cmd, session.opts, session.result)
+		return fmt.Errorf("removal requires a manual client step for %v; complete the displayed uninstall step, then rerun with --external-uninstalled; no target was changed", blocked)
+	}
 	return nil
+}
+
+func (session *removeManySession) blockedRemovalTargets(planned []usecase.RemoveResult) []domain.ClientID {
+	blocked := make([]domain.ClientID, 0, len(planned))
+	for index, target := range planned {
+		if !target.Deactivation.ArtifactRemovalAllowed {
+			blocked = append(blocked, session.selected[index].ClientID)
+		}
+	}
+	return blocked
 }
 
 func (session *removeManySession) appendPlannedTargets(planned []usecase.RemoveResult, operationID string) {
@@ -240,6 +261,11 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 	for _, target := range result.Targets {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, target.Status); err != nil {
 			return err
+		}
+		if target.Status == "blocked" && target.Output.NextAction != "" {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.Output.NextAction); err != nil {
+				return err
+			}
 		}
 	}
 	if result.PluginDataPreserved {

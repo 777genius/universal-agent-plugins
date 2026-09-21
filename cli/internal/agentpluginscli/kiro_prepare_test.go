@@ -113,7 +113,11 @@ func TestLateKiroExecutableDiscoveryDowngradesToPreparation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if loaded.cleanup != nil {
-		defer loaded.cleanup()
+		t.Cleanup(func() {
+			if err := loaded.cleanup(); err != nil {
+				t.Errorf("cleanup loaded package: %v", err)
+			}
+		})
 	}
 	loaded.origin = domain.OriginModeDirectory
 	intents := map[domain.ClientID]domain.InstallIntent{}

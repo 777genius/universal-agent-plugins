@@ -118,6 +118,21 @@ func TestInstallReviewGitHubLinkAndPlainFallback(t *testing.T) {
 	}
 }
 
+func TestPublicSourcesUseGitHubPathSeparators(t *testing.T) {
+	want := "777genius/universal-agent-plugins-registry/plugins/playwright"
+	identity := domain.SourceIdentity{
+		Repository:     "777genius/universal-agent-plugins-registry/",
+		PackageSubpath: "/plugins/playwright/",
+	}
+	if got := publicPackageSource(identity); got != want {
+		t.Fatalf("public package source = %q, want %q", got, want)
+	}
+	binding := domain.SourceBinding{Repository: identity.Repository, PackageSubpath: identity.PackageSubpath}
+	if got := publicSource(binding); got != want {
+		t.Fatalf("stored public source = %q, want %q", got, want)
+	}
+}
+
 func TestInstallReviewKeepsTargetDiagnosticsWithoutDuplicateWarning(t *testing.T) {
 	envelope, results := installReviewFixture()
 	results = results[3:]
