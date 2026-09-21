@@ -483,11 +483,7 @@ func groupTargetStatus(result usecase.AddResult) string {
 
 func publicPackageSource(source domain.SourceIdentity) string {
 	if source.Repository != "" {
-		value := source.Repository
-		if source.PackageSubpath != "" {
-			value += "//" + source.PackageSubpath
-		}
-		return value
+		return publicRepositoryPath(source.Repository, source.PackageSubpath)
 	}
 	if source.ResolvedRevision != "" {
 		return "direct immutable source"

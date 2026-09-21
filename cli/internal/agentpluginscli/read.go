@@ -578,11 +578,7 @@ func publicImmutableRevision(value string) string {
 
 func publicSource(source domain.SourceBinding) string {
 	if source.Repository != "" {
-		value := source.Repository
-		if source.PackageSubpath != "" {
-			value += "//" + source.PackageSubpath
-		}
-		return value
+		return publicRepositoryPath(source.Repository, source.PackageSubpath)
 	}
 	canonical := strings.TrimSpace(source.CanonicalSource)
 	if canonical == "" || filepath.IsAbs(canonical) {
@@ -596,6 +592,18 @@ func publicSource(source domain.SourceBinding) string {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String()
+}
+
+// publicRepositoryPath is presentation-only. The direct-source selector uses
+// owner/repo@revision//subpath, but exposing that parser delimiter as a doubled
+// slash makes a normal GitHub path look malformed in plans, JSON, and doctor.
+func publicRepositoryPath(repository, packageSubpath string) string {
+	repository = strings.Trim(repository, "/")
+	packageSubpath = strings.Trim(packageSubpath, "/")
+	if packageSubpath == "" {
+		return repository
+	}
+	return repository + "/" + packageSubpath
 }
 
 func selectInstallation(state domain.StateFileV2, selector string) (domain.Installation, error) {

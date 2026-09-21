@@ -2,6 +2,7 @@ package terminalprompts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -57,6 +58,9 @@ func (p PlainPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelecti
 	}
 	result, err := u.SelectMany(ctx, req)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return prompt.TargetSelectionResult{}, canceledPrompt(err)
+		}
 		return prompt.TargetSelectionResult{}, fmt.Errorf("invalid client multiselect: %w", err)
 	}
 	if result.Cancelled { //nolint:misspell // Read installerui's existing public result field.
@@ -74,6 +78,9 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
+	if err := ctx.Err(); err != nil {
+		return prompt.ConfirmationResult{}, err
+	}
 	title := prompt.SafeText(r.Title)
 	if title == "" {
 		title = "Continue?"
@@ -84,6 +91,9 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	}
 	result, err := u.Confirm(ctx, installerui.ConfirmRequest{Title: title, Summary: summary})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return prompt.ConfirmationResult{}, canceledPrompt(err)
+		}
 		return prompt.ConfirmationResult{}, err
 	}
 	if result.Cancelled { //nolint:misspell // Read installerui's existing public result field.

@@ -19,6 +19,10 @@ func (stalled) Read([]byte) (int, error) { return 0, nil }
 type broken struct{}
 
 func (broken) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+type canceledReader struct{}
+
+func (canceledReader) Read([]byte) (int, error) { return 0, context.Canceled }
 func TestPlainConfirmation(t *testing.T) {
 	for _, tc := range []struct {
 		input     string
@@ -62,6 +66,25 @@ func TestPlainSelectionAndHandoff(t *testing.T) {
 				t.Fatal(a, e)
 			}
 		}
+	}
+}
+
+func TestPlainUserCancellationIsNotReportedAsInvalidInput(t *testing.T) {
+	req := prompt.TargetSelectionRequest{
+		Choices:    []prompt.TargetChoice{{ID: "cursor", Label: "Cursor"}},
+		DefaultIDs: []domain.ClientID{"cursor"},
+	}
+	p := PlainPrompter{Input: canceledReader{}, Output: io.Discard}
+	if _, err := p.SelectTargets(context.Background(), req); !errors.Is(err, prompt.ErrPromptCanceled) || !errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "invalid client multiselect") {
+		t.Fatalf("selection cancellation = %v", err)
+	}
+	if _, err := p.Confirm(context.Background(), prompt.ConfirmationRequest{Title: "Apply?"}); !errors.Is(err, prompt.ErrPromptCanceled) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("confirmation cancellation = %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := p.SelectTargets(ctx, req); !errors.Is(err, context.Canceled) {
+		t.Fatalf("caller-canceled selection = %v", err)
 	}
 }
 func TestModePolicy(t *testing.T) {
