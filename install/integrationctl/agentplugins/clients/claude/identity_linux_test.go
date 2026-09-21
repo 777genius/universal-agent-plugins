@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -141,7 +142,7 @@ func TestLinuxPreparedRegistryRealSkillLayouts(t *testing.T) {
 			root := filepath.Join(parent, "skills")
 			active := filepath.Join(root, "managed-demo")
 			tc.seed(t, root, active)
-			finding, err := inspectPrepared(root, active, "demo", tc.owned)
+			finding, err := inspectPrepared(t, root, active, "demo", tc.owned)
 			if tc.errText != "" {
 				if err == nil || finding != clients.RegistryIndeterminate || !strings.Contains(err.Error(), tc.errText) {
 					t.Fatalf("finding=%v err=%v, want indeterminate containing %q", finding, err, tc.errText)
@@ -163,7 +164,7 @@ func TestLinuxPreparedRegistryIgnoresDanglingChainThatIsNotActivePath(t *testing
 	mid := filepath.Join(t.TempDir(), "mid-link")
 	mustSymlink(t, missing, mid)
 	mustSymlink(t, mid, filepath.Join(root, "stale-chain"))
-	finding, err := inspectPrepared(root, filepath.Join(root, "managed-demo"), "demo", false)
+	finding, err := inspectPrepared(t, root, filepath.Join(root, "managed-demo"), "demo", false)
 	if err != nil || finding != clients.RegistryClear {
 		t.Fatalf("finding=%v err=%v", finding, err)
 	}
@@ -181,13 +182,29 @@ func TestLinuxIgnoreUnrelatedDanglingDoesNotApplyToActivePath(t *testing.T) {
 	}
 }
 
-func inspectPrepared(root, active, name string, owned bool) (clients.RegistryFinding, error) {
-	return (*Adapter)(nil).InspectPreparedRegistry(domain.DeliveryPlan{
-		ClientID:     domain.ClientClaude,
-		DeclaredName: name,
-		TargetRoot:   root,
-		ActivePath:   active,
-	}, name, owned)
+func inspectPrepared(t *testing.T, root, active, name string, owned bool) (clients.RegistryFinding, error) {
+	t.Helper()
+	type outcome struct {
+		finding clients.RegistryFinding
+		err     error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		finding, err := (*Adapter)(nil).InspectPreparedRegistry(domain.DeliveryPlan{
+			ClientID:     domain.ClientClaude,
+			DeclaredName: name,
+			TargetRoot:   root,
+			ActivePath:   active,
+		}, name, owned)
+		done <- outcome{finding, err}
+	}()
+	select {
+	case result := <-done:
+		return result.finding, result.err
+	case <-time.After(3 * time.Second):
+		t.Fatal("InspectPreparedRegistry hung")
+		return clients.RegistryIndeterminate, nil
+	}
 }
 
 func mustMkdir(t *testing.T, path string) {
