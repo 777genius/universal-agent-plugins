@@ -60,7 +60,9 @@ class EmptySelectionTests(unittest.TestCase):
         from unittest.mock import Mock
         session = Mock()
         # An earlier transcript marker must not contaminate this branch boundary.
-        session.raw = bytearray(b'Apply this plan? old transcript\n')
+        session.raw = bytearray(
+            b'[x] OpenAI Codex (codex)\n[x] Cursor (cursor)\n'
+            b'Apply this plan? old transcript\n')
         def validation(*args, **kwargs):
             session.raw.extend(b'must select at least one\n' + early)
         def finish(expected):

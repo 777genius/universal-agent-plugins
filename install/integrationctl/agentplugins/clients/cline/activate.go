@@ -2,7 +2,6 @@ package cline
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -47,7 +46,11 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	if len(ClineObjects(request.NativeObjects)) == 0 {
-		return outcome, fmt.Errorf("managed Cline native ownership is missing")
+		action := "remove any Cline skills and MCP entries for this plugin, " +
+			"then rerun remove with `--external-uninstalled` " +
+			"(also use the flag if it was never activated)"
+		return shared.RequireExternalUninstall(
+			outcome, request.ExternalUninstalled, action), nil
 	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only its managed Cline skills and MCP entries")

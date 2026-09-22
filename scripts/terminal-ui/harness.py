@@ -55,10 +55,28 @@ def clean(data):
     return ANSI.sub('', data.decode('utf-8', 'replace'))
 
 
+def selection_choices(data):
+    return list(dict.fromkeys(re.findall(
+        r'\[[^\]]*\][^\r\n]*\(([a-z0-9_-]+)\)', clean(data))))
+
+
+def selection_keys(data, selected):
+    offered = selection_choices(data)
+    check(offered, 'selection has no client rows')
+    keys = bytearray()
+    for index, target in enumerate(offered):
+        if target not in selected:
+            keys.extend(b' ')
+        if index + 1 < len(offered):
+            keys.extend(b'\x1b[B')
+    keys.extend(b'\r')
+    return bytes(keys)
+
+
 def cancel_empty_selection(session, fixture, confirmation):
     # Include every byte from before the invalid submit through cancellation drain.
     offset = len(session.raw)
-    session.send(b' \x1b[B \r')
+    session.send(selection_keys(session.raw, set()))
     session.wait(r'(?i)(at least one|select one|cannot be empty|must select)',
                  'empty-validation', after=offset)
     fixture.unchanged()
@@ -596,10 +614,10 @@ def run_case(name, binary, root, args):
                     session.send(b'y\x04\x04')
                 else: session.send(b'\x04')
                 session.finish(1); fixture.unchanged(); return
-            # Single selected Cursor forces the plain activation handoff. Toggle
-            # Codex off with arrows/Space, then submit; other cases keep both.
+            # Single selected Cursor forces the plain activation handoff even
+            # when the host has additional installed client applications.
             offset = len(session.raw)
-            if name in ('yes-lifecycle', 'queued-lifecycle'): session.send(b' \x1b[B\r')
+            if name in ('yes-lifecycle', 'queued-lifecycle'): session.send(selection_keys(session.raw, {'cursor'}))
             elif name == 'queued': session.send(b'\r\r')
             elif name == 'paste': session.send(b'\x1b[200~\ny\nn\n\x1b[201~')
             else: session.send(b'\n' if plain else b'\r')

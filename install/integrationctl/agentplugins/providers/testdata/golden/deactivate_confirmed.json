@@ -32,13 +32,15 @@
   },
   "cline": {
     "Commands": [],
-    "Error": "managed Cline native ownership is missing",
+    "Error": "",
     "Outcome": {
-      "Activation": "not_required",
-      "ArtifactRemovalAllowed": true,
+      "Activation": "manual_activation_required",
+      "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
-      "UserActions": null
+      "UserActions": [
+        "remove any Cline skills and MCP entries for this plugin, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
+      ]
     }
   },
   "codex": {

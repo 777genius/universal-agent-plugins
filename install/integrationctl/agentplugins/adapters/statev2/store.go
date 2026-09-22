@@ -322,8 +322,11 @@ func Validate(state domain.StateFileV2) error {
 				if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 					return fmt.Errorf("%s client binding %q receipt[%d] has invalid operation id: %w", prefix, client.ClientBindingID, receiptIndex, err)
 				}
-				if receipt.ClientBindingID != client.ClientBindingID || receipt.Sequence < 1 || receipt.Phase == "" {
+				if receipt.ClientBindingID != client.ClientBindingID || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
 					return fmt.Errorf("%s client binding %q receipt[%d] is incomplete", prefix, client.ClientBindingID, receiptIndex)
+				}
+				if !validReceiptPhase(receipt.Phase) {
+					return fmt.Errorf("%s client binding %q receipt[%d] has invalid phase %q", prefix, client.ClientBindingID, receiptIndex, receipt.Phase)
 				}
 				if receipt.OperationGroupID != "" {
 					if err := pathpolicy.ValidateLeafID(receipt.OperationGroupID); err != nil {
@@ -337,7 +340,32 @@ func Validate(state domain.StateFileV2) error {
 			}
 		}
 	}
+	for index, receipt := range state.TransactionReceipts {
+		prefix := fmt.Sprintf("transaction_receipts[%d]", index)
+		if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
+			return fmt.Errorf("%s has invalid operation id: %w", prefix, err)
+		}
+		if strings.TrimSpace(receipt.ClientBindingID) == "" || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
+			return fmt.Errorf("%s is incomplete", prefix)
+		}
+		if !validReceiptPhase(receipt.Phase) {
+			return fmt.Errorf("%s has invalid phase %q", prefix, receipt.Phase)
+		}
+		if receipt.OperationGroupID != "" {
+			if err := pathpolicy.ValidateLeafID(receipt.OperationGroupID); err != nil {
+				return fmt.Errorf("%s has invalid operation group id: %w", prefix, err)
+			}
+		}
+		if _, duplicate := operationIDs[receipt.OperationID]; duplicate {
+			return fmt.Errorf("duplicate receipt operation_id %q", receipt.OperationID)
+		}
+		operationIDs[receipt.OperationID] = struct{}{}
+	}
 	return nil
+}
+
+func validReceiptPhase(value string) bool {
+	return value == domain.ReceiptPhaseStateCommitted || value == domain.ReceiptPhaseCommitted
 }
 
 func validMaterializationState(value domain.MaterializationState) bool {

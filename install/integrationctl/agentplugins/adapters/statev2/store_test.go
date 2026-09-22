@@ -188,6 +188,78 @@ func TestStoreRejectsDuplicateReceiptOperationIDsAcrossClients(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsUnknownReceiptPhase(t *testing.T) {
+	t.Parallel()
+	installation := validInstallation("00000000-0000-4000-8000-000000000001", "src_one", "demo-000000000001")
+	for key, client := range installation.Clients {
+		client.Receipts = []domain.MutationReceipt{{
+			OperationID: "tampered-op", Sequence: 1, MutationType: "directory_swap",
+			ClientBindingID: client.ClientBindingID, Phase: "tampered",
+		}}
+		installation.Clients[key] = client
+	}
+	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{installation}}
+	err := (Store{Path: filepath.Join(t.TempDir(), "state-v2.json")}).Save(state)
+	if err == nil || !strings.Contains(err.Error(), "invalid phase") {
+		t.Fatalf("save error = %v", err)
+	}
+}
+
+func TestStoreValidatesStandaloneTransactionReceipts(t *testing.T) {
+	t.Parallel()
+	base := domain.MutationReceipt{
+		OperationID: "standalone-op", Sequence: 1, MutationType: "directory_remove",
+		ClientBindingID: "removed-binding", Phase: domain.ReceiptPhaseCommitted,
+	}
+	for _, test := range []struct {
+		name    string
+		mutate  func(*domain.MutationReceipt)
+		wantErr string
+	}{
+		{name: "valid committed"},
+		{name: "valid state committed", mutate: func(receipt *domain.MutationReceipt) {
+			receipt.Phase = domain.ReceiptPhaseStateCommitted
+		}},
+		{name: "invalid phase", mutate: func(receipt *domain.MutationReceipt) {
+			receipt.Phase = "tampered"
+		}, wantErr: "invalid phase"},
+		{name: "missing mutation type", mutate: func(receipt *domain.MutationReceipt) {
+			receipt.MutationType = ""
+		}, wantErr: "incomplete"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			receipt := base
+			if test.mutate != nil {
+				test.mutate(&receipt)
+			}
+			state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, TransactionReceipts: []domain.MutationReceipt{receipt}}
+			err := (Store{Path: filepath.Join(t.TempDir(), "state-v2.json")}).Save(state)
+			if test.wantErr == "" && err != nil {
+				t.Fatalf("valid receipt rejected: %v", err)
+			}
+			if test.wantErr != "" && (err == nil || !strings.Contains(err.Error(), test.wantErr)) {
+				t.Fatalf("save error = %v; want %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestStoreRejectsReceiptOperationIDSharedWithStandaloneReceipt(t *testing.T) {
+	t.Parallel()
+	installation := validInstallation("00000000-0000-4000-8000-000000000001", "src_one", "demo-000000000001")
+	var bindingID string
+	for key, client := range installation.Clients {
+		bindingID = client.ClientBindingID
+		client.Receipts = []domain.MutationReceipt{{OperationID: "duplicate-op", Sequence: 1, MutationType: "directory_swap", ClientBindingID: bindingID, Phase: domain.ReceiptPhaseCommitted}}
+		installation.Clients[key] = client
+	}
+	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{installation}, TransactionReceipts: []domain.MutationReceipt{{OperationID: "duplicate-op", Sequence: 2, MutationType: "directory_remove", ClientBindingID: bindingID, Phase: domain.ReceiptPhaseCommitted}}}
+	err := (Store{Path: filepath.Join(t.TempDir(), "state-v2.json")}).Save(state)
+	if err == nil || !strings.Contains(err.Error(), "duplicate receipt operation_id") {
+		t.Fatalf("save error = %v", err)
+	}
+}
+
 func TestStoreRejectsUnknownLifecycleState(t *testing.T) {
 	t.Parallel()
 	installation := validInstallation("00000000-0000-4000-8000-000000000001", "src_one", "demo-000000000001")

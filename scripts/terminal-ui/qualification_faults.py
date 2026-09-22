@@ -60,7 +60,8 @@ def unix_case(binary, case, root, evidence, timeout):
             trigger.write_text('inject\n')
             session.wait(r'QUALIFICATION_TRIGGERED', 'triggered')
             if case.startswith('huh-write-') or case == 'huh-render-panic':
-                session.send(b' ')
+                # Redraw without queueing input for the next prompt owner.
+                session.resize(31, 101)
         session.wait(r'QUALIFICATION_REUSE_READY', 'same-process-reuse')
         check(termios.tcgetattr(session.slave) == session.before,
               'terminal modes not restored before inherited input reuse')

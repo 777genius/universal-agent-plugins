@@ -40,7 +40,7 @@ func TestInfoReconcilesExactCopilotIdentityWithoutMutationOrPathLeak(t *testing.
 		Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled,
 		PackageRevision: &domain.ClientPackageRevision{Version: "1.7.0-uap.1", TreeDigest: "sha256:tree", ManifestDigest: "sha256:manifest"},
 		NativeObjects:   []domain.NativeObjectOwnership{{ObjectID: "package:copilot:" + physical, Kind: "managed_package_directory", LogicalName: "demo", ManagedDigest: digest}},
-		Receipts:        []domain.MutationReceipt{{OperationID: "op-0000000000000001", Sequence: 1, ClientBindingID: bindingID, AfterDigest: digest, Phase: "committed"}},
+		Receipts:        []domain.MutationReceipt{{OperationID: "op-0000000000000001", Sequence: 1, MutationType: "directory_swap", ClientBindingID: bindingID, AfterDigest: digest, Phase: "committed"}},
 	}
 	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{{
 		InstallationID: installationID, DeclaredName: "demo",
@@ -379,7 +379,7 @@ func validReconciliationBinding(installationID string, client domain.ClientID, s
 		Materialization: domain.MaterializationMaterialized,
 		PackageRevision: &domain.ClientPackageRevision{Version: "1.0.0", TreeDigest: "sha256:tree", ManifestDigest: "sha256:manifest"},
 		NativeObjects:   []domain.NativeObjectOwnership{{ObjectID: "package:" + string(client) + ":" + physical, Kind: "managed_package_directory", LogicalName: "demo", ManagedDigest: digest}},
-		Receipts:        []domain.MutationReceipt{{OperationID: "op-" + bindingID[:12], Sequence: 1, ClientBindingID: bindingID, AfterDigest: digest, Phase: "committed"}},
+		Receipts:        []domain.MutationReceipt{{OperationID: "op-" + bindingID[:12], Sequence: 1, MutationType: "directory_swap", ClientBindingID: bindingID, AfterDigest: digest, Phase: "committed"}},
 	}
 }
 

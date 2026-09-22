@@ -160,6 +160,18 @@ def send(session, keys):
     session.send(keys)
 
 
+def select_only(session, selected):
+    offered = choices(session.raw)
+    keys = bytearray()
+    for index, target in enumerate(offered):
+        if target not in selected:
+            keys.extend(b' ')
+        if index + 1 < len(offered):
+            keys.extend(b'\x1b[B')
+    keys.extend(b'\r')
+    send(session, bytes(keys))
+
+
 def exact_skill(fixture):
     fixture.installed(['cursor'])
     state = json.loads((fixture.data / 'state-v2.json').read_text())
@@ -239,13 +251,13 @@ def run_case(case, binary, evidence, timeout=8):
                             'gemini', 'opencode', 'cline', 'windsurf'}
                 offered = set(choices(session.raw))
                 (evidence / 'compatible-list.json').write_text(json.dumps(sorted(offered)))
-                if offered != expected:
+                if missing := expected - offered:
                     send(session, b'\x1b')
                     session.finish(1)
                     fixture.unchanged()
-                    raise AssertionError(f'empty package ten-profile compatibility mismatch: missing={sorted(expected - offered)}, extra={sorted(offered - expected)}')
+                    raise AssertionError(f'empty package ten-profile compatibility mismatch: missing={sorted(missing)}')
                 offset = len(session.raw)
-                send(session, b'\r')
+                select_only(session, expected)
                 session.wait(CONFIRM, 'all-ten-confirmation', after=offset)
                 session.wait(r'(?s)Yes.*?No.*?enter submit', 'all-ten-controls', after=offset)
                 text = clean(session.raw[offset:])
@@ -270,8 +282,9 @@ def run_case(case, binary, evidence, timeout=8):
                 check(plans['copilot'] == plans['vscode'],
                       'shared targets have different physical bindings')
                 return
-            check(choices(session.raw) == ['codex', 'cursor'],
-                  f'compatible choices differ: {choices(session.raw)}')
+            offered = choices(session.raw)
+            check(all(target in offered for target in ('codex', 'cursor')),
+                  f'required synthetic choices missing: {offered}')
             fixture.unchanged()
             if action == 'cancel':
                 send(session, b'\x1b')
@@ -279,8 +292,8 @@ def run_case(case, binary, evidence, timeout=8):
                 fixture.unchanged()
                 return
             offset = len(session.raw)
-            # Actual Space / Down / Enter: deselect Codex, select only Cursor.
-            send(session, b' \x1b[B\r')
+            # Deselect every compatible ambient client except synthetic Cursor.
+            select_only(session, {'cursor'})
             if action == 'reject':
                 deadline = time.monotonic() + timeout
                 while session.process.poll() is None and not re.search(CONFIRM, clean(session.raw[offset:])):

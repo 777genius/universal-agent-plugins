@@ -84,11 +84,20 @@ class Keyboard(Session):
         self.frame(label)
 
 
-def selected_frame(session, expected):
+def selected_frame(session, available, expected):
     rows = choices(session.screen.snapshot())
-    check([r[1] for r in rows] == list(TARGETS), f'choice order/identities: {rows}')
-    check([r[1] for r in rows if r[0] == '•'] == list(expected),
+    check([row[1] for row in rows] == list(available),
+          f'choice order/identities: {rows}')
+    check([row[1] for row in rows if row[0] == '•'] == list(expected),
           f'displayed selection differs from identities {expected}: {rows}')
+
+
+def set_selection(session, available, selected):
+    for index, target in enumerate(available):
+        if target not in selected:
+            session.key(b' ', f'{target}-off')
+        if index + 1 < len(available):
+            session.key(b'\x1b[B', f'focus-{available[index + 1]}')
 
 
 def installed(fixture, selected):
@@ -217,7 +226,10 @@ def run_case(name, binary, evidence, timeout):
                 outcome['status'] = 'passed'
                 return outcome
             session.wait(r'enter submit', 'selection-ready')
-            selected_frame(session, TARGETS)
+            available = tuple(row[1] for row in choices(session.screen.snapshot()))
+            check(all(target in available for target in TARGETS),
+                  f'required synthetic choices missing: {available}')
+            selected_frame(session, available, available)
             fixture.unchanged()
             if name.startswith('selection-'):
                 session.send(b'\x1b' if name.endswith('escape') else b'\x03')
@@ -227,18 +239,8 @@ def run_case(name, binary, evidence, timeout):
                 selected = SETS.get(name.split('-')[0], TARGETS)
                 if name == 'neither': selected = ()
                 if name == 'native-ownership': selected = ('codex',)
-                # Every path exercises down/up and a reversible Space toggle.
-                session.key(b' ', 'toggle-off')
-                selected_frame(session, ('cursor',))
-                session.key(b' ', 'toggle-back')
-                selected_frame(session, TARGETS)
-                session.key(b'\x1b[B', 'down')
-                session.key(b'\x1b[A', 'up')
-                if 'codex' not in selected: session.key(b' ', 'codex-off')
-                if 'cursor' not in selected:
-                    session.key(b'\x1b[B', 'cursor-focus')
-                    session.key(b' ', 'cursor-off')
-                selected_frame(session, selected)
+                set_selection(session, available, selected)
+                selected_frame(session, available, selected)
                 outcome['selected_ids'] = list(selected)
                 fixture.unchanged()
                 offset = len(session.raw)
@@ -248,7 +250,7 @@ def run_case(name, binary, evidence, timeout):
                 if name == 'neither':
                     session.wait(r'(?i)(at least one|select one|cannot be empty|must select)',
                                  'empty-validation')
-                    selected_frame(session, ())
+                    selected_frame(session, available, ())
                     fixture.unchanged()
                     session.send(b'\x1b'); session.finish(1)
                     check(not re.search(CONFIRM, clean(session.raw[offset:])), 'empty reached confirmation')

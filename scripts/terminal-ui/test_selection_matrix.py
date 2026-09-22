@@ -164,12 +164,12 @@ class EvidenceTests(unittest.TestCase):
         screen.feed(b'[ ] OpenAI Codex (codex)\r\n')
         screen.feed('[•] Cursor (cursor)'.encode())
         session = SimpleNamespace(screen=screen)
-        selected_frame(session, ('cursor',))
-        with self.assertRaises(AssertionError): selected_frame(session, ('codex',))
+        selected_frame(session, ('codex', 'cursor'), ('cursor',))
+        with self.assertRaises(AssertionError): selected_frame(session, ('codex', 'cursor'), ('codex',))
         screen = Screen()
         screen.feed('[•] Cursor (cursor)\r\n[ ] OpenAI Codex (codex)'.encode())
         with self.assertRaises(AssertionError):
-            selected_frame(SimpleNamespace(screen=screen), ('cursor',))
+            selected_frame(SimpleNamespace(screen=screen), ('codex', 'cursor'), ('cursor',))
 
     def test_reverse_index_redraw_preserves_identity(self):
         raw = '[•] Codex (codex)\r\n[•] Cursor (cursor)\r\x1bM[ ]'.encode()

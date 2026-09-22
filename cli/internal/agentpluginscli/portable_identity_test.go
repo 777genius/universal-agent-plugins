@@ -35,7 +35,7 @@ func TestPortableReservedInfoReconciliation(t *testing.T) {
 		Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled,
 		PackageRevision: &domain.ClientPackageRevision{Version: "1.7.0-uap.1", TreeDigest: "sha256:tree", ManifestDigest: "sha256:manifest"},
 		NativeObjects:   []domain.NativeObjectOwnership{{ObjectID: "package:copilot:" + physical, Kind: "managed_package_directory", LogicalName: "con.foo", ManagedDigest: digest}},
-		Receipts:        []domain.MutationReceipt{{OperationID: "op-0000000000000001", Sequence: 1, ClientBindingID: bindingID, AfterDigest: digest, Phase: "committed"}},
+		Receipts:        []domain.MutationReceipt{{OperationID: "op-0000000000000001", Sequence: 1, MutationType: "directory_swap", ClientBindingID: bindingID, AfterDigest: digest, Phase: "committed"}},
 	}
 	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{{
 		InstallationID: installationID, DeclaredName: "con.foo",
