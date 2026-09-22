@@ -27,6 +27,7 @@ from selection_matrix import prepare_codex_registry
 if os.name == "posix":
     import fcntl
     import resource
+    import select
 
 
 CASES = (
@@ -78,6 +79,17 @@ def unsupported_reason(name):
     if name in UNIX_PROFILE_ONLY and platform.system() not in ("Linux", "Darwin"):
         return "synthetic multi-client profile is qualified on Linux and Darwin"
     return ""
+
+
+def expect_process_line(process, expected, timeout, message):
+    check(process.stdout is not None, "process stdout pipe is required")
+    readable, _, _ = select.select(
+        [process.stdout], [], [], max(0.1, min(timeout, 5)))
+    if not readable:
+        process.kill()
+        process.wait(timeout=2)
+        raise AssertionError(message + " before handshake deadline")
+    check(process.stdout.readline().strip() == expected, message)
 
 
 def seed_ten_clients(fixture):
@@ -472,14 +484,19 @@ class Matrix:
             [sys.executable, "-c", script, str(lock_path)],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            check(holder.stdout.readline().strip() == "locked",
-                  "lock owner did not acquire the kernel lock")
+            expect_process_line(
+                holder, "locked", self.timeout,
+                "lock owner did not acquire the kernel lock")
             holder.kill()
             holder.wait(timeout=2)
         finally:
             if holder.poll() is None:
                 holder.kill()
                 holder.wait(timeout=2)
+            if holder.stdout is not None:
+                holder.stdout.close()
+            if holder.stderr is not None:
+                holder.stderr.close()
         self.add(fixture, evidence, label="add-after-owner-kill")
         self.assert_healthy(fixture, evidence / "health", 1)
 

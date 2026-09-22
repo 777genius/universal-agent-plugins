@@ -3,6 +3,8 @@
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -50,6 +52,26 @@ class ResilienceMatrixContract(unittest.TestCase):
             lane.write_json(path, {'b': 2, 'a': 1})
             self.assertEqual(json.loads(path.read_text()), {'a': 1, 'b': 2})
             self.assertTrue(path.read_bytes().endswith(b'\n'))
+
+    @unittest.skipUnless(os.name == 'posix', 'pipe select is POSIX only')
+    def test_process_line_deadline_kills_and_reaps(self):
+        holder = subprocess.Popen(
+            [sys.executable, '-c', 'import time; time.sleep(60)'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            with self.assertRaisesRegex(
+                    AssertionError, 'before handshake deadline'):
+                lane.expect_process_line(
+                    holder, 'locked', 0.05, 'fixture did not start')
+            self.assertIsNotNone(holder.poll())
+        finally:
+            if holder.poll() is None:
+                holder.kill()
+                holder.wait(timeout=2)
+            if holder.stdout is not None:
+                holder.stdout.close()
+            if holder.stderr is not None:
+                holder.stderr.close()
 
 
 @unittest.skipUnless(os.environ.get('RESILIENCE_MATRIX_BINARY'),
