@@ -38,7 +38,7 @@ Creates a Claude runtime app.
 
 ###### allowedHooks
 
-readonly `string`[] \| `string`[]
+`string`[] \| readonly `string`[]
 
 Hook names that this binary accepts on argv.
 
