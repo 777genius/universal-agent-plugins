@@ -19,11 +19,14 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 
 from harness import Fixture, check, hashes, prepare_scanner, scanner_options
+from selection_matrix import prepare_codex_registry
 
 if os.name == "posix":
     import fcntl
+    import resource
 
 
 CASES = (
@@ -43,19 +46,30 @@ CASES = (
     "scanner-failure",
     "permission-denied",
     "closed-stdout",
+    "closed-stderr",
+    "file-size-limit",
     "foreign-collision",
     "dangling-symlink",
+    "source-path-traversal",
     "fresh-multi-client-install",
+    "per-client-lifecycle",
     "sigint-during-activation",
+    "unicode-normalization",
     "unicode-long-path",
 )
 
 POSIX_ONLY = frozenset({
     "held-process-lock", "killed-lock-owner", "scanner-failure",
     "permission-denied", "closed-stdout", "dangling-symlink",
+    "closed-stderr", "file-size-limit", "source-path-traversal",
     "sigint-during-activation",
 })
-UNIX_PROFILE_ONLY = frozenset({"fresh-multi-client-install"})
+UNIX_PROFILE_ONLY = frozenset({
+    "fresh-multi-client-install", "per-client-lifecycle"})
+
+ALL_CLIENTS = (
+    "codex", "chatgpt", "cursor", "copilot", "vscode", "kiro", "claude",
+    "gemini", "opencode", "cline", "windsurf")
 
 
 def unsupported_reason(name):
@@ -89,6 +103,67 @@ def seed_ten_clients(fixture):
         shutil.copy2(fixture.bin / "cursor", fixture.bin / name)
 
 
+def prepare_copilot_registry(fixture):
+    state = shlex.quote(str(fixture.root / "copilot-plugin.state"))
+    path = shlex.quote(str(fixture.root / "copilot-plugin.path"))
+    log = shlex.quote(str(fixture.root / "copilot-plugin.log"))
+    copilot = fixture.bin / "copilot"
+    copilot.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> {log}\n"
+        "if [ \"$#\" = 1 ] && [ \"$1\" = --version ]; then\n"
+        "  printf 'synthetic 99.0.0\\n'; exit 0\n"
+        "fi\n"
+        "if [ \"$*\" = 'plugin list' ]; then\n"
+        f"  if [ -s {state} ] && [ -s {path} ]; then\n"
+        f"    IFS= read -r spec < {state}\n"
+        f"    IFS= read -r active < {path}\n"
+        '    printf "Live Plugins (loaded from a local marketplace '
+        'directory, never copied):\\n  \\342\\200\\242 %s (v1.0.0) '
+        '(enabled)\\n      from %s\\n" "$spec" "$active"\n'
+        "  else\n"
+        "    printf \"No plugins installed.\\n\\nUse 'copilot plugin install <source>' to install a plugin.\\n\"\n"
+        "  fi\n"
+        "  exit 0\n"
+        "fi\n"
+        "case \"$1 $2\" in\n"
+        f"  'plugin install'|'plugin update') printf '%s\\n' \"$3\" > {state}; exit 0 ;;\n"
+        f"  'plugin uninstall') : > {state}; exit 0 ;;\n"
+        "  'plugin marketplace')\n"
+        f"    case \"$3\" in add) printf '%s\\n' \"$4\" > {path}; exit 0 ;;\n"
+        "      update) exit 0 ;;\n"
+        f"      remove) : > {path}; exit 0 ;; esac ;;\n"
+        "esac\n"
+        "exit 97\n",
+        encoding="utf-8")
+    copilot.chmod(0o700)
+    shutil.copy2(copilot, fixture.bin / "code")
+
+
+def prepare_claude_registry(fixture):
+    claude = fixture.bin / "claude"
+    log = shlex.quote(str(fixture.root / "claude-plugin.log"))
+    claude.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> {log}\n"
+        "if [ \"$#\" = 1 ] && [ \"$1\" = --version ]; then "
+        "printf 'synthetic 99.0.0\\n'; exit 0; fi\n"
+        "if [ \"$*\" = 'plugin list --json' ]; then\n"
+        "  for item in \"$CLAUDE_CONFIG_DIR\"/skills/*; do\n"
+        "    [ -d \"$item\" ] || continue\n"
+        "    [ -f \"$item/.claude-plugin/plugin.json\" ] || continue\n"
+        "    printf '[{\"id\":\"pty-synthetic@skills-dir\","
+        "\"scope\":\"user\",\"enabled\":true,"
+        "\"installPath\":\"%s\"}]\\n' \"$item\"\n"
+        "    exit 0\n"
+        "  done\n"
+        "  printf '[]\\n'; exit 0\n"
+        "fi\n"
+        "exit 97\n",
+        encoding="utf-8")
+    claude.chmod(0o700)
+
+
 def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
@@ -117,25 +192,36 @@ class Matrix:
         self.scanner_binary = scanner_binary
 
     def command(self, fixture, evidence, label, *args, expect=None,
-                closed_stdout=False):
+                closed_stdout=False, closed_stderr=False, preexec_fn=None):
         argv = [str(self.binary), *args, "--format=json"]
         env = dict(fixture.env, NO_COLOR="1")
         started = time.monotonic()
-        if closed_stdout:
-            check(os.name == "posix", "closed stdout pipe requires POSIX")
-            read_fd, write_fd = os.pipe()
-            os.close(read_fd)
+        if closed_stdout or closed_stderr:
+            check(os.name == "posix", "closed output pipe requires POSIX")
+            stdout_pipe = stderr_pipe = None
             try:
+                if closed_stdout:
+                    read_fd, stdout_pipe = os.pipe()
+                    os.close(read_fd)
+                if closed_stderr:
+                    read_fd, stderr_pipe = os.pipe()
+                    os.close(read_fd)
                 result = subprocess.run(
-                    argv, cwd=fixture.project, env=env, stdout=write_fd,
-                    stderr=subprocess.PIPE, text=True, timeout=self.timeout)
+                    argv, cwd=fixture.project, env=env,
+                    stdout=stdout_pipe if closed_stdout else subprocess.PIPE,
+                    stderr=stderr_pipe if closed_stderr else subprocess.PIPE,
+                    text=True, timeout=self.timeout, preexec_fn=preexec_fn)
             finally:
-                os.close(write_fd)
-            out, err = "", result.stderr
+                if stdout_pipe is not None:
+                    os.close(stdout_pipe)
+                if stderr_pipe is not None:
+                    os.close(stderr_pipe)
+            out = "" if closed_stdout else result.stdout
+            err = "" if closed_stderr else result.stderr
         else:
             result = subprocess.run(
                 argv, cwd=fixture.project, env=env, capture_output=True,
-                text=True, timeout=self.timeout)
+                text=True, timeout=self.timeout, preexec_fn=preexec_fn)
             out, err = result.stdout, result.stderr
         evidence.mkdir(parents=True, exist_ok=True)
         write_json(evidence / f"{label}.command.json", argv)
@@ -506,6 +592,37 @@ class Matrix:
         self.assert_healthy(fixture, evidence / "health", 1)
         self.remove(fixture, evidence)
         self.assert_healthy(fixture, evidence / "clean", 0)
+    def case_closed_stderr(self, fixture, evidence):
+        before = self.protected(fixture)
+        result, _ = self.command(
+            fixture, evidence, "closed-stderr", "add",
+            str(fixture.root / "missing-package"), "--target=cursor",
+            expect=False, closed_stderr=True)
+        check(result.returncode != 0, "closed stderr reported success")
+        check(self.protected(fixture) == before,
+              "closed stderr failure allowed mutation")
+
+    def case_file_size_limit(self, fixture, evidence):
+        check(os.name == "posix", "file size limit requires POSIX")
+
+        def limit_writes():
+            signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+            resource.setrlimit(resource.RLIMIT_FSIZE, (1, 1))
+
+        before = self.protected(fixture)
+        result, _ = self.command(
+            fixture, evidence, "file-size-limit", "add",
+            str(fixture.package), "--target=cursor", expect=False,
+            preexec_fn=limit_writes)
+        diagnostic = (result.stdout + result.stderr).lower()
+        check(any(word in diagnostic for word in (
+            "file too large", "space", "write", "persist", "journal",
+            "snapshot package content")),
+            "file size failure diagnostic missing")
+        check(self.protected(fixture) == before,
+              "file size failure allowed partial mutation")
+        self.assert_no_open_operations(fixture)
+
 
     def case_foreign_collision(self, fixture, evidence):
         state = self.installed_state(fixture, evidence)
@@ -548,6 +665,25 @@ class Matrix:
         check(target.is_symlink(), "dangling symlink was replaced")
         check(self.protected(fixture) == before,
               "dangling symlink allowed mutation")
+
+    def case_source_path_traversal(self, fixture, evidence):
+        check(os.name == "posix", "source traversal case requires POSIX")
+        outside = fixture.root / "outside-sentinel"
+        outside.write_text("foreign\n", encoding="utf-8")
+        skills = fixture.package / "skills"
+        skills.mkdir()
+        (skills / "escape").symlink_to(outside)
+        before = self.protected(fixture)
+        result, _ = self.add(
+            fixture, evidence, label="source-traversal", expect=False)
+        diagnostic = (result.stdout + result.stderr).lower()
+        check(any(word in diagnostic for word in (
+            "symlink", "path", "traversal", "package")),
+            "source traversal diagnostic missing")
+        check(outside.read_text(encoding="utf-8") == "foreign\n",
+              "source traversal changed external content")
+        check(self.protected(fixture) == before,
+              "source traversal allowed mutation")
     def case_sigint_during_activation(self, fixture, evidence):
         check(os.name == "posix", "SIGINT activation case requires POSIX")
         seed_ten_clients(fixture)
@@ -670,6 +806,98 @@ class Matrix:
         self.assert_healthy(fixture, evidence / "removed-health", 0)
         check(unrelated_dangling.is_symlink(),
               "remove mutated unrelated dangling Claude skill")
+
+    def case_per_client_lifecycle(self, fixture, evidence):
+        for target in ALL_CLIENTS:
+            client_fixture = Fixture(
+                fixture.root / ("client-" + target),
+                scanner_binary=self.scanner_binary)
+            seed_ten_clients(client_fixture)
+            if target == "codex":
+                prepare_codex_registry(client_fixture)
+            if target in ("copilot", "vscode"):
+                prepare_copilot_registry(client_fixture)
+            if target == "claude":
+                prepare_claude_registry(client_fixture)
+            target_evidence = evidence / target
+            if target == "chatgpt":
+                before = self.protected(client_fixture)
+                result, _ = self.command(
+                    client_fixture, target_evidence, "add-fail-closed",
+                    "add", str(client_fixture.package),
+                    "--target=chatgpt", expect=False)
+                diagnostic = (result.stdout + "\n" + result.stderr).lower()
+                check(
+                    "identity" in diagnostic or "directory" in diagnostic,
+                    "chatgpt: unsigned local source lacked a clear "
+                    "identity/directory diagnostic")
+                check(
+                    self.protected(client_fixture) == before,
+                    "chatgpt: rejected unsigned source mutated protected state")
+                write_json(target_evidence / "coverage.json", {
+                    "mode": "fail_closed_unsigned_local_source",
+                    "signed_directory_lifecycle_test": (
+                        "install/integrationctl/agentplugins/usecase/"
+                        "manual_remote_lifecycle_test.go::"
+                        "TestSignedChatGPTPreparationSupportsAddUpdateAnd"
+                        "RepairWhileRemoteActivationIsPending"),
+                })
+                continue
+            _, added = self.command(
+                client_fixture, target_evidence, "add", "add",
+                str(client_fixture.package), "--target=" + target,
+                expect=True)
+            rows = added["data"].get("targets", [])
+            check(len(rows) == 1 and rows[0]["target"] == target,
+                  f"{target}: add lost logical target identity")
+            self.assert_healthy(
+                client_fixture, target_evidence / "after-add", 1)
+            for action in ("update", "repair"):
+                _, result = self.command(
+                    client_fixture, target_evidence, action, action,
+                    "pty-synthetic", "--target=" + target, expect=True)
+                rows = result["data"].get("targets", [])
+                check(len(rows) == 1 and rows[0]["target"] == target,
+                      f"{target}: {action} lost logical target identity")
+                self.assert_healthy(
+                    client_fixture, target_evidence / ("after-" + action), 1)
+            self.command(
+                client_fixture, target_evidence, "remove", "remove",
+                "pty-synthetic", "--target=" + target,
+                "--external-uninstalled", "--purge-data", expect=True)
+            self.assert_healthy(
+                client_fixture, target_evidence / "after-remove", 0)
+            if target not in ("codex", "copilot", "vscode", "claude"):
+                client_fixture.validate_stubs()
+
+    def case_unicode_normalization(self, fixture, evidence):
+        nfc = unicodedata.normalize("NFC", "cafe\u0301-package")
+        nfd = unicodedata.normalize("NFD", "caf\u00e9-package")
+        check(nfc != nfd, "normalization fixture collapsed in memory")
+        observed_requested = []
+        for index, name in enumerate((nfc, nfd)):
+            target = fixture.root / (f"unicode-{index}-" + name)
+            fixture.package.rename(target)
+            fixture.package = target
+            self.add(fixture, evidence / str(index))
+            self.assert_healthy(fixture, evidence / str(index) / "health", 1)
+            state = json.loads(
+                self.state_path(fixture).read_text(encoding="utf-8"))
+            installations = state.get("installations", [])
+            check(len(installations) == 1,
+                  "unicode source lost installation identity")
+            source = installations[0].get("source", {})
+            requested = source.get("requested_source")
+            observed_requested.append(requested)
+            check(requested == str(target),
+                  "unicode requested source was normalized or rewritten")
+            canonical = Path(source.get("canonical_source", ""))
+            check(canonical.exists() and canonical.samefile(target),
+                  "unicode canonical source does not resolve to package")
+            self.remove(fixture, evidence / str(index))
+            self.assert_healthy(fixture, evidence / str(index) / "clean", 0)
+        check(observed_requested[0] != observed_requested[1],
+              "NFC and NFD requested sources collided in state")
 
     def case_unicode_long_path(self, fixture, evidence):
         nested = fixture.root / ("длинный-путь-" + "x" * 80) / "插件"

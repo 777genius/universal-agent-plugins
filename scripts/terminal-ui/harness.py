@@ -305,8 +305,9 @@ class OwnedProcess:
 
 class Session:
     def __init__(self, argv, fixture, evidence, timeout=10, stdin_pipe=False,
-                 redirect=None, rows=30, cols=100):
-        self.fixture, self.evidence, self.timeout = fixture, evidence, timeout
+                 redirect=None, rows=30, cols=100, read_chunk=65536):
+        self.fixture, self.evidence = fixture, evidence
+        self.timeout, self.read_chunk = timeout, read_chunk
         self.master, self.slave = pty.openpty()
         self.screen = Screen(rows, cols)
         self.raw = bytearray()
@@ -366,10 +367,17 @@ class Session:
 
     def pump(self, timeout=0.1):
         if select.select([self.master], [], [], timeout)[0]:
-            try: data = os.read(self.master, 65536)
-            except OSError: return
+            try: data = os.read(self.master, self.read_chunk)
+            except OSError: return False
             self.raw.extend(data); self.screen.feed(data)
             check(len(self.raw) < 4 * 1024 * 1024, 'capture exceeded 4 MiB bound')
+            return bool(data)
+        return False
+
+    def drain(self):
+        deadline = time.monotonic() + min(1, self.timeout)
+        while time.monotonic() < deadline and self.pump(0):
+            pass
 
     def wait(self, marker, label, after=0):
         deadline = time.monotonic() + self.timeout
@@ -407,7 +415,7 @@ class Session:
         deadline = time.monotonic() + self.timeout
         while self.process.poll() is None and time.monotonic() < deadline: self.pump()
         check(self.process.poll() is not None, 'CLI did not exit within timeout')
-        self.pump(0)
+        self.drain()
         check(self.process.returncode == expected,
               f'exit {self.process.returncode}, expected {expected}')
         self.frame('exit')
@@ -434,7 +442,7 @@ class Session:
             check(ready.encode() in self.raw[offset:], 'restoration probe not ready')
             self.send((answer + '\n').encode())
             while probe.poll() is None and time.monotonic() < deadline: self.pump()
-            self.pump(0)
+            self.drain()
             echo = answer.encode() in self.raw[offset:]
             ok = probe.poll() == 0 and success.encode() in self.raw[offset:]
             self.restoration = {'termios_equal': same, 'cursor_restored': cursor,
@@ -450,7 +458,7 @@ class Session:
         try:
             forced = self.process.poll() is None
             if forced: self.process.kill()
-            self.pump(0)
+            self.drain()
             (self.evidence / 'terminal.ansi').write_bytes(self.raw)
             (self.evidence / 'transcript.txt').write_text(clean(self.raw), encoding='utf-8')
             (self.evidence / 'events.json').write_text(json.dumps({
@@ -487,7 +495,8 @@ def assert_paste_stayed_in_selection(raw, confirmation):
 CASES = ('detection', 'baseline-lifecycle', 'default-no', 'no', 'yes-lifecycle', 'queued-lifecycle', 'sigterm', 'confirm-sigterm', 'empty',
          'escape', 'lf-escape', 'ctrl-c', 'ctrl-d', 'confirm-escape', 'confirm-ctrl-c',
          'confirm-ctrl-d', 'confirm-lf-escape', 'plain', 'dumb', 'term-unset', 'no-color', 'NO_COLOR',
-         'resize', 'tiny', 'queued', 'paste', 'plain-eof', 'plain-partial-eof',
+         'resize', 'tiny', 'width-40', 'width-80', 'width-160', 'slow-terminal',
+         'queued', 'paste', 'plain-eof', 'plain-partial-eof',
          'stdin-pipe', 'json', 'json-tty', 'json-explicit', 'stdout-redirect',
          'stderr-redirect', 'both-redirect', 'plain-auto', 'plain-always',
          'plain-never', 'plain-NO_COLOR', 'rich-never', 'color-stderr-visible',
@@ -537,9 +546,13 @@ def run_case(name, binary, root, args):
                     'json-explicit': 'stdout'}.get(name)
         if name == 'color-stderr-visible': redirect = 'stdout'
         if name in ('color-pipe-human', 'color-pipe-json'): redirect = 'both'
+        dimensions = {'tiny': (6, 32), 'width-40': (30, 40),
+                      'width-80': (30, 80), 'width-160': (30, 160)}
+        rows, cols = dimensions.get(name, (30, 100))
         session = Session(argv, fixture, evidence, args.timeout,
                           stdin_pipe=name == 'stdin-pipe', redirect=redirect,
-                          rows=6 if name == 'tiny' else 30, cols=32 if name == 'tiny' else 100)
+                          rows=rows, cols=cols,
+                          read_chunk=7 if name == 'slow-terminal' else 65536)
         try:
             if name in ('color-pipe-human', 'color-pipe-json', 'color-error'):
                 session.finish(1 if name == 'color-error' else 0)

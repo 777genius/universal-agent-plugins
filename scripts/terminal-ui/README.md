@@ -74,7 +74,8 @@ output before invoking the Unix harness; its hash is recorded in `results.json`.
 | `stdin-pipe` | Pipe stays open with no data; CLI exits with required-target error without reading it. |
 | `json`, `json-tty`, `json-explicit` | No-target JSON fails promptly without input; all-three-TTY JSON emits no controls; separate redirected stdout parses as exactly one versioned JSON envelope; explicit-target dry-run succeeds. |
 | `stdout-redirect`, `stderr-redirect`, `both-redirect` | One visible output gives Plain selection/No; both redirected fail without reading an invisible prompt. |
-| `resize`, `tiny` | Change terminal dimensions during selection, then default No without mutation. |
+| `resize`, `tiny`, `width-40`, `width-80`, `width-160` | Exercise resize and fixed narrow/standard/wide terminal dimensions, then default No without mutation. |
+| `slow-terminal` | Limit PTY reads to seven bytes, preserving complete fragmented output and terminal restoration. |
 | `queued`, `paste` | Consecutive Enters reach default No without hanging; bracketed multiline paste cannot silently grant consent, then Esc cancels. |
 
 For every successful exit/cancellation check, the harness compares the complete

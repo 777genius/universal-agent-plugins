@@ -22,6 +22,8 @@ REPO = Path(__file__).resolve().parent.parent
 AGENT_MODULE = REPO / "install/integrationctl/agentplugins"
 INTEGRATION_MODULE = REPO / "install/integrationctl"
 CLI_MODULE = REPO / "cli"
+RESILIENCE_VERSION = "999.0.0-resilience"
+
 
 COVERAGE = {
     "fault_injection": ["filesystem-kernels", "black-box-resilience",
@@ -36,12 +38,14 @@ COVERAGE = {
     "tty_matrix": ["terminal-contracts", "terminal-pty",
                    "selection-matrix", "terminal-fault-injection"],
     "all_clients": ["transaction-state-clients", "plugin-matrix",
-                    "black-box-resilience:fresh-multi-client-install"],
+                    "black-box-resilience:fresh-multi-client-install",
+                    "black-box-resilience:per-client-lifecycle"],
     "group_rollback": ["transaction-state-clients",
                        "black-box-resilience:add-remove-race"],
     "state_migrations": ["transaction-state-clients",
                          "black-box-resilience:migrate-state-v2",
-                         "black-box-resilience:migrate-state-v3"],
+                         "black-box-resilience:migrate-state-v3",
+                         "historical-release-migrations:0.1.4,0.1.5,0.1.6"],
     "packed_npm": ["npm-package-tests", "npm-pack-dry-run",
                    "npm-packed-lifecycle"],
     "native_platform_runtime": [
@@ -117,6 +121,7 @@ class Proof:
     def save(self):
         write_json(self.artifacts / "report.json", {
             "schema_version": 1,
+            "tool_version": RESILIENCE_VERSION,
             "source": str(REPO),
             "source_head": self.source_head,
             "source_dirty": self.source_dirty,
@@ -212,7 +217,8 @@ def main():
     binary = artifacts / ("agentplugins.exe" if os.name == "nt"
                           else "agentplugins")
     built = proof.run("build-current-source", [
-        go, "build", "-trimpath", "-ldflags=-X=main.version=resilience-dev",
+        go, "build", "-trimpath",
+        f"-ldflags=-X=main.version={RESILIENCE_VERSION}",
         "-o", binary, "./cmd/agentplugins",
     ], cwd=CLI_MODULE)
     if built:
@@ -222,6 +228,13 @@ def main():
             artifacts / "black-box", "--timeout", "20",
         ])
         if os.name == "posix":
+            proof.run("historical-release-migrations", [
+                sys.executable,
+                "scripts/terminal-ui/historical_state_flow.py",
+                "--binary", binary, "--go", go,
+                "--artifacts", artifacts / "historical-release-migrations",
+            ], timeout=600)
+
             proof.run("terminal-pty", [
                 sys.executable, "scripts/terminal-ui/harness.py", "--binary",
                 binary, "--artifacts", artifacts / "terminal-pty",

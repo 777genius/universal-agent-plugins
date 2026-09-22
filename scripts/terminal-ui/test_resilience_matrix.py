@@ -11,7 +11,7 @@ import resilience_matrix as lane
 
 class ResilienceMatrixContract(unittest.TestCase):
     def test_case_contract(self):
-        self.assertEqual(len(lane.CASES), 21)
+        self.assertEqual(len(lane.CASES), 26)
         self.assertEqual(len(set(lane.CASES)), len(lane.CASES))
         for required in (
                 'corrupt-state', 'future-state', 'duplicate-installation',
@@ -19,8 +19,10 @@ class ResilienceMatrixContract(unittest.TestCase):
                 'migrate-state-v2', 'migrate-state-v3',
                 'killed-lock-owner', 'concurrent-add',
                 'doctor-during-add', 'add-remove-race', 'scanner-failure',
-                'permission-denied', 'closed-stdout', 'foreign-collision',
-                'dangling-symlink', 'fresh-multi-client-install',
+                'permission-denied', 'closed-stdout', 'closed-stderr',
+                'file-size-limit', 'foreign-collision', 'dangling-symlink',
+                'source-path-traversal', 'fresh-multi-client-install',
+                'per-client-lifecycle', 'unicode-normalization',
                 'sigint-during-activation', 'unicode-long-path'):
             self.assertIn(required, lane.CASES)
 

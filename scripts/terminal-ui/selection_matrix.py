@@ -195,6 +195,17 @@ elif len(args) == 4 and args[:2] == ['plugin', 'add'] and args[3] == '--json':
                                installed=True, enabled=True)]
     registry.write_text(json.dumps(state))
     print('{}')
+elif len(args) == 4 and args[:2] == ['plugin', 'remove'] and args[3] == '--json':
+    if not any(item.get('pluginId') == args[2] for item in state.get('installed', [])):
+        sys.exit(97)
+    state['installed'] = []
+    registry.write_text(json.dumps(state))
+    print('{}')
+elif len(args) == 5 and args[:3] == ['plugin', 'marketplace', 'remove'] and args[4] == '--json':
+    if state.get('marketplace') != args[3]: sys.exit(97)
+    state.pop('marketplace', None)
+    registry.write_text(json.dumps(state))
+    print('{}')
 else:
     sys.exit(97)
 ''')

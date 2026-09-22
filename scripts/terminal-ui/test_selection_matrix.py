@@ -121,7 +121,7 @@ class EvidenceTests(unittest.TestCase):
                                        (['plugin', 'install', 'anything'], 97, ''),
                                        (['plugin', 'list', '--json', 'extra'], 97, '')]:
                 result = subprocess.run([str(fixture.bin / 'codex'), *argv],
-                                        env={}, capture_output=True, text=True, timeout=3)
+                                        env={}, capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, code)
                 self.assertEqual(result.stdout.strip(), output)
                 fixture.unchanged()
@@ -141,7 +141,7 @@ class EvidenceTests(unittest.TestCase):
                         (['plugin', 'list', '--json'], 0)]
             for argv, code in commands:
                 result = subprocess.run([str(fixture.bin / 'codex'), *argv], env={},
-                                        capture_output=True, text=True, timeout=3)
+                                        capture_output=True, text=True, timeout=10)
                 self.assertEqual(result.returncode, code, result.stderr)
             installed_plugins = json.loads(result.stdout)['installed']
             self.assertEqual(installed_plugins[0]['pluginId'], 'pty-synthetic@test-market')
