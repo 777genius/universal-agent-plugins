@@ -275,7 +275,7 @@ def main():
         package, fuzz = target.split(":", 1)
         proof.run(name, [
             go, "test", package, "-run=^$", f"-fuzz=^{fuzz}$",
-            "-fuzztime=2s",
+            "-fuzztime=5s", "-parallel=2",
         ], cwd=cwd)
 
     proof.run("npm-package-tests", [
