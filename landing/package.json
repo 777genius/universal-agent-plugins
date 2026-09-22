@@ -15,12 +15,14 @@
     "test:artifact": "node --experimental-strip-types --test ./tests/browser/artifact-*.mjs",
     "check:pages": "node --experimental-strip-types ./scripts/check-pages-artifact.mjs",
     "preview": "nuxt preview",
-    "test:registry": "node --test --experimental-strip-types tests/*.test.ts",
+    "test:registry": "node --test --experimental-strip-types tests/*.test.ts scripts/check-quality-scope.test.mjs",
     "test:browser": "playwright test",
-    "lint": "eslint \"app.vue\" \"error.vue\" \"components/**/*.{vue,ts}\" \"composables/**/*.{ts,js}\" \"data/**/*.{ts,js}\" \"layouts/**/*.vue\" \"pages/**/*.vue\" \"plugins/**/*.{ts,js}\" \"server/**/*.{ts,js}\" \"stores/**/*.{ts,js}\" \"types/**/*.ts\" \"utils/**/*.{ts,js}\" \"nuxt.config.ts\" --no-error-on-unmatched-pattern",
+    "lint": "pnpm run quality:scope && pnpm run lint:source",
     "lint:fix": "pnpm run lint -- --fix",
     "format": "prettier --check app.vue error.vue assets/styles/main.scss components composables content data layouts locales pages plugins server stores types utils nuxt.config.ts package.json",
-    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data layouts locales pages plugins server stores types utils nuxt.config.ts package.json"
+    "format:fix": "prettier --write app.vue error.vue assets/styles/main.scss components composables content data layouts locales pages plugins server stores types utils nuxt.config.ts package.json",
+    "quality:scope": "node ./scripts/check-quality-scope.mjs",
+    "lint:source": "eslint \"app.vue\" \"error.vue\" \"build/**/*.ts\" \"components/**/*.{vue,ts}\" \"composables/**/*.{ts,js}\" \"data/**/*.{ts,js}\" \"layouts/**/*.vue\" \"pages/**/*.vue\" \"plugins/**/*.{ts,js}\" \"server/**/*.{ts,js}\" \"stores/**/*.{ts,js}\" \"types/**/*.ts\" \"utils/**/*.{ts,js}\" \"scripts/**/*.mjs\" \".eslintrc.cjs\" \"eslint.config.mjs\" \"i18n.config.ts\" \"nuxt.config.ts\" \"playwright.config.ts\" --no-error-on-unmatched-pattern"
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",

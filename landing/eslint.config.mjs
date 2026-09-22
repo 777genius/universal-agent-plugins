@@ -1,6 +1,7 @@
 // @ts-check
 import withNuxt from './.nuxt/eslint.config.mjs'
 import tsParser from '@typescript-eslint/parser'
+import { protectedRules } from './scripts/quality-policy.mjs'
 
 export default withNuxt(
   {
@@ -8,6 +9,10 @@ export default withNuxt(
     languageOptions: {
       parser: tsParser,
     },
+  },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,vue}'],
+    rules: protectedRules,
   },
   {
     files: ['**/*.vue'],

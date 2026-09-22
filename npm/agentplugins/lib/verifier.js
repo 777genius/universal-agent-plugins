@@ -91,7 +91,10 @@ async function downloadFile(value, destination, expected, options = {}, redirect
     request.once("error", error => {
       // A superseded request may still fail while its response drains. Only
       // the descendant owns completion, including waiting for output close.
-      if (!delegated) streamFailure ? streamFailure(error) : reject(error);
+      if (!delegated) {
+        if (streamFailure) streamFailure(error);
+        else reject(error);
+      }
     });
     abort = () => request.destroy(new Error("binary acquisition cancelled"));
     options.signal?.addEventListener("abort", abort, { once: true });

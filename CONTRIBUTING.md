@@ -151,6 +151,32 @@ went down:
 cd install/integrationctl/agentplugins && go run ./internal/archtest -update
 ```
 
+## JavaScript and TypeScript Quality Surfaces
+
+The repository keeps each existing package or site as the owner of its quality
+route. Run the route for every surface you change:
+
+| Surface | Required route | Coverage |
+|---|---|---|
+| `npm/agentplugins`, `npm/plugin-kit-ai`, `npm/plugin-kit-ai-runtime` | `make test-agentplugins-js` | source admission, protected rules, production correctness, runtime declarations |
+| `landing` | `cd landing && pnpm lint && pnpm test:registry && pnpm exec vue-tsc --noEmit` | source admission, ESLint policy, registry tests, TypeScript/Vue |
+| `website` | `cd website && pnpm docs:check` | source admission, protected rules, docs tests, generated-site drift |
+| Go and Python | existing root/module lint, test, vet, security, and workflow gates | unchanged |
+
+These surfaces use their existing Node and package-manager contracts, so the
+repository does not add a root JavaScript runner or claim one tool covers every
+language. Fix diagnostics in the owning surface. Do not hide production or
+tooling paths with broad ignores, replace required commands with no-ops, or
+claim typed coverage without the existing compiler-backed route.
+
+Engineering Foundation 1.5.0 requires Node `>=24.18 <25` and pnpm
+`>=11.17 <12`. The active-equivalent evidence for this bounded rollout uses the
+exact local owner contracts instead: website uses Node `22.21.1` with pnpm
+`8.15.1`, landing uses Node `22.21.1` with pnpm `12.3.4`, and `npm/quality` is
+an npm-owned private tool surface. Manager and engine migration are out of
+scope. Lint evidence proves source admission and lint policy only; typed
+coverage comes from the separately invoked TypeScript or Vue compiler route.
+
 ## Pull Requests
 
 - keep PRs scoped to one change family

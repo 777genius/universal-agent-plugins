@@ -10,11 +10,11 @@ export function loadRegistryIndex(
   try {
     sourceText = readFileSync(path, 'utf8');
   } catch (error) {
-    throw new Error(`Unable to read registry index at ${path}: ${String(error)}`);
+    throw new Error(`Unable to read registry index at ${path}: ${String(error)}`, { cause: error });
   }
   try {
     return parseDirectoryData(JSON.parse(sourceText) as unknown, mode);
   } catch (error) {
-    throw new Error(`Invalid registry index at ${path}: ${String(error)}`);
+    throw new Error(`Invalid registry index at ${path}: ${String(error)}`, { cause: error });
   }
 }

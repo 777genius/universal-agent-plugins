@@ -260,7 +260,7 @@ test("historical schema-v2 staging rejects missing notices before mutations or p
   assert.deepEqual(snapshot(), before);
 });
 
-test("staged package tests are hermetic to repository layout and caller cwd", {
+test("staged package tests are hermetic to repository and private quality files", {
   skip: process.env.AGENTPLUGINS_STAGED_TEST_CHILD === "1"
 }, async (t) => {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-hermetic-stage-"));
@@ -281,6 +281,8 @@ test("staged package tests are hermetic to repository layout and caller cwd", {
   prepareRelease(assetsRoot, `agentplugins-v${version}`, COMMIT);
   const evidenceRoot = await fixtureEvidence(root);
   stage(packageRoot, assetsRoot, version, COMMIT, { evidenceRoot });
+  assert.equal(fs.existsSync(path.join(root, "Makefile")), false);
+  assert.equal(fs.existsSync(path.join(root, "npm", "quality")), false);
 
   const result = childProcess.spawnSync("npm", ["--prefix", packageRoot, "test"], {
     cwd: callerRoot,
