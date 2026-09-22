@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	ReceiptPhaseStateCommitted = domain.ReceiptPhaseStateCommitted
-	ReceiptPhaseCommitted      = domain.ReceiptPhaseCommitted
+	ReceiptPhaseStateCommitted = "state_committed"
+	ReceiptPhaseCommitted      = "committed"
 )
 
 type GroupFailurePhase string

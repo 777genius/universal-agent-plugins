@@ -209,7 +209,7 @@ func TestStoreValidatesStandaloneTransactionReceipts(t *testing.T) {
 	t.Parallel()
 	base := domain.MutationReceipt{
 		OperationID: "standalone-op", Sequence: 1, MutationType: "directory_remove",
-		ClientBindingID: "removed-binding", Phase: domain.ReceiptPhaseCommitted,
+		ClientBindingID: "removed-binding", Phase: receiptPhaseCommitted,
 	}
 	for _, test := range []struct {
 		name    string
@@ -218,7 +218,7 @@ func TestStoreValidatesStandaloneTransactionReceipts(t *testing.T) {
 	}{
 		{name: "valid committed"},
 		{name: "valid state committed", mutate: func(receipt *domain.MutationReceipt) {
-			receipt.Phase = domain.ReceiptPhaseStateCommitted
+			receipt.Phase = receiptPhaseStateCommitted
 		}},
 		{name: "invalid phase", mutate: func(receipt *domain.MutationReceipt) {
 			receipt.Phase = "tampered"
@@ -250,10 +250,10 @@ func TestStoreRejectsReceiptOperationIDSharedWithStandaloneReceipt(t *testing.T)
 	var bindingID string
 	for key, client := range installation.Clients {
 		bindingID = client.ClientBindingID
-		client.Receipts = []domain.MutationReceipt{{OperationID: "duplicate-op", Sequence: 1, MutationType: "directory_swap", ClientBindingID: bindingID, Phase: domain.ReceiptPhaseCommitted}}
+		client.Receipts = []domain.MutationReceipt{{OperationID: "duplicate-op", Sequence: 1, MutationType: "directory_swap", ClientBindingID: bindingID, Phase: receiptPhaseCommitted}}
 		installation.Clients[key] = client
 	}
-	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{installation}, TransactionReceipts: []domain.MutationReceipt{{OperationID: "duplicate-op", Sequence: 2, MutationType: "directory_remove", ClientBindingID: bindingID, Phase: domain.ReceiptPhaseCommitted}}}
+	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{installation}, TransactionReceipts: []domain.MutationReceipt{{OperationID: "duplicate-op", Sequence: 2, MutationType: "directory_remove", ClientBindingID: bindingID, Phase: receiptPhaseCommitted}}}
 	err := (Store{Path: filepath.Join(t.TempDir(), "state-v2.json")}).Save(state)
 	if err == nil || !strings.Contains(err.Error(), "duplicate receipt operation_id") {
 		t.Fatalf("save error = %v", err)

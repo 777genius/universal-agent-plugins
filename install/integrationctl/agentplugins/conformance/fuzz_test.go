@@ -24,6 +24,9 @@ func FuzzPluginManifest(f *testing.F) {
 		if len(body) > 1<<20 {
 			t.Skip()
 		}
-		decoder.Plugin(body)
+		_, _, _, err := decoder.Plugin(body)
+		if err != nil {
+			return
+		}
 	})
 }

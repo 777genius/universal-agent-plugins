@@ -16,7 +16,8 @@ import (
 
 // ErrActive lets callers report deterministic conflict diagnostics without
 // parsing platform-specific advisory-lock errors.
-var ErrActive = errors.New("another agentplugins mutation is active")
+var ErrActive = errors.New(
+	"another agentplugins mutation is active; wait for it to finish, then retry the same command; no target was changed")
 
 type Lock struct {
 	Path string

@@ -1,13 +1,11 @@
 package agentpluginscli
 
 import (
-	"errors"
 	"io"
 	"strings"
 	"unicode"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -15,9 +13,6 @@ import (
 // Malformed flags and unknown commands deliberately keep their diagnostic unstyled.
 func ErrorText(args []string, output io.Writer, err error) string {
 	text := safeDiagnosticText(err.Error())
-	if errors.Is(err, processlock.ErrActive) {
-		text += "; wait for it to finish, then retry the same command; no target was changed"
-	}
 	root := NewRoot(App{ErrorOutput: output})
 	cmd, remaining, findErr := root.Find(args)
 	if findErr != nil {

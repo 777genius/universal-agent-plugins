@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 )
 
 func TestErrorTextMissingAddArguments(t *testing.T) {
@@ -62,20 +61,5 @@ func TestErrorTextHostileMultiline(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestErrorTextActiveMutationGuidance(t *testing.T) {
-	err := fmt.Errorf("group apply: %w: resource temporarily unavailable", processlock.ErrActive)
-	got := ErrorText([]string{"add", "demo", "--color=never"}, io.Discard, err)
-	for _, want := range []string{
-		"another agentplugins mutation is active",
-		"wait for it to finish",
-		"retry the same command",
-		"no target was changed",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("diagnostic %q does not contain %q", got, want)
-		}
 	}
 }

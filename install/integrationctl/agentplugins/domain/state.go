@@ -131,11 +131,6 @@ type NativeObjectOwnership struct {
 	UserModified    bool   `json:"user_modified,omitempty"`
 }
 
-const (
-	ReceiptPhaseStateCommitted = "state_committed"
-	ReceiptPhaseCommitted      = "committed"
-)
-
 type MutationReceipt struct {
 	OperationID      string `json:"operation_id"`
 	OperationGroupID string `json:"operation_group_id,omitempty"`

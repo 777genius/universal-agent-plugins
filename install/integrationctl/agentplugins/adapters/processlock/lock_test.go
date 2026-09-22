@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -16,6 +17,9 @@ func TestLockIsExclusiveAndReleasedWithProcessHandle(t *testing.T) {
 	}
 	if _, err := lock.Acquire(context.Background()); !errors.Is(err, ErrActive) {
 		t.Fatalf("second process handle conflict = %v", err)
+	} else if message := err.Error(); !strings.Contains(message, "retry the same command") ||
+		!strings.Contains(message, "no target was changed") {
+		t.Fatalf("second process handle conflict is not actionable: %v", err)
 	}
 	if err := release(); err != nil {
 		t.Fatal(err)

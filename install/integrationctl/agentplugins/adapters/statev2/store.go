@@ -16,6 +16,11 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+const (
+	receiptPhaseStateCommitted = "state_committed"
+	receiptPhaseCommitted      = "committed"
+)
+
 var fullLowercaseSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type Store struct {
@@ -365,7 +370,7 @@ func Validate(state domain.StateFileV2) error {
 }
 
 func validReceiptPhase(value string) bool {
-	return value == domain.ReceiptPhaseStateCommitted || value == domain.ReceiptPhaseCommitted
+	return value == receiptPhaseStateCommitted || value == receiptPhaseCommitted
 }
 
 func validMaterializationState(value domain.MaterializationState) bool {
