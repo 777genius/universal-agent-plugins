@@ -1,4 +1,5 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
+import { clientLandingPages } from '../../data/clients';
 import { expect, test } from '@playwright/test';
 
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
@@ -48,7 +49,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   );
   await expect(page.locator('.command-snippet').first()).not.toContainText('--target');
   await expect(page.getByText('Supported clients')).toBeVisible();
-  await expect(page.locator('.client-strip li')).toHaveCount(11);
+  await expect(page.locator('.client-strip li')).toHaveCount(clientLandingPages.length);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('.plugin-card').first()).toBeVisible();
   const securityBadge = page.locator('.plugin-card__security').first();
@@ -518,7 +519,7 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   expect(sitemap).not.toContain('/plugins/community/');
   expect(sitemap).not.toContain('/create-plugin/');
   expect(locations.filter((location) => location.includes('/agents/'))).toHaveLength(
-    11 * publishedLocales.length,
+    clientLandingPages.length * publishedLocales.length,
   );
 
   const prefix = '/universal-agent-plugins/';

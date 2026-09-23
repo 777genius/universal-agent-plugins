@@ -32,7 +32,9 @@ test('download has one title, a readable version, and current client support', a
 });
 
 for (const client of clientLandingPages) {
-  test(`${client.name} copies a runnable example and uses canonical catalog links`, async ({ page }) => {
+  test(`${client.name} copies a runnable example and uses canonical catalog links`, async ({
+    page,
+  }) => {
     await page.addInitScript(() => {
       let copied = '';
       Object.defineProperty(navigator, 'clipboard', {
@@ -47,7 +49,8 @@ for (const client of clientLandingPages) {
     });
     await page.goto(`./agents/${client.slug}/`);
     await hydrated(page);
-    const command = `npx universal-agent-plugins add context7 --target ${client.id}`;
+    const source = client.id === 'grok' || client.id === 'kimi' ? './my-plugin' : 'context7';
+    const command = `npx universal-agent-plugins add ${source} --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code').first()).toHaveText(command);
     await install.getByRole('button', { name: 'Copy command', exact: true }).click();
