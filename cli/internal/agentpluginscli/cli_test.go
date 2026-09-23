@@ -22,6 +22,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
@@ -3126,7 +3127,7 @@ func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	mutationLock := processlock.Lock{Path: filepath.Join(root, "data", "mutation.lock")}
 	directory := dirswap.Manager{JournalDir: operations}
 	lifecycle := usecasetest.NewService(usecase.Service{StateStore: store, Planner: planner, Targets: planner, Stager: stager, Activator: providerstest.NewActivator(providers.Activator{}), Lock: mutationLock,
-		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}})
+		Kernel: transaction.Kernel{StateStore: store, Directory: directory}, NativeObserver: fixtureNativeObserver{}, NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeconfig.New()}, PluginData: providers.PluginDataManager{Base: filepath.Join(root, "data", "plugin-data")}})
 	return cliFixture{
 		root: root, store: store, operations: operations,
 		app: App{

@@ -130,7 +130,14 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	if err != nil {
 		return fmt.Errorf("target %s identity preflight: %w", target.Client.ClientID, err)
 	}
+	if err := session.service.checkMCPNamespace(session.ctx, target.Client, &plan, managed); err != nil {
+		return fmt.Errorf("target %s namespace preflight: %w", target.Client.ClientID, err)
+	}
+	session.result.Targets[targetIndex].Plan = plan
 	noChange := !requiresComponentRemoval(plan) && managed != nil && !session.input.Repair && !session.input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
+	if target.Client.ClientID == domain.ClientOpenCode && managed != nil && (managed.Activation == domain.ActivationFailed || managed.Verification == domain.VerificationFailed) {
+		noChange = false
+	}
 	if noChange {
 		session.result.Targets[targetIndex].NoChange = true
 		session.result.Targets[targetIndex].Activation = domain.ActivationOutcome{

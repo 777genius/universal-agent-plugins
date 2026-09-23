@@ -13,7 +13,7 @@ func TestOpenCodeExactKeysBindReceipts(t *testing.T) {
 			paths := Paths{JSON: filepath.Join(root, "opencode.json"), JSONC: filepath.Join(root, "opencode.jsonc")}
 			selected := filepath.Join(root, "opencode."+ext)
 			mustWrite(t, selected, `{"mcp":{}}`)
-			keys := []string{"api/server", "api server", "con", `api"server`, `api\server`, "сервер", "api-server"}
+			keys := []string{"api/server", "other space", "con", `quote"server`, `slash\server`, "сервер", "api-server"}
 			receipts := make([]Receipt, len(keys))
 			kernel := New()
 			for i, name := range keys {

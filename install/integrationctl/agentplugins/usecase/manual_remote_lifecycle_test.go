@@ -112,6 +112,7 @@ func TestKiroSkillSupportsAutomaticAddUpdateAndRepair(t *testing.T) {
 func TestOpenCodeSupportsAutomaticMCPAndSkillLifecycle(t *testing.T) {
 	service, store, _ := serviceFixture(t)
 	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	service.NamespacePreflight = providers.OpenCodeNamespacePreflight{Kernel: nativeconfig.New()}
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, DisplayName: "OpenCode", Status: domain.DetectionDetected,
 		ConfigRoot: filepath.Join(t.TempDir(), "xdg", "opencode"), ExecutablePath: "/test/bin/opencode"}
 	runtimeRoot := t.TempDir()

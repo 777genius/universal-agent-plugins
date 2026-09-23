@@ -57,6 +57,9 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 
 func (session *groupSession) reobserveGroupIdentity() error {
 	for _, target := range session.planned {
+		if err := session.service.checkMCPNamespace(session.ctx, target.input.Client, &target.plan, target.managed); err != nil {
+			return fmt.Errorf("MCP namespace changed before group commit: %w", err)
+		}
 		if target.recovering {
 			if err := session.reobserveRecoveringTarget(target); err != nil {
 				return err

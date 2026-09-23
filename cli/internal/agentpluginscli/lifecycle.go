@@ -220,7 +220,6 @@ type repairResultData struct {
 }
 
 func newRepairResultData(installation domain.Installation, result usecase.AddResult, dryRun bool) repairResultData {
-	result = withOpenCodeRuntimeNotice(result)
 	return repairResultData{
 		OperationID: result.Receipt.OperationID, Plugin: installation.DeclaredName,
 		Version: installation.Package.Version, Source: publicSource(installation.Source),

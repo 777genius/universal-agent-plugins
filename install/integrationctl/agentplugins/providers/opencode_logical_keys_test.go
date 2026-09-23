@@ -16,9 +16,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// These are configuration identities, not filesystem names. Native tool-name
-// normalization and blank-key support are separate from this lifecycle contract.
-var openCodeLogicalKeys = []string{"api/server", "api server", "con", `api"server`, `api\server`, "сервер", "api-server"}
+// These are configuration identities, not filesystem names. They deliberately
+// occupy distinct callable namespaces so their shared lifecycle can succeed.
+var openCodeLogicalKeys = []string{"api/server", "other space", "con", `quote"server`, `slash\server`, "сервер", "api-server"}
 
 func TestOpenCodeLogicalKeysLifecycle(t *testing.T) {
 	for _, ext := range []string{"json", "jsonc"} {

@@ -70,12 +70,13 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 	}
 	return usecase.Service{
 		StateStore: e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager,
-		Detected:       detected,
-		Activator:      seamActivator{inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
-		PluginData:     providers.PluginDataManager{Base: e.cfg.PluginDataBase},
-		Lock:           processlock.Lock{Path: e.cfg.LockFile},
-		Kernel:         transaction.Kernel{StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
-		NativeObserver: observer,
+		Detected:           detected,
+		Activator:          seamActivator{inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
+		PluginData:         providers.PluginDataManager{Base: e.cfg.PluginDataBase},
+		Lock:               processlock.Lock{Path: e.cfg.LockFile},
+		Kernel:             transaction.Kernel{StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
+		NativeObserver:     observer,
+		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},
 	}
 }
 

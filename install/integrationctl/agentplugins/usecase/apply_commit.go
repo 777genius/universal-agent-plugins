@@ -32,6 +32,10 @@ func (session *applySession) stageAndCommit() (AddResult, error) {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return session.result, fmt.Errorf("native identity changed before commit: %w", err)
 	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, session.managedBinding); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return session.result, fmt.Errorf("MCP namespace changed before commit: %w", err)
+	}
 	previousClient := domain.ClientBinding{}
 	if session.existing {
 		previousClient = session.state.Installations[session.installationIndex].Clients[session.clientBindingID]

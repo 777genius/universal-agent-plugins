@@ -149,15 +149,27 @@ func TestAgentpluginsOpenCodeNativeToolCollision(t *testing.T) {
 			}))
 			defer provider.Close()
 			config := map[string]any{"provider": map[string]any{"uap-fixture": map[string]any{"name": "Disposable fixture", "npm": "@ai-sdk/openai-compatible", "env": []string{}, "models": map[string]any{"fixture": map[string]any{"name": "Fixture", "tool_call": true, "limit": map[string]any{"context": 32000, "output": 1024}}}, "options": map[string]any{"apiKey": "disposable-not-a-secret", "baseURL": provider.URL + "/v1"}}}, "model": "uap-fixture/fixture", "small_model": "uap-fixture/fixture", "permission": "allow"}
-			nativeJSON(t, filepath.Join(f.XDGConfig, "opencode", "opencode.json"), config)
 			openCodeWriteFixturePackage(t, f.PackageRoot, "opencode-native-proof", "1.0.0")
 			servers := map[string]any{}
 			for i, name := range names {
 				servers[name] = map[string]any{"type": "streamable-http", "url": fmt.Sprintf("%s/server-%d", mcp.URL, i)}
 			}
 			nativeJSON(t, filepath.Join(f.PackageRoot, "mcp.json"), map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": servers})
-			added := openCodeRunInstaller(t, f, installer, filepath.Dir(client), "add-tool-fixture", "add", f.PackageRoot, "--target", "opencode")
-			openCodeAssertCompleted(t, "tool fixture install", added)
+			var added map[string]any
+			if len(names) == 2 {
+				// Keep upstream collision evidence independent of the installer:
+				// the installer now intentionally refuses this pair before writing.
+				nativeServers := map[string]any{}
+				for i, name := range names {
+					nativeServers[name] = map[string]any{"type": "remote", "url": fmt.Sprintf("%s/server-%d", mcp.URL, i)}
+				}
+				config["mcp"] = nativeServers
+				nativeJSON(t, filepath.Join(f.XDGConfig, "opencode", "opencode.json"), config)
+			} else {
+				nativeJSON(t, filepath.Join(f.XDGConfig, "opencode", "opencode.json"), config)
+				added = openCodeRunInstaller(t, f, installer, filepath.Dir(client), "add-tool-fixture", "add", f.PackageRoot, "--target", "opencode")
+				openCodeAssertCompleted(t, "tool fixture install", added)
+			}
 			installed := openCodeConfigMCP(t, openCodeDebugConfig(t, f, client, "tool-fixture-effective-config"))
 			if len(installed) != len(names) {
 				t.Fatalf("installed MCP count %d, want %d", len(installed), len(names))
@@ -279,8 +291,7 @@ func TestAgentpluginsOpenCodeNativeToolCollision(t *testing.T) {
 			evidence["status"] = "passed"
 
 			// With two logical servers, one offered tool and one dispatch establishes
-			// native tool-ID collision; this is an upstream limitation, not success
-			// evidence for separately addressable tools.
+			// native tool-ID collision independently of the installer guard.
 			if len(names) == 2 {
 				t.Log("native collision observed: two MCP catalogs become one callable tool ID")
 			}

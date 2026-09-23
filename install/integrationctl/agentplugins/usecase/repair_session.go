@@ -79,7 +79,14 @@ func (session *repairSession) loadRepairTarget() error {
 	}
 	session.plan = plan
 	session.result.Plan = plan
-	return session.bindRepairClient(physicalID)
+	if err := session.bindRepairClient(physicalID); err != nil {
+		return err
+	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, &session.client); err != nil {
+		return err
+	}
+	session.result.Plan = session.plan
+	return nil
 }
 
 func (session *repairSession) bindRepairClient(physicalID string) error {

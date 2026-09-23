@@ -34,6 +34,9 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if err := session.service.verifyRepairPrecondition(session.ctx, session.target.ActivePath, session.expectedDigest, verification.Kind, beforeDigest); err != nil {
 		return session.result, err
 	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, &session.client); err != nil {
+		return session.result, fmt.Errorf("MCP namespace changed before repair commit: %w", err)
+	}
 	return session.commitRepairPackage(delivery, beforeDigest)
 }
 

@@ -26,16 +26,17 @@ type Service struct {
 	Targets ports.DeliveryTargetResolver
 	// Detected is the surface map for this operation. The planner is stateless
 	// about detection; the use case copies this onto every PlanRequest.
-	Detected       map[domain.ClientID]domain.DetectedClient
-	Stager         ports.PackageStager
-	Activator      ports.ClientActivator
-	Legacy         ports.LegacyLifecycle
-	LegacyLock     legacyports.LockManager
-	Lock           ports.MutationLock
-	Kernel         transaction.Kernel
-	NativeObserver NativeIdentityObserver
-	PluginData     PluginDataManager
-	Now            func() time.Time
+	Detected           map[domain.ClientID]domain.DetectedClient
+	Stager             ports.PackageStager
+	Activator          ports.ClientActivator
+	Legacy             ports.LegacyLifecycle
+	LegacyLock         legacyports.LockManager
+	Lock               ports.MutationLock
+	Kernel             transaction.Kernel
+	NativeObserver     NativeIdentityObserver
+	NamespacePreflight MCPNamespacePreflight
+	PluginData         PluginDataManager
+	Now                func() time.Time
 }
 
 type NativeIdentityState = domain.NativeIdentityState
@@ -60,6 +61,12 @@ type NativeIdentityObserver interface {
 // executable or query a remote registry.
 type PreparedIdentityObserver interface {
 	ObservePreparedIdentity(context.Context, domain.DetectedClient, domain.DeliveryPlan, *domain.ClientBinding) (domain.NativeIdentityObservation, error)
+}
+
+// MCPNamespacePreflight is process-inert and checks the final selected MCP
+// server names against a client's observable user-level configuration.
+type MCPNamespacePreflight interface {
+	CheckMCPNamespace(context.Context, domain.DetectedClient, domain.DeliveryPlan, *domain.ClientBinding) error
 }
 
 type PluginDataManager interface {

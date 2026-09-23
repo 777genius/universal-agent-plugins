@@ -250,6 +250,9 @@ func (r installReviewRenderer) diagnosticLabel(severity domain.Severity) string 
 	if severity == domain.SeverityError {
 		return "Error"
 	}
+	if severity == domain.SeverityInfo {
+		return "Info"
+	}
 	return "Warning"
 }
 
@@ -290,7 +293,6 @@ func (r installReviewRenderer) wrap(value string, indent int) string {
 func prepareInstallReview(results []usecase.AddResult) ([]usecase.AddResult, sharedInstallReview) {
 	prepared := make([]usecase.AddResult, len(results))
 	for index, result := range results {
-		result = withOpenCodeRuntimeNotice(result)
 		result.Plan.Components = append([]domain.ComponentDecision(nil), result.Plan.Components...)
 		result.Plan.Diagnostics = append([]domain.Diagnostic(nil), result.Plan.Diagnostics...)
 		result.Plan.Warnings = uniqueReviewStrings(result.Plan.Warnings)
@@ -404,7 +406,10 @@ func reviewPlanStatus(plan domain.DeliveryPlan, styles installReviewStyles) (str
 	if plan.Status == domain.PlanManualActivationRequired || plan.Status == domain.PlanPrepared || plan.Activation == domain.ActivationManual || plan.InstallIntent == domain.InstallIntentPrepare {
 		return "! MANUAL STEP", styles.warning
 	}
-	needsReview := plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationPending || plan.Verification == domain.VerificationNotRun || len(plan.Diagnostics) > 0 || len(plan.Warnings) > 0
+	needsReview := plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationPending || plan.Verification == domain.VerificationNotRun || len(plan.Warnings) > 0
+	for _, diagnostic := range plan.Diagnostics {
+		needsReview = needsReview || diagnostic.Severity != domain.SeverityInfo
+	}
 	for _, component := range plan.Components {
 		needsReview = needsReview || component.Support == domain.SupportUnsupported
 	}

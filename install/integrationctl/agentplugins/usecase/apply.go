@@ -188,7 +188,14 @@ func (session *applySession) resolveBinding() error {
 		describeMCPRemovals(&session.plan, session.managedBinding)
 		session.result.Plan = session.plan
 	}
-	return session.rejectBlockedTarget()
+	if err := session.rejectBlockedTarget(); err != nil {
+		return err
+	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, session.managedBinding); err != nil {
+		return err
+	}
+	session.result.Plan = session.plan
+	return nil
 }
 
 func (session *applySession) adoptSharedBinding() {

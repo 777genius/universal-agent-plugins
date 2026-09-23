@@ -48,14 +48,14 @@ func TestInstallReviewCardsFitAndDeduplicateSharedFacts(t *testing.T) {
 			if got := strings.Count(strings.Join(strings.Fields(text), " "), "Verify the plugin once in each selected client"); got != 1 {
 				t.Fatalf("shared action count = %d\n%s", got, text)
 			}
-			if got := strings.Count(text, "✓ AUTO"); got != 2 {
-				t.Fatalf("automatic installation badge count = %d, want 2\n%s", got, text)
+			if got := strings.Count(text, "✓ AUTO"); got != 3 {
+				t.Fatalf("automatic installation badge count = %d, want 3\n%s", got, text)
 			}
 			if got := strings.Count(text, "! MANUAL STEP"); got != 1 {
 				t.Fatalf("manual installation badge count = %d, want 1\n%s", got, text)
 			}
-			if got := strings.Count(text, "! REVIEW"); got != 1 {
-				t.Fatalf("review badge count = %d, want 1\n%s", got, text)
+			if got := strings.Count(text, "! REVIEW"); got != 0 {
+				t.Fatalf("review badge count = %d, want 0\n%s", got, text)
 			}
 			if strings.Contains(text, "✓ READY") || strings.Contains(text, "! SETUP") {
 				t.Fatalf("ambiguous legacy statuses leaked\n%s", text)
@@ -162,7 +162,7 @@ func TestInstallReviewKeepsTargetDiagnosticsWithoutDuplicateWarning(t *testing.T
 	if got := strings.Count(output.String(), openCodeNamespaceNotice); got != 1 {
 		t.Fatalf("OpenCode diagnostic count = %d\n%s", got, output.String())
 	}
-	if !strings.Contains(output.String(), "callable tool-ID uniqueness is not evaluated") {
+	if !strings.Contains(output.String(), "Project settings, later config changes and live tool catalogs were not checked") {
 		t.Fatalf("target-specific diagnostic missing\n%s", output.String())
 	}
 }
@@ -212,10 +212,12 @@ func installReviewFixture() (domain.PackageEnvelope, []usecase.AddResult) {
 			UserActions: []string{verifySelectedClientAction, next},
 		}}
 	}
+	openCode := plan(domain.ClientOpenCode, domain.PackagePrepared, domain.PlanReady, domain.ActivationPrepared, domain.SupportPrepared, "restart OpenCode")
+	openCode.Plan.Diagnostics = []domain.Diagnostic{{Severity: domain.SeverityInfo, Code: openCodeNamespaceNotice, Message: "Initial global config server-name preflight found no potential overlap. Project settings, later config changes and live tool catalogs were not checked; verify tools in OpenCode before relying on them."}}
 	return envelope, []usecase.AddResult{
 		plan(domain.ClientCursor, domain.PackageNative, domain.PlanManualActivationRequired, domain.ActivationManual, domain.SupportNative, "reload Cursor and verify the plugin appears"),
 		plan(domain.ClientClaude, domain.PackageProjection, domain.PlanReady, domain.ActivationActive, domain.SupportProjected, "start a new Claude Code session or run /reload-plugins"),
 		plan(domain.ClientGemini, domain.PackageNative, domain.PlanReady, domain.ActivationPrepared, domain.SupportNative, "reload or restart Gemini CLI"),
-		plan(domain.ClientOpenCode, domain.PackagePrepared, domain.PlanReady, domain.ActivationPrepared, domain.SupportPrepared, "restart OpenCode"),
+		openCode,
 	}
 }

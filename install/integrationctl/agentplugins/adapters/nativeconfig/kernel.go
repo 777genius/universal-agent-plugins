@@ -152,6 +152,33 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			removeEntry(entries, req.Name)
 		}
 	}
+	if requests[0].Codec == CodecOpenCode {
+		proposed := make([]string, 0, len(requests))
+		for _, req := range requests {
+			if req.Action == ActionAdd || req.Action == ActionUpdate {
+				proposed = append(proposed, req.Name)
+			}
+		}
+		if len(proposed) > 0 {
+			active, namesErr := openCodeActiveMCPNames(entries)
+			if namesErr != nil {
+				return nil, namesErr
+			}
+			proposedSet := make(map[string]bool, len(proposed))
+			for _, name := range proposed {
+				proposedSet[name] = true
+			}
+			remaining := active[:0]
+			for _, name := range active {
+				if !proposedSet[name] {
+					remaining = append(remaining, name)
+				}
+			}
+			if err := checkOpenCodeNamespace(remaining, proposed); err != nil {
+				return nil, err
+			}
+		}
+	}
 
 	receipts = make([]Receipt, len(requests))
 	for index, req := range requests {

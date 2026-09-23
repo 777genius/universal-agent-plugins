@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -1978,13 +1979,14 @@ func serviceFixture(t *testing.T) (Service, statev2.Store, domain.DetectedClient
 	stager := providerstest.NewStager(providers.Stager{})
 	targetPlanner := plannertest.NewPlanner(clientplanner.Planner{ManagedRoot: managed})
 	return testService(Service{
-		StateStore: store,
-		Planner:    targetPlanner,
-		Targets:    targetPlanner,
-		Stager:     stager,
-		Activator:  providerstest.NewActivator(providers.Activator{}),
-		PluginData: providers.PluginDataManager{Base: filepath.Join(root, "plugin-data")},
-		Lock:       processlock.Lock{Path: filepath.Join(root, "state", "mutation.lock")},
+		StateStore:         store,
+		Planner:            targetPlanner,
+		Targets:            targetPlanner,
+		Stager:             stager,
+		Activator:          providerstest.NewActivator(providers.Activator{}),
+		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeconfig.New()},
+		PluginData:         providers.PluginDataManager{Base: filepath.Join(root, "plugin-data")},
+		Lock:               processlock.Lock{Path: filepath.Join(root, "state", "mutation.lock")},
 		Kernel: transaction.Kernel{
 			Directory: dirswap.Manager{JournalDir: filepath.Join(root, "state", "operations-v2")},
 		},
