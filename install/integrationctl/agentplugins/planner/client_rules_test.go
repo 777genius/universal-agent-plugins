@@ -71,6 +71,31 @@ func TestCopilotWithoutItsCLIIsNotPromoted(t *testing.T) {
 	}
 }
 
+func TestKiroMCPPlanRequiresCurrentCLIForAutomaticActivation(t *testing.T) {
+	t.Parallel()
+	client := detectedClient(domain.ClientKiro, filepath.Join(t.TempDir(), ".kiro"))
+	planner := testPlanner(Planner{ManagedRoot: t.TempDir()})
+	manual, err := planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manual.Status != domain.PlanManualActivationRequired || manual.Activation != domain.ActivationManual {
+		t.Fatalf("Kiro MCP without CLI claimed automatic activation: %s/%s", manual.Status, manual.Activation)
+	}
+	if contains(manual.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically") {
+		t.Fatalf("manual Kiro plan promised automatic installation: %v", manual.UserActions)
+	}
+
+	client.ExecutablePath = filepath.Join(t.TempDir(), "kiro-cli")
+	automatic, err := planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if automatic.Status != domain.PlanReady || automatic.Activation != domain.ActivationPrepared {
+		t.Fatalf("Kiro MCP with CLI was not promoted: %s/%s", automatic.Status, automatic.Activation)
+	}
+}
+
 const fixtureContext7AppID = "asdk_app_0123456789abcdef0123456789abcdef"
 
 // TestPersonalChatGPTMappingReplacesCatalogEvidenceOrIsRejected covers the only

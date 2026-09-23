@@ -20,8 +20,15 @@ var (
 )
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
-	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically")
+	eligible := shared.OnlyNativeComponents(plan.Components)
+	needsCLI := shared.HasSupportedMCP(plan.Components)
+	canActivate := eligible && (!needsCLI || isKiroCLI(in.Client.ExecutablePath))
+	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, canActivate)
+	if needsCLI && !isKiroCLI(in.Client.ExecutablePath) {
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "install a current Kiro CLI and rerun add to register and verify its MCP servers")
+	} else if canActivate {
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically")
+	}
 	return nil
 }
 

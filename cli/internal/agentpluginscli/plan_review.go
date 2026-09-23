@@ -399,7 +399,9 @@ func reviewPlanStatus(plan domain.DeliveryPlan, styles installReviewStyles) (str
 	if plan.Status == domain.PlanUnsupported || plan.Authentication == domain.AuthenticationFailed || plan.Verification == domain.VerificationFailed {
 		return "✗ BLOCKED", styles.failure
 	}
-	if plan.Status == domain.PlanManualActivationRequired || plan.Status == domain.PlanPrepared || plan.Activation == domain.ActivationManual || plan.Activation == domain.ActivationPrepared {
+	// A ready plan can use ActivationPrepared while the installer is about to
+	// write and verify native client configuration. That is not a user step.
+	if plan.Status == domain.PlanManualActivationRequired || plan.Status == domain.PlanPrepared || plan.Activation == domain.ActivationManual || plan.InstallIntent == domain.InstallIntentPrepare {
 		return "! MANUAL STEP", styles.warning
 	}
 	needsReview := plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationPending || plan.Verification == domain.VerificationNotRun || len(plan.Diagnostics) > 0 || len(plan.Warnings) > 0

@@ -48,8 +48,14 @@ func TestInstallReviewCardsFitAndDeduplicateSharedFacts(t *testing.T) {
 			if got := strings.Count(strings.Join(strings.Fields(text), " "), "Verify the plugin once in each selected client"); got != 1 {
 				t.Fatalf("shared action count = %d\n%s", got, text)
 			}
-			if !strings.Contains(text, "✓ AUTO") || !strings.Contains(text, "! MANUAL STEP") {
-				t.Fatalf("automation statuses missing\n%s", text)
+			if got := strings.Count(text, "✓ AUTO"); got != 2 {
+				t.Fatalf("automatic installation badge count = %d, want 2\n%s", got, text)
+			}
+			if got := strings.Count(text, "! MANUAL STEP"); got != 1 {
+				t.Fatalf("manual installation badge count = %d, want 1\n%s", got, text)
+			}
+			if got := strings.Count(text, "! REVIEW"); got != 1 {
+				t.Fatalf("review badge count = %d, want 1\n%s", got, text)
 			}
 			if strings.Contains(text, "✓ READY") || strings.Contains(text, "! SETUP") {
 				t.Fatalf("ambiguous legacy statuses leaked\n%s", text)
@@ -75,6 +81,18 @@ func TestInstallReviewUsesDefaultForegroundForEssentialText(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("background-specific foreground leaked: %q", forbidden)
 		}
+	}
+}
+
+func TestInstallReviewKeepsExplicitPreparationManual(t *testing.T) {
+	status, _ := reviewPlanStatus(domain.DeliveryPlan{
+		Status: domain.PlanReady, Activation: domain.ActivationPrepared,
+		InstallIntent:  domain.InstallIntentPrepare,
+		Authentication: domain.AuthenticationNotRequired,
+		Verification:   domain.VerificationPackageValid,
+	}, newInstallReviewRenderer(80, false).styles)
+	if status != "! MANUAL STEP" {
+		t.Fatalf("explicit preparation badge = %q", status)
 	}
 }
 
@@ -186,18 +204,18 @@ func installReviewFixture() (domain.PackageEnvelope, []usecase.AddResult) {
 	component := func(support domain.SupportLevel) []domain.ComponentDecision {
 		return []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "playwright", Support: support}}
 	}
-	plan := func(client domain.ClientID, mode domain.PackageMode, status domain.PlanStatus, support domain.SupportLevel, next string) usecase.AddResult {
+	plan := func(client domain.ClientID, mode domain.PackageMode, status domain.PlanStatus, activation domain.ActivationState, support domain.SupportLevel, next string) usecase.AddResult {
 		return usecase.AddResult{Plan: domain.DeliveryPlan{
-			ClientID: client, Scope: domain.ScopeUser, PackageMode: mode, Status: status,
+			ClientID: client, Scope: domain.ScopeUser, PackageMode: mode, Status: status, Activation: activation,
 			Authentication: domain.AuthenticationNotRequired, Verification: domain.VerificationPackageValid,
 			Components: component(support), Warnings: []string{catalogNotTestedWarning, catalogRuntimeNotTestedWarning},
 			UserActions: []string{verifySelectedClientAction, next},
 		}}
 	}
 	return envelope, []usecase.AddResult{
-		plan(domain.ClientCursor, domain.PackageNative, domain.PlanManualActivationRequired, domain.SupportNative, "reload Cursor and verify the plugin appears"),
-		plan(domain.ClientClaude, domain.PackageProjection, domain.PlanReady, domain.SupportProjected, "start a new Claude Code session or run /reload-plugins"),
-		plan(domain.ClientGemini, domain.PackageNative, domain.PlanReady, domain.SupportNative, "reload or restart Gemini CLI"),
-		plan(domain.ClientOpenCode, domain.PackagePrepared, domain.PlanReady, domain.SupportPrepared, "restart OpenCode"),
+		plan(domain.ClientCursor, domain.PackageNative, domain.PlanManualActivationRequired, domain.ActivationManual, domain.SupportNative, "reload Cursor and verify the plugin appears"),
+		plan(domain.ClientClaude, domain.PackageProjection, domain.PlanReady, domain.ActivationActive, domain.SupportProjected, "start a new Claude Code session or run /reload-plugins"),
+		plan(domain.ClientGemini, domain.PackageNative, domain.PlanReady, domain.ActivationPrepared, domain.SupportNative, "reload or restart Gemini CLI"),
+		plan(domain.ClientOpenCode, domain.PackagePrepared, domain.PlanReady, domain.ActivationPrepared, domain.SupportPrepared, "restart OpenCode"),
 	}
 }

@@ -13,7 +13,8 @@ var (
 	_ clients.Lifecycle = (*Adapter)(nil)
 )
 
-// Activate leaves Cursor as a manual registration. There is no managed CLI.
+// Activate leaves Cursor discovery pending until the user reloads the client.
+// The native package is already in Cursor's local plugin directory.
 func (*Adapter) Activate(_ context.Context, _ clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
@@ -25,13 +26,12 @@ func (*Adapter) Activate(_ context.Context, _ clients.Env, request domain.Activa
 		outcome.LocalActions = []string{fmt.Sprintf("open Cursor and verify the plugin from %s is visible and enabled", request.Delivery.ActivePath)}
 		return outcome, nil
 	}
-	outcome.UserActions = append(outcome.UserActions, "register the prepared package in Cursor and verify it is visible before using its components")
-	outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("open Cursor and register %s, then reload Cursor and verify %s is visible", request.Delivery.ActivePath, request.DeclaredName))
+	outcome.UserActions = append(outcome.UserActions, "reload Cursor and verify the local plugin is visible before using its components")
+	outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("reload Cursor with Developer: Reload Window, then verify %s from %s is visible; local plugin imports must be allowed", request.DeclaredName, request.Delivery.ActivePath))
 	return outcome, nil
 }
 
-// Deactivate has nothing to unwind: Cursor never received a managed CLI
-// registration.
+// Deactivate has nothing to unwind: Cursor never received a managed CLI entry.
 func (*Adapter) Deactivate(_ context.Context, _ clients.Env, _ domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	return shared.StartedDeactivation(), nil
 }
