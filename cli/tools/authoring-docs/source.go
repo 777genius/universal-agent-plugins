@@ -108,7 +108,7 @@ var factoryPins = []sourcePin{
 	{"cli/internal/agentpluginscli/outdated.go", "3a121369fbda57e812254cc38efd4ba1abf86f6369eea771085bd7183c03a7ac"},
 	{"cli/internal/agentpluginscli/opencode_runtime_notice.go", "de28d6e69aeeabce1c601761f2d3a1d459b97060f8bcbe2ea226dc02579f8c99"},
 	{"cli/internal/agentpluginscli/output.go", "571e944a73ac3cc89e8b66b84fb0274943913dd4ca2a28f953c5563d400ce8dc"},
-	{"cli/internal/agentpluginscli/plan_review.go", "4fa5bf70332c79c69e02a806ce2c213bbafeaed713f5c4949ea4f42df1530c1e"},
+	{"cli/internal/agentpluginscli/plan_review.go", "4f9ea661ddaa5135d3c827b07546965fef5a89b9589aa103a7a882b161604d75"},
 	{"cli/internal/agentpluginscli/plan_review_format.go", "f2633e875009e0e0c40aa4d4ca5e29f58346ba2cbfb204258534bf2cab774c6c"},
 	{"cli/internal/agentpluginscli/preflight.go", "22708d5f0008418c5c4f2cc959719dfabda0a33432e4cc8bd1bbd386151ae0d3"},
 	{"cli/internal/agentpluginscli/prepare.go", "92590c7463c91ec4459318e71085b3d5a511551ce912b172aecb26c6e464bf5a"},
