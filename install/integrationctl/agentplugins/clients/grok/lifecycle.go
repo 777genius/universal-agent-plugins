@@ -55,19 +55,19 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return outcome, nil
 	}
 	if found {
-		if _, err := shared.RunClientCommand(ctx, env.Runner, "Grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName); err != nil {
+		if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName); err != nil {
 			return activationError(outcome, request, fmt.Errorf("uninstall previous Grok plugin: %w", err))
 		}
 		if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
 			return activationError(outcome, request, fmt.Errorf("verify previous Grok plugin removal: %w", err))
 		}
 	}
-	_, installErr := shared.RunClientCommand(ctx, env.Runner, "Grok Build", request.BackendExecutable, "plugin", "install", "--trust", request.Delivery.ActivePath)
+	_, installErr := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "install", "--trust", request.Delivery.ActivePath)
 	verified, verifyErr := verifyActivation(ctx, env, request, outcome)
 	if installErr != nil {
 		// A same-version update may change package content, so a stale listing
 		// cannot prove a failed install delivered the new package bytes.
-		return shared.FailedActivation(outcome, "inspect `grok plugin list --json` and retry installation", fmt.Errorf("install Grok plugin: %w; verification: %v", installErr, verifyErr))
+		return shared.FailedActivation(outcome, "inspect `grok plugin list --json` and retry installation", errors.Join(fmt.Errorf("install grok plugin: %w", installErr), verifyErr))
 	}
 	if verifyErr == nil && verified.Verification == domain.VerificationInstalled {
 		return verified, nil
@@ -106,7 +106,7 @@ func verifyAbsent(ctx context.Context, env clients.Env, executable, name string)
 		return err
 	}
 	if _, found := findEntry(entries, name); found {
-		return fmt.Errorf("Grok plugin %q remains registered", name)
+		return fmt.Errorf("grok plugin %q remains registered", name)
 	}
 	return nil
 }
@@ -134,12 +134,12 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 		return outcome, nil
 	}
 	if !expectedEntry(entry, request.ManagedArtifactPath) {
-		return outcome, fmt.Errorf("Grok plugin %q is registered from a different source; refusing to uninstall it", request.DeclaredName)
+		return outcome, fmt.Errorf("grok plugin %q is registered from a different source; refusing to uninstall it", request.DeclaredName)
 	}
-	_, uninstallErr := shared.RunClientCommand(ctx, env.Runner, "Grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName)
+	_, uninstallErr := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName)
 	if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
 		if uninstallErr != nil {
-			return outcome, fmt.Errorf("uninstall Grok plugin: %w; verification: %v", uninstallErr, err)
+			return outcome, errors.Join(fmt.Errorf("uninstall grok plugin: %w", uninstallErr), fmt.Errorf("verification: %w", err))
 		}
 		return outcome, err
 	}

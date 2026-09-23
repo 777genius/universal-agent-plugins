@@ -26,6 +26,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ doma
 	}
 	record, err := reg.record(p.DeclaredName, p.ActivePath)
 	if err != nil {
+		//nolint:nilerr // A name or root conflict is a collision finding, not an inspection error.
 		return clients.RegistryCollision, nil
 	}
 	if record == nil {

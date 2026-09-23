@@ -26,7 +26,7 @@ type registry struct {
 func registryPath(root string) string { return filepath.Join(root, "plugins", "installed.json") }
 func validateRegistryPath(root string) error {
 	if !filepath.IsAbs(root) {
-		return fmt.Errorf("Kimi configuration root must be absolute")
+		return fmt.Errorf("kimi configuration root must be absolute")
 	}
 	return pathpolicy.RequireContainedChild(root, registryPath(root))
 }
@@ -58,7 +58,7 @@ func readRegistry(root string) (registry, error) {
 	}
 	records, ok := doc["plugins"].([]any)
 	if !ok {
-		return registry{}, fmt.Errorf("Kimi registry plugins must be an array")
+		return registry{}, fmt.Errorf("kimi registry plugins must be an array")
 	}
 	ids := map[string]bool{}
 	for _, raw := range records {
@@ -89,11 +89,11 @@ func (r registry) record(id, root string) (map[string]any, error) {
 		sameRoot := shared.SameCleanPath(record["root"].(string), root)
 		if strings.EqualFold(recordID, id) {
 			if recordID != id || !sameRoot {
-				return nil, fmt.Errorf("Kimi plugin identity collision for %q", id)
+				return nil, fmt.Errorf("kimi plugin identity collision for %q", id)
 			}
 			found = record
 		} else if sameRoot {
-			return nil, fmt.Errorf("Kimi plugin root is claimed by %q", recordID)
+			return nil, fmt.Errorf("kimi plugin root is claimed by %q", recordID)
 		}
 	}
 	return found, nil
@@ -124,11 +124,29 @@ func mutateRegistry(root, id, active string, remove, replace bool, now time.Time
 		return fmt.Errorf("lock Kimi registry: %w", err)
 	}
 	_ = file.Close()
-	defer os.Remove(lock)
+	defer func() { _ = os.Remove(lock) }()
 	current, err := readRegistry(root)
 	if err != nil {
 		return err
 	}
+	if err := applyRegistryMutation(&current, id, active, remove, replace, now); err != nil {
+		return err
+	}
+	body, err := json.MarshalIndent(current.document, "", "  ")
+	if err != nil {
+		return err
+	}
+	latest, err := readRegistry(root)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(latest.original, current.original) {
+		return fmt.Errorf("kimi registry changed concurrently")
+	}
+	return atomicfile.Write(registryPath(root), append(body, '\n'), 0o600)
+}
+
+func applyRegistryMutation(current *registry, id, active string, remove, replace bool, now time.Time) error {
 	record, err := current.record(id, active)
 	if err != nil {
 		return err
@@ -146,7 +164,7 @@ func mutateRegistry(root, id, active string, remove, replace bool, now time.Time
 		current.document["plugins"] = kept
 	} else {
 		if record != nil && !replace {
-			return fmt.Errorf("Kimi registry entry already exists without managed ownership")
+			return fmt.Errorf("kimi registry entry already exists without managed ownership")
 		}
 		stamp := now.UTC().Format(time.RFC3339Nano)
 		if record == nil {
@@ -157,18 +175,7 @@ func mutateRegistry(root, id, active string, remove, replace bool, now time.Time
 		record["updatedAt"] = stamp
 		current.document["plugins"] = current.records
 	}
-	body, err := json.MarshalIndent(current.document, "", "  ")
-	if err != nil {
-		return err
-	}
-	latest, err := readRegistry(root)
-	if err != nil {
-		return err
-	}
-	if !bytes.Equal(latest.original, current.original) {
-		return fmt.Errorf("Kimi registry changed concurrently")
-	}
-	return atomicfile.Write(registryPath(root), append(body, '\n'), 0o600)
+	return nil
 }
 func validateIdentity(root, id, active string) error {
 	if err := validateRegistryPath(root); err != nil {
@@ -181,11 +188,11 @@ func validateIdentity(root, id, active string) error {
 		return err
 	}
 	if !filepath.IsAbs(active) {
-		return fmt.Errorf("Kimi managed plugin root must be absolute")
+		return fmt.Errorf("kimi managed plugin root must be absolute")
 	}
 	base := filepath.Join(root, "plugins", "managed")
 	if filepath.Dir(filepath.Clean(active)) != filepath.Clean(base) {
-		return fmt.Errorf("Kimi plugin is outside managed directory")
+		return fmt.Errorf("kimi plugin is outside managed directory")
 	}
 	return pathpolicy.RequireContainedChild(root, active)
 }

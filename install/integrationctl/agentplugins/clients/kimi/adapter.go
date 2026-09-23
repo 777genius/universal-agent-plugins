@@ -43,7 +43,7 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 }
 func (*Adapter) TargetRoot(client domain.DetectedClient, _ domain.PackageMode, _ string) (string, string, error) {
 	if !filepath.IsAbs(client.ConfigRoot) {
-		return "", "", fmt.Errorf("Kimi configuration root must be absolute")
+		return "", "", fmt.Errorf("kimi configuration root must be absolute")
 	}
 	return client.ConfigRoot, filepath.Join(client.ConfigRoot, "plugins", "managed"), nil
 }

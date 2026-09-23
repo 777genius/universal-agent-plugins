@@ -28,43 +28,9 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 	if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./skills/"
 	}
-	servers := map[string]any{}
-	for _, name := range shared.SupportedMCPNames(in.Plan) {
-		server, ok := in.Envelope.MCP.Servers[name]
-		if !ok {
-			return nil, fmt.Errorf("missing Kimi MCP server %q", name)
-		}
-		config := shared.CloneObject(server.Decoded)
-		switch server.Type {
-		case "stdio":
-			delete(config, "type")
-			if err := shared.ApplyStdioDataContract(config, in.Plan.ActivePath, in.PluginDataPath, in.StagingPath); err != nil {
-				return nil, fmt.Errorf("Kimi MCP %s: %w", name, err)
-			}
-			command, _ := config["command"].(string)
-			if filepath.IsAbs(command) {
-				relative, err := pluginRelative(in.Plan.ActivePath, command)
-				if err != nil {
-					return nil, err
-				}
-				config["command"] = relative
-			} else if command == "" || strings.ContainsAny(command, `/\:`) {
-				return nil, fmt.Errorf("Kimi MCP command must be on PATH or within plugin root")
-			}
-			cwd, _ := config["cwd"].(string)
-			relative, err := pluginRelative(in.Plan.ActivePath, cwd)
-			if err != nil {
-				return nil, err
-			}
-			config["cwd"] = relative
-		case "streamable-http":
-			config["type"] = "http"
-		case "sse":
-			config["type"] = "sse"
-		default:
-			return nil, fmt.Errorf("unsupported Kimi MCP transport %q", server.Type)
-		}
-		servers[name] = config
+	servers, err := projectMCPServers(in)
+	if err != nil {
+		return nil, err
 	}
 	if len(servers) > 0 {
 		manifest["mcpServers"] = servers
@@ -94,13 +60,63 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 	}
 	return nil, nil
 }
+
+func projectMCPServers(in clients.ProjectionInput) (map[string]any, error) {
+	servers := map[string]any{}
+	for _, name := range shared.SupportedMCPNames(in.Plan) {
+		server, ok := in.Envelope.MCP.Servers[name]
+		if !ok {
+			return nil, fmt.Errorf("missing kimi MCP server %q", name)
+		}
+		config := shared.CloneObject(server.Decoded)
+		switch server.Type {
+		case "stdio":
+			if err := projectStdioMCP(config, in); err != nil {
+				return nil, fmt.Errorf("kimi MCP %s: %w", name, err)
+			}
+		case "streamable-http":
+			config["type"] = "http"
+		case "sse":
+			config["type"] = "sse"
+		default:
+			return nil, fmt.Errorf("unsupported kimi MCP transport %q", server.Type)
+		}
+		servers[name] = config
+	}
+	return servers, nil
+}
+
+func projectStdioMCP(config map[string]any, in clients.ProjectionInput) error {
+	delete(config, "type")
+	if err := shared.ApplyStdioDataContract(config, in.Plan.ActivePath, in.PluginDataPath, in.StagingPath); err != nil {
+		return err
+	}
+	command, _ := config["command"].(string)
+	if filepath.IsAbs(command) {
+		relative, err := pluginRelative(in.Plan.ActivePath, command)
+		if err != nil {
+			return err
+		}
+		config["command"] = relative
+	} else if command == "" || strings.ContainsAny(command, `/\:`) {
+		return fmt.Errorf("kimi MCP command must be on PATH or within plugin root")
+	}
+	cwd, _ := config["cwd"].(string)
+	relative, err := pluginRelative(in.Plan.ActivePath, cwd)
+	if err != nil {
+		return err
+	}
+	config["cwd"] = relative
+	return nil
+}
+
 func pluginRelative(root, path string) (string, error) {
 	if !filepath.IsAbs(root) || !filepath.IsAbs(path) {
-		return "", fmt.Errorf("Kimi MCP requires an absolute resolved plugin path")
+		return "", fmt.Errorf("kimi MCP requires an absolute resolved plugin path")
 	}
 	rel, err := filepath.Rel(root, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("Kimi MCP command/cwd must remain inside the plugin root")
+		return "", fmt.Errorf("kimi MCP command/cwd must remain inside the plugin root")
 	}
 	if rel == "." {
 		return "./", nil

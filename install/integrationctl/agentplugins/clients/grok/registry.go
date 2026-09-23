@@ -15,7 +15,7 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-var errUnknownList = errors.New("Grok plugin list JSON contract is not recognized")
+var errUnknownList = errors.New("grok plugin list JSON contract is not recognized")
 
 type pluginEntry struct {
 	Name    string `json:"name"`
@@ -69,7 +69,7 @@ func listPlugins(ctx context.Context, env clients.Env, executable string) ([]plu
 		return nil, fmt.Errorf("run Grok plugin list: %w", err)
 	}
 	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("Grok plugin list exited with code %d", result.ExitCode)
+		return nil, fmt.Errorf("grok plugin list exited with code %d", result.ExitCode)
 	}
 	return parseList(result.Stdout)
 }

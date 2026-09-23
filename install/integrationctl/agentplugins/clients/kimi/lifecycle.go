@@ -27,12 +27,12 @@ func (*Adapter) PreflightActivation(_ clients.Env, r domain.ActivationRequest) e
 		return fmt.Errorf("activation is not for Kimi")
 	}
 	if r.Plan.Scope != domain.ScopeUser {
-		return fmt.Errorf("Kimi plugins support user scope only")
+		return fmt.Errorf("kimi plugins support user scope only")
 	}
 	if (r.DeclaredName != "" && r.DeclaredName != r.Plan.DeclaredName) ||
 		(r.Delivery.ActivePath != "" && !shared.SameCleanPath(r.Plan.ActivePath, r.Delivery.ActivePath)) ||
 		!shared.SameCleanPath(r.Client.ConfigRoot, r.Plan.NativeRegistryRoot) {
-		return fmt.Errorf("Kimi activation identity mismatch")
+		return fmt.Errorf("kimi activation identity mismatch")
 	}
 	if err := validateIdentity(r.Client.ConfigRoot, r.Plan.DeclaredName, r.Plan.ActivePath); err != nil {
 		return err
@@ -119,7 +119,7 @@ func verifyManifest(root, name string) error {
 		return err
 	}
 	if actual != name {
-		return fmt.Errorf("Kimi manifest identity mismatch")
+		return fmt.Errorf("kimi manifest identity mismatch")
 	}
 	return nil
 }

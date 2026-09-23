@@ -21,7 +21,7 @@ func (*Adapter) TargetRoot(client domain.DetectedClient, mode domain.PackageMode
 		return shared.ManagedTargetRoot(client, mode, managedRoot)
 	}
 	if strings.TrimSpace(client.ConfigRoot) == "" {
-		return "", "", fmt.Errorf("Grok config root is unavailable")
+		return "", "", fmt.Errorf("grok config root is unavailable")
 	}
 	return client.ConfigRoot, filepath.Join(client.ConfigRoot, "plugins"), nil
 }
