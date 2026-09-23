@@ -140,8 +140,97 @@ func TestLockedRuntimeNPMFailureLeavesNoPreparedTarget(t *testing.T) {
 		t.Fatalf("npm runs = %d", *runs)
 	}
 	entries, err := os.ReadDir(filepath.Join(dataPath, "npm-runtime"))
-	if err != nil || len(entries) != 0 {
-		t.Fatalf("runtime store after failure: %v, %v", entries, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if !strings.Contains(entry.Name(), ".lock.retired-") {
+			t.Fatalf("unexpected runtime store entry after failure: %s", entry.Name())
+		}
+	}
+}
+
+func TestLockedRuntimeReclaimsDeadOwnerAndRetiresRelease(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows process liveness is checked conservatively")
+	}
+	root := t.TempDir()
+	lockPath := filepath.Join(root, "runtime.lock")
+	if err := os.Mkdir(lockPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(lockPath, "owner.json"), []byte(`{"pid":1073741823,"token":"dead"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reclaimed, err := reclaimRuntimeLock(lockPath)
+	if err != nil || !reclaimed {
+		t.Fatalf("reclaim dead owner: %v, %v", reclaimed, err)
+	}
+	owner, err := recordFreshRuntimeLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := releaseRuntimeLock(lockPath, owner); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(lockPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("release left active lock: %v", err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("retired lock count = %d, want 2", len(entries))
+	}
+	for _, entry := range entries {
+		if !strings.Contains(entry.Name(), ".retired-") {
+			t.Fatalf("unexpected entry %s", entry.Name())
+		}
+		if _, err := os.Stat(filepath.Join(root, entry.Name(), runtimeLockReclaimMarker)); err != nil {
+			t.Fatalf("retired lock lacks immutable marker: %v", err)
+		}
+	}
+}
+
+func recordFreshRuntimeLock(lockPath string) (string, error) {
+	if err := os.Mkdir(lockPath, 0o700); err != nil {
+		return "", err
+	}
+	return recordRuntimeLockOwner(lockPath)
+}
+
+func TestLockedRuntimeNeverReclaimsLiveOwner(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "runtime.lock")
+	owner, err := recordFreshRuntimeLock(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reclaimed, err := reclaimRuntimeLock(lockPath)
+	if err != nil || reclaimed {
+		t.Fatalf("live lock was reclaimed: %v, %v", reclaimed, err)
+	}
+	if err := releaseRuntimeLock(lockPath, owner); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLockedRuntimeReclaimsAgedOwnerlessLock(t *testing.T) {
+	lockPath := filepath.Join(t.TempDir(), "runtime.lock")
+	if err := os.Mkdir(lockPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	reclaimed, err := reclaimRuntimeLock(lockPath)
+	if err != nil || reclaimed {
+		t.Fatalf("fresh ownerless lock was reclaimed: %v, %v", reclaimed, err)
+	}
+	old := time.Now().Add(-31 * time.Second)
+	if err := os.Chtimes(lockPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	reclaimed, err = reclaimRuntimeLock(lockPath)
+	if err != nil || !reclaimed {
+		t.Fatalf("aged ownerless lock was not reclaimed: %v, %v", reclaimed, err)
 	}
 }
 
@@ -232,5 +321,17 @@ func TestLockedRuntimeRejectsSymlinkEntrypoint(t *testing.T) {
 	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err == nil ||
 		!strings.Contains(err.Error(), "unsafe locked npm entrypoint") {
 		t.Fatalf("symlinked entrypoint accepted: %v", err)
+	}
+}
+
+func TestRuntimeStderrTailBoundsDiagnostics(t *testing.T) {
+	var writer runtimeStderrTail
+	for _, chunk := range []string{strings.Repeat("a", 900), strings.Repeat("b", 900), strings.Repeat("c", 2000)} {
+		if _, err := writer.Write([]byte(chunk)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := string(writer.tail); got != strings.Repeat("c", 1200) {
+		t.Fatalf("stderr tail = %q", got)
 	}
 }

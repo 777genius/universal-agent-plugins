@@ -3,7 +3,6 @@ package providers
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -369,26 +368,21 @@ func prepareLockedRuntime(ctx context.Context, dataPath string, config lockedRun
 }
 
 func acquireRuntimeLock(ctx context.Context, lockPath, target string, expected lockedRuntimeMarker) (string, error) {
-	deadline := time.NewTimer(30 * time.Second)
+	deadline := time.NewTimer(12 * time.Minute)
 	defer deadline.Stop()
 	for {
 		if err := os.Mkdir(lockPath, 0o700); err == nil {
-			var nonce [16]byte
-			if _, err := rand.Read(nonce[:]); err != nil {
-				_ = os.Remove(lockPath)
-				return "", err
-			}
-			owner := fmt.Sprintf("{\"pid\":%d,\"token\":%q,\"created_at\":%q}\n", os.Getpid(), hex.EncodeToString(nonce[:]), time.Now().UTC().Format(time.RFC3339Nano))
-			if err := os.WriteFile(filepath.Join(lockPath, "owner.json"), []byte(owner), 0o600); err != nil {
-				_ = os.Remove(lockPath)
-				return "", err
-			}
-			return owner, nil
+			return recordRuntimeLockOwner(lockPath)
 		} else if !errors.Is(err, os.ErrExist) {
 			return "", err
 		}
 		if ready, err := readyLockedRuntime(target, expected); err != nil || ready {
 			return "", err
+		}
+		if reclaimed, err := reclaimRuntimeLock(lockPath); err != nil {
+			return "", err
+		} else if reclaimed {
+			continue
 		}
 		select {
 		case <-ctx.Done():
@@ -401,14 +395,28 @@ func acquireRuntimeLock(ctx context.Context, lockPath, target string, expected l
 }
 
 func releaseRuntimeLock(lockPath, owner string) error {
-	body, err := os.ReadFile(filepath.Join(lockPath, "owner.json"))
-	if err != nil || string(body) != owner {
-		return fmt.Errorf("locked npm runtime ownership changed before lock release")
-	}
-	if err := os.Remove(filepath.Join(lockPath, "owner.json")); err != nil {
+	before, err := snapshotRuntimeLock(lockPath)
+	if err != nil {
 		return err
 	}
-	return os.Remove(lockPath)
+	if before == nil || string(before.owner) != owner {
+		return fmt.Errorf("locked npm runtime ownership changed before lock release")
+	}
+	digest, err := runtimeLockRetirementDigest(lockPath)
+	if err != nil {
+		return err
+	}
+	if digest == "" {
+		return fmt.Errorf("locked npm runtime disappeared before lock release")
+	}
+	same, err := sameRuntimeLock(lockPath, before)
+	if err != nil {
+		return err
+	}
+	if !same {
+		return fmt.Errorf("locked npm runtime ownership changed during lock release")
+	}
+	return os.Rename(lockPath, lockPath+".retired-"+digest)
 }
 
 func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional bool) error {
@@ -427,7 +435,7 @@ func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional 
 	command.Dir = temporary
 	command.Stdin = nil
 	command.Stdout = io.Discard
-	var stderr bytes.Buffer
+	var stderr runtimeStderrTail
 	command.Stderr = &stderr
 	cachePath := filepath.Join(dataPath, "npm-cache")
 	if err := os.Mkdir(cachePath, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
@@ -440,7 +448,8 @@ func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional 
 	for _, item := range os.Environ() {
 		key, _, _ := strings.Cut(item, "=")
 		lower := strings.ToLower(key)
-		if strings.HasPrefix(lower, "npm_") || lower == "node_options" || lower == "node_path" || lower == "init_cwd" {
+		if strings.HasPrefix(lower, "npm_") || lower == "node_options" || lower == "node_path" ||
+			lower == "init_cwd" || lower == "home" || lower == "userprofile" {
 			continue
 		}
 		env = append(env, item)
@@ -455,14 +464,29 @@ func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional 
 		if timeout.Err() != nil {
 			return fmt.Errorf("locked npm runtime preparation timed out: %w", timeout.Err())
 		}
-		detail := strings.TrimSpace(stderr.String())
-		if len(detail) > 1200 {
-			detail = detail[len(detail)-1200:]
-		}
+		detail := strings.TrimSpace(string(stderr.tail))
 		if detail == "" {
 			return fmt.Errorf("locked npm runtime preparation: %w", err)
 		}
 		return fmt.Errorf("locked npm runtime preparation: %w: %s", err, detail)
 	}
 	return nil
+}
+
+// npm can emit unbounded diagnostics on a failing dependency graph. Keep only
+// the useful tail without letting an untrusted package exhaust installer RAM.
+type runtimeStderrTail struct{ tail []byte }
+
+func (writer *runtimeStderrTail) Write(chunk []byte) (int, error) {
+	const maxBytes = 1200
+	length := len(chunk)
+	if length >= maxBytes {
+		writer.tail = append(writer.tail[:0], chunk[length-maxBytes:]...)
+		return length, nil
+	}
+	if len(writer.tail)+length > maxBytes {
+		writer.tail = append(writer.tail[:0], writer.tail[len(writer.tail)+length-maxBytes:]...)
+	}
+	writer.tail = append(writer.tail, chunk...)
+	return length, nil
 }
