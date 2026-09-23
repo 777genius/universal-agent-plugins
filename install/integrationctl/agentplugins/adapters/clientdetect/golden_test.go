@@ -36,7 +36,7 @@ func TestDetectGoldenAcrossPlatforms(t *testing.T) {
 func goldenDetector(t *testing.T, goos, home string) Detector {
 	t.Helper()
 	binaries := map[string]string{}
-	for _, binary := range []string{"codex", "cursor", "copilot", "code", "kiro-cli", "kiro", "claude", "gemini", "opencode", "windsurf", "devin"} {
+	for _, binary := range []string{"codex", "cursor", "copilot", "code", "kiro-cli", "kiro", "claude", "gemini", "opencode", "windsurf", "devin", "grok", "kimi"} {
 		binaries[binary] = filepath.Join(home, "bin", binary)
 	}
 	detector := testDetector(home, binaries)
@@ -44,7 +44,7 @@ func goldenDetector(t *testing.T, goos, home string) Detector {
 	detector.Environment = map[string]string{"XDG_CONFIG_HOME": filepath.Join(home, ".config")}
 
 	makeDirs(t, home,
-		".codex", ".cursor", ".copilot", ".kiro", ".claude", ".gemini",
+		".codex", ".cursor", ".copilot", ".kiro", ".claude", ".gemini", ".grok", ".kimi-code",
 		filepath.Join(".config", "opencode"),
 		filepath.Join(".codeium", "windsurf"),
 		filepath.Join(".vscode", "extensions", "saoudrizwan.claude-dev"),

@@ -377,7 +377,7 @@
       "items": {
         "0": {
           "question": "Quels agents IA sont pris en charge ?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline et Windsurf sont pris en charge ou préparés via un chemin explicite spécifique au client."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline et Windsurf sont pris en charge ou préparés via un chemin explicite spécifique au client. Grok Build et Kimi Code prennent aussi en charge les skills et MCP natifs."
         },
         "1": {
           "question": "Une commande est-elle installée sur chaque agent ?",
@@ -793,6 +793,20 @@
         "intro": "Préparez Agent Plugins 1.0 pour Windsurf avec une commande CLI, puis terminez explicitement l'étape d'activation spécifique au client.",
         "delivery": "La CLI valide et prépare le package Windsurf compatible sans réclamer une activation automatique.",
         "activation": "Suivez le chemin d’activation manuel exact imprimé après la préparation."
+      },
+      "grok": {
+        "note": "Plugin natif de skills et MCP",
+        "status": "Pris en charge",
+        "intro": "Installez des skills et serveurs MCP pour Grok Build.",
+        "delivery": "Le CLI crée un plugin natif et l’enregistre via Grok CLI.",
+        "activation": "Rechargez Grok Build; installez son CLI et relancez update s’il manque."
+      },
+      "kimi": {
+        "note": "Plugin géré de skills et MCP",
+        "status": "Pris en charge",
+        "intro": "Installez des skills et serveurs MCP pour Kimi Code.",
+        "delivery": "Le CLI enregistre un plugin natif sans modifier les autres plugins Kimi.",
+        "activation": "Lancez /reload ou /new; vérifiez MCP et l’authentification dans Kimi Code."
       }
     },
     "directoryPage": {
@@ -875,7 +889,8 @@
       "vendorDocs": "Lire la documentation {name}",
       "availableFor": "Plugins disponibles pour {name}",
       "count": "Le package examiné {count} prend en charge ce client. | Les packages examinés {count} prennent en charge ce client.",
-      "tryPlugin": "Essayez Context7 ou remplacez {source} par le nom court révisé d'un autre plugin compatible ou la source du package GitHub épinglée."
+      "tryPlugin": "Essayez Context7 ou remplacez {source} par le nom court révisé d'un autre plugin compatible ou la source du package GitHub épinglée.",
+      "localPackageHint": "Remplacez ./my-plugin par le chemin d’un paquet Agent Plugins 1.0 valide."
     },
     "components": {
       "extensions": "extensions",

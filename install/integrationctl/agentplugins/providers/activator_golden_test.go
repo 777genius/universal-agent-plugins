@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,12 +25,12 @@ type deactivationRecord struct {
 	Commands [][]string
 }
 
-// TestActivateGoldenAcrossClients freezes the lifecycle of all eleven clients,
+// TestActivateGoldenAcrossClients freezes the lifecycle of all clients,
 // including which commands each one runs, before the switch in activator.go is
 // replaced by a registry lookup. The runner here answers every command with an
 // empty result, which is the silent-client path: Claude and Kiro end in their
-// unknown-evidence error, the other nine in their normal outcome.
-// TestActivateGoldenWhenClientsRespond covers the happy path for all eleven.
+// unknown-evidence error, the others in their normal outcome.
+// TestActivateGoldenWhenClientsRespond covers the happy path for every client.
 func TestActivateGoldenAcrossClients(t *testing.T) {
 	t.Parallel()
 	for _, verifyOnly := range []bool{false, true} {
@@ -59,7 +60,7 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 // TestActivateGoldenWhenClientsRespond is the happy path: every client's CLI
 // answers as it does when the plugin really is installed. Part 7 moves this
 // dispatch into per-client adapters, so both the responding and the silent side
-// have to stay identical for all eleven.
+// have to stay identical for all clients.
 func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 	t.Parallel()
 	for _, verifyOnly := range []bool{false, true} {
@@ -152,6 +153,11 @@ func goldenRespondingRunner(id domain.ClientID, request domain.ActivationRequest
 		// record; a plain reader hits EOF first and Kiro reads that as the
 		// agent exiting before verification finished.
 		return &recordingRunner{duplexOutput: connectedACP("remote"), duplexLive: true}
+	case domain.ClientGrok:
+		listing := fmt.Sprintf(`[{"name":%q,"status":"installed","source":%q,"version":%q}]`, request.DeclaredName, request.Delivery.ActivePath, "1.0.0")
+		return &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+			return legacyports.CommandResult{Stdout: []byte(listing)}
+		}}
 	default:
 		return &recordingRunner{}
 	}
@@ -184,6 +190,9 @@ func goldenActivationRequest(t *testing.T, id domain.ClientID, root string) doma
 	}
 	if err := os.MkdirAll(configRoot, 0o755); err != nil {
 		t.Fatal(err)
+	}
+	if id == domain.ClientKimi {
+		writeTestFile(t, filepath.Join(activePath, ".kimi-plugin", "plugin.json"), `{"name":"demo","skills":"./skills/"}`)
 	}
 	components := []domain.ComponentDecision{
 		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative},
@@ -231,6 +240,10 @@ func goldenTargetRoot(id domain.ClientID, root, configRoot string) (string, stri
 		return configRoot, filepath.Join(configRoot, "skills")
 	case domain.ClientCursor:
 		return configRoot, filepath.Join(configRoot, "plugins", "local")
+	case domain.ClientGrok:
+		return configRoot, filepath.Join(configRoot, "plugins")
+	case domain.ClientKimi:
+		return configRoot, filepath.Join(configRoot, "plugins", "managed")
 	default:
 		managed := filepath.Join(root, "managed")
 		return managed, filepath.Join(managed, "clients", string(id))

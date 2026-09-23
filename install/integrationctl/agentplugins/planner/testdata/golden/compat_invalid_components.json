@@ -283,6 +283,86 @@
     "Capabilities": {
       "ActivationMode": "manual",
       "AppSupport": "unsupported",
+      "ClientID": "grok",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "grok",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
+      "ClientID": "kimi",
+      "ExtensionSupport": "unsupported",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "native",
+        "streamable-http": "native"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "native"
+    },
+    "ClientID": "kimi",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client",
+          "invalid_component"
+        ],
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "input_has_errors",
+      "installation_not_checked",
+      "manual_activation_required",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
+      "ActivationMode": "manual",
+      "AppSupport": "unsupported",
       "ClientID": "kiro",
       "ExtensionSupport": "unsupported",
       "MCPTransports": {

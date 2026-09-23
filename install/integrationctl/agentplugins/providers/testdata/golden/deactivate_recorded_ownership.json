@@ -101,6 +101,50 @@
       "UserActions": null
     }
   },
+  "grok": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      [
+        "\u003croot\u003e/bin/grok",
+        "plugin",
+        "uninstall",
+        "--confirm",
+        "demo"
+      ],
+      [
+        "\u003croot\u003e/bin/grok",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "Grok plugin \"demo\" remains registered",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
+  "kimi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": [
+        "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
+      ]
+    }
+  },
   "kiro": {
     "Commands": [],
     "Error": "",

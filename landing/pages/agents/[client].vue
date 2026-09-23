@@ -23,16 +23,18 @@ const reviewedPlugins = registry.plugins.filter(
     plugin.trust_state !== 'conformant_unreviewed' &&
     plugin.client_support.clients.includes(client.id),
 );
-const siteUrl = productRootUrl(
-  String(config.public.siteUrl),
-  String(config.app.baseURL),
-).replace(/\/+$/, '');
-const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
+const siteUrl = productRootUrl(String(config.public.siteUrl), String(config.app.baseURL)).replace(
+  /\/+$/,
+  '',
+);
+const localizedUrl = (path: string) =>
+  `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
 const pageUrl = computed(() => localizedUrl(`/agents/${client.slug}/`));
 const breadcrumbId = computed(() => `${pageUrl.value}#breadcrumb`);
 const listId = computed(() => `${pageUrl.value}#plugin-list`);
 const title = computed(() => t('registryUi.agentPage.title', { name: client.name }));
-const installCommand = `npx universal-agent-plugins add context7 --target ${client.id}`;
+const needsLocalExample = client.id === 'grok' || client.id === 'kimi';
+const installCommand = `npx universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target ${client.id}`;
 
 usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
   translate: false,
@@ -117,9 +119,14 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
               kind="add"
               :label="t('registryUi.agentPage.install')"
             />
-            <i18n-t keypath="registryUi.agentPage.tryPlugin" tag="p" scope="global"
+            <i18n-t
+              v-if="!needsLocalExample"
+              keypath="registryUi.agentPage.tryPlugin"
+              tag="p"
+              scope="global"
               ><template #source><code>context7</code></template></i18n-t
             >
+            <p v-else>{{ t('registryUi.agentPage.localPackageHint') }}</p>
           </aside>
         </div>
       </v-container>

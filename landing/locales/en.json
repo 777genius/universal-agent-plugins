@@ -394,7 +394,7 @@
       "items": {
         "0": {
           "question": "Which AI agents are supported?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, and Windsurf are supported or prepared through an explicit client-specific path."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, and Windsurf are supported or prepared through an explicit client-specific path. Grok Build and Kimi Code also support native skills and MCP."
         },
         "1": {
           "question": "Does one command install into every agent?",
@@ -810,6 +810,20 @@
         "intro": "Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.",
         "delivery": "The CLI validates and prepares the compatible Windsurf package without claiming automatic activation.",
         "activation": "Follow the exact manual activation path printed after preparation."
+      },
+      "grok": {
+        "note": "Native skills and MCP plugin",
+        "status": "Supported",
+        "intro": "Install skills and MCP servers for Grok Build.",
+        "delivery": "The CLI writes a native plugin and registers it through Grok CLI.",
+        "activation": "Reload Grok Build; install its CLI and rerun update if missing."
+      },
+      "kimi": {
+        "note": "Managed skills and MCP plugin",
+        "status": "Supported",
+        "intro": "Install skills and MCP servers for Kimi Code.",
+        "delivery": "The CLI registers a native plugin while preserving other Kimi plugins.",
+        "activation": "Run /reload or /new; confirm MCP and authentication in Kimi Code."
       }
     },
     "directoryPage": {
@@ -892,7 +906,8 @@
       "vendorDocs": "Read {name} documentation",
       "availableFor": "Plugins available for {name}",
       "count": "{count} reviewed package supports this client. | {count} reviewed packages support this client.",
-      "tryPlugin": "Try Context7, or replace {source} with another compatible plugin's reviewed short name or pinned GitHub package source."
+      "tryPlugin": "Try Context7, or replace {source} with another compatible plugin's reviewed short name or pinned GitHub package source.",
+      "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package."
     },
     "components": {
       "extensions": "extensions",

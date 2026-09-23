@@ -240,7 +240,7 @@
       "items": {
         "0": {
           "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
-          "answer": "Codex وChatGPT وCursor وGitHub Copilot CLI وVS Code وKiro وClaude Code وGemini CLI وOpenCode وCline وWindsurf مدعومة أو مُحضّرة عبر مسار صريح خاص بكل عميل."
+          "answer": "Codex وChatGPT وCursor وGitHub Copilot CLI وVS Code وKiro وClaude Code وGemini CLI وOpenCode وCline وWindsurf مدعومة أو مُحضّرة عبر مسار صريح خاص بكل عميل. يدعم Grok Build وKimi Code أيضًا المهارات وMCP الأصليين."
         },
         "1": {
           "question": "هل يثبّت أمر واحد في كل وكيل؟",
@@ -793,6 +793,20 @@
         "intro": "حضّر Agent Plugins 1.0 لـ Windsurf باستخدام أمر CLI واحد، ثم أكمل صراحةً خطوة التفعيل الخاصة بالعميل.",
         "delivery": "يتحقق CLI من حزمة Windsurf المتوافقة ويحضّرها دون الادعاء بوجود تفعيل تلقائي.",
         "activation": "اتبع مسار التفعيل اليدوي الدقيق المطبوع بعد التحضير."
+      },
+      "grok": {
+        "note": "إضافة أصلية للمهارات وMCP",
+        "status": "مدعوم",
+        "intro": "ثبّت المهارات وخوادم MCP في Grok Build.",
+        "delivery": "ينشئ CLI إضافة أصلية ويسجلها عبر Grok CLI.",
+        "activation": "أعد تحميل Grok Build؛ ثبّت CLI وأعد update إذا كان غير متوفر."
+      },
+      "kimi": {
+        "note": "إضافة مُدارة للمهارات وMCP",
+        "status": "مدعوم",
+        "intro": "ثبّت المهارات وخوادم MCP في Kimi Code.",
+        "delivery": "يسجل CLI إضافة أصلية مع الحفاظ على إضافات Kimi الأخرى.",
+        "activation": "شغّل /reload أو /new؛ تحقق من MCP وتسجيل الدخول في Kimi Code."
       }
     },
     "directoryPage": {
@@ -875,7 +889,8 @@
       "vendorDocs": "اقرأ وثائق {name}",
       "availableFor": "الإضافات المتاحة لـ {name}",
       "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
-      "tryPlugin": "جرّب Context7، أو استبدل {source} بالاسم المختصر المراجَع لإضافة متوافقة أخرى أو بمصدر حزمة GitHub مثبّت."
+      "tryPlugin": "جرّب Context7، أو استبدل {source} بالاسم المختصر المراجَع لإضافة متوافقة أخرى أو بمصدر حزمة GitHub مثبّت.",
+      "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة."
     },
     "components": {
       "extensions": "الامتدادات",

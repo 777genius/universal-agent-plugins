@@ -26,7 +26,9 @@ export type ClientID =
   | 'gemini'
   | 'opencode'
   | 'cline'
-  | 'windsurf';
+  | 'windsurf'
+  | 'grok'
+  | 'kimi';
 export type ComponentID = 'extensions' | 'mcp' | 'skills';
 export type DistributionKind = 'upstream' | 'community_bridge' | 'community' | 'direct';
 export type EvidenceLevel = 'schema' | 'materialization' | 'discovery' | 'runtime' | 'oauth';

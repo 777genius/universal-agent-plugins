@@ -16,6 +16,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/grok"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
@@ -44,6 +46,8 @@ var defaultRegistry = sync.OnceValue(func() *clients.Registry {
 		opencode.New(),
 		cline.New(),
 		windsurf.New(),
+		grok.New(),
+		kimi.New(),
 	)
 	if err != nil {
 		panic(fmt.Sprintf("build the default client registry: %v", err))

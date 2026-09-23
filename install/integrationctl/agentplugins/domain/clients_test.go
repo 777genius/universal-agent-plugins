@@ -11,6 +11,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"copilot": ClientCopilot, "vscode": ClientVSCode, "kiro": ClientKiro,
 		"claude": ClientClaude, "gemini": ClientGemini, "opencode": ClientOpenCode,
 		"cline": ClientCline, "windsurf": ClientWindsurf,
+		"grok": ClientGrok, "kimi": ClientKimi,
 	}
 	for input, want := range canonical {
 		got, ok := ParseClientID(input)
@@ -22,6 +23,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"github-copilot": ClientCopilot, "vs-code": ClientVSCode, "claude-code": ClientClaude,
 		"gemini-cli": ClientGemini, "open-code": ClientOpenCode, "devin": ClientWindsurf,
 		"  CURSOR  ": ClientCursor, "Claude-Code": ClientClaude,
+		"grok-build": ClientGrok, "kimi-code": ClientKimi,
 	}
 	for input, want := range aliases {
 		got, ok := ParseClientID(input)
@@ -42,7 +44,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
-		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf,
+		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)

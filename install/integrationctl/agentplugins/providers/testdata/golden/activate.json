@@ -172,6 +172,47 @@
       "Verification": "installation_verified"
     }
   },
+  "grok": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/grok",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "verify that the managed plugin is installed and enabled in Grok Build"
+      ],
+      "Verification": "package_validated"
+    }
+  },
+  "kimi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
+      ],
+      "Verification": "installation_verified"
+    }
+  },
   "kiro": {
     "Commands": [
       [
