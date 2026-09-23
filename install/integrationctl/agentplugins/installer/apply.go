@@ -64,7 +64,7 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 		return result, err
 	}
 	if !prepared.plan.NoChange {
-		if op == OpInstall || op == OpUpdate || op == OpRepair {
+		if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
 			if _, err = e.helper(); err != nil {
 				result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
 				attachNextActions(&result)
@@ -94,6 +94,8 @@ func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedO
 			result, err = e.applyUpdate(ctx, prepared)
 		case OpRepair:
 			result, err = e.applyRepair(ctx, prepared)
+		case OpRefreshProjection:
+			result, err = e.applyRefreshProjection(ctx, prepared)
 		case OpRemove:
 			result, err = e.applyRemove(ctx, prepared)
 		default:
@@ -123,8 +125,16 @@ func (e *Engine) applyRepair(ctx context.Context, prepared *PreparedOperation) (
 	})
 }
 
+func (e *Engine) applyRefreshProjection(ctx context.Context, prepared *PreparedOperation) (Result, error) {
+	return e.applyMutatingPackage(ctx, prepared, func(svc usecase.Service, in usecase.AddInput) (usecase.AddResult, error) {
+		return svc.RefreshProjection(ctx, in)
+	})
+}
+
 func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOperation, call func(usecase.Service, usecase.AddInput) (usecase.AddResult, error)) (Result, error) {
-	if committed, binding, ok := e.liveBinding(prepared); ok && hostHandoffPending(binding) && e.cfg.OnCommittedBinding != nil {
+	// A projection refresh invokes the host handoff from its dedicated
+	// post-commit activation path, including an identical-output retry.
+	if committed, binding, ok := e.liveBinding(prepared); ok && prepared.req.Operation != OpRefreshProjection && hostHandoffPending(binding) && e.cfg.OnCommittedBinding != nil {
 		if err := e.cfg.OnCommittedBinding(ctx, committed.Binding); err != nil {
 			committed.Outcome = OutcomeIncomplete
 			committed.Reason = err.Error()
@@ -276,7 +286,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 }
 
 func (e *Engine) liveBinding(prepared *PreparedOperation) (Result, domain.ClientBinding, bool) {
-	result := Result{Operation: OpInstall, Binding: prepared.facts}
+	result := Result{Operation: prepared.req.Operation, Binding: prepared.facts}
 	state, err := e.store.Load()
 	if err != nil {
 		return result, domain.ClientBinding{}, false

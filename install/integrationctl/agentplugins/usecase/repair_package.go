@@ -26,7 +26,7 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 		session.result.RequiresConfirmation = true
 		return session.result, nil
 	}
-	delivery, err := session.stageRepairDelivery()
+	delivery, err := session.stageRepairDelivery(false)
 	if err != nil {
 		return session.result, err
 	}
@@ -47,7 +47,7 @@ func repairBeforeDigest(verification *ports.VerificationError) (string, error) {
 	return verification.ActualDigest, nil
 }
 
-func (session *repairSession) stageRepairDelivery() (domain.StagedDelivery, error) {
+func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (domain.StagedDelivery, error) {
 	operationID := strings.TrimSpace(session.input.OperationID)
 	if operationID == "" {
 		id, err := newOperationID()
@@ -73,7 +73,7 @@ func (session *repairSession) stageRepairDelivery() (domain.StagedDelivery, erro
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, fmt.Errorf("stager returned an unexpected repair target")
 	}
-	if delivery.ArtifactDigest != session.expectedDigest {
+	if !allowProjectionChange && delivery.ArtifactDigest != session.expectedDigest {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, fmt.Errorf("resolved repair projection digest differs from the originally managed package")
 	}
@@ -99,16 +99,27 @@ func (session *repairSession) repairDataPath() (string, error) {
 }
 
 func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery, beforeDigest string) (AddResult, error) {
+	verifiedState := lifecycleOutcome(session.client)
+	verifiedState.Verification = domain.VerificationPackageValid
+	result, err := session.commitRepairDirectory(delivery, beforeDigest, verifiedState)
+	if err != nil {
+		return result, err
+	}
+	return session.reactivateRepaired(delivery, verifiedState)
+}
+
+func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelivery, beforeDigest string, verifiedState domain.ActivationOutcome) (AddResult, error) {
 	// The user or client can change the native object while staging runs. Repair
 	// may replace the exact absent/digest-mismatched object reviewed above, but
 	// never a different object that appeared after preflight.
 	kernel := session.service.Kernel
 	kernel.StateStore = session.service.StateStore
-	verifiedState := lifecycleOutcome(session.client)
-	verifiedState.Verification = domain.VerificationPackageValid
 	desiredClient := session.client
 	desiredClient.Materialization = domain.MaterializationMaterialized
-	desiredClient.Verification = domain.VerificationPackageValid
+	desiredClient.Activation = verifiedState.Activation
+	desiredClient.Authentication = verifiedState.Authentication
+	desiredClient.Policy = verifiedState.Policy
+	desiredClient.Verification = verifiedState.Verification
 	desiredClient.NativeObjects = append([]domain.NativeObjectOwnership(nil), delivery.NativeObjects...)
 	desiredClient.UpdatedAt = session.service.now().Format("2006-01-02T15:04:05.999999999Z07:00")
 	session.installation.Clients[session.clientKey] = desiredClient
@@ -130,7 +141,7 @@ func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery
 	}
 	session.result.Mutated = true
 	session.result.Activation = verifiedState
-	return session.reactivateRepaired(delivery, verifiedState)
+	return session.result, nil
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {

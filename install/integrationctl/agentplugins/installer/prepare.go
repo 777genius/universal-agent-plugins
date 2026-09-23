@@ -105,6 +105,8 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 		return e.prepareUpdate(ctx, copied)
 	case OpRepair:
 		return e.prepareRepair(ctx, copied)
+	case OpRefreshProjection:
+		return e.prepareRefreshProjection(ctx, copied)
 	case OpRemove:
 		return e.prepareRemove(ctx, copied)
 	default:
@@ -133,6 +135,15 @@ func (e *Engine) prepareRepair(ctx context.Context, req Request) (*PreparedOpera
 	}
 	return e.prepareMutatingPackage(ctx, req, OpRepair, false, func(svc usecase.Service, in usecase.AddInput) (usecase.AddResult, error) {
 		return svc.Repair(ctx, in)
+	})
+}
+
+func (e *Engine) prepareRefreshProjection(ctx context.Context, req Request) (*PreparedOperation, error) {
+	if err := e.requireExistingBinding(req); err != nil {
+		return nil, err
+	}
+	return e.prepareMutatingPackage(ctx, req, OpRefreshProjection, false, func(svc usecase.Service, in usecase.AddInput) (usecase.AddResult, error) {
+		return svc.RefreshProjection(ctx, in)
 	})
 }
 
@@ -324,7 +335,7 @@ func (e *Engine) loadMutatingPackage(ctx context.Context, handle *PreparedOperat
 			return err
 		}
 	}
-	if op == OpRepair {
+	if op == OpRepair || op == OpRefreshProjection {
 		if err := e.refuseRepairRevisionRewrite(req.InstallationID, string(client.ClientID), snapshot.TreeDigest); err != nil {
 			return err
 		}

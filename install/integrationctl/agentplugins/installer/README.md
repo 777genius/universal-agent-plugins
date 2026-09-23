@@ -2,7 +2,7 @@
 
 Public process-local installer API for a standard local Agent Plugins package
 (`plugin.json` + MCP/skills). Constructor, inspect, Recover, and prepare/apply
-for **install**, **update**, **repair**, and **remove** are published. One
+for **install**, **update**, **repair**, **refresh_projection**, and **remove** are published. One
 client uses `Request.ClientID`. Claude+Codex together uses `Request.Targets`
 with the same operation verb. `install-group` as an operation name is invalid.
 Two PackageRoot values in one install or update group stay unpublished.
@@ -22,6 +22,16 @@ same per-binding digest, including unchanged mixed group Repair.
 `OnCommittedBinding` receives the same per-binding digest, not the first
 group envelope. `ProjectArgs` BindingFacts use the envelope digest of the
 client being staged.
+
+Single-target `refresh_projection` uses the same Prepare/Apply confirmation
+flow as repair, but requires the managed package to be intact. It restages the
+exact recorded package revision with current host `ProjectArgs` and the owned
+PLUGIN_DATA locator. Identical output returns `OutcomeUnchanged`; changed
+output commits a new managed projection digest. A damaged package needs repair
+first. `OnCommittedBinding` observes the committed projection before client
+activation. If that handoff fails, a repeat with the same package and args
+resumes the pending lifecycle without another directory receipt. Group
+projection refresh is not supported.
 
 ## Contract
 
