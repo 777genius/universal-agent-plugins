@@ -146,11 +146,11 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": [
-        "open Cursor and register \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab, then reload Cursor and verify demo is visible"
+        "reload Cursor with Developer: Reload Window, then verify demo from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible; local plugin imports must be allowed"
       ],
       "Policy": "allowed",
       "UserActions": [
-        "register the prepared package in Cursor and verify it is visible before using its components"
+        "reload Cursor and verify the local plugin is visible before using its components"
       ],
       "Verification": "package_validated"
     }
