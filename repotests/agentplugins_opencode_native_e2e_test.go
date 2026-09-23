@@ -368,16 +368,15 @@ func openCodeWriteFixturePackage(t *testing.T, root, name, version string) {
   "description": "OpenCode native lifecycle proof fixture"
 }`, name, version)), 0644))
 	must(os.WriteFile(filepath.Join(root, "skills", "demo-skill", "SKILL.md"), []byte("---\nname: demo-skill\ndescription: A demo skill for native lifecycle verification.\n---\n\n# Demo Skill\n\nSay hello when asked to demo.\n"), 0644))
-	// "api/server" and "api server" are the exact logical MCP keys O1 fixed:
-	// they were previously rejected as invalid physical filesystem leaf names.
-	// sse-server exercises OpenCode's own unsupported-transport handling
-	// alongside two healthy stdio siblings, to observe (not assume) whether
-	// an unsupported component is isolated or blocks the whole package.
+	// Keep distinct normalized names in the install lifecycle. The separate
+	// native collision test probes "api/server" and "api server" directly,
+	// because the installer now refuses to deliver them together.
+	// sse-server tests unsupported-transport isolation from healthy siblings.
 	must(os.WriteFile(filepath.Join(root, "mcp.json"), []byte(`{
   "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "api/server": {"type": "stdio", "command": "sh", "args": ["-c", "cat"]},
-    "api server": {"type": "stdio", "command": "sh", "args": ["-c", "cat"]},
+    "other api server": {"type": "stdio", "command": "sh", "args": ["-c", "cat"]},
     "sse-server": {"type": "sse", "url": "http://127.0.0.1:9/sse"}
   }
 }`), 0644))
@@ -500,34 +499,16 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	if _, slashOK := mcp["api/server"].(map[string]any); !slashOK {
 		t.Fatalf("O1's exact logical key \"api/server\" was not present: mcp=%+v", mcp)
 	}
-	if _, spaceOK := mcp["api server"].(map[string]any); !spaceOK {
-		t.Fatalf("O1's exact logical key \"api server\" was not present: mcp=%+v", mcp)
+	if _, spaceOK := mcp["other api server"].(map[string]any); !spaceOK {
+		t.Fatalf("space-containing logical key was not present: mcp=%+v", mcp)
 	}
-	// Config readback alone cannot prove the runtime treats the two keys as
-	// distinct connections (O2 explicitly forbids declaring the colliding
-	// case passed from config readback alone). Run `opencode mcp list`, which
-	// makes the real client spawn and attempt a live stdio handshake with
-	// each configured server, and require each exact key to appear as its
-	// own attempted connection. This is ONE mcp list call against the
-	// simultaneous-collision fixture (both keys installed together), parsed
-	// into two per-key assertions -- real evidence of two independent
-	// process spawns and JSON-RPC round-trips, but not the two genuinely
-	// separate single-key installs O2's "separate api/server and api server
-	// runs" wording asks for. That stronger form was not performed this
-	// checkpoint; say so plainly rather than implying it was.
+	// The real client's mcp list attempts both noncolliding connections.
+	// Colliding names and actual tool IDs are covered by the separate native
+	// test, not inferred from this config readback.
 	mcpList := openCodeMCPList(t, f, client, "mcp-list-v1")
 	openCodeAssertMCPListAttempted(t, mcpList, "api/server")
-	openCodeAssertMCPListAttempted(t, mcpList, "api server")
-	// What is NOT proven here, per O2's own required framing: whether the two
-	// servers' *tools* collide at the runtime tool-ID level. OpenCode 1.18.29
-	// sanitizes tool IDs as sanitize(server)+"_"+sanitize(tool)` with
-	// non-name characters replaced by "_", so "api/server" and "api server"
-	// both sanitize to the same "api_server" prefix -- a same-named tool on
-	// both servers is plausible to collide at that layer. Observing that
-	// requires a live model session actually selecting a tool, which this
-	// checkpoint does not have a safe no-auth route to. Recorded honestly as
-	// not proven rather than forced closed, per O2's explicit instruction.
-	stages["logical_key_collision_survey"] = openCodeNativeStage{Status: "not_proven", Reason: "verified beyond config readback: one opencode mcp list run over the simultaneous-collision fixture independently attempted a live connection to \"api/server\" and to \"api server\" as two distinct entries (two assertions against one run, not two genuinely separate single-key installs -- O2's stronger \"separate runs\" wording was not performed). Not proven: runtime tool-ID-level collision between the two servers' tools, which OpenCode's own sanitizer (replacing non-name characters with \"_\") makes plausible for same-named tools; observing that needs a live model session, which is out of scope here -- O2 requires this exact honesty rather than declaring the colliding case passed from config alone"}
+	openCodeAssertMCPListAttempted(t, mcpList, "other api server")
+	stages["logical_key_collision_survey"] = openCodeNativeStage{Status: "not_applicable", Reason: "installer lifecycle uses noncolliding logical keys; the separate native tool-collision test observes api/server and api server without bypassing the installer guard"}
 
 	if _, sseInstalled := mcp["sse-server"]; sseInstalled {
 		stages["sse_unsupported"] = openCodeNativeStage{Status: "failed", Reason: "sse-typed component was installed despite OpenCode SSE being unsupported"}
@@ -728,8 +709,8 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	if _, ok := postRemoveMCP["api/server"]; ok {
 		t.Fatalf("remove left the managed api/server entry behind: %+v", postRemoveMCP)
 	}
-	if _, ok := postRemoveMCP["api server"]; ok {
-		t.Fatalf("remove left the managed \"api server\" entry behind: %+v", postRemoveMCP)
+	if _, ok := postRemoveMCP["other api server"]; ok {
+		t.Fatalf("remove left the managed \"other api server\" entry behind: %+v", postRemoveMCP)
 	}
 	if _, ok := postRemoveMCP["foreign-untouched"]; !ok {
 		t.Fatalf("remove deleted the unrelated foreign entry: %+v", postRemoveMCP)
