@@ -1,7 +1,7 @@
 {
   "Digests": {
     ".kimi-plugin/": "dir",
-    ".kimi-plugin/plugin.json": "d618c0809366342138f07242292275d8f20258ca143ead8f934e4907da48eb03",
+    ".kimi-plugin/plugin.json": "ff749ab6a0ee5a386a494aad8926216bfbcad3ace74191e5a517e04341b4dca1",
     "bin/": "dir",
     "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
     "plugin.json": "a500ae72e02274b9e57d095be7788e0651eb8c4212d9fc17feeabad3b099196f",

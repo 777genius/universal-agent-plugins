@@ -119,9 +119,9 @@ func mutateRegistry(root, id, active string, remove, replace bool, now time.Time
 		return err
 	}
 	lock := registryPath(root) + ".agentplugins.lock"
-	file, err := os.OpenFile(lock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	file, err := acquireRegistryLock(lock)
 	if err != nil {
-		return fmt.Errorf("lock Kimi registry: %w", err)
+		return err
 	}
 	_ = file.Close()
 	defer func() { _ = os.Remove(lock) }()
@@ -144,6 +144,23 @@ func mutateRegistry(root, id, active string, remove, replace bool, now time.Time
 		return fmt.Errorf("kimi registry changed concurrently")
 	}
 	return atomicfile.Write(registryPath(root), append(body, '\n'), 0o600)
+}
+
+func acquireRegistryLock(lock string) (*os.File, error) {
+	file, err := os.OpenFile(lock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if os.IsExist(err) {
+		info, statErr := os.Lstat(lock)
+		if statErr == nil && info.Mode().IsRegular() && time.Since(info.ModTime()) > 2*time.Minute {
+			if removeErr := os.Remove(lock); removeErr != nil && !os.IsNotExist(removeErr) {
+				return nil, fmt.Errorf("remove stale kimi registry lock %s: %w", lock, removeErr)
+			}
+			file, err = os.OpenFile(lock, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("lock kimi registry at %s (remove it if no other installation is running): %w", lock, err)
+	}
+	return file, nil
 }
 
 func applyRegistryMutation(current *registry, id, active string, remove, replace bool, now time.Time) error {

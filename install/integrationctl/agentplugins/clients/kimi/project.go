@@ -75,9 +75,11 @@ func projectMCPServers(in clients.ProjectionInput) (map[string]any, error) {
 				return nil, fmt.Errorf("kimi MCP %s: %w", name, err)
 			}
 		case "streamable-http":
-			config["type"] = "http"
+			delete(config, "type")
+			delete(config, "transport")
 		case "sse":
-			config["type"] = "sse"
+			delete(config, "type")
+			config["transport"] = "sse"
 		default:
 			return nil, fmt.Errorf("unsupported kimi MCP transport %q", server.Type)
 		}

@@ -112,7 +112,7 @@
         "--json"
       ]
     ],
-    "Error": "Grok plugin list JSON contract is not recognized",
+    "Error": "grok plugin list JSON contract is not recognized",
     "Outcome": {
       "Activation": "not_required",
       "ArtifactRemovalAllowed": true,

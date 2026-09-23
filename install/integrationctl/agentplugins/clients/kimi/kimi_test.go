@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +71,30 @@ func TestRegistryPreservesUnknownFieldsOnUpdateAndRemoval(t *testing.T) {
 	}
 	if len(after.records) != 1 || !reflect.DeepEqual(before.records[1], after.records[0]) || !reflect.DeepEqual(before.document["future"], after.document["future"]) {
 		t.Fatal("removal changed unrelated data")
+	}
+}
+func TestRegistryLockRecoversStaleFileAndPreservesLiveLock(t *testing.T) {
+	r := fixture(t)
+	lock := registryPath(r.Client.ConfigRoot) + ".agentplugins.lock"
+	write(t, lock, "stale")
+	old := time.Now().Add(-3 * time.Minute)
+	if err := os.Chtimes(lock, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := mutateRegistry(r.Client.ConfigRoot, r.DeclaredName, r.Delivery.ActivePath, false, false, time.Now()); err != nil {
+		t.Fatalf("stale lock was not recovered: %v", err)
+	}
+	if _, err := os.Lstat(lock); !os.IsNotExist(err) {
+		t.Fatalf("stale lock remains: %v", err)
+	}
+	write(t, lock, "live")
+	err := mutateRegistry(r.Client.ConfigRoot, r.DeclaredName, r.Delivery.ActivePath, true, true, time.Now())
+	if err == nil || !strings.Contains(err.Error(), lock) {
+		t.Fatalf("live lock was not preserved with recovery guidance: %v", err)
+	}
+	body, err := os.ReadFile(lock)
+	if err != nil || string(body) != "live" {
+		t.Fatalf("live lock changed: %q, %v", body, err)
 	}
 }
 func TestVerifyAndUnconfirmedRemovalNeverWrite(t *testing.T) {
@@ -183,6 +208,38 @@ func TestProjectionUsesKimiRelativeStdioPaths(t *testing.T) {
 			}
 			if in.Envelope.MCP.Servers["test"].Decoded["cwd"] != "./bin" {
 				t.Fatal("envelope mutated")
+			}
+		})
+	}
+}
+func TestProjectionUsesKimiRemoteTransportSchema(t *testing.T) {
+	for _, tc := range []struct {
+		kind      string
+		transport string
+	}{
+		{kind: "streamable-http"},
+		{kind: "sse", transport: "sse"},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			in := clients.ProjectionInput{
+				Plan: domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "remote", Support: domain.SupportNative}}},
+				Envelope: domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
+					"remote": {Type: tc.kind, Decoded: map[string]any{"type": tc.kind, "url": "https://example.test/mcp"}},
+				}}},
+			}
+			servers, err := projectMCPServers(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := servers["remote"].(map[string]any)
+			if _, exists := server["type"]; exists {
+				t.Fatalf("Kimi remote MCP has unsupported type field: %+v", server)
+			}
+			if got, _ := server["transport"].(string); got != tc.transport {
+				t.Fatalf("Kimi transport = %q, want %q", got, tc.transport)
+			}
+			if in.Envelope.MCP.Servers["remote"].Decoded["type"] != tc.kind {
+				t.Fatal("source envelope was mutated")
 			}
 		})
 	}
