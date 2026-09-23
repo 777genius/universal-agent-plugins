@@ -94,6 +94,16 @@ func TestKiroMCPPlanRequiresCurrentCLIForAutomaticActivation(t *testing.T) {
 	if automatic.Status != domain.PlanReady || automatic.Activation != domain.ActivationPrepared {
 		t.Fatalf("Kiro MCP with CLI was not promoted: %s/%s", automatic.Status, automatic.Activation)
 	}
+
+	client.ConfigRoot = ""
+	withoutRoot, err := planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withoutRoot.Status != domain.PlanManualActivationRequired ||
+		contains(withoutRoot.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically") {
+		t.Fatalf("Kiro without a config root promised automatic installation: %+v", withoutRoot)
+	}
 }
 
 const fixtureContext7AppID = "asdk_app_0123456789abcdef0123456789abcdef"
