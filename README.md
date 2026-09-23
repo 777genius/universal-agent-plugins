@@ -9,6 +9,8 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is to complete every ownership-safe client step automatically and ask the user only for genuine external approvals, authentication, or reloads.
+
 [Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/) ·
 [Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
