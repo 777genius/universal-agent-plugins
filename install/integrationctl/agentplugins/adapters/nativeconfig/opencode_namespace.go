@@ -86,7 +86,7 @@ func openCodeActiveMCPNames(entries *hujson.Object) ([]string, error) {
 		name := member.Name.Value.(hujson.Literal).String()
 		body, err := entryCanonical(member)
 		if err != nil {
-			return nil, fmt.Errorf("%w: OpenCode MCP server %q: %v", ErrMalformed, name, err)
+			return nil, fmt.Errorf("%w: OpenCode MCP server %q: %w", ErrMalformed, name, err)
 		}
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
