@@ -9,6 +9,9 @@ const (
 	OpRemove  Operation = "remove"
 	OpUpdate  Operation = "update"
 	OpRepair  Operation = "repair"
+	// OpRefreshProjection re-renders an intact installed package with current
+	// host projection inputs while retaining its exact package revision.
+	OpRefreshProjection Operation = "refresh_projection"
 )
 
 // Outcome is the coarse public result. Mapping is not a bool.

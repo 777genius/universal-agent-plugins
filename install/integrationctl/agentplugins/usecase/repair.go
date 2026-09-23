@@ -36,6 +36,32 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	return session.repairPackage()
 }
 
+// RefreshProjection restages an intact, exactly bound package with the caller's
+// current host projection inputs. It is intended for host configuration changes
+// that do not change the resolved package revision. Unlike Repair, it can
+// commit a new projected digest even when the installed package is intact.
+// A repeated refresh with identical projection output is a no-op.
+func (service Service) RefreshProjection(ctx context.Context, input AddInput) (AddResult, error) {
+	session := &repairSession{service: service, ctx: ctx, input: input}
+	if err := session.validateRepairInput(); err != nil {
+		return AddResult{}, err
+	}
+	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
+	if err != nil {
+		return AddResult{}, err
+	}
+	if release != nil {
+		defer func() { _ = release() }()
+	}
+	if err := session.loadRepairTarget(); err != nil {
+		return session.result, err
+	}
+	if err := session.verifyRepairPreconditions(); err != nil {
+		return session.result, err
+	}
+	return session.refreshIntactProjection()
+}
+
 func (service Service) verifyRepairPrecondition(ctx context.Context, activePath, managedDigest string, reviewedKind ports.VerificationKind, reviewedDigest string) error {
 	err := service.Stager.Verify(ctx, activePath, managedDigest)
 	var observed *ports.VerificationError
