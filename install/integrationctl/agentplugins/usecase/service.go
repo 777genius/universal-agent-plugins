@@ -72,6 +72,7 @@ type MCPNamespacePreflight interface {
 type PluginDataManager interface {
 	EnsureData(context.Context, string, string, string) (domain.DataReceipt, bool, error)
 	ValidateData(context.Context, domain.DataReceipt) error
+	PrepareRuntime(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string) error
 	PurgeData(context.Context, domain.DataReceipt) error
 }
 

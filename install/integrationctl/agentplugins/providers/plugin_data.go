@@ -21,6 +21,8 @@ const dataOwnershipMarker = ".agentplugins-data-owner.json"
 type PluginDataManager struct {
 	Base string
 	Now  func() time.Time
+	// RunNPM is a test seam; production uses the bounded npm ci runner.
+	RunNPM func(context.Context, string, string, bool) error
 }
 
 func (manager PluginDataManager) EnsureData(ctx context.Context, installationID, physicalBackend, scope string) (domain.DataReceipt, bool, error) {

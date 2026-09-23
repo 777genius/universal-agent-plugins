@@ -267,6 +267,18 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
+		if applied.Phase == usecase.GroupPhaseManagedUnchanged && !applied.Mutated {
+			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preparation_failed", len(inputs), 0, 0
+			for index := range combined.Targets {
+				combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
+				combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"
+				combined.Targets[index].Output.NextAction = combined.Targets[index].NextAction
+				combined.Targets[index].Error = &usecase.GroupTargetFailure{Stage: "preparation", Message: err.Error()}
+				combined.setTargetProof(domain.ClientID(combined.Targets[index].Target), "not_completed")
+			}
+			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+			return fmt.Errorf("group preparation failed before client changes (selected targets: %v): %w; nothing was installed", targets, err)
+		}
 		combined.Status = groupFailureStatus(applied.Phase)
 		// Always report selected ChatGPT setup, even when installable peers failed.
 		if deferredChatGPT {
@@ -524,6 +536,10 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 			}
 		}
 		return nil
+	}
+	if result.Status == "preparation_failed" {
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: package preparation failed before any selected client was changed. See the error below, then retry the same command.")
+		return err
 	}
 	if result.DryRun {
 		if len(result.Targets) == 1 {

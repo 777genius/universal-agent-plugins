@@ -280,6 +280,12 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 	if verifyLabel == "no-change check" && !packageRevisionMatches(current.PackageRevision, session.input.Envelope) {
 		return true, session.result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", session.input.Client.ClientID)
 	}
+	if session.input.Confirmed {
+		installation := session.state.Installations[session.installationIndex]
+		if err := session.service.prepareExistingRuntime(session.ctx, session.input.Envelope, session.plan, installation, current); err != nil {
+			return true, session.result, fmt.Errorf("prepare installed MCP runtime: %w", err)
+		}
+	}
 	if !lifecycleConverged(current) {
 		result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
 		return true, result, err

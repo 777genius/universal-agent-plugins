@@ -160,6 +160,10 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, nil
 	}
 	if err := session.stageGroupDeliveries(); err != nil {
+		// Staging can prepare a locked runtime after the read-only preflight.
+		// No managed package or client was committed, but this is an apply-time
+		// preparation failure, not a failed preflight check.
+		session.result.Phase = GroupPhaseManagedUnchanged
 		return session.result, err
 	}
 	defer session.cleanupStaged()

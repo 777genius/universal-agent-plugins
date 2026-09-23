@@ -58,6 +58,30 @@ func TestGroupCollisionErrorIncludesSelectedTargetContext(t *testing.T) {
 	}
 }
 
+func TestRuntimePreparationFailureIsNotPresentedAsPreflightOrActivation(t *testing.T) {
+	result := addMultiResult{Batch: true, Status: "preparation_failed", Failed: 2, Plugin: "playwright"}
+	for _, format := range []string{"human", "json"} {
+		t.Run(format, func(t *testing.T) {
+			var out bytes.Buffer
+			command := &cobra.Command{}
+			command.SetOut(&out)
+			if err := renderAddMultiResult(command, &options{format: format}, result, domain.PackageEnvelope{}); err != nil {
+				t.Fatal(err)
+			}
+			body := out.String()
+			if format == "human" {
+				if !strings.Contains(body, "Nothing was installed: package preparation failed") ||
+					strings.Contains(body, "preflight") || strings.Contains(body, "activation") {
+					t.Fatalf("misleading preparation failure: %s", body)
+				}
+			} else if !strings.Contains(body, `"status":"preparation_failed"`) ||
+				!strings.Contains(body, `"result":"failure"`) {
+				t.Fatalf("structured preparation failure: %s", body)
+			}
+		})
+	}
+}
+
 func TestBatchActivationApplySummaryAndExitCodes(t *testing.T) {
 	t.Parallel()
 	t.Run("human summary keeps order and hides technical phases", func(t *testing.T) {

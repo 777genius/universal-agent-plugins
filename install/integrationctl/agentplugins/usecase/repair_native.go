@@ -7,6 +7,11 @@ import (
 )
 
 func (session *repairSession) repairNative() (AddResult, error) {
+	if session.input.Confirmed && !session.input.DryRun {
+		if err := session.service.prepareExistingRuntime(session.ctx, session.input.Envelope, session.plan, session.installation, session.client); err != nil {
+			return session.result, fmt.Errorf("prepare installed MCP runtime before repair: %w", err)
+		}
+	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
 	if clientVerifyErr != nil {
 		if !nativeLifecycleClient(session.input.Client.ClientID) {

@@ -28,6 +28,12 @@ func (session *applySession) stageAndCommit() (AddResult, error) {
 			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
 		}
 	}()
+	if dataReceipt.Locator != "" {
+		if err := session.service.PluginData.PrepareRuntime(session.ctx, session.input.Envelope, session.plan, dataReceipt.Locator); err != nil {
+			_ = session.service.Stager.Discard(context.Background(), delivery)
+			return session.result, fmt.Errorf("prepare locked MCP runtime before activation: %w", err)
+		}
+	}
 	if err := session.service.observeNativeIdentity(session.ctx, session.input.Client, session.plan, session.managedBinding); err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return session.result, fmt.Errorf("native identity changed before commit: %w", err)

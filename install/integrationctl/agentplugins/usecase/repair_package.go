@@ -80,6 +80,12 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, fmt.Errorf("resolved repair projection digest differs from the originally managed package")
 	}
+	if dataPath != "" {
+		if err := session.service.PluginData.PrepareRuntime(session.ctx, session.input.Envelope, session.plan, dataPath); err != nil {
+			_ = session.service.Stager.Discard(context.Background(), delivery)
+			return domain.StagedDelivery{}, fmt.Errorf("prepare locked MCP runtime before repair activation: %w", err)
+		}
+	}
 	session.input.OperationID = operationID
 	return delivery, nil
 }

@@ -20,6 +20,13 @@ func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
 		if target.noChange {
+			if target.managed != nil && session.existing {
+				installation := session.state.Installations[session.installationIndex]
+				if err := session.service.prepareExistingRuntime(session.ctx, target.input.Envelope, target.plan, installation, *target.managed); err != nil {
+					session.cleanupStaged()
+					return fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err)
+				}
+			}
 			continue
 		}
 		if err := session.stageOneGroupDelivery(targetIndex, target); err != nil {
@@ -52,6 +59,11 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 		return err
 	}
 	target.delivery = delivery
+	if target.dataReceipt.Locator != "" {
+		if err := session.service.PluginData.PrepareRuntime(session.ctx, target.input.Envelope, target.plan, target.dataReceipt.Locator); err != nil {
+			return fmt.Errorf("prepare locked MCP runtime for %s before group commit: %w", target.input.Client.ClientID, err)
+		}
+	}
 	return nil
 }
 
