@@ -644,13 +644,11 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		stages["foreign_key_collision"] = openCodeNativeStage{Status: "failed", Reason: "update silently overwrote a foreign entry claiming a managed logical key instead of refusing"}
 		t.Fatalf("expected refusal when a foreign entry occupies a managed logical key, got success:\n%s", collisionUpdateOut)
 	}
-	if !strings.Contains(collisionUpdateOut, "native identity is unmanaged") {
-		t.Fatalf("update refusal did not report unmanaged native identity:\n%s", collisionUpdateOut)
+	if !strings.Contains(collisionUpdateOut, `prior OpenCode MCP server "api/server" is not exactly owned`) {
+		t.Fatalf("update refusal did not report lost MCP ownership:\n%s", collisionUpdateOut)
 	}
-	// Identity inspect refuses the collision before managed bookkeeping
-	// commits, so this is apply_failed rather than
-	// managed_committed_activation_failed.
-	openCodeAssertJSONDataStatus(t, collisionUpdateOut, "apply_failed")
+	// Namespace preflight refuses the modified managed entry before commit.
+	openCodeAssertJSONDataStatus(t, collisionUpdateOut, "preflight_failed")
 	afterCollisionUpdateBytes, err := os.ReadFile(configPath)
 	must(err)
 	if string(afterCollisionUpdateBytes) != string(postCollisionPlantBytes) {
@@ -678,10 +676,10 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 		stages["foreign_key_collision"] = openCodeNativeStage{Status: "failed", Reason: "repair silently adopted a foreign entry claiming a managed logical key instead of refusing"}
 		t.Fatalf("expected repair to refuse when a foreign entry occupies a managed logical key, got success:\n%s", collisionRepairOut)
 	}
-	if !strings.Contains(collisionRepairOut, "native identity is unmanaged") {
-		t.Fatalf("repair refusal did not report unmanaged native identity:\n%s", collisionRepairOut)
+	if !strings.Contains(collisionRepairOut, `prior OpenCode MCP server "api/server" is not exactly owned`) {
+		t.Fatalf("repair refusal did not report lost MCP ownership:\n%s", collisionRepairOut)
 	}
-	openCodeAssertJSONDataStatus(t, collisionRepairOut, "apply_failed")
+	openCodeAssertJSONDataStatus(t, collisionRepairOut, "preflight_failed")
 	afterCollisionRepairBytes, err := os.ReadFile(configPath)
 	must(err)
 	if string(afterCollisionRepairBytes) != string(postCollisionPlantBytes) {
@@ -691,7 +689,7 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	if afterCollisionRepairSkillDigest != beforeCollisionSkillDigest {
 		t.Fatalf("installed skill file changed despite the refused repair: %s -> %s", beforeCollisionSkillDigest, afterCollisionRepairSkillDigest)
 	}
-	stages["foreign_key_collision"] = openCodeNativeStage{Status: "passed", Reason: "both update and repair independently refused before managed commit (data.status:apply_failed, native identity unmanaged); config file bytes and installed skill file digest verified unchanged after each refusal"}
+	stages["foreign_key_collision"] = openCodeNativeStage{Status: "passed", Reason: "both update and repair independently refused before managed commit (data.status:preflight_failed, prior MCP entry not exactly owned); config file bytes and installed skill file digest verified unchanged after each refusal"}
 	// Restore the exact pre-collision bytes directly, simulating the foreign
 	// writer reverting its own change, so remove below observes the actual
 	// managed state.
