@@ -10,7 +10,7 @@ import (
 const OpenCodeNamespaceCheckedCode = "opencode_global_namespace_checked"
 
 func (service Service) checkMCPNamespace(ctx context.Context, client domain.DetectedClient, plan *domain.DeliveryPlan, managed *domain.ClientBinding) error {
-	if client.ClientID != domain.ClientOpenCode || len(domain.SelectedMCPNames(*plan)) == 0 {
+	if !domain.ClientTraitsFor(client.ClientID).ReportsMCPToolNamespaceCollision || len(domain.SelectedMCPNames(*plan)) == 0 {
 		return nil
 	}
 	if service.NamespacePreflight == nil {

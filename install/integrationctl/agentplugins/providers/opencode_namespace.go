@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -19,7 +18,7 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if client.ClientID != domain.ClientOpenCode {
+	if !domain.ClientTraitsFor(client.ClientID).ReportsMCPToolNamespaceCollision {
 		return nil
 	}
 	root := strings.TrimSpace(client.ConfigRoot)
@@ -30,7 +29,7 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 	previous := []string{}
 	if managed != nil {
 		for _, object := range managed.NativeObjects {
-			if object.Kind == opencode.OpenCodeMCPObjectKind {
+			if object.Kind == nativeconfig.OpenCodeMCPObjectKind {
 				owned := nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: nativeconfig.CodecOpenCode, Name: object.LogicalName, Digest: object.ManagedDigest}
 				present, exactlyOwned, err := guard.Kernel.Inspect(paths, nativeconfig.CodecOpenCode, object.LogicalName, &owned)
 				if err != nil {

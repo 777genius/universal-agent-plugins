@@ -16,7 +16,7 @@ import (
 
 const (
 	OpenCodeProjectionFile = ".agentplugins-opencode.json"
-	OpenCodeMCPObjectKind  = "opencode_global_mcp_server"
+	OpenCodeMCPObjectKind  = nativeconfig.OpenCodeMCPObjectKind
 	openCodeSkillKind      = "opencode_global_skill_directory"
 )
 
