@@ -70,7 +70,7 @@ func TestRuntimePreparationFailureIsNotPresentedAsPreflightOrActivation(t *testi
 			}
 			body := out.String()
 			if format == "human" {
-				if !strings.Contains(body, "Nothing was installed: package preparation failed") ||
+				if !strings.Contains(body, "No selected client was changed: package preparation failed") ||
 					strings.Contains(body, "preflight") || strings.Contains(body, "activation") {
 					t.Fatalf("misleading preparation failure: %s", body)
 				}
@@ -79,6 +79,15 @@ func TestRuntimePreparationFailureIsNotPresentedAsPreflightOrActivation(t *testi
 				t.Fatalf("structured preparation failure: %s", body)
 			}
 		})
+	}
+}
+
+func TestManagedKernelFailureIsNotLabeledRuntimePreparation(t *testing.T) {
+	if got := groupFailureStatus(usecase.GroupPhaseManagedUnchanged); got != "apply_failed" {
+		t.Fatalf("managed kernel failure status = %q, want apply_failed", got)
+	}
+	if got := groupFailureStatus(usecase.GroupPhasePreparationFailed); got != "preparation_failed" {
+		t.Fatalf("preparation status = %q, want preparation_failed", got)
 	}
 }
 

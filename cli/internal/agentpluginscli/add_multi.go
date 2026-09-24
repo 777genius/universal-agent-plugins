@@ -267,7 +267,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
-		if applied.Phase == usecase.GroupPhaseManagedUnchanged && !applied.Mutated {
+		if applied.Phase == usecase.GroupPhasePreparationFailed && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preparation_failed", len(inputs), 0, 0
 			for index := range combined.Targets {
 				combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
@@ -277,7 +277,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 				combined.setTargetProof(domain.ClientID(combined.Targets[index].Target), "not_completed")
 			}
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-			return fmt.Errorf("group preparation failed before client changes (selected targets: %v): %w; nothing was installed", targets, err)
+			return fmt.Errorf("group preparation failed before client changes (selected targets: %v): %w; no selected client was changed", targets, err)
 		}
 		combined.Status = groupFailureStatus(applied.Phase)
 		// Always report selected ChatGPT setup, even when installable peers failed.
@@ -476,7 +476,7 @@ func addTargetProofOutcome(result usecase.AddResult) string {
 
 func groupFailureStatus(phase usecase.GroupPhase) string {
 	switch phase {
-	case usecase.GroupPhaseManagedRolledBack, usecase.GroupPhaseManagedCommitUnknown,
+	case usecase.GroupPhasePreparationFailed, usecase.GroupPhaseManagedRolledBack, usecase.GroupPhaseManagedCommitUnknown,
 		usecase.GroupPhaseManagedActivationFailed, usecase.GroupPhaseExternalPartialFailure:
 		return string(phase)
 	case usecase.GroupPhaseManagedCommitted:
@@ -538,7 +538,7 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		return nil
 	}
 	if result.Status == "preparation_failed" {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: package preparation failed before any selected client was changed. See the error below, then retry the same command.")
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), "No selected client was changed: package preparation failed. See the error below, then retry the same command.")
 		return err
 	}
 	if result.DryRun {

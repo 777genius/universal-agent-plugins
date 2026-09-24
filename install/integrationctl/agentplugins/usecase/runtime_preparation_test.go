@@ -66,7 +66,7 @@ func TestRuntimePreparationFailureLeavesGroupUnchanged(t *testing.T) {
 	result, err := service.AddGroup(context.Background(), GroupInput{
 		Targets: []AddInput{first, second}, OperationGroupID: "cold-group", Confirmed: true,
 	})
-	if err == nil || !strings.Contains(err.Error(), "cold npm unavailable") || result.Mutated || result.Phase != GroupPhaseManagedUnchanged || manager.calls != 1 {
+	if err == nil || !strings.Contains(err.Error(), "cold npm unavailable") || result.Mutated || result.Phase != GroupPhasePreparationFailed || manager.calls != 1 {
 		t.Fatalf("group result = %+v, error = %v, calls = %d", result, err, manager.calls)
 	}
 	state, err := store.Load()

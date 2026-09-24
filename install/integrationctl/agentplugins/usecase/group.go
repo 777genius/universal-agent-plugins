@@ -34,6 +34,7 @@ type GroupPhase string
 
 const (
 	GroupPhasePlanned                 GroupPhase = "planned"
+	GroupPhasePreparationFailed       GroupPhase = "preparation_failed"
 	GroupPhaseManagedUnchanged        GroupPhase = "managed_unchanged"
 	GroupPhaseManagedRolledBack       GroupPhase = "managed_rolled_back"
 	GroupPhaseManagedCommitUnknown    GroupPhase = "managed_commit_unknown"
@@ -163,7 +164,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		// Staging can prepare a locked runtime after the read-only preflight.
 		// No managed package or client was committed, but this is an apply-time
 		// preparation failure, not a failed preflight check.
-		session.result.Phase = GroupPhaseManagedUnchanged
+		session.result.Phase = GroupPhasePreparationFailed
 		return session.result, err
 	}
 	defer session.cleanupStaged()
