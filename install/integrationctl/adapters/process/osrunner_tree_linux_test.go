@@ -51,19 +51,21 @@ func TestOSRunnerSurvivesRemovedOwnExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	copyFile, err := os.OpenFile(copyPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0700)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := io.Copy(copyFile, source); err != nil {
-		copyFile.Close()
+		_ = copyFile.Close()
 		t.Fatal(err)
 	}
 	if err := copyFile.Close(); err != nil {
 		t.Fatal(err)
 	}
-	command := exec.Command(copyPath, "-test.run=^TestOSRunnerSurvivesRemovedOwnExecutable$")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, copyPath, "-test.run=^TestOSRunnerSurvivesRemovedOwnExecutable$")
 	command.Env = append(os.Environ(), helperEnv+"="+copyPath)
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("copied process could not run after self-unlink: %v\n%s", err, output)
