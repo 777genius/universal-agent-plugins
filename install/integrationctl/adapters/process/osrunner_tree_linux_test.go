@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -19,6 +20,55 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 	"golang.org/x/sys/unix"
 )
+
+// Package replacement can unlink the caller's binary while an ordinary
+// command still needs the process supervisor. The supervisor must relaunch
+// from the running inode, not from the removed pathname.
+func TestOSRunnerSurvivesRemovedOwnExecutable(t *testing.T) {
+	const helperEnv = "AGENTPLUGINS_REMOVED_SELF_EXECUTABLE"
+	if copied := os.Getenv(helperEnv); copied != "" {
+		self, err := os.Executable()
+		if err != nil || self != copied {
+			fmt.Fprintf(os.Stderr, "unexpected helper executable %q: %v\n", self, err)
+			os.Exit(81)
+		}
+		if err := os.Remove(self); err != nil {
+			fmt.Fprintf(os.Stderr, "remove copied helper: %v\n", err)
+			os.Exit(82)
+		}
+		if _, err := (OS{}).Run(context.Background(), ports.Command{Argv: []string{"/bin/true"}}); err != nil {
+			fmt.Fprintf(os.Stderr, "run after self-unlink: %v\n", err)
+			os.Exit(83)
+		}
+		os.Exit(0)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyPath := filepath.Join(t.TempDir(), "unlinked-runner-test")
+	source, err := os.Open(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	copyFile, err := os.OpenFile(copyPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0700)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.Copy(copyFile, source); err != nil {
+		copyFile.Close()
+		t.Fatal(err)
+	}
+	if err := copyFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(copyPath, "-test.run=^TestOSRunnerSurvivesRemovedOwnExecutable$")
+	command.Env = append(os.Environ(), helperEnv+"="+copyPath)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("copied process could not run after self-unlink: %v\n%s", err, output)
+	}
+}
 
 func TestOSRunnerPlannedDuplexShutdownContainsImmediateSetsidDescendant(t *testing.T) {
 	requireDuplexCapability(t)
