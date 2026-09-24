@@ -250,7 +250,7 @@ func (r *removedBackupListRunner) Run(_ context.Context, command legacyports.Com
 		return legacyports.CommandResult{}, fmt.Errorf("unexpected command %q", got)
 	}
 	marketplace := shared.ManagedMarketplaceName("artifact")
-	body := fmt.Sprintf(`{"installed":[{"pluginId":"demo@%s","name":"demo","marketplaceName":"%s","installed":true,"enabled":true}]}`, marketplace, marketplace)
+	body := fmt.Sprintf(`{"installed":[{"pluginId":%q,"name":"demo","marketplaceName":%q,"installed":true,"enabled":true}]}`, "demo@"+marketplace, marketplace)
 	return legacyports.CommandResult{Stdout: []byte(body)}, nil
 }
 

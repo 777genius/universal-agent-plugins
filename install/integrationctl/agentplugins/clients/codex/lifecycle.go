@@ -112,7 +112,7 @@ func verifyCodexPlugin(ctx context.Context, env clients.Env, request domain.Acti
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	pluginSpec := request.DeclaredName + "@" + marketplace
 	var listed []byte
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		result, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
 		if err == nil {
 			listed = result.Stdout
