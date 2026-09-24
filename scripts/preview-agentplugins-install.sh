@@ -10,6 +10,9 @@ if [[ $# -ne 1 || -z "$1" ]]; then
 fi
 
 source_ref=$1
+if [[ ( "$source_ref" == ./* || "$source_ref" == ../* ) && -e "$source_ref" ]]; then
+  source_ref="$(cd "$(dirname "$source_ref")" && pwd)/$(basename "$source_ref")"
+fi
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 temp_base=${TMPDIR:-/tmp}
 temp_base=${temp_base%/}
@@ -19,7 +22,7 @@ test_home="$sandbox_root/home"
 mkdir -p "$test_home/.gemini" "$test_home/.config/opencode" "$sandbox_root/project"
 
 printf 'Building current source in %s\n' "$repo_root"
-(cd "$repo_root" && go build -trimpath -ldflags='-X main.version=local-preview' -o "$sandbox_root/agentplugins" ./cli/cmd/agentplugins)
+(cd "$repo_root" && go build -trimpath -ldflags='-X main.version=0.1.72-dev' -o "$sandbox_root/agentplugins" ./cli/cmd/agentplugins)
 
 printf 'Fresh test profile: %s\n' "$sandbox_root"
 printf 'The agent chooser is interactive. Only this test profile will receive configuration.\n\n'

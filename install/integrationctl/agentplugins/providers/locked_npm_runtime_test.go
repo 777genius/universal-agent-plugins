@@ -91,6 +91,105 @@ func TestLockedRuntimePreparedOnceBeforeActivation(t *testing.T) {
 	}
 }
 
+func TestLockedRuntimeReplacesOwnedCacheWhenMarkerChanges(t *testing.T) {
+	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatal(err)
+	}
+	runtimeRoot := filepath.Join(envelope.SnapshotRoot, filepath.FromSlash(lockedRuntimePath))
+	configPath := filepath.Join(runtimeRoot, "runtime.json")
+	body, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := strings.Replace(string(body), `"omit_optional":false`, `"omit_optional":true`, 1)
+	if changed == string(body) {
+		t.Fatal("fixture did not contain omit_optional")
+	}
+	if err := os.WriteFile(configPath, []byte(changed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatal(err)
+	}
+	if *runs != 2 {
+		t.Fatalf("npm runs = %d, want two", *runs)
+	}
+	lockBody, err := os.ReadFile(filepath.Join(runtimeRoot, "package-lock.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(lockBody)
+	store := filepath.Join(dataPath, "npm-runtime")
+	target := filepath.Join(store, hex.EncodeToString(sum[:]))
+	markerBody, err := os.ReadFile(filepath.Join(target, runtimeMarkerName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var marker lockedRuntimeMarker
+	if err := decodeStrictJSON(markerBody, &marker); err != nil || !marker.OmitOptional {
+		t.Fatalf("new marker = %+v, error = %v", marker, err)
+	}
+	entries, err := os.ReadDir(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	retired := 0
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".retired-") {
+			retired++
+			oldBody, err := os.ReadFile(filepath.Join(store, entry.Name(), "runtime", runtimeMarkerName))
+			if err != nil || !strings.Contains(string(oldBody), `"omit_optional":false`) {
+				t.Fatalf("old runtime was not preserved: %s, %v", entry.Name(), err)
+			}
+		}
+	}
+	if retired != 1 {
+		t.Fatalf("retired runtimes = %d, want one", retired)
+	}
+}
+
+func TestLockedRuntimeRepairsMissingEntrypointWithoutDeletingOldCache(t *testing.T) {
+	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatal(err)
+	}
+	lockBody, err := os.ReadFile(filepath.Join(envelope.SnapshotRoot, filepath.FromSlash(lockedRuntimePath), "package-lock.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(lockBody)
+	store := filepath.Join(dataPath, "npm-runtime")
+	target := filepath.Join(store, hex.EncodeToString(sum[:]))
+	entrypoint := filepath.Join(target, "node_modules", "@example", "mcp", "cli.js")
+	if err := os.Remove(entrypoint); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatal(err)
+	}
+	if *runs != 2 {
+		t.Fatalf("npm runs = %d, want two", *runs)
+	}
+	if _, err := os.Stat(entrypoint); err != nil {
+		t.Fatalf("repaired entrypoint: %v", err)
+	}
+	entries, err := os.ReadDir(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundOld := false
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".retired-") {
+			_, err := os.Stat(filepath.Join(store, entry.Name(), "runtime", runtimeMarkerName))
+			foundOld = err == nil
+		}
+	}
+	if !foundOld {
+		t.Fatal("damaged old runtime was not preserved")
+	}
+}
+
 func TestLockedRuntimeNotSelectedStaysInert(t *testing.T) {
 	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
 	plan.Components[0].Support = domain.SupportUnsupported

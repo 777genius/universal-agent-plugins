@@ -361,11 +361,6 @@ func installLockedRuntime(ctx context.Context, dataPath, store, target string, e
 	if ready, err := readyLockedRuntime(target, expected); err != nil || ready {
 		return err
 	}
-	if _, err := os.Lstat(target); err == nil {
-		return fmt.Errorf("locked npm runtime target exists but is not ready; refusing to replace unrelated data")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 	temporary, err := os.MkdirTemp(store, ".tmp-"+strings.TrimPrefix(expected.LockDigest, "sha256:")+"-")
 	if err != nil {
 		return err
@@ -386,7 +381,7 @@ func installLockedRuntime(ctx context.Context, dataPath, store, target string, e
 	if err := writeRuntimeMarker(temporary, expected); err != nil {
 		return err
 	}
-	if err := os.Rename(temporary, target); err != nil {
+	if err := commitLockedRuntimeTarget(store, target, temporary, expected); err != nil {
 		return err
 	}
 	ready, err := readyLockedRuntime(target, expected)
