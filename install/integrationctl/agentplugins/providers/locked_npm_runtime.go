@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -161,15 +160,32 @@ func validateLockedRuntime(configBody, packageBody, lockBody []byte) (lockedRunt
 	}
 	sum := sha256.Sum256(lockBody)
 	digest := "sha256:" + hex.EncodeToString(sum[:])
+	if err := validateRuntimeConfig(config, digest); err != nil {
+		return config, "", err
+	}
+	if err := validateRuntimeManifest(config, packageBody); err != nil {
+		return config, "", err
+	}
+	if err := validateRuntimeLock(config, lockBody); err != nil {
+		return config, "", err
+	}
+	return config, digest, nil
+}
+
+func validateRuntimeConfig(config lockedRuntimeConfig, digest string) error {
 	if config.SchemaVersion != 1 || config.Package == "" || config.Version == "" ||
 		config.PackageLockSHA256 != digest || strings.ContainsAny(config.Entrypoint, "\\") ||
 		path.Clean(config.Entrypoint) != config.Entrypoint ||
 		!strings.HasPrefix(config.Entrypoint, "node_modules/"+config.Package+"/") {
-		return config, "", fmt.Errorf("runtime.json does not match the locked npm runtime")
+		return fmt.Errorf("runtime.json does not match the locked npm runtime")
 	}
 	if !lockedNPMName.MatchString(config.Package) || !semver.IsValid("v"+config.Version) {
-		return config, "", fmt.Errorf("invalid locked npm package identity")
+		return fmt.Errorf("invalid locked npm package identity")
 	}
+	return nil
+}
+
+func validateRuntimeManifest(config lockedRuntimeConfig, packageBody []byte) error {
 	var manifest struct {
 		Name         string            `json:"name"`
 		Version      string            `json:"version"`
@@ -178,56 +194,69 @@ func validateLockedRuntime(configBody, packageBody, lockBody []byte) (lockedRunt
 		Overrides    map[string]string `json:"overrides"`
 	}
 	if err := decodeStrictJSON(packageBody, &manifest); err != nil {
-		return config, "", fmt.Errorf("package.json: %w", err)
+		return fmt.Errorf("package.json: %w", err)
 	}
 	if !manifest.Private || len(manifest.Dependencies) != 1 || manifest.Dependencies[config.Package] != config.Version {
-		return config, "", fmt.Errorf("package.json must declare one exact private production dependency")
+		return fmt.Errorf("package.json must declare one exact private production dependency")
 	}
 	for name, version := range manifest.Overrides {
 		if !lockedNPMName.MatchString(name) || !semver.IsValid("v"+version) {
-			return config, "", fmt.Errorf("package.json contains a non-exact npm override")
+			return fmt.Errorf("package.json contains a non-exact npm override")
 		}
 	}
+	return nil
+}
+
+type runtimeLockPackage struct {
+	Version      string            `json:"version"`
+	Dependencies map[string]string `json:"dependencies"`
+	Resolved     string            `json:"resolved"`
+	Integrity    string            `json:"integrity"`
+	Link         bool              `json:"link"`
+}
+
+func validateRuntimeLock(config lockedRuntimeConfig, lockBody []byte) error {
 	var lock struct {
-		LockfileVersion int  `json:"lockfileVersion"`
-		Requires        bool `json:"requires"`
-		Packages        map[string]struct {
-			Version      string            `json:"version"`
-			Dependencies map[string]string `json:"dependencies"`
-			Resolved     string            `json:"resolved"`
-			Integrity    string            `json:"integrity"`
-			Link         bool              `json:"link"`
-		} `json:"packages"`
+		LockfileVersion int                           `json:"lockfileVersion"`
+		Requires        bool                          `json:"requires"`
+		Packages        map[string]runtimeLockPackage `json:"packages"`
 	}
 	if err := json.Unmarshal(lockBody, &lock); err != nil {
-		return config, "", fmt.Errorf("package-lock.json: %w", err)
+		return fmt.Errorf("package-lock.json: %w", err)
 	}
 	root, rootOK := lock.Packages[""]
 	dependency, dependencyOK := lock.Packages["node_modules/"+config.Package]
 	if lock.LockfileVersion != 3 || !lock.Requires || !rootOK || !dependencyOK ||
 		len(root.Dependencies) != 1 || root.Dependencies[config.Package] != config.Version ||
 		dependency.Version != config.Version {
-		return config, "", fmt.Errorf("package-lock.json does not bind the declared npm dependency")
+		return fmt.Errorf("package-lock.json does not bind the declared npm dependency")
 	}
 	for name, entry := range lock.Packages {
 		if name == "" {
 			continue
 		}
-		if !strings.HasPrefix(name, "node_modules/") || strings.Contains(name, "..") ||
-			strings.Contains(name, "\\") || entry.Link || entry.Version == "" {
-			return config, "", fmt.Errorf("package-lock.json contains an unsupported package entry %q", name)
-		}
-		resolved, err := url.Parse(entry.Resolved)
-		if err != nil || resolved.Scheme != "https" || resolved.Host != "registry.npmjs.org" ||
-			resolved.User != nil || resolved.RawQuery != "" || resolved.Fragment != "" {
-			return config, "", fmt.Errorf("package-lock.json package %q is not pinned to registry.npmjs.org", name)
-		}
-		decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(entry.Integrity, "sha512-"))
-		if !strings.HasPrefix(entry.Integrity, "sha512-") || err != nil || len(decoded) != sha256.Size*2 {
-			return config, "", fmt.Errorf("package-lock.json package %q lacks sha512 integrity", name)
+		if err := validateRuntimeLockPackage(name, entry); err != nil {
+			return err
 		}
 	}
-	return config, digest, nil
+	return nil
+}
+
+func validateRuntimeLockPackage(name string, entry runtimeLockPackage) error {
+	if !strings.HasPrefix(name, "node_modules/") || strings.Contains(name, "..") ||
+		strings.Contains(name, "\\") || entry.Link || entry.Version == "" {
+		return fmt.Errorf("package-lock.json contains an unsupported package entry %q", name)
+	}
+	resolved, err := url.Parse(entry.Resolved)
+	if err != nil || resolved.Scheme != "https" || resolved.Host != "registry.npmjs.org" ||
+		resolved.User != nil || resolved.RawQuery != "" || resolved.Fragment != "" {
+		return fmt.Errorf("package-lock.json package %q is not pinned to registry.npmjs.org", name)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(entry.Integrity, "sha512-"))
+	if !strings.HasPrefix(entry.Integrity, "sha512-") || err != nil || len(decoded) != sha256.Size*2 {
+		return fmt.Errorf("package-lock.json package %q lacks sha512 integrity", name)
+	}
+	return nil
 }
 
 func decodeStrictJSON(body []byte, target any) error {
@@ -265,7 +294,10 @@ func readyLockedRuntime(target string, expected lockedRuntimeMarker) (bool, erro
 		return false, err
 	}
 	var marker lockedRuntimeMarker
-	if err := decodeStrictJSON(body, &marker); err != nil || marker != expected {
+	if err := decodeStrictJSON(body, &marker); err != nil {
+		return false, fmt.Errorf("invalid locked npm runtime marker: %w", err)
+	}
+	if marker != expected {
 		return false, nil
 	}
 	entrypoint := filepath.Join(target, filepath.FromSlash(expected.Entrypoint))
@@ -273,7 +305,13 @@ func readyLockedRuntime(target string, expected lockedRuntimeMarker) (bool, erro
 		return false, fmt.Errorf("unsafe locked npm entrypoint: %w", err)
 	}
 	info, err := os.Stat(entrypoint)
-	if err != nil || !info.Mode().IsRegular() {
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
 		return false, nil
 	}
 	binPath := filepath.Join(target, "node_modules", ".bin")
@@ -281,7 +319,10 @@ func readyLockedRuntime(target string, expected lockedRuntimeMarker) (bool, erro
 		return false, fmt.Errorf("unsafe locked npm bin directory: %w", err)
 	}
 	if err := requireRealDirectory(binPath); err != nil {
-		return false, nil
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
 	}
 	return true, nil
 }
@@ -313,6 +354,10 @@ func prepareLockedRuntime(ctx context.Context, dataPath string, config lockedRun
 			returnErr = errors.Join(returnErr, err)
 		}
 	}()
+	return installLockedRuntime(ctx, dataPath, store, target, expected, config, packageBody, lockBody, runner)
+}
+
+func installLockedRuntime(ctx context.Context, dataPath, store, target string, expected lockedRuntimeMarker, config lockedRuntimeConfig, packageBody, lockBody []byte, runner func(context.Context, string, string, bool) error) error {
 	if ready, err := readyLockedRuntime(target, expected); err != nil || ready {
 		return err
 	}
@@ -321,11 +366,11 @@ func prepareLockedRuntime(ctx context.Context, dataPath string, config lockedRun
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	temporary, err := os.MkdirTemp(store, ".tmp-"+key+"-")
+	temporary, err := os.MkdirTemp(store, ".tmp-"+strings.TrimPrefix(expected.LockDigest, "sha256:")+"-")
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(temporary)
+	defer func() { _ = os.RemoveAll(temporary) }()
 	if err := os.WriteFile(filepath.Join(temporary, "package.json"), packageBody, 0o600); err != nil {
 		return err
 	}
@@ -335,13 +380,33 @@ func prepareLockedRuntime(ctx context.Context, dataPath string, config lockedRun
 	if err := runner(ctx, temporary, dataPath, config.OmitOptional); err != nil {
 		return err
 	}
-	entrypoint := filepath.Join(temporary, filepath.FromSlash(config.Entrypoint))
+	if err := validatePreparedRuntime(temporary, config.Entrypoint); err != nil {
+		return err
+	}
+	if err := writeRuntimeMarker(temporary, expected); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, target); err != nil {
+		return err
+	}
+	ready, err := readyLockedRuntime(target, expected)
+	if err != nil {
+		return fmt.Errorf("prepared npm runtime failed its ready check: %w", err)
+	}
+	if !ready {
+		return fmt.Errorf("prepared npm runtime failed its ready check")
+	}
+	return nil
+}
+
+func validatePreparedRuntime(temporary, entrypointName string) error {
+	entrypoint := filepath.Join(temporary, filepath.FromSlash(entrypointName))
 	if err := pathpolicy.RequireContainedChild(temporary, entrypoint); err != nil {
 		return fmt.Errorf("unsafe locked npm entrypoint: %w", err)
 	}
 	info, err := os.Stat(entrypoint)
 	if err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("locked npm package did not provide %s", config.Entrypoint)
+		return fmt.Errorf("locked npm package did not provide %s", entrypointName)
 	}
 	binPath := filepath.Join(temporary, "node_modules", ".bin")
 	if err := pathpolicy.RequireContainedChild(temporary, binPath); err != nil {
@@ -350,19 +415,16 @@ func prepareLockedRuntime(ctx context.Context, dataPath string, config lockedRun
 	if err := requireRealDirectory(binPath); err != nil {
 		return fmt.Errorf("locked npm package did not provide node_modules/.bin: %w", err)
 	}
+	return nil
+}
+
+func writeRuntimeMarker(temporary string, expected lockedRuntimeMarker) error {
 	body, err := json.Marshal(expected)
 	if err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(temporary, runtimeMarkerName), append(body, '\n'), 0o600); err != nil {
 		return err
-	}
-	if err := os.Rename(temporary, target); err != nil {
-		return err
-	}
-	ready, err := readyLockedRuntime(target, expected)
-	if err != nil || !ready {
-		return fmt.Errorf("prepared npm runtime failed its ready check: %w", err)
 	}
 	return nil
 }
@@ -417,76 +479,4 @@ func releaseRuntimeLock(lockPath, owner string) error {
 		return fmt.Errorf("locked npm runtime ownership changed during lock release")
 	}
 	return os.Rename(lockPath, lockPath+".retired-"+digest)
-}
-
-func runLockedNPM(ctx context.Context, temporary, dataPath string, omitOptional bool) error {
-	timeout, cancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer cancel()
-	args := []string{"ci", "--ignore-scripts", "--omit=dev"}
-	if omitOptional {
-		args = append(args, "--omit=optional")
-	}
-	args = append(args, "--no-audit", "--no-fund")
-	npm := "npm"
-	if filepath.Separator == '\\' {
-		npm = "npm.cmd"
-	}
-	command := exec.CommandContext(timeout, npm, args...)
-	command.Dir = temporary
-	command.Stdin = nil
-	command.Stdout = io.Discard
-	var stderr runtimeStderrTail
-	command.Stderr = &stderr
-	cachePath := filepath.Join(dataPath, "npm-cache")
-	if err := os.Mkdir(cachePath, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
-		return err
-	}
-	if err := requireRealDirectory(cachePath); err != nil {
-		return fmt.Errorf("unsafe npm cache: %w", err)
-	}
-	env := make([]string, 0, len(os.Environ())+8)
-	for _, item := range os.Environ() {
-		key, _, _ := strings.Cut(item, "=")
-		lower := strings.ToLower(key)
-		if strings.HasPrefix(lower, "npm_") || lower == "node_options" || lower == "node_path" ||
-			lower == "init_cwd" || lower == "home" || lower == "userprofile" {
-			continue
-		}
-		env = append(env, item)
-	}
-	env = append(env, "HOME="+temporary, "npm_config_cache="+cachePath,
-		"npm_config_userconfig="+filepath.Join(temporary, ".npmrc-user"),
-		"npm_config_globalconfig="+filepath.Join(temporary, ".npmrc-global"),
-		"npm_config_ignore_scripts=true", "npm_config_audit=false", "npm_config_fund=false",
-		"npm_config_update_notifier=false", "npm_config_registry=https://registry.npmjs.org/")
-	command.Env = env
-	if err := command.Run(); err != nil {
-		if timeout.Err() != nil {
-			return fmt.Errorf("locked npm runtime preparation timed out: %w", timeout.Err())
-		}
-		detail := strings.TrimSpace(string(stderr.tail))
-		if detail == "" {
-			return fmt.Errorf("locked npm runtime preparation: %w", err)
-		}
-		return fmt.Errorf("locked npm runtime preparation: %w: %s", err, detail)
-	}
-	return nil
-}
-
-// npm can emit unbounded diagnostics on a failing dependency graph. Keep only
-// the useful tail without letting an untrusted package exhaust installer RAM.
-type runtimeStderrTail struct{ tail []byte }
-
-func (writer *runtimeStderrTail) Write(chunk []byte) (int, error) {
-	const maxBytes = 1200
-	length := len(chunk)
-	if length >= maxBytes {
-		writer.tail = append(writer.tail[:0], chunk[length-maxBytes:]...)
-		return length, nil
-	}
-	if len(writer.tail)+length > maxBytes {
-		writer.tail = append(writer.tail[:0], writer.tail[len(writer.tail)+length-maxBytes:]...)
-	}
-	writer.tail = append(writer.tail, chunk...)
-	return length, nil
 }

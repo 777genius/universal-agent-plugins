@@ -107,7 +107,7 @@ func runtimeLockRetirementDigest(lockPath string) (string, error) {
 	}
 	_, writeErr := file.Write(claim)
 	closeErr := file.Close()
-	defer os.Remove(candidate)
+	defer func() { _ = os.Remove(candidate) }()
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		return "", err
 	}
@@ -157,7 +157,7 @@ func runtimeLockProcessDead(pid int) bool {
 	if err != nil {
 		return false
 	}
-	defer process.Release()
+	defer func() { _ = process.Release() }()
 	err = process.Signal(syscall.Signal(0))
 	return errors.Is(err, syscall.ESRCH) || errors.Is(err, os.ErrProcessDone)
 }
