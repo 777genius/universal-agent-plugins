@@ -231,3 +231,66 @@ func TestCommandFailuresAreNotAbsence(t *testing.T) {
 		t.Fatal("failure treated as absence")
 	}
 }
+
+type removedBackupListRunner struct {
+	calls     int
+	failCount int
+	failPath  string
+}
+
+func (r *removedBackupListRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	r.calls++
+	if r.calls <= r.failCount {
+		return legacyports.CommandResult{}, &os.PathError{
+			Op: "fork/exec", Path: r.failPath,
+			Err: os.ErrNotExist,
+		}
+	}
+	if got := strings.Join(command.Argv[1:], " "); got != "plugin list --json" {
+		return legacyports.CommandResult{}, fmt.Errorf("unexpected command %q", got)
+	}
+	marketplace := shared.ManagedMarketplaceName("artifact")
+	body := fmt.Sprintf(`{"installed":[{"pluginId":"demo@%s","name":"demo","marketplaceName":"%s","installed":true,"enabled":true}]}`, marketplace, marketplace)
+	return legacyports.CommandResult{Stdout: []byte(body)}, nil
+}
+
+func TestVerifyCodexPluginRetriesRemovedBackupProcessPath(t *testing.T) {
+	root := t.TempDir()
+	runner := &removedBackupListRunner{failCount: 1, failPath: filepath.Join(root, "plugins", "cache", "agentplugins-test", "plugin-backup-test", "agent-notify", "bin", "claude-notifications")}
+	request := domain.ActivationRequest{
+		Client:       domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: root},
+		Plan:         domain.DeliveryPlan{ClientID: domain.ClientCodex, PhysicalArtifactID: "artifact", NativeRegistryRoot: root},
+		Delivery:     domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: t.TempDir()},
+		DeclaredName: "demo", BackendExecutable: filepath.Join(root, "codex"), VerifyOnly: true,
+	}
+	outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
+	if err != nil || outcome.Verification != domain.VerificationInstalled || runner.calls != 2 {
+		t.Fatalf("removed-backup listing should recover on one read-only retry: outcome=%+v err=%v calls=%d", outcome, err, runner.calls)
+	}
+}
+
+func TestVerifyCodexPluginBackupRetryIsBoundedAndSpecific(t *testing.T) {
+	for _, tc := range []struct {
+		name, path string
+		failCount  int
+		wantCalls  int
+	}{
+		{name: "persistent removed backup", path: "plugin-backup-test/agent-notify/bin/claude-notifications", failCount: 3, wantCalls: 3},
+		{name: "missing active executable", path: "agent-notify/bin/claude-notifications", failCount: 1, wantCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			runner := &removedBackupListRunner{failCount: tc.failCount, failPath: filepath.Join(root, tc.path)}
+			request := domain.ActivationRequest{
+				Client:       domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: root},
+				Plan:         domain.DeliveryPlan{ClientID: domain.ClientCodex, PhysicalArtifactID: "artifact", NativeRegistryRoot: root},
+				Delivery:     domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: t.TempDir()},
+				DeclaredName: "demo", BackendExecutable: filepath.Join(root, "codex"), VerifyOnly: true,
+			}
+			_, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
+			if err == nil || runner.calls != tc.wantCalls {
+				t.Fatalf("retry escaped its bound or masked missing active executable: err=%v calls=%d", err, runner.calls)
+			}
+		})
+	}
+}

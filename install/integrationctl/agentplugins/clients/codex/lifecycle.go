@@ -4,6 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -107,11 +111,25 @@ func registerCodexMarketplace(ctx context.Context, env clients.Env, request doma
 func verifyCodexPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	pluginSpec := request.DeclaredName + "@" + marketplace
-	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
-	if err != nil {
-		return fmt.Errorf("verify Codex plugin listing: %w", err)
+	var listed []byte
+	for attempt := 0; attempt < 3; attempt++ {
+		result, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
+		if err == nil {
+			listed = result.Stdout
+			break
+		}
+		if attempt == 2 || !removedCodexBackupPath(err) {
+			return fmt.Errorf("verify Codex plugin listing: %w", err)
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 50 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("verify Codex plugin listing: %w", ctx.Err())
+		case <-timer.C:
+		}
 	}
-	switch PluginStatusFromList(listed.Stdout, request.DeclaredName, marketplace) {
+	switch PluginStatusFromList(listed, request.DeclaredName, marketplace) {
 	case StatusInstalled:
 		return nil
 	case StatusAbsent:
@@ -119,6 +137,29 @@ func verifyCodexPlugin(ctx context.Context, env clients.Env, request domain.Acti
 	default:
 		return fmt.Errorf("%w: verify Codex plugin listing", ErrListContractUnknown)
 	}
+}
+
+// Codex may briefly retain an executable path inside its just-removed plugin
+// backup while a marketplace replacement settles. Only retry this exact
+// read-only observation; a missing active executable must still fail closed.
+func removedCodexBackupPath(err error) bool {
+	if !errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	var pathErr *os.PathError
+	if !errors.As(err, &pathErr) {
+		return false
+	}
+	for path := filepath.Clean(pathErr.Path); path != "."; path = filepath.Dir(path) {
+		if strings.HasPrefix(filepath.Base(path), "plugin-backup-") {
+			return true
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			break
+		}
+	}
+	return false
 }
 
 func manualCodexVerification(outcome domain.ActivationOutcome, request domain.ActivationRequest) domain.ActivationOutcome {
