@@ -75,7 +75,7 @@ func NativeManifestIdentity(root string) (name string, qualified bool, namespace
 			return "", false, "", readErr
 		}
 	}
-	for _, manifest := range []string{filepath.Join(root, ".claude-plugin", "plugin.json"), filepath.Join(root, "plugin.json"), filepath.Join(root, ".cursor-plugin", "plugin.json"), filepath.Join(root, ".codex-plugin", "plugin.json")} {
+	for _, manifest := range []string{filepath.Join(root, ".claude-plugin", "plugin.json"), filepath.Join(root, "plugin.json"), filepath.Join(root, ".cursor-plugin", "plugin.json"), filepath.Join(root, ".codex-plugin", "plugin.json"), filepath.Join(root, ".grok-plugin", "plugin.json"), filepath.Join(root, ".kimi-plugin", "plugin.json"), filepath.Join(root, "kimi.plugin.json")} {
 		name, readErr := ReadJSONManifestName(manifest)
 		if readErr == nil {
 			return name, false, "", nil

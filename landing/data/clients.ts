@@ -163,6 +163,36 @@ export const clientLandingPages: ClientLandingPage[] = [
       'The CLI validates and prepares the compatible Windsurf package without claiming automatic activation.',
     activation: 'Follow the exact manual activation path printed after preparation.',
   },
+  {
+    id: 'grok',
+    slug: 'grok-build',
+    name: 'Grok Build',
+    icon: 'grok.svg',
+    note: 'Native skills and MCP plugin; CLI verification',
+    status: 'Supported',
+    intro:
+      'Install portable Agent Plugins 1.0 skills and MCP servers for Grok Build from the same CLI used for other clients.',
+    delivery:
+      "The CLI writes a native .grok-plugin manifest in Grok's user plugin directory and manages registration with the Grok CLI when available.",
+    activation:
+      'Reload Grok Build after installation. If the Grok CLI is unavailable, install it and rerun the update command for native verification.',
+    vendorDocsUrl: 'https://docs.x.ai/build/features/skills-plugins-marketplaces',
+  },
+  {
+    id: 'kimi',
+    slug: 'kimi-code',
+    name: 'Kimi Code',
+    icon: 'kimi.svg',
+    note: 'Managed user plugin with skills and MCP',
+    status: 'Supported',
+    intro:
+      'Install portable Agent Plugins 1.0 skills and MCP servers into Kimi Code through a managed user plugin.',
+    delivery:
+      'The CLI writes a native .kimi-plugin manifest and registers the managed package while preserving unrelated Kimi plugins.',
+    activation:
+      'Run /reload or /new in Kimi Code. Runtime MCP connections and provider authentication still need confirmation in Kimi.',
+    vendorDocsUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/customization/plugins',
+  },
 ];
 
 export const clients: ClientTarget[] = clientLandingPages.map(

@@ -171,6 +171,10 @@ The CLI has adapters for:
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | client-specific configuration projection |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | client-specific configuration projection |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | client-specific configuration projection |
+| <img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"> Grok Build | native skills/MCP plugin; Grok CLI install and verification when available |
+| <img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
+
+Grok Build and Kimi Code accept automatic user-scope installation of portable skills and stdio/HTTP MCP servers through `agentplugins add ./my-plugin --target grok,kimi`. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and remote MCP authentication/connectivity is verified in that client. Agent, hook, command, and LSP components are outside these two adapters' current supported scope.
 
 Compatibility is package-specific. A schema pass means that the package is
 well-formed; it does not prove runtime, OAuth, or activation in every client.

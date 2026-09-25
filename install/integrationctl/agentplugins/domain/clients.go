@@ -23,6 +23,8 @@ const (
 	ClientOpenCode ClientID = "opencode"
 	ClientCline    ClientID = "cline"
 	ClientWindsurf ClientID = "windsurf"
+	ClientGrok     ClientID = "grok"
+	ClientKimi     ClientID = "kimi"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -133,6 +135,14 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:            LifecycleNativeConfig,
 		UsesManagedStdioLauncher: true,
 	}),
+	clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleCLIRegistry,
+	}),
+	clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleNativeConfig,
+	}),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
@@ -209,6 +219,8 @@ var clientAliases = map[string]ClientID{
 	"gemini-cli":     ClientGemini,
 	"open-code":      ClientOpenCode,
 	"devin":          ClientWindsurf,
+	"grok-build":     ClientGrok,
+	"kimi-code":      ClientKimi,
 }
 
 // ParseClientID folds case and whitespace, maps known aliases onto canonical
