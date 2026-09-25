@@ -73,7 +73,7 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	if root == "" {
 		return clients.RegistryIndeterminate, nil
 	}
-	entries, err := os.ReadDir(root)
+	entries, err := readClaudePreparedEntries(root)
 	if os.IsNotExist(err) {
 		return clients.RegistryClear, nil
 	}
@@ -82,62 +82,127 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 	}
 	finding := clients.RegistryClear
 	for _, entry := range entries {
-		path, isDirectory, entryErr := claudePreparedEntry(root, entry)
-		if errors.Is(entryErr, errClaudeSkillSymlinkDangling) && !shared.SameCleanPath(path, plan.ActivePath) {
-			// Stale links to removed shared skills are common and cannot claim a
-			// plugin identity while their target is absent. They are unrelated to
-			// this mutation, so do not let one block every grouped install. A
-			// dangling link at the planned active path still fails closed below.
+		next, skip, classErr := classifyClaudePreparedEntry(root, entry, plan, name, owned)
+		if classErr != nil {
+			return clients.RegistryIndeterminate, classErr
+		}
+		if skip {
 			continue
 		}
-		if entryErr != nil {
-			return clients.RegistryIndeterminate, entryErr
+		if next == clients.RegistryCollision || next == clients.RegistryIndeterminate {
+			return next, nil
 		}
-		if !isDirectory {
-			// A plain file cannot contain the .claude-plugin/plugin.json this
-			// scheme requires, so it can never claim a competing plugin
-			// identity. OS-generated artifacts such as .DS_Store are common
-			// in a Finder-browsed skills directory and must not block every
-			// other plugin's repair/update.
-			continue
-		}
-		manifest := filepath.Join(path, ".claude-plugin", "plugin.json")
-		manifestName, readErr := shared.ReadJSONManifestName(manifest)
-		if os.IsNotExist(readErr) {
-			// Plain skills legitimately share this directory and do not claim a
-			// plugin identity.
-			if _, skillErr := os.Lstat(filepath.Join(path, "SKILL.md")); skillErr == nil {
-				continue
-			} else if !os.IsNotExist(skillErr) {
-				return clients.RegistryIndeterminate, skillErr
-			}
-			return clients.RegistryIndeterminate, nil
-		}
-		if readErr != nil {
-			return clients.RegistryIndeterminate, readErr
-		}
-		if manifestName != name {
-			continue
-		}
-		if shared.SameCleanPath(path, plan.ActivePath) && owned {
+		if next == clients.RegistryExpected {
 			finding = clients.RegistryExpected
-			continue
 		}
-		return clients.RegistryCollision, nil
 	}
 	return finding, nil
 }
 
+func classifyClaudePreparedEntry(root string, entry os.DirEntry, plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, bool, error) {
+	path, isDirectory, entryErr := claudePreparedEntry(root, entry)
+	if ignoreUnrelatedDanglingClaudeSkill(entryErr, path, plan.ActivePath) {
+		return clients.RegistryClear, true, nil
+	}
+	if entryErr != nil {
+		return clients.RegistryIndeterminate, false, entryErr
+	}
+	if !isDirectory {
+		// A plain file cannot contain the .claude-plugin/plugin.json this
+		// scheme requires, so it can never claim a competing plugin
+		// identity. OS-generated artifacts such as .DS_Store are common
+		// in a Finder-browsed skills directory and must not block every
+		// other plugin's repair/update. The planned active path is the
+		// managed package, so a file or FIFO there is integrity failure.
+		return clients.RegistryClear, true, refuseNonDirectoryClaudePath(path, plan.ActivePath)
+	}
+	return classifyClaudePreparedDirectory(path, plan, name, owned)
+}
+
+func classifyClaudePreparedDirectory(path string, plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, bool, error) {
+	manifestName, readErr := shared.ReadJSONManifestName(filepath.Join(path, ".claude-plugin", "plugin.json"))
+	if os.IsNotExist(readErr) {
+		// Plain skills legitimately share this directory and do not claim a
+		// plugin identity.
+		if _, skillErr := os.Lstat(filepath.Join(path, "SKILL.md")); skillErr == nil {
+			return clients.RegistryClear, true, nil
+		} else if !os.IsNotExist(skillErr) {
+			return clients.RegistryIndeterminate, false, skillErr
+		}
+		return clients.RegistryIndeterminate, false, nil
+	}
+	if readErr != nil {
+		return clients.RegistryIndeterminate, false, readErr
+	}
+	if manifestName != name {
+		return clients.RegistryClear, true, nil
+	}
+	if shared.SameCleanPath(path, plan.ActivePath) && owned {
+		return clients.RegistryExpected, false, nil
+	}
+	return clients.RegistryCollision, false, nil
+}
+
+func readClaudePreparedEntries(root string) ([]os.DirEntry, error) {
+	if err := claudePreparedRoot(root); err != nil {
+		return nil, err
+	}
+	return os.ReadDir(root)
+}
+
+func claudePreparedRoot(root string) error {
+	meta, err := os.Lstat(root)
+	if err != nil {
+		return err
+	}
+	if meta.Mode()&os.ModeSymlink == 0 {
+		if meta.IsDir() {
+			return nil
+		}
+		return fmt.Errorf("claude skills root is not a directory: %s", root)
+	}
+	// Lstat before ReadDir so a FIFO, socket, or dangling skills root cannot
+	// look unused (ReadDir follows and reports ENOENT) or hang the preflight.
+	info, err := os.Stat(root)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("%w: %s", errClaudeSkillSymlinkDangling, root)
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%w: %s", errClaudeSkillSymlinkNotDirectory, root)
+	}
+	return nil
+}
+
+func ignoreUnrelatedDanglingClaudeSkill(err error, path, activePath string) bool {
+	return errors.Is(err, errClaudeSkillSymlinkDangling) && !shared.SameCleanPath(path, activePath)
+}
+
+func refuseNonDirectoryClaudePath(path, activePath string) error {
+	if shared.SameCleanPath(path, activePath) {
+		return fmt.Errorf("claude managed path is not a directory: %s", path)
+	}
+	return nil
+}
+
 func claudePreparedEntry(root string, entry os.DirEntry) (string, bool, error) {
 	path := filepath.Join(root, entry.Name())
-	if entry.Type()&os.ModeSymlink == 0 {
-		return path, entry.IsDir(), nil
+	meta, err := os.Lstat(path)
+	if err != nil {
+		return path, false, err
+	}
+	if meta.Mode()&os.ModeSymlink == 0 {
+		return path, meta.IsDir(), nil
 	}
 	// Claude Code skills are commonly shared through symlinks. Follow the link
 	// for read-only identity classification so a normal linked skill does not
-	// block every unrelated plugin install. The caller ignores a dangling link
-	// only when it is unrelated to the planned active path; all other unresolved
-	// or non-directory links remain fail-closed.
+	// block every unrelated plugin install. Classify via Lstat first so a host
+	// that omits directory-entry types still fail-closes a dangling active path.
+	// The caller ignores a dangling link only when it is unrelated to the
+	// planned active path; all other unresolved or non-directory links remain
+	// fail-closed.
 	info, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		return path, false, fmt.Errorf("%w: %s", errClaudeSkillSymlinkDangling, path)
