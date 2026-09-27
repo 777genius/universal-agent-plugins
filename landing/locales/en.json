@@ -394,7 +394,7 @@
       "items": {
         "0": {
           "question": "Which AI agents are supported?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, and Windsurf are supported or prepared through an explicit client-specific path."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, and Kimi Code are supported or prepared through an explicit client-specific path."
         },
         "1": {
           "question": "Does one command install into every agent?",
@@ -810,6 +810,20 @@
         "intro": "Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.",
         "delivery": "The CLI validates and prepares the compatible Windsurf package without claiming automatic activation.",
         "activation": "Follow the exact manual activation path printed after preparation."
+      },
+      "grok": {
+        "note": "Native skills and MCP plugin; CLI verification",
+        "status": "Supported",
+        "intro": "Install portable Agent Plugins 1.0 skills and MCP servers for Grok Build from the same CLI used for other clients.",
+        "delivery": "The CLI writes a native .grok-plugin manifest in Grok's user plugin directory and manages registration with the Grok CLI when available.",
+        "activation": "Reload Grok Build after installation. If the Grok CLI is unavailable, install it and rerun the update command for native verification."
+      },
+      "kimi": {
+        "note": "Managed user plugin with skills and MCP",
+        "status": "Supported",
+        "intro": "Install portable Agent Plugins 1.0 skills and MCP servers into Kimi Code through a managed user plugin.",
+        "delivery": "The CLI writes a native .kimi-plugin manifest and registers the managed package while preserving unrelated Kimi plugins.",
+        "activation": "Run /reload or /new in Kimi Code. Runtime MCP connections and provider authentication still need confirmation in Kimi."
       }
     },
     "directoryPage": {
@@ -892,7 +906,8 @@
       "vendorDocs": "Read {name} documentation",
       "availableFor": "Plugins available for {name}",
       "count": "{count} reviewed package supports this client. | {count} reviewed packages support this client.",
-      "tryPlugin": "Try Context7, or replace {source} with another compatible plugin's reviewed short name or pinned GitHub package source."
+      "tryPlugin": "Try Context7, or replace {source} with another compatible plugin's reviewed short name or pinned GitHub package source.",
+      "localPackageHint": "Replace ./my-plugin with the path to a valid Agent Plugins 1.0 package."
     },
     "components": {
       "extensions": "extensions",

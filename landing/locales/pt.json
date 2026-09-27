@@ -240,7 +240,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline e Windsurf têm suporte ou estão preparados por um caminho explícito específico do cliente."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline e Windsurf têm suporte ou estão preparados por um caminho explícito específico do cliente. Grok Build e Kimi Code também aceitam skills e MCP nativos."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",
@@ -793,6 +793,20 @@
         "intro": "Prepare Agent Plugins 1.0 para o Windsurf com um único comando da CLI e depois conclua explicitamente a etapa de ativação específica do cliente.",
         "delivery": "A CLI valida e prepara o pacote compatível do Windsurf sem declarar ativação automática.",
         "activation": "Siga exatamente o caminho de ativação manual exibido após a preparação."
+      },
+      "grok": {
+        "note": "Plugin nativo de skills e MCP",
+        "status": "Compatível",
+        "intro": "Instale skills e servidores MCP para Grok Build.",
+        "delivery": "O CLI cria um plugin nativo e o registra pelo Grok CLI.",
+        "activation": "Recarregue o Grok Build; instale o CLI e repita update se ele faltar."
+      },
+      "kimi": {
+        "note": "Plugin gerenciado de skills e MCP",
+        "status": "Compatível",
+        "intro": "Instale skills e servidores MCP para Kimi Code.",
+        "delivery": "O CLI registra um plugin nativo sem alterar outros plugins Kimi.",
+        "activation": "Execute /reload ou /new; confira MCP e autenticação no Kimi Code."
       }
     },
     "directoryPage": {
@@ -875,7 +889,8 @@
       "vendorDocs": "Leia a documentação de {name}",
       "availableFor": "Plugins disponíveis para {name}",
       "count": "{count} pacote revisado oferece suporte a este cliente. | {count} pacotes revisados oferecem suporte a este cliente.",
-      "tryPlugin": "Experimente o Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela origem fixada de um pacote do GitHub."
+      "tryPlugin": "Experimente o Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela origem fixada de um pacote do GitHub.",
+      "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido."
     },
     "components": {
       "extensions": "extensões",

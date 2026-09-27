@@ -293,6 +293,90 @@
       ]
     }
   },
+  "grok": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/grok/plugins/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "grok",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/grok",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/grok",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/grok",
+      "TargetRoot": "\u003croot\u003e/clients/grok/plugins",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
+  "kimi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/kimi/plugins/managed/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "kimi",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/kimi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/kimi",
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "Scope": "user",
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/kimi",
+      "TargetRoot": "\u003croot\u003e/clients/kimi/plugins/managed",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
   "kiro": {
     "Error": "",
     "Plan": {

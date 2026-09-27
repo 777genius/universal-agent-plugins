@@ -377,7 +377,7 @@
       "items": {
         "0": {
           "question": "¿Qué agentes de IA son compatibles?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline y Windsurf son compatibles o se preparan a través de una ruta explícita específica del cliente."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline y Windsurf son compatibles o se preparan a través de una ruta explícita específica del cliente. Grok Build y Kimi Code también admiten skills y MCP nativos."
         },
         "1": {
           "question": "¿Se instala un comando en cada agente?",
@@ -793,6 +793,20 @@
         "intro": "Prepare Agent Plugins 1.0 para Windsurf con un comando CLI y luego finalice explícitamente el paso de activación específico del cliente.",
         "delivery": "La CLI valida y prepara el paquete de Windsurf compatible sin reclamar la activación automática.",
         "activation": "Siga la ruta de activación manual exacta impresa después de la preparación."
+      },
+      "grok": {
+        "note": "Plugin nativo de skills y MCP",
+        "status": "Apoyado",
+        "intro": "Instala skills y servidores MCP para Grok Build.",
+        "delivery": "El CLI crea un plugin nativo y lo registra mediante Grok CLI.",
+        "activation": "Recarga Grok Build; instala su CLI y repite update si falta."
+      },
+      "kimi": {
+        "note": "Plugin gestionado de skills y MCP",
+        "status": "Apoyado",
+        "intro": "Instala skills y servidores MCP para Kimi Code.",
+        "delivery": "El CLI registra un plugin nativo sin alterar otros plugins de Kimi.",
+        "activation": "Ejecuta /reload o /new; comprueba MCP y la autenticación en Kimi Code."
       }
     },
     "directoryPage": {
@@ -875,7 +889,8 @@
       "vendorDocs": "Leer la documentación {name}",
       "availableFor": "Complementos disponibles para {name}",
       "count": "{count} paquete revisado es compatible con este cliente. | {count} paquetes revisados ​​son compatibles con este cliente.",
-      "tryPlugin": "Pruebe Context7 o reemplace {source} con el nombre corto revisado de otro complemento compatible o la fuente del paquete GitHub anclado."
+      "tryPlugin": "Pruebe Context7 o reemplace {source} con el nombre corto revisado de otro complemento compatible o la fuente del paquete GitHub anclado.",
+      "localPackageHint": "Sustituye ./my-plugin por la ruta de un paquete Agent Plugins 1.0 válido."
     },
     "components": {
       "extensions": "extensiones",

@@ -377,7 +377,7 @@
       "items": {
         "0": {
           "question": "支持哪些人工智能代理？",
-          "answer": "Codex、ChatGPT、Cursor、GitHub Copilot CLI、VS Code、Kiro、Claude Code、Gemini CLI、OpenCode、Cline 和 Windsurf 通过显式的特定于客户端的路径进行支持或准备。"
+          "answer": "Codex、ChatGPT、Cursor、GitHub Copilot CLI、VS Code、Kiro、Claude Code、Gemini CLI、OpenCode、Cline 和 Windsurf 通过显式的特定于客户端的路径进行支持或准备。 Grok Build 和 Kimi Code 也支持原生技能与 MCP。"
         },
         "1": {
           "question": "是否将一个命令安装到每个代理中？",
@@ -793,6 +793,20 @@
         "intro": "使用一个 CLI 命令为 Windsurf 准备代理插件 1.0，然后显式完成客户端特定的激活步骤。",
         "delivery": "CLI 验证并准备兼容的 Windsurf 软件包，无需声明自动激活。",
         "activation": "按照准备后打印的确切手动激活路径进行操作。"
+      },
+      "grok": {
+        "note": "原生技能与 MCP 插件",
+        "status": "支持",
+        "intro": "为 Grok Build 安装技能和 MCP 服务器。",
+        "delivery": "CLI 创建原生插件并通过 Grok CLI 注册。",
+        "activation": "重新加载 Grok Build；若缺少 CLI，请安装后重新运行 update。"
+      },
+      "kimi": {
+        "note": "托管技能与 MCP 插件",
+        "status": "支持",
+        "intro": "为 Kimi Code 安装技能和 MCP 服务器。",
+        "delivery": "CLI 注册原生插件，同时保留其他 Kimi 插件。",
+        "activation": "运行 /reload 或 /new；在 Kimi Code 中确认 MCP 和身份验证。"
       }
     },
     "directoryPage": {
@@ -875,7 +889,8 @@
       "vendorDocs": "阅读 {name} 文档",
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 已审核的软件包支持此客户端。 | {count} 已审核的软件包支持此客户端。",
-      "tryPlugin": "尝试 Context7，或将 {source} 替换为另一个兼容插件的经过审核的短名称或固定的 GitHub 包源。"
+      "tryPlugin": "尝试 Context7，或将 {source} 替换为另一个兼容插件的经过审核的短名称或固定的 GitHub 包源。",
+      "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。"
     },
     "components": {
       "extensions": "扩展",

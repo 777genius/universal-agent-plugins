@@ -144,6 +144,47 @@
       "Verification": "installation_verified"
     }
   },
+  "grok": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/grok",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "active",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "Policy": "allowed",
+      "UserActions": null,
+      "Verification": "installation_verified"
+    }
+  },
+  "kimi": {
+    "Commands": [],
+    "Error": "recognized negative client evidence: Kimi plugin absent or disabled",
+    "Outcome": {
+      "Activation": "failed",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": true,
+      "LocalActions": [
+        "enable the managed plugin in Kimi Code"
+      ],
+      "Policy": "allowed",
+      "UserActions": [
+        "retry client activation and verify client visibility"
+      ],
+      "Verification": "failed"
+    }
+  },
   "kiro": {
     "Commands": [
       [

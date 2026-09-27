@@ -150,6 +150,46 @@
     "Version": ""
   },
   {
+    "ClientID": "grok",
+    "ConfigRoot": "\u003chome\u003e/.grok",
+    "DisplayName": "Grok Build",
+    "ExecutablePath": "\u003chome\u003e/bin/grok",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "grok_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "grok_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
+    "ClientID": "kimi",
+    "ConfigRoot": "\u003chome\u003e/.kimi-code",
+    "DisplayName": "Kimi Code",
+    "ExecutablePath": "\u003chome\u003e/bin/kimi",
+    "Status": "detected",
+    "Surfaces": [
+      {
+        "Detected": true,
+        "Evidence": "executable_on_path",
+        "ID": "kimi_cli"
+      },
+      {
+        "Detected": true,
+        "Evidence": "configuration_directory",
+        "ID": "kimi_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "kiro",
     "ConfigRoot": "\u003chome\u003e/.kiro",
     "DisplayName": "Kiro",
