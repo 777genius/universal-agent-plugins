@@ -35,7 +35,7 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 }
 
 func (session *groupSession) activateOneGroupTarget(plannedIndex int, target plannedGroupTarget) error {
-	outcome, activationErr, nativeComplete := session.activateGroupDelivery(target)
+	outcome, nativeComplete, activationErr := session.activateGroupDelivery(target)
 	previousNativeObjects := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previousNativeObjects = target.managed.NativeObjects
@@ -76,14 +76,14 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	return nil
 }
 
-func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, error, bool) {
+func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, bool, error) {
 	delivery := target.delivery
 	nativeComplete := true
 	if target.noChange && target.managed != nil {
 		var err error
 		delivery, nativeComplete, err = session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
 		if err != nil {
-			return domain.ActivationOutcome{}, err, false
+			return domain.ActivationOutcome{}, false, err
 		}
 	}
 	previous := []domain.NativeObjectOwnership(nil)
@@ -101,7 +101,7 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 	}
 	activationErr = session.normalizeActivationError(target, &outcome, activationErr)
 	session.preserveNoChangeActivation(target, &outcome, activationErr)
-	return outcome, activationErr, nativeComplete
+	return outcome, nativeComplete, activationErr
 }
 
 func (session *groupSession) normalizeActivationError(target plannedGroupTarget, outcome *domain.ActivationOutcome, activationErr error) error {

@@ -121,7 +121,7 @@ func TestKiroDoesNotClaimDesiredIdenticalForeignMCP(t *testing.T) {
 		t.Fatalf("foreign MCP changed after activation: %s %v writes=%d", got, err, files.writes)
 	}
 	removed, err := (&Adapter{}).Deactivate(context.Background(), clients.Env{}, domain.DeactivationRequest{
-		Client: domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: root},
+		Client:        domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: root},
 		NativeObjects: outcome.NativeObjects, Confirmed: true,
 	})
 	if err != nil || removed.ExternalRemovalComplete {

@@ -394,7 +394,7 @@ func TestPublicS2CodexRemovalRejectsDifferentBoundProfile(t *testing.T) {
 	for _, grouped := range []bool{false, true} {
 		t.Run(fmt.Sprint("grouped=", grouped), func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
-			profileA := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "profile-a")}
+			profileA := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, "profile-a")}
 			input := addInput(t, profileA, "https://example.com/codex-profile-owned")
 			input.Confirmed = true
 			added, err := service.Add(context.Background(), input)
@@ -409,7 +409,7 @@ func TestPublicS2CodexRemovalRejectsDifferentBoundProfile(t *testing.T) {
 				t.Fatalf("fresh profile root was not persisted before activation: %q", got)
 			}
 			profileB := profileA
-			profileB.ConfigRoot = filepath.Join(t.TempDir(), "profile-b")
+			profileB.ConfigRoot = canonicalCodexProfile(t, "profile-b")
 			remove := RemoveInput{Selector: added.InstallationID, Client: profileB, Scope: domain.ScopeUser, ExternalUninstalled: true, Confirmed: true}
 			if grouped {
 				_, err = service.RemoveGroup(context.Background(), RemoveGroupInput{Selector: added.InstallationID, Targets: []RemoveInput{remove}, Confirmed: true})

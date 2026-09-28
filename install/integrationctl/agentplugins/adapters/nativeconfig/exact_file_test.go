@@ -22,7 +22,7 @@ func TestExactFileRejectsConcurrentApplyAndRollback(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer txn.Close()
+			defer closeExactFile(t, txn)
 			foreign := func(path string) error { return os.WriteFile(path, []byte("foreign\n"), 0600) }
 			if boundary == "apply" {
 				files.beforeCAS = func(path string, _ []byte, _ bool, _ []byte) error { return foreign(path) }
@@ -64,7 +64,7 @@ func TestExactFileDoesNotClaimDesiredIdenticalForeignWrite(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer txn.Close()
+			defer closeExactFile(t, txn)
 			files.beforeCAS = func(path string, _ []byte, _ bool, _ []byte) error {
 				return os.WriteFile(path, []byte("ours\n"), 0600)
 			}
@@ -94,7 +94,7 @@ func TestExactFileVisibleWriteErrorReadbackAndRestore(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer txn.Close()
+			defer closeExactFile(t, txn)
 			if err := txn.Apply([]byte("ours\n")); err == nil || txn.Effect() != FileCommitted {
 				t.Fatalf("visible failure not read back: %v %s", err, txn.Effect())
 			}
@@ -121,7 +121,7 @@ func TestExactFileDistinguishesEmptyFileFromAbsence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer txn.Close()
+	defer closeExactFile(t, txn)
 	mustWrite(t, path, "")
 	if err := txn.Apply([]byte("ours")); !errors.Is(err, ErrConcurrentChange) || txn.Effect() != FileUncertain {
 		t.Fatalf("existence drift: %v %s", err, txn.Effect())
@@ -147,7 +147,7 @@ func TestExactFileNoFollowAndCommittedLockCleanup(t *testing.T) {
 			t.Fatal("read followed symlink")
 		}
 		if txn, err := New().BeginExactFile(path); err == nil {
-			txn.Close()
+			closeExactFile(t, txn)
 			t.Fatal("transaction followed symlink")
 		}
 		assertBytes(t, target, "foreign")
@@ -176,7 +176,7 @@ func TestExactFileHoldsWriterLockThroughRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer first.Close()
+	defer closeExactFile(t, first)
 	if err := first.Apply([]byte(`{"mcpServers":{"temporary":{}}}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -213,5 +213,12 @@ func TestExactFileHoldsWriterLockThroughRollback(t *testing.T) {
 	body := mustRead(t, path)
 	if strings.Contains(body, "temporary") || !strings.Contains(body, "later") {
 		t.Fatalf("writer used pre-rollback snapshot: %s", body)
+	}
+}
+
+func closeExactFile(t *testing.T, file *ExactFile) {
+	t.Helper()
+	if err := file.Close(); err != nil {
+		t.Errorf("close exact file: %v", err)
 	}
 }

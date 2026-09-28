@@ -5,9 +5,10 @@ package terminalprompts
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"golang.org/x/term"
-	"os"
 )
 
 func terminalQueuedInput(ctx context.Context, f *os.File) (queued []byte, submitted bool, err error) {

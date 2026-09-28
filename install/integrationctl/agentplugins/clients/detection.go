@@ -17,7 +17,7 @@ type HostDetector interface {
 // Detection is the raw outcome of probing one client's surfaces.
 type Detection struct {
 	// Err prevents an invalid selected profile from becoming mutation authority.
-	Err error
+	Err            error
 	ConfigRoot     string
 	ExecutablePath string
 	Surfaces       []domain.ClientSurface

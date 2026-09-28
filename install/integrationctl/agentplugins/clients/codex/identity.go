@@ -91,7 +91,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	}
 	if managed != nil {
 		if managed.PhysicalArtifact != "" && managed.PhysicalArtifact != plan.PhysicalArtifactID {
-			return clients.RegistryIndeterminate, fmt.Errorf("Codex binding artifact differs from plan")
+			return clients.RegistryIndeterminate, fmt.Errorf("codex binding artifact differs from plan")
 		}
 		if err := ValidateBindingProfile(profileRoot, *managed); err != nil {
 			return clients.RegistryIndeterminate, err

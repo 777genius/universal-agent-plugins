@@ -31,25 +31,34 @@ func CanonicalDirectory(path string, lstat func(string) (fs.FileInfo, error), ev
 		if err != nil {
 			return "", fmt.Errorf("inspect profile directory: %w", err)
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			if eval == nil {
-				return "", fmt.Errorf("profile symlink resolver is unavailable")
-			}
-			current, err = eval(current)
-			if err != nil {
-				return "", fmt.Errorf("resolve profile symlink: %w", err)
-			}
-			if !filepath.IsAbs(current) || filepath.Clean(current) != current {
-				return "", fmt.Errorf("profile symlink resolved to an invalid path")
-			}
-			info, err = lstat(current)
-			if err != nil {
-				return "", fmt.Errorf("inspect resolved profile directory: %w", err)
-			}
-		}
-		if !info.IsDir() {
-			return "", fmt.Errorf("profile path is not a directory")
+		current, err = canonicalProfileComponent(current, info, lstat, eval)
+		if err != nil {
+			return "", err
 		}
 	}
 	return current, nil
+}
+
+func canonicalProfileComponent(path string, info fs.FileInfo, lstat func(string) (fs.FileInfo, error), eval func(string) (string, error)) (string, error) {
+	if info.Mode()&os.ModeSymlink != 0 {
+		if eval == nil {
+			return "", fmt.Errorf("profile symlink resolver is unavailable")
+		}
+		resolved, err := eval(path)
+		if err != nil {
+			return "", fmt.Errorf("resolve profile symlink: %w", err)
+		}
+		if !filepath.IsAbs(resolved) || filepath.Clean(resolved) != resolved {
+			return "", fmt.Errorf("profile symlink resolved to an invalid path")
+		}
+		path = resolved
+		info, err = lstat(path)
+		if err != nil {
+			return "", fmt.Errorf("inspect resolved profile directory: %w", err)
+		}
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("profile path is not a directory")
+	}
+	return path, nil
 }

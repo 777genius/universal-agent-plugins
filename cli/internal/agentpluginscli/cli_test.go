@@ -3346,9 +3346,15 @@ func (detector staticDetector) Detect(context.Context) ([]domain.DetectedClient,
 
 func fixtureClient(t *testing.T, client domain.ClientID) domain.DetectedClient {
 	t.Helper()
+	// macOS temp directories can be spelled through /var, which aliases
+	// /private/var. Real detection passes a canonical profile to the planner.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	return domain.DetectedClient{
 		ClientID: client, DisplayName: string(client), Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), "home", "."+string(client)),
+		ConfigRoot: filepath.Join(root, "home", "."+string(client)),
 	}
 }
 

@@ -209,15 +209,6 @@ func TestExistingCodexProfileRejectsUnsupportedCLIWithoutMutation(t *testing.T) 
 	}
 }
 
-func commandEnvValue(environment []string, key string) string {
-	for _, entry := range environment {
-		if value, found := strings.CutPrefix(entry, key+"="); found {
-			return value
-		}
-	}
-	return ""
-}
-
 func TestEnvironmentFailsClosed(t *testing.T) {
 	root := t.TempDir()
 	for _, entries := range [][]string{{"CODEX_HOME=a", "CODEX_HOME=b"}, {"PATH=a", "Path=b"}, {"IGNORED=a", "IGNORED=b"}, {"broken"}, {"=value"}, {"BAD-NAME=x"}, {"X=a\x00b"}, {strings.Repeat("X", 128*1024+1) + "=v"}} {

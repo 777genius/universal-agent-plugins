@@ -13,10 +13,11 @@ import resilience_matrix as lane
 
 class ResilienceMatrixContract(unittest.TestCase):
     def test_case_contract(self):
-        self.assertEqual(len(lane.CASES), 26)
+        self.assertEqual(len(lane.CASES), 27)
         self.assertEqual(len(set(lane.CASES)), len(lane.CASES))
         for required in (
-                'corrupt-state', 'future-state', 'duplicate-installation',
+                'corrupt-state', 'future-state', 'unselected-client-detection-failure',
+                'duplicate-installation',
                 'tampered-receipt', 'corrupt-journal', 'held-process-lock',
                 'migrate-state-v2', 'migrate-state-v3',
                 'killed-lock-owner', 'concurrent-add',

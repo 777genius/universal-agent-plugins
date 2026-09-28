@@ -357,7 +357,6 @@ func validateLegacyReceipt(receipt Receipt) error {
 	return nil
 }
 
-
 func (manager Manager) ListOpen() ([]Receipt, error) {
 	if strings.TrimSpace(manager.JournalDir) == "" {
 		return nil, fmt.Errorf("directory swap journal dir is required")

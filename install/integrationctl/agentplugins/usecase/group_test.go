@@ -384,7 +384,7 @@ func (observer *recoveryProbeNativeObserver) ObserveNativeIdentity(ctx context.C
 func TestGroupedRepairRecoversAbsentManagedDirectoryWithoutTreatingFailedNativeDiscoveryAsAbsence(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/absent-repair")
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "absent-repair-add", Confirmed: true})
 	if err != nil {
@@ -447,7 +447,7 @@ func TestGroupedRepairRecoversAbsentManagedDirectoryWithoutTreatingFailedNativeD
 func TestGroupedRepairPreservesForeignContentThatAppearsAfterTheLastAbsenceRecheck(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/absent-repair-race")
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "race-add", Confirmed: true})
 	if err != nil {
@@ -504,7 +504,7 @@ func TestGroupedRepairPreservesForeignContentThatAppearsAfterTheLastAbsenceReche
 func TestGroupedRepairStillRefusesChangedExistingContentWithRecoveryAwareObserver(t *testing.T) {
 	t.Parallel()
 	service, _, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/changed-repair")
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "changed-repair-add", Confirmed: true})
 	if err != nil {
@@ -531,7 +531,7 @@ func TestGroupedRepairStillRefusesChangedExistingContentWithRecoveryAwareObserve
 func TestGroupedRepairRollsBackAbsentRecoveryWhenPostRestorationNativeVerificationFails(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/absent-repair-collision")
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "absent-collision-add", Confirmed: true})
 	if err != nil {
@@ -588,8 +588,8 @@ func TestGroupedRepairRollsBackAbsentRecoveryWhenPostRestorationNativeVerificati
 func TestGroupedRepairFailsClosedWhenAnotherInstallationsCodexDirectoryIsAlsoAbsent(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codexA := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
-	codexB := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codexA := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
+	codexB := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	installA := addInput(t, codexA, "https://example.com/multi-install-a")
 	installB := addInput(t, codexB, "https://example.com/multi-install-b")
 	installB.InstallationID = ""
@@ -748,7 +748,7 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 		service, store, cursor := serviceFixture(t)
 		activator := &failNthGroupActivator{failCall: 2}
 		service.Activator = activator
-		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
 			addInput(t, cursor, "https://example.com/batch-middle"),
@@ -776,7 +776,7 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 		service, _, cursor := serviceFixture(t)
 		activator := &failNthGroupActivator{failSet: map[int]bool{1: true, 2: true, 3: true}}
 		service.Activator = activator
-		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
 			addInput(t, cursor, "https://example.com/batch-all-fail"),
@@ -798,7 +798,7 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 		defer cancel()
 		activator := &cancelAfterFirstGroupActivator{cancel: cancel}
 		service.Activator = activator
-		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 		result, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{
 			addInput(t, cursor, "https://example.com/batch-cancel"),
@@ -831,7 +831,7 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 		service.StateStore = failing
 		service.Kernel.StateStore = failing
 		service.Activator = &countingGroupActivator{calls: &calls}
-		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 		result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
 			addInput(t, cursor, "https://example.com/batch-persist"),
@@ -917,7 +917,7 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 		defer cancel()
 		activator := &deadlineAfterFirstGroupActivator{cancel: cancel}
 		service.Activator = activator
-		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 		kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 		result, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{
 			addInput(t, cursor, "https://example.com/batch-deadline"),
@@ -1113,7 +1113,7 @@ func TestGroupedRepairPreservesCompletedAuthenticationWhenFinalizationFails(t *t
 func TestGroupedOpenAIOAuthPromotionMatchesSingleTargetSemantics(t *testing.T) {
 	t.Parallel()
 	service, store, cursor := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	inputs := func(version, tree, manifest string, explicitCodexCompatibility bool) (AddInput, AddInput) {
 		codexInput := addInput(t, codex, "https://example.com/group-oauth")
 		cursorInput := addInput(t, cursor, "https://example.com/group-oauth")

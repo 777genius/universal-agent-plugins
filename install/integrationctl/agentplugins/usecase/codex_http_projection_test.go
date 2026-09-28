@@ -40,7 +40,7 @@ import (
 func TestCodexStreamableHTTPProjectionPreservesLiteralURLAndHeaders(t *testing.T) {
 	t.Parallel()
 	service, _, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/codex-http-headers")
 	serverRaw := json.RawMessage(`{"type":"streamable-http","url":"https://example.invalid/mcp","headers":{"X-Test-Literal":"keep-me-exact","Authorization":"Bearer test-token-not-a-real-secret"}}`)
 	install.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{

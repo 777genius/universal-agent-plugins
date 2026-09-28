@@ -60,7 +60,11 @@ func TestKiroMCPRollbackPreservesConcurrentVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close MCP transaction: %v", err)
+		}
+	}()
 	if err := file.Apply(ours); err != nil {
 		t.Fatal(err)
 	}

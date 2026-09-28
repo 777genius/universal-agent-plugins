@@ -29,14 +29,14 @@ const (
 // Call Close exactly once, after commit or rollback. The portable content-CAS
 // limitation documented on conditionalFileIO also applies here.
 type ExactFile struct {
-	kernel    Kernel
-	path      string
-	original  FileSnapshot
-	output    []byte
-	attempted bool
+	kernel     Kernel
+	path       string
+	original   FileSnapshot
+	output     []byte
+	attempted  bool
 	conflicted bool
-	effect    FileEffect
-	release   func() error
+	effect     FileEffect
+	release    func() error
 }
 
 func (kernel Kernel) ReadExactFile(path string) (FileSnapshot, error) {

@@ -3,6 +3,7 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestBoardPTYCellSizingAndResize(t *testing.T) {
 				for {
 					fds := []unix.PollFd{{Fd: int32(master.Fd()), Events: unix.POLLIN}}
 					n, e := unix.Poll(fds, 20)
-					if e == unix.EINTR {
+					if errors.Is(e, unix.EINTR) {
 						continue
 					}
 					if e != nil {

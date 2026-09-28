@@ -207,11 +207,12 @@ func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
 		roles[2] = terminaltheme.Label
 	case progressFinished:
 		labels[2] = row.final
-		if labels[2] == "installed" {
+		switch labels[2] {
+		case "installed":
 			roles[2] = terminaltheme.Success
-		} else if labels[2] == "failed" {
+		case "failed":
 			roles[2] = terminaltheme.Error
-		} else {
+		default:
 			roles[2] = terminaltheme.Warning
 		}
 	}

@@ -94,8 +94,12 @@ func TestCanonicalConsentPTYBoundary(t *testing.T) {
 						t.Errorf("suffix=%q %v", line, e)
 					}
 				}
-				slave.Close()
-				master.Close()
+				if e := slave.Close(); e != nil {
+					t.Error(e)
+				}
+				if e := master.Close(); e != nil {
+					t.Error(e)
+				}
 				select {
 				case out := <-done:
 					t.Logf("%s", out)
