@@ -228,15 +228,13 @@ func activateKiroNativeEffect(ctx context.Context, env clients.Env, request doma
 	case domain.NativeEffectUnchanged:
 		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 	case domain.NativeEffectUncertain:
-		// Only report receipts whose complete native object can still be observed.
-		// Try desired first, then prior, so changed digests never claim one path twice.
+		// A matching desired digest does not prove we wrote it. A rejected CAS
+		// can leave a foreign, desired-identical server in place. Only earlier
+		// confirmed ownership receipts may survive an uncertain mutation.
 		outcome.NativeObjects = nil
-		seen := map[string]bool{}
-		candidates := append(NativeObjects(request.Delivery.NativeObjects), NativeObjects(request.PreviousNativeObjects)...)
-		for _, object := range candidates {
-			if !seen[object.ObjectID] && VerifyNativeObjects(request.Client.ConfigRoot, []domain.NativeObjectOwnership{object}, false) == nil {
+		for _, object := range NativeObjects(request.PreviousNativeObjects) {
+			if VerifyNativeObjects(request.Client.ConfigRoot, []domain.NativeObjectOwnership{object}, false) == nil {
 				outcome.NativeObjects = append(outcome.NativeObjects, object)
-				seen[object.ObjectID] = true
 			}
 		}
 	}

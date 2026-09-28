@@ -90,6 +90,49 @@ func TestKiroMCPConcurrentApplyPreservesBytesAndRestoresSkills(t *testing.T) {
 	}
 }
 
+func TestKiroDoesNotClaimDesiredIdenticalForeignMCP(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".kiro")
+	active, desired := kiroNativeFixture(t, root, "new", "https://new.test")
+	desired = desired[1:] // Only MCP; a foreign server must never become an owned receipt.
+	server, err := projectedKiroMCPServer(active, "docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign, err := encodeKiroMCPConfig(nil, map[string]any{"docs": server})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := desired[0].Path
+	files := &kiroFaultFiles{beforeRead: func(path string, reads int) error {
+		if reads == 2 {
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				return err
+			}
+			return os.WriteFile(path, foreign, 0600)
+		}
+		return nil
+	}}
+	outcome, err := (&Adapter{}).Activate(context.Background(), clients.Env{NativeConfig: nativeconfig.NewWithFileIO(files)}, kiroActivationRequest(root, active, nil, desired))
+	if !errors.Is(err, nativeconfig.ErrConcurrentChange) || outcome.NativeEffect != domain.NativeEffectUncertain || len(outcome.NativeObjects) != 0 {
+		t.Fatalf("foreign desired-identical MCP claimed: %+v %v", outcome, err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, foreign) || files.writes != 0 {
+		t.Fatalf("foreign MCP changed after activation: %s %v writes=%d", got, err, files.writes)
+	}
+	removed, err := (&Adapter{}).Deactivate(context.Background(), clients.Env{}, domain.DeactivationRequest{
+		Client: domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: root},
+		NativeObjects: outcome.NativeObjects, Confirmed: true,
+	})
+	if err != nil || removed.ExternalRemovalComplete {
+		t.Fatalf("foreign MCP treated as removable: %+v %v", removed, err)
+	}
+	got, err = os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, foreign) {
+		t.Fatalf("foreign MCP removed: %s %v", got, err)
+	}
+}
+
 func TestKiroMCPVisibleWriteFailureRestoresExactPriorState(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "add", true: "update"}[existing], func(t *testing.T) {
@@ -244,8 +287,8 @@ func TestKiroMCPUnreadableVisibleWriteRetainsOutputAndErrorCauses(t *testing.T) 
 	if err := VerifyNativeObjects(root, desired, false); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(outcome.NativeObjects, desired) {
-		t.Fatalf("observable exact receipts missing: %+v", outcome.NativeObjects)
+	if len(outcome.NativeObjects) != 0 {
+		t.Fatalf("uncertain write claimed new ownership by content: %+v", outcome.NativeObjects)
 	}
 }
 
