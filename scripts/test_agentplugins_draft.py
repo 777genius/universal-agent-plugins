@@ -318,10 +318,13 @@ class ProducerPermissionTests(unittest.TestCase):
         self.assertIn("needs: [validate, stage-draft, platform-proof]", self.job("verified-draft"))
         promote = self.job("promote-release")
         self.assertIn("if: ${{ inputs.publish_release == true }}", promote)
-        self.assertIn("needs: [validate, stage-draft, platform-proof, verified-draft]", promote)
-        for name in ("stage-draft", "verified-draft", "promote-release"):
+        self.assertIn("needs: [validate, reuse-verified-draft]", promote)
+        self.assertIn("if: ${{ inputs.publish_release == true }}", self.job("reuse-verified-draft"))
+        self.assertIn("if: ${{ inputs.publish_release != true }}", self.job("platform-proof"))
+        self.assertIn("if: ${{ inputs.publish_release != true }}", self.job("verified-draft"))
+        self.assertIn("scripts/reuse-agentplugins-verified-draft.py", promote)
+        for name in ("stage-draft", "verified-draft", "reuse-verified-draft", "promote-release"):
             self.assertNotRegex(self.job(name), r"always\(\)|!cancelled\(\)|failure\(\)|continue-on-error:")
-        self.assertNotIn("if:", self.job("verified-draft"))
 
 
 if __name__ == "__main__":

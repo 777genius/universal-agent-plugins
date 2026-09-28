@@ -58,12 +58,16 @@ the publishable version from the approved tag; do not manually bump it.
    `verified-draft.json`. With `publish_release=false`, promotion is skipped
    and the verified draft remains non-public.
 7. Only with separate explicit owner authorization for that exact version,
-   dispatch the existing producer with `publish_release=true`. Its exact
-   `main`/tag/source-ref gate and every required gate above must still pass;
-   this is not a standalone promotion command or a bypass for an old draft.
-   After all six native platform proofs and `verified-draft` succeed, approve
-   the promotion environment deployment. It reverifies the draft identity,
-   manifest, assets, and attestations before promoting that exact draft.
+   dispatch the existing producer with `publish_release=true`, plus
+   `qualified_run_id` and `qualified_run_attempt` from the successful
+   `publish_release=false` run. The exact `main`/tag/source-ref and required
+   commit gates still run. Promotion authenticates the prior successful
+   draft-only workflow attempt, all six native platform proofs, its verified
+   receipt artifact and ZIP SHA-256, then compares that receipt with a fresh
+   verification of the live nine-asset draft and attestations. Approve the
+   promotion environment deployment only after this check succeeds. The job
+   repeats the same verification immediately before publishing the exact draft.
+   It does not rebuild binaries or rerun native platform proofs.
 8. After authorized promotion, verify the resulting public release contains six platform binaries,
    `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and
    verify GitHub attestations for every file, including the notices.
@@ -72,15 +76,17 @@ the publishable version from the approved tag; do not manually bump it.
    A standalone public-release platform proof continues to prove the normal
    anonymous GitHub release download without changing publication ownership.
 
-The workflow rejects every existing public release. A rerun accepts an existing
-draft only when its tag, frozen commit, draft status, complete asset set, and
-every asset byte exactly match the rebuilt release; it never uploads over an
-existing asset. A failed native proof intentionally leaves that exact draft
-non-public. Fix the proof defect and rerun the same tag to resume. If draft
+The workflow rejects every existing public release. A draft-only rerun accepts an
+existing draft only when its tag, frozen commit, draft status, complete asset
+set, and every asset byte exactly match the rebuilt release; it never uploads
+over an existing asset. Promotion requires an unexpired receipt artifact from
+the exact successful draft-only run attempt. A failed native proof intentionally
+leaves that exact draft non-public. Fix the proof defect and rerun the same tag
+to qualify it. If draft
 creation itself was interrupted and left an incomplete or non-matching draft,
 an owner must verify that it was never public, delete only that draft release
 (not the tag), and rerun. Never edit or replace assets in place.
-Every resume still requires the exact current `main`/tag/workflow-source gate;
+Every dispatch still requires the exact current `main`/tag/workflow-source gate;
 an older frozen draft cannot bypass it, even with `publish_release=true`.
 
 For a schema-v1 historical platform audit, dispatch `Agentplugins Platform
