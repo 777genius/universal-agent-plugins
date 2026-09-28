@@ -56,7 +56,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 		{name: "fresh-paste-default-no", selection: "\r", confirmation: "\x1b[200~ \ry\n\x1b[201~\r"},
 		{name: "fresh-default-no", selection: "\r", confirmation: "\r"},
 		{name: "fresh-default-yes", selection: "\r", confirmation: "\r", defaultYes: true, accepted: true},
-		{name: "fresh-explicit-no-yes-default", selection: "\r", confirmation: " \r", defaultYes: true},
+		{name: "fresh-explicit-no-yes-default", selection: "\r", confirmation: " ", defaultYes: true},
 		{name: "fresh-escape", selection: "\r", confirmation: "\x1b", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-ctrl-c", selection: "\r", confirmation: "\x03", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-ctrl-d", selection: "\r", confirmation: "\x04", wantErr: prompt.ErrPromptCanceled},
@@ -74,7 +74,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 			go func() {
 				var output bytes.Buffer
 				var buf [4096]byte
-				selectionSent, confirmationSent := false, false
+				selectionSent, confirmationSent, toggledSubmitted := false, false, false
 				for {
 					n, err := master.Read(buf[:])
 					output.Write(buf[:n])
@@ -88,6 +88,12 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 						confirmationSent = true
 						if n, e := io.WriteString(master, tc.confirmation); e != nil || n != len(tc.confirmation) {
 							t.Errorf("confirmation write=%d %v", n, e)
+						}
+					}
+					if tc.name == "fresh-explicit-no-yes-default" && confirmationSent && !toggledSubmitted && bytes.Contains(output.Bytes(), []byte("✓ No")) {
+						toggledSubmitted = true
+						if n, e := io.WriteString(master, "\r"); e != nil || n != 1 {
+							t.Errorf("toggled confirmation write=%d %v", n, e)
 						}
 					}
 					if err != nil {
@@ -151,6 +157,20 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 			t.Logf("selection batch=%x separate confirmation=%x accepted=%v error=%v\n%s", tc.selection, tc.confirmation, result.Accepted, err, output)
 			if !errors.Is(err, tc.wantErr) || result.Accepted != tc.accepted {
 				t.Fatalf("confirmation=%+v %v; want accepted=%v", result, err, tc.accepted)
+			}
+			switch tc.name {
+			case "fresh-default-yes":
+				if !bytes.Contains(output, []byte("✓ Yes")) {
+					t.Error("default Yes has no visible selection mark")
+				}
+			case "fresh-explicit-no-yes-default":
+				if !bytes.Contains(output, []byte("✓ Yes")) || !bytes.Contains(output, []byte("✓ No")) {
+					t.Error("selection mark did not move from Yes to No")
+				}
+			case "fresh-default-no":
+				if !bytes.Contains(output, []byte("✓ No")) {
+					t.Error("default No has no visible selection mark")
+				}
 			}
 			if bytes.LastIndex(output, []byte("\x1b[?25h")) <= bytes.LastIndex(output, []byte("\x1b[?25l")) {
 				t.Error("cursor not restored")

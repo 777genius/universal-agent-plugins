@@ -370,7 +370,9 @@ func semanticHuhTheme(dark bool) *huh.Styles {
 		f.ErrorMessage = f.ErrorMessage.Foreground(terminaltheme.Color(terminaltheme.Error))
 		f.SelectedPrefix = f.SelectedPrefix.Foreground(terminaltheme.Color(terminaltheme.Success))
 		f.MultiSelectSelector = f.MultiSelectSelector.Foreground(terminaltheme.Color(terminaltheme.Label))
-		f.FocusedButton = f.FocusedButton.Foreground(terminaltheme.Color(terminaltheme.Label))
+		// Huh uses FocusedButton for the selected confirmation choice.
+		// Keep that choice visible when color is disabled or hard to distinguish.
+		f.FocusedButton = f.FocusedButton.Foreground(terminaltheme.Color(terminaltheme.Label)).SetString("✓")
 	}
 	return t
 }

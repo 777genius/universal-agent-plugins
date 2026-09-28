@@ -684,6 +684,8 @@ def run_case(name, binary, root, args):
                   'preflight plan omits package identity/version')
             if name != 'queued':
                 check(re.search(r'(?i)\byes\b|\[Y/n\]', clean(session.raw[offset:])), 'Yes default not visible')
+            if name in ('default-yes', 'no', 'no-color', 'NO_COLOR'):
+                check('✓ Yes' in clean(session.raw[offset:]), 'default Yes has no visible selection mark')
             if name == 'confirm-sigterm':
                 os.kill(session.process.pid, signal.SIGTERM)
                 session.finish(1); fixture.unchanged(); return
