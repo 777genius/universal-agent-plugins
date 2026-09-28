@@ -331,6 +331,14 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			// JSON calls must reject missing selectors before
+			// loading state, presenting choices, or touching an open input stream.
+			// Purging retained data is installation-wide and needs no target.
+			if opts.format == "json" && !opts.purgeData {
+				if err := requireNonInteractiveMutation(app, opts, "removal"); err != nil {
+					return err
+				}
+			}
 			if strings.TrimSpace(opts.target) == "" && app.Terminal && !opts.purgeData {
 				selection, err := promptBoundTargets(cmd, app, args[0], opts.scope)
 				if err != nil {

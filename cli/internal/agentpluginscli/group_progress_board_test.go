@@ -9,7 +9,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
-func TestGroupProgressBoardRewritesRowsAndKeepsActualOutcomes(t *testing.T) {
+func TestGroupProgressBoardPlainFallbackKeepsActualOutcomes(t *testing.T) {
 	t.Parallel()
 	var output bytes.Buffer
 	clients := []domain.DetectedClient{
@@ -22,17 +22,20 @@ func TestGroupProgressBoardRewritesRowsAndKeepsActualOutcomes(t *testing.T) {
 	board.observe(usecase.GroupProgressEvent{ClientID: domain.ClientCodex, Phase: usecase.GroupProgressConfigured})
 	board.observe(usecase.GroupProgressEvent{ClientID: domain.ClientCodex, Phase: usecase.GroupProgressActivated, Result: usecase.AddResult{
 		GroupPhase: usecase.GroupTargetExternalCompleted,
-		Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled},
+		Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotRequired},
 	}})
 	board.finish([]usecase.AddResult{
-		{GroupPhase: usecase.GroupTargetExternalCompleted, Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled}},
+		{GroupPhase: usecase.GroupTargetExternalCompleted, Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotRequired}},
 		{GroupPhase: usecase.GroupTargetExternalNotAttempted},
 	})
 	got := output.String()
-	for _, want := range []string{"OpenAI Codex", "Claude Code", "● preparing", "✓ preparing → ● configuring", "✓ configuring → ● installing", "✓ installed", "! not completed", "\033[2A", "\033[2K"} {
+	for _, want := range []string{"OpenAI Codex", "Claude Code", "● preparing", "✓ preparing → ● configuring", "✓ configuring → ● installing", "✓ installed", "! not completed"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("live board missing %q: %q", want, got)
 		}
+	}
+	if strings.Contains(got, "\033[") {
+		t.Fatal("nonterminal fallback emitted cursor controls")
 	}
 	if board.painted != 0 {
 		t.Fatal("board retained cursor position after finish")

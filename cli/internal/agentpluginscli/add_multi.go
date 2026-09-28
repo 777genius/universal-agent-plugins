@@ -55,6 +55,7 @@ type batchPresentationKind string
 
 const (
 	batchPresentationInstalled      batchPresentationKind = "Installed"
+	batchPresentationAttested       batchPresentationKind = "User-attested"
 	batchPresentationSetupRequired  batchPresentationKind = "Setup required"
 	batchPresentationSignInRequired batchPresentationKind = "Sign-in required"
 	batchPresentationFailed         batchPresentationKind = "Failed"
@@ -258,14 +259,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			case usecase.GroupProgressConfigured:
 				stage = "2/3  configuration ready"
 			case usecase.GroupProgressActivated:
-				switch {
-				case event.Result.GroupPhase != usecase.GroupTargetExternalCompleted:
-					stage = "3/3  activation failed"
-				case event.Result.Activation.Activation == domain.ActivationActive && event.Result.Activation.Verification == domain.VerificationInstalled:
-					stage = "3/3  installed"
-				default:
-					stage = "3/3  setup required"
-				}
+				stage = "3/3  " + progressResultLabel(event.Result)
 			default:
 				return
 			}
@@ -654,7 +648,7 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 	attention := make([]addTargetResult, 0, len(result.Targets))
 	for _, target := range result.Targets {
 		switch classifyBatchPresentation(target) {
-		case batchPresentationSetupRequired, batchPresentationSignInRequired, batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
+		case batchPresentationAttested, batchPresentationSetupRequired, batchPresentationSignInRequired, batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
 			attention = append(attention, target)
 		}
 	}
@@ -739,7 +733,7 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 	switch phase {
 	case usecase.GroupTargetManagedRolledBack:
 		return batchPresentationRolledBack
-	case usecase.GroupTargetExternalNotAttempted:
+	case usecase.GroupTargetPlanned, usecase.GroupTargetManagedCommitted, usecase.GroupTargetExternalNotAttempted:
 		return batchPresentationNotCompleted
 	case usecase.GroupTargetExternalFailed, usecase.GroupTargetExternalPartial, usecase.GroupTargetManagedUnknown:
 		return batchPresentationFailed
@@ -752,6 +746,9 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 		return batchPresentationSignInRequired
 	}
 	if fullyInstalled(activation) {
+		if activation.ActivationAttested || activation.AuthenticationAttested {
+			return batchPresentationAttested
+		}
 		return batchPresentationInstalled
 	}
 	if activation.Authentication == domain.AuthenticationNotChecked {
@@ -763,14 +760,14 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 	if phase == usecase.GroupTargetExternalCompleted {
 		return batchPresentationSetupRequired
 	}
-	return batchPresentationFailed
+	return batchPresentationNotCompleted
 }
 
 func batchResultTone(kind batchPresentationKind) terminaltheme.Role {
 	switch kind {
 	case batchPresentationInstalled:
 		return terminaltheme.Success
-	case batchPresentationSetupRequired, batchPresentationSignInRequired:
+	case batchPresentationAttested, batchPresentationSetupRequired, batchPresentationSignInRequired:
 		return terminaltheme.Warning
 	case batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
 		return terminaltheme.Error
@@ -783,6 +780,8 @@ func batchAttentionLines(target addTargetResult) []string {
 	kind := classifyBatchPresentation(target)
 	phase := target.Output.Result.GroupPhase
 	switch kind {
+	case batchPresentationAttested:
+		return []string{"Lifecycle was explicitly attested by the user; it was not observed from the client."}
 	case batchPresentationRolledBack:
 		return []string{"Managed installation was rolled back; no client changes were kept."}
 	case batchPresentationFailed, batchPresentationNotCompleted:
@@ -816,7 +815,7 @@ func batchAttentionLines(target addTargetResult) []string {
 
 func countBatchTarget(result *addMultiResult, target addTargetResult) {
 	switch classifyBatchPresentation(target) {
-	case batchPresentationInstalled:
+	case batchPresentationInstalled, batchPresentationAttested:
 		result.Succeeded++
 	case batchPresentationSetupRequired, batchPresentationSignInRequired:
 		// Deferred ChatGPT (status action_required, no group phase) is reported

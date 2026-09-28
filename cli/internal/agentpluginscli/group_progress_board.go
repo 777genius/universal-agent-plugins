@@ -6,7 +6,9 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"unicode/utf8"
+
+	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/term"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
@@ -25,21 +27,26 @@ const (
 )
 
 type groupProgressRow struct {
-	id    domain.ClientID
-	label string
-	step  groupProgressStep
-	final string
+	id                   domain.ClientID
+	label                string
+	step                 groupProgressStep
+	final                string
+	prepared, configured bool
 }
 
 // groupProgressBoard owns only terminal presentation. The use case emits
 // observed checkpoints and remains independent of terminal control sequences.
 type groupProgressBoard struct {
-	mu      sync.Mutex
-	writer  io.Writer
-	theme   terminaltheme.Theme
-	rows    []groupProgressRow
-	width   int
-	painted int
+	mu              sync.Mutex
+	writer          io.Writer
+	theme           terminaltheme.Theme
+	rows            []groupProgressRow
+	width           int
+	painted         int
+	columns, height int
+	live            bool
+	resized         func() bool
+	stopResize      func()
 }
 
 func startGroupProgressBoard(app App, opts *options, selected []domain.DetectedClient) *groupProgressBoard {
@@ -57,10 +64,15 @@ func newGroupProgressBoard(writer io.Writer, selected []domain.DetectedClient) *
 	board := &groupProgressBoard{writer: writer, theme: terminaltheme.For(writer)}
 	for _, client := range selected {
 		label := prompt.SafeText(clientDisplayName(client))
-		if width := utf8.RuneCountInString(label); width > board.width {
+		if width := ansi.StringWidth(label); width > board.width {
 			board.width = width
 		}
 		board.rows = append(board.rows, groupProgressRow{id: client.ClientID, label: label})
+	}
+	board.columns, board.height = board.terminalSize()
+	board.live = board.fits(board.columns, board.height)
+	if board.live {
+		board.resized, board.stopResize = watchProgressResize()
 	}
 	board.redrawLocked()
 	return board
@@ -80,8 +92,10 @@ func (board *groupProgressBoard) observe(event usecase.GroupProgressEvent) {
 		case usecase.GroupProgressPreparing:
 			next = progressPreparing
 		case usecase.GroupProgressConfiguring:
+			row.prepared = true
 			next = progressConfiguring
 		case usecase.GroupProgressConfigured:
+			row.configured = true
 			next = progressInstalling
 		case usecase.GroupProgressActivated:
 			next = progressFinished
@@ -116,31 +130,69 @@ func (board *groupProgressBoard) finish(results []usecase.AddResult) {
 	}
 	board.redrawLocked()
 	board.painted = 0
+	if board.stopResize != nil {
+		board.stopResize()
+	}
 	_, _ = fmt.Fprintln(board.writer)
 }
 
 func progressResultLabel(result usecase.AddResult) string {
-	switch result.GroupPhase {
-	case usecase.GroupTargetExternalCompleted:
-		if result.Activation.Activation == domain.ActivationActive && result.Activation.Verification == domain.VerificationInstalled {
-			return "installed"
+	return strings.ToLower(string(classifyBatchPresentation(addTargetResult{
+		Status: string(result.GroupPhase), Error: result.Failure,
+		Output: addResultData{Result: result},
+	})))
+}
+
+func (board *groupProgressBoard) terminalSize() (int, int) {
+	if f, ok := terminaltheme.Unwrap(board.writer).(*os.File); ok {
+		if width, height, err := term.GetSize(int(f.Fd())); err == nil {
+			return width, height
 		}
-		return "setup required"
-	case usecase.GroupTargetExternalFailed, usecase.GroupTargetManagedUnknown:
-		return "failed"
-	default:
-		return "not completed"
 	}
+	return 0, 0
+}
+
+func (board *groupProgressBoard) fits(columns, height int) bool {
+	// Reserve the final column to avoid autowrap, and a row for the cursor.
+	// Account for the widest possible final status before the first paint.
+	widest := 0
+	for _, final := range []string{"installed", "setup required", "sign-in required", "user-attested", "not completed", "rolled back", "failed"} {
+		row := groupProgressRow{step: progressFinished, final: final}
+		widest = max(widest, ansi.StringWidth(progressPipeline(terminaltheme.Theme{}, row)))
+	}
+	return columns > 4+board.width+widest && height > len(board.rows)
 }
 
 func (board *groupProgressBoard) redrawLocked() {
-	if board.painted > 0 {
-		_, _ = fmt.Fprintf(board.writer, "\033[%dA", board.painted)
+	columns, height := board.terminalSize()
+	resized := board.resized != nil && board.resized()
+	if board.live && (resized || columns != board.columns || height != board.height || !board.fits(columns, height)) {
+		// A terminal can reflow old rows on resize. Their physical positions are
+		// no longer knowable; append plain progress for the rest of this board.
+		board.live, board.painted = false, 0
+		_, _ = fmt.Fprint(board.writer, "\r\n")
+	}
+	var frame strings.Builder
+	if board.live && board.painted > 0 {
+		fmt.Fprintf(&frame, "\r\033[%dA", board.painted)
 	}
 	for _, row := range board.rows {
-		_, _ = fmt.Fprintf(board.writer, "\033[2K  %-*s  %s\n", board.width, row.label, progressPipeline(board.theme, row))
+		if board.live {
+			frame.WriteString("\r\033[2K")
+		}
+		padding := strings.Repeat(" ", board.width-ansi.StringWidth(row.label))
+		fmt.Fprintf(&frame, "  %s%s  %s\n", row.label, padding, progressPipeline(board.theme, row))
 	}
-	board.painted = len(board.rows)
+	if board.columns > 0 {
+		frame.WriteString("\r")
+	}
+	if n, err := io.WriteString(board.writer, frame.String()); err != nil || n != frame.Len() {
+		board.live, board.painted = false, 0
+		return
+	}
+	if board.live {
+		board.painted = len(board.rows)
+	}
 }
 
 func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
@@ -150,11 +202,10 @@ func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
 	case progressPreparing:
 		roles[0] = terminaltheme.Label
 	case progressConfiguring:
-		roles[0], roles[1] = terminaltheme.Success, terminaltheme.Label
+		roles[1] = terminaltheme.Label
 	case progressInstalling:
-		roles[0], roles[1], roles[2] = terminaltheme.Success, terminaltheme.Success, terminaltheme.Label
+		roles[2] = terminaltheme.Label
 	case progressFinished:
-		roles[0], roles[1] = terminaltheme.Success, terminaltheme.Success
 		labels[2] = row.final
 		if labels[2] == "installed" {
 			roles[2] = terminaltheme.Success
@@ -163,6 +214,12 @@ func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
 		} else {
 			roles[2] = terminaltheme.Warning
 		}
+	}
+	if row.prepared {
+		roles[0] = terminaltheme.Success
+	}
+	if row.configured {
+		roles[1] = terminaltheme.Success
 	}
 	arrow := theme.Text(terminaltheme.Muted, " → ")
 	parts := make([]string, len(labels))

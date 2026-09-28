@@ -298,3 +298,25 @@ CI workflow runs the full matrix on Linux and macOS; a local Linux result is
 not a macOS pass. Windows ConPTY is a separate lane. HTTP fixtures use only an
 isolated loopback endpoint and assert zero CLI requests; scanner output remains
 synthetic, with no authentication, security or real-client release qualification.
+
+Terminal UI consent/removal/progress regressions (disposable Unix PTYs):
+
+```sh
+python3 scripts/terminal-ui/ui_regressions.py --binary /path/to/agentplugins \
+  --artifacts /path/to/new-ui-regressions
+```
+
+This checks plain queued Enter/Yes before the plan, fresh Yes defaults, negative
+and cancellation answers, queued lifecycle handoff, JSON removal with missing
+`--target` using a TTY or a held-open pipe, and narrow/plain group progress.
+The group fixture explicitly supplies OpenCode's config directory alongside
+Cursor. Group progress uses a text-only skill to exercise observed OpenCode
+activation while authentication remains unchecked. The shared `group-progress`
+case retains its manifest-only package and expects manual setup for both
+clients. Selection helpers fail immediately if a requested client is absent.
+All fixtures use disposable homes and projects, a synthetic scanner, and
+version-only client stubs. These are UI/state checks, not native client,
+authentication, security-scanner, or release qualification. `TMPDIR` controls
+fixture storage. Go PTY tests cover display-cell alignment, narrow/short
+terminals, resize fallback, canonical/raw queued answers, terminal restoration,
+and observed-stage coloring independently of CLI timing.

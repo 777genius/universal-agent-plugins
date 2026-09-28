@@ -63,6 +63,7 @@ def selection_choices(data):
 def selection_keys(data, selected):
     offered = selection_choices(data)
     check(offered, 'selection has no client rows')
+    check(set(selected) <= set(offered), f'selected clients not offered: {set(selected) - set(offered)}')
     keys = bytearray()
     for index, target in enumerate(offered):
         if target not in selected:
@@ -169,7 +170,7 @@ class Screen:
 
 
 class Fixture:
-    def __init__(self, root, scanner_binary=None):
+    def __init__(self, root, scanner_binary=None, include_opencode=False):
         self.root = Path(root)
         self.home = self.root / 'home-é'
         self.project = self.root / 'project'
@@ -211,6 +212,8 @@ class Fixture:
                           'CODEX_HOME': '.codex', 'CLAUDE_CONFIG_DIR': '.claude',
                           'CURSOR_CONFIG_DIR': '.cursor', 'GEMINI_CLI_HOME': '.gemini'}.items():
             self.env[key] = str(self.home / path)
+        if include_opencode:
+            (Path(self.env['XDG_CONFIG_HOME']) / 'opencode').mkdir(parents=True)
         # Existing executable-cache seam, only inside this disposable fixture.
         # This is a SYNTHETIC scanner protocol response, not security evidence.
         machine = {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
@@ -241,7 +244,7 @@ class Fixture:
     def unchanged(self):
         check(self.mutations() == self.before, 'client/project/state/journal mutated before consent')
 
-    def installed(self, clients):
+    def installed(self, clients, active=()):
         state = self.data / 'state-v2.json'
         check(state.is_file(), 'no persisted installation state after Yes')
         body = json.loads(state.read_text(encoding='utf-8'))
@@ -266,7 +269,8 @@ class Fixture:
                   'wrong package materialized')
             check(any(r.get('phase') == 'committed' for r in binding.get('receipts', [])),
                   'no committed mutation receipt')
-            check(binding.get('activation') != 'active', 'activation falsely confirmed')
+            check((binding.get('activation') == 'active') == (binding['client_id'] in active),
+                  f'wrong activation for {binding["client_id"]}')
             check(binding.get('authentication') not in ('authenticated', 'not_required'),
                   'authentication falsely confirmed')
         check(self.mutations() != self.before, 'Yes produced no mutation')
@@ -506,8 +510,8 @@ CASES = ('detection', 'baseline-lifecycle', 'group-progress', 'group-progress-fa
 def run_case(name, binary, root, args):
     evidence = root / name
     evidence.mkdir()
-    with tempfile.TemporaryDirectory(prefix='agentplugins-pty-', dir='/tmp') as tmp:
-        fixture = Fixture(tmp, getattr(args, "scanner_path", None))
+    with tempfile.TemporaryDirectory(prefix='agentplugins-pty-') as tmp:
+        fixture = Fixture(tmp, getattr(args, "scanner_path", None), include_opencode=name == "group-progress")
         argv = [str(binary), 'add', str(fixture.package)]
         if getattr(args, 'npm_launcher', False):
             node = shutil.which('node')

@@ -23,22 +23,7 @@ func confirmationInput(ctx context.Context, input io.Reader) (keys []byte, err e
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	// Canonical mode can hide an incomplete queued line (notably a lone Space).
-	// This short, synchronous ownership interval has no competing form reader.
-	state, err := term.MakeRaw(int(f.Fd()))
-	if err != nil {
-		return nil, fmt.Errorf("prepare consent boundary: %w", err)
-	}
-	defer func() {
-		if e := term.Restore(int(f.Fd()), state); e != nil {
-			keys, err = nil, fmt.Errorf("restore consent boundary: %w", e)
-		}
-	}()
-	n, err := queuedInputBytes(f)
-	if err != nil {
-		return nil, fmt.Errorf("inspect consent boundary: %w", err)
-	}
-	queued, submitted, err := readQueuedInput(ctx, f, n)
+	queued, submitted, err := terminalQueuedInput(ctx, f)
 	if err != nil {
 		return nil, fmt.Errorf("read consent boundary: %w", err)
 	}
@@ -74,8 +59,10 @@ func readQueuedInput(ctx context.Context, input io.Reader, n int) ([]byte, bool,
 			return nil, false, io.ErrNoProgress
 		}
 		queued = append(queued, b[0])
+		// Canonical input has already mapped CR to LF. Both delimit a stale
+		// answer, but rich live forms still use CR for submission.
 		// Read is synchronous; there is no second reader accessing this gate.
-		if r.gate != nil {
+		if r.gate != nil || b[0] == '\n' && !r.paste {
 			return queued, true, nil
 		}
 	}
@@ -93,6 +80,11 @@ func queuedConfirmationKeys(queued []byte) []byte {
 		// the beginning of a paste, whose later bytes must not become consent.
 		if bytes.Equal(queued, []byte("\x1b[")) {
 			return []byte{3}
+		}
+		// A canonical Escape followed by its line terminator is cancellation,
+		// not the raw Alt+Enter encoding used by the rich form.
+		if bytes.HasPrefix(queued, []byte{'\x1b', '\n'}) {
+			return []byte{27}
 		}
 		n, event := decoder.Decode(queued)
 		if n <= 0 {
@@ -112,7 +104,7 @@ func queuedConfirmationKeys(queued []byte) []byte {
 			return []byte{3}
 		case uv.KeyPressEvent:
 			switch event.String() {
-			case "enter":
+			case "enter", "ctrl+j":
 				return []byte{'\r'}
 			case "esc":
 				return []byte{27}
