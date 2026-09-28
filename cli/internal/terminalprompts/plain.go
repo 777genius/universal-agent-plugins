@@ -89,7 +89,7 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	for i, s := range r.Summary {
 		summary[i] = prompt.SafeText(s)
 	}
-	result, err := u.Confirm(ctx, installerui.ConfirmRequest{Title: title, Summary: summary})
+	result, err := u.Confirm(ctx, installerui.ConfirmRequest{Title: title, Summary: summary, Default: r.Default})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return prompt.ConfirmationResult{}, canceledPrompt(err)

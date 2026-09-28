@@ -18,11 +18,13 @@ func TestAdapterSuccessContract(t *testing.T) {
 	for _, adapter := range []string{"plain", "huh"} {
 		t.Run(adapter, func(t *testing.T) {
 			for _, tc := range []struct {
-				name, plain, huh  string
-				confirm, accepted bool
-				defaults, want    []domain.ClientID
+				name, plain, huh              string
+				confirm, accepted, defaultYes bool
+				defaults, want                []domain.ClientID
 			}{
 				{name: "default-no", plain: "\n", huh: "\r", confirm: true},
+				{name: "default-yes", plain: "\n", huh: "\r", confirm: true, defaultYes: true, accepted: true},
+				{name: "explicit-no-with-yes-default", plain: "n\n", huh: " \r", confirm: true, defaultYes: true},
 				{name: "explicit-no", plain: "n\n", huh: "  \r", confirm: true},
 				{name: "explicit-yes", plain: "yes\n", huh: " \r", confirm: true, accepted: true},
 				{name: "all-defaults", plain: "\n", huh: "\r", defaults: []domain.ClientID{"cursor", "claude", "codex"}, want: []domain.ClientID{"cursor", "claude", "codex"}},
@@ -44,7 +46,7 @@ func TestAdapterSuccessContract(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 					defer cancel()
 					if tc.confirm {
-						req := prompt.ConfirmationRequest{Title: "Apply fixture?", Summary: []string{"Disposable fixture only"}}
+						req := prompt.ConfirmationRequest{Title: "Apply fixture?", Summary: []string{"Disposable fixture only"}, Default: tc.defaultYes}
 						got, err := p.Confirm(ctx, req)
 						if err != nil || got.Accepted != tc.accepted {
 							t.Fatalf("confirmation = %+v, %v; want accepted=%v", got, err, tc.accepted)

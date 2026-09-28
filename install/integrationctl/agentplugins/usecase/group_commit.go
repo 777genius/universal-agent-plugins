@@ -110,6 +110,9 @@ func (session *groupSession) applyGroupKernel() error {
 	postApplyVerify := session.service.groupRecoveryPostApplyVerify(session.planned)
 	if len(mutations) == 0 {
 		session.clearCreatedPluginData()
+		for _, target := range session.planned {
+			session.reportGroupProgress(target, GroupProgressConfigured)
+		}
 		return nil
 	}
 	receipts, err := kernel.ApplyDirectoryGroup(session.ctx, transaction.DirectoryGroup{
@@ -128,6 +131,9 @@ func (session *groupSession) applyGroupKernel() error {
 		session.result.Targets[index].GroupPhase = GroupTargetManagedCommitted
 	}
 	session.clearCreatedPluginData()
+	for _, target := range session.planned {
+		session.reportGroupProgress(target, GroupProgressConfigured)
+	}
 	return nil
 }
 

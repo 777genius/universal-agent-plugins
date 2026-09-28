@@ -64,19 +64,19 @@ output before invoking the Unix harness; its hash is recorded in `results.json`.
 | Cases | Required behavior |
 | --- | --- |
 | `detection`, `baseline-lifecycle` (explicit only) | Existing line selector discovers Codex/Cursor; dry-run leaves no mutations; selecting Cursor materializes its package, preserves manual activation after No, and restores terminal. These are baseline fixture proofs, not new consent acceptance. |
-| `default-no`, `no` | All selected; full visible plan before default Enter/explicit No; exit 0 and unchanged state/client/project/journals. |
+| `default-yes`, `no` | All selected; full visible plan before default Enter applies or explicit No leaves state unchanged. |
 | `yes-lifecycle` | Space deselects Codex, arrow moves to Cursor, Enter submits; preflight identity/version visible before Yes; exactly Cursor materializes; plain activation No is consumed and auth is not asked. |
 | `empty` | Space/arrows deselect both; Enter produces inline validation, never defaults back to all; Esc exits 1 without mutation. |
 | `escape`, `ctrl-c`, `ctrl-d`, `confirm-*` | Cancellation at each form exits 1 without mutation and restores terminal. Raw Ctrl+D is a key, not Unix EOF. |
-| `plain`, `dumb`, `term-unset` | Full selection/default-No path with explicit `--color=never`, without escape sequences; same consent policy. |
+| `plain`, `dumb`, `term-unset` | Full selection/explicit-No path with explicit `--color=never`, without escape sequences; same consent policy. |
 | `no-color`, `NO_COLOR` | Same keyboard UI, no color SGR; cursor controls are allowed. |
 | `plain-eof`, `plain-partial-eof` | Canonical VEOF at empty selection and partial `y` plus EOF at confirm fail closed; neither equals Enter/Yes. |
 | `stdin-pipe` | Pipe stays open with no data; CLI exits with required-target error without reading it. |
 | `json`, `json-tty`, `json-explicit` | No-target JSON fails promptly without input; all-three-TTY JSON emits no controls; separate redirected stdout parses as exactly one versioned JSON envelope; explicit-target dry-run succeeds. |
 | `stdout-redirect`, `stderr-redirect`, `both-redirect` | One visible output gives Plain selection/No; both redirected fail without reading an invisible prompt. |
-| `resize`, `tiny`, `width-40`, `width-80`, `width-160` | Exercise resize and fixed narrow/standard/wide terminal dimensions, then default No without mutation. |
+| `resize`, `tiny`, `width-40`, `width-80`, `width-160` | Exercise resize and fixed narrow/standard/wide terminal dimensions, then explicit No without mutation. |
 | `slow-terminal` | Limit PTY reads to seven bytes, preserving complete fragmented output and terminal restoration. |
-| `queued`, `paste` | Consecutive Enters reach default No without hanging; bracketed multiline paste cannot silently grant consent, then Esc cancels. |
+| `queued`, `paste` | Consecutive Enters cannot silently grant consent before the confirmation is visible; bracketed multiline paste cannot grant consent, then Esc cancels. |
 
 For every successful exit/cancellation check, the harness compares the complete
 pre/post termios attributes, checks that the final cursor-hide is followed by
@@ -92,7 +92,7 @@ cannot replace the CLI's exit status. Nonce-based probe markers cannot be
 satisfied by earlier CLI output. ENOTTY is an error, never a restoration pass.
 
 The inspected Huh keymap uses Space/arrows and Enter for confirmation; `y`/`n`
-are disabled. Yes uses Space then Enter; explicit No moves left then right and
+are disabled. Yes uses Enter; explicit No uses Space then Enter, and
 submits. Normal rich cases wait for the rendered Yes/No/Enter controls, beyond
 the preprinted question. The initially tiny viewport selects Plain under the
 inspected size gate (width < 40 or height < 10), and, with explicit `--color=never`, must emit no ANSI. `queued` deliberately sends two Enters together and
@@ -116,7 +116,7 @@ remaining unconfirmed. It does not equate text “success” with persisted succ
 Self-tests exercise the harness using synthetic subprocesses, including a broken
 raw-mode child. They are **not CLI/Huh evidence**. Integrated failures against the
 old base are expected gaps but remain failures. Baseline runs must never qualify
-new `--plain`, default-No or Huh behavior.
+new `--plain`, default-Yes or Huh behavior.
 
 ## Automated native Windows (implementation; native execution pending)
 
@@ -124,7 +124,7 @@ new `--plain`, default-No or Huh behavior.
 It creates pipes/HPCON, supplies an explicit isolated environment and Unicode cwd
 through `STARTUPINFOEX`, and launches `windows_job.py` as a persistent console
 owner. That owner runs the native CLI with inherited console handles. **TERM is
-unset and no `--plain` flag is supplied**: numbered selection and `[y/N]` markers
+unset and no `--plain` flag is supplied**: numbered selection and `[Y/n]` markers
 must prove the proposed conservative Plain fallback actually ran.
 
 On the GitHub Windows runner, stage Python, the candidate native Windows binary
@@ -146,7 +146,7 @@ The runner freezes its own CLI copy and records native OS/Python and hashes.
 There are no Windows runtime stubs: discovery must find exactly the two synthetic
 config-only profiles with an empty PATH. No real agent is installed or launched.
 
-Default cases: default No, explicit No, Cursor Yes → activation No, selection and
+Default cases: default Yes, explicit No, Cursor Yes → activation No, selection and
 confirmation Ctrl+C, Ctrl+Z/Enter EOF, and resize. Every case gets a new fixture.
 The owner samples all three `GetConsoleMode` values and cursor visibility before
 and after CLI exit, then reads a unique echoed canonical line on the same console.
@@ -224,7 +224,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/selection_matrix.py \
   --artifacts /tmp/new-selection-matrix --timeout 8
 ```
 
-Fifteen cases cover Codex-only, Cursor-only and both with default No and explicit
+Fifteen cases cover Codex-only, Cursor-only and both with default Yes and explicit
 Yes → activation No; neither with retained empty validation; Escape/Ctrl+C at
 both forms; queued Enter/Enter, Enter/y/Enter and Enter/Space/Enter; and native-ownership rejection.
 Selection paths exercise Up/Down and Space toggle/re-toggle, assert the displayed
@@ -264,7 +264,7 @@ unit tests as Windows PASS. No new framework or dependency is needed.
 binary. Eight package kinds cover empty/skill packages, missing stdio runtime,
 HTTP authentication uncertainty, mixed healthy/skipped components, malformed
 JSON, ignored unsupported components, and native ownership collisions. Keyboard
-cancel/default No, rejection, exact Cursor skill install/removal, and read-only
+cancel/explicit No, rejection, exact Cursor skill install/removal, and read-only
 JSON plans retain state and terminal restoration assertions.
 
 ```sh
@@ -272,7 +272,7 @@ PYTHONDONTWRITEBYTECODE=1 PLUGIN_MATRIX_BINARY=/absolute/frozen-agentplugins \
   python3 -m unittest discover -s scripts/terminal-ui -p test_plugin_matrix.py
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/plugin_matrix.py \
   --binary /absolute/frozen-agentplugins --artifacts /tmp/new-plugin-matrix --timeout 15
-# Focused ten-client selection/default-No and JSON plan check:
+# Focused ten-client selection/explicit-No and JSON plan check:
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/terminal-ui/plugin_matrix.py \
   --binary /absolute/frozen-agentplugins --case empty:all-ten \
   --artifacts /tmp/new-plugin-all-ten --timeout 15

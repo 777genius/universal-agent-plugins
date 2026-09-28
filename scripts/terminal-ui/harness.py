@@ -492,7 +492,7 @@ def assert_paste_stayed_in_selection(raw, confirmation):
           'paste advanced beyond selection before explicit submit')
 
 
-CASES = ('detection', 'baseline-lifecycle', 'default-no', 'no', 'yes-lifecycle', 'queued-lifecycle', 'sigterm', 'confirm-sigterm', 'empty',
+CASES = ('detection', 'baseline-lifecycle', 'group-progress', 'group-progress-failure', 'default-yes', 'no', 'yes-lifecycle', 'queued-lifecycle', 'sigterm', 'confirm-sigterm', 'empty',
          'escape', 'lf-escape', 'ctrl-c', 'ctrl-d', 'confirm-escape', 'confirm-ctrl-c',
          'confirm-ctrl-d', 'confirm-lf-escape', 'plain', 'dumb', 'term-unset', 'no-color', 'NO_COLOR',
          'resize', 'tiny', 'width-40', 'width-80', 'width-160', 'slow-terminal',
@@ -606,6 +606,35 @@ def run_case(name, binary, root, args):
                 session.finish()
                 fixture.installed(['cursor'])
                 return
+            if name == 'group-progress':
+                session.send(selection_keys(session.raw, {'cursor', 'opencode'}))
+                session.wait(args.confirmation, 'group-confirmation')
+                fixture.unchanged()
+                session.send(b'\r')
+                session.finish()
+                fixture.installed(['cursor', 'opencode'])
+                raw = bytes(session.raw)
+                check(b'\x1b[2A' in raw and raw.count(b'\x1b[2K') >= 6,
+                      'live group rows were not redrawn in place')
+                check('preparing' in clean(raw) and 'configuring' in clean(raw)
+                      and 'installing' in clean(raw), 'group stages missing from PTY stream')
+                check('OpenCode' in session.screen.snapshot()
+                      and 'Cursor' in session.screen.snapshot(), 'final group board missing selected clients')
+                check('1/3  preparing package' not in clean(raw),
+                      'static fallback appeared in a live terminal')
+                return
+            if name == 'group-progress-failure':
+                session.send(selection_keys(session.raw, {'codex', 'cursor'}))
+                session.wait(args.confirmation, 'group-confirmation')
+                fixture.unchanged()
+                session.send(b'\r')
+                session.finish(1)
+                fixture.unchanged()
+                raw = bytes(session.raw)
+                check(b'\x1b[2A' in raw, 'failed group did not use the live board')
+                check('not completed' in clean(raw) and 'no target was changed' in clean(raw),
+                      'failed preflight was presented as installed')
+                return
             cancel = {'lf-escape': b'\n\x1b', 'escape': b'\x1b', 'ctrl-c': b'\x03', 'ctrl-d': b'\x04'}
             if name == 'sigterm':
                 os.kill(session.process.pid, signal.SIGTERM)
@@ -630,7 +659,7 @@ def run_case(name, binary, root, args):
             # Single selected Cursor forces the plain activation handoff even
             # when the host has additional installed client applications.
             offset = len(session.raw)
-            if name in ('yes-lifecycle', 'queued-lifecycle'): session.send(selection_keys(session.raw, {'cursor'}))
+            if name in ('default-yes', 'yes-lifecycle', 'queued-lifecycle'): session.send(selection_keys(session.raw, {'cursor'}))
             elif name == 'queued': session.send(b'\r\r')
             elif name == 'paste': session.send(b'\x1b[200~\ny\nn\n\x1b[201~')
             else: session.send(b'\n' if plain else b'\r')
@@ -649,15 +678,16 @@ def run_case(name, binary, root, args):
             fixture.unchanged()
             check('pty-synthetic' in clean(session.raw) and '1.0.0' in clean(session.raw),
                   'preflight plan omits package identity/version')
-            check(re.search(r'(?i)\bno\b|\[y/N\]', clean(session.raw[offset:])), 'No default not visible')
+            if name != 'queued':
+                check(re.search(r'(?i)\byes\b|\[Y/n\]', clean(session.raw[offset:])), 'Yes default not visible')
             if name == 'confirm-sigterm':
                 os.kill(session.process.pid, signal.SIGTERM)
                 session.finish(1); fixture.unchanged(); return
             if name.startswith('confirm-'):
                 session.send(cancel[name.removeprefix('confirm-')])
                 session.finish(1); fixture.unchanged(); return
-            if name in ('yes-lifecycle', 'queued-lifecycle'):
-                session.send(b' \rn\n' if name == 'queued-lifecycle' else b' \r')
+            if name in ('default-yes', 'yes-lifecycle', 'queued-lifecycle'):
+                session.send(b'\rn\n' if name == 'queued-lifecycle' else b'\r')
                 session.wait(LIFECYCLE, 'plain-activation')
                 fixture.installed(['cursor'])
                 # At plain handoff raw/canonical mode must already be restored.
@@ -670,8 +700,7 @@ def run_case(name, binary, root, args):
                       'activation No advanced to auth')
                 fixture.installed(['cursor'])
             else:
-                if name == 'no': session.send(b'\x1b[D\x1b[C\r')
-                elif name != 'queued': session.send(b'\n' if plain else b'\r')
+                if name != 'queued': session.send(b'n\n' if plain else b' \r')
                 session.finish(); fixture.unchanged()
             if legacy_plain or name in ('plain-never', 'plain-NO_COLOR'):
                 check(b'\x1b' not in session.raw, 'plain emitted terminal controls')
@@ -683,7 +712,7 @@ def run_case(name, binary, root, args):
             if name == 'rich-never':
                 check(b'\x1b[?25l' in session.raw, 'never disabled rich interaction')
                 check(not re.search(rb'\x1b\[[0-9;:]*m', session.raw), 'never emitted SGR')
-            if name in ('yes-lifecycle', 'queued-lifecycle'):
+            if name in ('default-yes', 'yes-lifecycle', 'queued-lifecycle'):
                 check(re.search(rb'\x1b\[33m[^\x1b]+\x1b\[m', session.raw), 'warning role/reset missing')
             if name in ('no-color', 'NO_COLOR'):
                 sgr = re.findall(rb'\x1b\[([0-9;:]*)m', session.raw)

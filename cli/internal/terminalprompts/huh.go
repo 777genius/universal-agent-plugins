@@ -89,7 +89,9 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 		}
 		return prompt.ConfirmationResult{}, err
 	}
-	accepted := false
+	// Queued input can belong to the preceding selector. A stale Enter must
+	// never approve an install before the confirmation is visibly rendered.
+	accepted := r.Default && len(queued) == 0
 	for _, s := range r.Summary {
 		if err := promptio.WriteText(p.Output, prompt.SafeText(s)+"\n"); err != nil {
 			return prompt.ConfirmationResult{}, err
@@ -100,7 +102,7 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 	case len(queued) > 0:
 		// Queued input can complete the form before its first render. Keep one
 		// visible question without duplicating the normal interactive view.
-		separator = "\n" + prompt.SafeText(r.Title) + " (No by default)\n"
+		separator = "\n" + prompt.SafeText(r.Title) + " (queued input cannot accept the default)\n"
 	case !terminaltheme.IsTerminal(p.Output):
 		// Non-terminal forms may not render a stable interactive question.
 		separator = prompt.SafeText(r.Title) + "\n"

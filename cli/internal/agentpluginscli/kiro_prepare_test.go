@@ -95,7 +95,7 @@ func TestDetectedKiroOffersExplicitPreparationWithoutChangingOtherTargets(t *tes
 	if len(eligible) != 2 || len(skipped) != 0 || intents[domain.ClientKiro] != domain.InstallIntentPrepare || intents[domain.ClientCursor] != "" {
 		t.Fatalf("selection: %+v %+v %+v", eligible, skipped, intents)
 	}
-	if !strings.Contains(eligible[0].DisplayName, "prepare configuration") {
+	if !strings.Contains(eligible[0].DisplayName, "prepare only; manual verification") {
 		t.Fatalf("unlabelled preparation: %+v", eligible)
 	}
 }

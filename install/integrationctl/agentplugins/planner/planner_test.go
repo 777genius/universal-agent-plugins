@@ -33,6 +33,32 @@ func TestPlannerNegotiatesPartialSupportWithoutRejectingSupportedComponents(t *t
 	}
 }
 
+func TestCodexPlanMatchesAvailableCLIActivation(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name       string
+		executable string
+		status     domain.PlanStatus
+		activation domain.ActivationState
+		userAction string
+	}{
+		{"cli_available", "/test/bin/codex", domain.PlanReady, domain.ActivationActive, "start a new Codex session to load the installed plugin"},
+		{"desktop_only", "", domain.PlanManualActivationRequired, domain.ActivationManual, "finish installation in Codex Plugins, then start a new session"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := detectedClient(domain.ClientCodex, filepath.Join(t.TempDir(), ".codex"))
+			client.ExecutablePath = tc.executable
+			plan, err := testPlanner(Planner{ManagedRoot: t.TempDir()}).Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if plan.Status != tc.status || plan.Activation != tc.activation || !contains(plan.UserActions, tc.userAction) {
+				t.Fatalf("Codex plan does not match CLI availability: %+v", plan)
+			}
+		})
+	}
+}
+
 func TestPlannerAuthenticationRequiresAffirmativePerClientCatalogEvidence(t *testing.T) {
 	t.Parallel()
 	client := detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor"))

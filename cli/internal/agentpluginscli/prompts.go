@@ -46,7 +46,7 @@ func confirmInstall(ctx context.Context, cmd *cobra.Command, app App, loaded loa
 			return false, err
 		}
 	}
-	answer, err := app.Prompter.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply this plan?"})
+	answer, err := app.Prompter.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply this plan?", Default: true})
 	if err != nil {
 		return false, err
 	}
@@ -58,6 +58,7 @@ func confirmInstall(ctx context.Context, cmd *cobra.Command, app App, loaded loa
 
 func renderLegacyInstallReview(writer io.Writer, envelope domain.PackageEnvelope, results []usecase.AddResult) error {
 	checked := &planWriter{writer: writer}
+	results, shared := prepareInstallReview(results)
 	if _, err := fmt.Fprintf(checked, "%s: %s\n%s: user\n", terminaltheme.For(checked).Text(terminaltheme.Label, "Source"), prompt.SafeText(publicPackageSource(envelope.Source)), terminaltheme.For(checked).Text(terminaltheme.Label, "Scope")); err != nil {
 		return err
 	}
@@ -74,6 +75,21 @@ func renderLegacyInstallReview(writer io.Writer, envelope domain.PackageEnvelope
 	for _, result := range results {
 		if err := renderHumanPlan(checked, envelope, result); err != nil {
 			return err
+		}
+	}
+	if len(shared.warnings) > 0 || len(shared.actions) > 0 {
+		if _, err := fmt.Fprintln(checked, "For all selected clients:"); err != nil {
+			return err
+		}
+		for _, warning := range shared.warnings {
+			if _, err := fmt.Fprintln(checked, "  Warning: "+reviewWarningText(warning)); err != nil {
+				return err
+			}
+		}
+		for _, action := range shared.actions {
+			if _, err := fmt.Fprintln(checked, "  Next: "+prompt.SafeText(action)); err != nil {
+				return err
+			}
 		}
 	}
 	return checked.err

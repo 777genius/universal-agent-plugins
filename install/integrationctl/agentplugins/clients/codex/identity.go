@@ -106,6 +106,32 @@ func inspectCodexCLI(ctx context.Context, env clients.Env, plan domain.DeliveryP
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
+	// Codex rejects an explicit CODEX_HOME that does not exist. Check CLI
+	// compatibility against a disposable profile while leaving the selected
+	// profile untouched. Its absent registry is necessarily clear.
+	if _, err := os.Lstat(plan.NativeRegistryRoot); os.IsNotExist(err) {
+		probeRoot, err := os.MkdirTemp("", "agentplugins-codex-preflight-")
+		if err != nil {
+			return clients.RegistryIndeterminate, fmt.Errorf("create disposable Codex preflight profile: %w", err)
+		}
+		probePlan := plan
+		probePlan.NativeRegistryRoot = probeRoot
+		finding, inspectErr := inspectCodexCLIExisting(ctx, env, probePlan, nil)
+		cleanupErr := os.RemoveAll(probeRoot)
+		if err := errors.Join(inspectErr, cleanupErr); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if finding == clients.RegistryIndeterminate {
+			return finding, fmt.Errorf("the Codex plugin list output is not recognized")
+		}
+		return clients.RegistryClear, nil
+	} else if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	return inspectCodexCLIExisting(ctx, env, plan, managed)
+}
+
+func inspectCodexCLIExisting(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	command, err := codexCommand(plan.NativeRegistryRoot, plan.NativeRegistryExecutable, os.Environ(), "plugin", "list", "--json")
 	if err != nil {
 		return clients.RegistryIndeterminate, err

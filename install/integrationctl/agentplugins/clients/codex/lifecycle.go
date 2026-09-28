@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -47,6 +48,14 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	}
 	if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if !request.VerifyOnly {
+		if err := os.Mkdir(profileRoot, 0700); err != nil && !os.IsExist(err) {
+			return domain.ActivationOutcome{}, fmt.Errorf("create Codex profile: %w", err)
+		}
+		if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
 	}
 	request.Client.ConfigRoot = profileRoot
 	return completeCodexActivation(ctx, env, request, outcome)

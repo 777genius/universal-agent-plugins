@@ -128,6 +128,10 @@ func detectedSharedClient(target domain.ClientID, clients map[domain.ClientID]do
 }
 
 func promptYesNo(ctx context.Context, reader io.Reader, writer, alternate io.Writer, question string) (bool, error) {
+	return promptYesNoDefault(ctx, reader, writer, alternate, question, false)
+}
+
+func promptYesNoDefault(ctx context.Context, reader io.Reader, writer, alternate io.Writer, question string, defaultYes bool) (bool, error) {
 	var err error
 	writer, err = promptio.VisibleOutput(writer, alternate)
 	if err != nil {
@@ -141,6 +145,9 @@ func promptYesNo(ctx context.Context, reader io.Reader, writer, alternate io.Wri
 		return false, err
 	}
 	answer := strings.ToLower(strings.TrimSpace(line))
+	if answer == "" {
+		return defaultYes, nil
+	}
 	return answer == "y" || answer == "yes", nil
 }
 

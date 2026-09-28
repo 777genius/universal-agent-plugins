@@ -234,9 +234,48 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			combined.setTargetProof(client.ClientID, "not_run")
 		}
 	}
-	writeProgress(app, opts.format, "Applying the completely preflighted multi-target plan...")
+	writeProgress(app, opts.format, fmt.Sprintf("Installing %s for %d selected clients...", prompt.SafeText(loaded.envelope.Manifest.Name), len(selected)))
 	groupInput.DryRun, groupInput.Confirmed = false, true
+	board := startGroupProgressBoard(app, opts, selected)
+	if board != nil {
+		groupInput.Progress = board.observe
+	} else if app.Terminal && opts.format == "human" {
+		names := make(map[domain.ClientID]string, len(selected))
+		for _, client := range selected {
+			names[client.ClientID] = prompt.SafeText(reviewClientName(client.ClientID))
+		}
+		groupInput.Progress = func(event usecase.GroupProgressEvent) {
+			name := names[event.ClientID]
+			if name == "" {
+				name = prompt.SafeText(string(event.ClientID))
+			}
+			var stage string
+			switch event.Phase {
+			case usecase.GroupProgressPreparing:
+				stage = "1/3  preparing package..."
+			case usecase.GroupProgressConfiguring:
+				stage = "2/3  configuring clients..."
+			case usecase.GroupProgressConfigured:
+				stage = "2/3  configuration ready"
+			case usecase.GroupProgressActivated:
+				switch {
+				case event.Result.GroupPhase != usecase.GroupTargetExternalCompleted:
+					stage = "3/3  activation failed"
+				case event.Result.Activation.Activation == domain.ActivationActive && event.Result.Activation.Verification == domain.VerificationInstalled:
+					stage = "3/3  installed"
+				default:
+					stage = "3/3  setup required"
+				}
+			default:
+				return
+			}
+			_, _ = fmt.Fprintf(app.errorOutput(), "%s  %s\n", name, stage)
+		}
+	}
 	applied, err := service.AddGroup(ctx, groupInput)
+	if board != nil {
+		board.finish(applied.Targets)
+	}
 	if len(applied.Targets) != len(selected) || len(applied.Targets) != len(inputs) {
 		if err != nil {
 			return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", len(applied.Targets), len(selected), err)

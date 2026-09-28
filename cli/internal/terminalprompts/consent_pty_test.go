@@ -27,7 +27,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 	t.Setenv("TERM", "xterm-256color")
 	for _, tc := range []struct {
 		name, selection, confirmation, remaining string
-		accepted                                 bool
+		accepted, defaultYes                     bool
 		wantErr                                  error
 	}{
 		{name: "queued-space-enter", selection: "\r \r"},
@@ -39,6 +39,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 		{name: "queued-double-escape-enter", selection: "\r\x1b\x1b\r \r"},
 		{name: "queued-incomplete-csi-enter", selection: "\r\x1b[32;\r \r", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-enters", selection: "\r\r"},
+		{name: "queued-enters-yes-default", selection: "\r\r", defaultYes: true},
 		{name: "queued-yes", selection: "\ry\r"},
 		{name: "queued-left", selection: "\r\x1b[D\r"},
 		{name: "queued-right", selection: "\r\x1b[C\r"},
@@ -54,6 +55,8 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 		{name: "fresh-left-enter", selection: "\r", confirmation: "\x1b[D\r", accepted: true},
 		{name: "fresh-paste-default-no", selection: "\r", confirmation: "\x1b[200~ \ry\n\x1b[201~\r"},
 		{name: "fresh-default-no", selection: "\r", confirmation: "\r"},
+		{name: "fresh-default-yes", selection: "\r", confirmation: "\r", defaultYes: true, accepted: true},
+		{name: "fresh-explicit-no-yes-default", selection: "\r", confirmation: " \r", defaultYes: true},
 		{name: "fresh-escape", selection: "\r", confirmation: "\x1b", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-ctrl-c", selection: "\r", confirmation: "\x03", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-ctrl-d", selection: "\r", confirmation: "\x04", wantErr: prompt.ErrPromptCanceled},
@@ -116,7 +119,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 			if *selected != *before {
 				t.Errorf("selection changed terminal: got %+v want %+v", selected, before)
 			}
-			result, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?"})
+			result, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?", Default: tc.defaultYes})
 			after, restoreErr := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
 			if restoreErr != nil {
 				t.Fatal(restoreErr)

@@ -539,7 +539,7 @@ class PowerShellFixtureTests(unittest.TestCase):
             with patch.object(windows_conpty, 'Fixture', return_value=fixture), \
                     patch.object(windows_conpty, 'ConPTY', side_effect=capture):
                 with self.assertRaisesRegex(RuntimeError, 'stop before any process starts'):
-                    windows_conpty.run_case('default-no', args)
+                    windows_conpty.run_case('no', args)
             self.assertEqual(captured['env']['HOME'], str(fixture.root / 'powershell-home'))
             self.assertEqual(captured['cwd'], fixture.project)
             self.assertEqual(captured['timeout'], 15)
