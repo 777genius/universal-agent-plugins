@@ -48,3 +48,9 @@ type DataPathPreflighter interface {
 type PluginDataAwareStager interface {
 	StageWithPluginData(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string, domain.CompatibilityHints, string) (domain.StagedDelivery, error)
 }
+
+// ActiveNativeProjector computes native delivery from a digest-verified active
+// package. It must not write to the package or inspect external client state.
+type ActiveNativeProjector interface {
+	ProjectActiveNative(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string, string) ([]domain.NativeObjectOwnership, error)
+}

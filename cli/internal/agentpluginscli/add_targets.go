@@ -36,6 +36,9 @@ func selectClient(
 			return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", opts.target)
 		}
 		client, ok := detectedMap[target]
+		if err := selectedDetectionError(target, detectedMap); err != nil {
+			return domain.DetectedClient{}, detectedMap, err
+		}
 		if !ok && plansWithoutHostPresence(target) {
 			client = syntheticUndetectedClient(target)
 			detectedMap[target] = client

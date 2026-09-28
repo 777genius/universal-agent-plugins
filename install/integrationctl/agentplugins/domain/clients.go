@@ -86,6 +86,7 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:            LifecycleCLIRegistry,
 		HonorsOpenAIMCPAuthHints: true,
 		SupportsPreparedRecovery: true,
+		BindsNativeProfileRoot:   true,
 	}),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
@@ -107,8 +108,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}),
 	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
-		LifecycleKind:  LifecycleCLIRegistry,
+		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
+		LifecycleKind:       LifecycleCLIRegistry,
+		TracksNativeEffects: true,
 	}),
 	withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
@@ -275,6 +277,9 @@ type DetectedClient struct {
 	// emitted by the public JSON renderer because they can reveal the user home.
 	ExecutablePath string `json:"-"`
 	ConfigRoot     string `json:"-"`
+	// DetectionError is private diagnostic evidence. A failed client must not
+	// contribute paths or become a lifecycle target.
+	DetectionError error `json:"-"`
 }
 
 type ClientCapabilities struct {

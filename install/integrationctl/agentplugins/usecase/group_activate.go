@@ -35,7 +35,7 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 }
 
 func (session *groupSession) activateOneGroupTarget(plannedIndex int, target plannedGroupTarget) error {
-	outcome, activationErr := session.activateGroupDelivery(target)
+	outcome, activationErr, nativeComplete := session.activateGroupDelivery(target)
 	previousNativeObjects := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previousNativeObjects = target.managed.NativeObjects
@@ -43,6 +43,9 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	lifecycleChanged, persistErr := session.service.updateActivationResult(session.installationID, target.clientBindingID, outcome, activationErr, previousNativeObjects)
 	if lifecycleChanged {
 		session.result.Mutated = true
+	}
+	if !nativeComplete {
+		target.noChange = false
 	}
 	session.assignActivationOutcome(target, outcome, activationErr, persistErr, lifecycleChanged)
 	session.reportGroupProgress(target, GroupProgressActivated)
@@ -73,31 +76,32 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	return nil
 }
 
-func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, error) {
+func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, error, bool) {
 	delivery := target.delivery
+	nativeComplete := true
 	if target.noChange && target.managed != nil {
-		delivery = domain.StagedDelivery{
-			ClientID: target.input.Client.ClientID, OwnedBase: target.plan.TargetRoot,
-			ActivePath: target.managed.TargetLocator, ArtifactDigest: managedDigest(*target.managed),
-			NativeObjects: append([]domain.NativeObjectOwnership(nil), target.managed.NativeObjects...),
+		var err error
+		delivery, nativeComplete, err = session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
+		if err != nil {
+			return domain.ActivationOutcome{}, err, false
 		}
 	}
 	previous := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previous = append([]domain.NativeObjectOwnership(nil), target.managed.NativeObjects...)
 	}
-	outcome, activationErr := session.service.Activator.Activate(session.ctx, domain.ActivationRequest{
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, target.clientBindingID, domain.ActivationRequest{
 		Client: target.input.Client, Plan: target.plan, Delivery: delivery,
 		DeclaredName: target.input.Envelope.Manifest.Name, Replacing: session.replace, Interactive: target.input.Interactive,
 		BackendExecutable: target.input.BackendExecutable, PreviousNativeObjects: previous,
-		VerifyOnly: target.noChange, ActivationComplete: target.input.ActivationComplete,
+		VerifyOnly: target.noChange && nativeComplete, ActivationComplete: target.input.ActivationComplete,
 	})
 	if session.input.Repair && target.managed != nil {
 		outcome = preserveManagedAuthentication(outcome, target.managed.Authentication)
 	}
 	activationErr = session.normalizeActivationError(target, &outcome, activationErr)
 	session.preserveNoChangeActivation(target, &outcome, activationErr)
-	return outcome, activationErr
+	return outcome, activationErr, nativeComplete
 }
 
 func (session *groupSession) normalizeActivationError(target plannedGroupTarget, outcome *domain.ActivationOutcome, activationErr error) error {
@@ -112,9 +116,11 @@ func (session *groupSession) normalizeActivationError(target plannedGroupTarget,
 		activationErr = fmt.Errorf("activator reported a failed activation outcome without an error")
 	}
 	if activationErr != nil && outcome.Activation == "" {
+		effect, objects := outcome.NativeEffect, outcome.NativeObjects
 		*outcome = domain.ActivationOutcome{
 			Activation: domain.ActivationFailed, Authentication: target.plan.Authentication,
 			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			NativeEffect: effect, NativeObjects: objects,
 		}
 	}
 	return activationErr

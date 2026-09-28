@@ -11,6 +11,8 @@
       "LocalActions": [
         "open ChatGPT Plugins and install demo from the prepared marketplace at \u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab, then confirm it is enabled in a new chat"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "install the prepared skills-only plugin from ChatGPT Plugins, then confirm it is enabled in a new chat"
@@ -37,6 +39,8 @@
       "LocalActions": [
         "verify with `\u003croot\u003e/bin/claude plugin list --json`"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "retry client activation and verify client visibility"
@@ -54,6 +58,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "committed",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "reload the Cline MCP view in VS Code, or start a new Cline CLI process"
@@ -95,6 +101,8 @@
       "LocalActions": [
         "the `\u003croot\u003e/bin/codex plugin list --json` output contract was not recognized; inspect demo manually"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "confirm the managed plugin is installed and enabled in Codex"
@@ -131,6 +139,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
       "Verification": "installation_verified"
@@ -148,6 +158,8 @@
       "LocalActions": [
         "reload Cursor with Developer: Reload Window, then verify demo from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible; local plugin imports must be allowed"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "reload Cursor and verify the local plugin is visible before using its components"
@@ -165,6 +177,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "committed",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"
@@ -193,6 +207,8 @@
       "LocalActions": [
         "retry structured Kiro ACP verification with `\u003croot\u003e/bin/kiro acp --agent-engine v3 --auth-method cli`"
       ],
+      "NativeEffect": "committed",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "retry client activation and verify client visibility"
@@ -210,6 +226,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "committed",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "restart OpenCode to load the installed plugin"
@@ -246,6 +264,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
       "Verification": "installation_verified"
@@ -263,6 +283,8 @@
       "LocalActions": [
         "Windsurf: import MCP servers from \u003croot\u003e/managed/clients/windsurf/demo-0123456789ab/mcp.json; Devin cloud-synced configuration is never changed automatically"
       ],
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "select one legacy Windsurf channel and add the prepared MCP servers manually"

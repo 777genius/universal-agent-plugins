@@ -132,6 +132,30 @@ type Kernel struct {
 	Directory  dirswap.Manager
 }
 
+// A directory commit confirms only the managed package bytes. External native
+// receipts remain the last confirmed effect until the client adapter reports
+// its own result after this transaction.
+func committedDirectoryObjects(before domain.StateFileV2, installationID, bindingID string, projected []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+	var objects []domain.NativeObjectOwnership
+	for _, object := range projected {
+		if object.Kind == "managed_package_directory" {
+			objects = append(objects, object)
+		}
+	}
+	for _, installation := range before.Installations {
+		if installation.InstallationID != installationID {
+			continue
+		}
+		for _, object := range installation.Clients[bindingID].NativeObjects {
+			if object.Kind != "managed_package_directory" {
+				objects = append(objects, object)
+			}
+		}
+		break
+	}
+	return objects
+}
+
 func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutation) (domain.MutationReceipt, error) {
 	if kernel.StateStore == nil {
 		return domain.MutationReceipt{}, fmt.Errorf("transaction state store is required")
@@ -199,7 +223,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 		Phase:            ReceiptPhaseStateCommitted,
 	}
 	client.Receipts = append(client.Receipts, receipt)
-	client.NativeObjects = append([]domain.NativeObjectOwnership(nil), mutation.NativeObjects...)
+	client.NativeObjects = committedDirectoryObjects(beforeState, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
 	client.Materialization = domain.MaterializationMaterialized
 	client.Activation = mutation.Activation
 	client.Authentication = mutation.Authentication
@@ -329,7 +353,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 			ActivePath: directoryReceipt.ActivePath, StagingPath: directoryReceipt.StagingPath, BackupPath: directoryReceipt.BackupPath,
 			BeforeDigest: mutation.BeforeDigest, AfterDigest: mutation.AfterDigest, Phase: ReceiptPhaseStateCommitted}
 		client.Receipts = append(client.Receipts, receipt)
-		client.NativeObjects = append([]domain.NativeObjectOwnership(nil), mutation.NativeObjects...)
+		client.NativeObjects = committedDirectoryObjects(before, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
 		client.Materialization, client.Activation, client.Authentication = domain.MaterializationMaterialized, mutation.Activation, mutation.Authentication
 		client.Policy, client.Verification = mutation.Policy, mutation.Verification
 		installation := state.Installations[installationIndex]
@@ -768,6 +792,17 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 		}
 		return false, fmt.Errorf("state save failed and reload matched neither exact old nor desired state: %w", initialErr)
 	}
+}
+
+// PersistStateDecision gives lifecycle state writes the same visibility and
+// durability handling as directory commit decisions.
+func (kernel Kernel) PersistStateDecision(before, desired domain.StateFileV2) error {
+	beforeJSON, err := marshalComparableState(before)
+	if err != nil {
+		return err
+	}
+	_, err = kernel.persistCommitDecision(desired, beforeJSON)
+	return err
 }
 
 func marshalComparableState(state domain.StateFileV2) ([]byte, error) {

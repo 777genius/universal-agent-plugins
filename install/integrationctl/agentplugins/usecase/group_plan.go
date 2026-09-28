@@ -120,6 +120,11 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 
 func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan) error {
 	clientID, managed := session.resolveGroupManagedBinding(target, &plan)
+	if managed != nil {
+		if err := validateNativeBinding(*managed, target.Client); err != nil {
+			return err
+		}
+	}
 	if session.replace {
 		describeMCPRemovals(&plan, managed)
 	}

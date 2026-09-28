@@ -115,6 +115,9 @@ func (session *removeManySession) buildInputs() error {
 		if !installationHasTarget(session.installation, target, session.opts.scope) {
 			return fmt.Errorf("plugin is not installed for target %q in %s scope; no target was changed", target, session.opts.scope)
 		}
+		if err := selectedDetectionError(target, session.detected); err != nil {
+			return err
+		}
 		client, ok := session.detected[target]
 		if !ok {
 			client = domain.DetectedClient{ClientID: target, DisplayName: string(target), Status: domain.DetectionNotDetected}

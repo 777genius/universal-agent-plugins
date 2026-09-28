@@ -244,6 +244,5 @@ func progressRowMatches(row, event domain.ClientID) bool {
 	if row == event {
 		return true
 	}
-	return (row == domain.ClientCopilot || row == domain.ClientVSCode) &&
-		(event == domain.ClientCopilot || event == domain.ClientVSCode)
+	return domain.SharesBackend(row, event)
 }

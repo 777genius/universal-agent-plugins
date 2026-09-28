@@ -112,6 +112,9 @@ func (session *repairSession) bindRepairClient(physicalID string) error {
 		client.Scope != string(session.input.Scope) || client.PhysicalArtifact != physicalID {
 		return fmt.Errorf("managed repair target identity does not match the selected binding")
 	}
+	if err := validateNativeBinding(client, session.input.Client); err != nil {
+		return err
+	}
 	session.client = client
 	session.result.Activation = lifecycleOutcome(client)
 	return session.validateRepairRevision()

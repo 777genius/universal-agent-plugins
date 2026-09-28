@@ -33,9 +33,9 @@ type Detector struct {
 	// An explicitly injected legacy probe overrides the OS probe. It cannot
 	// carry a profile environment, so clients requiring one remain unprobed.
 	// Use ProbeVersionWithEnvironment and leave ProbeVersion nil for those clients.
-	ProbeVersion func(context.Context, string) (string, error)
-	VersionTimeout              time.Duration
-	TargetedVersionTimeout      time.Duration
+	ProbeVersion           func(context.Context, string) (string, error)
+	VersionTimeout         time.Duration
+	TargetedVersionTimeout time.Duration
 	// Registry supplies the client adapters that know where each client keeps
 	// its surfaces. It is injected by the composition root and never defaulted
 	// to "every client": that would link every adapter into any binary that
@@ -69,13 +69,13 @@ func NewOS(homeDir string) Detector {
 			userApplications,
 			"/usr/local/share/applications", "/usr/share/applications",
 		),
-		LookPath:                   exec.LookPath,
-		Lstat:                      os.Lstat,
-		ReadDir:                    os.ReadDir,
-		EvalSymlinks:               filepath.EvalSymlinks,
+		LookPath:                    exec.LookPath,
+		Lstat:                       os.Lstat,
+		ReadDir:                     os.ReadDir,
+		EvalSymlinks:                filepath.EvalSymlinks,
 		ProbeVersionWithEnvironment: probeExecutableVersionWithEnvironment,
-		VersionTimeout:             2 * time.Second,
-		TargetedVersionTimeout:     10 * time.Second,
+		VersionTimeout:              2 * time.Second,
+		TargetedVersionTimeout:      10 * time.Second,
 	}
 }
 
@@ -132,7 +132,15 @@ func (detector Detector) detect(ctx context.Context, probeVersion bool, selected
 	for _, adapter := range adapters {
 		client, err := detector.detectClient(ctx, host, adapter, probe(adapter.ID()))
 		if err != nil {
-			return nil, fmt.Errorf("detect %s: %w", adapter.ID(), err)
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			client.Status = domain.DetectionNotDetected
+			client.Version = ""
+			client.Surfaces = nil
+			client.ExecutablePath = ""
+			client.ConfigRoot = ""
+			client.DetectionError = fmt.Errorf("detect %s: %w", adapter.ID(), err)
 		}
 		result = append(result, client)
 	}

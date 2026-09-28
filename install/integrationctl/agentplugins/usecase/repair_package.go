@@ -169,7 +169,7 @@ func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery,
 }
 
 func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelivery) (AddResult, error) {
-	outcome, activationErr := session.service.Activator.Activate(session.ctx, domain.ActivationRequest{
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan,
 		Delivery: domain.StagedDelivery{
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase,
@@ -182,7 +182,7 @@ func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelive
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome
-	if _, updateErr := session.service.updateLifecycle(session.installation.InstallationID, session.clientKey, outcome); updateErr != nil {
+	if _, updateErr := session.service.updateActivationResult(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects); updateErr != nil {
 		if activationErr != nil {
 			return session.result, fmt.Errorf("reapply repaired native state: %w; persist verification state: %w", activationErr, updateErr)
 		}

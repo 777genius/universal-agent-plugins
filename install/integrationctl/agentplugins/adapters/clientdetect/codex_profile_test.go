@@ -65,7 +65,7 @@ func TestCodexHomeSymlinksAndInvalidPaths(t *testing.T) {
 	for _, bad := range []string{" ", "\t", "bad\nroot", "bad\x00root", file, filepath.Join(file, "child"), string(filepath.Separator)} {
 		d := codexDetector(t, base)
 		d.Environment["CODEX_HOME"] = bad
-		if got, err := d.Detect(context.Background()); err == nil { t.Fatalf("invalid root %q fell back: %+v", bad, got) }
+		assertInvalidCodexDetection(t, d)
 	}
 	alias := filepath.Join(base, "alias")
 	if err := os.Symlink(target, alias); err != nil { t.Skipf("symlinks unavailable: %v", err) }
@@ -82,12 +82,20 @@ func TestCodexHomeSymlinksAndInvalidPaths(t *testing.T) {
 		if err := os.Symlink(dest, link); err != nil { t.Fatal(err) }
 		d := codexDetector(t, base)
 		d.Environment["CODEX_HOME"] = link
-		if _, err := d.Detect(context.Background()); err == nil { t.Fatalf("accepted %s", name) }
+		assertInvalidCodexDetection(t, d)
 	}
 	d := codexDetector(t, base)
 	d.Environment["CODEX_HOME"] = target
 	d.Lstat = func(string) (os.FileInfo, error) { return nil, os.ErrPermission }
-	if _, err := d.Detect(context.Background()); err == nil { t.Fatal("permission error fell back") }
+	assertInvalidCodexDetection(t, d)
+}
+
+func assertInvalidCodexDetection(t *testing.T, detector Detector) {
+	t.Helper()
+	got, err := detector.Detect(context.Background())
+	if err != nil || len(got) != 1 || got[0].Status != domain.DetectionNotDetected || got[0].DetectionError == nil || got[0].ConfigRoot != "" || got[0].ExecutablePath != "" {
+		t.Fatalf("invalid Codex profile gained authority or interrupted detection: %+v, %v", got, err)
+	}
 }
 
 func TestCodexVersionProcessUsesFrozenProfile(t *testing.T) {

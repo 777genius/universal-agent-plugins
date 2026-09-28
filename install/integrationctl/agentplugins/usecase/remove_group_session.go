@@ -105,6 +105,9 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 	if err != nil {
 		return err
 	}
+	if err := validateNativeBinding(client, targetInput.Client); err != nil {
+		return err
+	}
 	session.result.Targets[targetIndex] = RemoveResult{
 		InstallationID:   session.installation.InstallationID,
 		Plugin:           session.installation.DeclaredName,

@@ -5,12 +5,42 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+func TestPublicS2DirectoryReplacementRetainsConfirmedExternalReceipts(t *testing.T) {
+	kernel, mutation, store := transactionFixture(t, "retain-native-op")
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := onlyClient(state.Installations[0])
+	previous := domain.NativeObjectOwnership{ObjectID: "external-skill", Kind: "gemini_skill", LogicalName: "skill", ManagedDigest: "sha256:old", Path: filepath.Join(t.TempDir(), "skill")}
+	client.NativeObjects = []domain.NativeObjectOwnership{previous}
+	state.Installations[0].Clients[client.ClientBindingID] = client
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	mutation.DesiredState = state
+	mutation.NativeObjects = []domain.NativeObjectOwnership{{ObjectID: "managed-package", Kind: "managed_package_directory", ManagedDigest: "sha256:new"}, {ObjectID: previous.ObjectID, Kind: previous.Kind, LogicalName: previous.LogicalName, ManagedDigest: "sha256:desired", Path: previous.Path}}
+	if _, err := kernel.ApplyDirectory(context.Background(), mutation); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := onlyClient(persisted.Installations[0]).NativeObjects
+	want := []domain.NativeObjectOwnership{mutation.NativeObjects[0], previous}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("confirmed receipts after package-only commit = %+v, want %+v", got, want)
+	}
+}
 
 func TestApplyDirectoryCommitsNativeTreeAndStateReceipt(t *testing.T) {
 	t.Parallel()

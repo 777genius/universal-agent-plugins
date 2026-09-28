@@ -42,17 +42,30 @@ func (service Service) resume(
 		result.RequiresConfirmation = true
 		return result, nil
 	}
-	delivery := domain.StagedDelivery{
-		ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot,
-		ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client),
-		NativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return result, err
 	}
-	outcome, activationErr := service.Activator.Activate(ctx, domain.ActivationRequest{
+	var installation domain.Installation
+	for _, item := range state.Installations {
+		if item.InstallationID == installationID {
+			installation = item
+			break
+		}
+	}
+	delivery, complete, err := service.activeNativeDelivery(ctx, input, result.Plan, installation, client)
+	if err != nil {
+		return result, err
+	}
+	if client.NativeActivationAttempt != "" {
+		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", client.NativeActivationAttempt)
+	}
+	outcome, activationErr := service.activateWithNativeAttempt(ctx, installationID, clientBindingID, domain.ActivationRequest{
 		Client: input.Client, Plan: result.Plan, Delivery: delivery,
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
-		VerifyOnly:            true, ActivationComplete: input.ActivationComplete,
+		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
 	})
 	// Authentication completion is a separate phase. Client installation/list
 	// evidence must never silently complete it.
@@ -68,13 +81,15 @@ func (service Service) resume(
 	}
 	result.Activation = outcome
 	if activationErr != nil && outcome.Activation == "" {
+		effect, objects := outcome.NativeEffect, outcome.NativeObjects
 		outcome = domain.ActivationOutcome{
 			Activation: domain.ActivationFailed, Authentication: result.Plan.Authentication,
 			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			NativeEffect: effect, NativeObjects: objects,
 		}
 		result.Activation = outcome
 	}
-	changed, updateErr := service.updateLifecycle(installationID, clientBindingID, outcome)
+	changed, updateErr := service.updateActivationResult(installationID, clientBindingID, outcome, activationErr, client.NativeObjects)
 	result.Mutated = changed
 	if updateErr != nil {
 		if activationErr != nil {
@@ -85,7 +100,7 @@ func (service Service) resume(
 	if activationErr != nil {
 		return result, activationErr
 	}
-	result.NoChange = !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
+	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
 	return result, nil
 }
 
@@ -155,6 +170,17 @@ func (service Service) updateLifecycle(installationID, clientBindingID string, o
 }
 
 func (service Service) updateActivationResult(installationID, clientBindingID string, outcome domain.ActivationOutcome, activationErr error, previousNativeObjects []domain.NativeObjectOwnership) (bool, error) {
+	switch outcome.NativeEffect {
+	case domain.NativeEffectCommitted:
+		confirmed := append([]domain.NativeObjectOwnership(nil), outcome.NativeObjects...)
+		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, &confirmed, true, true)
+	case domain.NativeEffectUnchanged:
+		prior := append([]domain.NativeObjectOwnership(nil), previousNativeObjects...)
+		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, &prior, true, true)
+	case domain.NativeEffectUncertain:
+		return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, nil, false, false)
+	}
+	// Legacy non-native activators have no native effect contract.
 	if activationErr == nil {
 		return service.updateLifecycle(installationID, clientBindingID, outcome)
 	}
@@ -163,6 +189,10 @@ func (service Service) updateActivationResult(installationID, clientBindingID st
 }
 
 func (service Service) updateLifecycleAndNativeObjects(installationID, clientBindingID string, outcome domain.ActivationOutcome, nativeObjects *[]domain.NativeObjectOwnership, preserveCommittedPackage bool) (bool, error) {
+	return service.updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID, outcome, nativeObjects, preserveCommittedPackage, false)
+}
+
+func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID, clientBindingID string, outcome domain.ActivationOutcome, nativeObjects *[]domain.NativeObjectOwnership, preserveCommittedPackage, clearAttempt bool) (bool, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
 		return false, err
@@ -179,14 +209,21 @@ func (service Service) updateLifecycleAndNativeObjects(installationID, clientBin
 		if err != nil {
 			return false, err
 		}
-		if lifecycleOutcomeUnchanged(client, outcome, nativeObjects) {
+		materializationChanged := outcome.NativeEffect == domain.NativeEffectCommitted && client.Materialization != domain.MaterializationMaterialized
+		if lifecycleOutcomeUnchanged(client, outcome, nativeObjects) && (!clearAttempt || client.NativeActivationAttempt == "") && !materializationChanged {
 			return false, nil
 		}
 		applyLifecycleOutcome(&client, outcome, nativeObjects, service.now())
+		if materializationChanged {
+			client.Materialization = domain.MaterializationMaterialized
+		}
+		if clearAttempt {
+			client.NativeActivationAttempt = ""
+		}
 		installation.Clients[clientBindingID] = client
 		installation.UpdatedAt = client.UpdatedAt
 		state.Installations[installationIndex] = installation
-		if err := service.StateStore.Save(state); err != nil {
+		if err := service.persistLifecycleState(state); err != nil {
 			return false, err
 		}
 		return true, nil

@@ -11,6 +11,8 @@
       "LocalActions": [
         "open ChatGPT Plugins and install demo from the prepared marketplace at \u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab, then confirm it is enabled in a new chat"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "install the prepared skills-only plugin from ChatGPT Plugins, then confirm it is enabled in a new chat"
@@ -35,6 +37,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
       "Verification": "installation_verified"
@@ -50,6 +54,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "reload the Cline MCP view in VS Code, or start a new Cline CLI process"
@@ -76,6 +82,8 @@
       "LocalActions": [
         "the `\u003croot\u003e/bin/codex plugin list --json` output contract was not recognized; inspect demo manually"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "confirm the managed plugin is installed and enabled in Codex"
@@ -101,6 +109,8 @@
       "LocalActions": [
         "the `\u003croot\u003e/bin/copilot plugin list` output contract was not recognized; inspect demo manually"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "confirm the managed plugin is installed and enabled in GitHub Copilot"
@@ -120,6 +130,8 @@
       "LocalActions": [
         "open Cursor and verify the plugin from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible and enabled"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "confirm that the plugin is visible and enabled in Cursor"
@@ -137,6 +149,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"
@@ -163,6 +177,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
       "Verification": "installation_verified"
@@ -178,6 +194,8 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "restart OpenCode to load the installed plugin"
@@ -203,6 +221,8 @@
       "LocalActions": [
         "the `\u003croot\u003e/bin/vscode plugin list` output contract was not recognized; inspect demo manually"
       ],
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "confirm the managed plugin is installed and enabled in GitHub Copilot"
@@ -222,6 +242,8 @@
       "LocalActions": [
         "Windsurf: import MCP servers from \u003croot\u003e/managed/clients/windsurf/demo-0123456789ab/mcp.json; Devin cloud-synced configuration is never changed automatically"
       ],
+      "NativeEffect": "unchanged",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "select one legacy Windsurf channel and add the prepared MCP servers manually"

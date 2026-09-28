@@ -157,7 +157,7 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 }
 
 func (session *applySession) activateCommitted(delivery domain.StagedDelivery, previousClient domain.ClientBinding) (AddResult, error) {
-	outcome, activationErr := session.service.Activator.Activate(session.ctx, domain.ActivationRequest{
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, session.clientBindingID, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan, Delivery: domain.StagedDelivery{
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath,
 			ArtifactDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects,
@@ -168,9 +168,11 @@ func (session *applySession) activateCommitted(delivery domain.StagedDelivery, p
 	})
 	session.result.Activation = outcome
 	if activationErr != nil && outcome.Activation == "" {
+		effect, objects := outcome.NativeEffect, outcome.NativeObjects
 		outcome = domain.ActivationOutcome{
 			Activation: domain.ActivationFailed, Authentication: session.plan.Authentication,
 			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			NativeEffect: effect, NativeObjects: objects,
 		}
 		session.result.Activation = outcome
 	}

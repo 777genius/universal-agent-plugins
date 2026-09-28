@@ -23,6 +23,13 @@ type Projector interface {
 	Project(ctx context.Context, in ProjectionInput) ([]domain.NativeObjectOwnership, error)
 }
 
+// ActiveNativeProjector reconstructs the desired native ownership from an
+// already committed package without writing into its tree. The stager verifies
+// that tree before invoking this client-owned capability.
+type ActiveNativeProjector interface {
+	ProjectActiveNative(context.Context, string, domain.PackageEnvelope, domain.DeliveryPlan, string) ([]domain.NativeObjectOwnership, error)
+}
+
 // ProjectionInput is everything a projector is allowed to see. StagingPath is
 // the tree to write into; Plan.ActivePath is the future location the projection
 // has to encode, and the two are deliberately different.

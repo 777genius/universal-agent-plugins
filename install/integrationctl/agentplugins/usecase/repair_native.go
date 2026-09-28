@@ -7,22 +7,29 @@ import (
 )
 
 func (session *repairSession) repairNative() (AddResult, error) {
+	delivery, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.installation, session.client)
+	if err != nil {
+		return session.result, err
+	}
 	if session.input.Confirmed && !session.input.DryRun {
 		if err := session.service.prepareExistingRuntime(session.ctx, session.input.Envelope, session.plan, session.installation, session.client); err != nil {
 			return session.result, fmt.Errorf("prepare installed MCP runtime before repair: %w", err)
 		}
+	}
+	if !complete {
+		return session.reapplyIntactNative(delivery)
 	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
 	if clientVerifyErr != nil {
 		if !nativeLifecycleClient(session.input.Client.ClientID) {
 			return session.result, clientVerifyErr
 		}
-		return session.reapplyIntactNative(clientVerifyErr)
+		return session.reapplyIntactNative(delivery)
 	}
 	return session.correctIntactLifecycle(verified)
 }
 
-func (session *repairSession) reapplyIntactNative(clientVerifyErr error) (AddResult, error) {
+func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery) (AddResult, error) {
 	// The package bytes are intact but an owned native projection is not.
 	// A confirmed repair may reconstruct an absent exact-owned object. The
 	// provider still observes the live object before any effect and rejects
@@ -34,12 +41,7 @@ func (session *repairSession) reapplyIntactNative(clientVerifyErr error) (AddRes
 		session.result.RequiresConfirmation = true
 		return session.result, nil
 	}
-	delivery := domain.StagedDelivery{
-		ClientID: session.input.Client.ClientID, OwnedBase: session.result.Plan.TargetRoot,
-		ActivePath: session.client.TargetLocator, ArtifactDigest: session.expectedDigest,
-		NativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
-	}
-	outcome, activationErr := session.service.Activator.Activate(session.ctx, domain.ActivationRequest{
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.result.Plan, Delivery: delivery,
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
 		BackendExecutable:     session.input.BackendExecutable,
@@ -47,20 +49,14 @@ func (session *repairSession) reapplyIntactNative(clientVerifyErr error) (AddRes
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome
+	changed, err := session.service.updateActivationResult(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects)
+	if err != nil {
+		return session.result, fmt.Errorf("persist repaired native lifecycle: %w", err)
+	}
+	session.result.Mutated = changed
 	if activationErr != nil {
 		return session.result, fmt.Errorf("repair managed native state: %w", activationErr)
 	}
-	repairedClient := session.client
-	repairedClient.Materialization = domain.MaterializationMaterialized
-	repairedClient.Activation = outcome.Activation
-	repairedClient.Authentication = outcome.Authentication
-	repairedClient.Policy = outcome.Policy
-	repairedClient.Verification = outcome.Verification
-	if err := session.persistRepair(repairedClient); err != nil {
-		return session.result, fmt.Errorf("persist repaired native lifecycle: %w", err)
-	}
-	session.result.Mutated = true
-	_ = clientVerifyErr
 	return session.result, nil
 }
 

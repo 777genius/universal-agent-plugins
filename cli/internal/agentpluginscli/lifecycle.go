@@ -726,6 +726,9 @@ func selectBoundClient(
 		if _, ok := bound[clientID]; !ok {
 			return domain.DetectedClient{}, fmt.Errorf("plugin is not installed for target %q in %s scope", clientID, opts.scope)
 		}
+		if err := selectedDetectionError(clientID, detectedMap); err != nil {
+			return domain.DetectedClient{}, err
+		}
 		client, ok := detectedMap[clientID]
 		if !ok {
 			client = domain.DetectedClient{ClientID: clientID, DisplayName: string(clientID), Status: domain.DetectionNotDetected}

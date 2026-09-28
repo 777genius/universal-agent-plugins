@@ -47,11 +47,11 @@ func ApplyOpenCodeNativeWithOps(configRoot, activePath string, previous, desired
 func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename openCodeRenameFunc, removeAll func(string) error) (resultErr error) {
 	prepared, err := prepareOpenCodeNativeApply(configRoot, activePath, previous, desired, kernel, rename, removeAll)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	requests, err := openCodeMCPRequests(prepared.kernel, prepared.projection, prepared.previous, prepared.desired)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	skills, err := installOpenCodeSkillsWithOps(configRoot, activePath, prepared.previous, prepared.desired, prepared.rename, prepared.removeAll)
 	if err != nil {
@@ -62,10 +62,18 @@ func applyOpenCodeNativeWithKernelAndOps(configRoot, activePath string, previous
 		if !committed {
 			if err := skills.rollback(); err != nil {
 				resultErr = errors.Join(resultErr, fmt.Errorf("rollback OpenCode skills: %w", err))
+			} else if knownOpenCodePreWriteError(resultErr) {
+				resultErr = &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: resultErr}
 			}
 		}
 	}()
 	return commitOpenCodeNative(prepared.kernel, requests, skills, prepared.desired, &committed)
+}
+
+func knownOpenCodePreWriteError(err error) bool {
+	var namespace *nativeconfig.OpenCodeNamespaceConflict
+	return errors.As(err, &namespace) || errors.Is(err, nativeconfig.ErrOpenCodeV2Namespace) ||
+		errors.Is(err, nativeconfig.ErrCollision) || errors.Is(err, nativeconfig.ErrNotOwned)
 }
 
 type openCodeNativeApply struct {

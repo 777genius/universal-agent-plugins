@@ -9,6 +9,11 @@ import (
 )
 
 var _ clients.Projector = (*Adapter)(nil)
+var _ clients.ActiveNativeProjector = (*Adapter)(nil)
+
+func (*Adapter) ProjectActiveNative(_ context.Context, root string, _ domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+	return BuildWindsurfNativeObjects(root, plan)
+}
 
 // Project copies the managed stdio launcher when needed, writes Windsurf MCP,
 // and records the objects it owns.

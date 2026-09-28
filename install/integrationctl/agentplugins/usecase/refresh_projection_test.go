@@ -128,8 +128,12 @@ func (activator *nativeRefreshRetryActivator) Activate(_ context.Context, reques
 	}
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
 	if activator.calls == 1 {
+		outcome.NativeEffect = domain.NativeEffectUnchanged
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 		return outcome, fmt.Errorf("injected native activation failure")
 	}
+	outcome.NativeEffect = domain.NativeEffectCommitted
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	return outcome, nil
 }
 

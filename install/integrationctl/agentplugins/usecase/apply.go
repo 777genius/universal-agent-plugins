@@ -182,6 +182,9 @@ func (session *applySession) resolveBinding() error {
 	session.registrationMigration = session.existing && session.input.Envelope.LocalChatGPTMapping != nil && session.state.Installations[session.installationIndex].LocalChatGPTMapping != nil && session.state.Installations[session.installationIndex].LocalChatGPTMapping.IsLegacyContext7Registration() && *session.state.Installations[session.installationIndex].LocalChatGPTMapping != *session.input.Envelope.LocalChatGPTMapping
 	if session.isMaterialized {
 		binding := session.state.Installations[session.installationIndex].Clients[session.clientBindingID]
+		if err := validateNativeBinding(binding, session.input.Client); err != nil {
+			return err
+		}
 		session.managedBinding = &binding
 	}
 	if session.replace {
@@ -293,6 +296,16 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 	if verifyLabel != "" {
 		if err := session.service.verifyManagedTarget(session.ctx, session.input.Client, session.input.Scope, current, verifyLabel); err != nil {
 			return true, session.result, err
+		}
+	}
+	if nativeLifecycleClient(session.input.Client.ClientID) {
+		_, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
+		if err != nil {
+			return true, session.result, err
+		}
+		if !complete || current.NativeActivationAttempt != "" {
+			result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
+			return true, result, err
 		}
 	}
 	return session.persistReadOnlyObservation(current)

@@ -32,6 +32,8 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return domain.ActivationOutcome{}, err
 	}
 	outcome := shared.StartedActivation(request)
+	outcome.NativeEffect = domain.NativeEffectUnchanged
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 	automatic := request.Plan.InstallIntent == domain.InstallIntentAutomatic &&
 		strings.TrimSpace(request.Client.ConfigRoot) != "" &&
 		len(WindsurfObjects(request.Delivery.NativeObjects)) > 0
@@ -56,9 +58,12 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	}
 	if err := ActivateWindsurfNativeWithKernel(ctx, request, env.NativeConfig); err != nil {
 		if !shared.CommittedNativeCleanup(&outcome, err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
 			return shared.FailedActivation(outcome, "retry the managed Windsurf MCP installation", err)
 		}
 	}
+	outcome.NativeEffect = domain.NativeEffectCommitted
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	outcome.Activation = domain.ActivationActive
 	outcome.Verification = domain.VerificationInstalled
 	outcome.UserActions = append(outcome.UserActions, "refresh MCP servers in Windsurf before first use")

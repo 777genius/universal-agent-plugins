@@ -39,6 +39,9 @@ func (session *removeSession) loadRemoveTarget() error {
 	if err != nil {
 		return err
 	}
+	if err := validateNativeBinding(client, session.input.Client); err != nil {
+		return err
+	}
 	if err := validatePurgeCoversActiveBindings(session.input.PurgeData, installation, clientKey); err != nil {
 		return err
 	}
@@ -60,6 +63,12 @@ func (session *removeSession) loadRemoveTarget() error {
 }
 
 func (session *removeSession) deactivateRemoveTarget() error {
+	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID) && session.input.Confirmed && !session.input.DryRun
+	if nativeAttempt {
+		if err := session.service.beginNativeAttempt(session.installation.InstallationID, session.clientKey); err != nil {
+			return err
+		}
+	}
 	deactivation, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
 		Client: session.input.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: session.client.Activation, Interactive: session.input.Interactive,
@@ -71,6 +80,11 @@ func (session *removeSession) deactivateRemoveTarget() error {
 		NativeObjects:       append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
 	})
 	session.result.Deactivation = deactivation
+	if err == nil && nativeAttempt {
+		if persistErr := session.service.completeNativeRemoval(session.installation.InstallationID, session.clientKey, deactivation.ExternalRemovalComplete); persistErr != nil {
+			return persistErr
+		}
+	}
 	return err
 }
 
@@ -85,15 +99,18 @@ func (session *removeSession) commitRemove() (RemoveResult, error) {
 }
 
 func (session *removeSession) reloadAfterExternalRemoval() error {
-	if !session.result.Deactivation.ExternalRemovalComplete || session.client.Activation != domain.ActivationActive {
-		return nil
-	}
-	if err := session.service.markDeactivated(session.state, session.installationIndex, session.clientKey); err != nil {
-		return err
-	}
 	state, err := session.service.StateStore.Load()
 	if err != nil {
 		return err
+	}
+	if session.result.Deactivation.ExternalRemovalComplete && !nativeLifecycleClient(session.input.Client.ClientID) && session.client.Activation == domain.ActivationActive {
+		if err := session.service.markDeactivated(state, session.installationIndex, session.clientKey); err != nil {
+			return err
+		}
+		state, err = session.service.StateStore.Load()
+		if err != nil {
+			return err
+		}
 	}
 	session.state = state
 	session.installation = state.Installations[session.installationIndex]

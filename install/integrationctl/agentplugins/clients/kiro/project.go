@@ -15,6 +15,11 @@ import (
 )
 
 var _ clients.Projector = (*Adapter)(nil)
+var _ clients.ActiveNativeProjector = (*Adapter)(nil)
+
+func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+	return BuildNativeObjects(root, envelope, plan)
+}
 
 // Project writes Kiro's MCP document and records the native objects it owns.
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {

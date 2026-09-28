@@ -189,7 +189,7 @@ func packedPlanner(t *testing.T, p packedProject) []map[string]any {
 			t.Fatal("missing structured plan")
 		}
 		wantStatus := string(domain.PlanManualActivationRequired)
-		if client.ClientID == domain.ClientClaude {
+		if client.ClientID == domain.ClientClaude || client.ClientID == domain.ClientCodex {
 			wantStatus = string(domain.PlanReady)
 		}
 		for _, plan := range plans {
