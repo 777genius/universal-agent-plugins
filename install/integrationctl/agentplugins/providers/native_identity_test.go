@@ -236,7 +236,7 @@ func TestNativeIdentityCodexAbsentRecoveryMatchesRealCLIFailureThenSucceedsAfter
 	plan.NativeRegistryRoot = profile
 	plan.NativeRegistryExecutable = "/test/bin/codex"
 	marketplace := shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
-	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	managed := &domain.ClientBinding{TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID, NativeProfileRoot: profile, NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
 	client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: profile}
 
 	failingRunner := &identityRunner{result: legacyports.CommandResult{ExitCode: 1, Stderr: []byte("Error: failed to load marketplace snapshot for " + marketplace + "\n")}}
