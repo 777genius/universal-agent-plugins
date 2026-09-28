@@ -66,7 +66,8 @@ the publishable version from the approved tag; do not manually bump it.
    receipt artifact and ZIP SHA-256, then compares that receipt with a fresh
    verification of the live nine-asset draft and attestations. Approve the
    promotion environment deployment only after this check succeeds. The job
-   repeats the same verification immediately before publishing the exact draft.
+   repeats the same verification immediately before publishing by the verified
+   numeric release ID, then confirms that the tag still resolves to that ID.
    It does not rebuild binaries or rerun native platform proofs.
 8. After authorized promotion, verify the resulting public release contains six platform binaries,
    `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and

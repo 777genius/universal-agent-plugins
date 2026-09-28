@@ -161,7 +161,8 @@ def main():
         parser.add_argument(f"--{name}", required=True)
     for name in ("run-id", "run-attempt"):
         parser.add_argument(f"--{name}", required=True, type=int)
-    verify(parser.parse_args())
+    live = verify(parser.parse_args())
+    print(live["release"]["id"])
 
 
 if __name__ == "__main__":

@@ -441,10 +441,14 @@ jobs:
           QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}
           QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}
         run: |
-          python3 scripts/reuse-agentplugins-verified-draft.py \
+          release_id="$(python3 scripts/reuse-agentplugins-verified-draft.py \
             --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "${FROZEN_COMMIT}" \
             --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
-            --source "${GITHUB_WORKSPACE}"
-          gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            --jq 'select(.draft == false and .prerelease == false) | .tag_name' | grep -Fx -- "${TAG}"
+            --source "${GITHUB_WORKSPACE}")"
+          [[ "${release_id}" =~ ^[1-9][0-9]*$ ]]
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            -F draft=false | jq -e --arg tag "${TAG}" --argjson id "${release_id}" \
+            '.id == $id and .tag_name == $tag and .draft == false and .prerelease == false'
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | \
+            jq -e --arg tag "${TAG}" --argjson id "${release_id}" \
+            '.id == $id and .tag_name == $tag and .draft == false and .prerelease == false'
