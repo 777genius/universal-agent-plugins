@@ -22,7 +22,7 @@ class DraftTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         source = self.root / "source"
         script = source / "npm/agentplugins/scripts/release-assets.js"
         script.parent.mkdir(parents=True)
