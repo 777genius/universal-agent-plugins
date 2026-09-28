@@ -7,8 +7,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"golang.org/x/term"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 )
 
 func terminalQueuedInput(ctx context.Context, f *os.File) (queued []byte, submitted bool, err error) {

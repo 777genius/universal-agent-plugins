@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/sys/unix"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func TestBoardPTYCellSizingAndResize(t *testing.T) {

@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
-	"golang.org/x/sys/unix"
 )
 
 func TestCanonicalConsentPTYBoundary(t *testing.T) {

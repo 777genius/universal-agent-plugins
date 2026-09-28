@@ -67,28 +67,8 @@ func (service Service) resume(
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
 		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
 	})
-	// Authentication completion is a separate phase. Client installation/list
-	// evidence must never silently complete it.
-	if activationErr == nil && !service.clientVerifierAvailable(input, result.Plan) && client.Activation == domain.ActivationActive && client.Verification == domain.VerificationInstalled {
-		outcome.Activation = client.Activation
-		outcome.Verification = client.Verification
-	}
-	if (client.Authentication == domain.AuthenticationPending || client.Authentication == domain.AuthenticationNotChecked) && input.AuthComplete {
-		outcome.Authentication = domain.AuthenticationComplete
-		outcome.AuthenticationAttested = true
-	} else if client.Authentication != "" {
-		outcome.Authentication = client.Authentication
-	}
+	outcome = service.resumeActivationOutcome(input, result.Plan, client, outcome, activationErr)
 	result.Activation = outcome
-	if activationErr != nil && outcome.Activation == "" {
-		effect, objects := outcome.NativeEffect, outcome.NativeObjects
-		outcome = domain.ActivationOutcome{
-			Activation: domain.ActivationFailed, Authentication: result.Plan.Authentication,
-			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
-			NativeEffect: effect, NativeObjects: objects,
-		}
-		result.Activation = outcome
-	}
 	changed, updateErr := service.updateActivationResult(installationID, clientBindingID, outcome, activationErr, client.NativeObjects)
 	result.Mutated = changed
 	if updateErr != nil {
@@ -102,6 +82,30 @@ func (service Service) resume(
 	}
 	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
 	return result, nil
+}
+
+func (service Service) resumeActivationOutcome(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, outcome domain.ActivationOutcome, activationErr error) domain.ActivationOutcome {
+	// Authentication completion is a separate phase. Client installation/list
+	// evidence must never silently complete it.
+	if activationErr == nil && !service.clientVerifierAvailable(input, plan) && client.Activation == domain.ActivationActive && client.Verification == domain.VerificationInstalled {
+		outcome.Activation = client.Activation
+		outcome.Verification = client.Verification
+	}
+	if (client.Authentication == domain.AuthenticationPending || client.Authentication == domain.AuthenticationNotChecked) && input.AuthComplete {
+		outcome.Authentication = domain.AuthenticationComplete
+		outcome.AuthenticationAttested = true
+	} else if client.Authentication != "" {
+		outcome.Authentication = client.Authentication
+	}
+	if activationErr != nil && outcome.Activation == "" {
+		effect, objects := outcome.NativeEffect, outcome.NativeObjects
+		outcome = domain.ActivationOutcome{
+			Activation: domain.ActivationFailed, Authentication: plan.Authentication,
+			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			NativeEffect: effect, NativeObjects: objects,
+		}
+	}
+	return outcome
 }
 
 // Unchecked authentication is not an outstanding action by itself. Report

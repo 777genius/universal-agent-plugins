@@ -417,12 +417,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -771,12 +771,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -1125,12 +1125,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -1493,12 +1493,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -1861,12 +1861,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -2215,12 +2215,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -2642,12 +2642,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -3010,12 +3010,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -3364,12 +3364,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -3718,12 +3718,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -4085,12 +4085,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -4446,12 +4446,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -4814,12 +4814,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
@@ -5182,12 +5182,12 @@
         "sha256": "47947e8993581135caf6329f83f9d0d66214059f0a7a9ebce14f3a0dc49c22dd"
       },
       {
-        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
-        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
-      },
-      {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/opencode_runtime_notice.go",
         "sha256": "c213ce3f979273b1ee0f92e5ab07f287677fa996f7d2fc370bcde5d2d1c3636f"
+      },
+      {
+        "path": "cli/plugin-kit-ai/internal/agentpluginscli/outdated.go",
+        "sha256": "3ecf284023dfb158e6c1c60572a57da99062ff1c68a1ecf105db677e7cb1f723"
       },
       {
         "path": "cli/plugin-kit-ai/internal/agentpluginscli/output.go",
