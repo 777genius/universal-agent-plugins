@@ -32,22 +32,8 @@ func selectClient(
 	}
 	target := normalizeTarget(opts.target)
 	if target != "" {
-		if strings.EqualFold(strings.TrimSpace(opts.target), "openai") {
-			return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", opts.target)
-		}
-		client, ok := detectedMap[target]
-		if err := selectedDetectionError(target, detectedMap); err != nil {
-			return domain.DetectedClient{}, detectedMap, err
-		}
-		if !ok && plansWithoutHostPresence(target) {
-			client = syntheticUndetectedClient(target)
-			detectedMap[target] = client
-			ok = true
-		}
-		if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
-			return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q was not detected", opts.target)
-		}
-		return client, detectedMap, nil
+		client, err := selectExplicitClient(target, opts.target, detectedMap)
+		return client, detectedMap, err
 	}
 	if len(detected) == 0 {
 		return domain.DetectedClient{}, detectedMap, fmt.Errorf("no supported local AI client was detected; use --target chatgpt for ChatGPT, or install/detect another client")
@@ -73,6 +59,25 @@ func selectClient(
 		return domain.DetectedClient{}, detectedMap, fmt.Errorf("invalid client selection")
 	}
 	return detected[choice-1], detectedMap, nil
+}
+
+func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, error) {
+	if strings.EqualFold(strings.TrimSpace(rawTarget), "openai") {
+		return domain.DetectedClient{}, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", rawTarget)
+	}
+	client, ok := detectedMap[target]
+	if err := selectedDetectionError(target, detectedMap); err != nil {
+		return domain.DetectedClient{}, err
+	}
+	if !ok && plansWithoutHostPresence(target) {
+		client = syntheticUndetectedClient(target)
+		detectedMap[target] = client
+		ok = true
+	}
+	if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
+		return domain.DetectedClient{}, fmt.Errorf("target %q was not detected", rawTarget)
+	}
+	return client, nil
 }
 
 func normalizeTarget(value string) domain.ClientID {

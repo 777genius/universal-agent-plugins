@@ -98,7 +98,7 @@ var factoryPins = []sourcePin{
 	{"cli/internal/agentpluginscli/add.go", "edb3be30b0867880ada7b74ba50abfb51c01540b82e3e1dba7244179ba7ea371"},
 	{"cli/internal/agentpluginscli/add_multi.go", "8bc5e86af80f5e925c9640994f2b01db7cc78e5f365f8acaa7a24876948747c8"},
 	{"cli/internal/agentpluginscli/add_result.go", "80239b867bc8c9ca77642b12a32cdb6cb8246ee5425ade83233b33f7f13e4651"},
-	{"cli/internal/agentpluginscli/add_targets.go", "4359acc59e1cfd561d0216f300dea55466631f39049e7340d1983e718e52e86a"},
+	{"cli/internal/agentpluginscli/add_targets.go", "53d68946b4885e5851164408ff27a0e47100760716249b0fd288195e5b277a1a"},
 	{"cli/internal/agentpluginscli/app.go", "92292a21b1439655c60f15715aa13814492b3545ca6d2a35aa09304c02dc58fe"},
 	{"cli/internal/agentpluginscli/binding.go", "d642368e4f4d0ef8f228a6939fcf011751ce8d7804506c6fbffd5cb6fbfd0842"},
 	{"cli/internal/agentpluginscli/chatgpt_guidance.go", "7dacf7fcb0581cfff8f7aabfc85cd21cef15b93486376f31eba25ad39711e19a"},
