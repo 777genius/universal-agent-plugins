@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -71,13 +73,23 @@ func (manager PluginDataManager) EnsureData(ctx context.Context, installationID,
 }
 
 func (manager PluginDataManager) ValidateData(ctx context.Context, receipt domain.DataReceipt) error {
+	return manager.ValidateDataAt(ctx, receipt, receipt.Locator)
+}
+
+// ValidateDataAt reads a moved physical directory while keeping the original
+// logical locator in both the marker and the caller receipt. The ownership
+// digest binds that locator, not the temporary backup name.
+func (manager PluginDataManager) ValidateDataAt(ctx context.Context, receipt domain.DataReceipt, physicalPath string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if err := pathpolicy.RequireContainedChild(manager.Base, receipt.Locator); err != nil {
 		return fmt.Errorf("unsafe PLUGIN_DATA receipt: %w", err)
 	}
-	existing, err := manager.readOwned(receipt.Locator)
+	if err := pathpolicy.RequireContainedChild(manager.Base, physicalPath); err != nil {
+		return fmt.Errorf("unsafe PLUGIN_DATA physical path: %w", err)
+	}
+	existing, err := manager.readOwnedAt(physicalPath, receipt.Locator)
 	if err != nil {
 		return err
 	}
@@ -89,21 +101,52 @@ func (manager PluginDataManager) ValidateData(ctx context.Context, receipt domai
 }
 
 func (manager PluginDataManager) PurgeData(ctx context.Context, receipt domain.DataReceipt) error {
-	if err := manager.ValidateData(ctx, receipt); err != nil {
+	swap := dirswap.Manager{JournalDir: filepath.Join(manager.Base, ".agentplugins-data-operations")}
+	r, err := swap.Apply(ctx, dirswap.Input{
+		OperationID: "data-purge-" + rand.Text(), ClientBindingID: receipt.DataReceiptID, Sequence: 1,
+		OwnedBase: manager.Base, ActivePath: receipt.Locator, Remove: true,
+		VerifyActive: func(ctx context.Context, path string) error { return manager.ValidateDataAt(ctx, receipt, path) },
+	})
+	if err != nil {
+		if r.OperationID != "" {
+			if rollbackErr := swap.Rollback(context.Background(), r); rollbackErr != nil {
+				return fmt.Errorf("%w; rollback failed: %w", err, rollbackErr)
+			}
+		}
 		return err
 	}
-	return os.RemoveAll(receipt.Locator)
+	if err := swap.Commit(ctx, r); err != nil {
+		return err
+	}
+	// Remove only an empty journal directory; other in-flight purges retain it.
+	_ = os.Remove(swap.JournalDir)
+	return nil
 }
 
 func (manager PluginDataManager) readOwned(locator string) (domain.DataReceipt, error) {
-	info, err := os.Lstat(locator)
+	return manager.readOwnedAt(locator, locator)
+}
+
+func (manager PluginDataManager) readOwnedAt(physicalPath, logicalLocator string) (domain.DataReceipt, error) {
+	info, err := os.Lstat(physicalPath)
 	if err != nil {
 		return domain.DataReceipt{}, fmt.Errorf("inspect PLUGIN_DATA: %w", err)
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return domain.DataReceipt{}, fmt.Errorf("PLUGIN_DATA locator is not an owned directory")
 	}
-	body, err := os.ReadFile(filepath.Join(locator, dataOwnershipMarker))
+	markerPath := filepath.Join(physicalPath, dataOwnershipMarker)
+	if err := pathpolicy.RequireContainedChild(physicalPath, markerPath); err != nil {
+		return domain.DataReceipt{}, err
+	}
+	marker, err := os.Lstat(markerPath)
+	if err != nil {
+		return domain.DataReceipt{}, err
+	}
+	if !marker.Mode().IsRegular() {
+		return domain.DataReceipt{}, fmt.Errorf("PLUGIN_DATA ownership marker must be a regular file")
+	}
+	body, err := os.ReadFile(markerPath)
 	if err != nil {
 		return domain.DataReceipt{}, fmt.Errorf("read PLUGIN_DATA ownership marker: %w", err)
 	}
@@ -113,7 +156,7 @@ func (manager PluginDataManager) readOwned(locator string) (domain.DataReceipt, 
 	if err := decoder.Decode(&receipt); err != nil {
 		return domain.DataReceipt{}, fmt.Errorf("decode PLUGIN_DATA ownership marker: %w", err)
 	}
-	if receipt.State != domain.DataReceiptOwned || receipt.OwnershipDigest != dataOwnershipDigest(receipt.DataReceiptID, locator) {
+	if receipt.State != domain.DataReceiptOwned || receipt.Locator != logicalLocator || receipt.OwnershipDigest != dataOwnershipDigest(receipt.DataReceiptID, logicalLocator) {
 		return domain.DataReceipt{}, fmt.Errorf("invalid PLUGIN_DATA ownership marker")
 	}
 	return receipt, nil

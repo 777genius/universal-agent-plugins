@@ -76,8 +76,8 @@ func (session *removeGroupSession) buildDirectoryRemovals() ([]transaction.Direc
 			OperationID: operationID, OperationGroupID: session.groupID,
 			ClientBindingID: receipt.DataReceiptID, Sequence: 1, OwnedBase: filepath.Dir(receipt.Locator),
 			ActivePath: receipt.Locator, BeforeDigest: receipt.OwnershipDigest, Standalone: true,
-			Verify: func(verifyContext context.Context, _ string) error {
-				return pluginData.ValidateData(verifyContext, receipt)
+			Verify: func(verifyContext context.Context, path string) error {
+				return pluginData.ValidateDataAt(verifyContext, receipt, path)
 			},
 		})
 	}

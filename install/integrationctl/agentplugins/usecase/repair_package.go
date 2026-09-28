@@ -30,7 +30,7 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 	if err != nil {
 		return session.result, err
 	}
-	defer func() { _ = session.service.Stager.Discard(context.Background(), delivery) }()
+	defer func() { session.service.discardSettledDelivery(session.input.OperationID, delivery) }()
 	if err := session.service.verifyRepairPrecondition(session.ctx, session.target.ActivePath, session.expectedDigest, verification.Kind, beforeDigest); err != nil {
 		return session.result, err
 	}
@@ -138,6 +138,10 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 		OperationID: session.input.OperationID, InstallationID: session.installation.InstallationID, ClientBindingID: session.clientKey,
 		Sequence: nextSequence(session.client), OwnedBase: delivery.OwnedBase, ActivePath: session.target.ActivePath,
 		StagingPath: delivery.StagingPath, BeforeDigest: beforeDigest, AfterDigest: delivery.ArtifactDigest,
+		RequireAbsent: beforeDigest == "",
+		VerifyBefore: func(verifyContext context.Context, path string) error {
+			return session.service.Stager.Verify(verifyContext, path, beforeDigest)
+		},
 		NativeObjects: delivery.NativeObjects, Activation: verifiedState.Activation, Authentication: verifiedState.Authentication,
 		Policy: verifiedState.Policy, Verification: verifiedState.Verification, DesiredState: session.state,
 		Verify: func(verifyContext context.Context, activePath string) error {

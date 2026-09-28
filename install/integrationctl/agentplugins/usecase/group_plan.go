@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -126,6 +127,10 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 		return fmt.Errorf("update target %s is not installed", target.Client.ClientID)
 	}
 	session.result.Targets[targetIndex].Plan = plan
+	requireAbsent, err := session.reviewGroupDirectoryAbsence(plan, managed)
+	if err != nil {
+		return err
+	}
 	recovering, err := session.observePlannedGroupTarget(target, plan, managed)
 	if err != nil {
 		return fmt.Errorf("target %s identity preflight: %w", target.Client.ClientID, err)
@@ -146,7 +151,7 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	}
 	session.physical[session.collisionKey] = len(session.planned)
 	session.planned = append(session.planned, plannedGroupTarget{
-		input: target, plan: plan, resultIndexes: []int{targetIndex}, clientBindingID: clientID, managed: managed, noChange: noChange, recovering: recovering,
+		input: target, plan: plan, resultIndexes: []int{targetIndex}, clientBindingID: clientID, managed: managed, noChange: noChange, recovering: recovering, requireAbsent: requireAbsent || recovering,
 	})
 	return nil
 }
@@ -248,4 +253,18 @@ func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compa
 		}
 	}
 	return nil
+}
+
+func (session *groupSession) reviewGroupDirectoryAbsence(plan domain.DeliveryPlan, managed *domain.ClientBinding) (bool, error) {
+	if managed == nil {
+		return true, nil
+	}
+	if !session.input.Repair {
+		return false, nil
+	}
+	_, err := os.Lstat(plan.ActivePath)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	return false, err
 }

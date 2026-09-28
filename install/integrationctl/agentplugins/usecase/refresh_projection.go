@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 
@@ -23,7 +22,7 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 	if err != nil {
 		return session.result, err
 	}
-	defer func() { _ = session.service.Stager.Discard(context.Background(), delivery) }()
+	defer func() { session.service.discardSettledDelivery(session.input.OperationID, delivery) }()
 	pendingActivation := session.client.Activation == domain.ActivationPrepared || session.client.Activation == domain.ActivationFailed || session.client.Verification == domain.VerificationFailed
 	// A failed activation retains the prior external ownership. That difference
 	// from the staged desired ownership must not create another directory receipt.

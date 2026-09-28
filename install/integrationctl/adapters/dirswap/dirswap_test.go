@@ -226,7 +226,7 @@ func TestCrossParentStagingAtomicallyCommits(t *testing.T) {
 	manager := Manager{JournalDir: filepath.Join(root, "journal")}
 	receipt, err := manager.Apply(context.Background(), Input{
 		OperationID: "cross-parent", ClientBindingID: "binding-1", Sequence: 1,
-		OwnedBase: owned, ActivePath: active, StagingPath: staging,
+		OwnedBase: owned, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +253,7 @@ func TestCrossParentStagingRecoversRollbackAfterActivationCrash(t *testing.T) {
 	}}
 	if _, err := manager.Apply(context.Background(), Input{
 		OperationID: "cross-parent-crash", ClientBindingID: "binding-1", Sequence: 1,
-		OwnedBase: owned, ActivePath: active, StagingPath: staging,
+		OwnedBase: owned, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 	}); err == nil {
 		t.Fatal("fault was not injected")
 	}
@@ -279,7 +279,7 @@ func TestCrossParentStagingRejectsUnreservedOrForeignSibling(t *testing.T) {
 			writeBody(t, staging, "new")
 			if _, err := manager.Apply(context.Background(), Input{
 				OperationID: "reject-" + name, ClientBindingID: "binding-1", Sequence: 1,
-				OwnedBase: owned, ActivePath: active, StagingPath: staging,
+				OwnedBase: owned, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 			}); err == nil {
 				t.Fatal("unsafe cross-parent staging path was accepted")
 			}
@@ -378,7 +378,7 @@ func fixture(t *testing.T) (Manager, Input) {
 	writeBody(t, staging, "new")
 	return Manager{JournalDir: filepath.Join(root, "journal")}, Input{
 		OperationID: "operation-1", ClientBindingID: "binding-1", Sequence: 1,
-		OwnedBase: base, ActivePath: active, StagingPath: staging,
+		OwnedBase: base, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 	}
 }
 
@@ -401,4 +401,13 @@ func assertBody(t *testing.T, root, want string) {
 	if string(body) != want {
 		t.Fatalf("body = %q, want %q", body, want)
 	}
+}
+
+func verifyFixture(t *testing.T, path string) func(context.Context, string) error {
+	t.Helper()
+	identity, digest, err := publicationProof(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func(_ context.Context, candidate string) error { return matchesProof(candidate, identity, digest) }
 }

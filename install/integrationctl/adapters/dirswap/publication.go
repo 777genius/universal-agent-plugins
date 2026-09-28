@@ -95,63 +95,54 @@ func publicationProof(root string) (string, string, error) {
 	return identity, hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func matchesPublication(receipt Receipt, path string) error {
-	if receipt.PublishedIdentity == "" || receipt.PublishedDigest == "" {
-		return fmt.Errorf("directory rollback ownership evidence unavailable; recovery required")
+func matchesProof(path, expectedIdentity, expectedDigest string) error {
+	if expectedIdentity == "" || expectedDigest == "" {
+		return fmt.Errorf("directory ownership evidence unavailable for %q; recovery required", path)
 	}
 	identity, digest, err := publicationProof(path)
 	if err != nil {
-		return fmt.Errorf("verify directory rollback ownership: %w", err)
+		return fmt.Errorf("verify directory ownership at %q: %w", path, err)
 	}
-	if identity != receipt.PublishedIdentity || digest != receipt.PublishedDigest {
-		return fmt.Errorf("directory changed or replaced since staging; recovery required")
+	if identity != expectedIdentity || digest != expectedDigest {
+		return fmt.Errorf("directory changed or replaced at %q; recovery required", path)
 	}
 	return nil
 }
 
-func (manager Manager) rollbackAbsent(receipt Receipt, activeExists, backupExists bool) error {
-	if !activeExists && !backupExists {
-		return nil
-	}
-	if receipt.Operation != OperationSwap {
-		return fmt.Errorf("unexpected directory for absent removal; recovery required")
-	}
-	if backupExists {
-		// A crash may leave the provisional object quarantined before cleanup.
-		if err := matchesPublication(receipt, receipt.BackupPath); err != nil {
-			return err
-		}
-		if activeExists {
-			return fmt.Errorf("active directory appeared during rollback; recovery required")
-		}
-	} else {
-		if err := matchesPublication(receipt, receipt.ActivePath); err != nil {
-			return err
-		}
-		// Quarantine atomically before the final ownership check. A path replacement
-		// during the earlier hash is preserved, never passed to RemoveAll.
-		if err := renameDirectoryExclusive(receipt.ActivePath, receipt.BackupPath); err != nil {
-			return err
-		}
-		if err := atomicSyncRollback(receipt); err != nil {
-			return err
-		}
-		if err := manager.inject(FaultRollbackQuarantined); err != nil {
-			return err
-		}
-		if err := matchesPublication(receipt, receipt.BackupPath); err != nil {
-			// Best effort exclusive restoration preserves a concurrently created active.
-			_ = renameDirectoryExclusive(receipt.BackupPath, receipt.ActivePath)
-			_ = atomicSyncRollback(receipt)
-			return err
-		}
-	}
-	if err := removeOwnedDirectory(receipt.OwnedBase, receipt.BackupPath); err != nil {
-		return err
-	}
-	return manager.inject(FaultRollbackRemoved)
+func matchesPublication(receipt Receipt, path string) error {
+	return matchesProof(path, receipt.PublishedIdentity, receipt.PublishedDigest)
+}
+
+func matchesBackup(receipt Receipt, path string) error {
+	return matchesProof(path, receipt.BackupIdentity, receipt.BackupDigest)
 }
 
 const FaultRollbackQuarantined = "rollback_quarantined"
+const FaultCommitQuarantined = "commit_quarantined"
 
-func atomicSyncRollback(receipt Receipt) error { return syncReceiptParents(receipt, false) }
+// Parent identities prevent later path substitution from redirecting a journal
+// to a different tree, including through an ancestor above OwnedBase.
+func physicalDirectoryIdentity(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("parent %q is not a real directory", path)
+	}
+	return directoryIdentity(path, info)
+}
+
+func matchesDirectoryIdentity(path, expected string) error {
+	if expected == "" {
+		return fmt.Errorf("parent identity unavailable for %q", path)
+	}
+	identity, err := physicalDirectoryIdentity(path)
+	if err != nil {
+		return err
+	}
+	if identity != expected {
+		return fmt.Errorf("directory parent changed at %q; recovery required", path)
+	}
+	return nil
+}

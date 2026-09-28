@@ -149,6 +149,8 @@ type plannedGroupTarget struct {
 	// client discovery. Its full native identity is deferred until the group's
 	// directories are restored and is verified once, together, before commit.
 	recovering bool
+	// requireAbsent records the filesystem precondition independently of native recovery.
+	requireAbsent bool
 }
 
 func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) {

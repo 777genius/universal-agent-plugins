@@ -24,7 +24,7 @@ func (session *applySession) stageAndCommit() (AddResult, error) {
 	}
 	keepCreatedData := false
 	defer func() {
-		if dataCreated && !keepCreatedData {
+		if dataCreated && !keepCreatedData && !session.service.directoryRecoveryPending(operationID) {
 			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
 		}
 	}()
@@ -133,20 +133,24 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 		ActivePath:      delivery.ActivePath,
 		StagingPath:     delivery.StagingPath,
 		BeforeDigest:    managedDigest(previousClient),
-		AfterDigest:     delivery.ArtifactDigest,
-		NativeObjects:   delivery.NativeObjects,
-		Activation:      initialActivation,
-		Authentication:  session.plan.Authentication,
-		Policy:          domain.PolicyAllowed,
-		Verification:    initialVerification,
-		DesiredState:    session.state,
+		RequireAbsent:   managedDigest(previousClient) == "",
+		VerifyBefore: func(verifyContext context.Context, path string) error {
+			return session.service.Stager.Verify(verifyContext, path, managedDigest(previousClient))
+		},
+		AfterDigest:    delivery.ArtifactDigest,
+		NativeObjects:  delivery.NativeObjects,
+		Activation:     initialActivation,
+		Authentication: session.plan.Authentication,
+		Policy:         domain.PolicyAllowed,
+		Verification:   initialVerification,
+		DesiredState:   session.state,
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 		},
 	})
 	session.result.Receipt = receipt
 	if applyErr != nil {
-		_ = session.service.Stager.Discard(context.Background(), delivery)
+		session.service.discardSettledDelivery(operationID, delivery)
 		return applyErr
 	}
 	return nil

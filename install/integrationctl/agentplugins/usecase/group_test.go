@@ -227,7 +227,7 @@ func TestSwitchGroupPreservesOwnedPluginDataAcrossDistributionSwitchReverseAndRo
 	originalStager := service.Stager
 	service.Stager = &failNthVerificationStager{
 		verificationFailureStager: verificationFailureStager{PackageStager: originalStager, err: errors.New("injected switch verification failure")},
-		failAt:                    3,
+		failAt:                    5, // Active ownership and moved-backup verification precede publication verification.
 	}
 	rolledBack, err := service.SwitchGroup(context.Background(), GroupInput{Targets: []AddInput{toBridge}, OperationGroupID: "bridge-rollback", Confirmed: true, Switch: true})
 	if err == nil || rolledBack.Phase != GroupPhaseManagedRolledBack {

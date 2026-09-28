@@ -146,7 +146,7 @@ func (session *groupSession) buildGroupMutations() []transaction.DirectoryMutati
 		}
 		client := session.desired.Installations[session.installationIndex].Clients[target.clientBindingID]
 		before := ""
-		if target.managed != nil && !target.recovering {
+		if target.managed != nil && !target.requireAbsent {
 			// A recovering target's active path is positively absent right now; its
 			// recorded receipt digest describes what was there before it disappeared,
 			// not the current (absent) state this mutation actually observed.
@@ -162,7 +162,10 @@ func (session *groupSession) buildGroupMutations() []transaction.DirectoryMutati
 			OperationID: operationID, InstallationID: session.installationID, ClientBindingID: target.clientBindingID,
 			Sequence: nextSequence(client), OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath, StagingPath: delivery.StagingPath,
 			BeforeDigest: before, AfterDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects, Activation: target.plan.Activation,
-			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: target.plan.Verification, RequireAbsent: target.recovering,
+			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: target.plan.Verification, RequireAbsent: target.requireAbsent,
+			VerifyBefore: func(verifyContext context.Context, path string) error {
+				return stager.Verify(verifyContext, path, before)
+			},
 			Verify: func(verifyContext context.Context, activePath string) error {
 				return stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 			},
