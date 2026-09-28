@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { setSignedMirrorTestTime } from './i18n-state.helpers';
+
+test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
 
 test('community installer is centered, full-width, and readable at desktop/tablet/mobile', async ({
   page,

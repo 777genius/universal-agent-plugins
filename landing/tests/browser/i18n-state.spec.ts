@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   automatic, downloadChannelTitle, downloadHeading, hydrated, deferred, delayedMirror, exactCommands, locales, navigate, offline,
-  projections, registryFixture, targets, wording,
+  projections, registryFixture, setSignedMirrorTestTime, targets, wording,
 } from './i18n-state.helpers';
 
 // Real parent v-model wiring, installed Nuxt router, public DOM; no store access.
@@ -171,6 +171,7 @@ for (const outcome of ['success', 'error', 'security'] as const) {
       test.skip(itinerary === 'locale' && locales.length < 2, 'Requires published locale remount');
       const locale = itinerary === 'locale' ? locales[1]! : 'en';
       const t = wording(locale);
+      await setSignedMirrorTestTime(page);
       const errors = await offline(page);
       const discovery = await delayedMirror(page, 'discovery', outcome === 'error');
       const security = await delayedMirror(page, 'security');

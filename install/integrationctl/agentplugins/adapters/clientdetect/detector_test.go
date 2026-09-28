@@ -27,6 +27,18 @@ func TestMain(m *testing.M) {
 			time.Sleep(5 * time.Second)
 			os.Exit(0)
 		}
+		if strings.Contains(name, "codex-profile-version-probe") {
+			cwd, _ := os.Getwd()
+			body, _ := json.Marshal(struct {
+				CWD string
+				Env []string
+			}{cwd, os.Environ()})
+			if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "version-observation.json"), body, 0600); err != nil {
+				os.Exit(2)
+			}
+			_, _ = os.Stdout.WriteString("codex-cli 1.2.3\n")
+			os.Exit(0)
+		}
 		stdin, _ := io.ReadAll(os.Stdin)
 		cwd, _ := os.Getwd()
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
@@ -54,6 +66,41 @@ func TestDetectorReturnsAllSupportedClientsWithoutAmbientDiscovery(t *testing.T)
 		if client.Status != domain.DetectionNotDetected {
 			t.Fatalf("client %s unexpectedly detected", client.ClientID)
 		}
+	}
+}
+
+func TestDetectorKeepsOtherClientsWhenCodexProfileIsInvalid(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	badProfile := filepath.Join(home, "invalid-codex-profile")
+	if err := os.WriteFile(badProfile, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(home, ".cursor"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	detector := testDetector(home, nil)
+	detector.Environment["CODEX_HOME"] = badProfile
+	detected, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := clientOf(detected, domain.ClientCodex)
+	if codex.Status != domain.DetectionNotDetected || codex.DetectionError == nil || !strings.Contains(codex.DetectionError.Error(), "profile path is not a directory") {
+		t.Fatalf("Codex failure was not retained safely: %+v", codex)
+	}
+	if codex.ConfigRoot != "" || codex.ExecutablePath != "" || len(codex.Surfaces) != 0 {
+		t.Fatalf("failed Codex retained authority locators: %+v", codex)
+	}
+	if cursor := clientOf(detected, domain.ClientCursor); cursor.Status != domain.DetectionDetected || cursor.DetectionError != nil {
+		t.Fatalf("Cursor detection was affected: %+v", cursor)
+	}
+	encoded, err := json.Marshal(codex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), badProfile) || strings.Contains(string(encoded), "DetectionError") {
+		t.Fatalf("private diagnostic leaked to JSON: %s", encoded)
 	}
 }
 
@@ -778,9 +825,10 @@ func testDetector(home string, binaries map[string]string) Detector {
 			}
 			return "", exec.ErrNotFound
 		},
-		Lstat:    os.Lstat,
-		ReadDir:  os.ReadDir,
-		Registry: all.Default(),
+		EvalSymlinks: filepath.EvalSymlinks,
+		Lstat:        os.Lstat,
+		ReadDir:      os.ReadDir,
+		Registry:     all.Default(),
 	}
 }
 

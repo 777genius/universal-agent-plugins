@@ -72,7 +72,7 @@ func TestCodexSSEHistoricalLifecycle(t *testing.T) {
 	for _, op := range []string{"add", "repair", "update-preview", "update", "all-unsupported-update"} {
 		t.Run(op, func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
-			client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "codex")}
+			client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, "codex")}
 			input := codexSSEInput(t, client, op != "all-unsupported-update")
 			currentPlanner := service.Planner
 			service.Planner = historicalCodexSSEPlanner{currentPlanner}
@@ -142,7 +142,7 @@ func TestCodexSSEHistoricalLifecycle(t *testing.T) {
 
 func TestCodexSSEOnlyAddDoesNotWriteInstallation(t *testing.T) {
 	service, store, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "codex")}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, "codex")}
 	input := codexSSEInput(t, client, false)
 	before, err := store.Load()
 	if err != nil {
@@ -166,7 +166,7 @@ func TestCodexSSEOnlyAddDoesNotWriteInstallation(t *testing.T) {
 
 func TestCodexTransportTransientUpdateRetainsInstalledBytes(t *testing.T) {
 	service, store, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "codex")}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, "codex")}
 	input := codexSSEInput(t, client, true)
 	installed, err := service.Add(context.Background(), input)
 	if err != nil {

@@ -313,6 +313,14 @@ func Validate(state domain.StateFileV2) error {
 					return fmt.Errorf("%s client binding %q references unknown data receipt", prefix, client.ClientBindingID)
 				}
 			}
+			if client.NativeProfileRoot != "" && (!filepath.IsAbs(client.NativeProfileRoot) || filepath.Clean(client.NativeProfileRoot) != client.NativeProfileRoot) {
+				return fmt.Errorf("%s client binding %q has an invalid native profile root", prefix, client.ClientBindingID)
+			}
+			if client.NativeActivationAttempt != "" {
+				if err := pathpolicy.ValidateLeafID(client.NativeActivationAttempt); err != nil {
+					return fmt.Errorf("%s client binding %q has an invalid native activation attempt: %w", prefix, client.ClientBindingID, err)
+				}
+			}
 			objectIDs := map[string]struct{}{}
 			for _, object := range client.NativeObjects {
 				if strings.TrimSpace(object.ObjectID) == "" || strings.TrimSpace(object.Kind) == "" {

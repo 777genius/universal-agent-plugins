@@ -128,8 +128,12 @@ func (activator *nativeRefreshRetryActivator) Activate(_ context.Context, reques
 	}
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
 	if activator.calls == 1 {
+		outcome.NativeEffect = domain.NativeEffectUnchanged
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 		return outcome, fmt.Errorf("injected native activation failure")
 	}
+	outcome.NativeEffect = domain.NativeEffectCommitted
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	return outcome, nil
 }
 
@@ -147,7 +151,7 @@ func (observer mutatingRefreshObserver) ObserveNativeIdentity(_ context.Context,
 func hostProjectionFixture(t *testing.T) (Service, AddInput, *hostArgsStager) {
 	t.Helper()
 	service, _, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	input := addInput(t, client, "./refresh-host-projection")
 	input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{
 		"local": {Name: "local", Type: "stdio", Decoded: map[string]any{"type": "stdio", "command": "sh", "args": []any{"-c", "echo ${PLUGIN_DATA}"}}},

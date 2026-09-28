@@ -25,6 +25,8 @@ type ClientTraits struct {
 	SupportsPreparedRecovery          bool
 	RequiresPersonalMappingForPrepare bool
 	ReportsMCPToolNamespaceCollision  bool
+	BindsNativeProfileRoot            bool
+	TracksNativeEffects               bool
 }
 
 // ClientTraitsFor returns the declared traits for a known client. Unknown ids

@@ -49,7 +49,7 @@ import (
 func TestCodexRemoveGroupPreservesForeignSiblingAndRefusesRepeatRemove(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/codex-remove-lifecycle")
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "codex-remove-add", Confirmed: true})
 	if err != nil {
@@ -164,7 +164,7 @@ func TestCodexRemoveGroupPreservesForeignSiblingAndRefusesRepeatRemove(t *testin
 func TestCodexRemoveGroupRequiresExternalUninstalledFlag(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	install := addInput(t, codex, "https://example.com/codex-remove-requires-flag")
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{install}, OperationGroupID: "codex-remove-flag-add", Confirmed: true})
 	if err != nil {

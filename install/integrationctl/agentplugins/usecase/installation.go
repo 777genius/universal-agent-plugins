@@ -92,6 +92,10 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 	if previous.ClientID != "" {
 		bindingClientID = previous.ClientID
 	}
+	profileRoot := previous.NativeProfileRoot
+	if profileRoot == "" && domain.ClientTraitsFor(input.Client.ClientID).BindsNativeProfileRoot {
+		profileRoot = input.Client.ConfigRoot
+	}
 	return domain.ClientBinding{
 		InstallIntent:   input.InstallIntent,
 		ClientBindingID: clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
@@ -99,10 +103,12 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		Materialization: domain.MaterializationStaged, Activation: domain.ActivationPrepared,
 		Authentication: plan.Authentication, Policy: domain.PolicyAllowed,
 		Verification: domain.VerificationPackageValid, UpdatedAt: timestamp,
-		PackageRevision:  packageRevisionForInput(input),
-		Receipts:         append([]domain.MutationReceipt(nil), previous.Receipts...),
-		NativeObjects:    append([]domain.NativeObjectOwnership(nil), previous.NativeObjects...),
-		AffectedSurfaces: preparedAffectedSurfaces(previous, input.Client.ClientID),
+		PackageRevision:         packageRevisionForInput(input),
+		Receipts:                append([]domain.MutationReceipt(nil), previous.Receipts...),
+		NativeObjects:           append([]domain.NativeObjectOwnership(nil), previous.NativeObjects...),
+		NativeProfileRoot:       profileRoot,
+		NativeActivationAttempt: previous.NativeActivationAttempt,
+		AffectedSurfaces:        preparedAffectedSurfaces(previous, input.Client.ClientID),
 	}
 }
 

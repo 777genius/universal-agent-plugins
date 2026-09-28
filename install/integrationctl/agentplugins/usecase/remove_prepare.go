@@ -247,8 +247,8 @@ func dataReceiptRemovals(service Service, operationID string, receipts []domain.
 		removals = append(removals, transaction.DirectoryRemoval{OperationID: fmt.Sprintf("%s-data-%03d", operationID, index+1),
 			OperationGroupID: operationID, ClientBindingID: receipt.DataReceiptID, Sequence: 1,
 			OwnedBase: filepath.Dir(receipt.Locator), ActivePath: receipt.Locator, BeforeDigest: receipt.OwnershipDigest, Standalone: true,
-			Verify: func(verifyContext context.Context, _ string) error {
-				return service.PluginData.ValidateData(verifyContext, receipt)
+			Verify: func(verifyContext context.Context, path string) error {
+				return service.PluginData.ValidateDataAt(verifyContext, receipt, path)
 			}})
 	}
 	return removals

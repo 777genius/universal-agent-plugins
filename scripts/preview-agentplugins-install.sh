@@ -38,5 +38,3 @@ preview_env=(
   LANG="${LANG:-en_US.UTF-8}"
 )
 env -i "${preview_env[@]}" "$sandbox_root/agentplugins" add "$source_ref"
-printf '\nFinal read-only status:\n'
-env -i "${preview_env[@]}" "$sandbox_root/agentplugins" doctor

@@ -22,8 +22,14 @@ func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, ap
 		return nil, nil, nil, fmt.Errorf("detect AI clients: %w", err)
 	}
 	detected := detectedSupportedClients(clients)
+	detectionSkipped := make([]targetSkip, 0)
+	for _, client := range clients {
+		if client.DetectionError != nil && supportedTarget(client.ClientID) {
+			detectionSkipped = append(detectionSkipped, targetSkip{Client: client.ClientID, Reason: "client configuration could not be inspected safely; correct it and retry"})
+		}
+	}
 	if len(detected) == 0 {
-		selection, all, err := promptTargetChoices(cmd, app, detected, nil, clients)
+		selection, all, err := promptTargetChoices(cmd, app, detected, detectionSkipped, clients)
 		return selection, all, nil, err
 	}
 
@@ -31,6 +37,7 @@ func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, ap
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	skipped = append(detectionSkipped, skipped...)
 	selection, all, err := promptTargetChoices(cmd, app, compatible, skipped, clients)
 	if err != nil {
 		if preloaded != nil && preloaded.cleanup != nil {

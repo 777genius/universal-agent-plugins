@@ -3,7 +3,8 @@ package usecase
 import "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 
 func nativeLifecycleClient(clientID domain.ClientID) bool {
-	return domain.ClientTraitsFor(clientID).LifecycleKind == domain.LifecycleNativeConfig
+	traits := domain.ClientTraitsFor(clientID)
+	return traits.TracksNativeEffects || traits.LifecycleKind == domain.LifecycleNativeConfig
 }
 
 func sharesPhysicalBackend(id domain.ClientID) bool {

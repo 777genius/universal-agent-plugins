@@ -108,7 +108,7 @@ class EvidenceTests(unittest.TestCase):
     def test_matrix_covers_each_nonempty_set_both_decisions(self):
         self.assertEqual(set(SETS.values()), {('codex',), ('cursor',), ('codex', 'cursor')})
         for name in SETS:
-            for decision in ('default-no', 'yes'):
+            for decision in ('no', 'yes'):
                 self.assertIn(name + '-' + decision, CASES)
         self.assertIn('neither', CASES)
 

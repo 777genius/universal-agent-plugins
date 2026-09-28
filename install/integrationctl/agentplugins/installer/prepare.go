@@ -244,7 +244,7 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 		handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected}
 		helperVersion, helperDigest := e.helperIdentity()
 		handle.plan = Plan{
-			Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: req.ClientConfigRoot,
+			Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
 			InstallationID: installation.InstallationID, HelperVersion: helperVersion,
 			HelperDigest: helperDigest, NoChange: true,
 		}
@@ -262,7 +262,7 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 	handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected}
 	helperVersion, helperDigest := e.helperIdentity()
 	handle.plan = Plan{
-		Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: req.ClientConfigRoot,
+		Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
 		TargetPath: binding.TargetLocator, InstallationID: installation.InstallationID,
 		BindingID: binding.ClientBindingID, HelperVersion: helperVersion, HelperDigest: helperDigest,
 	}
@@ -364,7 +364,7 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 	handle.plan = Plan{
 		Operation: op, SourceRoot: firstNonEmpty(req.SourceRoot, req.PackageRoot), TreeDigest: snapshot.TreeDigest,
 		DigestAlgorithm: snapshot.DigestAlgorithm, ClientID: string(client.ClientID),
-		ConfigRoot: req.ClientConfigRoot, TargetPath: preview.Plan.ActivePath,
+		ConfigRoot: client.ConfigRoot, TargetPath: preview.Plan.ActivePath,
 		InstallationID: firstNonEmpty(req.InstallationID, preview.InstallationID),
 		BindingID:      domain.ComputeClientBindingID(firstNonEmpty(req.InstallationID, preview.InstallationID), string(preview.Plan.ClientID), string(preview.Plan.Scope), preview.Plan.ActivePath),
 		HelperVersion:  helperVersion, HelperDigest: helperDigest,

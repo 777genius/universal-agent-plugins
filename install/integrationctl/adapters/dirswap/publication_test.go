@@ -65,6 +65,9 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			case "legacy":
 				r.PublishedIdentity = ""
 				r.PublishedDigest = ""
+				if err := m.save(r); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err = m.Rollback(context.Background(), r); err == nil {
 				t.Fatal("rollback accepted drift")
@@ -75,8 +78,8 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			if _, err = os.Stat(in.ActivePath); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = m.Load(in.OperationID); err != nil {
-				t.Fatal(err)
+			if _, err = m.Load(in.OperationID); (err != nil) != (variant == "legacy") {
+				t.Fatalf("legacy journals must fail closed: %v", err)
 			}
 		})
 	}
@@ -134,12 +137,12 @@ func TestAbsentRecoveryPreservesChangedQuarantine(t *testing.T) {
 	if err = m.Rollback(context.Background(), r); err == nil {
 		t.Fatal("missing crash")
 	}
-	writeBody(t, r.BackupPath, "foreign")
+	writeBody(t, r.QuarantinePath, "foreign")
 	m.Fault = nil
 	if err = m.Recover(context.Background(), in.OperationID, false); err == nil {
 		t.Fatal("recovery accepted changed quarantine")
 	}
-	assertBody(t, r.BackupPath, "foreign")
+	assertBody(t, r.QuarantinePath, "foreign")
 	if _, err = m.Load(in.OperationID); err != nil {
 		t.Fatal(err)
 	}
@@ -153,10 +156,10 @@ func TestAbsentRollbackPreservesReplacementDuringQuarantine(t *testing.T) {
 	}
 	m.Fault = func(at string) error {
 		if at == FaultRollbackQuarantined {
-			if err := os.Rename(r.BackupPath, r.BackupPath+".saved"); err != nil {
+			if err := os.Rename(r.QuarantinePath, r.QuarantinePath+".saved"); err != nil {
 				return err
 			}
-			writeBody(t, r.BackupPath, "foreign")
+			writeBody(t, r.QuarantinePath, "foreign")
 		}
 		return nil
 	}

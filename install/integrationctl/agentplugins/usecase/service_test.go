@@ -134,7 +134,7 @@ func TestAddKeepsCodexProjectionInManualActivationState(t *testing.T) {
 	service, store, _ := serviceFixture(t)
 	client := domain.DetectedClient{
 		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+		ConfigRoot: canonicalCodexProfile(t, ".codex"),
 	}
 	input := addInput(t, client, "https://example.com/openai")
 	input.Confirmed = true
@@ -161,7 +161,7 @@ func TestAddKeepsCodexProjectionInManualActivationState(t *testing.T) {
 func TestAddKeepsOAuthPackageInAuthPendingState(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	input := addInput(t, client, "https://example.com/oauth")
 	input.Envelope.MCP = domain.MCPComponent{
 		Present: true, Enabled: true,
@@ -191,7 +191,11 @@ func TestOpenAIOAuthHintsDoNotOverrideGenericAuthentication(t *testing.T) {
 	t.Parallel()
 	for _, clientID := range []domain.ClientID{domain.ClientCursor, domain.ClientCodex} {
 		service, _, _ := serviceFixture(t)
-		client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".client")}
+		profile := filepath.Join(t.TempDir(), ".client")
+		if clientID == domain.ClientCodex {
+			profile = canonicalCodexProfile(t, ".client")
+		}
+		client := domain.DetectedClient{ClientID: clientID, Status: domain.DetectionDetected, ConfigRoot: profile}
 		input := addInput(t, client, "https://example.com/generic-auth-"+string(clientID))
 		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{"server": {Name: "server", Type: "stdio", Decoded: map[string]any{"command": "sh"}}}}
 		input.Envelope.CatalogEvidence = &domain.CatalogEvidence{Compatibility: map[string]domain.CatalogCompatibility{string(clientID): {Package: map[bool]string{true: "projected", false: "native"}[clientID == domain.ClientCodex], Authentication: domain.AuthenticationRequirementNotRequired}}}
@@ -559,7 +563,7 @@ func TestUnconfirmedInfrastructureFailureIsNotPersistedAsAuthoritativeEvidenceFo
 
 func TestPlanFirstAuthoritativePersistenceIsSurroundedByMutationLock(t *testing.T) {
 	service, store, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	input := addInput(t, client, "https://example.com/authoritative-lock")
 	input.Confirmed = true
 	if _, err := service.Add(context.Background(), input); err != nil {
@@ -622,7 +626,7 @@ func TestValidateDirectoryTransitionRejectsSameReleaseRevisionRewrite(t *testing
 
 func TestPlanFirstAuthoritativePersistenceRejectsStaleObservedBinding(t *testing.T) {
 	service, store, _ := serviceFixture(t)
-	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	client := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	input := addInput(t, client, "https://example.com/stale-authoritative-observation")
 	input.Confirmed = true
 	if _, err := service.Add(context.Background(), input); err != nil {
@@ -1147,7 +1151,7 @@ func TestExistingSourceRejectsManifestRenameWithoutChangingAnyClient(t *testing.
 	}
 	codex := domain.DetectedClient{
 		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+		ConfigRoot: canonicalCodexProfile(t, ".codex"),
 	}
 	second := addInput(t, codex, "https://example.com/identity")
 	second.Confirmed = true
@@ -1268,7 +1272,7 @@ func TestMultiClientUpdateConvergesEachClientRevision(t *testing.T) {
 	}
 	codex := domain.DetectedClient{
 		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+		ConfigRoot: canonicalCodexProfile(t, ".codex"),
 	}
 	firstCursor := addInput(t, cursor, "https://example.com/shared")
 	firstCursor.Envelope.CatalogEvidence = evidence("sha256:catalog-v1")
@@ -1331,7 +1335,7 @@ func TestPartialMultiClientUpdateFailurePreservesIndependentRevisions(t *testing
 	service, store, cursor := serviceFixture(t)
 	codex := domain.DetectedClient{
 		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+		ConfigRoot: canonicalCodexProfile(t, ".codex"),
 	}
 
 	firstCursor := addInput(t, cursor, "https://example.com/partial-update")
@@ -1402,7 +1406,7 @@ func TestAddNewTargetEnforcesExistingPackageIdentity(t *testing.T) {
 	if _, err := service.Add(context.Background(), first); err != nil {
 		t.Fatal(err)
 	}
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	conflict := addInput(t, codex, "https://example.com/shared")
 	conflict.Envelope.TreeDigest = "sha256:changed-same-version"
 	conflict.Envelope.ManifestDigest = "sha256:changed-manifest"
@@ -1527,7 +1531,7 @@ func TestRemoveCommitsReceiptAndLeavesBindingAbsent(t *testing.T) {
 func TestPluginDataMarkerSurvivesUpdateRepairAndNormalRemovalUntilOwnedPurge(t *testing.T) {
 	t.Parallel()
 	service, store, _ := serviceFixture(t)
-	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codex")}
+	codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
 	withStdio := func(input *AddInput) {
 		input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, Servers: map[string]domain.MCPServer{
 			"local": {Name: "local", Type: "stdio", Decoded: map[string]any{
@@ -1758,7 +1762,7 @@ func TestRemovePlanExposesExternalUninstallAndPreservesCodexArtifactUntilAcknowl
 	service, store, _ := serviceFixture(t)
 	client := domain.DetectedClient{
 		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+		ConfigRoot: canonicalCodexProfile(t, ".codex"),
 	}
 	add := addInput(t, client, "https://example.com/copied")
 	add.Confirmed = true
@@ -1805,7 +1809,7 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	service, store, _ := serviceFixture(t)
 	client := domain.DetectedClient{
 		ClientID: domain.ClientCodex, Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), ".codex"),
+		ConfigRoot: canonicalCodexProfile(t, ".codex"),
 	}
 	runner := &codexCleanupUsecaseRunner{configRoot: client.ConfigRoot}
 	if result := runner.writeConfig(false); result.ExitCode != 0 {

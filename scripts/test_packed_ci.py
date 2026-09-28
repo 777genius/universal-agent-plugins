@@ -38,7 +38,7 @@ def plan_fixture():
                 components.append(dict(kind='skill', name=lane, support='native'))
             if lane != 'skill': components.append(dict(kind='mcp_server', name=lane, support='native'))
             for target in p.TARGETS:
-                plan = dict(client_id=target, scope='user', status='ready' if target == 'claude' else 'manual_activation_required', components=copy.deepcopy(components))
+                plan = dict(client_id=target, scope='user', status='manual_activation_required' if target == 'cursor' else 'ready', components=copy.deepcopy(components))
                 rows.append(dict(product=product, lane=lane, target=target,
                     report=dict(result='success', data=dict(dry_run=True, plan=plan))))
     return dict(plans=rows)

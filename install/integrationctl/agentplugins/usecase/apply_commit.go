@@ -24,7 +24,7 @@ func (session *applySession) stageAndCommit() (AddResult, error) {
 	}
 	keepCreatedData := false
 	defer func() {
-		if dataCreated && !keepCreatedData {
+		if dataCreated && !keepCreatedData && !session.service.directoryRecoveryPending(operationID) {
 			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
 		}
 	}()
@@ -133,27 +133,31 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 		ActivePath:      delivery.ActivePath,
 		StagingPath:     delivery.StagingPath,
 		BeforeDigest:    managedDigest(previousClient),
-		AfterDigest:     delivery.ArtifactDigest,
-		NativeObjects:   delivery.NativeObjects,
-		Activation:      initialActivation,
-		Authentication:  session.plan.Authentication,
-		Policy:          domain.PolicyAllowed,
-		Verification:    initialVerification,
-		DesiredState:    session.state,
+		RequireAbsent:   managedDigest(previousClient) == "",
+		VerifyBefore: func(verifyContext context.Context, path string) error {
+			return session.service.Stager.Verify(verifyContext, path, managedDigest(previousClient))
+		},
+		AfterDigest:    delivery.ArtifactDigest,
+		NativeObjects:  delivery.NativeObjects,
+		Activation:     initialActivation,
+		Authentication: session.plan.Authentication,
+		Policy:         domain.PolicyAllowed,
+		Verification:   initialVerification,
+		DesiredState:   session.state,
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 		},
 	})
 	session.result.Receipt = receipt
 	if applyErr != nil {
-		_ = session.service.Stager.Discard(context.Background(), delivery)
+		session.service.discardSettledDelivery(operationID, delivery)
 		return applyErr
 	}
 	return nil
 }
 
 func (session *applySession) activateCommitted(delivery domain.StagedDelivery, previousClient domain.ClientBinding) (AddResult, error) {
-	outcome, activationErr := session.service.Activator.Activate(session.ctx, domain.ActivationRequest{
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, session.clientBindingID, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan, Delivery: domain.StagedDelivery{
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath,
 			ArtifactDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects,
@@ -164,9 +168,11 @@ func (session *applySession) activateCommitted(delivery domain.StagedDelivery, p
 	})
 	session.result.Activation = outcome
 	if activationErr != nil && outcome.Activation == "" {
+		effect, objects := outcome.NativeEffect, outcome.NativeObjects
 		outcome = domain.ActivationOutcome{
 			Activation: domain.ActivationFailed, Authentication: session.plan.Authentication,
 			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed,
+			NativeEffect: effect, NativeObjects: objects,
 		}
 		session.result.Activation = outcome
 	}

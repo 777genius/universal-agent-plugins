@@ -290,6 +290,9 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 	detectedByID := make(map[string]domain.DetectedClient, len(detected))
 	for _, client := range detected {
 		detectedByID[string(client.ClientID)] = client
+		if client.DetectionError != nil {
+			findings = append(findings, doctorFinding{Status: "unknown", Code: "client_detection_failed", ClientID: string(client.ClientID), Message: "client configuration could not be inspected safely", RecoveryAction: "correct the client profile configuration and rerun doctor"})
+		}
 	}
 	if len(open) > 0 {
 		findings = append(findings, degradedFinding("open_recovery_operations", "operations", "an interrupted managed-directory operation requires recovery", "rerun the intended add, update, or remove command to perform transactional recovery"))
@@ -315,7 +318,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			if plansWithoutHostPresence(bindingClient) && !visible {
 				client = syntheticUndetectedClient(bindingClient)
 			}
-			if !plansWithoutHostPresence(bindingClient) && (!visible || client.Status != domain.DetectionDetected) {
+			if !plansWithoutHostPresence(bindingClient) && (!visible || (client.Status != domain.DetectionDetected && client.DetectionError == nil)) {
 				findings = append(findings, scopedFinding("degraded", "client_not_visible", installation, binding.ClientID, "the package is tracked but no current client visibility evidence was detected", "install or launch the client so its CLI, desktop application, or configuration directory is visible, then rerun doctor"))
 			}
 			if requiresPersonalMapping(bindingClient) {

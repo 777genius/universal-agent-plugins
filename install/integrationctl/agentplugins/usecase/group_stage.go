@@ -6,7 +6,10 @@ import (
 )
 
 func (session *groupSession) cleanupStaged() {
-	for _, target := range session.planned {
+	for index, target := range session.planned {
+		if session.service.directoryRecoveryPending(fmt.Sprintf("%s-%03d", session.groupID, index+1)) {
+			continue
+		}
 		if target.delivery.StagingPath != "" {
 			_ = session.service.Stager.Discard(context.Background(), target.delivery)
 		}
@@ -19,6 +22,7 @@ func (session *groupSession) cleanupStaged() {
 func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
+		session.reportGroupProgress(*target, GroupProgressPreparing)
 		if target.noChange {
 			if target.managed != nil && session.existing {
 				installation := session.state.Installations[session.installationIndex]

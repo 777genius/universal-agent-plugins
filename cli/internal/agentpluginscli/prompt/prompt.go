@@ -36,6 +36,7 @@ type TargetSelectionResult struct{ IDs []domain.ClientID }
 type ConfirmationRequest struct {
 	Title   string
 	Summary []string
+	Default bool
 }
 type ConfirmationResult struct{ Accepted bool }
 

@@ -111,7 +111,7 @@ def plans(record):
         require(len(found) == 1, 'one target plan required')
         plan = found[0]
         require(plan['client_id'] == row['target'] and plan['scope'] == 'user' and
-                plan['status'] == ('ready' if row['target'] == 'claude' else 'manual_activation_required'), 'wrong plan target/status')
+                plan['status'] == ('manual_activation_required' if row['target'] == 'cursor' else 'ready'), 'wrong plan target/status')
         components = plan['components']
         expected = {('skill', 'extra-skill')}
         if row['lane'] == 'skill' or row['lane'].startswith('hybrid-'): expected.add(('skill', row['lane']))

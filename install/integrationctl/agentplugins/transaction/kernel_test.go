@@ -5,12 +5,42 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+func TestPublicS2DirectoryReplacementRetainsConfirmedExternalReceipts(t *testing.T) {
+	kernel, mutation, store := transactionFixture(t, "retain-native-op")
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := onlyClient(state.Installations[0])
+	previous := domain.NativeObjectOwnership{ObjectID: "external-skill", Kind: "gemini_skill", LogicalName: "skill", ManagedDigest: "sha256:old", Path: filepath.Join(t.TempDir(), "skill")}
+	client.NativeObjects = []domain.NativeObjectOwnership{previous}
+	state.Installations[0].Clients[client.ClientBindingID] = client
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	mutation.DesiredState = state
+	mutation.NativeObjects = []domain.NativeObjectOwnership{{ObjectID: "managed-package", Kind: "managed_package_directory", ManagedDigest: "sha256:new"}, {ObjectID: previous.ObjectID, Kind: previous.Kind, LogicalName: previous.LogicalName, ManagedDigest: "sha256:desired", Path: previous.Path}}
+	if _, err := kernel.ApplyDirectory(context.Background(), mutation); err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := onlyClient(persisted.Installations[0]).NativeObjects
+	want := []domain.NativeObjectOwnership{mutation.NativeObjects[0], previous}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("confirmed receipts after package-only commit = %+v, want %+v", got, want)
+	}
+}
 
 func TestApplyDirectoryCommitsNativeTreeAndStateReceipt(t *testing.T) {
 	t.Parallel()
@@ -69,7 +99,7 @@ func TestApplyDirectoryGroupRollsBackEveryTargetWhenSecondVerificationFails(t *t
 	installation.Clients[secondClientID] = secondClient
 	desired.Installations[0] = installation
 	second := DirectoryMutation{OperationID: "group-second", InstallationID: installation.InstallationID, ClientBindingID: secondClientID,
-		Sequence: 1, OwnedBase: first.OwnedBase, ActivePath: secondActive, StagingPath: secondStaging,
+		Sequence: 1, OwnedBase: first.OwnedBase, ActivePath: secondActive, StagingPath: secondStaging, VerifyBefore: verifyTransactionBody("old-second"),
 		Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed,
 		Verification: domain.VerificationInstalled, Verify: func(context.Context, string) error { return errors.New("second verification failed") }}
 	_, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{OperationGroupID: "group-op", Mutations: []DirectoryMutation{first, second}, DesiredState: desired})
@@ -99,6 +129,7 @@ func TestApplyDirectoryGroupPostApplyVerifyRunsAfterRestorationAndRollsBackOnFai
 	if err := os.RemoveAll(mutation.ActivePath); err != nil {
 		t.Fatal(err)
 	}
+	mutation.RequireAbsent = true
 	verifyCalls := 0
 	_, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{
 		OperationGroupID: "post-verify-group", Mutations: []DirectoryMutation{mutation}, DesiredState: mutation.DesiredState,
@@ -137,6 +168,7 @@ func TestApplyDirectoryGroupPostApplyVerifySucceedsBeforeCommit(t *testing.T) {
 	if err := os.RemoveAll(mutation.ActivePath); err != nil {
 		t.Fatal(err)
 	}
+	mutation.RequireAbsent = true
 	verifyCalls := 0
 	receipts, err := kernel.ApplyDirectoryGroup(context.Background(), DirectoryGroup{
 		OperationGroupID: "post-verify-success-group", Mutations: []DirectoryMutation{mutation}, DesiredState: mutation.DesiredState,
@@ -183,7 +215,7 @@ func TestApplyDirectoryGroupRequireAbsentRejectsAndRollsBackWithoutTouchingOccup
 	installation.Clients[secondClientID] = secondClient
 	desired.Installations[0] = installation
 	second := DirectoryMutation{OperationID: "require-absent-second", InstallationID: installation.InstallationID, ClientBindingID: secondClientID,
-		Sequence: 1, OwnedBase: mutation.OwnedBase, ActivePath: secondActive, StagingPath: secondStaging,
+		Sequence: 1, OwnedBase: mutation.OwnedBase, ActivePath: secondActive, StagingPath: secondStaging, VerifyBefore: verifyTransactionBody("old-second"),
 		Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed,
 		Verification: domain.VerificationInstalled, Verify: func(_ context.Context, activePath string) error {
 			body, readErr := os.ReadFile(filepath.Join(activePath, "body"))
@@ -245,9 +277,9 @@ func TestGroupedRemovalRecoversFinalStateAndRenamedDataAfterRestart(t *testing.T
 	_, err := kernel.RemoveDirectoryGroup(context.Background(), DirectoryRemovalGroup{OperationGroupID: "restart-remove-group", DesiredState: desired,
 		Removals: []DirectoryRemoval{
 			{OperationID: "restart-remove-native", InstallationID: mutation.InstallationID, ClientBindingID: mutation.ClientBindingID,
-				Sequence: mutation.Sequence, OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath},
+				Sequence: mutation.Sequence, OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, Verify: verifyTransactionBody("old")},
 			{OperationID: "restart-remove-data", ClientBindingID: "owned-data", Sequence: 1,
-				OwnedBase: mutation.OwnedBase, ActivePath: dataPath, Standalone: true},
+				OwnedBase: mutation.OwnedBase, ActivePath: dataPath, Standalone: true, Verify: verifyTransactionBody("persistent")},
 		}})
 	if err == nil || FailurePhase(err) != GroupFailureCommitted {
 		t.Fatalf("interrupted finalization = %v, phase=%q", err, FailurePhase(err))
@@ -350,7 +382,7 @@ func TestRecoverUsesDurableStateReceiptAsCommitDecision(t *testing.T) {
 			}
 			directoryReceipt, err := manager.Apply(context.Background(), dirswap.Input{
 				OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
-				OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
+				OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath, VerifyActive: mutation.VerifyBefore,
 			})
 			if err == nil {
 				t.Fatal("simulated crash did not occur")
@@ -494,7 +526,7 @@ func TestRemoveLeavesJournalWhenStateSaveDurabilityRemainsAmbiguous(t *testing.T
 	_, err := kernel.RemoveDirectory(context.Background(), DirectoryRemoval{
 		OperationID: mutation.OperationID, InstallationID: mutation.InstallationID,
 		ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
-		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath,
+		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, Verify: verifyTransactionBody("old"),
 	})
 	if err == nil {
 		t.Fatal("ambiguous post-rename removal save failure was ignored")
@@ -583,7 +615,7 @@ func transactionFixture(t *testing.T, operationID string) (Kernel, DirectoryMuta
 	}
 	return Kernel{StateStore: store, Directory: dirswap.Manager{JournalDir: filepath.Join(root, "operations-v2")}}, DirectoryMutation{
 		OperationID: operationID, InstallationID: installationID, ClientBindingID: clientID, Sequence: 1,
-		OwnedBase: base, ActivePath: active, StagingPath: staging,
+		OwnedBase: base, ActivePath: active, StagingPath: staging, VerifyBefore: verifyTransactionBody("old"),
 		Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired,
 		Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled,
 		DesiredState: state,
@@ -643,4 +675,17 @@ func (store *postCommitErrorStore) Save(state domain.StateFileV2) error {
 		return errors.New("simulated parent directory sync failure after state rename")
 	}
 	return nil
+}
+
+func verifyTransactionBody(want string) func(context.Context, string) error {
+	return func(_ context.Context, path string) error {
+		body, err := os.ReadFile(filepath.Join(path, "body"))
+		if err != nil {
+			return err
+		}
+		if string(body) != want {
+			return errors.New("unexpected owned body")
+		}
+		return nil
+	}
 }

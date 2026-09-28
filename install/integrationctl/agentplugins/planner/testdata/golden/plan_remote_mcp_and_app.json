@@ -179,7 +179,7 @@
   "codex": {
     "Error": "",
     "Plan": {
-      "Activation": "manual_activation_required",
+      "Activation": "active",
       "ActivePath": "\u003croot\u003e/managed/clients/codex/demo-0123456789ab",
       "Authentication": "not_checked",
       "ClientID": "codex",
@@ -222,12 +222,12 @@
       "PhysicalArtifactID": "demo-0123456789ab",
       "Policy": "allowed",
       "Scope": "user",
-      "Status": "manual_activation_required",
+      "Status": "ready",
       "TargetAnchor": "\u003croot\u003e/managed",
       "TargetRoot": "\u003croot\u003e/managed/clients/codex",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "finish installation in Codex Plugins, then start a new session"
+        "start a new Codex session to load the installed plugin"
       ],
       "Verification": "package_validated",
       "Warnings": [

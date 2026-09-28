@@ -63,6 +63,7 @@ def selection_choices(data):
 def selection_keys(data, selected):
     offered = selection_choices(data)
     check(offered, 'selection has no client rows')
+    check(set(selected) <= set(offered), f'selected clients not offered: {set(selected) - set(offered)}')
     keys = bytearray()
     for index, target in enumerate(offered):
         if target not in selected:
@@ -169,7 +170,7 @@ class Screen:
 
 
 class Fixture:
-    def __init__(self, root, scanner_binary=None):
+    def __init__(self, root, scanner_binary=None, include_opencode=False):
         self.root = Path(root)
         self.home = self.root / 'home-é'
         self.project = self.root / 'project'
@@ -211,6 +212,8 @@ class Fixture:
                           'CODEX_HOME': '.codex', 'CLAUDE_CONFIG_DIR': '.claude',
                           'CURSOR_CONFIG_DIR': '.cursor', 'GEMINI_CLI_HOME': '.gemini'}.items():
             self.env[key] = str(self.home / path)
+        if include_opencode:
+            (Path(self.env['XDG_CONFIG_HOME']) / 'opencode').mkdir(parents=True)
         # Existing executable-cache seam, only inside this disposable fixture.
         # This is a SYNTHETIC scanner protocol response, not security evidence.
         machine = {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
@@ -241,7 +244,7 @@ class Fixture:
     def unchanged(self):
         check(self.mutations() == self.before, 'client/project/state/journal mutated before consent')
 
-    def installed(self, clients):
+    def installed(self, clients, active=()):
         state = self.data / 'state-v2.json'
         check(state.is_file(), 'no persisted installation state after Yes')
         body = json.loads(state.read_text(encoding='utf-8'))
@@ -266,7 +269,8 @@ class Fixture:
                   'wrong package materialized')
             check(any(r.get('phase') == 'committed' for r in binding.get('receipts', [])),
                   'no committed mutation receipt')
-            check(binding.get('activation') != 'active', 'activation falsely confirmed')
+            check((binding.get('activation') == 'active') == (binding['client_id'] in active),
+                  f'wrong activation for {binding["client_id"]}')
             check(binding.get('authentication') not in ('authenticated', 'not_required'),
                   'authentication falsely confirmed')
         check(self.mutations() != self.before, 'Yes produced no mutation')
@@ -492,7 +496,7 @@ def assert_paste_stayed_in_selection(raw, confirmation):
           'paste advanced beyond selection before explicit submit')
 
 
-CASES = ('detection', 'baseline-lifecycle', 'default-no', 'no', 'yes-lifecycle', 'queued-lifecycle', 'sigterm', 'confirm-sigterm', 'empty',
+CASES = ('detection', 'baseline-lifecycle', 'group-progress', 'group-progress-failure', 'default-yes', 'no', 'yes-lifecycle', 'queued-lifecycle', 'sigterm', 'confirm-sigterm', 'empty',
          'escape', 'lf-escape', 'ctrl-c', 'ctrl-d', 'confirm-escape', 'confirm-ctrl-c',
          'confirm-ctrl-d', 'confirm-lf-escape', 'plain', 'dumb', 'term-unset', 'no-color', 'NO_COLOR',
          'resize', 'tiny', 'width-40', 'width-80', 'width-160', 'slow-terminal',
@@ -506,8 +510,8 @@ CASES = ('detection', 'baseline-lifecycle', 'default-no', 'no', 'yes-lifecycle',
 def run_case(name, binary, root, args):
     evidence = root / name
     evidence.mkdir()
-    with tempfile.TemporaryDirectory(prefix='agentplugins-pty-', dir='/tmp') as tmp:
-        fixture = Fixture(tmp, getattr(args, "scanner_path", None))
+    with tempfile.TemporaryDirectory(prefix='agentplugins-pty-') as tmp:
+        fixture = Fixture(tmp, getattr(args, "scanner_path", None), include_opencode=name == "group-progress")
         argv = [str(binary), 'add', str(fixture.package)]
         if getattr(args, 'npm_launcher', False):
             node = shutil.which('node')
@@ -606,6 +610,35 @@ def run_case(name, binary, root, args):
                 session.finish()
                 fixture.installed(['cursor'])
                 return
+            if name == 'group-progress':
+                session.send(selection_keys(session.raw, {'cursor', 'opencode'}))
+                session.wait(args.confirmation, 'group-confirmation')
+                fixture.unchanged()
+                session.send(b'\r')
+                session.finish()
+                fixture.installed(['cursor', 'opencode'])
+                raw = bytes(session.raw)
+                check(b'\x1b[2A' in raw and raw.count(b'\x1b[2K') >= 6,
+                      'live group rows were not redrawn in place')
+                check('preparing' in clean(raw) and 'configuring' in clean(raw)
+                      and 'installing' in clean(raw), 'group stages missing from PTY stream')
+                check('OpenCode' in session.screen.snapshot()
+                      and 'Cursor' in session.screen.snapshot(), 'final group board missing selected clients')
+                check('1/3  preparing package' not in clean(raw),
+                      'static fallback appeared in a live terminal')
+                return
+            if name == 'group-progress-failure':
+                session.send(selection_keys(session.raw, {'codex', 'cursor'}))
+                session.wait(args.confirmation, 'group-confirmation')
+                fixture.unchanged()
+                session.send(b'\r')
+                session.finish(1)
+                fixture.unchanged()
+                raw = bytes(session.raw)
+                check(b'\x1b[2A' in raw, 'failed group did not use the live board')
+                check('not completed' in clean(raw) and 'no target was changed' in clean(raw),
+                      'failed preflight was presented as installed')
+                return
             cancel = {'lf-escape': b'\n\x1b', 'escape': b'\x1b', 'ctrl-c': b'\x03', 'ctrl-d': b'\x04'}
             if name == 'sigterm':
                 os.kill(session.process.pid, signal.SIGTERM)
@@ -630,7 +663,7 @@ def run_case(name, binary, root, args):
             # Single selected Cursor forces the plain activation handoff even
             # when the host has additional installed client applications.
             offset = len(session.raw)
-            if name in ('yes-lifecycle', 'queued-lifecycle'): session.send(selection_keys(session.raw, {'cursor'}))
+            if name in ('default-yes', 'yes-lifecycle', 'queued-lifecycle'): session.send(selection_keys(session.raw, {'cursor'}))
             elif name == 'queued': session.send(b'\r\r')
             elif name == 'paste': session.send(b'\x1b[200~\ny\nn\n\x1b[201~')
             else: session.send(b'\n' if plain else b'\r')
@@ -649,15 +682,18 @@ def run_case(name, binary, root, args):
             fixture.unchanged()
             check('pty-synthetic' in clean(session.raw) and '1.0.0' in clean(session.raw),
                   'preflight plan omits package identity/version')
-            check(re.search(r'(?i)\bno\b|\[y/N\]', clean(session.raw[offset:])), 'No default not visible')
+            if name != 'queued':
+                check(re.search(r'(?i)\byes\b|\[Y/n\]', clean(session.raw[offset:])), 'Yes default not visible')
+            if name in ('default-yes', 'no', 'no-color', 'NO_COLOR'):
+                check('✓ Yes' in clean(session.raw[offset:]), 'default Yes has no visible selection mark')
             if name == 'confirm-sigterm':
                 os.kill(session.process.pid, signal.SIGTERM)
                 session.finish(1); fixture.unchanged(); return
             if name.startswith('confirm-'):
                 session.send(cancel[name.removeprefix('confirm-')])
                 session.finish(1); fixture.unchanged(); return
-            if name in ('yes-lifecycle', 'queued-lifecycle'):
-                session.send(b' \rn\n' if name == 'queued-lifecycle' else b' \r')
+            if name in ('default-yes', 'yes-lifecycle', 'queued-lifecycle'):
+                session.send(b'\rn\n' if name == 'queued-lifecycle' else b'\r')
                 session.wait(LIFECYCLE, 'plain-activation')
                 fixture.installed(['cursor'])
                 # At plain handoff raw/canonical mode must already be restored.
@@ -670,8 +706,7 @@ def run_case(name, binary, root, args):
                       'activation No advanced to auth')
                 fixture.installed(['cursor'])
             else:
-                if name == 'no': session.send(b'\x1b[D\x1b[C\r')
-                elif name != 'queued': session.send(b'\n' if plain else b'\r')
+                if name != 'queued': session.send(b'n\n' if plain else b' \r')
                 session.finish(); fixture.unchanged()
             if legacy_plain or name in ('plain-never', 'plain-NO_COLOR'):
                 check(b'\x1b' not in session.raw, 'plain emitted terminal controls')
@@ -683,7 +718,7 @@ def run_case(name, binary, root, args):
             if name == 'rich-never':
                 check(b'\x1b[?25l' in session.raw, 'never disabled rich interaction')
                 check(not re.search(rb'\x1b\[[0-9;:]*m', session.raw), 'never emitted SGR')
-            if name in ('yes-lifecycle', 'queued-lifecycle'):
+            if name in ('default-yes', 'yes-lifecycle', 'queued-lifecycle'):
                 check(re.search(rb'\x1b\[33m[^\x1b]+\x1b\[m', session.raw), 'warning role/reset missing')
             if name in ('no-color', 'NO_COLOR'):
                 sgr = re.findall(rb'\x1b\[([0-9;:]*)m', session.raw)

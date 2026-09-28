@@ -1070,8 +1070,12 @@ func TestDeactivatorDoesNotClaimManualCopilotLifecycle(t *testing.T) {
 func TestDeactivatorPreservesManualClientArtifactsUntilAcknowledged(t *testing.T) {
 	t.Parallel()
 	for _, client := range []domain.ClientID{domain.ClientCodex, domain.ClientKiro, domain.ClientVSCode} {
+		configRoot := ""
+		if client == domain.ClientCodex {
+			configRoot = filepath.Join(t.TempDir(), "codex-profile")
+		}
 		outcome, err := testActivator(Activator{}).Deactivate(context.Background(), domain.DeactivationRequest{
-			Client: domain.DetectedClient{ClientID: client}, DeclaredName: "demo",
+			Client: domain.DetectedClient{ClientID: client, ConfigRoot: configRoot}, DeclaredName: "demo",
 			CurrentActivation: domain.ActivationManual,
 		})
 		if err != nil {

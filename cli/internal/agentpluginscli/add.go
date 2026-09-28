@@ -238,11 +238,12 @@ func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	if confirmed || opts.format != "human" || !app.Terminal {
 		return confirmed, nil
 	}
-	question := "Apply this plan? [y/N]"
+	question := "Apply this plan? [Y/n]"
 	if !freshInstall {
 		question = "Apply these explicit lifecycle attestations? [y/N]"
+		return promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), question)
 	}
-	return promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), question)
+	return promptYesNoDefault(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), question, true)
 }
 
 func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.DetectedClient, skipped []targetSkip, allClients []domain.DetectedClient) ([]domain.ClientID, []domain.DetectedClient, error) {
@@ -319,7 +320,11 @@ func resumeInteractiveLifecycle(
 	envelope domain.PackageEnvelope,
 	current usecase.AddResult,
 ) error {
-	if current.Plan.InstallIntent == domain.InstallIntentPrepare {
+	if current.Plan.InstallIntent == domain.InstallIntentPrepare ||
+		(current.Activation.Activation == domain.ActivationActive &&
+			current.Activation.Verification == domain.VerificationInstalled &&
+			current.Activation.Authentication != domain.AuthenticationPending &&
+			current.Activation.Authentication != domain.AuthenticationNotChecked) {
 		return nil
 	}
 	var err error

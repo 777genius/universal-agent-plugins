@@ -1,5 +1,8 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { expect, test } from '@playwright/test';
+import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
+
+test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
 
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
   const values = await page.locator('script[type="application/ld+json"]').allTextContents();
@@ -57,7 +60,9 @@ test('homepage installs with auto-detection and exposes the full directory', asy
     /Automated review: (?:no blocking findings|\d+ notes?|\d+ blocking findings?)/,
   );
   await expect(securityBadge).not.toHaveAttribute('title');
-  await securityBadge.hover();
+  await hydrated(page);
+  await securityBadge.scrollIntoViewIfNeeded();
+  await securityBadge.focus();
   const securityTooltip = page.locator('.app-tooltip');
   await expect(securityTooltip).toBeVisible();
   await expect(securityTooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);

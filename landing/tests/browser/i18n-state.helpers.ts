@@ -168,3 +168,30 @@ export async function delayedMirror(page: Page, kind: 'discovery' | 'security', 
   });
   return { ...gate, seen: seen.promise, delivered: delivered.promise };
 }
+
+// UI behavior tests use the exact signed mirror staged into the local Pages
+// artifact, but must not age out when that mirror's public TTL has elapsed.
+// The production verifier still checks its signatures and validity window.
+let signedMirrorTestTime: Promise<Date> | undefined;
+export async function setSignedMirrorTestTime(page: Page) {
+  signedMirrorTestTime ??= (async () => {
+    const windows = await Promise.all(['discovery', 'security'].map(async (kind) => {
+      const latest = await page.request.get(`./${kind}/latest.json`);
+      expect(latest.ok(), `${kind} pointer must exist in the assembled artifact`).toBe(true);
+      const pointer = await latest.json() as { snapshot_path?: string };
+      expect(pointer.snapshot_path).toMatch(/^snapshots\/\d{20}\.json$/);
+      const response = await page.request.get(`./${kind}/${pointer.snapshot_path}`);
+      expect(response.ok(), `${kind} signed snapshot must exist in the assembled artifact`).toBe(true);
+      const snapshot = await response.json() as { generated_at?: string; expires_at?: string };
+      const start = Date.parse(snapshot.generated_at ?? '');
+      const end = Date.parse(snapshot.expires_at ?? '');
+      expect(Number.isFinite(start) && Number.isFinite(end) && start < end, `${kind} validity window`).toBe(true);
+      return { start, end };
+    }));
+    const start = Math.max(...windows.map((window) => window.start));
+    const end = Math.min(...windows.map((window) => window.end));
+    expect(start, 'signed mirror validity windows must overlap').toBeLessThan(end);
+    return new Date(start + Math.floor((end - start) / 2));
+  })();
+  await page.clock.setFixedTime(await signedMirrorTestTime);
+}

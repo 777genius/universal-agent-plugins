@@ -81,6 +81,26 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	if err := ctx.Err(); err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
+	queued, err := confirmationInput(ctx, p.Input)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return prompt.ConfirmationResult{}, canceledPrompt(err)
+		}
+		return prompt.ConfirmationResult{}, err
+	}
+	if len(queued) > 0 {
+		// Render the question and resolve the stale answer without reading the
+		// next owner's queued suffix. Fresh terminal input keeps the Yes default.
+		answer := "n\n"
+		if queued[0] != '\r' {
+			answer = "cancel\n"
+		}
+		p.Input = strings.NewReader(answer)
+		u, err = p.ui()
+		if err != nil {
+			return prompt.ConfirmationResult{}, err
+		}
+	}
 	title := prompt.SafeText(r.Title)
 	if title == "" {
 		title = "Continue?"
@@ -89,7 +109,7 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 	for i, s := range r.Summary {
 		summary[i] = prompt.SafeText(s)
 	}
-	result, err := u.Confirm(ctx, installerui.ConfirmRequest{Title: title, Summary: summary})
+	result, err := u.Confirm(ctx, installerui.ConfirmRequest{Title: title, Summary: summary, Default: r.Default})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return prompt.ConfirmationResult{}, canceledPrompt(err)

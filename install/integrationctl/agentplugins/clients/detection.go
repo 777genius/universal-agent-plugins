@@ -16,6 +16,8 @@ type HostDetector interface {
 
 // Detection is the raw outcome of probing one client's surfaces.
 type Detection struct {
+	// Err prevents an invalid selected profile from becoming mutation authority.
+	Err            error
 	ConfigRoot     string
 	ExecutablePath string
 	Surfaces       []domain.ClientSurface
@@ -31,6 +33,8 @@ type Detection struct {
 // evidence strings are produced, which is a cross-client output contract.
 type Host interface {
 	HomeDir() string
+	WorkingDir() string
+	CanonicalDirectory(path string) (string, error)
 	GOOS() string
 	Env(name string) string
 	SystemApplicationsDir() string
@@ -57,4 +61,22 @@ type Host interface {
 	XDGConfigRoot(name string) string
 	EditorChannelConfigRoot(channel string) string
 	VSCodeConfigRoot() string
+}
+
+// ProfileResolver normalizes an explicit profile at a composition boundary.
+// Implementations must reject ambiguous input before resolving symlink aliases.
+type ProfileResolver interface {
+	ResolveProfileRoot(root string) (string, error)
+}
+
+// VersionProbeEnvironment pins a native version probe to the selected profile.
+// The detector still controls the isolated cwd, timeout and output limit.
+type VersionProbeEnvironment interface {
+	VersionProbeEnvironment(configRoot string) ([]string, error)
+}
+
+// ProfileBindingValidator checks persisted profile authority before lifecycle
+// work, including removal paths that do not inspect a native registry.
+type ProfileBindingValidator interface {
+	ValidateBindingProfile(root string, binding domain.ClientBinding) error
 }

@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,15 +32,16 @@ type geminiNativeApply struct {
 func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	prepared, err := prepareGeminiNativeApply(configRoot, activePath, previous, desired, kernel, rename, capacity)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	txn, err := newGeminiSkillTxn(prepared)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	if err := txn.stageDesired(); err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
+	mcpMayWrite := false
 	defer func() {
 		if txn.cleanup && txn.transactionRoot != "" {
 			_ = os.RemoveAll(txn.transactionRoot)
@@ -54,6 +56,8 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 		if rollbackErr := txn.rollback(); rollbackErr != nil {
 			txn.cleanup = false
 			resultErr = fmt.Errorf("%w; Gemini skill rollback failed: %w; recovery retained at %q", resultErr, rollbackErr, txn.transactionRoot)
+		} else if !mcpMayWrite || errors.Is(resultErr, nativeconfig.ErrCollision) || errors.Is(resultErr, nativeconfig.ErrNotOwned) {
+			resultErr = &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: resultErr}
 		}
 	}()
 	if err := txn.backupPrevious(); err != nil {
@@ -69,6 +73,7 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	if err := verifyGeminiMCPReceipts(prepared, requests); err != nil {
 		return err
 	}
+	mcpMayWrite = true
 	if _, err := prepared.kernel.ApplyBatch(requests); err != nil {
 		return err
 	}

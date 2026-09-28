@@ -86,18 +86,20 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if profileRoot == "" {
 		profileRoot = plan.NativeRegistryRoot
 	}
-	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
-		if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		plan.NativeRegistryRoot = profileRoot
-		return inspectCodexCLI(ctx, env, plan, managed)
+	if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
+		return clients.RegistryIndeterminate, err
 	}
-	if profileRoot != "" {
-		if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
+	if managed != nil {
+		if managed.PhysicalArtifact != "" && managed.PhysicalArtifact != plan.PhysicalArtifactID {
+			return clients.RegistryIndeterminate, fmt.Errorf("codex binding artifact differs from plan")
+		}
+		if err := ValidateBindingProfile(profileRoot, *managed); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
-		plan.NativeRegistryRoot = profileRoot
+	}
+	plan.NativeRegistryRoot = profileRoot
+	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
+		return inspectCodexCLI(ctx, env, plan, managed)
 	}
 	return inspectCodexFiles(plan, managed)
 }
@@ -106,6 +108,17 @@ func inspectCodexCLI(ctx context.Context, env clients.Env, plan domain.DeliveryP
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
+	// A missing selected profile has no registry. Do not run a registry probe
+	// against a disposable second profile or create the selected one in preflight.
+	if _, err := os.Lstat(plan.NativeRegistryRoot); os.IsNotExist(err) {
+		return clients.RegistryClear, nil
+	} else if err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	return inspectCodexCLIExisting(ctx, env, plan, managed)
+}
+
+func inspectCodexCLIExisting(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	command, err := codexCommand(plan.NativeRegistryRoot, plan.NativeRegistryExecutable, os.Environ(), "plugin", "list", "--json")
 	if err != nil {
 		return clients.RegistryIndeterminate, err

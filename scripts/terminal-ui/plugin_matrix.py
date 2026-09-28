@@ -29,7 +29,7 @@ KINDS = ('empty', 'skill', 'stdio-missing', 'http-auth', 'mixed', 'malformed',
          'unsupported', 'collision')
 CASES = tuple(f'{kind}:{action}' for kind in KINDS for action in
               (('reject',) if kind == 'malformed' else
-               ('cancel',) if kind in ('stdio-missing', 'collision') else ('cancel', 'default-no'))
+               ('cancel',) if kind in ('stdio-missing', 'collision') else ('cancel', 'no'))
               ) + ('skill:install', 'stdio-missing:reject', 'mixed:partial-plan',
                    'collision:reject', 'http-auth:auth-unknown', 'empty:all-ten')
 
@@ -264,7 +264,7 @@ def run_case(case, binary, evidence, timeout=8):
                 planned = re.findall(r'Target: ([a-z]+)', text)
                 check('pty-synthetic' in text and '1.0.0' in text, 'ten-target plan identity missing')
                 fixture.unchanged()
-                send(session, b'\r')
+                send(session, b' \r')
                 session.finish()
                 fixture.unchanged()
                 check(set(planned) == expected and len(planned) == len(expected),
@@ -302,10 +302,10 @@ def run_case(case, binary, evidence, timeout=8):
                 if re.search(CONFIRM, clean(session.raw[offset:])):
                     session.wait(r'(?s)Yes.*?No.*?enter submit', 'unexpected-consent', after=offset)
                     fixture.unchanged()
-                    send(session, b'\r')
+                    send(session, b' \r')
                     session.finish()
                     fixture.unchanged()
-                    raise AssertionError(f'{kind}: reached consent instead of fail-closed rejection; default No preserved zero changes')
+                    raise AssertionError(f'{kind}: reached consent instead of fail-closed rejection; explicit No preserved zero changes')
                 session.finish(1)
                 fixture.unchanged()
                 text = clean(session.raw[offset:]).lower()
@@ -345,8 +345,8 @@ def run_case(case, binary, evidence, timeout=8):
             if kind in ('empty', 'unsupported'):
                 check(not re.search(r'\b(?:Skill|MCP server|Hook|Command):', text),
                       'loader invented portable components')
-            if action in ('default-no', 'partial-plan', 'auth-unknown'):
-                send(session, b'\r')
+            if action in ('no', 'partial-plan', 'auth-unknown'):
+                send(session, b' \r')
                 session.finish()
                 fixture.unchanged()
                 if action in ('partial-plan', 'auth-unknown'):
@@ -364,7 +364,7 @@ def run_case(case, binary, evidence, timeout=8):
                         check(mcp['support'] == 'native', 'HTTP component lost')
                         check(requests == [], 'installation unexpectedly contacted HTTP endpoint')
                 return
-            send(session, b' \r')
+            send(session, b'\r')
             session.wait(LIFECYCLE, 'activation')
             target = exact_skill(fixture)
             (evidence / 'installed-files.json').write_text(json.dumps(hashes(target), indent=2))

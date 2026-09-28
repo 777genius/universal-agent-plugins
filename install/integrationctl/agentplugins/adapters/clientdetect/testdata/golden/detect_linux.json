@@ -2,6 +2,7 @@
   {
     "ClientID": "chatgpt",
     "ConfigRoot": "",
+    "DetectionError": null,
     "DisplayName": "ChatGPT",
     "ExecutablePath": "",
     "Status": "detected",
@@ -17,6 +18,7 @@
   {
     "ClientID": "claude",
     "ConfigRoot": "\u003chome\u003e/.claude",
+    "DetectionError": null,
     "DisplayName": "Claude Code",
     "ExecutablePath": "\u003chome\u003e/bin/claude",
     "Status": "detected",
@@ -37,6 +39,7 @@
   {
     "ClientID": "cline",
     "ConfigRoot": "\u003chome\u003e/.cline",
+    "DetectionError": null,
     "DisplayName": "Cline",
     "ExecutablePath": "",
     "Status": "detected",
@@ -67,6 +70,7 @@
   {
     "ClientID": "codex",
     "ConfigRoot": "\u003chome\u003e/.codex",
+    "DetectionError": null,
     "DisplayName": "OpenAI Codex",
     "ExecutablePath": "\u003chome\u003e/bin/codex",
     "Status": "detected",
@@ -92,6 +96,7 @@
   {
     "ClientID": "copilot",
     "ConfigRoot": "\u003chome\u003e/.copilot",
+    "DetectionError": null,
     "DisplayName": "GitHub Copilot CLI",
     "ExecutablePath": "\u003chome\u003e/bin/copilot",
     "Status": "detected",
@@ -112,6 +117,7 @@
   {
     "ClientID": "cursor",
     "ConfigRoot": "\u003chome\u003e/.cursor",
+    "DetectionError": null,
     "DisplayName": "Cursor",
     "ExecutablePath": "\u003chome\u003e/bin/cursor",
     "Status": "detected",
@@ -137,6 +143,7 @@
   {
     "ClientID": "gemini",
     "ConfigRoot": "\u003chome\u003e/.gemini",
+    "DetectionError": null,
     "DisplayName": "Gemini CLI",
     "ExecutablePath": "\u003chome\u003e/bin/gemini",
     "Status": "detected",
@@ -157,6 +164,7 @@
   {
     "ClientID": "kiro",
     "ConfigRoot": "\u003chome\u003e/.kiro",
+    "DetectionError": null,
     "DisplayName": "Kiro",
     "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
     "Status": "detected",
@@ -187,6 +195,7 @@
   {
     "ClientID": "opencode",
     "ConfigRoot": "\u003chome\u003e/.config/opencode",
+    "DetectionError": null,
     "DisplayName": "OpenCode",
     "ExecutablePath": "\u003chome\u003e/bin/opencode",
     "Status": "detected",
@@ -212,6 +221,7 @@
   {
     "ClientID": "vscode",
     "ConfigRoot": "\u003chome\u003e/.config/Code/User",
+    "DetectionError": null,
     "DisplayName": "Visual Studio Code",
     "ExecutablePath": "\u003chome\u003e/bin/code",
     "Status": "detected",
@@ -237,6 +247,7 @@
   {
     "ClientID": "windsurf",
     "ConfigRoot": "\u003chome\u003e/.codeium/windsurf",
+    "DetectionError": null,
     "DisplayName": "Windsurf / Devin",
     "ExecutablePath": "\u003chome\u003e/bin/windsurf",
     "Status": "detected",

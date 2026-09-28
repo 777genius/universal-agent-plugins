@@ -1103,7 +1103,7 @@ func TestInteractiveAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "prepare configuration; automatic MCP verification unavailable") {
+	if !strings.Contains(stdout, "kiro (prepare only; manual verification)") {
 		t.Fatalf("activation-aware interactive output = %q", stdout)
 	}
 	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {
@@ -1694,6 +1694,22 @@ func TestHumanCodexFlowNeverClaimsPreparedPackageIsInstalled(t *testing.T) {
 	}
 	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, fixture.root) || !strings.Contains(stdout, "verify") {
 		t.Fatalf("human output must contain one path-bearing verification step: %s", stdout)
+	}
+}
+
+func TestInteractiveCompletedLifecycleDoesNotPrintSecondSuccess(t *testing.T) {
+	var output bytes.Buffer
+	command := &cobra.Command{}
+	command.SetOut(&output)
+	result := usecase.AddResult{Mutated: true, Activation: domain.ActivationOutcome{
+		Activation: domain.ActivationActive, Verification: domain.VerificationInstalled,
+		Authentication: domain.AuthenticationNotRequired,
+	}}
+	if err := resumeInteractiveLifecycle(context.Background(), command, usecase.Service{}, usecase.AddInput{}, domain.PackageEnvelope{}, result); err != nil {
+		t.Fatal(err)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("completed lifecycle printed duplicate result: %q", output.String())
 	}
 }
 
@@ -3330,9 +3346,15 @@ func (detector staticDetector) Detect(context.Context) ([]domain.DetectedClient,
 
 func fixtureClient(t *testing.T, client domain.ClientID) domain.DetectedClient {
 	t.Helper()
+	// macOS temp directories can be spelled through /var, which aliases
+	// /private/var. Real detection passes a canonical profile to the planner.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	return domain.DetectedClient{
 		ClientID: client, DisplayName: string(client), Status: domain.DetectionDetected,
-		ConfigRoot: filepath.Join(t.TempDir(), "home", "."+string(client)),
+		ConfigRoot: filepath.Join(root, "home", "."+string(client)),
 	}
 }
 

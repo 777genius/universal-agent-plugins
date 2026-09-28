@@ -79,6 +79,8 @@ type DirectoryMutation struct {
 	// filesystem mutation, if ActivePath already exists. See dirswap.Input's
 	// field of the same name.
 	RequireAbsent bool
+	// VerifyBefore proves caller ownership at the active and moved backup paths.
+	VerifyBefore func(context.Context, string) error
 }
 
 type DirectoryRemoval struct {
@@ -130,6 +132,30 @@ type Kernel struct {
 	Directory  dirswap.Manager
 }
 
+// A directory commit confirms only the managed package bytes. External native
+// receipts remain the last confirmed effect until the client adapter reports
+// its own result after this transaction.
+func committedDirectoryObjects(before domain.StateFileV2, installationID, bindingID string, projected []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+	var objects []domain.NativeObjectOwnership
+	for _, object := range projected {
+		if object.Kind == "managed_package_directory" {
+			objects = append(objects, object)
+		}
+	}
+	for _, installation := range before.Installations {
+		if installation.InstallationID != installationID {
+			continue
+		}
+		for _, object := range installation.Clients[bindingID].NativeObjects {
+			if object.Kind != "managed_package_directory" {
+				objects = append(objects, object)
+			}
+		}
+		break
+	}
+	return objects
+}
+
 func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutation) (domain.MutationReceipt, error) {
 	if kernel.StateStore == nil {
 		return domain.MutationReceipt{}, fmt.Errorf("transaction state store is required")
@@ -159,20 +185,29 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
 		OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
-		RequireAbsent: mutation.RequireAbsent,
+		RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
 	})
 	if err != nil {
 		if directoryReceipt.OperationID != "" {
-			_ = kernel.Directory.Rollback(context.Background(), directoryReceipt)
+			if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
+				return domain.MutationReceipt{}, fmt.Errorf("%w; rollback failed: %w", err, rollbackErr)
+			}
 		}
 		return domain.MutationReceipt{}, err
 	}
-	rollback := func() { _ = kernel.Directory.Rollback(context.Background(), directoryReceipt) }
+	rollback := func(cause error) error {
+		if err := kernel.Directory.Rollback(context.Background(), directoryReceipt); err != nil {
+			return fmt.Errorf("%w; rollback failed: %w", cause, err)
+		}
+		return cause
+	}
 	if mutation.Verify != nil {
 		if err := mutation.Verify(ctx, directoryReceipt.ActivePath); err != nil {
-			rollback()
-			return domain.MutationReceipt{}, fmt.Errorf("verify activated directory: %w", err)
+			return domain.MutationReceipt{}, rollback(fmt.Errorf("verify activated directory: %w", err))
 		}
+	}
+	if err := kernel.Directory.VerifyPending(directoryReceipt); err != nil {
+		return domain.MutationReceipt{}, rollback(err)
 	}
 	receipt := domain.MutationReceipt{
 		OperationID:      mutation.OperationID,
@@ -188,7 +223,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 		Phase:            ReceiptPhaseStateCommitted,
 	}
 	client.Receipts = append(client.Receipts, receipt)
-	client.NativeObjects = append([]domain.NativeObjectOwnership(nil), mutation.NativeObjects...)
+	client.NativeObjects = committedDirectoryObjects(beforeState, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
 	client.Materialization = domain.MaterializationMaterialized
 	client.Activation = mutation.Activation
 	client.Authentication = mutation.Authentication
@@ -201,7 +236,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if oldState, err := kernel.persistCommitDecision(state, beforeStateJSON); err != nil {
 		if oldState {
 			if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
-				return domain.MutationReceipt{}, fmt.Errorf("commit transaction state: %v; rollback failed: %w", err, rollbackErr)
+				return domain.MutationReceipt{}, fmt.Errorf("commit transaction state: %w; rollback failed: %w", err, rollbackErr)
 			}
 		}
 		return domain.MutationReceipt{}, fmt.Errorf("commit transaction state: %w", err)
@@ -265,8 +300,8 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 	rollback := func() error {
 		var rollbackErr error
 		for index := len(applied) - 1; index >= 0; index-- {
-			if err := kernel.Directory.Rollback(context.Background(), applied[index].receipt); err != nil && rollbackErr == nil {
-				rollbackErr = err
+			if err := kernel.Directory.Rollback(context.Background(), applied[index].receipt); err != nil {
+				rollbackErr = errors.Join(rollbackErr, err)
 			}
 		}
 		return rollbackErr
@@ -290,14 +325,14 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
 			OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 			OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
-			RequireAbsent: mutation.RequireAbsent,
+			RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
 		})
 		if err != nil {
 			if directoryReceipt.OperationID != "" {
 				applied = append(applied, appliedGroupMutation{receipt: directoryReceipt})
 			}
 			if rollbackErr := rollback(); rollbackErr != nil {
-				return nil, groupError(GroupFailureUnknown, fmt.Errorf("apply grouped directory mutation: %v; rollback failed: %w", err, rollbackErr))
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("apply grouped directory mutation: %w; rollback failed: %w", err, rollbackErr))
 			}
 			if len(applied) > 0 {
 				return nil, groupError(GroupFailureRolledBack, err)
@@ -308,7 +343,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		if mutation.Verify != nil {
 			if err := mutation.Verify(ctx, directoryReceipt.ActivePath); err != nil {
 				if rollbackErr := rollback(); rollbackErr != nil {
-					return nil, groupError(GroupFailureUnknown, fmt.Errorf("verify grouped directory mutation: %v; rollback failed: %w", err, rollbackErr))
+					return nil, groupError(GroupFailureUnknown, fmt.Errorf("verify grouped directory mutation: %w; rollback failed: %w", err, rollbackErr))
 				}
 				return nil, groupError(GroupFailureRolledBack, fmt.Errorf("verify grouped directory mutation: %w", err))
 			}
@@ -318,7 +353,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 			ActivePath: directoryReceipt.ActivePath, StagingPath: directoryReceipt.StagingPath, BackupPath: directoryReceipt.BackupPath,
 			BeforeDigest: mutation.BeforeDigest, AfterDigest: mutation.AfterDigest, Phase: ReceiptPhaseStateCommitted}
 		client.Receipts = append(client.Receipts, receipt)
-		client.NativeObjects = append([]domain.NativeObjectOwnership(nil), mutation.NativeObjects...)
+		client.NativeObjects = committedDirectoryObjects(before, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
 		client.Materialization, client.Activation, client.Authentication = domain.MaterializationMaterialized, mutation.Activation, mutation.Authentication
 		client.Policy, client.Verification = mutation.Policy, mutation.Verification
 		installation := state.Installations[installationIndex]
@@ -330,19 +365,27 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 	if group.PostApplyVerify != nil {
 		if err := group.PostApplyVerify(ctx); err != nil {
 			if rollbackErr := rollback(); rollbackErr != nil {
-				return nil, groupError(GroupFailureUnknown, fmt.Errorf("post-apply group verification: %v; rollback failed: %w", err, rollbackErr))
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("post-apply group verification: %w; rollback failed: %w", err, rollbackErr))
 			}
 			return nil, groupError(GroupFailureRolledBack, fmt.Errorf("post-apply group verification: %w", err))
 		}
 	}
-	if oldState, err := kernel.persistCommitDecision(state, beforeJSON); err != nil {
-		if oldState {
+	for _, item := range applied {
+		if err := kernel.Directory.VerifyPending(item.receipt); err != nil {
 			if rollbackErr := rollback(); rollbackErr != nil {
-				return nil, groupError(GroupFailureUnknown, fmt.Errorf("commit grouped transaction state: %v; rollback failed: %w", err, rollbackErr))
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("%w; rollback failed: %w", err, rollbackErr))
+			}
+			return nil, groupError(GroupFailureRolledBack, err)
+		}
+	}
+	if old, err := kernel.persistCommitDecision(state, beforeJSON); err != nil {
+		if old {
+			if rollbackErr := rollback(); rollbackErr != nil {
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("commit grouped transaction state: %w; rollback failed: %w", err, rollbackErr))
 			}
 			return nil, groupError(GroupFailureRolledBack, fmt.Errorf("commit grouped transaction state: %w", err))
 		}
-		if !oldState {
+		if !old {
 			return groupReceipts(applied), groupError(GroupFailureUnknown, fmt.Errorf("commit grouped transaction state: %w", err))
 		}
 	}
@@ -410,11 +453,19 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 	}
 	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{
 		OperationID: removal.OperationID, ClientBindingID: removal.ClientBindingID, Sequence: removal.Sequence,
-		OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true,
+		OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify,
 	})
 	if err != nil {
 		if directoryReceipt.OperationID != "" {
-			_ = kernel.Directory.Rollback(context.Background(), directoryReceipt)
+			if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
+				return domain.MutationReceipt{}, fmt.Errorf("%w; rollback failed: %w", err, rollbackErr)
+			}
+		}
+		return domain.MutationReceipt{}, err
+	}
+	if err := kernel.Directory.VerifyPending(directoryReceipt); err != nil {
+		if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
+			return domain.MutationReceipt{}, fmt.Errorf("%w; rollback failed: %w", err, rollbackErr)
 		}
 		return domain.MutationReceipt{}, err
 	}
@@ -443,7 +494,7 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 	if oldState, err := kernel.persistCommitDecision(state, beforeStateJSON); err != nil {
 		if oldState {
 			if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
-				return domain.MutationReceipt{}, fmt.Errorf("commit removal state: %v; rollback failed: %w", err, rollbackErr)
+				return domain.MutationReceipt{}, fmt.Errorf("commit removal state: %w; rollback failed: %w", err, rollbackErr)
 			}
 		}
 		return domain.MutationReceipt{}, fmt.Errorf("commit removal state: %w", err)
@@ -507,8 +558,8 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 	rollback := func() error {
 		var result error
 		for index := len(applied) - 1; index >= 0; index-- {
-			if err := kernel.Directory.Rollback(context.Background(), applied[index].receipt); err != nil && result == nil {
-				result = err
+			if err := kernel.Directory.Rollback(context.Background(), applied[index].receipt); err != nil {
+				result = errors.Join(result, err)
 			}
 		}
 		return result
@@ -534,13 +585,13 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 			}
 		}
 		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{OperationID: removal.OperationID, ClientBindingID: removal.ClientBindingID,
-			Sequence: removal.Sequence, OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true})
+			Sequence: removal.Sequence, OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify})
 		if err != nil {
 			if directoryReceipt.OperationID != "" {
 				applied = append(applied, appliedGroupMutation{receipt: directoryReceipt})
 			}
 			if rollbackErr := rollback(); rollbackErr != nil {
-				return nil, groupError(GroupFailureUnknown, fmt.Errorf("apply grouped removal: %v; rollback failed: %w", err, rollbackErr))
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("apply grouped removal: %w; rollback failed: %w", err, rollbackErr))
 			}
 			if len(applied) > 0 {
 				return nil, groupError(GroupFailureRolledBack, err)
@@ -576,10 +627,18 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 		}
 		applied = append(applied, appliedGroupMutation{receipt: directoryReceipt, state: receipt})
 	}
+	for _, item := range applied {
+		if err := kernel.Directory.VerifyPending(item.receipt); err != nil {
+			if rollbackErr := rollback(); rollbackErr != nil {
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("%w; rollback failed: %w", err, rollbackErr))
+			}
+			return nil, groupError(GroupFailureRolledBack, err)
+		}
+	}
 	if old, err := kernel.persistCommitDecision(state, beforeJSON); err != nil {
 		if old {
 			if rollbackErr := rollback(); rollbackErr != nil {
-				return nil, groupError(GroupFailureUnknown, fmt.Errorf("commit grouped removal: %v; rollback failed: %w", err, rollbackErr))
+				return nil, groupError(GroupFailureUnknown, fmt.Errorf("commit grouped removal: %w; rollback failed: %w", err, rollbackErr))
 			}
 			return nil, groupError(GroupFailureRolledBack, fmt.Errorf("commit grouped removal state: %w", err))
 		}
@@ -733,6 +792,17 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 		}
 		return false, fmt.Errorf("state save failed and reload matched neither exact old nor desired state: %w", initialErr)
 	}
+}
+
+// PersistStateDecision gives lifecycle state writes the same visibility and
+// durability handling as directory commit decisions.
+func (kernel Kernel) PersistStateDecision(before, desired domain.StateFileV2) error {
+	beforeJSON, err := marshalComparableState(before)
+	if err != nil {
+		return err
+	}
+	_, err = kernel.persistCommitDecision(desired, beforeJSON)
+	return err
 }
 
 func marshalComparableState(state domain.StateFileV2) ([]byte, error) {

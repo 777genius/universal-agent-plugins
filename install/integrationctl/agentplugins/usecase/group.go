@@ -14,10 +14,28 @@ type GroupInput struct {
 	Targets             []AddInput
 	CompatibilityChecks []AddInput
 	OperationGroupID    string
+	Progress            func(GroupProgressEvent)
 	DryRun              bool
 	Confirmed           bool
 	Switch              bool
 	Repair              bool
+}
+
+type GroupProgressPhase string
+
+const (
+	GroupProgressPreparing   GroupProgressPhase = "preparing"
+	GroupProgressConfiguring GroupProgressPhase = "configuring"
+	GroupProgressConfigured  GroupProgressPhase = "configured"
+	GroupProgressActivated   GroupProgressPhase = "activated"
+)
+
+// GroupProgressEvent reports observed checkpoints; it never grants consent or
+// changes the outcome of an installation.
+type GroupProgressEvent struct {
+	ClientID domain.ClientID
+	Phase    GroupProgressPhase
+	Result   AddResult
 }
 
 type GroupResult struct {
@@ -131,6 +149,18 @@ type plannedGroupTarget struct {
 	// client discovery. Its full native identity is deferred until the group's
 	// directories are restored and is verified once, together, before commit.
 	recovering bool
+	// requireAbsent records the filesystem precondition independently of native recovery.
+	requireAbsent bool
+}
+
+func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) {
+	if session.input.Progress == nil {
+		return
+	}
+	for _, index := range target.resultIndexes {
+		result := session.result.Targets[index]
+		session.input.Progress(GroupProgressEvent{ClientID: result.Plan.ClientID, Phase: phase, Result: result})
+	}
 }
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
@@ -172,6 +202,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	session.buildDesiredGroupState()
+	for _, target := range session.planned {
+		session.reportGroupProgress(target, GroupProgressConfiguring)
+	}
 	if err := session.applyGroupKernel(); err != nil {
 		return session.result, err
 	}

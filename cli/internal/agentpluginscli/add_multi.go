@@ -55,6 +55,7 @@ type batchPresentationKind string
 
 const (
 	batchPresentationInstalled      batchPresentationKind = "Installed"
+	batchPresentationAttested       batchPresentationKind = "User-attested"
 	batchPresentationSetupRequired  batchPresentationKind = "Setup required"
 	batchPresentationSignInRequired batchPresentationKind = "Sign-in required"
 	batchPresentationFailed         batchPresentationKind = "Failed"
@@ -234,9 +235,41 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			combined.setTargetProof(client.ClientID, "not_run")
 		}
 	}
-	writeProgress(app, opts.format, "Applying the completely preflighted multi-target plan...")
+	writeProgress(app, opts.format, fmt.Sprintf("Installing %s for %d selected clients...", prompt.SafeText(loaded.envelope.Manifest.Name), len(selected)))
 	groupInput.DryRun, groupInput.Confirmed = false, true
+	board := startGroupProgressBoard(app, opts, selected)
+	if board != nil {
+		groupInput.Progress = board.observe
+	} else if app.Terminal && opts.format == "human" {
+		names := make(map[domain.ClientID]string, len(selected))
+		for _, client := range selected {
+			names[client.ClientID] = prompt.SafeText(reviewClientName(client.ClientID))
+		}
+		groupInput.Progress = func(event usecase.GroupProgressEvent) {
+			name := names[event.ClientID]
+			if name == "" {
+				name = prompt.SafeText(string(event.ClientID))
+			}
+			var stage string
+			switch event.Phase {
+			case usecase.GroupProgressPreparing:
+				stage = "1/3  preparing package..."
+			case usecase.GroupProgressConfiguring:
+				stage = "2/3  configuring clients..."
+			case usecase.GroupProgressConfigured:
+				stage = "2/3  configuration ready"
+			case usecase.GroupProgressActivated:
+				stage = "3/3  " + progressResultLabel(event.Result)
+			default:
+				return
+			}
+			_, _ = fmt.Fprintf(app.errorOutput(), "%s  %s\n", name, stage)
+		}
+	}
 	applied, err := service.AddGroup(ctx, groupInput)
+	if board != nil {
+		board.finish(applied.Targets)
+	}
 	if len(applied.Targets) != len(selected) || len(applied.Targets) != len(inputs) {
 		if err != nil {
 			return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", len(applied.Targets), len(selected), err)
@@ -615,7 +648,7 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 	attention := make([]addTargetResult, 0, len(result.Targets))
 	for _, target := range result.Targets {
 		switch classifyBatchPresentation(target) {
-		case batchPresentationSetupRequired, batchPresentationSignInRequired, batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
+		case batchPresentationAttested, batchPresentationSetupRequired, batchPresentationSignInRequired, batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
 			attention = append(attention, target)
 		}
 	}
@@ -700,7 +733,7 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 	switch phase {
 	case usecase.GroupTargetManagedRolledBack:
 		return batchPresentationRolledBack
-	case usecase.GroupTargetExternalNotAttempted:
+	case usecase.GroupTargetPlanned, usecase.GroupTargetManagedCommitted, usecase.GroupTargetExternalNotAttempted:
 		return batchPresentationNotCompleted
 	case usecase.GroupTargetExternalFailed, usecase.GroupTargetExternalPartial, usecase.GroupTargetManagedUnknown:
 		return batchPresentationFailed
@@ -713,6 +746,9 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 		return batchPresentationSignInRequired
 	}
 	if fullyInstalled(activation) {
+		if activation.ActivationAttested || activation.AuthenticationAttested {
+			return batchPresentationAttested
+		}
 		return batchPresentationInstalled
 	}
 	if activation.Authentication == domain.AuthenticationNotChecked {
@@ -724,14 +760,14 @@ func classifyBatchPresentation(target addTargetResult) batchPresentationKind {
 	if phase == usecase.GroupTargetExternalCompleted {
 		return batchPresentationSetupRequired
 	}
-	return batchPresentationFailed
+	return batchPresentationNotCompleted
 }
 
 func batchResultTone(kind batchPresentationKind) terminaltheme.Role {
 	switch kind {
 	case batchPresentationInstalled:
 		return terminaltheme.Success
-	case batchPresentationSetupRequired, batchPresentationSignInRequired:
+	case batchPresentationAttested, batchPresentationSetupRequired, batchPresentationSignInRequired:
 		return terminaltheme.Warning
 	case batchPresentationFailed, batchPresentationNotCompleted, batchPresentationRolledBack:
 		return terminaltheme.Error
@@ -744,6 +780,8 @@ func batchAttentionLines(target addTargetResult) []string {
 	kind := classifyBatchPresentation(target)
 	phase := target.Output.Result.GroupPhase
 	switch kind {
+	case batchPresentationAttested:
+		return []string{"Lifecycle was explicitly attested by the user; it was not observed from the client."}
 	case batchPresentationRolledBack:
 		return []string{"Managed installation was rolled back; no client changes were kept."}
 	case batchPresentationFailed, batchPresentationNotCompleted:
@@ -777,7 +815,7 @@ func batchAttentionLines(target addTargetResult) []string {
 
 func countBatchTarget(result *addMultiResult, target addTargetResult) {
 	switch classifyBatchPresentation(target) {
-	case batchPresentationInstalled:
+	case batchPresentationInstalled, batchPresentationAttested:
 		result.Succeeded++
 	case batchPresentationSetupRequired, batchPresentationSignInRequired:
 		// Deferred ChatGPT (status action_required, no group phase) is reported

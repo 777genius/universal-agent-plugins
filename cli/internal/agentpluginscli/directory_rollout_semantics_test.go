@@ -394,7 +394,7 @@ func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "prepare configuration; automatic MCP verification unavailable") {
+	if !strings.Contains(stdout, "kiro (prepare only; manual verification)") {
 		t.Fatalf("activation-aware Directory output = %q", stdout)
 	}
 	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {
