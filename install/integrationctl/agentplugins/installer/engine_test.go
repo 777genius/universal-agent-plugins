@@ -5149,7 +5149,8 @@ func TestExampleFlaggedPathRunsAgainstLocalModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replaced := string(mod) + "\nreplace github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins => " + repo + "\n"
+	replaced := string(mod) + "\nreplace github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins => " + repo + "\n" +
+		"replace github.com/777genius/plugin-kit-ai/install/integrationctl => " + filepath.Dir(repo) + "\n"
 	if err := os.WriteFile(filepath.Join(work, "go.mod"), []byte(replaced), 0600); err != nil {
 		t.Fatal(err)
 	}
