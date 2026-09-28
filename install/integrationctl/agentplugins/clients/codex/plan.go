@@ -8,7 +8,14 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-var _ clients.PlanRefiner = (*Adapter)(nil)
+var (
+	_ clients.PlanRefiner      = (*Adapter)(nil)
+	_ clients.PlanPrecondition = (*Adapter)(nil)
+)
+
+func (*Adapter) CheckPlanPrecondition(input clients.PlanInput, plan *domain.DeliveryPlan) error {
+	return validateProfile(input.Client.ConfigRoot, plan.NativeRegistryRoot)
+}
 
 func (*Adapter) RefinePlan(_ context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if plan.Status != domain.PlanUnsupported && shared.HasListingCLI(plan.NativeRegistryExecutable) {

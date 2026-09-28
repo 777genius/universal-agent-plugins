@@ -18,18 +18,24 @@ import (
 )
 
 type Detector struct {
-	HomeDir                string
-	GOOS                   string
-	Environment            map[string]string
-	SystemApplicationsDir  string
-	WindowsProgramFiles    []string
-	LinuxApplicationDirs   []string
-	LookPath               func(string) (string, error)
-	Lstat                  func(string) (fs.FileInfo, error)
-	ReadDir                func(string) ([]os.DirEntry, error)
-	ProbeVersion           func(context.Context, string) (string, error)
-	VersionTimeout         time.Duration
-	TargetedVersionTimeout time.Duration
+	HomeDir                     string
+	WorkingDir                  string
+	GOOS                        string
+	Environment                 map[string]string
+	SystemApplicationsDir       string
+	WindowsProgramFiles         []string
+	LinuxApplicationDirs        []string
+	LookPath                    func(string) (string, error)
+	Lstat                       func(string) (fs.FileInfo, error)
+	ReadDir                     func(string) ([]os.DirEntry, error)
+	EvalSymlinks                func(string) (string, error)
+	ProbeVersionWithEnvironment func(context.Context, string, []string) (string, error)
+	// An explicitly injected legacy probe overrides the OS probe. It cannot
+	// carry a profile environment, so clients requiring one remain unprobed.
+	// Use ProbeVersionWithEnvironment and leave ProbeVersion nil for those clients.
+	ProbeVersion func(context.Context, string) (string, error)
+	VersionTimeout              time.Duration
+	TargetedVersionTimeout      time.Duration
 	// Registry supplies the client adapters that know where each client keeps
 	// its surfaces. It is injected by the composition root and never defaulted
 	// to "every client": that would link every adapter into any binary that
@@ -42,6 +48,7 @@ type Detector struct {
 // knows about, so it assigns Registry before the detector is used.
 func NewOS(homeDir string) Detector {
 	environment := environmentSnapshot()
+	workingDir, _ := os.Getwd()
 	xdgApplications := ""
 	if root := strings.TrimSpace(environment["XDG_DATA_HOME"]); root != "" {
 		xdgApplications = filepath.Join(root, "applications")
@@ -52,6 +59,7 @@ func NewOS(homeDir string) Detector {
 	}
 	return Detector{
 		HomeDir:               homeDir,
+		WorkingDir:            workingDir,
 		GOOS:                  runtime.GOOS,
 		Environment:           environment,
 		SystemApplicationsDir: "/Applications",
@@ -61,12 +69,13 @@ func NewOS(homeDir string) Detector {
 			userApplications,
 			"/usr/local/share/applications", "/usr/share/applications",
 		),
-		LookPath:               exec.LookPath,
-		Lstat:                  os.Lstat,
-		ReadDir:                os.ReadDir,
-		ProbeVersion:           probeExecutableVersion,
-		VersionTimeout:         2 * time.Second,
-		TargetedVersionTimeout: 10 * time.Second,
+		LookPath:                   exec.LookPath,
+		Lstat:                      os.Lstat,
+		ReadDir:                    os.ReadDir,
+		EvalSymlinks:               filepath.EvalSymlinks,
+		ProbeVersionWithEnvironment: probeExecutableVersionWithEnvironment,
+		VersionTimeout:             2 * time.Second,
+		TargetedVersionTimeout:     10 * time.Second,
 	}
 }
 
@@ -121,7 +130,11 @@ func (detector Detector) detect(ctx context.Context, probeVersion bool, selected
 	host := detector.host()
 	result := make([]domain.DetectedClient, 0, len(adapters))
 	for _, adapter := range adapters {
-		result = append(result, detector.detectClient(ctx, host, adapter, probe(adapter.ID())))
+		client, err := detector.detectClient(ctx, host, adapter, probe(adapter.ID()))
+		if err != nil {
+			return nil, fmt.Errorf("detect %s: %w", adapter.ID(), err)
+		}
+		result = append(result, client)
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].ClientID < result[j].ClientID })
 	return result, nil
@@ -131,7 +144,7 @@ func (detector Detector) detect(ctx context.Context, probeVersion bool, selected
 // Identity and display name come from the declarative registry, so an adapter
 // cannot rename the client it serves. An adapter that does not probe surfaces
 // at all reports as not detected rather than disappearing from the listing.
-func (detector Detector) detectClient(ctx context.Context, host clients.Host, adapter clients.Adapter, probeVersion bool) domain.DetectedClient {
+func (detector Detector) detectClient(ctx context.Context, host clients.Host, adapter clients.Adapter, probeVersion bool) (domain.DetectedClient, error) {
 	definition, _ := domain.ClientDefinitionFor(adapter.ID())
 	client := domain.DetectedClient{
 		ClientID:    adapter.ID(),
@@ -140,25 +153,47 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 	}
 	hostDetector, ok := clients.As[clients.HostDetector](detector.Registry, adapter.ID())
 	if !ok {
-		return client
+		return client, nil
 	}
 	detection := hostDetector.DetectSurfaces(host)
+	if detection.Err != nil {
+		return client, detection.Err
+	}
 	client.Surfaces = detection.Surfaces
 	client.ExecutablePath = detection.ExecutablePath
 	client.ConfigRoot = detection.ConfigRoot
 	client.Status = detectionStatus(detection)
-	if probeVersion && client.Status == domain.DetectionDetected && client.ExecutablePath != "" && detector.ProbeVersion != nil {
+	if probeVersion && client.Status == domain.DetectionDetected && client.ExecutablePath != "" && (detector.ProbeVersion != nil || detector.ProbeVersionWithEnvironment != nil) {
 		timeout := detector.VersionTimeout
 		if timeout <= 0 {
 			timeout = 2 * time.Second
 		}
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
-		if version, err := detector.ProbeVersion(ctx, client.ExecutablePath); err == nil {
+		var environment []string
+		if profile, ok := adapter.(clients.VersionProbeEnvironment); ok {
+			var err error
+			environment, err = profile.VersionProbeEnvironment(client.ConfigRoot)
+			if err != nil {
+				return client, err
+			}
+		}
+		var version string
+		var err error
+		if detector.ProbeVersion != nil {
+			if len(environment) == 0 {
+				version, err = detector.ProbeVersion(ctx, client.ExecutablePath)
+			}
+		} else if detector.ProbeVersionWithEnvironment != nil {
+			version, err = detector.ProbeVersionWithEnvironment(ctx, client.ExecutablePath, environment)
+		}
+		// A legacy probe cannot carry profile authority. Leave the version unknown
+		// rather than invoking Codex against a different or ambient profile.
+		if err == nil {
 			client.Version = normalizeVersion(version)
 		}
 	}
-	return client
+	return client, nil
 }
 
 // detectionStatus separates read-only discovery evidence from the surfaces that
@@ -185,7 +220,7 @@ func environmentSnapshot() map[string]string {
 	for _, name := range []string{
 		"APPDATA", "LOCALAPPDATA", "ProgramFiles", "ProgramW6432", "ProgramFiles(x86)",
 		"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
-		"CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH",
+		"CODEX_HOME", "CLAUDE_CONFIG_DIR", "GEMINI_CLI_HOME", "CLINE_DATA_DIR", "CLINE_MCP_SETTINGS_PATH",
 	} {
 		if value, ok := os.LookupEnv(name); ok {
 			values[name] = value

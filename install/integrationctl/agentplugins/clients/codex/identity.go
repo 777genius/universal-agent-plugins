@@ -86,18 +86,20 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if profileRoot == "" {
 		profileRoot = plan.NativeRegistryRoot
 	}
-	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
-		if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		plan.NativeRegistryRoot = profileRoot
-		return inspectCodexCLI(ctx, env, plan, managed)
+	if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
+		return clients.RegistryIndeterminate, err
 	}
-	if profileRoot != "" {
-		if err := validateProfile(profileRoot, plan.NativeRegistryRoot); err != nil {
+	if managed != nil {
+		if managed.PhysicalArtifact != "" && managed.PhysicalArtifact != plan.PhysicalArtifactID {
+			return clients.RegistryIndeterminate, fmt.Errorf("Codex binding artifact differs from plan")
+		}
+		if err := ValidateBindingProfile(profileRoot, *managed); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
-		plan.NativeRegistryRoot = profileRoot
+	}
+	plan.NativeRegistryRoot = profileRoot
+	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
+		return inspectCodexCLI(ctx, env, plan, managed)
 	}
 	return inspectCodexFiles(plan, managed)
 }
@@ -106,24 +108,9 @@ func inspectCodexCLI(ctx context.Context, env clients.Env, plan domain.DeliveryP
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
-	// Codex rejects an explicit CODEX_HOME that does not exist. Check CLI
-	// compatibility against a disposable profile while leaving the selected
-	// profile untouched. Its absent registry is necessarily clear.
+	// A missing selected profile has no registry. Do not run a registry probe
+	// against a disposable second profile or create the selected one in preflight.
 	if _, err := os.Lstat(plan.NativeRegistryRoot); os.IsNotExist(err) {
-		probeRoot, err := os.MkdirTemp("", "agentplugins-codex-preflight-")
-		if err != nil {
-			return clients.RegistryIndeterminate, fmt.Errorf("create disposable Codex preflight profile: %w", err)
-		}
-		probePlan := plan
-		probePlan.NativeRegistryRoot = probeRoot
-		finding, inspectErr := inspectCodexCLIExisting(ctx, env, probePlan, nil)
-		cleanupErr := os.RemoveAll(probeRoot)
-		if err := errors.Join(inspectErr, cleanupErr); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		if finding == clients.RegistryIndeterminate {
-			return finding, fmt.Errorf("the Codex plugin list output is not recognized")
-		}
 		return clients.RegistryClear, nil
 	} else if err != nil {
 		return clients.RegistryIndeterminate, err

@@ -14,6 +14,9 @@ import (
 // operator confirms, or records the manual steps when the CLI is missing.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
+	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
+		return outcome, err
+	}
 	if !request.ExternalUninstalled {
 		return shared.RequireExternalUninstall(outcome, false, "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"), nil
 	}

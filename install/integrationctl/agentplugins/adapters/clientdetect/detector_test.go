@@ -27,6 +27,13 @@ func TestMain(m *testing.M) {
 			time.Sleep(5 * time.Second)
 			os.Exit(0)
 		}
+  if strings.Contains(name, "codex-profile-version-probe") {
+   cwd, _ := os.Getwd()
+   body, _ := json.Marshal(struct { CWD string; Env []string }{cwd, os.Environ()})
+   if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "version-observation.json"), body, 0600); err != nil { os.Exit(2) }
+   _, _ = os.Stdout.WriteString("codex-cli 1.2.3\n")
+   os.Exit(0)
+  }
 		stdin, _ := io.ReadAll(os.Stdin)
 		cwd, _ := os.Getwd()
 		_ = json.NewEncoder(os.Stdout).Encode(struct {
@@ -772,14 +779,15 @@ func testDetector(home string, binaries map[string]string) Detector {
 		GOOS:                  "linux",
 		Environment:           map[string]string{},
 		SystemApplicationsDir: applications,
-		LookPath: func(name string) (string, error) {
+		LookPath:                   func(name string) (string, error) {
 			if path := binaries[name]; path != "" {
 				return path, nil
 			}
 			return "", exec.ErrNotFound
 		},
-		Lstat:    os.Lstat,
-		ReadDir:  os.ReadDir,
+		EvalSymlinks:               filepath.EvalSymlinks,
+		Lstat:                      os.Lstat,
+		ReadDir:                    os.ReadDir,
 		Registry: all.Default(),
 	}
 }

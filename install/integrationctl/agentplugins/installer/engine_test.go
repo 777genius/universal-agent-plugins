@@ -59,41 +59,11 @@ func buildCodexProbe(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	src := filepath.Join(dir, "codex_probe.go")
-	body := `package main
-import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
-)
-func main() {
-	root := os.Getenv("CODEX_HOME")
-	marker := filepath.Join(root, ".uap-test-plugin")
-	args := os.Args[1:]
-	if len(args) >= 2 && args[0] == "plugin" && args[1] == "list" {
-		spec, err := os.ReadFile(marker)
-		if err != nil {
-			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"installed": []any{}})
-			return
-		}
-		name, marketplace, ok := strings.Cut(string(spec), "@")
-		if !ok {
-			os.Exit(2)
-		}
-		entry := map[string]any{"pluginId": string(spec), "name": name, "marketplaceName": marketplace, "installed": true, "enabled": true}
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"installed": []any{entry}})
-		return
+	body, err := os.ReadFile(filepath.Join("testdata", "codex_profile_probe.go"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(args) >= 3 && args[0] == "plugin" && args[1] == "add" {
-		_ = os.MkdirAll(root, 0700)
-		if err := os.WriteFile(marker, []byte(args[2]), 0600); err != nil { os.Exit(2) }
-	} else if len(args) >= 3 && args[0] == "plugin" && args[1] == "remove" {
-		_ = os.Remove(marker)
-	}
-	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true})
-}
-`
-	if err := os.WriteFile(src, []byte(body), 0600); err != nil {
+	if err := os.WriteFile(src, body, 0600); err != nil {
 		t.Fatal(err)
 	}
 	name := "codex-probe"
@@ -5190,7 +5160,7 @@ func TestExampleFlaggedPathRunsAgainstLocalModule(t *testing.T) {
 		t.Fatalf("tidy sample: %s %v", body, err)
 	}
 	bin := filepath.Join(work, "sample")
-	build := exec.CommandContext(ctx, "go", "build", "-o", bin, ".")
+	build := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", bin, ".")
 	build.Dir = work
 	build.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off")
 	if body, err := build.CombinedOutput(); err != nil {

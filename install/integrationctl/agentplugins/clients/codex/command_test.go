@@ -106,7 +106,7 @@ func TestEveryCommandUsesExplicitProfile(t *testing.T) {
 					t.Fatalf("%+v %v", out, err)
 				}
 			} else if scenario.inspect {
-				finding, err := New().InspectNativeRegistry(context.Background(), env, client, plan, &domain.ClientBinding{})
+				finding, err := New().InspectNativeRegistry(context.Background(), env, client, plan, &domain.ClientBinding{NativeProfileRoot: root})
 				if err != nil || finding != clients.RegistryExpected || !runner.tree {
 					t.Fatalf("%v %v tree=%v", finding, err, runner.tree)
 				}
@@ -170,16 +170,10 @@ func TestFreshCodexProfileIsReadOnlyUntilActivation(t *testing.T) {
 	client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: root}
 	plan := domain.DeliveryPlan{ClientID: domain.ClientCodex, PhysicalArtifactID: "artifact", DeclaredName: "demo", NativeRegistryRoot: root, NativeRegistryExecutable: executable}
 	finding, err := New().InspectNativeRegistry(context.Background(), env, client, plan, nil)
-	if err != nil || finding != clients.RegistryClear || len(runner.commands) != 1 {
+	if err != nil || finding != clients.RegistryClear || len(runner.commands) != 0 {
 		t.Fatalf("fresh profile preflight = %v, %v; commands = %+v", finding, err, runner.commands)
 	}
-	probeRoot := commandEnvValue(runner.commands[0].Env, "CODEX_HOME")
-	if probeRoot == root || probeRoot == "" {
-		t.Fatalf("preflight used selected profile instead of disposable profile: %q", probeRoot)
-	}
-	if _, err := os.Lstat(probeRoot); !os.IsNotExist(err) {
-		t.Fatalf("disposable preflight profile was not removed: %v", err)
-	}
+
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatalf("preflight created profile: %v", err)
 	}
@@ -195,20 +189,23 @@ func TestFreshCodexProfileIsReadOnlyUntilActivation(t *testing.T) {
 	}
 }
 
-func TestFreshCodexProfileRejectsUnsupportedCLIWithoutMutation(t *testing.T) {
+func TestExistingCodexProfileRejectsUnsupportedCLIWithoutMutation(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	root := filepath.Join(t.TempDir(), ".codex")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	runner := &profileRunner{fail: "plugin list"}
 	plan := domain.DeliveryPlan{ClientID: domain.ClientCodex, PhysicalArtifactID: "artifact", DeclaredName: "demo", NativeRegistryRoot: root, NativeRegistryExecutable: executable}
 	finding, err := New().InspectNativeRegistry(context.Background(), clients.Env{Runner: runner}, domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: root}, plan, nil)
 	if err == nil || finding != clients.RegistryIndeterminate || len(runner.commands) != 1 {
 		t.Fatalf("unsupported CLI preflight = %v, %v; commands = %+v", finding, err, runner.commands)
 	}
-	if _, err := os.Lstat(root); !os.IsNotExist(err) {
-		t.Fatalf("unsupported CLI preflight created selected profile: %v", err)
+	if entries, err := os.ReadDir(root); err != nil || len(entries) != 0 {
+		t.Fatalf("unsupported CLI preflight mutated selected profile: %v %v", entries, err)
 	}
 }
 

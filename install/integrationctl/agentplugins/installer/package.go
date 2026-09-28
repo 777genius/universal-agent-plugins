@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -132,7 +133,15 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if req.Operation == OpInstall && (req.ClientExecutable == "" || !validRoot(req.ClientExecutable)) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: req.ClientConfigRoot, ExecutablePath: req.ClientExecutable}, nil
+	root := req.ClientConfigRoot
+	if resolver, ok := clients.As[clients.ProfileResolver](e.cfg.Registry, id); ok {
+		var err error
+		root, err = resolver.ResolveProfileRoot(root)
+		if err != nil {
+			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
+		}
+	}
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, ExecutablePath: req.ClientExecutable}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {

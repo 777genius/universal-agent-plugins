@@ -26,6 +26,10 @@ func (buffer *cappedBuffer) Write(value []byte) (int, error) {
 }
 
 func probeExecutableVersion(ctx context.Context, executable string) (string, error) {
+	return probeExecutableVersionWithEnvironment(ctx, executable, nil)
+}
+
+func probeExecutableVersionWithEnvironment(ctx context.Context, executable string, environment []string) (string, error) {
 	isolatedDir, err := os.MkdirTemp("", "agentplugins-version-probe-")
 	if err != nil {
 		return "", fmt.Errorf("create isolated version probe directory: %w", err)
@@ -35,9 +39,9 @@ func probeExecutableVersion(ctx context.Context, executable string) (string, err
 	output := &cappedBuffer{remaining: maximumVersionOutput}
 	command := exec.CommandContext(ctx, executable, "--version")
 	command.Dir = isolatedDir
-	command.Env = []string{}
+	command.Env = append([]string{}, environment...)
 	if path := os.Getenv("PATH"); strings.TrimSpace(path) != "" {
-		// PATH is the sole inherited variable so /usr/bin/env shebangs can
+		// PATH is the sole ambient variable so /usr/bin/env shebangs can
 		// resolve their runtime without exposing HOME, tokens, or credentials.
 		command.Env = append(command.Env, "PATH="+path)
 	}

@@ -35,13 +35,6 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	outcome := shared.StartedActivation(request)
-	if !shared.HasClientCLI(env, request.BackendExecutable) {
-		outcome.Activation = domain.ActivationManual
-		outcome.UserActions = append(outcome.UserActions, "install the prepared plugin in Codex Plugins, then verify it appears in Plugins > Personal")
-		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
-		return outcome, nil
-	}
 	profileRoot := request.Client.ConfigRoot
 	if profileRoot == "" {
 		profileRoot = request.Plan.NativeRegistryRoot
@@ -49,8 +42,16 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	outcome := shared.StartedActivation(request)
+	if !shared.HasClientCLI(env, request.BackendExecutable) {
+		outcome.Activation = domain.ActivationManual
+		outcome.UserActions = append(outcome.UserActions, "install the prepared plugin in Codex Plugins, then verify it appears in Plugins > Personal")
+		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
+		return outcome, nil
+	}
+
 	if !request.VerifyOnly {
-		if err := os.Mkdir(profileRoot, 0700); err != nil && !os.IsExist(err) {
+		if err := os.MkdirAll(profileRoot, 0700); err != nil && !os.IsExist(err) {
 			return domain.ActivationOutcome{}, fmt.Errorf("create Codex profile: %w", err)
 		}
 		if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
