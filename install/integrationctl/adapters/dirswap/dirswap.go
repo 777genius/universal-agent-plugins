@@ -256,6 +256,9 @@ func (manager Manager) Recover(ctx context.Context, operationID string, stateCom
 	if err != nil {
 		return err
 	}
+	if receipt.SchemaVersion == 3 {
+		return manager.recoveryError(receipt, fmt.Errorf("legacy directory swap journal lacks physical ownership proof; preserve its files and resolve manually"))
+	}
 	if receipt.Phase == PhaseRolledBack {
 		if stateCommitted {
 			return fmt.Errorf("state committed but directory swap is rolled back")
@@ -291,11 +294,69 @@ func (manager Manager) Load(operationID string) (Receipt, error) {
 	if receipt.OperationID != operationID {
 		return Receipt{}, fmt.Errorf("directory swap journal %q contains a different operation id", manager.journalPath(operationID))
 	}
-	if err := manager.validateReceipt(receipt); err != nil {
+	var validationErr error
+	if receipt.SchemaVersion == 3 {
+		validationErr = validateLegacyReceipt(receipt)
+	} else {
+		validationErr = manager.validateReceipt(receipt)
+	}
+	if err := validationErr; err != nil {
 		return Receipt{}, manager.recoveryError(receipt, err)
 	}
 	return receipt, nil
 }
+
+// Schema 3 is observable for recovery inventory, but lacks the identity and
+// content proofs required to replay a filesystem mutation safely.
+func validateLegacyReceipt(receipt Receipt) error {
+	if receipt.SchemaVersion != 3 {
+		return fmt.Errorf("unsupported directory swap receipt schema_version %d", receipt.SchemaVersion)
+	}
+	if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
+		return err
+	}
+	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil {
+		return err
+	}
+	if receipt.Sequence < 1 || (receipt.Operation != OperationSwap && receipt.Operation != OperationRemove) {
+		return fmt.Errorf("invalid legacy directory swap identity")
+	}
+	switch receipt.Phase {
+	case PhaseIntent, PhaseBackupPending, PhaseOldBackedUp, PhaseActivationPending,
+		PhaseActivated, PhaseCommitPending, PhaseCommitted, PhaseRollbackPending, PhaseRolledBack:
+	default:
+		return fmt.Errorf("invalid legacy directory swap phase %q", receipt.Phase)
+	}
+	if !filepath.IsAbs(receipt.OwnedBase) || receipt.OwnedBase != filepath.Clean(receipt.OwnedBase) {
+		return fmt.Errorf("unsafe legacy owned base")
+	}
+	sum := sha256.Sum256([]byte(receipt.OperationID))
+	if receipt.BackupPath != filepath.Join(receipt.OwnedBase, ".agentplugins-backup-"+hex.EncodeToString(sum[:8])) {
+		return fmt.Errorf("unexpected legacy backup path")
+	}
+	for _, path := range []string{receipt.ActivePath, receipt.BackupPath} {
+		if !filepath.IsAbs(path) || path != filepath.Clean(path) || filepath.Dir(path) != receipt.OwnedBase {
+			return fmt.Errorf("unsafe legacy directory swap path")
+		}
+		if err := pathpolicy.RequireContainedChild(receipt.OwnedBase, path); err != nil {
+			return err
+		}
+	}
+	if receipt.ActivePath == receipt.BackupPath {
+		return fmt.Errorf("overlapping legacy directory swap paths")
+	}
+	if receipt.Operation == OperationSwap {
+		if receipt.StagingPath == "" || receipt.StagingPath == receipt.ActivePath || receipt.StagingPath == receipt.BackupPath {
+			return fmt.Errorf("invalid legacy staging path")
+		}
+		return validateStagingPath(receipt.OwnedBase, receipt.StagingPath)
+	}
+	if receipt.StagingPath != "" {
+		return fmt.Errorf("remove receipt cannot contain staging path")
+	}
+	return nil
+}
+
 
 func (manager Manager) ListOpen() ([]Receipt, error) {
 	if strings.TrimSpace(manager.JournalDir) == "" {

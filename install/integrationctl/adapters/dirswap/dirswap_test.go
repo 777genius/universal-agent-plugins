@@ -2,9 +2,13 @@ package dirswap
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -365,6 +369,48 @@ func TestListOpenFailsClosedOnCorruptJournal(t *testing.T) {
 	}
 	if _, err := manager.ListOpen(); err == nil {
 		t.Fatal("corrupt directory swap journal was skipped")
+	}
+}
+
+func TestLegacyJournalIsVisibleButNeverReplayedWithoutOwnershipProof(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	base := filepath.Join(root, "managed")
+	active := filepath.Join(base, "plugin")
+	staging := filepath.Join(base, ".agentplugins-staging-legacy")
+	writeBody(t, active, "old")
+	writeBody(t, staging, "new")
+	operationID := "legacy-operation"
+	sum := sha256.Sum256([]byte(operationID))
+	manager := Manager{JournalDir: filepath.Join(root, "journal")}
+	receipt := Receipt{
+		SchemaVersion: 3, Operation: OperationSwap, OperationID: operationID,
+		ClientBindingID: "binding-1", Sequence: 1, OwnedBase: base,
+		ActivePath: active, StagingPath: staging,
+		BackupPath: filepath.Join(base, ".agentplugins-backup-"+hex.EncodeToString(sum[:8])),
+		HadActive:  true, Phase: PhaseIntent,
+	}
+	if err := os.MkdirAll(manager.JournalDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manager.journalPath(operationID), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	open, err := manager.ListOpen()
+	if err != nil || len(open) != 1 || open[0].OperationID != operationID {
+		t.Fatalf("legacy journal inventory = %+v, %v", open, err)
+	}
+	if err := manager.Recover(context.Background(), operationID, false); err == nil || !strings.Contains(err.Error(), "lacks physical ownership proof") {
+		t.Fatalf("legacy recovery did not fail closed: %v", err)
+	}
+	assertBody(t, active, "old")
+	assertBody(t, staging, "new")
+	if _, err := os.Stat(manager.journalPath(operationID)); err != nil {
+		t.Fatalf("legacy journal was removed: %v", err)
 	}
 }
 
