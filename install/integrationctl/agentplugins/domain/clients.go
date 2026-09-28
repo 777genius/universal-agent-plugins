@@ -395,6 +395,9 @@ type ActivationOutcome struct {
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`
+	// Native effect evidence is transient and distinct from client verification.
+	NativeEffect  NativeEffectState       `json:"-"`
+	NativeObjects []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationRequest struct {

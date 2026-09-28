@@ -159,23 +159,27 @@ type ClientPackageRevision struct {
 }
 
 type ClientBinding struct {
-	InstallIntent    InstallIntent           `json:"install_intent,omitempty"`
-	ClientBindingID  string                  `json:"client_binding_id"`
-	ClientID         string                  `json:"client_id"`
-	Scope            string                  `json:"scope"`
-	TargetLocator    string                  `json:"target_locator"`
-	PhysicalArtifact string                  `json:"physical_artifact_id"`
-	Materialization  MaterializationState    `json:"materialization"`
-	Activation       ActivationState         `json:"activation"`
-	Authentication   AuthenticationState     `json:"authentication"`
-	Policy           PolicyState             `json:"policy"`
-	Verification     VerificationState       `json:"verification"`
-	PackageRevision  *ClientPackageRevision  `json:"package_revision,omitempty"`
-	DataReceiptID    string                  `json:"data_receipt_id,omitempty"`
-	AffectedSurfaces []string                `json:"affected_surfaces,omitempty"`
-	NativeObjects    []NativeObjectOwnership `json:"native_objects,omitempty"`
-	Receipts         []MutationReceipt       `json:"receipts,omitempty"`
-	UpdatedAt        string                  `json:"updated_at"`
+	InstallIntent    InstallIntent          `json:"install_intent,omitempty"`
+	ClientBindingID  string                 `json:"client_binding_id"`
+	ClientID         string                 `json:"client_id"`
+	Scope            string                 `json:"scope"`
+	TargetLocator    string                 `json:"target_locator"`
+	PhysicalArtifact string                 `json:"physical_artifact_id"`
+	Materialization  MaterializationState   `json:"materialization"`
+	Activation       ActivationState        `json:"activation"`
+	Authentication   AuthenticationState    `json:"authentication"`
+	Policy           PolicyState            `json:"policy"`
+	Verification     VerificationState      `json:"verification"`
+	PackageRevision  *ClientPackageRevision `json:"package_revision,omitempty"`
+	DataReceiptID    string                 `json:"data_receipt_id,omitempty"`
+	AffectedSurfaces []string               `json:"affected_surfaces,omitempty"`
+	// NativeProfileRoot binds a registration to its selected native profile.
+	NativeProfileRoot string `json:"native_profile_root,omitempty"`
+	// NativeActivationAttempt marks a potentially unacknowledged native effect.
+	NativeActivationAttempt string                  `json:"native_activation_attempt,omitempty"`
+	NativeObjects           []NativeObjectOwnership `json:"native_objects,omitempty"`
+	Receipts                []MutationReceipt       `json:"receipts,omitempty"`
+	UpdatedAt               string                  `json:"updated_at"`
 }
 
 // DirectoryOrigin is the minimum signed Directory provenance needed to make
