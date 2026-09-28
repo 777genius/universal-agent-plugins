@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { setSignedMirrorTestTime } from './i18n-state.helpers';
+
+test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
 
 async function waitForDiscovery(page: import('@playwright/test').Page) {
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
