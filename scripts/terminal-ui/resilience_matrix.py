@@ -33,6 +33,7 @@ if os.name == "posix":
 CASES = (
     "corrupt-state",
     "future-state",
+    "unselected-client-detection-failure",
     "duplicate-installation",
     "tampered-receipt",
     "corrupt-journal",
@@ -324,6 +325,40 @@ class Matrix:
         self.invalid_state(
             fixture, evidence,
             '{"schema_version":999,"installations":[]}\n', "future state")
+
+    def case_unselected_client_detection_failure(self, fixture, evidence):
+        broken = fixture.root / "not-a-codex-directory"
+        broken.write_text("synthetic invalid profile", encoding="utf-8")
+        fixture.env["CODEX_HOME"] = str(broken)
+        before = self.protected(fixture)
+
+        _, doctor = self.command(
+            fixture, evidence, "doctor-cursor", "doctor", "--target=cursor",
+            expect=True)
+        findings = doctor["data"]["findings"]
+        check(any(f.get("code") == "client_detection_failed" and
+                  f.get("client_id") == "codex" for f in findings),
+              "doctor omitted isolated Codex detection failure")
+        check(str(broken) not in json.dumps(doctor),
+              "doctor leaked the invalid profile path")
+        check(any(c.get("client_id") == "cursor" and
+                  c.get("status") == "detected"
+                  for c in doctor["data"]["clients"]),
+              "invalid Codex profile hid independent Cursor")
+
+        self.command(fixture, evidence, "cursor-dry-run", "add",
+                     str(fixture.package), "--target=cursor", "--dry-run",
+                     expect=True)
+        rejected, _ = self.command(
+            fixture, evidence, "codex-dry-run", "add",
+            str(fixture.package), "--target=codex", "--dry-run",
+            expect=False)
+        check("profile path is not a directory" in
+              (rejected.stdout + rejected.stderr).lower(),
+              "selected Codex lost its precise profile error")
+        check(self.protected(fixture) == before,
+              "detection and dry-run changed protected state")
+        self.assert_no_open_operations(fixture)
 
     def installed_state(self, fixture, evidence):
         self.add(fixture, evidence)
