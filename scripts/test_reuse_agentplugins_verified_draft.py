@@ -50,6 +50,10 @@ class ReuseTests(unittest.TestCase):
         self.jobs = [{"name": name, "run_id": 42, "status": "completed",
                       "conclusion": "success", "steps": [{"conclusion": "success"}]}
                      for name in names]
+        self.stage = next(job for job in self.jobs if job["name"] == "stage-draft")
+        self.stage["steps"] = [{"name": name, "conclusion": "success"} for name in (
+            "Prepare immutable stable assets", "Run actions/attest", "Create non-public immutable draft",
+            "Capture staged release identity", "Share frozen draft assets with the read-only proof workflow")]
         self.jobs.append({"name": "promote-release", "run_id": 42,
                           "status": "completed", "conclusion": "skipped", "steps": []})
         self.current_main = self.args.commit
@@ -130,6 +134,24 @@ class ReuseTests(unittest.TestCase):
         self.reject()
         self.jobs = copy.deepcopy(original)
         self.jobs[-1]["conclusion"] = "success"
+        self.reject()
+
+    def test_resumable_draft_allows_only_creation_step_to_skip(self):
+        creation = self.stage["steps"][2]
+        creation["conclusion"] = "skipped"
+        self.verify()
+        for index in (0, 1, 3, 4):
+            with self.subTest(step=self.stage["steps"][index]["name"]):
+                self.stage["steps"][index]["conclusion"] = "skipped"
+                self.reject()
+                self.stage["steps"][index]["conclusion"] = "success"
+        self.stage["steps"].pop(2)
+        self.reject()
+
+    def test_other_qualification_job_skipped_step_rejected(self):
+        native = next(job for job in self.jobs if job["name"] ==
+                      "platform-proof / native runtime E2E (darwin-amd64)")
+        native["steps"][0]["conclusion"] = "skipped"
         self.reject()
 
     def test_receipt_artifact_and_identity_tampering(self):

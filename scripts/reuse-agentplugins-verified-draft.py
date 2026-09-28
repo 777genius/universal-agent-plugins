@@ -46,7 +46,13 @@ def one_job(jobs, name, run_id, conclusion):
             "missing or wrong qualification job: " + name)
     if conclusion == "success":
         steps = matches[0].get("steps", [])
-        require(steps and all(step.get("conclusion") == "success" for step in steps),
+        create = "Create non-public immutable draft"
+        if name == "stage-draft":
+            require(sum(step.get("name") == create for step in steps) == 1,
+                    "missing draft creation or reuse decision")
+        require(steps and all(step.get("conclusion") == "success"
+                              or (name == "stage-draft" and step.get("name") == create
+                                  and step.get("conclusion") == "skipped") for step in steps),
                 "incomplete qualification job: " + name)
 
 
