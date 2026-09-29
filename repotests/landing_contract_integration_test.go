@@ -295,9 +295,9 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, pluginsPage, `const registry = await useRegistryPage({ discovery: true })`)
 	if strings.Contains(pluginsPage, "t('registryUi.directoryPage.title')") {
 		mustContain(t, pluginsPage, "usePageSeo(() => t('registryUi.directoryPage.title')")
-		assertLandingApprovedString(t, enLocaleBody, "registryUi.directoryPage.title", "Agent Plugins 1.0 Directory | Search 2,500+ Plugins")
+		assertLandingApprovedString(t, enLocaleBody, "registryUi.directoryPage.title", "Agent Plugins 1.0 Directory | Find Plugins")
 	} else {
-		mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Search 2,500+ Plugins'`)
+		mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Find Plugins'`)
 	}
 	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
 	mustContain(t, pluginsPage, `<PluginCatalog`)
