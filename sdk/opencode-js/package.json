@@ -1,0 +1,10 @@
+{
+  "name": "@universal-agent-plugins/opencode-events",
+  "version": "0.0.0-private",
+  "private": true,
+  "type": "module",
+  "exports": {".": {"types": "./index.d.ts", "default": "./index.js"}},
+  "scripts": {"test": "node --test", "check": "node --check index.js && node --test && tsc --noEmit -p tsconfig.json"},
+  "peerDependencies": {"@opencode-ai/sdk": "1.18.33"},
+  "devDependencies": {"@opencode-ai/plugin": "1.18.33", "@opencode-ai/sdk": "1.18.33", "typescript": "7.0.2"}
+}
