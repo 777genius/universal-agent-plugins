@@ -803,7 +803,7 @@
       "useThemEverywhere": "到处使用它们。",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "搜索从公共 GitHub 存储库中发现的已审阅的软件包和社区插件。",
       "description": "搜索 Codex、Claude Code、Cursor、Gemini CLI、OpenCode 等已审查和社区代理插件 1.0。",
-      "title": "代理插件 1.0 目录 {'|'} 搜索 2,500+ 插件",
+      "title": "代理插件 1.0 目录 {'|'} 搜索插件",
       "listName": "审查了代理插件 1.0 包"
     },
     "detail": {
