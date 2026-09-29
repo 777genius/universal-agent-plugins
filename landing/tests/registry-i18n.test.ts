@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import {
@@ -94,12 +94,20 @@ test('all owned presentation keys exist and technical client content remains the
       assert.equal(t(`${client.presentationKey}.${field}`), client[field]);
     }
   }
-  assert.equal(t('registryUi.directoryPage.title'), 'Agent Plugins 1.0 Directory | Search 2,500+ Plugins');
+  assert.equal(t('registryUi.directoryPage.title'), 'Agent Plugins 1.0 Directory | Find Plugins');
   assert.equal(t('registryUi.detail.title', { name: 'GitLab' }), 'GitLab Agent Plugin | Universal Agent Plugins');
   assert.equal(t('registryUi.agentPage.tryPlugin', { source: 'context7' }), "Try Context7, or replace context7 with another compatible plugin's reviewed short name or pinned GitHub package source.");
   for (const count of [0, 1, 2, 5, 11, 21, 22, 25, 101]) {
     assert.equal(t('registryUi.multi.agents', count), `${count} agent${count === 1 ? '' : 's'}`);
     assert.equal(t('registryUi.directory.communityCount', count), `${count} community package${count === 1 ? '' : 's'}`);
+  }
+});
+
+test('catalog SEO titles never promise a count before the signed feed loads', () => {
+  for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
+    if (!filename.endsWith('.json')) continue;
+    const locale = JSON.parse(readFileSync(new URL(`../locales/${filename}`, import.meta.url), 'utf8'));
+    assert.doesNotMatch(locale.registryUi.directoryPage.title, /(?:2[\s,.]?500|2500)/, filename);
   }
 });
 

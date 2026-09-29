@@ -803,7 +803,7 @@
       "useThemEverywhere": "Используйте их везде.",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Ищите проверенные пакеты и плагины сообщества, найденные в общедоступных репозиториях GitHub.",
       "description": "Ищите проверенные Agent Plugins 1.0 и плагины сообщества для Codex, Claude Code, Cursor, Gemini CLI, OpenCode и других.",
-      "title": "Каталог Agent Plugins 1.0 {'|'} Поиск среди 2 500+ плагинов",
+      "title": "Каталог Agent Plugins 1.0 {'|'} Поиск плагинов",
       "listName": "Проверенные пакеты Agent Plugins 1.0"
     },
     "detail": {

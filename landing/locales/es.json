@@ -803,7 +803,7 @@
       "useThemEverywhere": "Úselos en todas partes.",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Busque paquetes revisados y complementos comunitarios descubiertos en repositorios públicos de GitHub.",
       "description": "Busque complementos de agente comunitarios y revisados ​​1.0 para Codex, Claude Code, Cursor, Gemini CLI, OpenCode y más.",
-      "title": "Directorio de complementos de agente 1.0 {'|'} Buscar más de 2500 complementos",
+      "title": "Directorio de complementos de agente 1.0 {'|'} Buscar complementos",
       "listName": "Paquetes de Agent Plugins 1.0 revisados"
     },
     "detail": {
