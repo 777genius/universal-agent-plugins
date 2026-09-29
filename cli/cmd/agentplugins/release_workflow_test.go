@@ -57,8 +57,8 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 			t.Fatalf("agentplugins stable release lacks %q", required)
 		}
 	}
-	if strings.Count(workflow, "node-version: \"22.21.1\"") != 3 {
-		t.Fatal("agentplugins stable release must pin Node 22.21.1 on validate, verified-draft, and promote")
+	if strings.Count(workflow, "node-version: \"22.21.1\"") != 4 {
+		t.Fatal("agentplugins stable release must pin Node 22.21.1 on validate, verified-draft, reuse-verified-draft, and promote")
 	}
 	if strings.Contains(workflow, "node-version: 22\n") || strings.Contains(workflow, "node-version: 22\r") {
 		t.Fatal("agentplugins stable release must not use an unpinned Node 22")
@@ -66,6 +66,21 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 	negativeTestIndex := strings.Index(workflow, "TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride")
 	if negativeTestIndex < 0 || negativeTestIndex > buildIndex {
 		t.Fatal("negative release-binary conformance test must run in validate before release builds")
+	}
+	parsed := parseReleaseWorkflow(t, "agentplugins-release.yml")
+	for _, name := range []string{"validate", "verified-draft", "reuse-verified-draft", "promote-release"} {
+		setupNode := 0
+		for _, step := range parsed.Jobs[name].Steps {
+			if strings.HasPrefix(step.Uses, "actions/setup-node@") {
+				setupNode++
+				if step.With["node-version"] != "22.21.1" {
+					t.Fatalf("%s must pin Node 22.21.1", name)
+				}
+			}
+		}
+		if setupNode != 1 {
+			t.Fatalf("%s must have exactly one setup-node step", name)
+		}
 	}
 
 	binaryTestPath := filepath.Join(filepath.Dir(source), "release_binary_test.go")
@@ -288,20 +303,31 @@ func TestCurrentReleaseGraphsAndConcurrency(t *testing.T) {
 
 func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	expectedNeeds := map[string][]string{
-		"validate":        nil,
-		"build":           {"validate"},
-		"stage-draft":     {"validate", "build"},
-		"platform-proof":  {"validate", "stage-draft"},
-		"verified-draft":  {"validate", "stage-draft", "platform-proof"},
-		"promote-release": {"validate", "stage-draft", "platform-proof", "verified-draft"},
+		"validate":             nil,
+		"build":                {"validate"},
+		"stage-draft":          {"validate", "build"},
+		"platform-proof":       {"validate", "stage-draft"},
+		"verified-draft":       {"validate", "stage-draft", "platform-proof"},
+		"reuse-verified-draft": {"validate"},
+		"promote-release":      {"validate", "reuse-verified-draft"},
 	}
 	expectedPermissions := map[string]map[string]string{
-		"validate":        {"checks": "read", "contents": "read", "pull-requests": "read"},
-		"build":           {"contents": "read"},
-		"stage-draft":     {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
-		"platform-proof":  {"contents": "read", "attestations": "read"},
-		"verified-draft":  {"contents": "write", "attestations": "read"},
-		"promote-release": {"contents": "write", "attestations": "read"},
+		"validate":             {"checks": "read", "contents": "read", "pull-requests": "read"},
+		"build":                {"contents": "read"},
+		"stage-draft":          {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
+		"platform-proof":       {"contents": "read", "attestations": "read"},
+		"verified-draft":       {"contents": "write", "attestations": "read"},
+		"reuse-verified-draft": {"contents": "write", "actions": "read", "attestations": "read"},
+		"promote-release":      {"contents": "write", "actions": "read", "attestations": "read"},
+	}
+	expectedConditions := map[string]string{
+		"validate":             "",
+		"build":                "${{ inputs.publish_release != true }}",
+		"stage-draft":          "${{ inputs.publish_release != true }}",
+		"platform-proof":       "${{ inputs.publish_release != true }}",
+		"verified-draft":       "${{ inputs.publish_release != true }}",
+		"reuse-verified-draft": "${{ inputs.publish_release == true }}",
+		"promote-release":      "${{ inputs.publish_release == true }}",
 	}
 	for name, needs := range expectedNeeds {
 		job, ok := workflow.Jobs[name]
@@ -311,12 +337,8 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		if !reflect.DeepEqual(effectiveReleasePermissions(workflow, name), expectedPermissions[name]) {
 			return fmt.Errorf("%s permissions", name)
 		}
-		if name == "promote-release" {
-			if job.If != "${{ inputs.publish_release == true }}" {
-				return fmt.Errorf("promotion condition")
-			}
-		} else if job.If != "" {
-			return fmt.Errorf("%s must use implicit success reachability", name)
+		if job.If != expectedConditions[name] {
+			return fmt.Errorf("%s two-mode reachability condition", name)
 		}
 		for _, step := range job.Steps {
 			if step.Continue || strings.Contains(step.If, "always()") || strings.Contains(step.If, "failure()") || strings.Contains(step.If, "cancelled()") {
@@ -324,8 +346,17 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 			}
 		}
 	}
-	if workflow.Jobs["stage-draft"].Environment != "agentplugins-release" || workflow.Jobs["promote-release"].Environment != "agentplugins-release" {
+	if workflow.Jobs["stage-draft"].Environment != "agentplugins-release" || workflow.Jobs["promote-release"].Environment != "agentplugins-release" || workflow.Jobs["reuse-verified-draft"].Environment != nil {
 		return fmt.Errorf("native protected environments")
+	}
+	for _, step := range workflow.Jobs["validate"].Steps {
+		if strings.HasPrefix(step.Uses, "actions/setup-go@") || strings.HasPrefix(step.Uses, "actions/setup-node@") ||
+			step.Name == "Verify exact release-bound Directory bootstrap" || step.Name == "Test standard-first engine and CLI" ||
+			step.Name == "Prove production binary excludes Directory conformance overrides" || step.Name == "Test npm bootstrap without install scripts" {
+			if step.If != "${{ inputs.publish_release != true }}" {
+				return fmt.Errorf("validate qualification step must not rerun on promotion: %s", step.Name)
+			}
+		}
 	}
 	stageDownload, stageUpload := false, false
 	for _, step := range workflow.Jobs["stage-draft"].Steps {
@@ -348,7 +379,7 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, status := range []string{"failure", "cancelled", "skipped", ""} {
-		for _, name := range []string{"build", "stage-draft", "platform-proof", "verified-draft", "promote-release"} {
+		for _, name := range []string{"build", "stage-draft", "platform-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
 			// None of these jobs has a status override. GitHub prepends implicit
 			// success(), so any non-success prerequisite keeps it unreachable.
 			job := workflow.Jobs[name]
@@ -368,6 +399,21 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 			job := w.Jobs["verified-draft"]
 			job.If = "${{ always() }}"
 			w.Jobs["verified-draft"] = job
+		},
+		"build promotion bypass": func(w *releaseWorkflow) {
+			job := w.Jobs["build"]
+			job.If = ""
+			w.Jobs["build"] = job
+		},
+		"reuse needs": func(w *releaseWorkflow) {
+			job := w.Jobs["reuse-verified-draft"]
+			job.Needs = nil
+			w.Jobs["reuse-verified-draft"] = job
+		},
+		"promote proof bypass": func(w *releaseWorkflow) {
+			job := w.Jobs["promote-release"]
+			job.Needs = []any{"validate"}
+			w.Jobs["promote-release"] = job
 		},
 		"permissions": func(w *releaseWorkflow) {
 			job := w.Jobs["platform-proof"]

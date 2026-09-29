@@ -11,6 +11,12 @@ on:
         required: false
         type: boolean
         default: false
+      qualified_run_id:
+        description: Successful draft-only qualification run ID; required for promotion
+        required: false
+      qualified_run_attempt:
+        description: Exact successful draft-only run attempt; required for promotion
+        required: false
 
 permissions:
   contents: read
@@ -107,10 +113,12 @@ jobs:
             require_check "${name}"
           done
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: ${{ inputs.publish_release != true }}
         with:
           go-version: 1.25.13
           cache: false
       - name: Verify exact release-bound Directory bootstrap
+        if: ${{ inputs.publish_release != true }}
         working-directory: cli
         run: |
           release_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -123,22 +131,27 @@ jobs:
             -expected-public-key HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI= \
             -release-at "${release_at}"
       - name: Test standard-first engine and CLI
+        if: ${{ inputs.publish_release != true }}
         run: |
           (cd install/integrationctl/agentplugins && go test ./...)
           (cd install/integrationctl && go test ./adapters/dirswap ./adapters/source)
           (cd cli && go test ./internal/agentpluginscli ./cmd/agentplugins/...)
       - name: Prove production binary excludes Directory conformance overrides
+        if: ${{ inputs.publish_release != true }}
         working-directory: cli
         run: go test ./cmd/agentplugins -run '^TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride$' -count=1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ inputs.publish_release != true }}
         with:
           node-version: "22.21.1"
           package-manager-cache: false
       - name: Test npm bootstrap without install scripts
+        if: ${{ inputs.publish_release != true }}
         working-directory: npm/agentplugins
         run: npm test && npm pack --dry-run --ignore-scripts
 
   build:
+    if: ${{ inputs.publish_release != true }}
     needs: validate
     runs-on: ubuntu-latest
     env:
@@ -195,6 +208,7 @@ jobs:
           retention-days: 3
 
   stage-draft:
+    if: ${{ inputs.publish_release != true }}
     needs: [validate, build]
     runs-on: ubuntu-latest
     environment: agentplugins-release
@@ -317,6 +331,7 @@ jobs:
           retention-days: 7
 
   platform-proof:
+    if: ${{ inputs.publish_release != true }}
     needs: [validate, stage-draft]
     uses: ./.github/workflows/agentplugins-platform-proof.yml
     permissions:
@@ -331,6 +346,7 @@ jobs:
       release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}
 
   verified-draft:
+    if: ${{ inputs.publish_release != true }}
     needs: [validate, stage-draft, platform-proof]
     runs-on: ubuntu-latest
     permissions:
@@ -368,13 +384,45 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  reuse-verified-draft:
+    if: ${{ inputs.publish_release == true }}
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      # Draft release API visibility requires write capability; this job only reads.
+      contents: write
+      actions: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+      - name: Authenticate qualification and reverify live draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
+          QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}
+          QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}
+        run: |
+          python3 scripts/reuse-agentplugins-verified-draft.py \
+            --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "${FROZEN_COMMIT}" \
+            --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
+            --source "${GITHUB_WORKSPACE}"
+
   promote-release:
     if: ${{ inputs.publish_release == true }}
-    needs: [validate, stage-draft, platform-proof, verified-draft]
+    needs: [validate, reuse-verified-draft]
     runs-on: ubuntu-latest
     environment: agentplugins-release
     permissions:
       contents: write
+      actions: read
       attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -390,40 +438,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
-          EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}
+          QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}
+          QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}
         run: |
-          git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
-          test "$(git rev-list -n 1 "refs/tags/${TAG}")" = "${FROZEN_COMMIT}"
-          owner="${GITHUB_REPOSITORY%%/*}"
-          repository="${GITHUB_REPOSITORY#*/}"
-          release_query='query($owner:String!,$name:String!,$tag:String!){repository(owner:$owner,name:$name){release(tagName:$tag){isDraft isPrerelease tagName}}}'
-          release_response="$(gh api graphql -f query="${release_query}" -F owner="${owner}" -F name="${repository}" -F tag="${TAG}")" || {
-            echo "failed to look up release ${TAG} immediately before promotion" >&2
-            exit 1
-          }
-          release_json="$(jq -c '.data.repository.release' <<<"${release_response}")"
-          [[ "${release_json}" != "null" ]] || {
-            echo "release ${TAG} was not found immediately before promotion" >&2
-            exit 1
-          }
-          jq -e --arg tag "${TAG}" \
-            '.isDraft == true and .isPrerelease == false and .tagName == $tag' \
-            <<<"${release_json}" >/dev/null || {
-              echo "release is no longer the exact non-public draft proven by this run" >&2
-              exit 1
-            }
-          assets="${RUNNER_TEMP}/agentplugins-promote-assets"
-          mkdir -p "${assets}"
-          gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" --dir "${assets}"
-          node npm/agentplugins/scripts/release-assets.js verify "${assets}" "${TAG}" "${FROZEN_COMMIT}"
-          cmp -- npm/agentplugins/THIRD_PARTY_NOTICES.txt "${assets}/THIRD_PARTY_NOTICES.txt"
-          test "$(sha256sum "${assets}/checksums.txt" | cut -d ' ' -f 1)" = "${EXPECTED_ASSET_SET_DIGEST}"
-          for asset in "${assets}"/agentplugins_* "${assets}/checksums.txt" "${assets}/release-manifest.json" "${assets}/THIRD_PARTY_NOTICES.txt"; do
-            gh attestation verify "${asset}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" \
-              --source-digest "${FROZEN_COMMIT}"
-          done
-          gh release edit "${TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
-            --jq 'select(.draft == false and .prerelease == false) | .tag_name' | grep -Fx -- "${TAG}"
+          release_id="$(python3 scripts/reuse-agentplugins-verified-draft.py \
+            --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "${FROZEN_COMMIT}" \
+            --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
+            --source "${GITHUB_WORKSPACE}")"
+          [[ "${release_id}" =~ ^[1-9][0-9]*$ ]]
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            -F draft=false | jq -e --arg tag "${TAG}" --argjson id "${release_id}" \
+            '.id == $id and .tag_name == $tag and .draft == false and .prerelease == false'
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | \
+            jq -e --arg tag "${TAG}" --argjson id "${release_id}" \
+            '.id == $id and .tag_name == $tag and .draft == false and .prerelease == false'
