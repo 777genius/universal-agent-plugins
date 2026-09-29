@@ -102,23 +102,23 @@ func Plan(in Input) (Placement, error) {
 	if in.Existing.Path != target {
 		return Placement{}, fmt.Errorf("observed path %q does not match target %q", in.Existing.Path, target)
 	}
-	copy := *in.Existing
-	out.Existing = &copy
-	if copy.Kind != Regular {
-		if copy.Kind != Symlink && copy.Kind != Other {
-			return Placement{}, fmt.Errorf("invalid existing file kind %q", copy.Kind)
+	observed := *in.Existing
+	out.Existing = &observed
+	if observed.Kind != Regular {
+		if observed.Kind != Symlink && observed.Kind != Other {
+			return Placement{}, fmt.Errorf("invalid existing file kind %q", observed.Kind)
 		}
 		out.Action, out.ConflictReason = Conflict, WrongKind
 		return out, nil
 	}
-	if !validDigest(copy.SHA256) {
+	if !validDigest(observed.SHA256) {
 		return Placement{}, errors.New("existing regular file requires a lowercase SHA256")
 	}
 	if in.OwnedSHA256 == "" {
 		out.Action, out.ConflictReason = Conflict, ForeignFile
-	} else if copy.SHA256 != in.OwnedSHA256 {
+	} else if observed.SHA256 != in.OwnedSHA256 {
 		out.Action, out.ConflictReason = Conflict, ChangedFile
-	} else if copy.SHA256 == in.DesiredSHA256 {
+	} else if observed.SHA256 == in.DesiredSHA256 {
 		out.Action = Unchanged
 	} else {
 		out.Action = Replace
@@ -162,7 +162,7 @@ func validDigest(digest string) bool {
 		return false
 	}
 	for _, ch := range digest {
-		if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f') {
+		if (ch < '0' || ch > '9') && (ch < 'a' || ch > 'f') {
 			return false
 		}
 	}
