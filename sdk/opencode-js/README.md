@@ -1,4 +1,4 @@
-# OpenCode event observer (PR1 source package)
+# OpenCode event observer
 
 `createObserver({client, emit})` accepts native `event` hook values as untrusted
 input and emits content-free wire v1 facts. A consumer can pass an OpenCode
@@ -40,6 +40,7 @@ The exact OpenCode 1.18.33 plugin and SDK versions are pinned for type checks.
 A disposable OpenCode 1.18.33 profile loaded this adapter source as a local JS
 plugin and produced all four wire facts: turn completion, question, permission,
 and terminal error. The error run also emitted a native idle, without a false
-completion fact. This source package remains private until a separate UAP
-release decision. The source probe does not qualify a published package,
+completion fact. `plugin-kit-ai-opencode-events` is prepared as a standalone npm
+package but remains unpublished until a separate UAP release decision. The
+source probe does not qualify a published package,
 Notifications delivery, lifecycle, or other operating systems.
