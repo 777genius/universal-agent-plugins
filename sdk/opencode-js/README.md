@@ -25,6 +25,7 @@ turn; an error after a verified completion is ignored. Optional native
 Deduplication lasts only while the session remains in this observer instance's
 bounded memory. Unknown native events use a separate evicting cache and cannot
 evict the completion/error admission of a retained session.
+Lookups that finish after their session state was evicted produce no fact.
 
 Every actionable fact carries `rootSession`, verified through `client.session.get`.
 `false` means an OpenCode child session; the consumer must filter it when it
@@ -35,12 +36,12 @@ The shared fixture `fixtures/wire-v1.json` is the v1 contract for this producer
 and `sdk/opencode`'s Go decoder. Future native events become `unknown` facts
 without their body. The wire carries no prompt, response, question text,
 error body, tool arguments, project identity, or delivery metadata.
+IDs are limited to 256 UTF-8 bytes and exclude JSON control characters.
 
 The exact OpenCode 1.18.33 plugin and SDK versions are pinned for type checks.
 A disposable OpenCode 1.18.33 profile loaded this adapter source as a local JS
 plugin and produced all four wire facts: turn completion, question, permission,
 and terminal error. The error run also emitted a native idle, without a false
-completion fact. `plugin-kit-ai-opencode-events` is prepared as a standalone npm
-package but remains unpublished until a separate UAP release decision. The
-source probe does not qualify a published package,
+completion fact. `plugin-kit-ai-opencode-events` is a standalone npm package.
+The source probe alone does not qualify the published package artifact,
 Notifications delivery, lifecycle, or other operating systems.

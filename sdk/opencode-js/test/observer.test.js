@@ -69,6 +69,17 @@ test('malformed requests do not invent IDs and different turns are distinct', as
   assert.ok(h.diagnostics.length >= 2);
 });
 
+test('IDs with JSON control characters are rejected before emission', async () => {
+  const h = harness(), o = h.observer.observe;
+  await o(native('message.updated', { info: user() }));
+  await o(native('question.asked', { sessionID: 's1', id: '\0'.repeat(256), questions: [{}] }));
+  await o(native('message.updated', { info: { ...answer(), id: 'a\n1' } }));
+  await o(native('session.idle', { sessionID: 's1' }));
+  assert.deepEqual(h.out, []);
+  assert.ok(h.diagnostics.includes('invalid request'));
+  assert.ok(h.diagnostics.includes('invalid message.updated'));
+});
+
 test('cancel, unresolved permission, and resolution during lookup cannot yield stale facts', async () => {
   const h = harness(), o = h.observer.observe;
   await o(native('message.updated',{info:user()}));
@@ -245,6 +256,32 @@ test('unknown-event cache eviction cannot replay an admitted completion', async 
   await observer.observe(native('future.event', { sessionID: 's1' }));
   await observer.observe(native('session.idle', { sessionID: 's1' }));
   assert.equal(out.filter((x) => x.kind === 'turn_idle_verified').length, 1);
+});
+
+test('a lookup cannot emit facts from an evicted session state', async () => {
+  for (const event of [
+    native('session.idle', { sessionID: 's1' }),
+    native('question.asked', { sessionID: 's1', id: 'q1', questions: [{}] }),
+    native('session.error', { sessionID: 's1', error: { name: 'Error' } }),
+  ]) {
+    const out = [];
+    let startLookup, resumeLookup;
+    const started = new Promise((resolve) => { startLookup = resolve; });
+    const waiting = new Promise((resolve) => { resumeLookup = resolve; });
+    const observer = createObserver({ dedupLimit: 1, emit: (fact) => out.push(fact), client: { session: {
+      get: async ({ path }) => ({ data: { id: path.id } }),
+      messages: async () => { startLookup(); await waiting; return { data: [user(), answer()] }; },
+    } } });
+    await observer.observe(native('message.updated', { info: user() }));
+    if (event.type === 'session.idle') await observer.observe(native('message.updated', { info: answer() }));
+    const pending = observer.observe(event);
+    await started;
+    await observer.observe(native('message.updated', { info: user('other-user', 's2') }));
+    await observer.observe(native('message.updated', { info: user('new-turn') }));
+    resumeLookup();
+    await pending;
+    assert.deepEqual(out, [], event.type);
+  }
 });
 
 test('bounded latest window still verifies an observed long turn', async () => {

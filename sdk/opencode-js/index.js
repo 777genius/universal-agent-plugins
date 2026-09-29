@@ -1,6 +1,6 @@
 // A content-free observer for OpenCode's native event hook.
 const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
-const id = (x) => typeof x === 'string' && x.length > 0 && new TextEncoder().encode(x).length <= 256;
+const id = (x) => typeof x === 'string' && x.length > 0 && !/[\u0000-\u001f]/u.test(x) && new TextEncoder().encode(x).length <= 256;
 const typeOK = (x) => typeof x === 'string' && /^[a-z][a-z0-9.-]{0,79}$/.test(x);
 
 /** @param {import('./index.d.ts').ObserverOptions} options */
@@ -85,13 +85,13 @@ export function createObserver(options) {
     const s = state(sid), revision = s.revision, uid = s.user;
     if (!uid || !s.assistant || s.admitted.has('idle') || s.retry || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
     const messages = await latest(sid);
-    if (!messages || revision !== s.revision || s.user !== uid || s.retry || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
+    if (!messages || sessions.get(sid) !== s || revision !== s.revision || s.user !== uid || s.retry || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
     if (!currentTurn(messages, uid)) return;
     const answer = messages.at(-1);
     if (!answer || answer.role !== 'assistant' || answer.id !== s.assistant || answer.parentID !== uid ||
         answer.finish !== 'stop' || !Number.isFinite(answer.time?.completed) || answer.error != null) return;
     const rootSession = await rootStatus(sid);
-    if (rootSession === undefined || revision !== s.revision || s.user !== uid || s.cancelled || s.errorPending) return;
+    if (rootSession === undefined || sessions.get(sid) !== s || revision !== s.revision || s.user !== uid || s.cancelled || s.errorPending) return;
     await emit({ kind: 'turn_idle_verified', sessionID: sid, turnID: uid, messageID: answer.id, rootSession }, 'idle', s);
   }
   async function observe(event) {
@@ -132,13 +132,13 @@ export function createObserver(options) {
       const pending = type === 'question.asked' ? s.questions : s.permissions;
       pending.add(p.id); s.revision++;
       const messages = await latest(p.sessionID);
-      if (s.turnEpoch !== epoch || s.user !== uid || !pending.has(p.id) || s.resolved.has(p.id)) return;
+      if (sessions.get(p.sessionID) !== s || s.turnEpoch !== epoch || s.user !== uid || !pending.has(p.id) || s.resolved.has(p.id)) return;
       if (!messages || !currentTurn(messages, uid)) { pending.delete(p.id); diag('unmatched request turn'); return; }
       if (requestMessageID && requestMessageID !== uid && !messages.some((m) => m.role === 'assistant' && m.id === requestMessageID && m.parentID === uid)) {
         pending.delete(p.id); diag('unmatched request message'); return;
       }
       const rootSession = await rootStatus(p.sessionID);
-      if (rootSession === undefined || s.turnEpoch !== epoch || s.user !== uid || !pending.has(p.id) || s.resolved.has(p.id)) return;
+      if (rootSession === undefined || sessions.get(p.sessionID) !== s || s.turnEpoch !== epoch || s.user !== uid || !pending.has(p.id) || s.resolved.has(p.id)) return;
       s.assistant = ''; s.revision++;
       await emit({ kind: type === 'question.asked' ? 'question_asked' : 'permission_asked', sessionID: p.sessionID, turnID: uid, requestID: p.id, rootSession }, `${type}:${p.id}`, s);
       return;
@@ -160,12 +160,12 @@ export function createObserver(options) {
       s.errorPending++; s.revision++;
       const messages = await latest(p.sessionID);
       s.errorPending--;
-      if (!messages || s.turnEpoch !== epoch || s.user !== uid || s.admitted.has('idle') || !currentTurn(messages, uid)) return;
+      if (!messages || sessions.get(p.sessionID) !== s || s.turnEpoch !== epoch || s.user !== uid || s.admitted.has('idle') || !currentTurn(messages, uid)) return;
       if (p.messageID && !messages.some((m) => m.role === 'assistant' && m.id === p.messageID && m.parentID === uid)) {
         diag('unmatched error message'); return;
       }
       const rootSession = await rootStatus(p.sessionID);
-      if (rootSession === undefined || s.turnEpoch !== epoch || s.user !== uid || s.admitted.has('idle')) return;
+      if (rootSession === undefined || sessions.get(p.sessionID) !== s || s.turnEpoch !== epoch || s.user !== uid || s.admitted.has('idle')) return;
       s.cancelled = true; s.revision++;
       if (/abort|cancel/i.test(String(p.error.name ?? ''))) return;
       await emit({ kind: 'terminal_error', sessionID: p.sessionID, turnID: uid, rootSession }, 'error', s);
