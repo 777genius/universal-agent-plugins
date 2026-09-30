@@ -127,8 +127,15 @@ export async function targets(page: Page, scope: Locator, names: string[]) {
   const trigger = scope.locator('.app-multiselect__trigger');
   await expect(trigger).toHaveAttribute('data-hydrated', 'true');
   await trigger.click();
-  for (const name of names) await page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) }).click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  for (const name of names) {
+    const checkbox = page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) });
+    const checked = await checkbox.isChecked();
+    await checkbox.click();
+    await expect(checkbox).toBeChecked({ checked: !checked });
+  }
   await page.keyboard.press('Escape');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 }
 
 export async function automatic(page: Page, scope: Locator, locale: PublishedLocale) {

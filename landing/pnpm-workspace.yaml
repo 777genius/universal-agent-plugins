@@ -8,6 +8,9 @@ allowBuilds:
   vue-demi: true
 
 overrides:
-  brace-expansion@>=4.0.0 <5.0.9: 5.0.9
-  js-yaml@>=4.0.0 <4.3.1: 4.3.1
+  brace-expansion@>=1.0.0 <1.1.21: 1.1.21
+  brace-expansion@>=2.0.0 <2.1.7: 2.1.7
+  brace-expansion@>=4.0.0 <5.0.12: 5.0.12
+  fast-uri@>=3.0.0 <3.1.8: 3.1.8
+  js-yaml@>=4.0.0 <4.3.2: 4.3.2
   nanoid@>=3.0.0 <3.3.18: 3.3.18

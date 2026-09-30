@@ -68,6 +68,7 @@ jobs:
 
       - name: Check registry, lint, and generate
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           NUXT_APP_BASE_URL: /universal-agent-plugins/
           NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
         working-directory: landing
@@ -88,11 +89,20 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run browser E2E
+        id: browser-e2e
         env:
           UAP_E2E_REPOSITORY_BASE: universal-agent-plugins
           UAP_E2E_WEB_ROOT: .e2e-pages
         working-directory: landing
         run: pnpm run test:browser
+
+      - name: Preserve failed browser traces
+        if: failure() && steps.browser-e2e.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: landing-browser-failure
+          path: landing/test-results/
+          retention-days: 7
 
   combined-pages-validation:
     if: github.event_name == 'pull_request'
@@ -173,6 +183,8 @@ jobs:
           GOBIN="${RUNNER_TEMP}/docs-tools-root/bin" go install github.com/princjef/gomarkdoc/cmd/gomarkdoc@v1.1.0
 
       - name: Prepare and validate landing
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         working-directory: landing
         run: |
           pnpm exec nuxt prepare
@@ -228,8 +240,17 @@ jobs:
           cp -a .pages-dist/. .combined-browser${{ matrix.base }}/
 
       - name: Representative final static integration
+        id: browser-e2e
         working-directory: landing
         env:
           UAP_E2E_WEB_ROOT: ../.combined-browser
           UAP_E2E_REPOSITORY_BASE: ${{ matrix.base }}
         run: pnpm exec playwright test tests/browser/i18n-integration.spec.ts tests/browser/payload-scoping.spec.ts tests/browser/i18n-state.spec.ts tests/browser/locale-install-navigation.spec.ts tests/browser/release-base.spec.ts
+
+      - name: Preserve failed browser traces
+        if: failure() && steps.browser-e2e.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: landing-combined-browser-failure-${{ strategy.job-index }}
+          path: landing/test-results/
+          retention-days: 7
