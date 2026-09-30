@@ -20,7 +20,7 @@ export function createObserver(options) {
     if (!sessions.has(sid)) {
       sessions.set(sid, {
         user: '', userCreated: undefined, seenUsers: new Set(), assistant: '', failedAssistant: '',
-        overflowPending: false, retry: false, retryAssistant: '', cancelled: false,
+        overflowPending: false, idleObserved: false, retry: false, retryAssistant: '', cancelled: false,
         questions: new Set(), permissions: new Set(), resolved: new Set(), admitted: new Set(),
         turnEpoch: 0, revision: 0, errorPending: 0, rootSession: undefined,
       });
@@ -84,11 +84,14 @@ export function createObserver(options) {
   }
   async function idle(sid) {
     const s = state(sid), revision = s.revision, uid = s.user;
-    if (!uid || (!s.assistant && !s.failedAssistant && !s.overflowPending) ||
-        s.admitted.has('idle') || s.admitted.has('error') || s.retry || s.cancelled ||
+    s.idleObserved = true;
+    const failed = Boolean(s.failedAssistant || s.overflowPending);
+    if (!uid || (!s.assistant && !failed) ||
+        s.admitted.has('idle') || s.admitted.has('error') || (s.retry && !failed) || s.cancelled ||
         s.errorPending || s.questions.size || s.permissions.size) return;
     const messages = await latest(sid);
-    if (!messages || sessions.get(sid) !== s || revision !== s.revision || s.user !== uid || s.retry || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
+    if (!messages || sessions.get(sid) !== s || revision !== s.revision || s.user !== uid ||
+        (s.retry && !failed) || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
     if (!currentTurn(messages, uid)) return;
     const answer = messages.at(-1);
     if (s.failedAssistant || s.overflowPending) {
@@ -124,7 +127,7 @@ export function createObserver(options) {
         if (s.seenUsers.size > 512) s.seenUsers.delete(s.seenUsers.values().next().value);
         s.userCreated = Number.isFinite(created) ? created : undefined;
         s.user = m.id; s.assistant = ''; s.retry = false; s.retryAssistant = ''; s.cancelled = false;
-        s.failedAssistant = ''; s.overflowPending = false;
+        s.failedAssistant = ''; s.overflowPending = false; s.idleObserved = false;
         s.questions.clear(); s.permissions.clear(); s.resolved.clear(); s.admitted.clear();
         s.turnEpoch++; s.revision++;
       }
@@ -139,9 +142,12 @@ export function createObserver(options) {
     }
     if (type === 'session.status') {
       if (!id(p.sessionID) || !object(p.status) || !['busy', 'idle', 'retry'].includes(p.status.type)) { diag('invalid session.status'); return; }
+      if (p.status.type === 'busy') {
+        const s = state(p.sessionID); s.idleObserved = false; s.revision++;
+      }
       if (p.status.type === 'retry') {
         const s = state(p.sessionID); s.retryAssistant = s.assistant; s.assistant = '';
-        s.failedAssistant = ''; s.overflowPending = false; s.retry = true; s.revision++;
+        s.failedAssistant = ''; s.overflowPending = false; s.idleObserved = false; s.retry = true; s.revision++;
       }
       if (p.status.type === 'idle') await idle(p.sessionID);
       return;
@@ -195,6 +201,7 @@ export function createObserver(options) {
         // The same native error also precedes automatic compaction and retry.
         // Only a final idle with an assistant error proves it was terminal.
         s.overflowPending = true; s.revision++;
+        if (s.idleObserved) await idle(p.sessionID);
         return;
       }
       s.cancelled = true; s.revision++;
