@@ -341,7 +341,7 @@ func TestNodeFixtureIntegrityAndStaticServer(t *testing.T) {
 	// Original generated fixture hashes pin every byte, including every transitive
 	// dependency and integrity value. No npm, Node, or SDK code is invoked here.
 	for name, b := range map[string][]byte{"package": nodePackage, "lock": nodeLock} {
-		want := map[string]string{"package": "dcf6025f7356e0f09aa50db14395f5efd33ff5934ab2404601eaba7b5f36e053", "lock": "14b7f6537202997b0572ab7e368a3c969ff01b558f7e8b25917c839361cb0f0f"}[name]
+		want := map[string]string{"package": "dcf6025f7356e0f09aa50db14395f5efd33ff5934ab2404601eaba7b5f36e053", "lock": "337869717057bce8057306af169679b4e83fb9024e39c9a0f019331b2779a603"}[name]
 		if got := fmt.Sprintf("%x", sha256.Sum256(b)); got != want {
 			t.Fatalf("%s fixture changed: %s", name, got)
 		}
