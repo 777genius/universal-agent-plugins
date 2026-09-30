@@ -6,7 +6,7 @@ settings:
 
 overrides:
   brace-expansion@>=4.0.0 <5.0.12: 5.0.12
-  dompurify: 3.4.13
+  dompurify: 3.4.16
   lodash-es: 4.18.1
   markdown-it@>=14.0.0 <14.3.2: 14.3.2
   nanoid@>=3.0.0 <3.3.18: 3.3.18
@@ -1229,8 +1229,8 @@ packages:
       dequal: 2.0.3
     dev: true
 
-  /dompurify@3.4.13:
-    resolution: {integrity: sha512-2vmYIoqjze2d+kakP8S/nS5shfsl587kzwEjcGlTdiksUVgFHnFCsLYDVj/JNqJVOQZGSYBTmuycv0PodwmnMQ==}
+  /dompurify@3.4.16:
+    resolution: {integrity: sha512-sqo+pNp3qRhCIpbgRi1y8Tgk27Bo2Ry7w0dC1NBeNTdZChWjz9Xb/KOoZbRP/R6pQZ80Qw8YhXw13hWWBbMRnQ==}
     optionalDependencies:
       '@types/trusted-types': 2.0.7
     dev: true
@@ -1555,7 +1555,7 @@ packages:
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.23
-      dompurify: 3.4.13
+      dompurify: 3.4.16
       es-toolkit: 1.50.0
       fastdom: 1.0.12
       katex: 0.16.47
