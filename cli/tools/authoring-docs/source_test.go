@@ -14,8 +14,9 @@ import (
 
 func fixtureGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	c := exec.CommandContext(t.Context(), "git", append([]string{"-C", dir}, args...)...)
-	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Docs Fixture", "GIT_AUTHOR_EMAIL=docs@example.invalid", "GIT_COMMITTER_NAME=Docs Fixture", "GIT_COMMITTER_EMAIL=docs@example.invalid")
+	// Detached maintenance must not race cleanup of the disposable Git fixture.
+	c := exec.CommandContext(t.Context(), "git", append([]string{"-c", "maintenance.auto=false", "-c", "gc.auto=0", "-C", dir}, args...)...)
+	c.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=iliya", "GIT_AUTHOR_EMAIL=iliyazelenkog@gmail.com", "GIT_COMMITTER_NAME=iliya", "GIT_COMMITTER_EMAIL=iliyazelenkog@gmail.com")
 	b, e := c.CombinedOutput()
 	if e != nil {
 		t.Fatalf("git %v: %v: %s", args, e, b)
@@ -39,7 +40,12 @@ func writeFixture(t *testing.T, dir, name string, body []byte) {
 func commitFixture(t *testing.T, dir string) string {
 	t.Helper()
 	fixtureGit(t, dir, "add", ".")
-	fixtureGit(t, dir, "-c", "commit.gpgsign=false", "commit", "-qm", "docs fixture")
+	for _, variable := range []string{"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"} {
+		if identity := fixtureGit(t, dir, "var", variable); !strings.HasPrefix(identity, "iliya <iliyazelenkog@gmail.com> ") {
+			t.Fatalf("unexpected %s: %s", variable, identity)
+		}
+	}
+	fixtureGit(t, dir, "-c", "commit.gpgsign=false", "commit", "-qm", "test(docs): capture disposable source fixture")
 	return checkoutSHA(t, dir)
 }
 
