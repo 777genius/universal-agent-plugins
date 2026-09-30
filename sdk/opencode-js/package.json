@@ -1,6 +1,6 @@
 {
   "name": "universal-agent-plugins-opencode-events",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "Apache-2.0",
   "repository": {"type": "git", "url": "git+https://github.com/777genius/universal-agent-plugins.git", "directory": "sdk/opencode-js"},
   "files": ["index.js", "index.d.ts", "README.md"],

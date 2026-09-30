@@ -19,7 +19,8 @@ export function createObserver(options) {
   const state = (sid) => {
     if (!sessions.has(sid)) {
       sessions.set(sid, {
-        user: '', assistant: '', retry: false, retryAssistant: '', cancelled: false,
+        user: '', userCreated: undefined, seenUsers: new Set(), assistant: '', failedAssistant: '',
+        overflowPending: false, retry: false, retryAssistant: '', cancelled: false,
         questions: new Set(), permissions: new Set(), resolved: new Set(), admitted: new Set(),
         turnEpoch: 0, revision: 0, errorPending: 0, rootSession: undefined,
       });
@@ -83,11 +84,24 @@ export function createObserver(options) {
   }
   async function idle(sid) {
     const s = state(sid), revision = s.revision, uid = s.user;
-    if (!uid || !s.assistant || s.admitted.has('idle') || s.retry || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
+    if (!uid || (!s.assistant && !s.failedAssistant && !s.overflowPending) ||
+        s.admitted.has('idle') || s.admitted.has('error') || s.retry || s.cancelled ||
+        s.errorPending || s.questions.size || s.permissions.size) return;
     const messages = await latest(sid);
     if (!messages || sessions.get(sid) !== s || revision !== s.revision || s.user !== uid || s.retry || s.cancelled || s.errorPending || s.questions.size || s.permissions.size) return;
     if (!currentTurn(messages, uid)) return;
     const answer = messages.at(-1);
+    if (s.failedAssistant || s.overflowPending) {
+      if (!answer || answer.role !== 'assistant' || answer.parentID !== uid ||
+          (s.failedAssistant && answer.id !== s.failedAssistant) || !object(answer.error) ||
+          /abort|cancel/i.test(String(answer.error.name ?? ''))) return;
+      if (s.overflowPending && !s.failedAssistant && answer.error.name !== 'ContextOverflowError') return;
+      const rootSession = await rootStatus(sid);
+      if (rootSession === undefined || sessions.get(sid) !== s || revision !== s.revision || s.user !== uid || s.cancelled) return;
+      s.cancelled = true; s.revision++;
+      await emit({ kind: 'terminal_error', sessionID: sid, turnID: uid, rootSession }, 'error', s);
+      return;
+    }
     if (!answer || answer.role !== 'assistant' || answer.id !== s.assistant || answer.parentID !== uid ||
         answer.finish !== 'stop' || !Number.isFinite(answer.time?.completed) || answer.error != null) return;
     const rootSession = await rootStatus(sid);
@@ -102,21 +116,32 @@ export function createObserver(options) {
       if (!object(m) || !id(m.id) || !id(m.sessionID) || !['user', 'assistant'].includes(m.role)) { diag('invalid message.updated'); return; }
       const s = state(m.sessionID);
       if (m.role === 'user' && m.id !== s.user) {
+        const created = m.time?.created;
+        // Summary/diff work can republish an older user after a newer turn starts.
+        if (s.seenUsers.has(m.id) || (Number.isFinite(created) &&
+            Number.isFinite(s.userCreated) && created < s.userCreated)) return;
+        s.seenUsers.add(m.id);
+        if (s.seenUsers.size > 512) s.seenUsers.delete(s.seenUsers.values().next().value);
+        s.userCreated = Number.isFinite(created) ? created : undefined;
         s.user = m.id; s.assistant = ''; s.retry = false; s.retryAssistant = ''; s.cancelled = false;
+        s.failedAssistant = ''; s.overflowPending = false;
         s.questions.clear(); s.permissions.clear(); s.resolved.clear(); s.admitted.clear();
         s.turnEpoch++; s.revision++;
       }
       if (m.role === 'assistant' && m.parentID === s.user && m.finish === 'stop' &&
           Number.isFinite(m.time?.completed) && m.error == null && m.id !== s.retryAssistant) {
-        s.assistant = m.id; s.retry = false; s.revision++;
+        s.assistant = m.id; s.failedAssistant = ''; s.overflowPending = false; s.retry = false; s.revision++;
       }
-      if (m.role === 'assistant' && m.parentID === s.user && m.error != null) { s.cancelled = true; s.revision++; }
+      if (m.role === 'assistant' && m.parentID === s.user && m.error != null) {
+        s.assistant = ''; s.failedAssistant = m.id; s.revision++;
+      }
       return;
     }
     if (type === 'session.status') {
       if (!id(p.sessionID) || !object(p.status) || !['busy', 'idle', 'retry'].includes(p.status.type)) { diag('invalid session.status'); return; }
       if (p.status.type === 'retry') {
-        const s = state(p.sessionID); s.retryAssistant = s.assistant; s.assistant = ''; s.retry = true; s.revision++;
+        const s = state(p.sessionID); s.retryAssistant = s.assistant; s.assistant = '';
+        s.failedAssistant = ''; s.overflowPending = false; s.retry = true; s.revision++;
       }
       if (p.status.type === 'idle') await idle(p.sessionID);
       return;
@@ -166,6 +191,12 @@ export function createObserver(options) {
       }
       const rootSession = await rootStatus(p.sessionID);
       if (rootSession === undefined || sessions.get(p.sessionID) !== s || s.turnEpoch !== epoch || s.user !== uid || s.admitted.has('idle')) return;
+      if (p.error.name === 'ContextOverflowError') {
+        // The same native error also precedes automatic compaction and retry.
+        // Only a final idle with an assistant error proves it was terminal.
+        s.overflowPending = true; s.revision++;
+        return;
+      }
       s.cancelled = true; s.revision++;
       if (/abort|cancel/i.test(String(p.error.name ?? ''))) return;
       await emit({ kind: 'terminal_error', sessionID: p.sessionID, turnID: uid, rootSession }, 'error', s);
