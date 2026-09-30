@@ -129,7 +129,8 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
           JSON.stringify(projectRegistry(registry, projection)),
         );
       }
-      await put(path.join(root, 'api/releases/latest'), '{"ok":false,"source":"unavailable"}');
+      // Test metadata only; production builds still fetch the real GitHub release.
+      await put(path.join(root, 'api/releases/latest'), '{"ok":true,"source":"github-releases","version":"1.2.3"}');
       const options = { root, mirror, docsDist, base, siteUrl, locales };
       await checkPagesArtifact(options);
       const mutation = async (relative, value, pattern) => {
@@ -193,6 +194,18 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
         /Unexpected\/draft\/fake HTML/,
       );
       await mutation('api/releases/latest', '[]', /Invalid release metadata/);
+      await mutation(
+        'api/releases/latest',
+        '{"ok":false,"version":"1.2.3"}',
+        /Release metadata is unavailable/,
+      );
+      for (const version of [null, 123, '', 'not-a-version', '1.2.3 trailing']) {
+        await mutation(
+          'api/releases/latest',
+          JSON.stringify({ ok: true, version }),
+          /Invalid release metadata version/,
+        );
+      }
       await mutation(
         'index.html',
         home.replace(

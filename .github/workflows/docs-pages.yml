@@ -105,6 +105,7 @@ jobs:
 
       - name: Build landing
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           NUXT_APP_BASE_URL: /universal-agent-plugins/
           NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
           NUXT_PUBLIC_GITHUB_REPO: 777genius/universal-agent-plugins
