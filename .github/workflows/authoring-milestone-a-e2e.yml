@@ -94,6 +94,17 @@ jobs:
         with:
           node-version: '22.23.2'
           check-latest: false
+      - name: Initialize run evidence before platform prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          outer="$RUNNER_TEMP/milestone-a-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$outer"
+          root="$outer/run"
+          native_root="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$root")"
+          evidence="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1]))' "$native_root")"
+          printf 'MILESTONE_A_EVIDENCE=%s\n' "$evidence" >> "$GITHUB_ENV"
+          node -e 'require("fs").writeFileSync(require("path").join(process.argv[1],"workflow-context.json"),JSON.stringify({expected_head:process.env.EXPECTED_HEAD,platform:process.argv[2],arch:process.argv[3],publication:false},null,2)+"\n",{flag:"wx",mode:0o600})' "$evidence" '${{ matrix.platform }}' '${{ matrix.arch }}'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         if: runner.os == 'macOS'
         with:
@@ -107,7 +118,13 @@ jobs:
           CGO_ENABLED: '0'
           GOTOOLCHAIN: local
           GOMAXPROCS: '2'
-        run: go test -count=1 ./adapters/packageview
+        run: |
+          set -euo pipefail
+          status=0
+          go test -count=1 ./adapters/packageview > "$MILESTONE_A_EVIDENCE/darwin-packageview-prerequisite.log" 2>&1 || status=$?
+          cat "$MILESTONE_A_EVIDENCE/darwin-packageview-prerequisite.log"
+          printf '%s\n' "$status" > "$MILESTONE_A_EVIDENCE/darwin-packageview-prerequisite.status"
+          exit "$status"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
@@ -136,15 +153,12 @@ jobs:
         run: |
           set -euo pipefail
           outer="$RUNNER_TEMP/milestone-a-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          test ! -e "$outer"
           root="$outer/run"
           native_root="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$root")"
           native_outer="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$outer")"
           native_input="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$RUNNER_TEMP/milestone-a-input")"
           native_candidate="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "${MILESTONE_A_CANDIDATE:-$RUNNER_TEMP/milestone-a-input/candidate}")"
           npm_cli="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").resolveNpmCLI())')"
-          printf 'MILESTONE_A_EVIDENCE=%s\n' "$(node -e 'process.stdout.write(require("path").join(process.argv[1],"evidence"))' "$native_root")" >> "$GITHUB_ENV"
-          node -e 'require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1])' "$native_root"
           config="$RUNNER_TEMP/milestone-a-run.json"
           native_config="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$config")"
           node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,outerRoot:process.argv[3],input:process.argv[4],candidateRoot:process.argv[5],npm:process.argv[6],platform:process.argv[7],arch:process.argv[8],expectedHead:process.env.EXPECTED_HEAD}))' \
