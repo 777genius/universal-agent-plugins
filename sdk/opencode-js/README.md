@@ -22,6 +22,11 @@ produce a completion fact.
 An error is emitted only when its session still has the latest observed user
 turn; an error after a verified completion is ignored. Optional native
 `messageID` must identify an assistant message parented to that turn.
+Late metadata updates for an older user do not replace the current turn.
+Context overflow is held until idle because OpenCode also emits it before
+automatic compaction; a final assistant error at idle confirms a terminal
+failure. An assistant error without `session.error`, such as a structured
+output failure, is verified at idle as well.
 Deduplication lasts only while the session remains in this observer instance's
 bounded memory. Unknown native events use a separate evicting cache and cannot
 evict the completion/error admission of a retained session.
@@ -42,6 +47,6 @@ The exact OpenCode 1.18.33 plugin and SDK versions are pinned for type checks.
 A disposable OpenCode 1.18.33 profile loaded this adapter source as a local JS
 plugin and produced all four wire facts: turn completion, question, permission,
 and terminal error. The error run also emitted a native idle, without a false
-completion fact. `plugin-kit-ai-opencode-events` is a standalone npm package.
+completion fact. `universal-agent-plugins-opencode-events` is a standalone npm package.
 The source probe alone does not qualify the published package artifact,
 Notifications delivery, lifecycle, or other operating systems.

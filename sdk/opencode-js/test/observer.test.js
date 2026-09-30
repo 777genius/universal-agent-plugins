@@ -335,6 +335,88 @@ test('rejected old request and old error do not poison current completion', asyn
   assert.deepEqual(h.out, [fixture[0]]);
 });
 
+test('late metadata update for an earlier user cannot replace the current turn', async () => {
+  const h = harness(), o = h.observer.observe;
+  await o(native('message.updated', { info: { ...user(), time: { created: 1 } } }));
+  await o(native('message.updated', { info: { ...user('u2'), time: { created: 2 } } }));
+  h.setMessages([{ ...user('u2'), time: { created: 2 } }, { ...answer('u2'), id: 'a2' }]);
+  await o(native('message.updated', { info: { ...user(), time: { created: 1 }, summary: { diffs: [] } } }));
+  await o(native('message.updated', { info: { ...answer('u2'), id: 'a2' } }));
+  await o(native('session.idle', { sessionID: 's1' }));
+  assert.deepEqual(h.out.map((x) => [x.kind, x.turnID]), [['turn_idle_verified', 'u2']]);
+});
+
+test('recoverable context overflow does not announce an error before compaction continues', async () => {
+  const h = harness(), o = h.observer.observe;
+  await o(native('message.updated', { info: user() }));
+  h.setMessages([user()]);
+  await o(native('session.error', { sessionID: 's1', error: { name: 'ContextOverflowError' } }));
+  assert.deepEqual(h.out, []);
+  await o(native('message.updated', { info: user('u2') }));
+  h.setMessages([user('u2'), { ...answer('u2'), id: 'a2' }]);
+  await o(native('message.updated', { info: { ...answer('u2'), id: 'a2' } }));
+  await o(native('session.idle', { sessionID: 's1' }));
+  assert.deepEqual(h.out.map((x) => [x.kind, x.turnID]), [['turn_idle_verified', 'u2']]);
+});
+
+test('terminal context overflow and structured output failures surface once at idle', async () => {
+  for (const name of ['ContextOverflowError', 'StructuredOutputError']) {
+    const h = harness(), o = h.observer.observe;
+    const failed = { ...answer(), finish: 'error', error: { name } };
+    await o(native('message.updated', { info: user() }));
+    h.setMessages([user(), failed]);
+    await o(native('message.updated', { info: failed }));
+    if (name === 'ContextOverflowError') {
+      await o(native('session.error', { sessionID: 's1', error: { name } }));
+    }
+    await o(native('session.idle', { sessionID: 's1' }));
+    await o(native('session.idle', { sessionID: 's1' }));
+    assert.deepEqual(h.out.map((x) => x.kind), ['terminal_error'], name);
+  }
+});
+
+test('final idle observed during context overflow lookup is evaluated after the lookup', async () => {
+  const out = [];
+  let startLookup, releaseLookup;
+  const started = new Promise((resolve) => { startLookup = resolve; });
+  const blocked = new Promise((resolve) => { releaseLookup = resolve; });
+  const failed = { ...answer(), finish: 'error', error: { name: 'ContextOverflowError' } };
+  let calls = 0;
+  const observer = createObserver({ emit: (fact) => out.push(fact), client: { session: {
+    get: async ({ path }) => ({ data: { id: path.id } }),
+    messages: async () => {
+      if (++calls === 1) { startLookup(); await blocked; }
+      return { data: [user(), failed] };
+    },
+  } } });
+  await observer.observe(native('message.updated', { info: user() }));
+  const pending = observer.observe(native('session.error', { sessionID: 's1', error: { name: 'ContextOverflowError' } }));
+  await started;
+  await observer.observe(native('message.updated', { info: failed }));
+  await observer.observe(native('session.status', { sessionID: 's1', status: { type: 'idle' } }));
+  await observer.observe(native('session.idle', { sessionID: 's1' }));
+  releaseLookup();
+  await pending;
+  assert.deepEqual(out.map((x) => x.kind), ['terminal_error']);
+});
+
+test('a final assistant error after retry is still terminal', async () => {
+  for (const name of ['ContextOverflowError', 'StructuredOutputError']) {
+    const h = harness(), o = h.observer.observe;
+    const failed = { ...answer(), finish: 'length', error: { name } };
+    await o(native('message.updated', { info: user() }));
+    await o(native('session.status', { sessionID: 's1', status: { type: 'retry' } }));
+    await o(native('session.status', { sessionID: 's1', status: { type: 'busy' } }));
+    h.setMessages([user(), failed]);
+    await o(native('message.updated', { info: failed }));
+    if (name === 'ContextOverflowError') {
+      await o(native('session.error', { sessionID: 's1', error: { name } }));
+    }
+    await o(native('session.idle', { sessionID: 's1' }));
+    assert.deepEqual(h.out.map((x) => x.kind), ['terminal_error'], name);
+  }
+});
+
 test('unrelated resolution does not clear current final assistant', async () => {
   const h = harness(), o = h.observer.observe;
   await o(native('message.updated', { info: user() }));
