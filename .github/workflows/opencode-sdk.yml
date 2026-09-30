@@ -40,7 +40,7 @@ jobs:
           cd "$consumer"
           npm init -y >/dev/null
           npm install --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/$tarball"
-          node --input-type=module -e 'import { createObserver } from "plugin-kit-ai-opencode-events"; if (typeof createObserver !== "function") process.exit(1)'
+          node --input-type=module -e 'import { createObserver } from "universal-agent-plugins-opencode-events"; if (typeof createObserver !== "function") process.exit(1)'
 
   go-contract:
     runs-on: ubuntu-24.04
