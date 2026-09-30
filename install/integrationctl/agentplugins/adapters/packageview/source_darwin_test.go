@@ -3,11 +3,15 @@
 package packageview
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -20,7 +24,10 @@ import (
 // accepted. hdiutil is fixture tooling, never production reader behavior.
 func readOnlyFixture(t *testing.T, build func(string)) string {
 	t.Helper()
-	tmp := t.TempDir()
+	tmp, e := filepath.EvalSymlinks(t.TempDir())
+	if e != nil {
+		t.Fatal(e)
+	}
 	mount := filepath.Join(tmp, "mount")
 	dmg := filepath.Join(tmp, "fixture.sparseimage")
 	if e := os.Mkdir(mount, 0700); e != nil {
@@ -36,24 +43,107 @@ func readOnlyFixture(t *testing.T, build func(string)) string {
 		}
 	}
 	run("create", "-size", "512m", "-fs", "APFS", "-volname", "packageview-disposable", "-type", "SPARSE", dmg)
-	attached := false
 	t.Cleanup(func() {
-		if attached {
-			run("detach", mount)
+		if e := detachFixture(dmg, mount); e != nil {
+			t.Errorf("UNPROVEN APFS fixture cleanup: %v", e)
 		}
 	})
-	attached = true
 	run("attach", "-nobrowse", "-noautoopen", "-mountpoint", mount, dmg)
 	root := filepath.Join(mount, "source")
 	if e := os.Mkdir(root, 0700); e != nil {
 		t.Fatal(e)
 	}
 	build(root)
-	run("detach", mount)
-	attached = false
-	attached = true
+	if e := detachFixture(dmg, mount); e != nil {
+		t.Fatalf("UNPROVEN APFS fixture prerequisite: %v", e)
+	}
 	run("attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mount, dmg)
 	return root
+}
+
+// Only detach the exact new image at its expected mount. A failed command may
+// already have detached it; querying state also makes cleanup idempotent.
+func detachFixture(image, mount string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	mounted := func() (bool, error) {
+		plist, e := exec.CommandContext(ctx, "/usr/bin/hdiutil", "info", "-plist").CombinedOutput()
+		if e != nil {
+			return false, fmt.Errorf("hdiutil info: %w\n%s", e, plist)
+		}
+		convert := exec.CommandContext(ctx, "/usr/bin/plutil", "-convert", "json", "-o", "-", "-")
+		convert.Stdin = bytes.NewReader(plist)
+		data, e := convert.CombinedOutput()
+		if e != nil {
+			return false, fmt.Errorf("plutil mount state: %w\n%s", e, data)
+		}
+		var info struct {
+			Images []struct {
+				Path     string `json:"image-path"`
+				Entities []struct {
+					Mount string `json:"mount-point"`
+				} `json:"system-entities"`
+			} `json:"images"`
+		}
+		if e := json.Unmarshal(data, &info); e != nil {
+			return false, fmt.Errorf("decode mount state: %w", e)
+		}
+		if info.Images == nil {
+			return false, fmt.Errorf("unproven hdiutil image inventory: %s", data)
+		}
+		ownImage, ownMount := false, false
+		for _, attached := range info.Images {
+			own := filepath.Clean(attached.Path) == image
+			ownImage = ownImage || own
+			for _, entity := range attached.Entities {
+				if filepath.Clean(entity.Mount) == mount {
+					if !own {
+						return false, fmt.Errorf("refusing detach: %s belongs to another image", mount)
+					}
+					ownMount = true
+				}
+			}
+		}
+		var fs unix.Statfs_t
+		if e := unix.Statfs(mount, &fs); e != nil {
+			return false, fmt.Errorf("stat fixture mount: %w", e)
+		}
+		isMount := unix.ByteSliceToString(fs.Mntonname[:]) == mount
+		if ownImage != ownMount || ownMount != isMount {
+			return false, fmt.Errorf("unproven fixture mount state for %s: image=%t mount=%t filesystem=%t", image, ownImage, ownMount, isMount)
+		}
+		return ownMount, nil
+	}
+	var diagnostics strings.Builder
+	for attempt := 1; attempt <= 4; attempt++ {
+		attached, e := mounted()
+		if e != nil {
+			return fmt.Errorf("%sverify fixture before detach: %w", diagnostics.String(), e)
+		}
+		if !attached {
+			return nil
+		}
+		out, detachErr := exec.CommandContext(ctx, "/usr/bin/hdiutil", "detach", mount).CombinedOutput()
+		fmt.Fprintf(&diagnostics, "detach attempt %d: %v\n%s\n", attempt, detachErr, out)
+		attached, e = mounted()
+		if e != nil {
+			return fmt.Errorf("%sverify fixture after detach: %w", diagnostics.String(), e)
+		}
+		if !attached {
+			return nil
+		}
+		if detachErr == nil || !strings.Contains(strings.ToLower(string(out)), "resource busy") || attempt == 4 {
+			return fmt.Errorf("%sfixture still attached at %s", diagnostics.String(), mount)
+		}
+		timer := time.NewTimer(time.Duration(attempt) * 250 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return fmt.Errorf("%sdetach retry: %w", diagnostics.String(), ctx.Err())
+		case <-timer.C:
+		}
+	}
+	return fmt.Errorf("%sdetach attempts exhausted", diagnostics.String())
 }
 
 // Ordinary sources are new writable local APFS directories, never user projects.
