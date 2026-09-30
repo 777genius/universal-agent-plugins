@@ -42,6 +42,6 @@ The exact OpenCode 1.18.33 plugin and SDK versions are pinned for type checks.
 A disposable OpenCode 1.18.33 profile loaded this adapter source as a local JS
 plugin and produced all four wire facts: turn completion, question, permission,
 and terminal error. The error run also emitted a native idle, without a false
-completion fact. `plugin-kit-ai-opencode-events` is a standalone npm package.
+completion fact. `universal-agent-plugins-opencode-events` is a standalone npm package.
 The source probe alone does not qualify the published package artifact,
 Notifications delivery, lifecycle, or other operating systems.

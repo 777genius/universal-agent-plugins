@@ -1,5 +1,5 @@
 {
-  "name": "plugin-kit-ai-opencode-events",
+  "name": "universal-agent-plugins-opencode-events",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "repository": {"type": "git", "url": "git+https://github.com/777genius/universal-agent-plugins.git", "directory": "sdk/opencode-js"},
