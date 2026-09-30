@@ -1,0 +1,12 @@
+{
+  "name": "plugin-kit-ai-opencode-events",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "repository": {"type": "git", "url": "git+https://github.com/777genius/universal-agent-plugins.git", "directory": "sdk/opencode-js"},
+  "files": ["index.js", "index.d.ts", "README.md"],
+  "type": "module",
+  "exports": {".": {"types": "./index.d.ts", "default": "./index.js"}},
+  "scripts": {"test": "node --test", "check": "node --check index.js && node --test && tsc --noEmit -p tsconfig.json"},
+  "peerDependencies": {"@opencode-ai/sdk": "1.18.33"},
+  "devDependencies": {"@opencode-ai/plugin": "1.18.33", "@opencode-ai/sdk": "1.18.33", "typescript": "7.0.2"}
+}
