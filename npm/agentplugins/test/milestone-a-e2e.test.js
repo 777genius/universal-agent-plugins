@@ -6,6 +6,17 @@ const test=require("node:test"),assert=require("node:assert/strict"),fs=require(
 const harness=require("../scripts/milestone-a-e2e"),HEAD="9db754c93c713219c72206eab54d71ee39e88abf";
 const D="sha256:"+"a".repeat(64),R="sha256:"+"b".repeat(64),P="sha256:"+"c".repeat(64);
 const repo=path.resolve(__dirname,"../../.."),workflow=fs.readFileSync(path.join(repo,".github/workflows/authoring-milestone-a-e2e.yml"),"utf8");
+// Read job/step boundaries separately from indented shell and Node block bodies.
+function workflowSteps(job){
+ const body=new RegExp(`^  ${job}:\\n((?: {4}[^\\n]*(?:\\n|$)|\\n)*)`,"m").exec(workflow)?.[1];
+ assert.ok(body,`missing workflow job ${job}`);
+ const starts=[...body.matchAll(/^      - /gm)];
+ return starts.map((start,index)=>{
+  const block=body.slice(start.index,starts[index+1]?.index),field=key=>new RegExp(`^(?:      - |        )${key}: ([^\\n]+)$`,"m").exec(block)?.[1];
+  const script=/^        run: \|\n((?:          [^\n]*(?:\n|$)|\n)*)/m.exec(block)?.[1];
+  return{name:field("name"),uses:field("uses"),condition:field("if"),run:script?.replace(/^          /gm,"")||field("run"),uploadPath:/^          path: ([^\n]+)$/m.exec(block)?.[1]};
+ });
+}
 test("prepare assembles the exact current stager identity schema",()=>{const identity=harness.candidateIdentity(HEAD);assert.deepEqual(identity,{repository:"777genius/universal-agent-plugins",commit:HEAD,engine_revision:HEAD,versions:{agentplugins:"0.1.91","plugin-kit-ai":"2.0.0"}});assert.notEqual(identity.versions.agentplugins,identity.versions["plugin-kit-ai"]);});
 test("negative metadata mutation is rejected by the real stager validator",()=>{const identity=harness.candidateIdentity(HEAD);delete identity.engine_revision;const c=require("../scripts/dual-authoring-candidate");assert.throws(()=>c.identity(identity),/identity: unexpected or missing fields/);});
 test("trusted tool config resolves setup-node-style npm and Go symlinks to invocable regular files",()=>{const root=fs.mkdtempSync(path.join(os.tmpdir(),"milestone-a-tools-"));try{const npmCli=path.join(root,"lib/node_modules/npm/bin/npm-cli.js"),goTarget=path.join(root,"toolchains/go/bin/go");fs.mkdirSync(path.dirname(npmCli),{recursive:true});fs.mkdirSync(path.dirname(goTarget),{recursive:true});fs.writeFileSync(npmCli,'if(process.argv[2]!=="--probe")process.exit(19);process.stdout.write("npm-cli-ok")');fs.writeFileSync(goTarget,"go-binary-placeholder");const npmLink=path.join(root,"bin/npm"),goLink=path.join(root,"bin/go");fs.mkdirSync(path.dirname(npmLink));fs.symlinkSync(path.relative(path.dirname(npmLink),npmCli),npmLink);fs.symlinkSync(path.relative(path.dirname(goLink),goTarget),goLink);const tools=harness.resolveTrustedTools(goLink,npmLink,process.execPath);assert.equal(tools.go,fs.realpathSync(goTarget));assert.equal(tools.npm,fs.realpathSync(npmCli));assert.equal(tools.node,fs.realpathSync(process.execPath));for(const value of Object.values(tools)){const stat=fs.lstatSync(value);assert.equal(stat.isFile(),true);assert.equal(stat.nlink,1)}assert.equal(require("node:child_process").execFileSync(tools.node,[tools.npm,"--probe"],{encoding:"utf8"}),"npm-cli-ok");}finally{fs.rmSync(root,{recursive:true,force:true})}});
@@ -137,8 +148,58 @@ test("workflow uses real local packages and has no test entrypoint injection",()
 test("workflow is unfiltered, secretless, pinned, bounded and failure-preserving",()=>{assert.match(workflow,/pull_request:\s*\n\s*workflow_dispatch:/);assert.doesNotMatch(workflow,/pull_request:[\s\S]{0,200}paths:/);assert.match(workflow,/permissions:\n  contents: read/);assert.doesNotMatch(workflow,/secrets\.|permissions:\s*write|publish|npm-token|id-token/);assert.match(workflow,/ubuntu-24\.04[\s\S]*windows-2022[\s\S]*macos-14/);assert.match(workflow,/if: always\(\)[\s\S]*actions\/upload-artifact@[0-9a-f]{40}/);assert.doesNotMatch(workflow,/uses:\s*[^\n]+@(?![0-9a-f]{40}(?:\s|$))/);for(const n of [...workflow.matchAll(/timeout-minutes:\s*(\d+)/g)].map(x=>+x[1]))assert.ok(n<=20);assert.match(workflow,/NODE_OPTIONS: --max-old-space-size=384/);});
 test("workflow creates a private prepare upload root before packing and installs a bounded failure receipt",()=>{assert.match(workflow,/test ! -e "\$root"\s+mkdir -m 700 "\$root"\s+mkdir -m 700 "\$root\/evidence"/);assert.match(workflow,/precreatedRoot:true/);assert.match(workflow,/milestone-a-e2e-workflow-failure\/v1/);assert.match(workflow,/\.slice\(0,4096\)|status:Number/);});
 test("workflow uploads only the exact candidate, offline packages and failure evidence",()=>{const upload=workflow.slice(workflow.indexOf("Upload exact candidate bundle and failure evidence"),workflow.indexOf("  e2e:")),block=/path: \|\n([\s\S]*?)\n\s+include-hidden-files:/.exec(upload);assert.ok(block);assert.deepEqual(block[1].trim().split(/\s*\n\s*/),["${{ env.MILESTONE_A_BUNDLE }}/candidate","${{ env.MILESTONE_A_BUNDLE }}/packages","${{ env.MILESTONE_A_BUNDLE }}/evidence"]);assert.doesNotMatch(upload,/MILESTONE_A_BUNDLE \}\}\/journeys/);});
-test("workflow precreates portable run evidence before execution and uploads that stable path",()=>{const run=workflow.slice(workflow.indexOf("Run both packaged public entrypoints"));assert.match(run,/native_root=.*nativeAbsolute[\s\S]*MILESTONE_A_EVIDENCE=%s[\s\S]*\.precreate\(process\.argv\[1\]\)/);assert.match(run,/native_outer=.*nativeAbsolute[\s\S]*native_input=.*nativeAbsolute/);assert.match(run,/precreatedRoot:true/);assert.doesNotMatch(run,/mkdir -m 700|rmdir \"\$root\/evidence\"/);assert.match(run,/if: always\(\)[\s\S]*path: \$\{\{ env\.MILESTONE_A_EVIDENCE \}\}/);});
+test("workflow precreates portable run evidence before execution and uploads that stable path",()=>{
+ const steps=workflowSteps("e2e"),init=steps.find(s=>s.name==="Initialize run evidence before platform prerequisites"),prerequisite=steps.find(s=>s.name==="Check Darwin writable acquisition and separate read-only regressions"),run=steps.find(s=>s.name==="Run both packaged public entrypoints in fresh roots"),upload=steps.find(s=>s.name==="Upload run evidence, including failures");
+ assert.ok(init&&prerequisite&&run&&upload);
+ assert.equal(init.condition,undefined);
+ assert.ok(steps.indexOf(init)<steps.findIndex(s=>s.uses?.startsWith("actions/setup-go@")));
+ assert.ok(steps.indexOf(init)<steps.indexOf(prerequisite));
+ assert.ok(steps.indexOf(prerequisite)<steps.indexOf(run));
+ assert.ok(steps.indexOf(run)<steps.indexOf(upload));
+ assert.match(init.run,/native_root=.*nativeAbsolute/);
+ assert.match(init.run,/evidence=.*\.precreate\(process\.argv\[1\]\)[\s\S]*MILESTONE_A_EVIDENCE=%s[^\n]*"\$evidence" >> "\$GITHUB_ENV"/);
+ const roots=init.run.match(/^\s*(?:outer|root)=.*$/gm);assert.equal(roots?.length,2);
+ assert.deepEqual(roots,run.run.match(/^\s*(?:outer|root)=.*$/gm));
+ assert.equal(steps.filter(s=>s.run?.includes("MILESTONE_A_EVIDENCE=%s")).length,1);
+ assert.match(prerequisite.run,/\$MILESTONE_A_EVIDENCE\/darwin-packageview-prerequisite\.log/);
+ assert.match(prerequisite.run,/\$MILESTONE_A_EVIDENCE\/darwin-packageview-prerequisite\.status[\s\S]*exit "\$status"/);
+ assert.match(run.run,/native_outer=.*nativeAbsolute[\s\S]*native_input=.*nativeAbsolute/);
+ assert.match(run.run,/precreatedRoot:true/);
+ assert.doesNotMatch(run.run,/\.precreate\(|mkdir -m 700|rmdir \"\$root\/evidence\"/);
+ assert.equal(upload.condition,"always()");
+ assert.match(upload.uses,/^actions\/upload-artifact@[0-9a-f]{40}$/);
+ assert.equal(upload.uploadPath,"${{ env.MILESTONE_A_EVIDENCE }}");
+});
 test("workflow converts the MSYS run config path to native Win32 before writing and invoking",()=>{const run=workflow.slice(workflow.indexOf("Run both packaged public entrypoints"));assert.match(run,/native_config=.*nativeAbsolute\(process\.argv\[1\]\)[\s\S]*writeFileSync\(process\.argv\[1\][\s\S]*\"\$native_config\"[\s\S]*milestone-a-e2e\.js run \"\$native_config\"/);assert.doesNotMatch(run,/milestone-a-e2e\.js run \"\$config\"/);});
-test("workflow gives Darwin packageview a local read-only APFS candidate and always detaches it",()=>{assert.match(workflow,/runner\.os == 'macOS'[\s\S]*hdiutil create[^\n]*-fs APFS -format UDRO[\s\S]*hdiutil attach[^\n]*-readonly/);assert.match(workflow,/candidateRoot:process\.argv\[5\]/);assert.match(workflow,/if: always\(\) && runner\.os == 'macOS'[\s\S]*hdiutil detach/);});
+test("workflow gives Darwin packageview a local read-only APFS candidate and always detaches it",()=>{
+ const steps=workflowSteps("e2e"),seal=steps.find(s=>s.name==="Seal the Darwin launcher candidate independently of the writable project"),cleanup=steps.find(s=>s.name==="Detach Darwin packageview candidate"),run=steps.find(s=>s.name==="Run both packaged public entrypoints in fresh roots");
+ assert.ok(seal&&cleanup&&run);
+ assert.equal(seal.condition,"runner.os == 'macOS'");
+ assert.equal(cleanup.condition,"always() && runner.os == 'macOS'");
+ assert.ok(steps.indexOf(seal)<steps.indexOf(run)&&steps.indexOf(run)<steps.indexOf(cleanup));
+ assert.match(run.run,/candidateRoot:process\.argv\[5\]/);
+ assert.match(cleanup.run,/run\("\/usr\/bin\/hdiutil",\["detach",mounted\?mount:disk\["dev-entry"\]\]/);
+ assert.match(cleanup.run,/if\(owned\(\)\)throw new Error/);
+ const script=/^node <<'NODE'\n([\s\S]*?)^NODE$/m.exec(seal.run)?.[1];assert.ok(script);
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"milestone-a-seal-contract-")),calls=[];
+ const env={RUNNER_TEMP:root,MILESTONE_A_EVIDENCE:root,MILESTONE_A_CANDIDATE_IMAGE:path.join(root,"candidate.dmg"),MILESTONE_A_CANDIDATE:path.join(root,"mount")};
+ try{
+  const modules={fs,path,child_process:{spawnSync:(tool,args,options)=>{
+   calls.push({tool,args:Array.from(args),timeout:options.timeout});return{status:0,signal:null,stdout:"candidate tool output",stderr:""};
+  }}};
+  require("node:vm").runInNewContext(script,{require:name=>{const module=modules[name.replace(/^node:/,"")];assert.ok(module,`unexpected workflow module ${name}`);return module},process:{env,stdout:{write(){}},stderr:{write(){}}},console:{log(){}}});
+  assert.deepEqual(calls.map(c=>[c.tool,...c.args]),[
+   ["/usr/bin/hdiutil","create","-srcfolder",path.join(root,"milestone-a-input","candidate"),"-fs","APFS","-format","UDRO",env.MILESTONE_A_CANDIDATE_IMAGE],
+   ["/usr/bin/hdiutil","attach","-readonly","-nobrowse","-noautoopen","-mountpoint",env.MILESTONE_A_CANDIDATE,env.MILESTONE_A_CANDIDATE_IMAGE]
+  ]);
+  for(const [index,name] of ["create","attach"].entries()){
+   assert.ok(calls[index].timeout>0&&calls[index].timeout<=120000);
+   const receipt=JSON.parse(fs.readFileSync(path.join(root,`darwin-candidate-${name}.status.json`)));
+   assert.deepEqual(receipt.command,[calls[index].tool,...calls[index].args]);assert.equal(receipt.status,0);
+   assert.equal(fs.readFileSync(path.join(root,`darwin-candidate-${name}.stdout.log`),"utf8"),"candidate tool output");
+   assert.equal(fs.readFileSync(path.join(root,`darwin-candidate-${name}.stderr.log`),"utf8"),"");
+  }
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
 test("workflow canonicalizes trusted prepare tools before constructing config",()=>{assert.match(workflow,/resolveTrustedTools\(process\.argv\[3\],process\.argv\[5\]\)/);assert.doesNotMatch(workflow,/npm:process\.argv\[5\]/);});
 }
