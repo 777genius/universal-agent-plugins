@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sync/atomic"
 	"time"
 
 	sdk "github.com/777genius/plugin-kit-ai/sdk"
@@ -39,6 +40,14 @@ func main() {
 		cfg.IO = sdk.NewCursorObserverPipeIO(os.Stdin, os.Stdout)
 	}
 	app := sdk.New(cfg)
+	var callbackActive atomic.Int32
+	var observerReturned, lateCallback atomic.Bool
+	callbackEntered := func() {
+		callbackActive.Add(1)
+		if observerReturned.Load() {
+			lateCallback.Store(true)
+		}
+	}
 	record := func(kind string, event any) {
 		_ = json.NewEncoder(os.Stderr).Encode(struct {
 			Kind  string `json:"kind"`
@@ -46,6 +55,8 @@ func main() {
 		}{kind, event})
 	}
 	app.Cursor().OnStopContext(func(ctx context.Context, e *cursor.StopEvent) (*cursor.StopResponse, error) {
+		callbackEntered()
+		defer callbackActive.Add(-1)
 		record("cursor", e)
 		switch mode {
 		case "panic":
@@ -62,6 +73,8 @@ func main() {
 	})
 	if mode == "simple" {
 		app.Cursor().OnStop(func(e *cursor.StopEvent) *cursor.StopResponse {
+			callbackEntered()
+			defer callbackActive.Add(-1)
 			record("cursor", e)
 			return nil
 		})
@@ -96,13 +109,43 @@ func main() {
 		os.Exit(app.RunContext(ctx))
 	}
 	code := app.RunCursorObserver(ctx)
-	// Verify return/cleanup in the process, rather than relying only on os.Exit
-	// to remove indefinitely abandoned IO goroutines.
+	observerReturned.Store(true)
+	// Owned descriptors and the registered callback must be finished immediately;
+	// waiting for incidental context timer tails must not hide either violation.
+	joined := callbackActive.Load() == 0
+	closed := runtime.GOOS != "linux" || fileCount() <= fdBaseline-2
+	if mode == "leak-probe" {
+		// Self-check the observation deadline in this disposable process only.
+		go func() { select {} }()
+	}
+	quiet, stacks := observerQuiescent(baseline)
 	_ = json.NewEncoder(os.Stderr).Encode(struct {
-		Clean bool `json:"clean"`
-		Code  int  `json:"code"`
-	}{runtime.NumGoroutine() <= baseline && (runtime.GOOS != "linux" || fileCount() <= fdBaseline-2), code})
+		Clean  bool   `json:"clean"`
+		Code   int    `json:"code"`
+		Stacks string `json:"stacks,omitempty"`
+	}{closed && joined && !lateCallback.Load() && quiet, code, stacks})
 	os.Exit(code)
+}
+
+// RunCursorObserver joins owned work, but context's timer/AfterFunc goroutine
+// can still be exiting after its final operation. Observe global quiescence
+// within a failure deadline; persistent goroutines still fail with stack evidence.
+func observerQuiescent(baseline int) (bool, string) {
+	deadline := time.NewTimer(100 * time.Millisecond)
+	defer deadline.Stop()
+	poll := time.NewTicker(time.Millisecond)
+	defer poll.Stop()
+	for {
+		if runtime.NumGoroutine() <= baseline {
+			return true, ""
+		}
+		select {
+		case <-deadline.C:
+			buf := make([]byte, 64<<10)
+			return false, string(buf[:runtime.Stack(buf, true)])
+		case <-poll.C:
+		}
+	}
 }
 
 func ownedBroken(closeStdio bool) int {

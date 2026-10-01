@@ -58,10 +58,11 @@ func buildCursorConsumer(t *testing.T) string {
 }
 
 type cursorRecord struct {
-	Kind  string           `json:"kind"`
-	Event cursor.StopEvent `json:"event"`
-	Clean bool             `json:"clean"`
-	Code  int              `json:"code"`
+	Kind   string           `json:"kind"`
+	Event  cursor.StopEvent `json:"event"`
+	Clean  bool             `json:"clean"`
+	Code   int              `json:"code"`
+	Stacks string           `json:"stacks,omitempty"`
 }
 
 func cursorRecords(t *testing.T, b string) []cursorRecord {
@@ -181,6 +182,15 @@ func TestCursorObserverProcess(t *testing.T) {
 	})
 	// Red: cancellation during a blocked read waits for the original deadline.
 	t.Run("cancel open stdin", func(t *testing.T) { cursorOpenPipe(t, binary, "", "cancel-reading", true) })
+	// Red: the bounded cleanup observation admits an intentionally live goroutine,
+	// omits its failure stacks, or waits indefinitely rather than reporting a leak.
+	t.Run("leaking cleanup probe", func(t *testing.T) {
+		start := time.Now()
+		code, out, records := runCursorConsumer(t, binary, "CursorStop", "leak-probe", cursorInput)
+		if code != 0 || out != "{}\n" || len(records) != 2 || records[0].Kind != "cursor" || records[1].Clean || records[1].Code != 0 || !strings.Contains(records[1].Stacks, "[select (no cases)]") || time.Since(start) > time.Second {
+			t.Fatalf("leak observation: exit=%d stdout=%q records=%+v", code, out, records)
+		}
+	})
 }
 
 func cursorOpenPipe(t *testing.T, binary, input, mode string, oversize bool) {
