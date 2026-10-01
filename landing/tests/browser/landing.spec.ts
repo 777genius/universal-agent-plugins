@@ -261,6 +261,7 @@ test('homepage publishes canonical social metadata and complete product schema',
 
 test('supported client links open crawlable client-specific landing pages', async ({ page }) => {
   await page.goto('./');
+  await hydrated(page);
   await page.locator('.client-strip a[href$="/agents/codex/"]').click();
   await expect(page).toHaveURL(/\/agents\/codex\/?$/);
   await expect(page).toHaveTitle('Agent Plugins for Codex | Universal Agent Plugins');
