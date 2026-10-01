@@ -53,7 +53,7 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         working-directory: cli
-        run: go test -json -race -count=1 -timeout=5m ./installerui ./internal/promptio ./internal/terminalreader > "$RUNNER_TEMP/TEST-terminal-evidence/current.jsonl"
+        run: go test -json -race -count=1 -timeout=5m ./installerui ./internal/promptio ./internal/terminalreader ./internal/terminalprompts > "$RUNNER_TEMP/TEST-terminal-evidence/current.jsonl"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
