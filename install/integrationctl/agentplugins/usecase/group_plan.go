@@ -27,6 +27,12 @@ func (session *groupSession) planOneGroupTarget(targetIndex int, target AddInput
 	if err != nil {
 		return err
 	}
+	clientID, managed := session.resolveGroupManagedBinding(target, &plan)
+	if managed != nil {
+		if err := validateNativeBinding(*managed, target.Client); err != nil {
+			return err
+		}
+	}
 	collided, err := session.collideGroupTarget(targetIndex, target, plan)
 	if err != nil {
 		return err
@@ -34,7 +40,7 @@ func (session *groupSession) planOneGroupTarget(targetIndex int, target AddInput
 	if collided {
 		return nil
 	}
-	return session.recordGroupTarget(targetIndex, target, plan)
+	return session.recordGroupTarget(targetIndex, target, plan, clientID, managed)
 }
 
 func (session *groupSession) validateGroupTarget(targetIndex int, target *AddInput) error {
@@ -109,6 +115,9 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	if !sameNativeBackend(prior.input.Client.ClientID, target.Client.ClientID) {
 		return false, fmt.Errorf("targets collide on physical backend %s", key)
 	}
+	if (domain.ClientTraitsFor(prior.input.Client.ClientID).BindsNativeProfileRoot || domain.ClientTraitsFor(target.Client.ClientID).BindsNativeProfileRoot) && prior.input.Client.ConfigRoot != target.Client.ConfigRoot {
+		return false, fmt.Errorf("targets select different native profile roots for physical backend %s", key)
+	}
 	if prior.noChange {
 		session.result.Targets[targetIndex].NoChange = true
 		session.result.Targets[targetIndex].Activation = session.result.Targets[prior.resultIndexes[0]].Activation
@@ -118,13 +127,7 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	return true, nil
 }
 
-func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan) error {
-	clientID, managed := session.resolveGroupManagedBinding(target, &plan)
-	if managed != nil {
-		if err := validateNativeBinding(*managed, target.Client); err != nil {
-			return err
-		}
-	}
+func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan, clientID string, managed *domain.ClientBinding) error {
 	if session.replace {
 		describeMCPRemovals(&plan, managed)
 	}
