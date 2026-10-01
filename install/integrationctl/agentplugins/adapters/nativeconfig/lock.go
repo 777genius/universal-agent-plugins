@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"time"
 )
@@ -29,14 +28,13 @@ var defaultClineLockTiming = clineLockTiming{
 }
 
 func (kernel Kernel) acquireCandidateLocks(paths Paths, codec Codec) (func() error, error) {
-	pathsToLock := []string{filepath.Clean(paths.JSON)}
-	if paths.JSONC != "" {
-		pathsToLock = append(pathsToLock, filepath.Clean(paths.JSONC))
+	targets, err := writerLockTargets(paths, codec)
+	if err != nil {
+		return nil, err
 	}
-	sort.Strings(pathsToLock)
-	releases := make([]func() error, 0, len(pathsToLock))
-	for _, path := range pathsToLock {
-		release, err := kernel.acquireWriteLock(path, codec)
+	releases := make([]func() error, 0, len(targets))
+	for _, target := range targets {
+		release, err := kernel.acquireWriteLock(target.configPath, target.lockPath, codec)
 		if err != nil {
 			cleanupErr := error(nil)
 			for index := len(releases) - 1; index >= 0; index-- {
@@ -87,7 +85,7 @@ func acquireProcessPathLock(path string) func() {
 	}
 }
 
-func (kernel Kernel) acquireWriteLock(path string, codec Codec) (func() error, error) {
+func (kernel Kernel) acquireWriteLock(path, lockPath string, codec Codec) (func() error, error) {
 	releaseProcess := acquireProcessPathLock(path)
 	switch kernel.files.(type) {
 	case osFiles, conditionalOSFiles:
@@ -101,9 +99,9 @@ func (kernel Kernel) acquireWriteLock(path string, codec Codec) (func() error, e
 	var releaseFile func() error
 	var err error
 	if codec == CodecCline {
-		releaseFile, err = lockClineConfig(path + ".lock")
+		releaseFile, err = lockClineConfig(lockPath)
 	} else {
-		releaseFile, err = lockNativeConfig(path + ".agentplugins.lock")
+		releaseFile, err = lockNativeConfig(lockPath)
 	}
 	if err != nil {
 		releaseProcess()
