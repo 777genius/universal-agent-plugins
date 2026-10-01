@@ -8,7 +8,7 @@ func geminiProfile() PlatformProfile {
 			TargetClass:            "mcp_extension",
 			TargetNoun:             "extension",
 			ProductionClass:        "production-ready extension packaging lane",
-			RuntimeContract:        "production-ready extension packaging plus optional production-ready 9-hook Go runtime",
+			RuntimeContract:        "production-ready extension packaging plus optional production-ready 9-hook Go runtime and public-beta Notification observer",
 			InstallModel:           "copy install",
 			DevModel:               "link",
 			ActivationModel:        "restart required",

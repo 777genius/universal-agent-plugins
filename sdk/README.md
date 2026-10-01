@@ -92,6 +92,11 @@ silently assuming a host. The root package also exports `plugin-kit-ai.MaxPayloa
 wire limit used by runtime decoders.
 Gemini's current production-ready 9-hook runtime boundary is audited in [../../docs/GEMINI_RUNTIME_AUDIT.md](../../docs/GEMINI_RUNTIME_AUDIT.md).
 
+The additional `gemini/Notification` event is **public-beta**. Its native input
+shape follows official Gemini CLI v0.62.0 source (`b460678f3db508407554afd604cc9d6635becb2a`);
+SDK stdin/process checks do not qualify native CLI execution. Native qualification
+is pending. Runtime metadata now contains ten Gemini events: nine stable and one beta.
+
 Generated support matrix: [../../docs/generated/support_matrix.md](../../docs/generated/support_matrix.md)
 
 ## Experimental Custom Claude Hooks
@@ -209,3 +214,34 @@ Gemini helper rule of thumb:
 - use `gemini.BeforeToolAllow()` or `gemini.AfterToolAllow()` only when you intentionally want an explicit `"decision":"allow"` in the Gemini hook response
 - use `gemini.BeforeToolRewriteInputValue(...)` when you want to rewrite `tool_input` from a normal Go map/struct; it validates the result is a JSON object, which matches the Gemini hooks contract
 - use `gemini.AfterToolAddContext(...)` to append extra text to the tool result, or `gemini.AfterToolTailCallValue(...)` to request an immediate follow-up tool call with typed Go args
+
+### Gemini Notification observer (beta)
+
+The existing Gemini scaffold and extension renderer retain their nine stable
+hooks. Notification requires explicit handler registration and a native hook
+entry. Generated Scaffold, Validate and Live Test fields describe platform
+capabilities and do not promise Notification-specific coverage.
+
+Register with `app.Gemini().OnNotification(func(e *gemini.NotificationEvent) *gemini.NotificationResponse { ... })`
+and invoke the consumer with `GeminiNotification`. Bare `Notification` continues
+to select Claude. [The public consumer fixture](./testdata/gemini-observer/main.go)
+registers both `OnAfterAgent` and `OnNotification` using only public SDK imports;
+its stderr records contain synthetic test data and are not a production logging example.
+
+`NotificationEvent` exposes native `notification_type`, `message`, `details`, and
+the existing base fields (`session_id`, `timestamp`, `hook_event_name`, `cwd`,
+`transcript_path`). `Details` retains arbitrary JSON values as `json.RawMessage`.
+`NotificationTypeToolPermission` is supported; unknown subtype strings decode
+unchanged and consumers should ignore subtypes they do not use. Unknown top-level
+fields follow the existing decoder policy and are ignored. The SDK trusts the
+invocation selector; consumers that need native event admission must also check
+`HookEventName` against that selector.
+
+`NotificationResponse` is an empty struct. Returning nil or
+`&gemini.NotificationResponse{}` produces `{}` with exit 0. This is an advisory
+observer subset of native `NotificationOutput`: native `suppressOutput` and
+`systemMessage` options are omitted. It cannot decide permission or add context.
+Filtering sensitive message/details, choosing notifications, and delivering them
+belong to consumers. The SDK supplies no notification configuration or delivery
+policy. Existing `AfterAgent` behavior is unchanged; an observation does not prove
+a successful final turn, and no native turn/request/root identifier is invented.

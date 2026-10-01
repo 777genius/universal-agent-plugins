@@ -625,6 +625,7 @@ type customCodexEvent struct {
 	Task   string `json:"task"`
 }
 
+// Red: registering the Gemini observer steals the existing bare Claude alias.
 func TestApp_ClaudeNotification(t *testing.T) {
 	iox := &testIO{in: []byte(`{"session_id":"s","cwd":"/","hook_event_name":"Notification","message":"done","notification_type":"info"}`)}
 	app := New(Config{
@@ -632,6 +633,10 @@ func TestApp_ClaudeNotification(t *testing.T) {
 		Args: []string{"plugin-kit-ai", "Notification"},
 		IO:   iox,
 		Env:  testEnv{},
+	})
+	app.Gemini().OnNotification(func(*gemini.NotificationEvent) *gemini.NotificationResponse {
+		t.Fatal("bare Notification dispatched to Gemini")
+		return nil
 	})
 	app.Claude().OnNotification(func(e *claude.NotificationEvent) *claude.NotificationResponse {
 		if e.Message != "done" {

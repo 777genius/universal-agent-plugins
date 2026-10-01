@@ -202,6 +202,13 @@ var registry = map[key]runtime.Descriptor{
 		Decode:   internal_gemini.DecodeAfterTool,
 		Encode:   internal_gemini.EncodeAfterTool,
 	},
+	{platform: "gemini", event: "Notification"}: {
+		Platform: "gemini",
+		Event:    "Notification",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_gemini.DecodeNotification,
+		Encode:   internal_gemini.EncodeNotification,
+	},
 	{platform: "codex", event: "Notify"}: {
 		Platform: "codex",
 		Event:    "Notify",
