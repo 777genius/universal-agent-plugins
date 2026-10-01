@@ -150,7 +150,9 @@ func probeWindowsPowerShell(t *testing.T, ps, home string, env []string) []byte 
 		`Mark 'script-entry'`,
 		`$metadata=[ordered]@{Major=$PSVersionTable.PSVersion.Major;Minor=$PSVersionTable.PSVersion.Minor;Edition=$PSVersionTable.PSEdition}`,
 		`Mark 'version-edition'`,
-		`Mark 'get-process-before'; $metadata['ProcessPath']=(Get-Process -Id $PID).Path; Mark 'get-process-after'`,
+		// Keep the historical boundary markers; read the same Path backing property
+		// directly from this process and dispose only the acquired Process wrapper.
+		`Mark 'get-process-before'; $currentProcess=[System.Diagnostics.Process]::GetCurrentProcess(); try { $metadata['ProcessPath']=$currentProcess.MainModule.FileName } finally { $currentProcess.Dispose() }; Mark 'get-process-after'`,
 		`$metadata['ConsoleCodePage']=[Console]::OutputEncoding.CodePage; $metadata['NativeInputCodePage']=$OutputEncoding.CodePage; Mark 'encodings'`,
 		`Mark 'convert-json-before'; $json=$metadata | ConvertTo-Json -Compress; Mark 'convert-json-after'; $json`,
 	}, "; ")
