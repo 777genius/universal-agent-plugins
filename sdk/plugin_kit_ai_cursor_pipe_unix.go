@@ -10,8 +10,9 @@ import (
 )
 
 // Inherited standard streams are often blocking NewFile wrappers that cannot
-// accept deadlines. Transfer them to nonblocking pollable duplicates. Duplicate
-// stdout also keeps a broken pipe from terminating Go via fd 1 SIGPIPE handling.
+// accept deadlines. Transfer them to nonblocking pollable duplicates.
+// Both duplicates must be above standard IO even when unrelated stdio is closed;
+// os.NewFile on fd 1/2 enables Go's standard-output SIGPIPE termination behavior.
 func prepareCursorPipe(source *os.File) (*os.File, error) {
 	if source == nil {
 		return nil, fmt.Errorf("Cursor observer requires owned pipe IO")
@@ -32,8 +33,11 @@ func prepareCursorPipe(source *os.File) (*os.File, error) {
 	var setupErr error
 	err = raw.Control(func(value uintptr) {
 		syscall.ForkLock.RLock()
-		fd, setupErr = syscall.Dup(int(value))
-		if setupErr == nil {
+		duplicate, _, errno := syscall.Syscall(syscall.SYS_FCNTL, value, syscall.F_DUPFD, 3)
+		if errno != 0 {
+			setupErr = errno
+		} else {
+			fd = int(duplicate)
 			syscall.CloseOnExec(fd)
 		}
 		syscall.ForkLock.RUnlock()

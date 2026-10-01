@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"runtime"
 	"time"
@@ -19,6 +20,9 @@ import (
 
 func main() {
 	mode := os.Args[2]
+	if mode == "owned-broken" || mode == "low-fd-broken" {
+		os.Exit(ownedBroken(mode == "low-fd-broken"))
+	}
 	// Prime Go's shared poller before the descriptor baseline. Its epoll/eventfd
 	// handles are runtime resources, not observer leaks; owned pipe handles must
 	// still disappear (including both originals) after the runner returns.
@@ -99,6 +103,47 @@ func main() {
 		Code  int  `json:"code"`
 	}{runtime.NumGoroutine() <= baseline && (runtime.GOOS != "linux" || fileCount() <= fdBaseline-2), code})
 	os.Exit(code)
+}
+
+func ownedBroken(closeStdio bool) int {
+	input, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		panic(err)
+	}
+	in, writer, err := os.Pipe()
+	if err != nil {
+		panic(err)
+	}
+	reader, out, err := os.Pipe()
+	if err != nil {
+		panic(err)
+	}
+	if _, err := writer.Write(input); err != nil {
+		panic(err)
+	}
+	_ = writer.Close()
+	_ = reader.Close()
+	if closeStdio {
+		_ = os.Stdin.Close()
+		_ = os.Stdout.Close()
+	}
+	baseline, fdBaseline := runtime.NumGoroutine(), fileCount()
+	app := sdk.New(sdk.Config{Args: []string{"TEST", "CursorStop"}, IO: sdk.NewCursorObserverPipeIO(in, out)})
+	app.Cursor().OnStop(func(e *cursor.StopEvent) *cursor.StopResponse {
+		_ = json.NewEncoder(os.Stderr).Encode(struct {
+			Kind  string            `json:"kind"`
+			Event *cursor.StopEvent `json:"event"`
+		}{"cursor", e})
+		return nil
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
+	defer cancel()
+	code := app.RunCursorObserver(ctx)
+	_ = json.NewEncoder(os.Stderr).Encode(struct {
+		Clean bool `json:"clean"`
+		Code  int  `json:"code"`
+	}{runtime.NumGoroutine() <= baseline && (runtime.GOOS != "linux" || fileCount() == fdBaseline-2), code})
+	return code
 }
 
 func fileCount() int {

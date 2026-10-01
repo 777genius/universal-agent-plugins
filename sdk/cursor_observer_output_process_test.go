@@ -67,3 +67,17 @@ func TestCursorObserverOutputPipes(t *testing.T) {
 		})
 	}
 }
+
+// Red: distinct owned pipes with valid Stop input and EOF cause SIGPIPE when
+// unrelated fd 0/1 are closed, losing the callback/return record and cleanup.
+func TestCursorObserverOwnedBrokenPipes(t *testing.T) {
+	binary := buildCursorConsumer(t)
+	for _, mode := range []string{"owned-broken", "low-fd-broken"} {
+		t.Run(mode, func(t *testing.T) {
+			code, out, records := runCursorConsumer(t, binary, "CursorStop", mode, cursorInput)
+			if code != 1 || out != "" || len(records) != 2 || records[0].Kind != "cursor" || records[0].Event.ConversationID != "TEST_CONVERSATION" || !records[1].Clean || records[1].Code != 1 {
+				t.Fatalf("owned broken output: exit=%d stdout=%q records=%+v", code, out, records)
+			}
+		})
+	}
+}
