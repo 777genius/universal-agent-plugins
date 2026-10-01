@@ -92,12 +92,9 @@ func (txn *geminiSkillTxn) backupPrevious() error {
 }
 
 func (txn *geminiSkillTxn) verifyIsolatedBackup(object domain.NativeObjectOwnership, backup string) error {
-	digest, digestErr := shared.DigestSkillDirectory(backup)
-	if digestErr != nil {
-		return fmt.Errorf("verify isolated Gemini skill backup %q: %w", object.LogicalName, digestErr)
-	}
-	if digest != object.ManagedDigest {
-		return fmt.Errorf("isolated Gemini skill backup %q changed outside agentplugins", object.LogicalName)
+	object.Path = backup
+	if err := verifyGeminiSkill(object, false); err != nil {
+		return fmt.Errorf("verify isolated Gemini skill backup %q: %w", object.LogicalName, err)
 	}
 	return nil
 }
@@ -137,8 +134,7 @@ func (txn *geminiSkillTxn) rollback() error {
 }
 
 func (txn *geminiSkillTxn) removeManagedInstall(object domain.NativeObjectOwnership) error {
-	digest, digestErr := shared.DigestSkillDirectory(object.Path)
-	if digestErr == nil && digest == object.ManagedDigest {
+	if err := verifyGeminiSkill(object, false); err == nil {
 		return os.RemoveAll(object.Path)
 	}
 	return nil
