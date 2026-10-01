@@ -13,7 +13,10 @@ import (
 var _ clients.Projector = (*Adapter)(nil)
 
 // Project writes Cursor's compatibility manifest and MCP document.
-func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := projectCursor(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath); err != nil {
 		return nil, err
 	}
