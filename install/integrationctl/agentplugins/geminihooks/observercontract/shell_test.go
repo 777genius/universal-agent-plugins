@@ -126,11 +126,25 @@ func assertNativeContract(t *testing.T, shell nativeShell, executable string, st
 			t.Fatal(err)
 		}
 	}
+	var nativeStderr string
+	if !observer && status == "0" {
+		// A coverage-instrumented TestMain fixture can emit a Go runtime
+		// diagnostic at exit. Compare generic rendering with the independent
+		// direct executable, preserving every byte instead of filtering stderr.
+		direct := command(t, path, argv[1:]...)
+		var directOut, directErr bytes.Buffer
+		direct.Stdout, direct.Stderr = &directOut, &directErr
+		if err := direct.Run(); err != nil || directOut.String() != "{\"decision\":\"deny\",\"continue\":false}\n" || !strings.HasPrefix(directErr.String(), "observer diagnostic\n") {
+			t.Fatalf("direct native fixture contract: %q %q %v", directOut.String(), directErr.String(), err)
+		}
+		nativeStderr = directErr.String()
+		clearRecordedArgv(t, record)
+	}
 	stdout, stderr, err := runNative(t, shell, executable, text)
 	if observer {
 		assertNeutral(t, stdout, stderr, err)
 	} else {
-		assertGeneric(t, status, stdout, stderr, err)
+		assertGeneric(t, status, stdout, stderr, nativeStderr, err)
 	}
 	if status == "missing" {
 		if _, err := os.Stat(record); !os.IsNotExist(err) {
@@ -174,10 +188,10 @@ func assertNeutral(t *testing.T, stdout string, stderr string, err error) {
 	}
 }
 
-func assertGeneric(t *testing.T, status string, stdout string, stderr string, err error) {
+func assertGeneric(t *testing.T, status string, stdout string, stderr string, nativeStderr string, err error) {
 	t.Helper()
 	if status == "0" {
-		if err != nil || stdout != "{\"decision\":\"deny\",\"continue\":false}\n" || stderr != "observer diagnostic\n" {
+		if err != nil || stdout != "{\"decision\":\"deny\",\"continue\":false}\n" || stderr != nativeStderr {
 			t.Fatalf("generic behavior changed: %q %q %v", stdout, stderr, err)
 		}
 		return
