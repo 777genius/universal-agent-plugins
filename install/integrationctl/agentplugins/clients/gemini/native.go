@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -39,6 +38,9 @@ func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.Deacti
 }
 
 func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
+	if err := validateProfile(configRoot, ""); err != nil {
+		return err
+	}
 	if err := kernel.RequireFileIO(); err != nil {
 		return err
 	}
@@ -116,11 +118,17 @@ func applyGeminiNativeMutationWithKernelAndRename(configRoot, activePath string,
 }
 
 func InspectGeminiRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
-	root := strings.TrimSpace(plan.NativeRegistryRoot)
+	root := plan.NativeRegistryRoot
 	if root == "" {
 		return clients.RegistryIndeterminate, nil
 	}
+	if err := validateProfile(root, ""); err != nil {
+		return clients.RegistryIndeterminate, err
+	}
 	if managed != nil {
+		if err := validateBindingProfile(root, *managed, kernel); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
 		if err := VerifyGeminiNativeObjects(root, managed.NativeObjects, true, kernel); err != nil {
 			return clients.RegistryIndeterminate, err
 		}

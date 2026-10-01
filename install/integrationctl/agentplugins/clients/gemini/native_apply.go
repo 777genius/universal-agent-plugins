@@ -91,9 +91,8 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 	if capacity == nil {
 		return nil, fmt.Errorf("the Gemini capacity checker is unavailable")
 	}
-	configRoot = strings.TrimSpace(configRoot)
-	if configRoot == "" || !filepath.IsAbs(configRoot) {
-		return nil, fmt.Errorf("the Gemini config root is unavailable")
+	if err := validateProfile(configRoot, ""); err != nil {
+		return nil, err
 	}
 	previous, desired = GeminiObjects(previous), GeminiObjects(desired)
 	if err := VerifyGeminiNativeObjects(configRoot, previous, true, kernel); err != nil {
