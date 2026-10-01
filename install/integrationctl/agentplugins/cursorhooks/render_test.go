@@ -68,7 +68,9 @@ type recorded struct {
 func freshRecorder(t *testing.T) (string, string) {
 	t.Helper()
 	root := os.Getenv("CURSORHOOKS_TEST_ROOT")
-	if !filepath.IsAbs(root) || !strings.Contains(filepath.ToSlash(root), "/.research/tmp/") {
+	if root == "" {
+		root = t.TempDir()
+	} else if !filepath.IsAbs(root) || !strings.Contains(filepath.ToSlash(root), "/.research/tmp/") {
 		t.Fatal("set CURSORHOOKS_TEST_ROOT to own absolute .research/tmp TEST directory")
 	}
 	dir, err := os.MkdirTemp(root, "TEST-argv-")
