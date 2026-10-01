@@ -183,7 +183,7 @@ var factoryPins = []sourcePin{
 	{"install/integrationctl/agentplugins/domain/acquisition.go", "ea60178232db888d8df99a7b6722bb26b7a3f1a23776a6be041cf9c84f7a2cb3"},
 	{"install/integrationctl/agentplugins/domain/catalog.go", "e70853260635bed305ce77fef0c420e2028a57d77a9ce0565ab9cf8b275a98bc"},
 	{"install/integrationctl/agentplugins/domain/chatgpt_mapping.go", "a124fe2ad1c349628b36bd901ea280c6401487aa341a05a0216d379d7cac3669"},
-	{"install/integrationctl/agentplugins/domain/clients.go", "187d2171bf27ec9699378f05a8de81b41f61f6d9512cb03d57faeecc103dd853"},
+	{"install/integrationctl/agentplugins/domain/clients.go", "b24f2ecd462b72c0a1e8fee2f0ac4330a34cb9f512fd12e32a8ec489586f3a9f"},
 	{"install/integrationctl/agentplugins/domain/directory.go", "fbb49723b1e1b7ebfa19ebb7f872ebda461be535fae57a1767883fc6bd015860"},
 	{"install/integrationctl/agentplugins/domain/directory_context7_preparation.go", "7fdd6190751ed53a2b438f58415861bcef086e7097350cc9f2305e98dc88f5c1"},
 	{"install/integrationctl/agentplugins/domain/errors.go", "7229bf792c60bcbb290050a6659f129f09e85e22174d32ac681a4c6e5bb6efd8"},
