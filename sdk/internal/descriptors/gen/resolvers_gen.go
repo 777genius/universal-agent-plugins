@@ -92,6 +92,9 @@ func ResolveInvocation(args []string, _ runtime.Env) (runtime.Invocation, error)
 	if strings.EqualFold(raw, "GeminiAfterTool") {
 		return runtime.Invocation{Platform: "gemini", Event: "AfterTool", RawName: raw}, nil
 	}
+	if strings.EqualFold(raw, "GeminiNotification") {
+		return runtime.Invocation{Platform: "gemini", Event: "Notification", RawName: raw}, nil
+	}
 	if strings.EqualFold(raw, "notify") {
 		return runtime.Invocation{Platform: "codex", Event: "Notify", RawName: raw}, nil
 	}

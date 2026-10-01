@@ -37,6 +37,7 @@ func TestEventsPreserveStableBucketOrder(t *testing.T) {
 		{platform: "gemini", event: "AfterAgent"},
 		{platform: "gemini", event: "BeforeTool"},
 		{platform: "gemini", event: "AfterTool"},
+		{platform: "gemini", event: "Notification"},
 		{platform: "codex", event: "Notify"},
 		{platform: "codex", event: "Stop"},
 		{platform: "codex", event: "SubagentStop"},

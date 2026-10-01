@@ -48,6 +48,8 @@ func CanonicalInvocationName(platform PlatformID, raw string) string {
 			return "BeforeTool"
 		case strings.EqualFold(raw, "GeminiAfterTool"):
 			return "AfterTool"
+		case strings.EqualFold(raw, "GeminiNotification"):
+			return "Notification"
 		}
 	}
 	return raw
