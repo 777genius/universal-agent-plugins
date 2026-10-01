@@ -306,3 +306,18 @@ test('unavoidable active root eviction reports capacity', async () => {
   assert.equal(h.diagnostics.includes('session_capacity'), true);
   h.observer.dispose();
 });
+
+// Regression: pending input is treated as disposable when a terminal gate is held
+// or when the previous epoch has already emitted its completion.
+for (const stage of ['before terminal', 'after settled epoch']) test(`evicting pending owned input reports capacity: ${stage}`, async () => {
+  const h = harness({ config: { maxSessions: 1 } });
+  h.begin();
+  const enqueue = () => h.event('session.inbox.enqueued', { inboxID: 'queued', item: { type: 'user', delivery: 'queue' } });
+  if (stage === 'before terminal') enqueue();
+  h.finish(); await tick();
+  assert.equal(h.facts.length, stage === 'before terminal' ? 0 : 1);
+  if (stage === 'after settled epoch') enqueue();
+  h.event('session.created', { sessionID: 'another' }); await tick();
+  assert.equal(h.diagnostics.includes('session_capacity'), true);
+  h.observer.dispose();
+});
