@@ -95,6 +95,11 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 		return nil, err
 	}
 	previous, desired = GeminiObjects(previous), GeminiObjects(desired)
+	// Validate desired paths even for replacements, before verifying digests or
+	// creating a transaction. Matching cleaned prior paths is not sufficient.
+	if err := validateGeminiObjectPaths(configRoot, desired); err != nil {
+		return nil, err
+	}
 	if err := VerifyGeminiNativeObjects(configRoot, previous, true, kernel); err != nil {
 		return nil, err
 	}
@@ -120,7 +125,7 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 func validateGeminiDesiredIdentity(configRoot string, previousByID, desiredByID map[string]domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	for id, object := range desiredByID {
 		if prior, replacing := previousByID[id]; replacing {
-			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
+			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || prior.Path != object.Path {
 				return fmt.Errorf("the Gemini native object identity changed unexpectedly for %s", id)
 			}
 			continue

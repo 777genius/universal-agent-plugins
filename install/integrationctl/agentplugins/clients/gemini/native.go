@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -44,10 +45,10 @@ func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectO
 	if err := kernel.RequireFileIO(); err != nil {
 		return err
 	}
+	if err := validateGeminiObjectPaths(configRoot, objects); err != nil {
+		return err
+	}
 	for _, object := range GeminiObjects(objects) {
-		if err := validateGeminiObject(configRoot, object); err != nil {
-			return err
-		}
 		switch object.Kind {
 		case GeminiSkillObjectKind:
 			if err := verifyGeminiSkill(object, allowMissing); err != nil {
@@ -63,10 +64,17 @@ func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectO
 }
 
 func verifyGeminiSkill(object domain.NativeObjectOwnership, allowMissing bool) error {
-	digest, err := shared.DigestSkillDirectory(object.Path)
+	info, err := os.Lstat(object.Path)
 	if os.IsNotExist(err) && allowMissing {
 		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("inspect managed Gemini skill %q: %w", object.LogicalName, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("managed Gemini skill %q is not a directory", object.LogicalName)
+	}
+	digest, err := shared.DigestSkillDirectory(object.Path)
 	if err != nil {
 		return fmt.Errorf("inspect managed Gemini skill %q: %w", object.LogicalName, err)
 	}
@@ -243,6 +251,15 @@ func requireGeminiObjectAbsent(root string, object domain.NativeObjectOwnership,
 	return nil
 }
 
+func validateGeminiObjectPaths(root string, objects []domain.NativeObjectOwnership) error {
+	for _, object := range GeminiObjects(objects) {
+		if err := validateGeminiObject(root, object); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateGeminiObject(root string, object domain.NativeObjectOwnership) error {
 	if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
 		return err
@@ -253,7 +270,10 @@ func validateGeminiObject(root string, object domain.NativeObjectOwnership) erro
 	} else if object.Kind != GeminiMCPObjectKind {
 		return fmt.Errorf("unsupported Gemini native object kind %q", object.Kind)
 	}
-	if !shared.SameCleanPath(expected, object.Path) {
+	// Do not normalize ownership into authority: a symlink followed by .. can
+	// clean to the selected profile while filesystem operations address another.
+	if !filepath.IsAbs(object.Path) || strings.TrimSpace(object.Path) != object.Path ||
+		filepath.Clean(object.Path) != object.Path || object.Path != expected {
 		return fmt.Errorf("the Gemini native object %q has an untrusted path", object.LogicalName)
 	}
 	return pathpolicy.RequireContainedChild(root, object.Path)

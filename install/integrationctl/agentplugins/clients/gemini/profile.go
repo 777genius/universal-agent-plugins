@@ -124,12 +124,7 @@ func validateBindingProfile(root string, binding domain.ClientBinding, kernel na
 		if err := validateProfile(binding.NativeProfileRoot, root); err != nil {
 			return fmt.Errorf("recorded Gemini profile mismatch: %w", err)
 		}
-		for _, object := range GeminiObjects(binding.NativeObjects) {
-			if err := validateGeminiObject(root, object); err != nil {
-				return err
-			}
-		}
-		return nil
+		return validateGeminiObjectPaths(root, binding.NativeObjects)
 	}
 	objects := GeminiObjects(binding.NativeObjects)
 	if len(objects) == 0 {
