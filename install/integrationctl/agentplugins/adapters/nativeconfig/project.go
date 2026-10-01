@@ -37,6 +37,19 @@ func DesiredReceipt(resolvedPath string, codec Codec, name string, server Server
 }
 
 func projectServer(codec Codec, server Server, placeholders Placeholders) (map[string]any, error) {
+	if !supportedCodec(codec) {
+		return nil, fmt.Errorf("unsupported native config codec %q", codec)
+	}
+	if codec == CodecOpenCodeV2 {
+		return projectOpenCodeV2Server(server, placeholders)
+	}
+	if server.OpenCodeV2 != nil {
+		return nil, fmt.Errorf("%s does not accept OpenCode V2 options", codec)
+	}
+	return projectBaseServer(codec, server, placeholders)
+}
+
+func projectBaseServer(codec Codec, server Server, placeholders Placeholders) (map[string]any, error) {
 	serverType := strings.ToLower(strings.TrimSpace(server.Type))
 	if serverType != "stdio" && serverType != "remote" {
 		return nil, fmt.Errorf("MCP server type must be stdio or remote")
