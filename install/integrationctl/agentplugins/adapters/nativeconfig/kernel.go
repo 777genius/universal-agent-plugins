@@ -99,12 +99,21 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 	if err != nil {
 		return nil, err
 	}
-	key := codecCollectionKey(requests[0].Codec)
 	create := false
 	for _, req := range requests {
 		create = create || req.Action == ActionAdd
 	}
-	entries, err := collection(doc, key, create)
+	if requests[0].Codec == CodecOpenCodeV2 {
+		for _, req := range requests {
+			if req.Action != ActionRemove {
+				if err := requireOpenCodeV2Root(doc); err != nil {
+					return nil, err
+				}
+				break
+			}
+		}
+	}
+	entries, err := codecCollection(doc, requests[0].Codec, create)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +161,7 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			removeEntry(entries, req.Name)
 		}
 	}
-	if requests[0].Codec == CodecOpenCode {
+	if requests[0].Codec == CodecOpenCode || requests[0].Codec == CodecOpenCodeV2 {
 		proposed := make([]string, 0, len(requests))
 		for _, req := range requests {
 			if req.Action == ActionAdd || req.Action == ActionUpdate {
@@ -160,9 +169,22 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			}
 		}
 		if len(proposed) > 0 {
-			active, namesErr := openCodeActiveMCPNames(entries)
+			active, namesErr := openCodeActiveMCPNamesForCodec(entries, requests[0].Codec)
 			if namesErr != nil {
 				return nil, namesErr
+			}
+			if requests[0].Codec == CodecOpenCodeV2 {
+				activeSet := make(map[string]bool, len(active))
+				for _, name := range active {
+					activeSet[name] = true
+				}
+				activeProposed := proposed[:0]
+				for _, name := range proposed {
+					if activeSet[name] {
+						activeProposed = append(activeProposed, name)
+					}
+				}
+				proposed = activeProposed
 			}
 			proposedSet := make(map[string]bool, len(proposed))
 			for _, name := range proposed {
@@ -233,8 +255,7 @@ func (kernel Kernel) Inspect(paths Paths, codec Codec, name string, owned *Recei
 	if err != nil {
 		return false, false, err
 	}
-	key := codecCollectionKey(codec)
-	entries, err := collection(doc, key, false)
+	entries, err := codecCollection(doc, codec, false)
 	if err != nil || entries == nil {
 		return false, false, err
 	}
@@ -286,6 +307,11 @@ func (kernel Kernel) writeVerified(file resolvedFile, _ Codec, next []byte) (res
 		return err
 	}
 	if err := kernel.compareAndSwap(file.path, file.body, file.exists, next, mode); err != nil {
+		if errors.Is(err, ErrConcurrentChange) {
+			// A rejected CAS never authorized our write, even if the competing
+			// writer chose next. Do not treat equal foreign output as rollback authority.
+			return fmt.Errorf("write native config: %w", err)
+		}
 		return kernel.rollbackIfStillOurs(file, next, restore, fmt.Errorf("write native config: %w", err))
 	}
 	if err := kernel.verifyAlternateAbsent(file); err != nil {

@@ -75,7 +75,11 @@ func objectMember(obj *hujson.Object, key string) (*hujson.ObjectMember, int) {
 }
 
 func collection(doc *document, key string, create bool) (*hujson.Object, error) {
-	member, _ := objectMember(doc.root, key)
+	return objectCollection(doc.root, key, create)
+}
+
+func objectCollection(parent *hujson.Object, key string, create bool) (*hujson.Object, error) {
+	member, _ := objectMember(parent, key)
 	if member != nil {
 		obj, ok := member.Value.Value.(*hujson.Object)
 		if !ok {
@@ -90,9 +94,17 @@ func collection(doc *document, key string, create bool) (*hujson.Object, error) 
 	if err != nil {
 		return nil, err
 	}
-	appendMember(doc.root, key, value)
-	member, _ = objectMember(doc.root, key)
+	appendMember(parent, key, value)
+	member, _ = objectMember(parent, key)
 	return member.Value.Value.(*hujson.Object), nil
+}
+
+func codecCollection(doc *document, codec Codec, create bool) (*hujson.Object, error) {
+	entries, err := collection(doc, codecCollectionKey(codec), create)
+	if err != nil || entries == nil || codec != CodecOpenCodeV2 {
+		return entries, err
+	}
+	return objectCollection(entries, "servers", create)
 }
 
 func jsonValue(value any) (hujson.Value, error) {
