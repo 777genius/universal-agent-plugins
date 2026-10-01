@@ -195,14 +195,23 @@ linters:
               desc: shared helpers are used by client packages and never use one
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro
               desc: shared helpers are used by client packages and never use one
-            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini
-              desc: shared helpers are used by client packages and never use one
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode
               desc: shared helpers are used by client packages and never use one
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline
               desc: shared helpers are used by client packages and never use one
             - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf
               desc: shared helpers are used by client packages and never use one
+        clients-no-gemini-peer:
+          # Keep the Gemini peer ban everywhere the rule above applies. Only
+          # Gemini's own public consumer tests may import their own adapter;
+          # they retain every other peer and assembled-registry ban above.
+          files:
+            - "**/install/integrationctl/agentplugins/clients/**"
+            - "!**/install/integrationctl/agentplugins/clients/all/**"
+            - "!**/install/integrationctl/agentplugins/clients/gemini/*_test.go"
+          deny:
+            - pkg: github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini
+              desc: shared helpers and peer adapters never import Gemini
         libraries-take-an-injected-registry:
           # Libraries are handed a registry; they never assemble the default
           # one. Importing clients/all here would link every adapter into any

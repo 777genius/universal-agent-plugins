@@ -21,7 +21,7 @@ var (
 func profileSpelling(root string) error {
 	if root == "" || strings.TrimSpace(root) != root || strings.ContainsAny(root, "\x00\r\n") ||
 		!utf8.ValidString(root) || !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Dir(root) == root {
-		return fmt.Errorf("Gemini config root must be an explicit clean absolute directory")
+		return fmt.Errorf("gemini config root must be an explicit clean absolute directory")
 	}
 	return nil
 }
@@ -52,7 +52,7 @@ func detectedProfileRoot(host clients.Host) (string, error) {
 		parent = host.HomeDir()
 	}
 	if parent == "" || strings.ContainsAny(parent, "\x00\r\n") || !utf8.ValidString(parent) {
-		return "", fmt.Errorf("Gemini native home parent is unavailable or unsupported")
+		return "", fmt.Errorf("gemini native home parent is unavailable or unsupported")
 	}
 	if !filepath.IsAbs(parent) {
 		cwd := host.WorkingDir()
@@ -87,10 +87,10 @@ func validateProfile(root, planned string) error {
 		return err
 	}
 	if canonical != root {
-		return fmt.Errorf("Gemini config root must be canonical before native operations")
+		return fmt.Errorf("gemini config root must be canonical before native operations")
 	}
 	if planned != "" && planned != root {
-		return fmt.Errorf("Gemini planned registry root differs from client config root")
+		return fmt.Errorf("gemini planned registry root differs from client config root")
 	}
 	return nil
 }

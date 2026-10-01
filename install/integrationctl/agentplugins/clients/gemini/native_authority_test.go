@@ -222,9 +222,10 @@ func TestExactOwnershipPathStillRejectsSymlinkComponents(t *testing.T) {
 			object := ownedSkill(t, other, "# TEST foreign skill\n")
 			object.Path = filepath.Join(root, "skills", "docs")
 			link, target := object.Path, filepath.Join(other, "skills", "docs")
-			if kind == "skills ancestor" {
+			switch kind {
+			case "skills ancestor":
 				link, target = filepath.Dir(link), filepath.Dir(target)
-			} else if kind == "settings leaf" {
+			case "settings leaf":
 				object = ownedMCP(t, other)
 				object.Path = filepath.Join(root, "settings.json")
 				link, target = object.Path, filepath.Join(other, "settings.json")

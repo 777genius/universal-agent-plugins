@@ -118,8 +118,9 @@ var clientDefinitions = []ClientDefinition{
 		UsesManagedStdioLauncher: true,
 	}), ActivationAutomatic),
 	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleNativeConfig,
+		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:          LifecycleNativeConfig,
+		BindsNativeProfileRoot: true,
 	}),
 	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
