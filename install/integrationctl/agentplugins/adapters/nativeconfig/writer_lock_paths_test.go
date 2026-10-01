@@ -110,6 +110,63 @@ func TestWriterLockPathsWaitForActualKernelHolder(t *testing.T) {
 	child.wait(t)
 }
 
+func TestWriterLockPathsPrefixPairProgress(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{JSON: filepath.Join(root, "a"), JSONC: filepath.Join(root, "a-")}
+	locks, err := WriterLockPaths(paths, CodecGemini)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(locks, []string{paths.JSONC + ".agentplugins.lock", paths.JSON + ".agentplugins.lock"}) {
+		t.Fatalf("unexpected prefix lock order: %v", locks)
+	}
+	body := `{"hooks":{"retained":true},"mcpServers":{"foreign-tool":{"opaque":true}}}`
+	mustWrite(t, paths.JSON, body)
+	releaseFirst := holdExportedWriterLock(t, locks[0], CodecGemini)
+	second := make(chan error, 1)
+	started, observed := false, false
+	// Registered before the child's cleanup: on red, kill/reap the blocked
+	// writer first, then join the second acquisition without leaking its lock.
+	t.Cleanup(func() {
+		if started && !observed {
+			select {
+			case <-second:
+			case <-time.After(3 * time.Second):
+				t.Error("second acquisition did not stop after child cleanup")
+			}
+		}
+	})
+	child := startWriterLockChild(t, "write", paths, CodecGemini, "")
+	assertWriterLockChildBlocked(t, child)
+	started = true
+	go func() {
+		file, acquireErr := New().BeginExactFile(paths.JSON)
+		if acquireErr == nil {
+			acquireErr = file.Close()
+		}
+		second <- acquireErr
+	}()
+	select {
+	case err := <-second:
+		observed = true
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("second exported lock blocked while first retained: writer order cycle")
+	}
+	if got := mustRead(t, paths.JSON); got != body {
+		t.Fatalf("writer changed settings while first lock retained: %s", got)
+	}
+	releaseFirst()
+	child.wait(t)
+	assertWriterLockForeignEntries(t, paths.JSON, "mcpServers")
+	present, _, err := New().Inspect(paths, CodecGemini, "TEST-owned", nil)
+	if err != nil || !present {
+		t.Fatalf("prefix write missing: present=%t err=%v", present, err)
+	}
+}
+
 func TestWriterLockPathsRejectInvalidCandidatesLikeApply(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "TEST-settings.json")
@@ -118,7 +175,7 @@ func TestWriterLockPathsRejectInvalidCandidatesLikeApply(t *testing.T) {
 		codec Codec
 	}{
 		{Paths{}, CodecGemini}, {Paths{JSON: "relative.json"}, CodecGemini},
-		{Paths{JSON: root + string(os.PathSeparator) + "./TEST-settings.json"}, CodecGemini},
+		{Paths{JSON: fmt.Sprintf("%s%c.%cTEST-settings.json", root, os.PathSeparator, os.PathSeparator)}, CodecGemini},
 		{Paths{JSON: path, JSONC: "relative.jsonc"}, CodecGemini},
 		{Paths{JSON: path, JSONC: path}, CodecGemini}, {Paths{JSON: path}, Codec("unknown")},
 		{Paths{JSON: path + "\x00"}, CodecGemini}, {Paths{JSON: path, JSONC: path + "\x00"}, CodecGemini},

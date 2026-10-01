@@ -7,10 +7,10 @@ import (
 )
 
 // WriterLockPaths returns the exact lockfile identities used by the default
-// native MCP writer, sorted by path. JSON is required; JSONC is optional. Both
-// candidates are locked even when only one exists, so file selection and the
-// ambiguous-config check happen under the locks. Paths must be absolute, clean
-// and distinct, as for Apply; the codec must be supported.
+// native MCP writer, sorted by lock path in acquisition order. JSON is required;
+// JSONC is optional. Both candidates are locked even when only one exists, so
+// file selection and the ambiguous-config check happen under the locks. Paths
+// must be absolute, clean and distinct, as for Apply; the codec must be supported.
 //
 // This function performs no filesystem access, creates no locks and does not
 // resolve symlinks or select a profile. Callers must validate their authority
@@ -18,6 +18,8 @@ import (
 // Cline uses populated-directory .lock locks; all other codecs use regular-file
 // .agentplugins.lock locks. This describes the default writer, not an injected
 // NewWithLockAcquirer implementation, and does not acquire a lock on its behalf.
+// Earlier binaries may acquire candidates in config-path order; multi-candidate
+// interoperability requires that order to agree with the returned lock order.
 func WriterLockPaths(paths Paths, codec Codec) ([]string, error) {
 	targets, err := writerLockTargets(paths, codec)
 	if err != nil {
@@ -27,7 +29,6 @@ func WriterLockPaths(paths Paths, codec Codec) ([]string, error) {
 	for index, target := range targets {
 		locks[index] = target.lockPath
 	}
-	sort.Strings(locks)
 	return locks, nil
 }
 
@@ -64,8 +65,8 @@ func writerLockTargets(paths Paths, codec Codec) ([]writerLockTarget, error) {
 		}
 		targets[index] = writerLockTarget{configPath: path, lockPath: path + suffix}
 	}
-	// Keep the existing writer's candidate acquisition order and process-mutex
-	// keys. Exporting identities must not change its locking protocol.
-	sort.Slice(targets, func(i, j int) bool { return targets[i].configPath < targets[j].configPath })
+	// Export and acquisition share this order over the actual lock identities;
+	// process mutexes remain keyed by the corresponding config paths.
+	sort.Slice(targets, func(i, j int) bool { return targets[i].lockPath < targets[j].lockPath })
 	return targets, nil
 }
