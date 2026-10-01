@@ -72,6 +72,19 @@ func TestTESTWindowsPowerShell51Process(t *testing.T) {
 	systemRoot := os.Getenv("SystemRoot")
 	target := hooks.Target{Shell: hooks.WindowsPowerShell51, SystemRoot: systemRoot, ComSpec: filepath.Join(systemRoot, "System32", "cmd.exe")}
 	ps := filepath.Join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+	// Bound native cmdlet discovery to these two shipped system modules.
+	// Omitting PSModulePath enables default recursive discovery in PS5.1.
+	moduleDirs := make([]string, 0, 2)
+	for _, name := range []string{"Microsoft.PowerShell.Management", "Microsoft.PowerShell.Utility"} {
+		module := filepath.Join(filepath.Dir(ps), "Modules", name)
+		if info, err := os.Stat(module); err != nil || !info.IsDir() {
+			t.Fatal("required system module directory unavailable", module, err)
+		}
+		if info, err := os.Stat(filepath.Join(module, name+".psd1")); err != nil || !info.Mode().IsRegular() {
+			t.Fatal("required system module manifest unavailable", module, err)
+		}
+		moduleDirs = append(moduleDirs, module)
+	}
 	recorder := filepath.Join(root, "TEST ü 中文 recorder's $cash `ticks` %TEST_LITERAL% & [brackets].exe")
 	copyTestExecutable(t, recorder)
 	record, sentinel := filepath.Join(root, "TEST-args.json"), filepath.Join(root, "TEST-INJECTION-MUST-NOT-EXIST")
@@ -81,6 +94,7 @@ func TestTESTWindowsPowerShell51Process(t *testing.T) {
 		"POWERSHELL_UPDATECHECK=Off", "U2_TEST_WINDOWS_RECORDER=1", "U2_TEST_RECORD=" + record,
 		// PS5.1 recognizes native executable extensions through PATHEXT.
 		"PATHEXT=.EXE",
+		"PSModulePath=" + strings.Join(moduleDirs, ";"),
 		"TEST_LITERAL=TEST-expansion-would-be-a-defect",
 	}
 	// The same exact system executable is probed separately so the public rendered
