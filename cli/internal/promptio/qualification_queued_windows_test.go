@@ -6,13 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
 	"unicode/utf16"
 	"unsafe"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"golang.org/x/sys/windows"
 )
 
@@ -78,7 +78,7 @@ func qualificationConsoleQueuedAnswers(t *testing.T, inherited windows.Handle, m
 			stop()
 			var wantErr error
 			if j == 1 {
-				wantErr = prompt.ErrPromptInputClosed
+				wantErr = io.EOF
 			}
 			if line != want || !errors.Is(err, wantErr) {
 				t.Fatalf("queued triplet %d answer %d: got %q %v; want %q %v", i, j, line, err, want, wantErr)

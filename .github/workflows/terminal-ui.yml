@@ -45,7 +45,7 @@ jobs:
         id: build
         working-directory: cli
         run: |
-          go test ./internal/agentpluginscli/prompt ./internal/promptio ./internal/terminalprompts
+          go test ./installerui ./internal/agentpluginscli/prompt ./internal/promptio ./internal/terminalprompts
           go build -o "$RUNNER_TEMP/agentplugins.exe" ./cmd/agentplugins
       - name: Provision only pinned lintai
         run: python scripts/terminal-ui/provision_scanner.py --target '${{ matrix.target }}' --output "$RUNNER_TEMP/scanner"
@@ -58,6 +58,9 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/terminal-ui -p 'test_*.py'
           python3 scripts/terminal-ui/harness.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
+      - name: Unix public renderer fault injection and terminal reuse
+        if: runner.os != 'Windows'
+        run: python3 scripts/terminal-ui/qualification_faults.py --artifacts "$RUNNER_TEMP/unix-fault-evidence" --timeout 15
       - name: Unix selection combinations (synthetic client and scanner protocols)
         if: runner.os != 'Windows'
         run: |
@@ -109,6 +112,7 @@ jobs:
             ${{ runner.temp }}/terminal-evidence
             ${{ runner.temp }}/resilience-evidence
             ${{ runner.temp }}/npm-terminal-evidence
+            ${{ runner.temp }}/unix-fault-evidence
             ${{ runner.temp }}/windows-fault-evidence
             ${{ runner.temp }}/windows-resource-oracle-evidence
             ${{ runner.temp }}/powershell-terminal-evidence

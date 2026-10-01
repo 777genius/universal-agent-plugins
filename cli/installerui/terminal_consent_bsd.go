@@ -1,6 +1,6 @@
 //go:build darwin || freebsd || openbsd || netbsd || dragonfly
 
-package terminalprompts
+package installerui
 
 import (
 	"os"

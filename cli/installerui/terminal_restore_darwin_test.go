@@ -1,6 +1,6 @@
 //go:build darwin
 
-package terminalprompts
+package installerui
 
 import (
 	"context"
@@ -10,9 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 )
 
 func TestDarwinRestoreQueuedFlags(t *testing.T) {

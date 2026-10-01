@@ -148,7 +148,7 @@ def main():
     cases = args.case or allowed
     check(all(c in allowed for c in cases), 'case is not supported on this native host')
     binary = artifacts / ('qualification.test.exe' if native_windows else 'qualification.test')
-    package = './internal/promptio' if native_windows else './internal/terminalprompts'
+    package = './internal/promptio' if native_windows else './installerui'
     command = [args.go, 'test', '-c', '-o', str(binary), package]
     build = subprocess.run(command, cwd=repo / 'cli', stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True, timeout=180)

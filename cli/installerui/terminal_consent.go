@@ -1,4 +1,4 @@
-package terminalprompts
+package installerui
 
 import (
 	"bytes"
@@ -40,6 +40,9 @@ func confirmationInput(ctx context.Context, input io.Reader) (keys []byte, err e
 func readQueuedInput(ctx context.Context, input io.Reader, n int) ([]byte, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
+	}
+	if n < 0 || n > 4096 {
+		return nil, false, fmt.Errorf("consent input budget exceeded")
 	}
 	// Reuse the handoff parser: even within the snapshot, stop at the first
 	// non-pasted submission and leave the next owner's answer in the terminal.

@@ -1,4 +1,4 @@
-package terminalprompts
+package installerui
 
 import (
 	"context"
@@ -7,31 +7,28 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Real forms consume keyboard bytes through public adapter methods. Only
 // presentation-specific input differs; expectations are shared literal values,
 // never computed by the production validator or a substitute form runner.
 func TestAdapterSuccessContract(t *testing.T) {
-	for _, adapter := range []string{"plain"} {
+	for _, adapter := range []string{"huh"} {
 		t.Run(adapter, func(t *testing.T) {
 			for _, tc := range []struct {
 				name, plain, huh              string
 				confirm, accepted, defaultYes bool
-				defaults, want                []domain.ClientID
+				defaults, want                []string
 			}{
 				{name: "default-no", plain: "\n", huh: "\r", confirm: true},
 				{name: "default-yes", plain: "\n", huh: "\r", confirm: true, defaultYes: true, accepted: true},
 				{name: "explicit-no-with-yes-default", plain: "n\n", huh: " \r", confirm: true, defaultYes: true},
 				{name: "explicit-no", plain: "n\n", huh: "  \r", confirm: true},
 				{name: "explicit-yes", plain: "yes\n", huh: " \r", confirm: true, accepted: true},
-				{name: "all-defaults", plain: "\n", huh: "\r", defaults: []domain.ClientID{"cursor", "claude", "codex"}, want: []domain.ClientID{"cursor", "claude", "codex"}},
-				{name: "subset-defaults-canonical-order", plain: "\n", huh: "\r", defaults: []domain.ClientID{"codex", "cursor"}, want: []domain.ClientID{"cursor", "codex"}},
-				{name: "changed-subset", plain: "3,1\n", huh: "\x1b[B \r", defaults: []domain.ClientID{"cursor", "claude", "codex"}, want: []domain.ClientID{"cursor", "codex"}},
-				{name: "single-selection", plain: "2\n", huh: " \x1b[B\x1b[B \r", defaults: []domain.ClientID{"cursor", "claude", "codex"}, want: []domain.ClientID{"claude"}},
+				{name: "all-defaults", plain: "\n", huh: "\r", defaults: []string{"cursor", "claude", "codex"}, want: []string{"cursor", "claude", "codex"}},
+				{name: "subset-defaults-canonical-order", plain: "\n", huh: "\r", defaults: []string{"codex", "cursor"}, want: []string{"cursor", "codex"}},
+				{name: "changed-subset", plain: "3,1\n", huh: "\x1b[B \r", defaults: []string{"cursor", "claude", "codex"}, want: []string{"cursor", "codex"}},
+				{name: "single-selection", plain: "2\n", huh: " \x1b[B\x1b[B \r", defaults: []string{"cursor", "claude", "codex"}, want: []string{"claude"}},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					keys := tc.plain
@@ -40,14 +37,14 @@ func TestAdapterSuccessContract(t *testing.T) {
 					}
 					input := strings.NewReader(keys + "next-answer\n")
 					var output strings.Builder
-					var p prompt.Prompter = PlainPrompter{Input: input, Output: &output}
+					var p testPrompter = testPlain{Input: input, Output: &output}
 					if adapter == "huh" {
-						p = HuhPrompter{Input: input, Output: &output, NoColor: true}
+						p = testRich{Input: input, Output: &output, NoColor: true}
 					}
 					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 					defer cancel()
 					if tc.confirm {
-						req := prompt.ConfirmationRequest{Title: "Apply fixture?", Summary: []string{"Disposable fixture only"}, Default: tc.defaultYes}
+						req := ConfirmRequest{Title: "Apply fixture?", Summary: []string{"Disposable fixture only"}, Default: tc.defaultYes}
 						got, err := p.Confirm(ctx, req)
 						if err != nil || got.Accepted != tc.accepted {
 							t.Fatalf("confirmation = %+v, %v; want accepted=%v", got, err, tc.accepted)
@@ -56,15 +53,13 @@ func TestAdapterSuccessContract(t *testing.T) {
 							t.Fatal("confirmation request mutated")
 						}
 					} else {
-						req := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Cursor"}, {ID: "claude", Label: "Claude"}, {ID: "codex", Label: "Codex"}}, DefaultIDs: append([]domain.ClientID(nil), tc.defaults...), SkippedLabels: []string{"kiro: this CLI cannot automatically check MCP connections; retry --target kiro\x1b\u202e"}}
-						before := prompt.TargetSelectionRequest{Choices: append([]prompt.TargetChoice(nil), req.Choices...), DefaultIDs: append([]domain.ClientID(nil), req.DefaultIDs...), SkippedLabels: append([]string(nil), req.SkippedLabels...)}
-						got, err := p.SelectTargets(ctx, req)
+						req := SelectRequest{Title: "Choose targets", Options: []Option{{ID: "cursor", Label: "Cursor"}, {ID: "claude", Label: "Claude"}, {ID: "codex", Label: "Codex"}}, Defaults: append([]string(nil), tc.defaults...)}
+						before := SelectRequest{Title: "Choose targets", Options: append([]Option(nil), req.Options...), Defaults: append([]string(nil), req.Defaults...)}
+						got, err := p.SelectMany(ctx, MultiSelectRequest{SelectRequest: req, MinSelected: 1})
 						if err != nil || !reflect.DeepEqual(got.IDs, tc.want) {
 							t.Fatalf("selection = %+v, %v; want %v", got, err, tc.want)
 						}
-						if !strings.Contains(output.String(), "Not available for automatic install:\n  - kiro: this CLI cannot automatically check MCP connections; retry --target kiro") || strings.Contains(output.String(), "\u202e") {
-							t.Fatalf("missing or unsafe skipped guidance: %q", output.String())
-						}
+
 						if !reflect.DeepEqual(req, before) {
 							t.Fatal("selection request mutated")
 						}

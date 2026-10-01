@@ -1,6 +1,6 @@
 //go:build darwin
 
-package terminalprompts
+package installerui
 
 import (
 	"context"
@@ -13,11 +13,11 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/muesli/cancelreader"
 	"golang.org/x/sys/unix"
 	"golang.org/x/term"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 )
 
 // Each production regression owns a fresh PTY and a bounded subprocess. A
@@ -112,7 +112,7 @@ func TestDarwinInputHandoffChild(t *testing.T) {
 			t.Fatalf("blocked read cancellation: %q %v", line, err)
 		}
 	} else if scenario == "partial-eof" {
-		if line != "" || !errors.Is(err, prompt.ErrPromptInputClosed) {
+		if line != "" || !errors.Is(err, io.EOF) {
 			t.Fatalf("partial EOF must fail closed: %q %v", line, err)
 		}
 	} else if line != want || err != nil {

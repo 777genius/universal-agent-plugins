@@ -1,9 +1,10 @@
 //go:build !windows
 
-package terminalprompts
+package installerui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -21,13 +22,17 @@ func terminalQueuedInput(ctx context.Context, f *os.File) (queued []byte, submit
 	}
 	defer func() {
 		if e := restore(); e != nil {
-			queued, submitted, err = nil, false, fmt.Errorf("restore consent boundary: %w", e)
+			queued, submitted, err = nil, false, errors.Join(err, fmt.Errorf("restore consent boundary: %w", e))
 		}
 	}()
 	if _, err := term.MakeRaw(int(f.Fd())); err != nil {
 		return nil, false, fmt.Errorf("prepare consent boundary: %w", err)
 	}
-	n, err := queuedInputBytes(f)
+	query := func() (int, error) { return queuedInputBytes(f) }
+	if ops := promptOps(ctx); ops != nil && ops.queued != nil {
+		query = ops.queued
+	}
+	n, err := query()
 	if err != nil {
 		return nil, false, fmt.Errorf("inspect consent boundary: %w", err)
 	}
