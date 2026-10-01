@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-// NewCursorObserverPipeIO transfers exclusive ownership of two distinct pipe
+// NewCursorObserverPipeIO transfers exclusive ownership of two distinct IPC
 // files to a Cursor observer. Neither may be used concurrently or after this
 // call. On Linux/macOS originals close during preparation; prepared handles are
 // closed when RunCursorObserver returns. This is for Config.IO injection; it
 // does not replace injected IO silently. Setup failures surface on read/write.
-// Only pipe files that can support deadlines are accepted. Linux/macOS inherited
-// blocking pipes are adapted; other systems require already pollable pipes.
+// Linux/macOS accept pipes and connected anonymous UNIX SOCK_STREAM sockets
+// with empty local and peer names, adapting blocking inherited handles. Named
+// UNIX sockets, network sockets and other files are unsupported. Other systems
+// require already pollable pipes. Prepared files must support deadlines.
 // Never pass the same descriptor for both arguments.
 func NewCursorObserverPipeIO(stdin, stdout *os.File) CursorObserverIO {
 	return newCursorPipeIO(stdin, stdout)

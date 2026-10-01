@@ -29,10 +29,13 @@ type CursorObserverIO interface {
 // output/cleanup. An already expired context receives at most 100 ms output
 // grace. Cancellation stops dispatch but does not cancel the neutral response.
 //
-// Default process IO transfers stdin/stdout pipe ownership to this call; the
+// Default process IO transfers stdin/stdout IPC ownership to this call; the
 // handles are closed before return. On Linux/macOS they are made pollable and
-// deadline-capable. Other hosts require deadline-capable pipes or injected
-// CursorObserverIO; unsupported/broken/full output is a no-response limitation.
+// deadline-capable: pipes or connected anonymous UNIX stream sockets with empty
+// local/peer names only, including Node/libuv socketpair stdio. Named/network
+// sockets and other files are unsupported. Other hosts require pollable pipes
+// or injected CursorObserverIO; unsupported/broken/full output is a no-response
+// limitation.
 // Config.IO is honored: arbitrary caller IO remains caller-owned and runs
 // synchronously. Its read must honor ctx; its ordinary WriteStdout must return
 // promptly. Non-closeable IO cannot be forcibly interrupted by this API.
