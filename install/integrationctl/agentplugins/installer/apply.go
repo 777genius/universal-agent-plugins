@@ -155,7 +155,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	e.report(ProgressStage)
 	added, err := call(svc, usecase.AddInput{
 		Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, Confirmed: true,
-		InstallationID: prepared.req.InstallationID, OperationID: prepared.req.OperationID,
+		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
 		BackendExecutable: prepared.req.ClientExecutable,
 	})
 	err = wrapLifecycleError(err)
