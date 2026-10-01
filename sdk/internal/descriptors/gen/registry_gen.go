@@ -3,6 +3,7 @@ package gen
 import (
 	internal_claude "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/claude"
 	internal_codex "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/codex"
+	internal_cursor "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/cursor"
 	internal_gemini "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/gemini"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 )
@@ -243,6 +244,13 @@ var registry = map[key]runtime.Descriptor{
 		Carrier:  runtime.CarrierStdinJSON,
 		Decode:   internal_codex.DecodePermissionRequest,
 		Encode:   internal_codex.EncodePermissionRequest,
+	},
+	{platform: "cursor", event: "stop"}: {
+		Platform: "cursor",
+		Event:    "stop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_cursor.DecodeStop,
+		Encode:   internal_cursor.EncodeStop,
 	},
 }
 

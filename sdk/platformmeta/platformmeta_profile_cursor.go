@@ -24,9 +24,9 @@ func cursorProfile() PlatformProfile {
 			PublicPackage:   "cursor",
 			InternalPackage: "cursor",
 			InternalImport:  "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/cursor",
-			Status:          StatusScaffoldOnly,
+			Status:          StatusRuntimeSupported,
 			TransportModes:  []TransportMode{TransportProcess},
-			LiveTestProfile: "cursor_plugin",
+			LiveTestProfile: "cursor_stop_contract",
 		},
 		Launcher: LauncherMeta{Requirement: LauncherIgnored},
 		SurfaceTiers: []SurfaceSupport{

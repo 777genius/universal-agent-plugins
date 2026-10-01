@@ -8,6 +8,13 @@ The format is inspired by Keep a Changelog; versions follow SemVer. This unrelea
 
 ### Added
 
+- Cursor native `stop` observer (`public-beta`): descriptor-generated `CursorStop`
+  registrar/metadata, documented DTO with pointer presence, empty response,
+  `App.Cursor()` and opt-in `App.RunCursorObserver(ctx)` with owned Linux/macOS
+  pipe deadlines and fixed `{}\n`. Injected IO remains supported under the
+  documented cooperation contract. Native qualification is pending. Ordinary
+  SDK output and permission exits remain unchanged.
+
 - Codex stdin-JSON lifecycle hooks (`public-beta`): `codex/Stop`, `codex/SubagentStop`, `codex/PreToolUse`, and `codex/PermissionRequest` with prefixed invocation names `CodexStop`, `CodexSubagentStop`, `CodexPreToolUse`, `CodexPermissionRequest` (bare event names stay owned by Claude in the flat resolver). These invocation names are now reserved: `codex.RegisterCustomJSON` with any of them fails registration with a "conflicts with built-in invocation" error instead of being silently shadowed.
 - `hostdetect` package (`public-beta`): fail-closed host product detection with explicit override, env markers, and bounded top-level payload sniffing for Claude and Codex.
 - Root `plugin-kit-ai.MaxPayloadBytes` export so consumers reference the single wire limit instead of duplicating it.

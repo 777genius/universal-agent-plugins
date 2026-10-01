@@ -28,6 +28,10 @@ func CanonicalInvocationName(platform PlatformID, raw string) string {
 		case strings.EqualFold(raw, "CodexPermissionRequest"):
 			return "PermissionRequest"
 		}
+	case "cursor":
+		if strings.EqualFold(raw, "CursorStop") {
+			return "stop"
+		}
 	case "gemini":
 		switch {
 		case strings.EqualFold(raw, "GeminiSessionStart"):
