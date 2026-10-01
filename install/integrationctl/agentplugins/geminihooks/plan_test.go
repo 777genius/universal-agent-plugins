@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
 
-	gh "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/geminihooks"
 	"github.com/tailscale/hujson"
+
+	gh "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/geminihooks"
 )
 
 // Red condition: installing or reconciling owned groups loses foreign data,
@@ -320,5 +322,19 @@ func TestOpaqueSiblingsCommentsAndMultipleOwnedGroups(t *testing.T) {
 	}
 	if !bytes.Equal(saved, input) {
 		t.Fatal("planner mutated caller bytes")
+	}
+}
+
+// Parser errors remain discoverable alongside the conflict sentinel.
+func TestConflictWrapsUnderlyingParseError(t *testing.T) {
+	settings := []byte("{")
+	r, planErr := gh.Plan(gh.Request{Settings: settings, Shell: gh.Bash, Operation: gh.Install, Hooks: specs()})
+	if !r.Conflict || r.Receipt != nil || !bytes.Equal(r.Desired, settings) {
+		t.Fatal("parse conflict changed settings or returned ownership")
+	}
+	for _, err := range []error{planErr, gh.VerifyOwned(settings, nil)} {
+		if !errors.Is(err, gh.ErrConflict) || !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Fatalf("lost conflict or underlying parse error: %v", err)
+		}
 	}
 }

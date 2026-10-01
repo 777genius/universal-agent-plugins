@@ -19,29 +19,13 @@ func preflightSettings(body []byte) error {
 		case ' ', '\t', '\r', '\n', ',', ':':
 			atom = false
 		case '/':
-			if i+1 < len(body) && body[i+1] == '/' {
-				i += 2
-				for i < len(body) && body[i] != '\n' {
-					i++
-				}
-				atom = false
-			} else if i+1 < len(body) && body[i+1] == '*' {
-				i += 2
-				for i+1 < len(body) && !(body[i] == '*' && body[i+1] == '/') {
-					i++
-				}
-				i++
+			if end, comment := commentEnd(body, i); comment {
+				i = end
 				atom = false
 			}
 		case '"':
 			nodes++
-			for i++; i < len(body); i++ {
-				if body[i] == '\\' {
-					i++
-				} else if body[i] == '"' {
-					break
-				}
-			}
+			i = stringEnd(body, i)
 			atom = false
 		case '{', '[':
 			depth++
@@ -67,4 +51,39 @@ func preflightSettings(body []byte) error {
 		}
 	}
 	return nil
+}
+
+// Return the last scanned byte so the caller's loop advances exactly once.
+// Unterminated tokens are left for hujson's grammar validation.
+func commentEnd(body []byte, i int) (int, bool) {
+	if i+1 >= len(body) {
+		return i, false
+	}
+	switch body[i+1] {
+	case '/':
+		i += 2
+		for i < len(body) && body[i] != '\n' {
+			i++
+		}
+		return i, true
+	case '*':
+		i += 2
+		for i+1 < len(body) && (body[i] != '*' || body[i+1] != '/') {
+			i++
+		}
+		return i + 1, true
+	default:
+		return i, false
+	}
+}
+
+func stringEnd(body []byte, i int) int {
+	for i++; i < len(body); i++ {
+		if body[i] == '\\' {
+			i++
+		} else if body[i] == '"' {
+			break
+		}
+	}
+	return i
 }

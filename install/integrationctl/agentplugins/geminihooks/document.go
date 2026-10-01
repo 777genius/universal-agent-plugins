@@ -3,6 +3,7 @@ package geminihooks
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -135,7 +136,7 @@ func nativeKey(s string) string { return nativeString(hujson.String(s)) }
 // paired escapes equal to literal Unicode, without changing any document bytes.
 func nativeString(s hujson.Literal) string {
 	units := make([]byte, 0, len(s))
-	appendUnit := func(u uint16) { units = append(units, byte(u>>8), byte(u)) }
+	appendUnit := func(u uint16) { units = binary.BigEndian.AppendUint16(units, u) }
 	for i := 1; i < len(s)-1; {
 		r, size := utf8.DecodeRune(s[i:])
 		i += size
@@ -171,12 +172,14 @@ func nativeString(s hujson.Literal) string {
 				r = '\t'
 			}
 		}
+		// DecodeRune returns Unicode scalars; EncodeRune returns two 16-bit
+		// surrogates. Masks make those bounds explicit without altering units.
 		if r > 0xffff {
 			hi, lo := utf16.EncodeRune(r)
-			appendUnit(uint16(hi))
-			appendUnit(uint16(lo))
+			appendUnit(uint16(hi & 0xffff))
+			appendUnit(uint16(lo & 0xffff))
 		} else {
-			appendUnit(uint16(r))
+			appendUnit(uint16(r & 0xffff))
 		}
 	}
 	return string(units)

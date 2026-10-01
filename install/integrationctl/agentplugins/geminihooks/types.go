@@ -24,7 +24,7 @@ const (
 )
 
 // ErrConflict identifies unsupported input, ambiguity or lost ownership.
-var ErrConflict = errors.New("Gemini hooks conflict")
+var ErrConflict = errors.New("gemini hooks conflict")
 
 // HookSpec describes one named command in one singleton native event group.
 // Argv includes the executable. Timeout is milliseconds; zero omits the field.

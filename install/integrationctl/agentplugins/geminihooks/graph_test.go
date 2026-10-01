@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -18,8 +17,11 @@ import (
 // Red condition: the neutral production planner acquires a CLI/YAML/installer
 // dependency, or directly imports filesystem/environment/network APIs.
 func TestNeutralProductionDependencyGraph(t *testing.T) {
-	goexe := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cmd := exec.Command(goexe, "list", "-deps", "-json", ".")
+	goexe, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal("Go toolchain required on PATH:", err)
+	}
+	cmd := testCommand(t, goexe, "list", "-deps", "-json", ".")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatal("list actual production graph:", err)

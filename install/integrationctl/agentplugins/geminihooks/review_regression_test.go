@@ -39,7 +39,7 @@ func TestNativeSurrogateOwnedEditConflict(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				cmd := exec.Command(node, "-e", `let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{const [a,b,k]=JSON.parse(s);const get=x=>{const g=JSON.parse(x).hooks.AfterAgent[0];return k==='matcher'?g.matcher:g.hooks[0][k]};const x=get(a),y=get(b);if(x===y||!x.includes('\ufffd')||![0xd800,0xd801,0xdfff].some(c=>y.includes(String.fromCharCode(c))))process.exit(1);console.log('native strings differ')})`)
+				cmd := testCommand(t, node, "-e", `let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{const [a,b,k]=JSON.parse(s);const get=x=>{const g=JSON.parse(x).hooks.AfterAgent[0];return k==='matcher'?g.matcher:g.hooks[0][k]};const x=get(a),y=get(b);if(x===y||!x.includes('\ufffd')||![0xd800,0xd801,0xdfff].some(c=>y.includes(String.fromCharCode(c))))process.exit(1);console.log('native strings differ')})`)
 				cmd.Stdin = bytes.NewReader(input)
 				if out, err := cmd.CombinedOutput(); err != nil {
 					t.Fatalf("native comparison: %v: %s", err, out)
@@ -66,7 +66,7 @@ func TestNativeSurrogateForeignControl(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(node, "-e", `let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{const o=JSON.parse(s).opaque;if(Object.keys(o).length!==5||o['\ud800']!==1||o['\ud801']!==2||o['\udfff']!=='\ud800'||o['😀']!==3||o['�']!==4)process.exit(1);console.log('native foreign keys are distinct')})`)
+	cmd := testCommand(t, node, "-e", `let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{const o=JSON.parse(s).opaque;if(Object.keys(o).length!==5||o['\ud800']!==1||o['\ud801']!==2||o['\udfff']!=='\ud800'||o['😀']!==3||o['�']!==4)process.exit(1);console.log('native foreign keys are distinct')})`)
 	cmd.Stdin = bytes.NewReader(input)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("native foreign-key control: %v: %s", err, out)

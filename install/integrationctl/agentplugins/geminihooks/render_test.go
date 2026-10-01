@@ -33,7 +33,7 @@ func expanded(t *testing.T, command string) string {
 		t.Fatal("Node >=22.18 required for native resolver fixture:", err)
 	}
 	input, _ := json.Marshal(map[string]string{"command": command})
-	cmd := exec.Command(node, "testdata/expand.mjs")
+	cmd := testCommand(t, node, "testdata/expand.mjs")
 	cmd.Stdin = bytes.NewReader(input)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -84,7 +84,7 @@ func assertArgv(t *testing.T, shell gh.Shell, executable string, prefix []string
 	if effective != command {
 		t.Fatal("settings expansion changed supported invocation")
 	}
-	cmd := exec.Command(executable, append(prefix, effective)...)
+	cmd := testCommand(t, executable, append(prefix, effective)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("native shell: %v, %s", err, out)
@@ -148,7 +148,7 @@ func TestNativeExpansionNegativeControlAndUnsupportedTokens(t *testing.T) {
 			t.Fatal(err)
 		}
 		unsafe := command + " '$U2_RENDER_VAR' '${U2_MISSING:-native-default}'"
-		cmd := exec.Command(bash, "-c", expanded(t, unsafe))
+		cmd := testCommand(t, bash, "-c", expanded(t, unsafe))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatal(err)

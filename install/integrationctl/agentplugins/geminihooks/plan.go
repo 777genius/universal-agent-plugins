@@ -33,29 +33,33 @@ func indexNames(hooks *hujson.Object) map[string][]location {
 		if !ok {
 			continue
 		}
-		for i, g := range array.Elements {
-			obj, ok := g.Value.(*hujson.Object)
-			if !ok {
-				continue
-			}
-			hs := member(obj, "hooks")
-			if hs == nil {
-				continue
-			}
-			entries, ok := hs.Value.Value.(*hujson.Array)
-			if !ok {
-				continue
-			}
-			for _, entry := range entries.Elements {
-				if h, ok := entry.Value.(*hujson.Object); ok {
-					if name := stringMember(h, "name"); name != "" {
-						names[name] = append(names[name], location{event, array, i})
-					}
+		indexArrayNames(names, event, array)
+	}
+	return names
+}
+
+func indexArrayNames(names map[string][]location, event string, array *hujson.Array) {
+	for i, g := range array.Elements {
+		obj, ok := g.Value.(*hujson.Object)
+		if !ok {
+			continue
+		}
+		hs := member(obj, "hooks")
+		if hs == nil {
+			continue
+		}
+		entries, ok := hs.Value.Value.(*hujson.Array)
+		if !ok {
+			continue
+		}
+		for _, entry := range entries.Elements {
+			if h, ok := entry.Value.(*hujson.Object); ok {
+				if name := stringMember(h, "name"); name != "" {
+					names[name] = append(names[name], location{event, array, i})
 				}
 			}
 		}
 	}
-	return names
 }
 
 func verify(names map[string][]location, receipt *Receipt) error {
@@ -99,7 +103,7 @@ func VerifyOwned(settings []byte, receipt *Receipt) error {
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrConflict, err)
+		return fmt.Errorf("%w: %w", ErrConflict, err)
 	}
 	return nil
 }
@@ -141,7 +145,7 @@ func Plan(req Request) (Result, error) {
 		unchanged = append([]byte(nil), req.Settings...)
 	}
 	conflict := func(err error) (Result, error) {
-		return Result{Desired: unchanged, Conflict: true}, fmt.Errorf("%w: %v", ErrConflict, err)
+		return Result{Desired: unchanged, Conflict: true}, fmt.Errorf("%w: %w", ErrConflict, err)
 	}
 	if req.Operation != Install && req.Operation != Update && req.Operation != Remove {
 		return conflict(fmt.Errorf("unsupported operation"))
@@ -155,103 +159,21 @@ func Plan(req Request) (Result, error) {
 		return conflict(err)
 	}
 	names := indexNames(hooks)
-	old := map[string]OwnedGroup{}
-	if req.Previous != nil || req.Operation != Install {
-		if err := verify(names, req.Previous); err != nil {
-			return conflict(err)
-		}
-		for _, g := range req.Previous.Groups {
-			old[g.Name] = g
-		}
+	old, err := previousGroups(req, names)
+	if err != nil {
+		return conflict(err)
 	}
-	desired := map[string]hujson.Value{}
-	receipt := &Receipt{Version: 1}
-	if req.Operation != Remove {
-		if len(req.Hooks) == 0 {
-			return conflict(fmt.Errorf("empty desired hook set; use remove"))
-		}
-		for _, h := range req.Hooks {
-			if hooks != nil {
-				if m := member(hooks, h.Event); m != nil {
-					if _, ok := m.Value.Value.(*hujson.Array); !ok {
-						return conflict(fmt.Errorf("requested event must be an array"))
-					}
-				}
-			}
-			if _, ok := desired[h.Name]; ok {
-				return conflict(fmt.Errorf("duplicate requested name"))
-			}
-			v, err := desiredGroup(req.Shell, h)
-			if err != nil {
-				return conflict(err)
-			}
-			if _, owned := old[h.Name]; !owned && len(names[nativeKey(h.Name)]) > 0 {
-				return conflict(fmt.Errorf("name collision %q; no adoption", h.Name))
-			}
-			desired[h.Name] = v
-			digest, err := groupDigest(h.Event, v)
-			if err != nil {
-				return conflict(err)
-			}
-			receipt.Groups = append(receipt.Groups, OwnedGroup{Event: h.Event, Name: h.Name, Digest: digest})
-		}
+	desired, receipt, err := desiredGroups(req, hooks, names, old)
+	if err != nil {
+		return conflict(err)
 	}
-	// Compare sets by name/event/full group digest, independent of receipt order.
-	same := len(old) == len(receipt.Groups)
-	for _, g := range receipt.Groups {
-		if old[g.Name] != g {
-			same = false
-		}
-	}
-	if same {
+	if sameGroups(old, receipt) {
 		return Result{Desired: unchanged, Receipt: receipt, NoOp: true}, nil
 	}
-	// Replace same-event owned groups in place; remove retired/moved groups
-	// in reverse index order. Preserve surrounding comments on removal too.
-	if hooks != nil {
-		for _, event := range hooks.Members {
-			a, ok := event.Value.Value.(*hujson.Array)
-			if !ok {
-				continue
-			}
-			for i := len(a.Elements) - 1; i >= 0; i-- {
-				for name := range old {
-					loc := names[nativeKey(name)][0]
-					if loc.array != a || loc.index != i {
-						continue
-					}
-					if v, ok := desired[name]; ok && nativeKey(old[name].Event) == nativeString(event.Name.Value.(hujson.Literal)) {
-						v.BeforeExtra, v.AfterExtra = a.Elements[i].BeforeExtra, a.Elements[i].AfterExtra
-						a.Elements[i] = v
-						delete(desired, name)
-					} else {
-						comments := append(append(hujson.Extra{}, a.Elements[i].BeforeExtra...), a.Elements[i].AfterExtra...)
-						if i+1 < len(a.Elements) {
-							a.Elements[i+1].BeforeExtra = append(comments, a.Elements[i+1].BeforeExtra...)
-						} else {
-							a.AfterExtra = append(comments, a.AfterExtra...)
-						}
-						a.Elements = append(a.Elements[:i], a.Elements[i+1:]...)
-					}
-				}
-			}
-		}
-	}
+	reconcileOwned(hooks, names, old, desired)
 	if req.Operation != Remove {
 		hooks, _ = hooksObject(root, true)
-		for _, h := range req.Hooks {
-			v, pending := desired[h.Name]
-			if !pending {
-				continue
-			}
-			m := member(hooks, h.Event)
-			if m == nil {
-				addMember(hooks, h.Event, hujson.Value{Value: &hujson.Array{}})
-				m = member(hooks, h.Event)
-			}
-			a := m.Value.Value.(*hujson.Array)
-			a.Elements = append(a.Elements, v)
-		}
+		appendDesired(hooks, req.Hooks, desired)
 	} else {
 		receipt = nil
 	}
