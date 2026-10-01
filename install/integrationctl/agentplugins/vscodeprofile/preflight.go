@@ -22,7 +22,11 @@ func preflight(body []byte) error {
 		case ' ', '\t', '\r', '\n', ',', ':':
 			atom = false
 		case '/':
-			if end, ok := commentEnd(body, i); ok {
+			end, ok, err := commentEnd(body, i)
+			if err != nil {
+				return err
+			}
+			if ok {
 				i = end
 				atom = false
 			}
@@ -56,21 +60,27 @@ func preflight(body []byte) error {
 	return nil
 }
 
-func commentEnd(body []byte, i int) (int, bool) {
+func commentEnd(body []byte, i int) (int, bool, error) {
 	if i+1 >= len(body) {
-		return i, false
+		return i, false, nil
 	}
 	switch body[i+1] {
 	case '/':
-		for i += 2; i < len(body) && body[i] != '\n'; i++ {
+		for i += 2; i < len(body) && body[i] != '\r' && body[i] != '\n'; i++ {
 		}
-		return i, true
+		// Native JSONC ends // at CR or LF, but hujson ends it only at LF.
+		// Admit CRLF; refuse bare CR before AST interpretation can hide
+		// native-visible members. Never normalize foreign trivia.
+		if i < len(body) && body[i] == '\r' && (i+1 == len(body) || body[i+1] != '\n') {
+			return i, true, fmt.Errorf("ambiguous bare-CR line comment")
+		}
+		return i, true, nil
 	case '*':
 		for i += 2; i+1 < len(body) && (body[i] != '*' || body[i+1] != '/'); i++ {
 		}
-		return i + 1, true
+		return i + 1, true, nil
 	default:
-		return i, false
+		return i, false, nil
 	}
 }
 

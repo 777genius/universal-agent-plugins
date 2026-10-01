@@ -55,9 +55,12 @@ CAS/readback boundary. Returning planned bytes performs no write.
 Bounds apply to inputs and emitted outputs: **4 MiB**, **64 container levels**,
 **65,536 nodes** (containers, keys and scalar values), and **4 KiB per identity
 string**. A lexical budget pass precedes hujson's recursive parse. Empty bytes
-represent absent settings; other inputs must be one UTF-8 JSONC object. Duplicates
-are refused in the edited shape: the root location selector and all location
-keys, including equivalent escape spellings. Unknown foreign settings, duplicate
+represent absent settings; other inputs must be one UTF-8 JSONC object. As an
+interim admission restriction, `//` comments terminated by bare CR refuse
+before AST parsing. CRLF/LF line comments, CR whitespace, CR in block comments
+and escaped CR in strings remain supported; foreign bytes are never normalized.
+Duplicates are refused in the edited shape: the root location selector and all
+location keys, including equivalent escape spellings. Unknown foreign settings, duplicate
 foreign keys, number lexemes and lone surrogate escapes remain opaque. Location
 keys with lone surrogate escapes refuse ambiguous Go/native Unicode decoding.
 
@@ -65,7 +68,9 @@ Identity paths must be clean absolute POSIX or drive-rooted Windows paths;
 UNC/device paths and forward/mixed Windows identity separators are outside this
 slice. Foreign drive-rooted Windows keys with either or mixed separators are
 normalized only for collision comparison; receipt identity and map keys remain
-exact. Lexically resolvable aliases, ECMAScript trimming aliases (including
+exact. Foreign leading-separator drive URI paths (`/C:/...` or `\C:\...`) also
+participate in comparison, without broadening requested Windows identity forms.
+Lexically resolvable aliases, ECMAScript trimming aliases (including
 U+FEFF, excluding U+0085) and Windows case aliases of the requested root refuse
 collisions. Physical symlink/case identity, remote/tilde
 resolution and unsupported metadata remain caller qualification responsibilities.
@@ -75,6 +80,7 @@ No-ops return exact original bytes; refusal returns `ErrConflict`, original byte
 alias inputs. Digests and edits are deterministic. Foreign lexemes/comments are
 retained in hujson's AST without a whole-settings DTO roundtrip or normalization.
 Tests import only the public API and independently normalize JSONC trivia before
-standard-library decoding; this is native-compatible grammar proof, not a native
-Code parser or desktop test. U4 must compose persisted effects, client lifecycle,
+standard-library decoding, ending line comments at CR or LF; this checks a
+native-compatible grammar contract, not a native Code parser or desktop test.
+U4 must compose persisted effects, client lifecycle,
 profile IO/locks/CAS/recovery and later native qualification.

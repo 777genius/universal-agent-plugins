@@ -110,6 +110,12 @@ func aliasesRoot(key, root string) bool {
 		// Windows resolves either separator. Normalize only collision comparison;
 		// explicit identities, receipts and map lookup retain their exact keys.
 		key = strings.ReplaceAll(key, "/", "\\")
+		// fileURI also resolves a leading-separator drive URI path to the
+		// drive root. Strip that one separator only for foreign comparison;
+		// absolutePath still validates the drive letter and rooted suffix.
+		if len(key) >= 4 && key[0] == '\\' && key[2] == ':' && key[3] == '\\' {
+			key = key[1:]
+		}
 	}
 	normalized, ok := absolutePath(key)
 	if !ok {

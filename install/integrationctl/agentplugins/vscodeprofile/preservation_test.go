@@ -163,7 +163,7 @@ func stripComments(stripped []byte) {
 			line := stripped[i+1] == '/'
 			i += 2
 			for i < len(stripped) {
-				if line && stripped[i] == '\n' {
+				if line && (stripped[i] == '\r' || stripped[i] == '\n') {
 					break
 				}
 				if !line && i+1 < len(stripped) && stripped[i] == '*' && stripped[i+1] == '/' {
