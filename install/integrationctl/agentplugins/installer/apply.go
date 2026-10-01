@@ -63,6 +63,11 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 		attachNextActions(&result)
 		return result, err
 	}
+	if err := e.revalidateOpenCodeHost(ctx, prepared); err != nil {
+		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
+		attachNextActions(&result)
+		return result, err
+	}
 	if !prepared.plan.NoChange {
 		if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
 			if _, err = e.helper(); err != nil {
@@ -150,7 +155,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	e.report(ProgressStage)
 	added, err := call(svc, usecase.AddInput{
 		Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, Confirmed: true,
-		InstallationID: prepared.req.InstallationID, OperationID: prepared.req.OperationID,
+		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
 		BackendExecutable: prepared.req.ClientExecutable,
 	})
 	err = wrapLifecycleError(err)
@@ -400,6 +405,11 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 		}
 		check := target
 		check.Client = client
+		if client.ClientID == target.Client.ClientID {
+			// The selected client's prepared authority must survive update's
+			// compatibility preview; sibling checks remain observational.
+			check.Client = target.Client
+		}
 		check.BackendExecutable = client.ExecutablePath
 		checks = append(checks, check)
 	}

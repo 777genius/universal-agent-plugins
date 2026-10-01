@@ -11,7 +11,14 @@ import (
 // AutomaticallyActivates reports that Activate will write managed OpenCode
 // native objects for this exact request.
 func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationRequest) bool {
-	return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
+	return automaticallyActivatesOpenCode(request)
+}
+
+func automaticallyActivatesOpenCode(request domain.ActivationRequest) bool {
+	// Removing the final declarations still reconciles owned native objects.
+	// Keep empty first installs manual and preserve non-native plan restrictions.
+	cleanup := request.Client.ConfigRoot != "" && len(request.Plan.Components) == 0 && len(OpenCodeObjects(request.PreviousNativeObjects)) > 0
+	return request.Plan.InstallIntent == domain.InstallIntentAutomatic && (shared.HasNativeConfigRoot(request) || cleanup)
 }
 
 // VerifierAvailable reports that an exact native configuration listing can be
@@ -23,10 +30,15 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 // Activate installs or verifies managed OpenCode skills and MCP servers
 // through the native config kernel.
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if !request.VerifyOnly && request.Client.OpenCodeHost != nil {
+		if err := request.Client.OpenCodeHost.ValidateNative(false, nil); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	automatic := request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
+	automatic := automaticallyActivatesOpenCode(request)
 	return shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
 		Automatic:         automatic,
 		UnavailableAction: "rerun with a detected OpenCode config root",

@@ -9,12 +9,17 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // Config is copied by New. Later mutation of the caller's value is ignored.
 type Config struct {
+	// OpenCodeProbe defaults to the explicit-target facade. New captures and pins
+	// the allowlisted environment once; it never executes a probe.
+	OpenCodeProbe            OpenCodeProbe
+	OpenCodeProbeEnvironment []string
 	// StateRoot is the owned UAP namespace. It is required and must be an
 	// absolute clean path. New does not create it.
 	StateRoot                                                                 string
@@ -99,6 +104,18 @@ func (c Config) resolved() (Config, error) {
 			cloned[id] = p
 		}
 		out.ClientExecutables = cloned
+	}
+	if out.OpenCodeProbe == nil {
+		out.OpenCodeProbe = clientdetect.ProbeOpenCodeTarget
+	}
+	env := out.OpenCodeProbeEnvironment
+	if env == nil {
+		env = clientdetect.OpenCodeProbeEnvironment()
+	}
+	var err error
+	out.OpenCodeProbeEnvironment, err = clientdetect.CopyOpenCodeProbeEnvironment(env)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w: host_target_invalid", ErrInvalidConfig)
 	}
 	return out, nil
 }

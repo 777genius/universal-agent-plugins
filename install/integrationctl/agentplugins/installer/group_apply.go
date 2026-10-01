@@ -101,7 +101,9 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 			envelopes[i] = prepared.envelope
 		}
 	}
-	inputs, _, err := e.groupAddInputs(prepared.req, envelopes, false, true)
+	req := prepared.req
+	req.InstallationID = firstNonEmpty(req.InstallationID, prepared.plan.InstallationID)
+	inputs, _, err := e.groupAddInputs(req, envelopes, false, true)
 	if err != nil {
 		return nil, err
 	}
