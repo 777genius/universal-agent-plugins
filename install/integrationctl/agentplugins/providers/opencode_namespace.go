@@ -2,11 +2,13 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -26,14 +28,25 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 		return fmt.Errorf("OpenCode user config root is unavailable")
 	}
 	paths := nativeconfig.Paths{JSON: filepath.Join(root, "opencode.json"), JSONC: filepath.Join(root, "opencode.jsonc")}
+	codec, err := clients.DesiredOpenCodeCodec(plan.OpenCodeHost)
+	if err != nil {
+		return err
+	}
 	previous := []string{}
 	if managed != nil {
 		for _, object := range managed.NativeObjects {
-			if object.Kind != nativeconfig.OpenCodeMCPObjectKind {
+			stored, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
+			if err != nil {
+				return err
+			}
+			if !mcp {
 				continue
 			}
-			owned := nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: nativeconfig.CodecOpenCode, Name: object.LogicalName, Digest: object.ManagedDigest}
-			present, exactlyOwned, err := guard.Kernel.Inspect(paths, nativeconfig.CodecOpenCode, object.LogicalName, &owned)
+			if stored != codec {
+				return nativeconfig.ErrNativeMigrationRequired
+			}
+			owned := nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: stored, Name: object.LogicalName, Digest: object.ManagedDigest}
+			present, exactlyOwned, err := guard.Kernel.Inspect(paths, stored, object.LogicalName, &owned)
 			if err != nil {
 				return fmt.Errorf("inspect prior OpenCode MCP server %q: %w", object.LogicalName, err)
 			}
@@ -43,5 +56,28 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 			previous = append(previous, object.LogicalName)
 		}
 	}
-	return guard.Kernel.CheckOpenCodeNamespace(paths, domain.SelectedMCPNames(plan), previous)
+	// Disabled foreign entries reserve their names even though they do not
+	// participate in the active callable namespace. They cannot be adopted.
+	prior := make(map[string]bool, len(previous))
+	for _, name := range previous {
+		prior[name] = true
+	}
+	proposed := domain.SelectedMCPNames(plan)
+	for _, name := range proposed {
+		if prior[name] {
+			continue
+		}
+		present, _, err := guard.Kernel.Inspect(paths, codec, name, nil)
+		if err != nil {
+			return err
+		}
+		if present {
+			return fmt.Errorf("OpenCode MCP server %q already exists: %w", name, nativeconfig.ErrCollision)
+		}
+	}
+	err = guard.Kernel.CheckOpenCodeNamespaceForCodec(paths, codec, proposed, previous)
+	if errors.Is(err, nativeconfig.ErrOpenCodeV2Namespace) {
+		return errors.Join(nativeconfig.ErrNativeMigrationRequired, err)
+	}
+	return err
 }

@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
@@ -24,7 +26,7 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 		return nil
 	}
 	skills, transports := clients.OpenCodeNativeRequirements(handle.envelope)
-	previousEffects, ownedConfig, err := e.previousOpenCodeEffects(handle, consumer)
+	previousEffects, ownedCodec, err := e.previousOpenCodeEffects(handle, consumer)
 	if err != nil {
 		return err
 	}
@@ -44,10 +46,16 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 		return errors.New("host_target_unverified")
 	}
 	profile := opencodehost.Resolve(evidence.VersionEvidence)
-	// Current owned MCP receipts belong to config_v1, even when an update
-	// removes the last declaration. Never route their cleanup through V2.
-	if ownedConfig && profile.ConfigDialect != opencodehost.DialectV1 {
-		return clients.ErrOpenCodeAdapterUnavailable
+	// Phase 1 cannot change stored ownership dialect, including cleanup of
+	// the last declaration. Durable native/skill/state recovery is phase 2.
+	if ownedCodec != "" {
+		selected, err := opencode.DesiredOpenCodeCodec(newOpenCodePreparedHost(executable, openCodeRootIdentity(handle.client.ConfigRoot), target.Environment, evidence.VersionEvidence, profile, nil))
+		if err != nil {
+			return err
+		}
+		if ownedCodec != selected {
+			return nativeconfig.ErrNativeMigrationRequired
+		}
 	}
 	selections, err := selectOpenCodeNative(profile, skills, transports)
 	if err != nil {
@@ -64,10 +72,10 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 	return nil
 }
 
-func (e *Engine) previousOpenCodeEffects(handle *PreparedOperation, consumer clients.OpenCodeHostProfileConsumer) (effects, ownedConfig bool, err error) {
+func (e *Engine) previousOpenCodeEffects(handle *PreparedOperation, consumer clients.OpenCodeHostProfileConsumer) (effects bool, ownedCodec nativeconfig.Codec, err error) {
 	state, err := e.store.Load()
 	if err != nil {
-		return false, false, err
+		return false, "", err
 	}
 	sourceID := domain.ComputeSourceBindingID(handle.envelope.Source)
 	for _, installation := range state.Installations {
@@ -86,9 +94,21 @@ func (e *Engine) previousOpenCodeEffects(handle *PreparedOperation, consumer cli
 		}
 		ownedSkills, config := consumer.OwnedOpenCodeNativeRequirements(binding.NativeObjects)
 		effects = effects || ownedSkills || config || e.cfg.OnCommittedBinding != nil && hostHandoffPending(binding)
-		ownedConfig = ownedConfig || config
+		for _, object := range binding.NativeObjects {
+			codec, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
+			if err != nil {
+				return false, "", err
+			}
+			if !mcp {
+				continue
+			}
+			if ownedCodec != "" && ownedCodec != codec {
+				return false, "", nativeconfig.ErrNativeMigrationRequired
+			}
+			ownedCodec = codec
+		}
 	}
-	return effects, ownedConfig, nil
+	return effects, ownedCodec, nil
 }
 
 func (e *Engine) revalidateOpenCodeHost(ctx context.Context, handle *PreparedOperation) error {

@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -20,7 +21,7 @@ import (
 
 func openCodeTestRoot(t *testing.T) string {
 	t.Helper()
-	root, err := os.MkdirTemp(".", "TEST-opencode-installer-")
+	root, err := os.MkdirTemp("", "TEST-opencode-installer-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,9 +71,9 @@ func openCodeRequest(t *testing.T, root, executable string) Request {
 }
 
 // Regression: real Prepare must consume the exact selected V2 while PATH points
-// at V1. A pure config_v2 selection must stop before preview/staging/activation,
-// rather than silently writing config_v1. Single explicit target shape counts.
-func TestOpenCodePrepareExplicitV2BlocksUnavailableCodec(t *testing.T) {
+// at V1. The immutable explicit-target profile must admit the real V2 codec.
+// Single explicit target shape counts; prepare remains free of native effects.
+func TestOpenCodePrepareExplicitV2SelectsAvailableCodec(t *testing.T) {
 	root := openCodeTestRoot(t)
 	v1 := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.33", "ok")
 	v2 := buildOpenCodeTarget(t, filepath.Join(root, "v2"), "2.0.21", "ok")
@@ -89,11 +90,15 @@ func TestOpenCodePrepareExplicitV2BlocksUnavailableCodec(t *testing.T) {
 	req := openCodeRequest(t, root, v1)
 	req.Targets = []ClientTarget{{ClientID: "opencode", ClientConfigRoot: req.ClientConfigRoot, ClientExecutable: v2}}
 	handle, err := engine.Prepare(testCtx(t), req)
-	if !errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) || handle != nil || calls != 1 || observed.Version != "2.0.21" || handoffs != 0 {
+	if err != nil || handle == nil || calls != 1 || observed.Version != "2.0.21" || handoffs != 0 {
 		t.Fatalf("target: handle=%v calls=%d evidence=%+v err=%v", handle, calls, observed, err)
 	}
+	defer handle.Close()
+	if handle.Plan().OpenCodeProfile.ConfigDialect != opencodehost.DialectV2 {
+		t.Fatal("explicit profile not V2")
+	}
 	if _, err := os.Stat(engine.cfg.ManagedRoot); !os.IsNotExist(err) {
-		t.Fatalf("staged before adapter availability: %v", err)
+		t.Fatalf("staged during prepare: %v", err)
 	}
 	if _, err := os.Stat(req.ClientConfigRoot); !os.IsNotExist(err) {
 		t.Fatalf("native effect: %v", err)
@@ -496,7 +501,7 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 			}
 			if change == "v2" {
 				req.ClientExecutable = replacement
-				if handle, err := engine.Prepare(testCtx(t), req); !errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) || handle != nil {
+				if handle, err := engine.Prepare(testCtx(t), req); !errors.Is(err, nativeconfig.ErrNativeMigrationRequired) || handle != nil {
 					t.Fatalf("config_v1 cleanup sent to V2: handle=%v %v", handle, err)
 				}
 				return
@@ -609,7 +614,7 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 	}
 }
 
-// Regression: withholding the V2 MCP codec cannot disable qualified directory
+// Regression: MCP qualification cannot disable qualified directory
 // skills, nor may a skills-only install rewrite a foreign V2 JSONC config.
 func TestOpenCodeV2SkillsIndependentOfMCPCodecAndObservers(t *testing.T) {
 	root := openCodeTestRoot(t)

@@ -15,7 +15,7 @@ var _ clients.PlanRefiner = (*Adapter)(nil)
 func (*Adapter) OwnedOpenCodeNativeRequirements(objects []domain.NativeObjectOwnership) (skills, config bool) {
 	for _, object := range objects {
 		switch object.Kind {
-		case OpenCodeMCPObjectKind:
+		case OpenCodeMCPObjectKind, OpenCodeV2MCPObjectKind:
 			config = true
 		case openCodeSkillKind:
 			skills = true
@@ -26,7 +26,10 @@ func (*Adapter) OwnedOpenCodeNativeRequirements(objects []domain.NativeObjectOwn
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if in.Client.OpenCodeHost != nil {
-		skills, transports := clients.OpenCodeNativeRequirements(in.Envelope)
+		skills, transports, err := clients.PlannedOpenCodeNativeRequirements(in.Envelope, *plan)
+		if err != nil {
+			return err
+		}
 		if err := in.Client.OpenCodeHost.ValidateNative(skills, transports); err != nil {
 			return err
 		}

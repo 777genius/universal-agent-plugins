@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
 func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
@@ -27,8 +28,17 @@ func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 	if err != nil {
 		return err
 	}
-	projection := OpenCodeProjection{Version: 1, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
+	codec, err := DesiredOpenCodeCodec(plan.OpenCodeHost)
+	if err != nil {
+		return err
+	}
+	dialect := opencodehost.DialectV1
+	if codec == nativeconfig.CodecOpenCodeV2 {
+		dialect = opencodehost.DialectV2
+	}
+	projection := OpenCodeProjection{Version: 2, Dialect: dialect, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
 		PackageRoot: plan.ActivePath, DataRoot: dataRoot, MCPServers: map[string]nativeconfig.Server{}, ResolvedCWD: map[string]bool{}}
+
 	if err := projectOpenCodeMCPServers(&projection, root, envelope, plan, dataRoot); err != nil {
 		return err
 	}
@@ -247,14 +257,18 @@ func BuildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 }
 
 func openCodeMCPOwnerships(projection OpenCodeProjection) ([]domain.NativeObjectOwnership, error) {
+	codec, err := projectionCodec(projection)
+	if err != nil {
+		return nil, err
+	}
 	objects := make([]domain.NativeObjectOwnership, 0, len(projection.MCPServers))
 	placeholders := nativeconfig.Placeholders{PackageRoot: projection.PackageRoot, DataRoot: projection.DataRoot}
 	for name, server := range projection.MCPServers {
-		receipt, err := nativeconfig.DesiredReceipt(projection.ConfigPath, nativeconfig.CodecOpenCode, name, server, placeholders)
+		receipt, err := nativeconfig.DesiredReceipt(projection.ConfigPath, codec, name, server, placeholders)
 		if err != nil {
 			return nil, err
 		}
-		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "opencode-mcp:" + name, Kind: OpenCodeMCPObjectKind,
+		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "opencode-mcp:" + name, Kind: openCodeMCPKind(codec),
 			LogicalName: name, Path: receipt.Path, ManagedDigest: receipt.Digest, ProtectionClass: "managed"})
 	}
 	return objects, nil

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 	"github.com/tailscale/hujson"
 )
 
@@ -450,7 +452,7 @@ func openCodeSkillOnlyActivationFixture(t *testing.T) (string, string, []domain.
 	envelope := domain.PackageEnvelope{
 		Skills: map[string]domain.Skill{"docs": {Name: "docs", RelativePath: "skills/docs/SKILL.md"}},
 	}
-	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active, Components: []domain.ComponentDecision{
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active, Components: []domain.ComponentDecision{
 		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportPrepared},
 	}}
 	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(filepath.Dir(active), "data")); err != nil {
@@ -643,7 +645,7 @@ func TestOpenCodeRejectsReservedStdioEnvWithoutProjection(t *testing.T) {
 	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
 		"docs": {Name: "docs", Type: "stdio", Decoded: map[string]any{"command": "node", "env": authorEnv}},
 	}}}
-	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active,
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active,
 		Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared}}}
 	err := opencode.ProjectOpenCodeNative(active, envelope, plan, filepath.Join(root, "data"))
 	if err == nil || !strings.Contains(err.Error(), "PLUGIN_ROOT is reserved") {
@@ -667,7 +669,7 @@ func TestOpenCodeAmbiguousJSONVariantsFailBeforeProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{}}}
-	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active}
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active}
 	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, ""); !errors.Is(err, nativeconfig.ErrAmbiguousConfig) {
 		t.Fatalf("expected ambiguous config rejection, got %v", err)
 	}
@@ -677,7 +679,7 @@ func TestOpenCodeRejectsPackageOwnedProjectionCollision(t *testing.T) {
 	root := t.TempDir()
 	active := filepath.Join(root, "active")
 	writeOpenCodeTestFile(t, filepath.Join(active, opencode.OpenCodeProjectionFile), `{"attacker":true}`)
-	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active}
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active}
 	err := opencode.ProjectOpenCodeNative(active, domain.PackageEnvelope{}, plan, "")
 	if err == nil || !strings.Contains(err.Error(), "reserved") {
 		t.Fatalf("expected reserved projection rejection, got %v", err)
@@ -719,7 +721,7 @@ func openCodeTestPackage(t *testing.T, active, configRoot, skillText string) (do
 			"command": "node", "args": []any{"${PLUGIN_ROOT}/server.js"}, "env": map[string]any{"DATA": "${PLUGIN_DATA}"},
 		}}}},
 	}
-	plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active, Components: []domain.ComponentDecision{
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active, Components: []domain.ComponentDecision{
 		{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportPrepared},
 		{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared},
 	}}
@@ -769,4 +771,43 @@ func assertOpenCodeEntry(t *testing.T, body string, present bool, command, arg s
 			t.Fatalf("unexpected OpenCode entry: %#v", entry)
 		}
 	}
+}
+
+// Lower-level V1 filesystem regressions consume an explicit pure profile port.
+// Real target probing is qualified separately by the public installer fixtures.
+// This supplies profile data, not a test-only production override or resolver.
+type openCodeV1FixtureProfile struct{}
+
+func (openCodeV1FixtureProfile) Profile() opencodehost.Profile {
+	return opencodehost.Resolve(opencodehost.VersionEvidence{Version: "1.18.34", Source: "executable_version", ProbeStatus: "ok"})
+}
+func (h openCodeV1FixtureProfile) ConfigDialect() string { return string(h.Profile().ConfigDialect) }
+
+func (h openCodeV1FixtureProfile) ValidateNative(skills bool, transports []string) error {
+	profile := h.Profile()
+	if skills {
+		if _, err := opencodehost.Select(profile, []opencodehost.ArtifactRequirement{{ID: "fixture-skills", Adapter: opencodehost.SkillDirectory, Required: []opencodehost.Capability{opencodehost.GlobalSkillDirectory}}}); err != nil {
+			return err
+		}
+	}
+	var required []opencodehost.Capability
+	for _, transport := range transports {
+		switch transport {
+		case "stdio":
+			if !slices.Contains(required, opencodehost.MCPStdio) {
+				required = append(required, opencodehost.MCPStdio)
+			}
+		case "streamable-http":
+			if !slices.Contains(required, opencodehost.MCPStreamableHTTP) {
+				required = append(required, opencodehost.MCPStreamableHTTP)
+			}
+		default:
+			return errors.New("unsupported fixture transport")
+		}
+	}
+	if len(required) > 0 {
+		_, err := opencodehost.Select(profile, []opencodehost.ArtifactRequirement{{ID: "fixture-config", Adapter: opencodehost.ConfigV1, Required: required}})
+		return err
+	}
+	return nil
 }

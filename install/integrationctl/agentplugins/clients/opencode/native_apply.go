@@ -147,7 +147,7 @@ func expectedOpenCodeConfig(projection OpenCodeProjection, previous []domain.Nat
 		return projection.ConfigPath
 	}
 	for _, object := range previous {
-		if object.Kind == OpenCodeMCPObjectKind {
+		if _, mcp, _ := nativeconfig.OpenCodeCodecForKind(object.Kind); mcp {
 			return object.Path
 		}
 	}
@@ -193,7 +193,7 @@ func matchOpenCodeMCPReceipts(requests []nativeconfig.Request, receipts []native
 			continue
 		}
 		expected := desiredByID["opencode-mcp:"+request.Name]
-		if receipts[index].Digest != expected.ManagedDigest || receipts[index].Path != expected.Path {
+		if receipts[index].Digest != expected.ManagedDigest || receipts[index].Path != expected.Path || receipts[index].Codec != request.Codec || receipts[index].Name != request.Name || receipts[index].Version != "1" {
 			return fmt.Errorf("OpenCode native receipt differs from staged ownership")
 		}
 	}

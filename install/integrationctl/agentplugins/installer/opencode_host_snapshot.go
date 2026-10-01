@@ -3,7 +3,6 @@ package installer
 import (
 	"slices"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
@@ -25,7 +24,10 @@ func newOpenCodePreparedHost(executable, root string, environment []string, evid
 	}
 	return h
 }
-func (h *OpenCodePreparedHost) Profile() opencodehost.Profile          { return h.profile.Clone() }
+func (h *OpenCodePreparedHost) Profile() opencodehost.Profile { return h.profile.Clone() }
+
+// ConfigDialect exposes only the immutable prepared config selection.
+func (h *OpenCodePreparedHost) ConfigDialect() string                  { return string(h.profile.ConfigDialect) }
 func (h *OpenCodePreparedHost) Evidence() opencodehost.VersionEvidence { return h.evidence }
 func (h *OpenCodePreparedHost) Root() string                           { return h.root }
 func (h *OpenCodePreparedHost) Target() (string, []string) {
@@ -40,7 +42,7 @@ func (h *OpenCodePreparedHost) Selections() []opencodehost.Selection {
 }
 
 // selectOpenCodeNative selects skills and MCP independently of observers. The
-// pure config_v2 candidate is diagnostic until lane B supplies its actual codec.
+// selected config candidate binds the native projection to the prepared profile.
 func selectOpenCodeNative(profile opencodehost.Profile, skills bool, transports []string) ([]opencodehost.Selection, error) {
 	var out []opencodehost.Selection
 	if skills {
@@ -80,19 +82,6 @@ func selectOpenCodeNative(profile opencodehost.Profile, skills bool, transports 
 }
 
 func (h *OpenCodePreparedHost) ValidateNative(skills bool, transports []string) error {
-	for _, selection := range h.selections {
-		if selection.Adapter == opencodehost.ConfigV2 {
-			return clients.ErrOpenCodeAdapterUnavailable
-		}
-	}
-	selections, err := selectOpenCodeNative(h.profile, skills, transports)
-	if err != nil {
-		return err
-	}
-	for _, selection := range selections {
-		if selection.Adapter == opencodehost.ConfigV2 {
-			return clients.ErrOpenCodeAdapterUnavailable
-		}
-	}
-	return nil
+	_, err := selectOpenCodeNative(h.profile, skills, transports)
+	return err
 }
