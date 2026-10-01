@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/darwin-terminal-cancel.yml'
       - 'cli/internal/terminalreader/**'
+      - 'cli/internal/terminalprompts/**'
       - 'cli/internal/promptio/cancel_unix.go'
       - 'cli/installerui/terminal_session.go'
       - 'cli/installerui/terminal_stdin_darwin_test.go'

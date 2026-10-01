@@ -24,6 +24,10 @@ func TestConsentPTYBoundary(t *testing.T) {
 }
 
 func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File)) {
+	testConsentPTYCase(t, openPTY, "")
+}
+
+func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File), selectedCase string) {
 	t.Setenv("TERM", "xterm-256color")
 	for _, tc := range []struct {
 		name, selection, confirmation, remaining string
@@ -63,6 +67,9 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 		{name: "stale-next-owner", selection: "\r \rnext-owner\n", remaining: "next-owner"},
 		{name: "fresh-next-owner", selection: "\r", confirmation: " \rnext-owner\n", accepted: true, remaining: "next-owner"},
 	} {
+		if selectedCase != "" && tc.name != selectedCase {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			master, slave := openPTY(t)
 			before, err := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
