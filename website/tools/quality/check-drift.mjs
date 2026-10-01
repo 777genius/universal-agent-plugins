@@ -8,5 +8,9 @@ try {
   });
 } catch {
   console.error("Generated docs drift detected under website/generated.");
+  execFileSync("git", ["diff", "--binary", "--", "website/generated"], {
+    cwd: repoRoot,
+    stdio: "inherit"
+  });
   process.exit(1);
 }
