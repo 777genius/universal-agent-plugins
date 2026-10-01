@@ -33,6 +33,8 @@ export function createV2Observer(options) {
     try { options.onDiagnostic?.(code); } catch { /* advisory only */ }
   };
   function invalidate(s) { s.generation++; s.revision++; sessions.delete(s.sid); }
+  const activeOwned = (s) => ['root', 'pending', 'new'].includes(s.ownership) &&
+    s.started && !s.result && !s.interrupted && (!s.terminal || s.verifying.size > 0);
   function state(sid) {
     if (sessions.has(sid)) {
       const existing = sessions.get(sid);
@@ -42,8 +44,8 @@ export function createV2Observer(options) {
     if (sessions.size === maxSessions) {
       const records = [...sessions.values()];
       const victim = records.find((s) => s.ownership === 'rejected' || s.ownership === 'child') ??
-        records.find((s) => !(s.started && !s.result && !s.interrupted) && !s.verifying.size) ?? records[0];
-      if (victim.started && !victim.result && !victim.interrupted) diag('session_capacity');
+        records.find((s) => !activeOwned(s) && !s.verifying.size) ?? records[0];
+      if (activeOwned(victim)) diag('session_capacity');
       invalidate(victim);
     }
     const s = { sid, generation: 0, ownership: 'new', epoch: 0, revision: 0, started: false,

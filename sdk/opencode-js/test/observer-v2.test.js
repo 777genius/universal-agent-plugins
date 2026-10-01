@@ -271,3 +271,38 @@ test('active root survives 512 global child sessions', async () => {
   assert.equal(h.facts[0].kind, 'turn_idle_verified');
   h.observer.dispose();
 });
+
+// Regression: started foreign records consume the once-only active-loss diagnostic.
+test('evicting started foreign work does not report lost active capacity', async () => {
+  const h = harness({ config: { maxSessions: 2 }, get: async (input) => ({ id: input.sessionID,
+    location: input.sessionID === 'session' ? own : { directory: '/TEST-foreign' } }) });
+  h.begin(); await tick();
+  h.event('session.execution.started', { sessionID: 'foreign' }); await tick();
+  h.event('session.created', { sessionID: 'other' }); await tick();
+  h.finish(); await tick();
+  assert.equal(h.facts.length, 1);
+  assert.equal(h.diagnostics.includes('session_capacity'), false);
+  h.observer.dispose();
+});
+
+// Regression: unverified execution records outrank a live owned root at the bound.
+test('active root survives 512 started unverified sessions', async () => {
+  const h = harness({ get: async (input) => input.sessionID === 'session' ? { id: input.sessionID, location: own } : undefined });
+  h.begin(); await tick();
+  for (let i = 0; i < 512; i++) {
+    h.event('session.execution.started', { sessionID: `unverified${i}` }); await tick();
+  }
+  h.finish(); await tick();
+  assert.equal(h.facts.length, 1);
+  assert.equal(h.diagnostics.includes('session_capacity'), false);
+  h.observer.dispose();
+});
+
+// Regression: suppressing false capacity signals also hides real active eviction.
+test('unavoidable active root eviction reports capacity', async () => {
+  const h = harness({ config: { maxSessions: 1 } });
+  h.begin(); await tick();
+  h.event('session.created', { sessionID: 'another' }); await tick();
+  assert.equal(h.diagnostics.includes('session_capacity'), true);
+  h.observer.dispose();
+});
