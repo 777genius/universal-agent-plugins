@@ -82,6 +82,9 @@ func (r *reader) Close() error { return errors.Join(r.signal.Close(), r.wake.Clo
 
 func (r *reader) readSelect(p []byte) (int, error) {
 	input, wake := int(r.file.Fd()), int(r.wake.Fd())
+	if input < 0 || wake < 0 {
+		return 0, os.ErrClosed
+	}
 	if input >= unix.FD_SETSIZE || wake >= unix.FD_SETSIZE {
 		return 0, fmt.Errorf("virtual terminal descriptor exceeds select limit")
 	}
