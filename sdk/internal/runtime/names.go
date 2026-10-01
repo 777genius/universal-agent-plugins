@@ -32,6 +32,13 @@ func CanonicalInvocationName(platform PlatformID, raw string) string {
 		if strings.EqualFold(raw, "CursorStop") {
 			return "stop"
 		}
+	case "vscode-local":
+		switch {
+		case strings.EqualFold(raw, "VSCodeLocalStop"):
+			return "Stop"
+		case strings.EqualFold(raw, "VSCodeLocalSubagentStop"):
+			return "SubagentStop"
+		}
 	case "gemini":
 		switch {
 		case strings.EqualFold(raw, "GeminiSessionStart"):

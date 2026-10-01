@@ -50,7 +50,10 @@ func validateModel(m model) error {
 		if len(p.TransportModes) == 0 {
 			return fmt.Errorf("platform profile %s missing transport modes", p.Platform)
 		}
-		if p.Status != runtime.StatusDeferred {
+		if p.RuntimeOnly && (len(p.Scaffold.RequiredFiles) > 0 || len(p.Scaffold.TemplateFiles) > 0 || len(p.Validate.RequiredFiles) > 0) {
+			return fmt.Errorf("runtime-only platform profile %s has authoring metadata", p.Platform)
+		}
+		if p.Status != runtime.StatusDeferred && !p.RuntimeOnly {
 			if len(p.Scaffold.RequiredFiles) == 0 || len(p.Scaffold.TemplateFiles) == 0 {
 				return fmt.Errorf("platform profile %s missing scaffold metadata", p.Platform)
 			}

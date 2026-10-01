@@ -8,6 +8,12 @@ The format is inspired by Keep a Changelog; versions follow SemVer. This unrelea
 
 ### Added
 
+- VS Code Local Stop/SubagentStop observers (`public-beta`) with
+  `App.VSCodeLocal()`, typed presence-preserving input and neutral `{}` output
+  through the existing `RunContext` engine. Runtime `vscode-local` stays separate
+  from installer `vscode` and Notifications `copilot-vscode`. This library slice
+  does not qualify an installed integration or executable release.
+
 - Cursor native `stop` observer (`public-beta`): descriptor-generated `CursorStop`
   registrar/metadata, documented DTO with pointer presence, empty response,
   `App.Cursor()` and opt-in `App.RunCursorObserver(ctx)` with owned Linux/macOS

@@ -12,6 +12,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/sdk/internal/descriptors/gen"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime/process"
+	"github.com/777genius/plugin-kit-ai/sdk/vscodelocal"
 )
 
 // Use appends middleware that wraps all subsequent handler dispatch.
@@ -45,6 +46,12 @@ func (a *App) Gemini() *gemini.Registrar {
 // Cursor returns a registrar for the beta native stop observer.
 func (a *App) Cursor() *cursor.Registrar {
 	return cursor.NewRegistrar(registrarBackend{app: a})
+}
+
+// VSCodeLocal returns a registrar for beta Local Stop/SubagentStop observers.
+// This optional runtime API does not qualify native installation or availability.
+func (a *App) VSCodeLocal() *vscodelocal.Registrar {
+	return vscodelocal.NewRegistrar(registrarBackend{app: a})
 }
 
 // Run dispatches the current process invocation with context.Background().
