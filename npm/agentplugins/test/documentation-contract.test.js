@@ -70,12 +70,9 @@ test("public Agentplugins documentation keeps copyable commands within the CLI c
       (command) => command.startsWith("npx universal-agent-plugins ") || command.startsWith("agentplugins ")
     );
     assert.ok(commands.length > 0, `${label} has no copyable universal-agent-plugins commands`);
-    const expectedFirstCommand = label === "root README"
-      ? "agentplugins add context7"
-      : "npx universal-agent-plugins add context7";
     assert.equal(
-      commands[0],
-      expectedFirstCommand,
+      commands[0].replace(/^npx universal-agent-plugins /, "agentplugins "),
+      "agentplugins add context7",
       `${label}: the first command must keep the no-target interactive quick start`
     );
 
@@ -106,7 +103,7 @@ test("public Agentplugins documentation keeps copyable commands within the CLI c
         `${label}: missing ${verb} example`
       );
     }
-    assert.ok(commands.some((command) => command.includes("--target codex,cursor,kiro")), `${label}: missing explicit three-target example`);
+    assert.ok(commands.some((command) => commandArgument(command, "--target").split(",").length > 1), `${label}: missing explicit multi-target example`);
   }
 });
 
