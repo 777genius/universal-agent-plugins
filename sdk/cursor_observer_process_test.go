@@ -121,7 +121,7 @@ func TestCursorObserverProcess(t *testing.T) {
 		{"panic", "panic", cursorInput, true},
 		{"callback error", "error", cursorInput, true},
 		{"cooperative cancellation", "cooperative", cursorInput, true},
-		{"canceled context", "cancelled", cursorInput, false},
+		{"canceled context", "canceled", cursorInput, false},
 		{"malformed", "normal", `{"conversation_id":`, false},
 		{"oversize", "normal", strings.Repeat("x", pluginkitai.MaxPayloadBytes+1), false},
 		{"trailing value", "normal", cursorInput + ` {}`, false},

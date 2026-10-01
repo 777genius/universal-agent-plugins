@@ -99,7 +99,7 @@ func main() {
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
 	defer cancel()
-	if mode == "cancelled" {
+	if mode == "canceled" || mode == "cancelled" {
 		cancel()
 	}
 	if mode == "cancel-reading" {
