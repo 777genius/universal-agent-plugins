@@ -9,9 +9,10 @@ import (
 )
 
 type HuhPrompter struct {
-	Input   io.Reader
-	Output  io.Writer
-	NoColor bool
+	Input    io.Reader
+	Output   io.Writer
+	NoColor  bool
+	terminal *installerui.Terminal
 }
 
 // RichReview preserves the host's structured install review policy.
@@ -27,7 +28,7 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 	if p.Input == nil || p.Output == nil {
 		return prompt.TargetSelectionResult{}, prompt.ErrPromptUnavailable
 	}
-	t, err := terminalUI(p.Input, p.Output, installerui.ModeRich, p.NoColor)
+	t, err := p.ui()
 	if err != nil {
 		return prompt.TargetSelectionResult{}, err
 	}
@@ -52,10 +53,19 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 	if p.Input == nil || p.Output == nil {
 		return prompt.ConfirmationResult{}, prompt.ErrPromptUnavailable
 	}
-	t, err := terminalUI(p.Input, p.Output, installerui.ModeRich, p.NoColor)
+	t, err := p.ui()
 	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
 	result, err := t.Confirm(ctx, confirmationRequest(r))
 	return confirmationResult(result, err)
+}
+
+// A factory-created adapter keeps the same UI mode across sequential prompts.
+// Its renderer reflows after resize without repeating constructor eligibility.
+func (p HuhPrompter) ui() (*installerui.Terminal, error) {
+	if p.terminal != nil {
+		return p.terminal, nil
+	}
+	return terminalUI(p.Input, p.Output, installerui.ModeRich, p.NoColor)
 }

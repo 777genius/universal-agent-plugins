@@ -17,6 +17,7 @@ import time
 from types import SimpleNamespace
 
 from harness import check
+import re
 
 UNIX_CASES = ['huh-cancel', 'plain-cancel', 'huh-write-error',
               'huh-write-short', 'huh-render-panic', 'huh-init-error']
@@ -93,10 +94,15 @@ def windows_case(binary, case, root, evidence, timeout):
     env = {key: str(root) for key in ('HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TMP', 'TEMP')}
     env.update(SystemRoot=os.environ['SystemRoot'], WINDIR=os.environ['SystemRoot'],
                PATH=str(root), UAP_QUALIFICATION_CASE=case)
+    public_consent = case == 'windows-consent-boundary'
+    if public_consent:
+        env['AGENTPLUGINS_WINDOWS_CONSENT_PROOF'] = '1'
+    test_filter = ('^TestWindows(ConsoleConsentBoundary|ConsentSnapshotOverflow)$'
+                   if public_consent else '^TestQualificationConsoleCancellation$')
     status_path = evidence / 'status.json'
     config_path = evidence / 'job.json'
     config_path.write_text(json.dumps(dict(
-        argv=[str(binary), '-test.run=^TestQualificationConsoleCancellation$',
+        argv=[str(binary), '-test.run=' + test_filter,
               '-test.v', '-test.timeout=45s'], cwd=str(root), nonce=nonce,
         status=str(status_path))), encoding='utf-8')
     session = ConPTY([sys.executable, '-I', str(Path(__file__).with_name('windows_job.py')),
@@ -106,15 +112,23 @@ def windows_case(binary, case, root, evidence, timeout):
     try:
         session.wait('OWNER_READY_' + nonce)
         offset = 0
-        for i in range(30):
+        for i in range(0 if public_consent else 30):
             offset = session.wait(r'QUALIFICATION_CONSOLE_REUSE_READY ' + str(i) + r'\b', after=offset, child_nonce=nonce)
             # One Enter only: CRLF input injection can enqueue a second empty
             # line and invalidate the next cancellation-entry sample.
             session.send(('qualification-reuse-' + str(i) + '\r').encode())
-        session.wait(r'QUALIFICATION_CONSOLE_OK', after=offset, child_nonce=nonce, child_final=True)
+        if not public_consent:
+            session.wait(r'QUALIFICATION_CONSOLE_OK', after=offset, child_nonce=nonce, child_final=True)
         session.wait('RESTORE_READY_' + nonce)
         status = json.loads(status_path.read_text(encoding='utf-8'))
         check(status['exit'] == 0, 'native console helper failed: ' + repr(status))
+        if public_consent:
+            transcript = clean(session.raw)
+            for name in ('TestWindowsConsoleConsentBoundary', 'TestWindowsConsentSnapshotOverflow'):
+                check(re.search(r'--- PASS: ' + name + r'\b', transcript),
+                      'required native consent test did not pass: ' + name)
+            check('--- SKIP:' not in transcript and 'no tests to run' not in transcript,
+                  'skipped or unmatched native consent tests cannot qualify')
         check(status['owner_before'] == status['owner_after'], 'console state changed after cancellation sweep')
         offset = len(session.raw)
         session.send(('line_' + nonce + '\r').encode())
@@ -129,7 +143,8 @@ def windows_case(binary, case, root, evidence, timeout):
     finally:
         finish_console(session, status_path, evidence)
     check(not session.forced, 'forced cleanup cannot qualify as a pass')
-    return {'native_console': True, 'cancellation_and_reuse_iterations': 30,
+    return {'native_console': True, 'cancellation_and_reuse_iterations': 0 if public_consent else 30,
+            'public_consent_boundary_and_overflow': public_consent,
             'owner_restoration_and_reuse': True}
 
 
@@ -144,7 +159,7 @@ def main():
     args.artifacts.mkdir(parents=True, exist_ok=True)
     artifacts = args.artifacts.resolve()
     native_windows = os.name == 'nt'
-    allowed = ['windows-console-cancel'] if native_windows else UNIX_CASES
+    allowed = ['windows-console-cancel', 'windows-consent-boundary'] if native_windows else UNIX_CASES
     cases = args.case or allowed
     check(all(c in allowed for c in cases), 'case is not supported on this native host')
     binary = artifacts / ('qualification.test.exe' if native_windows else 'qualification.test')
@@ -156,15 +171,26 @@ def main():
     check(build.returncode == 0, 'test helper build failed; see build.log')
     results = {'platform': platform.platform(), 'test_binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
                'build_command': command, 'test_only': True, 'cases': []}
+    consent_binary = None
+    if native_windows and 'windows-consent-boundary' in cases:
+        consent_binary = artifacts / 'qualification-consent.test.exe'
+        consent_command = [args.go, 'test', '-c', '-o', str(consent_binary), './installerui']
+        consent_build = subprocess.run(consent_command, cwd=repo / 'cli', stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, text=True, timeout=180)
+        (artifacts / 'consent-build.log').write_text(consent_build.stdout)
+        check(consent_build.returncode == 0, 'public consent helper build failed; see consent-build.log')
+        results['consent_build_command'] = consent_command
     for case in cases:
+        case_binary = consent_binary if case == 'windows-consent-boundary' else binary
         evidence = artifacts / case
         evidence.mkdir(exist_ok=True)
-        row = {'case': case, 'passed': False}
+        row = {'case': case, 'passed': False,
+               'test_binary_sha256': hashlib.sha256(case_binary.read_bytes()).hexdigest()}
         started = time.monotonic()
         try:
             with tempfile.TemporaryDirectory(prefix='uap-qualification-fault-') as temp:
                 runner = windows_case if native_windows else unix_case
-                row.update(runner(binary, case, Path(temp), evidence, args.timeout))
+                row.update(runner(case_binary, case, Path(temp), evidence, args.timeout))
             row['passed'] = True
         except Exception as exc:
             row['error'] = repr(exc)

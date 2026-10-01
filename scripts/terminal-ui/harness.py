@@ -78,7 +78,7 @@ def cancel_empty_selection(session, fixture, confirmation):
     # Include every byte from before the invalid submit through cancellation drain.
     offset = len(session.raw)
     session.send(selection_keys(session.raw, set()))
-    session.wait(r'(?i)(at least one|select one|cannot be empty|must select)',
+    session.wait(r'(?i)(at least (?:one|1\b)|select one|cannot be empty|must select)',
                  'empty-validation', after=offset)
     fixture.unchanged()
     session.send(b'\x1b')

@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/777genius/plugin-kit-ai/cli/installerui"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"golang.org/x/term"
@@ -56,7 +57,11 @@ func New(input io.Reader, output, errorOutput io.Writer, plain, noColor bool) (p
 		visible = errorOutput
 	}
 	if mode == Rich {
-		return HuhPrompter{Input: input, Output: terminaltheme.Unwrap(visible), NoColor: noColor}, visible, nil
+		t, err := terminalUI(input, visible, installerui.ModeRich, noColor)
+		if err != nil {
+			return nil, nil, err
+		}
+		return HuhPrompter{Input: input, Output: terminaltheme.Unwrap(visible), NoColor: noColor, terminal: t}, visible, nil
 	}
 	policy := &terminaltheme.Policy{Mode: "always", Explicit: true}
 	if noColor {
