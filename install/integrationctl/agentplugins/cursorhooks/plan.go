@@ -93,7 +93,7 @@ func requested(req Request, old hujson.Value) (hujson.Value, HookSpec, error) {
 	}
 	entry, err := desiredEntry(req.Shell, specs[0])
 	if err == nil && req.Operation == Repair && valueDigest("stop-entry", entry) != valueDigest("stop-entry", old) {
-		err = fmt.Errorf("Repair requires fixed prior specification")
+		err = fmt.Errorf("repair requires fixed prior specification")
 	}
 	return entry, specs[0], err
 }

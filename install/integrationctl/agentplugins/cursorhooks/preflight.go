@@ -47,9 +47,10 @@ func preflight(body []byte) error {
 
 func stringEnd(body []byte, start int) int {
 	for i := start + 1; i < len(body); i++ {
-		if body[i] == '\\' {
+		switch body[i] {
+		case '\\':
 			i++
-		} else if body[i] == '"' {
+		case '"':
 			return i
 		}
 	}

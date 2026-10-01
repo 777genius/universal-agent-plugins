@@ -119,9 +119,9 @@ func stringIdentity(s hujson.Literal) string {
 			}
 		}
 		if r > 0xffff {
-			hi, lo := utf16.EncodeRune(r)
-			add(uint16(hi))
-			add(uint16(lo))
+			for _, u := range utf16.Encode([]rune{r}) {
+				add(u)
+			}
 		} else {
 			add(uint16(r))
 		}
