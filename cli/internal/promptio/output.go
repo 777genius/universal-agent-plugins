@@ -4,9 +4,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"golang.org/x/term"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 )
 
 // VisibleOutput keeps inherited file-backed questions out of redirected logs.
@@ -20,7 +20,7 @@ func VisibleOutput(primary, alternate io.Writer) (io.Writer, error) {
 		if f, ok := terminaltheme.Unwrap(alternate).(*os.File); ok && term.IsTerminal(int(f.Fd())) {
 			return alternate, nil
 		}
-		return nil, prompt.ErrPromptUnavailable
+		return nil, ErrUnavailable
 	}
 	return primary, nil
 }

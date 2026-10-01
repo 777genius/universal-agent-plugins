@@ -1,4 +1,4 @@
-package terminalprompts
+package installerui
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 )
 
@@ -117,11 +116,11 @@ func resourceSession(t *testing.T, adapter, kind string) {
 		}
 		output = fault
 	}
-	var p prompt.Prompter = PlainPrompter{Input: r, Output: output}
+	var p testPrompter = testPlain{Input: r, Output: output}
 	if adapter == "huh" {
-		p = HuhPrompter{Input: r, Output: output, NoColor: true}
+		p = testRich{Input: r, Output: output, NoColor: true}
 	}
-	got, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Resource fixture?"})
+	got, err := p.Confirm(ctx, ConfirmRequest{Title: "Resource fixture?"})
 	var want error
 	switch kind {
 	case "cancel":
@@ -129,7 +128,7 @@ func resourceSession(t *testing.T, adapter, kind string) {
 	case "writer":
 		want = io.ErrClosedPipe
 	case "eof":
-		want = prompt.ErrPromptInputClosed
+		want = io.EOF
 	}
 	if got.Accepted || !errors.Is(err, want) {
 		t.Fatalf("%s/%s: result=%+v err=%v want=%v", adapter, kind, got, err, want)

@@ -1,4 +1,4 @@
-package terminalprompts
+package installerui
 
 import (
 	"context"

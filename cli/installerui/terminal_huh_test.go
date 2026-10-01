@@ -1,8 +1,9 @@
-package terminalprompts
+package installerui
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -13,8 +14,6 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestFormWindowSizeMessages(t *testing.T) {
@@ -41,7 +40,7 @@ func TestFormWindowSizeMessages(t *testing.T) {
 // Both implementations must discard values when canceled, closed or unable to
 // show their question. PTY tests separately exercise rich keyboard submission.
 func TestAdapterErrorContract(t *testing.T) {
-	req := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Cursor"}}, DefaultIDs: []domain.ClientID{"cursor"}}
+	req := MultiSelectRequest{SelectRequest: SelectRequest{Title: "Choose targets", Options: []Option{{ID: "cursor", Label: "Cursor"}}, Defaults: []string{"cursor"}}, MinSelected: 1}
 	for _, name := range []string{"plain", "huh"} {
 		t.Run(name, func(t *testing.T) {
 			for _, kind := range []string{"canceled", "writer", "eof"} {
@@ -56,15 +55,15 @@ func TestAdapterErrorContract(t *testing.T) {
 					if kind == "writer" {
 						output = broken{}
 					}
-					var p prompt.Prompter = PlainPrompter{input, output}
+					var p testPrompter = testPlain{input, output}
 					if name == "huh" {
-						p = HuhPrompter{Input: input, Output: output}
+						p = testRich{Input: input, Output: output}
 					}
-					result, err := p.SelectTargets(ctx, req)
+					result, err := p.SelectMany(ctx, req)
 					if err == nil || result.IDs != nil {
 						t.Fatal(result, err)
 					}
-					accepted, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply?"})
+					accepted, err := p.Confirm(ctx, ConfirmRequest{Title: "Apply?"})
 					if err == nil || accepted.Accepted {
 						t.Fatal(accepted, err)
 					}
@@ -89,26 +88,32 @@ func TestHuhKeysRequireSubmitAndCancel(t *testing.T) {
 	}
 }
 func TestSubmissionReaderPreservesQueuedAnswer(t *testing.T) {
-	input := strings.NewReader("\rnext\n")
-	r := newSubmissionReader(context.Background(), input)
-	var b [8]byte
-	if n, e := r.Read(b[:]); n != 1 || e != nil || b[0] != '\r' {
-		t.Fatal(n, e)
-	}
-	done := make(chan error, 1)
-	go func() { _, e := r.Read(b[:]); done <- e }()
-	r.finish()
-	select {
-	case e := <-done:
-		if e == nil {
-			t.Fatal("read crossed submit")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("read hung")
-	}
-	rest, _ := io.ReadAll(input)
-	if string(rest) != "next\n" {
-		t.Fatal(string(rest))
+	for _, enter := range []string{"\r", "\x1b[13u", "\x1b[13;1u"} {
+		t.Run(fmt.Sprintf("%x", enter), func(t *testing.T) {
+			input := strings.NewReader(enter + "next\n")
+			r := newSubmissionReader(context.Background(), input)
+			var b [8]byte
+			for _, want := range []byte(enter) {
+				if n, e := r.Read(b[:]); n != 1 || e != nil || b[0] != want {
+					t.Fatal(n, e, b)
+				}
+			}
+			done := make(chan error, 1)
+			go func() { _, e := r.Read(b[:]); done <- e }()
+			r.finish()
+			select {
+			case e := <-done:
+				if e == nil {
+					t.Fatal("read crossed submit")
+				}
+			case <-time.After(time.Second):
+				t.Fatal("read hung")
+			}
+			rest, _ := io.ReadAll(input)
+			if string(rest) != "next\n" {
+				t.Fatal(string(rest))
+			}
+		})
 	}
 }
 func TestSubmissionReaderRejectAndPaste(t *testing.T) {
@@ -141,8 +146,8 @@ func TestHuhCancelBlockedFile(t *testing.T) {
 	defer w.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	p := HuhPrompter{Input: r, Output: io.Discard}
-	result, e := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply?"})
+	p := testRich{Input: r, Output: io.Discard}
+	result, e := p.Confirm(ctx, ConfirmRequest{Title: "Apply?"})
 	if result.Accepted || !errors.Is(e, context.DeadlineExceeded) {
 		t.Fatal(result, e)
 	}
@@ -160,9 +165,9 @@ func TestHuhOutputFailureCancelsBlockedInput(t *testing.T) {
 	defer w.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	p := HuhPrompter{Input: r, Output: broken{}}
-	req := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Cursor"}}, DefaultIDs: []domain.ClientID{"cursor"}}
-	result, e := p.SelectTargets(ctx, req)
+	p := testRich{Input: r, Output: broken{}}
+	req := MultiSelectRequest{SelectRequest: SelectRequest{Title: "Choose targets", Options: []Option{{ID: "cursor", Label: "Cursor"}}, Defaults: []string{"cursor"}}, MinSelected: 1}
+	result, e := p.SelectMany(ctx, req)
 	if result.IDs != nil || !errors.Is(e, io.ErrClosedPipe) {
 		t.Fatal(result, e)
 	}
@@ -192,7 +197,7 @@ func TestHuhRendererFailureAfterQuestion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	out := &lateBrokenWriter{}
-	result, err := (HuhPrompter{Input: r, Output: out}).Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply?"})
+	result, err := (testRich{Input: r, Output: out}).Confirm(ctx, ConfirmRequest{Title: "Apply?"})
 	if result.Accepted || !errors.Is(err, io.ErrClosedPipe) || out.writes < 2 {
 		t.Fatal(result, err, out.writes)
 	}
@@ -212,7 +217,7 @@ func TestHuhClosedInputInitializationFails(t *testing.T) {
 	defer w.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	result, err := (HuhPrompter{Input: r, Output: io.Discard}).Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply?"})
+	result, err := (testRich{Input: r, Output: io.Discard}).Confirm(ctx, ConfirmRequest{Title: "Apply?"})
 	if err == nil || result.Accepted || errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(result, err)
 	}

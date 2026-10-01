@@ -1,4 +1,4 @@
-package terminalprompts
+package installerui
 
 // These helpers run only under scripts/terminal-ui/qualification_faults.py.
 // Inherited terminal descriptors remain owned by the runner throughout.
@@ -15,7 +15,6 @@ import (
 
 	"charm.land/huh/v2"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 )
 
@@ -72,14 +71,14 @@ func TestQualificationTerminalFault(t *testing.T) {
 		}
 	}()
 	defer func() { close(stop); <-joined }()
-	var p prompt.Prompter = HuhPrompter{Input: os.Stdin, Output: writer, NoColor: true}
+	var p testPrompter = testRich{Input: os.Stdin, Output: writer, NoColor: true}
 	if kind == "huh-cancel" {
-		p = HuhPrompter{Input: os.Stdin, Output: os.Stdout, NoColor: true}
+		p = testRich{Input: os.Stdin, Output: os.Stdout, NoColor: true}
 	}
 	if kind == "plain-cancel" {
-		p = PlainPrompter{Input: os.Stdin, Output: os.Stdout}
+		p = testPlain{Input: os.Stdin, Output: os.Stdout}
 	}
-	var result prompt.ConfirmationResult
+	var result Confirmation
 	var err error
 	if kind == "huh-init-error" {
 		// Call the production form runner directly so the failed output descriptor
@@ -90,9 +89,9 @@ func TestQualificationTerminalFault(t *testing.T) {
 		}
 		closed.Close()
 		field := huh.NewConfirm().Title("Apply qualification?").Value(&result.Accepted)
-		err = (HuhPrompter{Input: os.Stdin, Output: closed, NoColor: true}).run(ctx, huh.NewForm(huh.NewGroup(field)))
+		err = (terminalRenderer{Input: os.Stdin, Output: closed, NoColor: true}).run(ctx, huh.NewForm(huh.NewGroup(field)))
 	} else {
-		result, err = p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply qualification?"})
+		result, err = p.Confirm(ctx, ConfirmRequest{Title: "Apply qualification?"})
 	}
 	if result.Accepted || err == nil {
 		t.Fatalf("consent on fault: %+v, %v", result, err)
