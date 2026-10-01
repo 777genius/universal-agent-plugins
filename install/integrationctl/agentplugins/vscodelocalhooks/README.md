@@ -42,17 +42,18 @@ identity and maintain separate source/projection digests before writing.
 Limits are two distinct events, 64 arguments per invocation, 2,048 UTF-8 bytes
 per literal, 16,384 bytes per rendered command and 65,536 bytes per encoded JSON
 file. Verification bounds nesting to eight before the existing hujson parser
-allocates its AST. NUL and invalid UTF-8 are refused; Unix empty strings,
-newlines and other non-NUL controls remain fixed literals. Errors classify via
-`errors.Is` and do not echo supplied command values.
+allocates its AST. NUL, CR/LF and invalid UTF-8 are refused in executable paths
+and arguments; Unix empty strings and remaining non-NUL controls stay fixed
+literals. Errors classify via `errors.Is` and do not echo supplied command values.
 
 Unresolved `${PLUGIN_ROOT}`, `${PLUGIN_DATA}` and `${CLAUDE_PLUGIN_ROOT}` are
-explicitly refused even inside quoted arguments. Native plugin replacement
-precedes shell parsing, so quoting alone cannot protect those tokens. The
-existing UAP projector must expand declared references once against trusted
-active/data roots before rendering. No native root expansion has been admitted
-by this slice. Other dollar expressions, backticks and shell operators remain
-literal Unix argv, as proved with a real `/bin/sh` recorder.
+explicitly refused even inside quoted arguments by this library's fixed-projection
+contract. The standard AgentPlugin namespace parses hooks without legacy
+plugin-root interpolation. The existing UAP projector must resolve declared
+references once against trusted active/data roots before rendering. No native
+root expansion has been admitted by this slice. Other dollar expressions,
+backticks and shell operators remain literal Unix argv, as proved with a real
+`/bin/sh` recorder.
 
 The source contract is pinned to VS Code **1.140.0**, commit
 [`07f806f999227108933c2e30515b26eecc1fda74`](https://github.com/microsoft/vscode/tree/07f806f999227108933c2e30515b26eecc1fda74).
@@ -68,6 +69,9 @@ Relevant public sources at that commit:
   flat extraction. Native accepts broader forms than this authored contract.
 - [`hookTypes.ts`](https://github.com/microsoft/vscode/blob/07f806f999227108933c2e30515b26eecc1fda74/src/vs/workbench/contrib/chat/common/promptSyntax/hookTypes.ts):
   Local PascalCase versus separate CLI naming.
+- [`pluginParsers.ts`](https://github.com/microsoft/vscode/blob/07f806f999227108933c2e30515b26eecc1fda74/src/vs/platform/agentPlugins/common/pluginParsers.ts):
+  Standard AgentPlugin parsing passes hooks directly to `parseHooksJson`;
+  legacy Claude/OpenPlugin root interpolation is a separate contract.
 
 The supplied prior native Linux spike genuinely selected a public synthetic
 language-model provider after anonymous setup, completed one Local response,

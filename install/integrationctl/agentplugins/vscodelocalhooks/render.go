@@ -83,12 +83,12 @@ func Render(target Target, specs []Spec) ([]byte, error) {
 }
 
 func validateLiteral(value string) error {
-	if len(value) > MaxLiteralBytes || !utf8.ValidString(value) || strings.ContainsRune(value, 0) {
-		return fmt.Errorf("%w: literal byte limit, UTF-8 or NUL", ErrInvalid)
+	if len(value) > MaxLiteralBytes || !utf8.ValidString(value) || strings.ContainsAny(value, "\x00\r\n") {
+		return fmt.Errorf("%w: literal byte limit, UTF-8, NUL or CR/LF", ErrInvalid)
 	}
-	// The native plugin parser replaces these tokens before shell evaluation,
-	// including inside quotes. Reject even literal appearances rather than
-	// promising that shell quoting prevents native replacement.
+	// The fixed-projection contract requires the caller to resolve declared
+	// root/data references once. The standard AgentPlugin namespace does not
+	// perform legacy plugin-root interpolation, even inside quotes.
 	for _, token := range []string{"${PLUGIN_ROOT}", "${PLUGIN_DATA}", "${CLAUDE_PLUGIN_ROOT}"} {
 		if strings.Contains(value, token) {
 			return fmt.Errorf("%w: resolve portable/native placeholders before rendering", ErrUnsupported)

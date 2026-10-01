@@ -26,7 +26,7 @@ func windowsAbsolute(value string) bool {
 	if validateLiteral(value) != nil || len(value) < 4 || value[1:3] != `:\` {
 		return false
 	}
-	if !((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) {
+	if (value[0] < 'A' || value[0] > 'Z') && (value[0] < 'a' || value[0] > 'z') {
 		return false
 	}
 	if strings.ContainsAny(value[3:], `/:*?"<>|`) {

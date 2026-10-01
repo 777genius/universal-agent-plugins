@@ -82,7 +82,7 @@ func TestRefuseUnsupportedInputs(t *testing.T) {
 			t.Fatalf("target accepted or wrong error: %+v, %v", target, err)
 		}
 	}
-	for _, value := range []string{"", "embedded\"quote", `trailing\`, "newline\n", "tab\t", "control\x01", "delete\x7f"} {
+	for _, value := range []string{"", "embedded\"quote", `trailing\`, "tab\t", "control\x01", "delete\x7f"} {
 		if _, err := hooks.RenderArgv(windows(), `C:\TEST\runtime.exe`, []string{value}); !errors.Is(err, hooks.ErrUnsupported) {
 			t.Fatalf("Windows argument accepted: %q, %v", value, err)
 		}
@@ -96,6 +96,40 @@ func TestRefuseUnsupportedInputs(t *testing.T) {
 		if _, err := hooks.RenderArgv(linux(), executable, nil); !errors.Is(err, hooks.ErrInvalid) {
 			t.Fatalf("Unix executable accepted: %q, %v", executable, err)
 		}
+	}
+}
+
+// Red: CR/LF in either literal position is accepted, produces output, or leaks
+// a supplied value through a classified refusal at any public boundary.
+func TestRefuseLineBreakLiterals(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		target     hooks.Target
+		executable string
+		args       []string
+	}{
+		{"LF argument", linux(), "/TEST/runtime", []string{"TEST-private-sentinel\nbreak"}},
+		{"CR argument", linux(), "/TEST/runtime", []string{"TEST-private-sentinel\rreturn"}},
+		{"LF executable", linux(), "/TEST/private-sentinel\ntime", nil},
+		{"CR executable", linux(), "/TEST/private-sentinel\rtime", nil},
+		{"Windows LF argument", windows(), `C:\TEST\runtime.exe`, []string{"newline\n"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			spec := hooks.Spec{Event: hooks.Stop, Executable: test.executable, Args: test.args, TimeoutSeconds: 5}
+			command, argvErr := hooks.RenderArgv(test.target, test.executable, test.args)
+			body, renderErr := hooks.Render(test.target, []hooks.Spec{spec})
+			verifyErr := hooks.VerifyOwned([]byte(authored), test.target, []hooks.Spec{spec})
+			for _, err := range []error{argvErr, renderErr, verifyErr} {
+				if !errors.Is(err, hooks.ErrInvalid) {
+					t.Errorf("line break accepted or wrong classification: %v", err)
+				} else if strings.Contains(err.Error(), "private-sentinel") || strings.Contains(err.Error(), "newline") {
+					t.Error("refusal leaked supplied literal")
+				}
+			}
+			if command != "" || len(body) != 0 {
+				t.Error("refused literal produced executable output")
+			}
+		})
 	}
 }
 

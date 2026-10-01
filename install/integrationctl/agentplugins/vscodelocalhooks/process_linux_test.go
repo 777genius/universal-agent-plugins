@@ -49,12 +49,13 @@ func TestTESTShellArgvProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	recorder := filepath.Join(root, "TEST ü recorder's $ [brackets] `ticks`; \"quotes\" \\slash\n\x01")
+	recorder := filepath.Join(root, "TEST ü recorder's $ [brackets] `ticks`; \"quotes\" \\slash\x01")
 	copyTestExecutable(t, recorder)
 	sentinel := filepath.Join(root, "TEST-INJECTION-MUST-NOT-EXIST")
 	values := []string{
 		"", "spaces and\ttab", "apostrophe's value", "unicode-ü-中文-😀", "$TEST_LITERAL", "${HOME}",
-		"[a-z]*?", "back`tick", ";semicolon", "double\"quote", "back\\slash", "end\\", "line\nbreak", "carriage\rreturn", "control\x01\x1b\x7f",
+		"[a-z]*?", "back`tick", ";semicolon", "double\"quote", "back\\slash", "end\\", "control\x01\x1b\x7f",
+		"NFC-é", "NFD-e\u0301", "%TEST_LITERAL%", "!TEST_LITERAL!", "a&b",
 		"$(/usr/bin/touch '" + sentinel + "')", "`/usr/bin/touch '" + sentinel + "'`",
 		"'; /usr/bin/touch '" + sentinel + "'; '",
 		"$SHELL", "~/.config", "--looks-like-a-flag", home,

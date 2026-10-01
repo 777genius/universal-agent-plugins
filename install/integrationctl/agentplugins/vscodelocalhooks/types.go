@@ -59,5 +59,5 @@ const (
 var (
 	ErrInvalid     = errors.New("invalid Local hook input")
 	ErrUnsupported = errors.New("unsupported Local hook representation")
-	ErrNotOwned    = errors.New("Local hook file differs from fixed authored entries")
+	ErrNotOwned    = errors.New("local hook file differs from fixed authored entries")
 )

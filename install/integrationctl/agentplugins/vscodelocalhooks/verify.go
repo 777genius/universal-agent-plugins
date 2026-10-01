@@ -42,36 +42,9 @@ func VerifyOwned(body []byte, target Target, specs []Spec) error {
 func sameAuthoredValue(actual, expected hujson.ValueTrimmed) bool {
 	switch want := expected.(type) {
 	case *hujson.Object:
-		got, ok := actual.(*hujson.Object)
-		if !ok || len(got.Members) != len(want.Members) {
-			return false
-		}
-		members := make(map[string]hujson.ValueTrimmed, len(got.Members))
-		for _, member := range got.Members {
-			key := member.Name.Value.(hujson.Literal).String()
-			if _, duplicate := members[key]; duplicate {
-				return false
-			}
-			members[key] = member.Value.Value
-		}
-		for _, member := range want.Members {
-			key := member.Name.Value.(hujson.Literal).String()
-			if !sameAuthoredValue(members[key], member.Value.Value) {
-				return false
-			}
-		}
-		return true
+		return sameAuthoredObject(actual, want)
 	case *hujson.Array:
-		got, ok := actual.(*hujson.Array)
-		if !ok || len(got.Elements) != len(want.Elements) {
-			return false
-		}
-		for i := range want.Elements {
-			if !sameAuthoredValue(got.Elements[i].Value, want.Elements[i].Value) {
-				return false
-			}
-		}
-		return true
+		return sameAuthoredArray(actual, want)
 	case hujson.Literal:
 		got, ok := actual.(hujson.Literal)
 		if !ok {
@@ -84,6 +57,41 @@ func sameAuthoredValue(actual, expected hujson.ValueTrimmed) bool {
 		return gotValue == wantValue
 	}
 	return false
+}
+
+func sameAuthoredObject(actual hujson.ValueTrimmed, want *hujson.Object) bool {
+	got, ok := actual.(*hujson.Object)
+	if !ok || len(got.Members) != len(want.Members) {
+		return false
+	}
+	members := make(map[string]hujson.ValueTrimmed, len(got.Members))
+	for _, member := range got.Members {
+		key := member.Name.Value.(hujson.Literal).String()
+		if _, duplicate := members[key]; duplicate {
+			return false
+		}
+		members[key] = member.Value.Value
+	}
+	for _, member := range want.Members {
+		key := member.Name.Value.(hujson.Literal).String()
+		if !sameAuthoredValue(members[key], member.Value.Value) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameAuthoredArray(actual hujson.ValueTrimmed, want *hujson.Array) bool {
+	got, ok := actual.(*hujson.Array)
+	if !ok || len(got.Elements) != len(want.Elements) {
+		return false
+	}
+	for i := range want.Elements {
+		if !sameAuthoredValue(got.Elements[i].Value, want.Elements[i].Value) {
+			return false
+		}
+	}
+	return true
 }
 
 // Bound parsing before allocating an AST. JSON validity is supplied by the
