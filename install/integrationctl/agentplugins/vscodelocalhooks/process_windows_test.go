@@ -79,6 +79,8 @@ func TestTESTWindowsPowerShell51Process(t *testing.T) {
 		"SystemRoot=" + systemRoot, "ComSpec=" + target.ComSpec, "HOME=" + home, "USERPROFILE=" + profile,
 		"APPDATA=" + home, "LOCALAPPDATA=" + profile, "TEMP=" + root, "TMP=" + root, "PATH=C:\\TEST-no-PATH",
 		"POWERSHELL_UPDATECHECK=Off", "U2_TEST_WINDOWS_RECORDER=1", "U2_TEST_RECORD=" + record,
+		// PS5.1 recognizes native executable extensions through PATHEXT.
+		"PATHEXT=.EXE",
 		"TEST_LITERAL=TEST-expansion-would-be-a-defect",
 	}
 	// The same exact system executable is probed separately so the public rendered
