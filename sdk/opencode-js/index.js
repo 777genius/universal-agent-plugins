@@ -214,3 +214,5 @@ export function createObserver(options) {
   }
   return { observe };
 }
+
+export { createV2Observer } from './observer-v2.js';

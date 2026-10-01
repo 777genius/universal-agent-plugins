@@ -50,3 +50,56 @@ and terminal error. The error run also emitted a native idle, without a false
 completion fact. `universal-agent-plugins-opencode-events` is a standalone npm package.
 The source probe alone does not qualify the published package artifact,
 Notifications delivery, lifecycle, or other operating systems.
+
+## Native OpenCode V2
+
+`createV2Observer({client, location, emit})` is additive. Its structural client
+receives native `ctx.session` with bare-value `get({sessionID})` and
+`context({sessionID})`; no V1 methods or V2 plugin runtime dependency
+are required. The exact V1 SDK peer is optional for V2 JavaScript consumers;
+V1 TypeScript consumers still install the pinned SDK for the public native alias.
+
+```js
+import { createV2Observer } from 'universal-agent-plugins-opencode-events';
+const observer = createV2Observer({ client: ctx.session,
+  location: ctx.location, emit: forward });
+// Pass each native envelope directly, without awaiting external delivery.
+observer.observe(event);
+// The subscription owner also closes its native iterator on cleanup.
+observer.dispose();
+```
+
+V2 recognizes native inbox/execution/step/retry/compaction, question forms,
+permission requests and their resolutions. It emits only the four actionable
+wire v1 facts for authoritatively verified root sessions. Global plugin bus
+subscriptions receive other locations, so both directory and optional workspaceID
+must match the observer owner and native session lookup. Moves/deletion fence
+old ownership before filtering foreign events. No history is replayed at startup.
+
+Completion means the latest delivered user input and final primary assistant
+settled successfully for an observed native busy period. Coalesced queued inputs
+can produce one completion. A successful execution alone or a finished tool
+step cannot produce completion: the live final stop must match current context,
+including completed time and no error, no later continuation, unresolved request,
+retry or interruption. V2 idle control rows can follow the answer. Compaction
+can remove the visible user only when the observer retained live delivery and
+compaction continuity in the same work epoch. Terminal execution failure is
+separate from retry, step failure and cancellation. Requests resolved during a
+lookup never emit afterward.
+
+Metadata reduction is synchronous; ownership verification and delivery proceed
+in the background. Defaults are 512 session records, 64 admissions/pending
+requests per session, 16 **actual outstanding host calls per observer**, and a
+2-second soft timeout (clamped to 100-10000 ms). Context rejects more than 4096
+rows and copies metadata only. Native context has no server-side row limit,
+so these limits do not bound network bytes. OpenCode 2.0.0 ignores the optional
+signal: timing out or disposing does not release an actual slot until the host
+Promise settles. Saturation fails closed without a retry queue.
+
+Dispose immediately fences late results, clears timers, and does not wait for
+hung calls. It cannot cancel an external callback already admitted. Semantic
+admission happens before emit; callback failure, timeout or capacity never
+retries that fact. Deduplication is process-local and bounded, not durable
+exactly-once delivery. Diagnostics use fixed codes and carry no native bodies,
+paths or identifiers. Native qualification and platform support belong to the
+consumer's exact installed artifact evidence, not this SDK's contract tests.
