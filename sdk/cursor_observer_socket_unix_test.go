@@ -11,12 +11,25 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	pluginkitai "github.com/777genius/plugin-kit-ai/sdk"
 )
+
+// Red: a shared SDK name syscall constant is unavailable on Linux/386, breaking
+// historical pipe users before they can invoke any public SDK API.
+func TestCursorObserverLinux386Build(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin/go"), "build", "-p=2", ".", "./cursor")
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=386", "CGO_ENABLED=0")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Linux/386 public SDK build: %v\n%s", err, output)
+	}
+}
 
 // Node/libuv's anonymous stream socketpairs are inherited as real stdio, not
 // injected IO. Red on the pipe-only public SDK: no callback, no response, exit 1.
@@ -226,6 +239,28 @@ func TestCursorObserverUnsupportedDescriptors(t *testing.T) {
 					return accepted
 				}
 				return client
+			}
+			nulBytes := 32
+			factories["all-NUL "+name] = func(t *testing.T) *os.File {
+				named, peer := cursorSocketPair(t, syscall.SOCK_STREAM)
+				// Go's textual name is indistinguishable from an unnamed pair;
+				// the returned native socklen must reject this abstract address.
+				cursorSocketControl(t, named, func(fd int) error {
+					// All-NUL names share a finite kernel namespace. Reserve a free
+					// length without interfering with another TEST owner's sockets.
+					for nulBytes < syscall.SizeofSockaddrUnix-3 {
+						nulBytes++
+						err := syscall.Bind(fd, &syscall.SockaddrUnix{Name: "@" + strings.Repeat("\x00", nulBytes)})
+						if !errors.Is(err, syscall.EADDRINUSE) {
+							return err
+						}
+					}
+					return errors.New("TEST all-NUL address namespace exhausted")
+				})
+				if server {
+					return named
+				}
+				return peer
 			}
 		}
 	}

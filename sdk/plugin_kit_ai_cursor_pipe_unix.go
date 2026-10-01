@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"syscall"
 	"time"
-	"unsafe"
 )
 
 // Inherited pipes and anonymous UNIX stream socketpairs (Node/libuv stdio) can
@@ -19,7 +18,7 @@ func prepareCursorPipe(source *os.File) (*os.File, error) {
 	if source == nil {
 		return nil, fmt.Errorf("Cursor observer requires owned pipe IO")
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	stat, err := source.Stat()
 	if err != nil {
 		return nil, err
@@ -80,10 +79,10 @@ func validateCursorSocket(fd int) error {
 	if kind != syscall.SOCK_STREAM {
 		return fmt.Errorf("Cursor observer requires anonymous UNIX stream IO")
 	}
-	if err := cursorSocketAnonymous(fd, syscall.SYS_GETSOCKNAME); err != nil {
+	if err := cursorSocketAnonymous(fd, false); err != nil {
 		return err
 	}
-	return cursorSocketAnonymous(fd, syscall.SYS_GETPEERNAME)
+	return cursorSocketAnonymous(fd, true)
 }
 
 // The Linux syscall SockaddrUnix wrapper loses the returned length and renders
@@ -91,13 +90,10 @@ func validateCursorSocket(fd int) error {
 // admit named abstract addresses containing NULs. Preserve the native length:
 // Linux anonymous addresses contain only the two-byte family. Darwin has no
 // abstract namespace and may return a padded sockaddr with an empty path.
-func cursorSocketAnonymous(fd int, call uintptr) error {
+func cursorSocketAnonymous(fd int, peer bool) error {
 	var address syscall.RawSockaddrUnix
 	size := uint32(syscall.SizeofSockaddrUnix)
-	// Audited native buffers: the kernel receives their exact sizes; both
-	// conversions occur in the syscall expression, preserving Go's pointer
-	// lifetime rule. No pointer is retained by these synchronous name calls.
-	_, _, errno := syscall.Syscall(call, uintptr(fd), uintptr(unsafe.Pointer(&address)), uintptr(unsafe.Pointer(&size)))
+	errno := cursorSocketName(fd, peer, &address, &size)
 	if errno != 0 {
 		return errno
 	}

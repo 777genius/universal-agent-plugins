@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/777genius/plugin-kit-ai/sdk"
+	pluginkitai "github.com/777genius/plugin-kit-ai/sdk"
 	"github.com/777genius/plugin-kit-ai/sdk/cursor"
 )
 
@@ -121,9 +121,9 @@ func TestCursorObserverProcess(t *testing.T) {
 		{"panic", "panic", cursorInput, true},
 		{"callback error", "error", cursorInput, true},
 		{"cooperative cancellation", "cooperative", cursorInput, true},
-		{"cancelled context", "cancelled", cursorInput, false},
+		{"canceled context", "cancelled", cursorInput, false},
 		{"malformed", "normal", `{"conversation_id":`, false},
-		{"oversize", "normal", strings.Repeat("x", sdk.MaxPayloadBytes+1), false},
+		{"oversize", "normal", strings.Repeat("x", pluginkitai.MaxPayloadBytes+1), false},
 		{"trailing value", "normal", cursorInput + ` {}`, false},
 		{"non object", "normal", `[]`, false},
 		{"empty IDs", "normal", strings.Replace(cursorInput, "TEST_CONVERSATION", "", 1), false},
@@ -163,7 +163,7 @@ func TestCursorObserverProcess(t *testing.T) {
 		t.Run("status "+status, func(t *testing.T) {
 			input := strings.Replace(cursorInput, `"completed"`, status, 1)
 			code, out, records := runCursorConsumer(t, binary, "CursorStop", "normal", input)
-			if code != 0 || out != "{}\n" || len(records) != 2 || records[0].Event.Status != cursor.StopStatus(strings.Trim(status, `"`)) && !(status == `null` && records[0].Event.Status == "") {
+			if code != 0 || out != "{}\n" || len(records) != 2 || records[0].Event.Status != cursor.StopStatus(strings.Trim(status, `"`)) && (status != `null` || records[0].Event.Status != "") {
 				t.Fatal("status changed or rejected")
 			}
 		})
@@ -178,7 +178,7 @@ func TestCursorObserverProcess(t *testing.T) {
 	t.Run("open stdin without EOF", func(t *testing.T) { cursorOpenPipe(t, binary, "", "normal", false) })
 	t.Run("valid frame without EOF", func(t *testing.T) { cursorOpenPipe(t, binary, cursorInput, "normal", false) })
 	t.Run("oversize without EOF", func(t *testing.T) {
-		cursorOpenPipe(t, binary, strings.Repeat("x", sdk.MaxPayloadBytes+1), "normal", true)
+		cursorOpenPipe(t, binary, strings.Repeat("x", pluginkitai.MaxPayloadBytes+1), "normal", true)
 	})
 	// Red: cancellation during a blocked read waits for the original deadline.
 	t.Run("cancel open stdin", func(t *testing.T) { cursorOpenPipe(t, binary, "", "cancel-reading", true) })
@@ -203,8 +203,8 @@ func cursorOpenPipe(t *testing.T, binary, input, mode string, oversize bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r.Close()
-	defer w.Close()
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
 	cmd.Stdin = r
 	var out, diag bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &diag

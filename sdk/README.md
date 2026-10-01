@@ -254,7 +254,15 @@ a successful final turn, and no native turn/request/root identifier is invented.
 
 The descriptor-derived [Cursor stop guide](../docs/generated/cursor_stop.md)
 explains typed native fields, the fixed `{}\n` observer response and exclusive
-process-pipe IO ownership. `RunCursorObserver` honors `Config.IO`; arbitrary
-caller IO must cooperate with cancellation and cannot be forcibly interrupted.
+process IPC ownership. On Linux/macOS, pipes or connected anonymous
+AF_UNIX/SOCK_STREAM sockets with empty local AND peer names are accepted; named
+sockets (including Linux abstract names), network sockets and other files are
+refused. Transferred handles and aliases require exclusive ownership and close
+before return. The runner has one four-second budget with a 100 ms output
+reserve; cancellation interrupts owned IO and joins its callback. Consumer
+callbacks must honor their context. `RunCursorObserver` honors `Config.IO`;
+arbitrary caller IO must cooperate with cancellation and cannot be forcibly
+interrupted. The observer remains public-beta; manual package activation and
+pending native qualification retain their existing availability limits.
 This source slice proves SDK protocol handling only. It does not qualify native
 Cursor IDE/CLI, installation, delivery or availability.

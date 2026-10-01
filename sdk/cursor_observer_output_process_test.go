@@ -5,6 +5,7 @@ package pluginkitai_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"testing"
@@ -26,8 +27,8 @@ func TestCursorObserverOutputPipes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer r.Close()
-			defer w.Close()
+			defer func() { _ = r.Close() }()
+			defer func() { _ = w.Close() }()
 			if full {
 				if err := w.SetWriteDeadline(time.Now().Add(20 * time.Millisecond)); err != nil {
 					t.Fatal(err)
@@ -56,8 +57,8 @@ func TestCursorObserverOutputPipes(t *testing.T) {
 			cmd.Stderr = &diag
 			start := time.Now()
 			err = cmd.Run()
-			exit, ok := err.(*exec.ExitError)
-			if !ok || exit.ExitCode() != 1 || ctx.Err() != nil || time.Since(start) > time.Second {
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 1 || ctx.Err() != nil || time.Since(start) > time.Second {
 				t.Fatalf("output failure process result: %v time=%v stderr=%q", err, time.Since(start), diag.String())
 			}
 			records := cursorRecords(t, diag.String())

@@ -46,11 +46,12 @@ type CursorObserverIO interface {
 // proves a protocol observation, never task success or notification delivery.
 func (a *App) RunCursorObserver(ctx context.Context) (code int) {
 	engine := a.cursorObserverEngine()
-	if _, ok := engine.IO.(process.IO); ok {
-		owned := newCursorProcessIO()
-		engine.IO = owned
-		defer owned.close()
-	} else if owned, ok := engine.IO.(*cursorPipeIO); ok {
+	switch owned := engine.IO.(type) {
+	case process.IO:
+		prepared := newCursorProcessIO()
+		engine.IO = prepared
+		defer prepared.close()
+	case *cursorPipeIO:
 		defer owned.close()
 	}
 	deadline := time.Now().Add(cursorObserverBudget)
@@ -98,14 +99,21 @@ func (a *App) cursorObserverEngine() runtime.Engine {
 }
 
 func writeCursorNeutral(ctx context.Context, hostIO IO) (code int) {
-	code = 1
-	defer func() { _ = recover() }()
+	written := false
+	defer func() {
+		_ = recover()
+		if !written {
+			code = 1
+		}
+	}()
 	response := []byte("{}\n")
 	if bounded, ok := hostIO.(CursorObserverIO); ok {
 		if bounded.WriteStdoutContext(ctx, response) == nil {
+			written = true
 			return 0
 		}
 	} else if hostIO.WriteStdout(response) == nil {
+		written = true
 		return 0
 	}
 	return 1
