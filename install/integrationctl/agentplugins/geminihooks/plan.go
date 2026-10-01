@@ -112,13 +112,16 @@ func desiredGroup(shell Shell, h HookSpec) (hujson.Value, error) {
 	if !events[h.Event] || h.Name == "" || h.Timeout < 0 {
 		return hujson.Value{}, fmt.Errorf("invalid hook specification")
 	}
+	if h.Observer && h.Event != "AfterAgent" && h.Event != "Notification" {
+		return hujson.Value{}, fmt.Errorf("observer requires AfterAgent or Notification")
+	}
 	if err := safeString(h.Name); err != nil {
 		return hujson.Value{}, err
 	}
 	if err := safeString(h.Matcher); err != nil {
 		return hujson.Value{}, err
 	}
-	command, err := RenderArgv(shell, h.Argv)
+	command, err := renderCommand(shell, h.Argv, h.Observer)
 	if err != nil {
 		return hujson.Value{}, err
 	}

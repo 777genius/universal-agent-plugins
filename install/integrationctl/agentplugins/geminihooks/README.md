@@ -43,6 +43,30 @@ keys and unknown nested values too. Literal U+FFFD and valid paired Unicode
 remain supported. Distinct lone-surrogate keys/names in opaque foreign data
 remain distinct, and their original bytes are preserved.
 
+`HookSpec.Observer` explicitly opts an `AfterAgent` or `Notification` hook into
+neutral observation. Other events conflict before mutation. Its zero value
+keeps the exact generic command rendering and behavior. Observer argv uses the
+same literal validation and quoting as `RenderArgv`; the planner wraps that
+invocation in the existing native shell. All observer output is discarded,
+then the shell emits exactly `{}\n` and exits zero, including a removed/missing
+executable, nonzero exit status, or a thrown PowerShell invocation. Bash uses a
+guarded subshell; PowerShell consumes all streams and catches invocation errors,
+then exits before Gemini's appended native exit-code check. No additional
+executable, delivery policy or application-specific command participates.
+
+This opt-in addresses Gemini 0.62.0's cached hook lifecycle: deleting a helper
+while Gemini remains alive leaves its cached command callable. Naked Bash
+invocation then emits a diagnostic and exit 127; `hookRunner` falls back from
+JSON parsing to `convertPlainTextToHookOutput`, mapping nonzero codes other than
+1 to `decision: deny`. An AfterAgent denial can cause a retry with
+`stop_hook_active: true`. An observer must never supply such a decision, context
+or model message. Empty JSON supplies none of those fields. Receipts continue
+to digest the actual wrapped command bytes, so opt-in changes require a normal
+owned update; repeat, drift checks and remove use the same version-1 contract.
+The native hook timeout (explicit `Timeout`, otherwise Gemini's default) still
+bounds invocation; this wrapper does not add a timer or neutralize native timeout
+or shell-start failures.
+
 The planner preserves top-level policy, unknown values, foreign groups and their
 comments in the document AST. Gemini 0.62.0 uses separate top-level
 `hooksConfig.enabled/disabled/notifications` (`config.ts:1111`,
@@ -96,3 +120,12 @@ naive quoting is changed by actual expansion. Windows CI cases execute available
 pwsh.exe/powershell.exe and log exact argv; non-Windows hosts explicitly skip
 those cases. Linux results do not qualify Windows, macOS or actual Gemini
 activation. No actual agent, credentials or real project is exercised.
+
+`go test ./geminihooks/...` also runs the observer contract fixtures. They record
+exact argv through a real executable, exercise cached-command deletion and exits
+0/2/127, assert full stdout `{}\n`, empty stderr and exit zero, and retain naked
+command negative controls. Available Bash, pwsh and Windows PowerShell execute
+directly; observer cases skip only unavailable shell executables. PowerShell
+cases include the real hookRunner exit-code suffix and a thrown script invocation.
+Unavailable Windows PowerShell execution remains pending native Windows CI
+qualification; Linux Bash evidence cannot qualify Windows.

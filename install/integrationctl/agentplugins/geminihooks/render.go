@@ -58,3 +58,27 @@ func RenderArgv(shell Shell, argv []string) (string, error) {
 	}
 	return command, nil
 }
+
+// Keep the generic invocation/validation unchanged. An observer may report
+// nothing to the model, even after its executable is removed while Gemini
+// still holds a cached command. Native timeout enforcement remains unchanged.
+func renderCommand(shell Shell, argv []string, observer bool) (string, error) {
+	command, err := RenderArgv(shell, argv)
+	if err != nil || !observer {
+		return command, err
+	}
+	if shell == Bash {
+		// exec stays inside the subshell so failure cannot replace/exit the
+		// outer shell. The guard also handles a caller's errexit setting.
+		command = "(" + command + ") >/dev/null 2>&1 || :; printf '{}\\n'; exit 0"
+	} else {
+		// Consume all PowerShell streams, catch invocation errors, and exit
+		// before Gemini's appended LASTEXITCODE check. Console.Write emits LF
+		// exactly on Windows too. No settings-variable tokens are introduced.
+		command = "try { " + command + " *>&1 | Out-Null } catch {}; [Console]::Out.Write(\"{}`n\"); exit 0"
+	}
+	if err := safeString(command); err != nil {
+		return "", err
+	}
+	return command, nil
+}

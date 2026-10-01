@@ -33,6 +33,10 @@ type HookSpec struct {
 	Argv        []string
 	Matcher     string
 	Timeout     int
+	// Observer discards command output and returns neutral JSON with exit zero.
+	// Only AfterAgent and Notification support this opt-in; false keeps the
+	// ordinary command contract. The native hook timeout still bounds execution.
+	Observer bool
 }
 
 type Request struct {
