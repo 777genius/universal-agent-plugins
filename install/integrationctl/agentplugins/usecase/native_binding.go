@@ -11,14 +11,17 @@ func validateNativeBinding(client domain.ClientBinding, detected domain.Detected
 	if client.NativeActivationAttempt != "" {
 		return fmt.Errorf("native activation attempt %s is unresolved; review client state before another mutation", client.NativeActivationAttempt)
 	}
-	if !domain.ClientTraitsFor(detected.ClientID).BindsNativeProfileRoot {
+	if err := client.SelectedDelivery.Validate(); err != nil {
+		return err
+	}
+	if !client.SelectedDelivery.EffectiveTraits(detected.ClientID).BindsNativeProfileRoot {
 		return nil
 	}
 	if client.NativeProfileRoot == "" {
-		return fmt.Errorf("legacy Codex binding has no proven native profile root; reviewed rebind is required")
+		return fmt.Errorf("legacy native binding has no proven native profile root; reviewed rebind is required")
 	}
 	if detected.ConfigRoot == "" || !filepath.IsAbs(detected.ConfigRoot) || filepath.Clean(detected.ConfigRoot) != client.NativeProfileRoot {
-		return fmt.Errorf("selected Codex profile differs from the binding's native profile root")
+		return fmt.Errorf("selected native profile differs from the binding's native profile root")
 	}
 	return nil
 }

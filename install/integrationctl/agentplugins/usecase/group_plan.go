@@ -95,7 +95,7 @@ func (session *groupSession) planAndPreflightGroupTarget(targetIndex int, target
 
 func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan) (bool, error) {
 	key := plan.ActivePath
-	if sharesPhysicalBackend(target.Client.ClientID) {
+	if sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery) {
 		definition, _ := domain.ClientDefinitionFor(target.Client.ClientID)
 		key = "shared-backend:" + definition.BackendFamily + ":" + plan.PhysicalArtifactID
 	} else if session.existing {
@@ -173,7 +173,7 @@ func (session *groupSession) resolveGroupManagedBinding(target AddInput, plan *d
 		owned := binding
 		return clientID, &owned
 	}
-	if !sharesPhysicalBackend(target.Client.ClientID) {
+	if !sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery) {
 		return clientID, nil
 	}
 	for _, binding := range session.state.Installations[session.installationIndex].Clients {

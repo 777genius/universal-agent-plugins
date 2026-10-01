@@ -223,6 +223,7 @@ func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID
 		}
 		if clearAttempt {
 			client.NativeActivationAttempt = ""
+			client.PendingNativeIntent = nil
 		}
 		installation.Clients[clientBindingID] = client
 		installation.UpdatedAt = client.UpdatedAt

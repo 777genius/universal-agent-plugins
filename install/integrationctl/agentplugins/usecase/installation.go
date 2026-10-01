@@ -93,12 +93,16 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		bindingClientID = previous.ClientID
 	}
 	profileRoot := previous.NativeProfileRoot
-	if profileRoot == "" && domain.ClientTraitsFor(input.Client.ClientID).BindsNativeProfileRoot {
+	if profileRoot == "" && plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).BindsNativeProfileRoot {
 		profileRoot = input.Client.ConfigRoot
+		if facts, ok := plan.SelectedDelivery.LocalFacts(); ok {
+			profileRoot = facts.ProfileRoot
+		}
 	}
 	return domain.ClientBinding{
-		InstallIntent:   input.InstallIntent,
-		ClientBindingID: clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
+		SelectedDelivery: plan.SelectedDelivery,
+		InstallIntent:    input.InstallIntent,
+		ClientBindingID:  clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
 		TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID,
 		Materialization: domain.MaterializationStaged, Activation: domain.ActivationPrepared,
 		Authentication: plan.Authentication, Policy: domain.PolicyAllowed,
@@ -108,18 +112,20 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		NativeObjects:           append([]domain.NativeObjectOwnership(nil), previous.NativeObjects...),
 		NativeProfileRoot:       profileRoot,
 		NativeActivationAttempt: previous.NativeActivationAttempt,
-		AffectedSurfaces:        preparedAffectedSurfaces(previous, input.Client.ClientID),
+		AffectedSurfaces:        preparedAffectedSurfaces(previous, input.Client.ClientID, plan.SelectedDelivery),
 	}
 }
 
-func preparedAffectedSurfaces(previous domain.ClientBinding, requested domain.ClientID) []string {
+func preparedAffectedSurfaces(previous domain.ClientBinding, requested domain.ClientID, selected domain.SelectedDelivery) []string {
 	values := append([]string(nil), previous.AffectedSurfaces...)
 	if previous.ClientID != "" {
 		values = append(values, previous.ClientID)
 	}
 	values = append(values, string(requested))
-	for _, sibling := range domain.BackendSiblings(requested) {
-		values = append(values, string(sibling))
+	if selected.SharesBackend(requested) {
+		for _, sibling := range domain.BackendSiblings(requested) {
+			values = append(values, string(sibling))
+		}
 	}
 	return uniqueSortedSurfaces(values)
 }

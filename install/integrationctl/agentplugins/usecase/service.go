@@ -78,19 +78,20 @@ type PluginDataManager interface {
 }
 
 type AddInput struct {
-	InstallIntent      domain.InstallIntent
-	Envelope           domain.PackageEnvelope
-	Client             domain.DetectedClient
-	Scope              domain.InstallScope
-	DryRun             bool
-	Confirmed          bool
-	Interactive        bool
-	Hints              domain.CompatibilityHints
-	InstallationID     string
-	OperationID        string
-	BackendExecutable  string
-	ActivationComplete bool
-	AuthComplete       bool
+	refreshSelectedDelivery bool
+	InstallIntent           domain.InstallIntent
+	Envelope                domain.PackageEnvelope
+	Client                  domain.DetectedClient
+	Scope                   domain.InstallScope
+	DryRun                  bool
+	Confirmed               bool
+	Interactive             bool
+	Hints                   domain.CompatibilityHints
+	InstallationID          string
+	OperationID             string
+	BackendExecutable       string
+	ActivationComplete      bool
+	AuthComplete            bool
 	// OriginMode and DirectoryResolution are supplied by the resolver. Omitting
 	// OriginMode is treated as an explicit direct source for compatibility with
 	// exact/local callers; Directory authority is never inferred from a name.
@@ -185,6 +186,10 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 			_ = release()
 			return nil, err
 		}
+	}
+	if err := service.validateRecordedDeliveries(); err != nil {
+		_ = release()
+		return nil, err
 	}
 	kernel := service.Kernel
 	kernel.StateStore = service.StateStore
