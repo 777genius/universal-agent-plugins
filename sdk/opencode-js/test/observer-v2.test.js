@@ -95,7 +95,9 @@ test('retry requires a later final step; interrupted work never emits failure', 
   h.event('session.step.started', { assistantMessageID: 'assistant' }); h.finish(); await tick();
   assert.equal(h.facts[0].kind, 'turn_idle_verified');
   h.begin('user2'); h.event('session.step.failed', { assistantMessageID: 'assistant' });
-  h.event('session.execution.interrupted', { reason: 'user' }); h.event('session.execution.failed');
+  h.rows([{ id: 'user2', type: 'user' }, { id: 'assistant', type: 'assistant', finish: 'stop', time: { completed: 2 } }]);
+  h.event('session.execution.interrupted', { reason: 'user' });
+  h.event('session.execution.failed', { error: { name: 'ProviderError' } });
   await tick(); assert.equal(h.facts.length, 1); h.observer.dispose();
 });
 
@@ -229,5 +231,43 @@ test('bounded current-epoch admission permits more than 2048 separate turns', as
   const h = harness();
   for (let i = 0; i < 2050; i++) { h.begin(); h.finish(); await tick(); }
   assert.equal(h.facts.length, 2050); assert.equal(h.diagnostics.includes('admission_capacity'), false);
+  h.observer.dispose();
+});
+
+// Regression: one transient ownership failure permanently blacklists a root.
+for (const reason of ['capacity', 'timeout', 'rejection']) test(`fresh work recovers inconclusive ownership: ${reason}`, async () => {
+  const first = deferred();
+  let attempts = 0;
+  const h = harness({ get: async (input) => {
+    attempts++;
+    if (attempts === 1) {
+      if (reason === 'rejection') throw new Error('temporary host failure');
+      return first.promise;
+    }
+    return { id: input.sessionID, location: own };
+  }, config: { maxConcurrentLookups: 1, lookupTimeoutMs: 100 } });
+  if (reason === 'capacity') { h.event('session.created', { sessionID: 'occupant' }); await tick(); }
+  h.begin(); h.finish(); await tick();
+  if (reason === 'timeout') await new Promise((resolve) => setTimeout(resolve, 130));
+  first.resolve({ id: reason === 'capacity' ? 'occupant' : 'session', location: own });
+  await tick(); assert.equal(h.facts.length, 0);
+  h.begin(); h.finish(); await tick();
+  assert.equal(attempts, 2);
+  assert.equal(h.facts.length, 1);
+  assert.equal(h.facts[0].kind, 'turn_idle_verified');
+  h.observer.dispose();
+});
+
+// Regression: a burst of global child sessions evicts a live owned root.
+test('active root survives 512 global child sessions', async () => {
+  const h = harness({ get: async (input) => ({ id: input.sessionID, location: own,
+    ...(input.sessionID === 'session' ? {} : { parentID: 'session' }) }) });
+  h.begin(); await tick();
+  for (let i = 0; i < 512; i++) {
+    h.event('session.created', { sessionID: `child${i}` }); await tick();
+  }
+  h.finish(); await tick();
+  assert.equal(h.facts.length, 1);
+  assert.equal(h.facts[0].kind, 'turn_idle_verified');
   h.observer.dispose();
 });

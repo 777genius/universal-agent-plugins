@@ -95,6 +95,11 @@ rows and copies metadata only. Native context has no server-side row limit,
 so these limits do not bound network bytes. OpenCode 2.0.0 ignores the optional
 signal: timing out or disposing does not release an actual slot until the host
 Promise settles. Saturation fails closed without a retry queue.
+An inconclusive ownership lookup stays unverified and may be tried once again
+when a new execution starts; facts from the earlier epoch are never replayed.
+Confirmed child/foreign ownership remains rejected. Session records use recency
+and evict child/foreign or inactive records before active work; unavoidable
+active eviction emits the fixed `session_capacity` diagnostic.
 
 Dispose immediately fences late results, clears timers, and does not wait for
 hung calls. It cannot cancel an external callback already admitted. Semantic

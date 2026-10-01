@@ -34,8 +34,18 @@ export function createV2Observer(options) {
   };
   function invalidate(s) { s.generation++; s.revision++; sessions.delete(s.sid); }
   function state(sid) {
-    if (sessions.has(sid)) return sessions.get(sid);
-    if (sessions.size === maxSessions) invalidate(sessions.values().next().value);
+    if (sessions.has(sid)) {
+      const existing = sessions.get(sid);
+      sessions.delete(sid); sessions.set(sid, existing);
+      return existing;
+    }
+    if (sessions.size === maxSessions) {
+      const records = [...sessions.values()];
+      const victim = records.find((s) => s.ownership === 'rejected' || s.ownership === 'child') ??
+        records.find((s) => !(s.started && !s.result && !s.interrupted) && !s.verifying.size) ?? records[0];
+      if (victim.started && !victim.result && !victim.interrupted) diag('session_capacity');
+      invalidate(victim);
+    }
     const s = { sid, generation: 0, ownership: 'new', epoch: 0, revision: 0, started: false,
       user: '', assistant: '', final: '', retry: false, interrupted: false, compacting: false,
       compactedUser: '', blocked: false, admissionsOverflow: false, terminal: '', result: '', admissions: new Map(),
@@ -70,6 +80,7 @@ export function createV2Observer(options) {
     const token = ownershipToken(s);
     void lookup((signal) => options.client.get({ sessionID: s.sid }, { signal })).then((info) => {
       if (!ownedToken(token)) return;
+      if (info === undefined) { s.ownership = 'unverified'; diag('ownership_unverified'); return; }
       if (!object(info) || info.id !== s.sid || (info.parentID !== undefined && !id(info.parentID)) ||
           !sameLocation(info.location, own)) { s.ownership = 'rejected'; diag('ownership_unverified'); return; }
       s.ownership = info.parentID === undefined ? 'root' : 'child';
@@ -171,6 +182,8 @@ export function createV2Observer(options) {
     if (s.ownership === 'rejected' || s.ownership === 'child') return;
     let changed = true;
     if (type === 'session.execution.started') {
+      // Retry inconclusive ownership once on fresh work, never replay old facts.
+      if (s.ownership === 'unverified') s.ownership = 'new';
       s.epoch++; s.started = true; s.user = ''; s.assistant = ''; resetFinal(s);
       s.retry = false; s.interrupted = false; s.compacting = false; s.compactedUser = ''; s.result = '';
       s.blocked = s.admissionsOverflow;
