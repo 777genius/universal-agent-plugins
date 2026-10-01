@@ -24,7 +24,7 @@ Généré à partir du package Go public via gomarkdoc.
 import "github.com/777genius/plugin-kit-ai/sdk/gemini"
 ```
 
-Package gemini exposes typed public Gemini hook inputs, responses, and registrars for the production\-ready Gemini Go runtime lane, including the current 9\-hook runtime surface.
+Package gemini exposes typed public Gemini hook inputs, responses, and registrars for the production\-ready Gemini Go runtime lane, including the current stable 9\-hook runtime surface, and a public\-beta Notification observer whose native CLI qualification is pending.
 
 ## Index
 
@@ -84,6 +84,9 @@ Package gemini exposes typed public Gemini hook inputs, responses, and registrar
   - func BeforeToolSelectionForceAuto\(allowedFunctionNames ...string\) \*BeforeToolSelectionResponse
   - func BeforeToolSelectionQuiet\(\) \*BeforeToolSelectionResponse
 - type CommonResponse
+- type NotificationEvent
+- type NotificationResponse
+- type NotificationType
 - type Registrar
   - func NewRegistrar\(backend runtime.RegistrarBackend\) \*Registrar
   - func \(r \*Registrar\) OnAfterAgent\(fn func\(\*AfterAgentEvent\) \*AfterAgentResponse\)
@@ -93,6 +96,7 @@ Package gemini exposes typed public Gemini hook inputs, responses, and registrar
   - func \(r \*Registrar\) OnBeforeModel\(fn func\(\*BeforeModelEvent\) \*BeforeModelResponse\)
   - func \(r \*Registrar\) OnBeforeTool\(fn func\(\*BeforeToolEvent\) \*BeforeToolResponse\)
   - func \(r \*Registrar\) OnBeforeToolSelection\(fn func\(\*BeforeToolSelectionEvent\) \*BeforeToolSelectionResponse\)
+  - func \(r \*Registrar\) OnNotification\(fn func\(\*NotificationEvent\) \*NotificationResponse\)
   - func \(r \*Registrar\) OnSessionEnd\(fn func\(\*SessionEndEvent\) \*SessionEndResponse\)
   - func \(r \*Registrar\) OnSessionStart\(fn func\(\*SessionStartEvent\) \*SessionStartResponse\)
 - type SessionEndEvent
@@ -587,6 +591,34 @@ type CommonResponse struct {
 }
 ```
 
+## type NotificationEvent
+
+NotificationEvent is the native Gemini Notification input \(public\-beta\). Details retains arbitrary native detail keys and JSON values. Message and Details may contain sensitive agent content; filtering belongs to consumers.
+
+```go
+type NotificationEvent = internalgemini.NotificationInput
+```
+
+## type NotificationResponse
+
+NotificationResponse is an advisory observer subset of Gemini's native NotificationOutput \(public\-beta\). Both nil and an empty response encode as \{\}. Native suppressOutput and systemMessage options are outside this subset. It cannot decide tool permission or supply context.
+
+```go
+type NotificationResponse struct{}
+```
+
+## type NotificationType
+
+NotificationType is a native Gemini notification subtype. Unknown future values are decoded unchanged; consumers can ignore subtypes they do not use. This API is public\-beta.
+
+```go
+type NotificationType = internalgemini.NotificationType
+```
+
+```go
+const NotificationTypeToolPermission NotificationType = internalgemini.NotificationTypeToolPermission
+```
+
 ## type Registrar
 
 Registrar registers public Gemini hook handlers on a root SDK app.
@@ -660,6 +692,14 @@ func (r *Registrar) OnBeforeToolSelection(fn func(*BeforeToolSelectionEvent) *Be
 ```
 
 OnBeforeToolSelection registers a handler for the gemini BeforeToolSelection.
+
+### func \(\*Registrar\) OnNotification
+
+```go
+func (r *Registrar) OnNotification(fn func(*NotificationEvent) *NotificationResponse)
+```
+
+OnNotification registers a handler for the gemini Notification.
 
 ### func \(\*Registrar\) OnSessionEnd
 
