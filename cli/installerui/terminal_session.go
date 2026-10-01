@@ -8,8 +8,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/terminalreader"
 	"github.com/muesli/cancelreader"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalreader"
 )
 
 type formSession struct {

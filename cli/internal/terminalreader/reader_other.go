@@ -4,8 +4,9 @@
 package terminalreader
 
 import (
-	"github.com/muesli/cancelreader"
 	"os"
+
+	"github.com/muesli/cancelreader"
 )
 
 func New(f *os.File) (cancelreader.CancelReader, error) { return cancelreader.NewReader(f) }
