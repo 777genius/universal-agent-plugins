@@ -16,8 +16,9 @@ import (
 
 // The public shell duplicates its virtual /dev/tty onto stdin. Qualify the
 // actual consent boundary and suffix handoff using that device, not a PTY slave.
+// ESC+LF is a canonical cancellation, avoiding the ambiguous raw Alt+CR encoding.
 func TestDarwinVirtualTTYConsent(t *testing.T) {
-	for _, name := range []string{"queued-alt-enter-next-owner", "queued-escape", "fresh-space-enter"} {
+	for _, name := range []string{"queued-escape-enter-next-owner", "queued-escape", "fresh-space-enter"} {
 		t.Run(name, func(t *testing.T) {
 			master, slave := consentPTY(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -55,7 +56,7 @@ func TestDarwinVirtualTTYConsentChild(t *testing.T) {
 		return
 	}
 	switch name {
-	case "queued-alt-enter-next-owner", "queued-escape", "fresh-space-enter":
+	case "queued-escape-enter-next-owner", "queued-escape", "fresh-space-enter":
 	default:
 		t.Fatal("unknown virtual consent scenario")
 	}

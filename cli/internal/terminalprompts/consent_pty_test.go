@@ -53,6 +53,7 @@ func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.Fi
 		{name: "queued-paste-fresh-consent", selection: "\r\x1b[200~ \ry\n\x1b[201~", confirmation: " \r", accepted: true},
 		{name: "incomplete-paste", selection: "\r\x1b[200~ \r", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-escape", selection: "\r\x1b", wantErr: prompt.ErrPromptCanceled},
+		{name: "queued-escape-enter-next-owner", selection: "\r\x1b\nnext-owner\n", remaining: "next-owner", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-ctrl-c", selection: "\r\x03", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-ctrl-d", selection: "\r\x04", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-space-enter", selection: "\r", confirmation: " \r", accepted: true},
