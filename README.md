@@ -80,6 +80,12 @@ irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/ins
 
 </details>
 
+To install the latest installer globally with Node.js 22+:
+
+```bash
+npm install -g universal-agent-plugins
+```
+
 Homebrew and the installers select the native binary for your OS and architecture.
 The installer scripts verify its published SHA-256 and reported version, then
 replace the CLI atomically. They install into `$HOME/.local/bin` unless
@@ -226,7 +232,8 @@ No install telemetry is sent.
 Before changing a client, the CLI validates the source and preflights every
 selected target. `--dry-run` prints the same plan without writing. Managed files
 and state are committed together; failures roll back what ownership proves safe
-or stop with a repair command.
+or stop with a repair command. Preview does not activate a plugin or sign you in.
+Repair checks managed files; it does not prove external OAuth or runtime behavior.
 
 </details>
 
@@ -286,19 +293,23 @@ the recorded source, and `remove` changes only files owned by the CLI.
 
 ## Build plugins
 
-Create a portable Agent Plugins 1.0 package from a root `plugin.json`, with
-optional `skills/` and `mcp.json`. The same package can then be checked and
-installed across supported agents. `agentplugins author` is the public
-authoring entrypoint.
+Create a portable Agent Plugins 1.0 package manually from a root `plugin.json`, with
+optional `skills/` and `mcp.json`, then validate and install it with the commands
+above. The current npm and native installer releases do not include
+`agentplugins author`.
 
-Install the latest npm release (Node.js 22+):
-
-```bash
-npm install -g universal-agent-plugins
-```
-
-[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases) use the `agentplugins-v*` tag prefix.
+The [Build guide](website/source/en/build/index.md) covers package structure,
+remote MCP, stdio MCP, hybrid packages, and the handoff to installation. Its
+authoring commands require a qualified authoring build or a source build.
 See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
+[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases) use the `agentplugins-v*` tag prefix.
+
+<details>
+<summary>Qualified/source-build authoring commands (not in the current installer release)</summary>
+
+In qualified authoring builds, `agentplugins author` is the public authoring
+entrypoint. These examples require such a build or a current source build;
+installing the latest npm or native installer does not provide them.
 
 Create and check a Skill package:
 
@@ -309,16 +320,8 @@ agentplugins author inspect ./my-plugin
 agentplugins author test ./my-plugin
 ```
 
-The [Build guide](website/source/en/build/index.md) also covers remote MCP,
-stdio MCP, hybrid packages, extra Skills, compatibility checks, and the handoff
-to installation.
-
-<details>
-<summary>Source-build commands (UNRELEASED)</summary>
-
-Newer source builds also include JSON maintenance and a continuous MCP
-development loop. These commands are not part of the current released binary
-yet. Plan mode is read-only, and `--write` is
+Current source builds also include JSON maintenance, dependency bootstrap, and
+a continuous MCP development loop. Plan mode is read-only, and `--write` is
 required for JSON maintenance changes:
 
 ```bash
@@ -331,13 +334,14 @@ agentplugins author dev ./my-plugin
 ```
 
 Native import reads only the explicit strict-JSON file, skips unsafe or
-credential-bearing servers, and publishes only to an absent output. Source-only
-commands become supported installation guidance after the next signed
-`agentplugins` release passes the public-channel checks.
+credential-bearing servers, and publishes only to an absent output. These
+commands become supported installation guidance after a signed `agentplugins`
+authoring release passes the public-channel checks.
 
 Authoring validation and project doctor are distinct from installer
-`agentplugins validate` and `agentplugins doctor`. MCP execution is available
-through `author test` and `author dev`. Dependency bootstrap, client projection,
+`agentplugins validate` and `agentplugins doctor`. In qualified/source builds,
+MCP execution is available through `author test` and `author dev`.
+Dependency bootstrap is supported in qualified/source builds. Client projection,
 export/bundle, and publication are not exposed by the current authoring CLI.
 OAuth and activation inside a supported client still require client-specific
 verification.
