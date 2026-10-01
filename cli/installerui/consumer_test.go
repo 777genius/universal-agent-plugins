@@ -63,7 +63,15 @@ func CorrectUse(ctx context.Context,in,out *os.File) error {
 	cmd.Dir = root
 	// Preserve only prepared build inputs and trusted tool paths, never auth env.
 	for _, key := range []string{"PATH", "TMPDIR", "GOCACHE", "GOMODCACHE"} {
-		cmd.Env = append(cmd.Env, key+"="+os.Getenv(key))
+		value := os.Getenv(key)
+		if value == "" && (key == "GOCACHE" || key == "GOMODCACHE") {
+			out, err := exec.Command("go", "env", key).Output()
+			if err != nil {
+				t.Fatalf("resolve prepared %s: %v", key, err)
+			}
+			value = strings.TrimSpace(string(out))
+		}
+		cmd.Env = append(cmd.Env, key+"="+value)
 	}
 	cmd.Env = append(cmd.Env, "HOME="+t.TempDir(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GOSUMDB=off")
 	out, err := cmd.CombinedOutput()
