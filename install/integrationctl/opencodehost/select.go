@@ -130,7 +130,11 @@ func validateRequirements(candidates []ArtifactRequirement) error {
 func capabilitySelection(p Profile, r ArtifactRequirement) Selection {
 	s := Selection{ArtifactID: r.ID, Adapter: r.Adapter}
 	for _, c := range r.Required {
-		switch p.Capabilities[c] {
+		status := p.Capabilities[c]
+		if r.Adapter == ObserverV1 || r.Adapter == ObserverV2 {
+			status = p.observerSupport(r.Adapter, c)
+		}
+		switch status {
 		case Supported:
 		case Unverified:
 			s.Unverified = append(s.Unverified, c)
