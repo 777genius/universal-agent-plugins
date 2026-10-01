@@ -62,9 +62,12 @@ foreign keys, number lexemes and lone surrogate escapes remain opaque. Location
 keys with lone surrogate escapes refuse ambiguous Go/native Unicode decoding.
 
 Identity paths must be clean absolute POSIX or drive-rooted Windows paths;
-UNC/device paths and mixed Windows separators are outside this slice. Lexically
-resolvable aliases, native trimming aliases and Windows case aliases of the
-requested root refuse collisions. Physical symlink/case identity, remote/tilde
+UNC/device paths and forward/mixed Windows identity separators are outside this
+slice. Foreign drive-rooted Windows keys with either or mixed separators are
+normalized only for collision comparison; receipt identity and map keys remain
+exact. Lexically resolvable aliases, ECMAScript trimming aliases (including
+U+FEFF, excluding U+0085) and Windows case aliases of the requested root refuse
+collisions. Physical symlink/case identity, remote/tilde
 resolution and unsupported metadata remain caller qualification responsibilities.
 
 No-ops return exact original bytes; refusal returns `ErrConflict`, original bytes,

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"path"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -35,9 +34,17 @@ func validateIdentity(id Identity) error {
 	return nil
 }
 
-// The native loader calls JS String.trim, which also strips U+FEFF.
+// The native loader calls JS String.trim: ECMAScript WhiteSpace and
+// LineTerminator characters, including U+FEFF but excluding U+0085.
 func nativeTrim(s string) string {
-	return strings.TrimFunc(s, func(r rune) bool { return unicode.IsSpace(r) || r == '\ufeff' })
+	return strings.TrimFunc(s, func(r rune) bool {
+		switch r {
+		case '\u0009', '\u000b', '\u000c', '\u0020', '\u00a0', '\u1680',
+			'\u202f', '\u205f', '\u3000', '\ufeff', '\u000a', '\u000d', '\u2028', '\u2029':
+			return true
+		}
+		return r >= '\u2000' && r <= '\u200a'
+	})
 }
 
 func validDigest(s string) bool {

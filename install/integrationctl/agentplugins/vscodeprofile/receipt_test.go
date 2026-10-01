@@ -2,7 +2,9 @@ package vscodeprofile_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -148,5 +150,86 @@ func TestNativeUnicodeEscapeOwnershipIsByteExact(t *testing.T) {
 	removed := plan(t, vp.Request{Settings: escaped, Identity: id, Action: vp.Remove, Previous: installed.Receipt})
 	if len(decoded(t, removed.Settings)["chat.pluginLocations"].(map[string]any)) != 0 {
 		t.Fatal("escaped owned key was not removed")
+	}
+}
+
+// Red: Install/absent Repair publishes true beside a disabled Windows alias,
+// or VerifyOwned accepts both keys. Comparison must not broaden identity spelling.
+func TestWindowsSeparatorCollisions(t *testing.T) {
+	id := identity()
+	id.SettingsPath, id.PluginRoot = `C:\lab\profile\settings.json`, `C:\lab\plugins\通知`
+	installed := plan(t, vp.Request{Settings: []byte(`{}`), Identity: id, Action: vp.Install})
+	if installed.Receipt.Identity != id {
+		t.Fatal("receipt changed exact Windows identity")
+	}
+	for _, key := range []string{`C:/lab/plugins/通知`, `C:\lab/plugins\通知`, `C:/lab\plugins/通知`, `c:\LAB\plugins\通知`} {
+		t.Run(key, func(t *testing.T) {
+			body, _ := json.Marshal(map[string]any{"chat.pluginLocations": map[string]bool{key: false}})
+			for _, action := range []vp.Action{vp.Install, vp.Repair} {
+				req := vp.Request{Settings: body, Identity: id, Action: action}
+				if action == vp.Repair {
+					req.Previous = installed.Receipt
+				}
+				r, err := vp.Plan(req)
+				if !errors.Is(err, vp.ErrConflict) || r.Changed || r.Receipt != nil || !bytes.Equal(r.Settings, body) {
+					t.Fatalf("unsafe collision refusal: %+v err=%v", r, err)
+				}
+			}
+			ambiguous, _ := json.Marshal(map[string]any{"chat.pluginLocations": map[string]bool{key: false, id.PluginRoot: true}})
+			if _, err := vp.VerifyOwned(ambiguous, id, installed.Receipt); !errors.Is(err, vp.ErrConflict) {
+				t.Fatal("disabled native-equivalent key verified", err)
+			}
+			if strings.Contains(key, "/") {
+				foreignID := id
+				foreignID.PluginRoot = key
+				refused(t, vp.Request{Settings: []byte(`{}`), Identity: foreignID, Action: vp.Install})
+			}
+		})
+	}
+}
+
+// Red: a JS-trimmed foreign spelling is treated as absent and bypasses its false.
+func TestECMAScriptTrimmingCollisions(t *testing.T) {
+	id := identity()
+	// ECMAScript WhiteSpace and LineTerminator characters, including FEFF.
+	for _, r := range "\u0009\u000b\u000c\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u202f\u205f\u3000\ufeff\u000a\u000d\u2028\u2029" {
+		t.Run(fmt.Sprintf("%U", r), func(t *testing.T) {
+			for _, key := range []string{string(r) + id.PluginRoot, id.PluginRoot + string(r)} {
+				body, _ := json.Marshal(map[string]any{"chat.pluginLocations": map[string]bool{key: false}})
+				refused(t, vp.Request{Settings: body, Identity: id, Action: vp.Install})
+			}
+		})
+	}
+}
+
+// Red: U+0085 is trimmed into a false collision, its foreign lexeme changes,
+// or an otherwise clean NEL-suffixed identity is refused/normalized in its receipt.
+func TestNELRemainsDistinctAndOwnedIdentityExact(t *testing.T) {
+	for _, root := range []string{"/lab/plugins/通知", `C:\lab\plugins\通知`} {
+		t.Run(root, func(t *testing.T) {
+			id := identity()
+			id.PluginRoot = root
+			foreign := root + "\u0085"
+			key, _ := json.Marshal(foreign)
+			body := []byte(`{"chat.pluginLocations":{` + string(key) + `:false}}`)
+			installed := plan(t, vp.Request{Settings: body, Identity: id, Action: vp.Install})
+			locations := decoded(t, installed.Settings)["chat.pluginLocations"].(map[string]any)
+			if !installed.Changed || installed.Receipt.Identity != id || len(locations) != 2 || locations[root] != true || locations[foreign] != false || !bytes.Contains(installed.Settings, append(key, []byte(`:false`)...)) {
+				t.Fatal("distinct NEL foreign key or exact receipt changed")
+			}
+			// The distinct suffix also belongs to a legal explicit owned root.
+			id.PluginRoot = foreign
+			owned := plan(t, vp.Request{Settings: []byte(`{}`), Identity: id, Action: vp.Install})
+			if owned.Receipt.Identity != id || decoded(t, owned.Settings)["chat.pluginLocations"].(map[string]any)[foreign] != true {
+				t.Fatal("NEL owned identity changed")
+			}
+			if _, err := vp.VerifyOwned(owned.Settings, id, owned.Receipt); err != nil {
+				t.Fatal(err)
+			}
+			repeat := plan(t, vp.Request{Settings: owned.Settings, Identity: id, Action: vp.Install, Previous: owned.Receipt})
+			if repeat.Changed || !bytes.Equal(repeat.Settings, owned.Settings) || *repeat.Receipt != *owned.Receipt {
+				t.Fatal("NEL identity repeat churned bytes/receipt")
+			}
+		})
 	}
 }

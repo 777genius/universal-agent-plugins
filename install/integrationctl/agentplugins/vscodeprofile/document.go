@@ -105,7 +105,13 @@ func losslessKey(s hujson.Literal) bool {
 }
 
 func aliasesRoot(key, root string) bool {
-	normalized, ok := absolutePath(nativeTrim(key))
+	key = nativeTrim(key)
+	if !strings.HasPrefix(root, "/") {
+		// Windows resolves either separator. Normalize only collision comparison;
+		// explicit identities, receipts and map lookup retain their exact keys.
+		key = strings.ReplaceAll(key, "/", "\\")
+	}
+	normalized, ok := absolutePath(key)
 	if !ok {
 		return false
 	}
