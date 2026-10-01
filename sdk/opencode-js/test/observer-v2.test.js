@@ -205,3 +205,29 @@ test('global readers route to exactly one directory and workspace owner', async 
   for (const event of events) { a.observe(event); b.observe(event); }
   await tick(); assert.equal(facts.length, 1); a.dispose(); b.dispose();
 });
+
+// Regression: one missed admission or over-budget period poisons every later turn.
+test('a fresh fully observed epoch recovers from an unassociated delivery', async () => {
+  const h = harness();
+  h.event('session.execution.started'); h.event('session.inbox.delivered', { inboxID: 'missed' });
+  h.event('session.execution.succeeded'); await tick(); assert.equal(h.facts.length, 0);
+  h.begin(); h.finish(); await tick(); assert.equal(h.facts.length, 1); h.observer.dispose();
+});
+
+// Regression: clearing blocked at start falsely accepts overflowing pre-start admissions.
+test('overflow remains blocked through start, then fresh work recovers after its terminal', async () => {
+  const h = harness();
+  for (let i = 0; i < 65; i++) h.event('session.inbox.enqueued', { inboxID: `user${i}`, item: { type: 'user' } });
+  h.event('session.execution.started'); h.event('session.inbox.delivered', { inboxID: 'user0' });
+  h.event('session.step.started', { assistantMessageID: 'assistant' }); h.finish();
+  await tick(); assert.equal(h.facts.length, 0);
+  h.begin(); h.finish(); await tick(); assert.equal(h.facts.length, 1); h.observer.dispose();
+});
+
+// Regression: cumulative terminal dedup keys permanently suppress a long-lived session.
+test('bounded current-epoch admission permits more than 2048 separate turns', async () => {
+  const h = harness();
+  for (let i = 0; i < 2050; i++) { h.begin(); h.finish(); await tick(); }
+  assert.equal(h.facts.length, 2050); assert.equal(h.diagnostics.includes('admission_capacity'), false);
+  h.observer.dispose();
+});

@@ -38,7 +38,7 @@ export function createV2Observer(options) {
     if (sessions.size === maxSessions) invalidate(sessions.values().next().value);
     const s = { sid, generation: 0, ownership: 'new', epoch: 0, revision: 0, started: false,
       user: '', assistant: '', final: '', retry: false, interrupted: false, compacting: false,
-      compactedUser: '', blocked: false, terminal: '', result: '', admissions: new Map(),
+      compactedUser: '', blocked: false, admissionsOverflow: false, terminal: '', result: '', admissions: new Map(),
       pending: new Map(), resolved: new Set(), admitted: new Set(), liveAssistants: new Set(), attempted: new Set(), verifying: new Set() };
     sessions.set(sid, s);
     return s;
@@ -173,11 +173,13 @@ export function createV2Observer(options) {
     if (type === 'session.execution.started') {
       s.epoch++; s.started = true; s.user = ''; s.assistant = ''; resetFinal(s);
       s.retry = false; s.interrupted = false; s.compacting = false; s.compactedUser = ''; s.result = '';
+      s.blocked = s.admissionsOverflow;
+      s.admitted.clear(); // Previous epochs cannot be admitted by the current semantic token.
       s.pending.clear(); s.liveAssistants.clear(); s.attempted.clear();
       // Undelivered inbox admissions intentionally survive execution start.
     } else if (type === 'session.inbox.enqueued') {
       if (!id(p.inboxID) || !object(p.item) || typeof p.item.type !== 'string') { diag('invalid_inbox'); return; }
-      if (s.admissions.size >= 64 && !s.admissions.has(p.inboxID)) block(s);
+      if (s.admissions.size >= 64 && !s.admissions.has(p.inboxID)) { s.admissionsOverflow = true; block(s); }
       else s.admissions.set(p.inboxID, { type: p.item.type, delivery: p.item.delivery === 'queue' ? 'queue' : 'steer' });
       resetFinal(s);
     } else if (type === 'session.inbox.delivered') {
@@ -241,6 +243,11 @@ export function createV2Observer(options) {
       else s.pending.set(rid, { id: rid, messageID, kind });
       resetFinal(s);
     } else changed = false;
+    // A terminal boundary ends an over-budget period. Missing queued metadata
+    // subsequently fails closed at delivery, while fresh observed work recovers.
+    if (s.admissionsOverflow && ['session.execution.succeeded', 'session.execution.failed', 'session.execution.interrupted'].includes(type)) {
+      s.admissionsOverflow = false; s.admissions.clear();
+    }
     if (changed) s.revision++;
     ensureOwnership(s);
     schedule(s);
