@@ -50,8 +50,10 @@ jobs:
           assert any(r.get('Test') == 'TestDarwinInheritedTTYCancel' and r.get('Action') == 'fail' for r in rows)
           assert 'sent=1, deadline=context deadline exceeded' in ''.join(r.get('Output', '') for r in rows)
           PY
+      # Strict before/after proof runs on macOS 26. The old macOS 15 code can
+      # also deadlock in child reaping; the current suite still covers both OSes.
       - name: Reproduce queued cancellation consuming another owner's line
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.os == 'macos-26' }}
         shell: bash
         run: |
           baseline="$RUNNER_TEMP/TEST-consent-baseline"
