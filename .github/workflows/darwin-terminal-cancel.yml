@@ -47,9 +47,10 @@ jobs:
           from pathlib import Path
           rows = [json.loads(s) for s in (Path(os.environ['RUNNER_TEMP']) / 'TEST-terminal-evidence/baseline.jsonl').read_text().splitlines()]
           assert any(r.get('Test') == 'TestDarwinInheritedTTYCancel' and r.get('Action') == 'fail' for r in rows)
-          assert 'deadline=context deadline exceeded' in ''.join(r.get('Output', '') for r in rows)
+          assert 'sent=1, deadline=context deadline exceeded' in ''.join(r.get('Output', '') for r in rows)
           PY
       - name: Verify cancellation, restoration and next-owner reuse
+        if: ${{ !cancelled() }}
         shell: bash
         working-directory: cli
         run: go test -json -race -count=1 -timeout=5m ./installerui ./internal/promptio ./internal/terminalreader > "$RUNNER_TEMP/TEST-terminal-evidence/current.jsonl"

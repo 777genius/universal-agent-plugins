@@ -69,7 +69,13 @@ func TestDarwinInheritedTTYCancel(t *testing.T) {
 		var buf [8192]byte
 		n, err := master.Read(buf[:])
 		if err != nil {
-			t.Fatal(err)
+			_ = cmd.Process.Kill()
+			waitErr := <-done
+			joined = true
+			if waitErr == nil && sent == 4 {
+				return
+			}
+			t.Fatalf("inherited TTY: %v, read=%v, sent=%d, deadline=%v\n%s\n%s", waitErr, err, sent, ctx.Err(), diagnostics.String(), screen.String())
 		}
 		screen.Write(buf[:n])
 		marker := fmt.Sprintf("Choose fixture %d", sent)
