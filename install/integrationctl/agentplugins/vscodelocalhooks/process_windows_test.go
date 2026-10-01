@@ -140,8 +140,21 @@ func assertWindowsRecording(t *testing.T, record, home, profile string, values [
 // from its filename or from renderer implementation strings.
 func probeWindowsPowerShell(t *testing.T, ps, home string, env []string) []byte {
 	t.Helper()
-	command := `[ordered]@{Major=$PSVersionTable.PSVersion.Major;Minor=$PSVersionTable.PSVersion.Minor;Edition=$PSVersionTable.PSEdition;ProcessPath=(Get-Process -Id $PID).Path;ConsoleCodePage=[Console]::OutputEncoding.CodePage;NativeInputCodePage=$OutputEncoding.CodePage} | ConvertTo-Json -Compress`
-	stdout, stderr, code := runWindowsPowerShell(t, ps, command, home, env)
+	phaseFile := filepath.Join(t.TempDir(), "TEST-ps51-phases.txt")
+	// Only this separate metadata probe has markers. Each .NET append is
+	// synchronous, finite and terminating on failure; nothing enters stdout.
+	command := strings.Join([]string{
+		`$ErrorActionPreference='Stop'; $clock=[System.Diagnostics.Stopwatch]::StartNew()`,
+		`$phaseFile='` + strings.ReplaceAll(phaseFile, "'", "''") + `'`,
+		`function Mark([string]$phase) { [System.IO.File]::AppendAllText($phaseFile, ($phase+' elapsedMs='+$clock.ElapsedMilliseconds+' pid='+$PID+[Environment]::NewLine), [System.Text.UTF8Encoding]::new($false)) }`,
+		`Mark 'script-entry'`,
+		`$metadata=[ordered]@{Major=$PSVersionTable.PSVersion.Major;Minor=$PSVersionTable.PSVersion.Minor;Edition=$PSVersionTable.PSEdition}`,
+		`Mark 'version-edition'`,
+		`Mark 'get-process-before'; $metadata['ProcessPath']=(Get-Process -Id $PID).Path; Mark 'get-process-after'`,
+		`$metadata['ConsoleCodePage']=[Console]::OutputEncoding.CodePage; $metadata['NativeInputCodePage']=$OutputEncoding.CodePage; Mark 'encodings'`,
+		`Mark 'convert-json-before'; $json=$metadata | ConvertTo-Json -Compress; Mark 'convert-json-after'; $json`,
+	}, "; ")
+	stdout, stderr, code := runObservedWindowsPowerShell(t, ps, command, home, env, phaseFile)
 	var got struct {
 		Major, Minor                         int
 		Edition, ProcessPath                 string
@@ -167,19 +180,28 @@ func equalWindowsPath(a, b string) bool {
 // pwsh search/fallback. A deadline bounds execution; WaitDelay bounds open pipes.
 func runWindowsPowerShell(t *testing.T, ps, command, home string, env []string) ([]byte, []byte, int) {
 	t.Helper()
+	return runObservedWindowsPowerShell(t, ps, command, home, env, "")
+}
+
+func runObservedWindowsPowerShell(t *testing.T, ps, command, home string, env []string, phaseFile string) ([]byte, []byte, int) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	child := exec.CommandContext(ctx, ps, "-ExecutionPolicy", "Bypass", "-NoProfile", "-NoLogo", "-Command", command)
 	child.Dir, child.Env, child.WaitDelay = home, env, time.Second
+	runStarted := time.Now()
 	// On timeout, terminate only this owned fixture process tree before waiting.
 	// This is test cleanup, not a claim about the vendor's timeout semantics.
 	child.Cancel = func() error {
+		cleanupStarted := time.Now()
+		t.Logf("TEST PS cancel entry pid=%d elapsed=%s context=%v", child.Process.Pid, time.Since(runStarted), ctx.Err())
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cleanupCancel()
 		taskkill := filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(ps))), "taskkill.exe")
 		cleanup := exec.CommandContext(cleanupCtx, taskkill, "/PID", strconv.Itoa(child.Process.Pid), "/T", "/F")
 		cleanup.Dir, cleanup.Env, cleanup.WaitDelay = home, env, time.Second
 		output, cleanupErr := cleanup.CombinedOutput()
+		t.Logf("TEST owned taskkill complete pid=%d elapsed=%s error=%v output=%q", child.Process.Pid, time.Since(cleanupStarted), cleanupErr, output)
 		if cleanupErr != nil {
 			t.Logf("TEST tree cleanup failed: %v output=%q", cleanupErr, output)
 			return child.Process.Kill()
@@ -188,12 +210,24 @@ func runWindowsPowerShell(t *testing.T, ps, command, home string, env []string) 
 	}
 	var stdout, stderr bytes.Buffer
 	child.Stdout, child.Stderr = &stdout, &stderr
-	err := child.Run()
+	started := time.Now()
+	t.Log("TEST PS Start begin")
+	err := child.Start()
+	t.Logf("TEST PS Start end elapsed=%s error=%v", time.Since(started), err)
+	if err == nil {
+		waiting := time.Now()
+		t.Logf("TEST PS Wait begin pid=%d", child.Process.Pid)
+		err = child.Wait()
+		t.Logf("TEST PS Wait end pid=%d elapsed=%s error=%v context=%v", child.Process.Pid, time.Since(waiting), err, ctx.Err())
+	}
 	code := -1
 	if child.ProcessState != nil {
 		code = child.ProcessState.ExitCode()
 	}
 	t.Logf("TEST system PS argv=%q code=%d stdoutBytes=%x stderrBytes=%x", child.Args, code, stdout.Bytes(), stderr.Bytes())
+	if phaseFile != "" {
+		logWindowsProbePhases(t, phaseFile)
+	}
 	if ctx.Err() != nil {
 		t.Fatal("native PowerShell deadline", ctx.Err())
 	}
@@ -202,6 +236,29 @@ func runWindowsPowerShell(t *testing.T, ps, command, home string, env []string) 
 		t.Fatal("required system PS5.1 unavailable or pipes not closed", err)
 	}
 	return stdout.Bytes(), stderr.Bytes(), code
+}
+
+func logWindowsProbePhases(t *testing.T, phaseFile string) {
+	t.Helper()
+	// The script can append only seven fixed records. Read only its own fresh
+	// file, after Wait/owned cleanup and before any timeout fatal or TempDir cleanup.
+	file, err := os.Open(phaseFile)
+	if err != nil {
+		t.Logf("TEST PS final phases unavailable: %v", err)
+		t.Error("required metadata phase evidence unavailable")
+		return
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Error("close metadata phase evidence", err)
+		}
+	}()
+	var data [1024]byte
+	n, err := file.Read(data[:])
+	t.Logf("TEST PS final phases bytes=%d readError=%v content=%q", n, err, data[:n])
+	if err != nil || n == len(data) {
+		t.Error("metadata phase evidence unreadable or exceeds bound", err)
+	}
 }
 
 func testWindowsRefusalsBeforeProcess(t *testing.T, target hooks.Target, recorder, root, ps, home string, env []string) {

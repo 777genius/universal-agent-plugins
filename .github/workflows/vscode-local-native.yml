@@ -8,6 +8,15 @@ on:
       - 'install/integrationctl/agentplugins/go.sum'
       - '.github/workflows/vscode-local-native.yml'
   workflow_dispatch:
+    inputs:
+      os:
+        description: Native diagnostic runner selection
+        type: choice
+        default: all
+        options:
+          - all
+          - windows
+          - darwin
 
 permissions:
   contents: read
@@ -19,13 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: windows-latest
-            os: windows
-            required_test: TestTESTWindowsPowerShell51Process
-          - runner: macos-latest
-            os: darwin
-            required_test: TestTESTShellArgvProcess
+        include: ${{ fromJSON(inputs.os == 'windows' && '[{"runner":"windows-latest","os":"windows","required_test":"TestTESTWindowsPowerShell51Process"}]' || inputs.os == 'darwin' && '[{"runner":"macos-latest","os":"darwin","required_test":"TestTESTShellArgvProcess"}]' || '[{"runner":"windows-latest","os":"windows","required_test":"TestTESTWindowsPowerShell51Process"},{"runner":"macos-latest","os":"darwin","required_test":"TestTESTShellArgvProcess"}]') }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 12
     defaults:
