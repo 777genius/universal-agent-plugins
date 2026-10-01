@@ -1,7 +1,6 @@
 package pluginkitai_test
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -159,7 +158,7 @@ func TestVSCodeLocalDispatchIsolationAndErrors(t *testing.T) {
 			t.Fatalf("Cursor runner dispatched Local: %+v", got)
 		}
 	}
-	for _, mode := range []string{"read-error", "write-error", "handler-error", "cancelled", "panic"} {
+	for _, mode := range []string{"read-error", "write-error", "handler-error", "canceled", "panic"} {
 		t.Run(mode, func(t *testing.T) {
 			got := c.run(t, "VSCodeLocalStop", mode, localStopInput)
 			if got.Code != 1 || got.Stdout != "" || got.Stderr == "" {
@@ -188,6 +187,6 @@ func TestVSCodeLocalSupportContract(t *testing.T) {
 		delete(want, string(entry.Event))
 	}
 	if len(want) != 0 {
-		t.Fatal(fmt.Sprintf("missing Local support entries: %v", want))
+		t.Fatalf("missing Local support entries: %v", want)
 	}
 }

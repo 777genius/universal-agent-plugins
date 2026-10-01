@@ -123,7 +123,7 @@ func main() {
 		})
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	if c.mode == "cancelled" {
+	if c.mode == "canceled" {
 		cancel()
 	}
 	if c.mode == "cursor-runner" {

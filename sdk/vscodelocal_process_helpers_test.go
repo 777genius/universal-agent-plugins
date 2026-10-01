@@ -50,9 +50,10 @@ func buildLocalConsumer(t *testing.T) localConsumer {
 	}
 	// Use the running Go test toolchain, never an ambient/downloaded toolchain.
 	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
-	env := []string{"HOME=" + home, "TMPDIR=" + dir, "GOTMPDIR=" + dir,
+	env := make([]string, 0, 11)
+	env = append(env, "HOME="+home, "TMPDIR="+dir, "GOTMPDIR="+dir,
 		"GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOMAXPROCS=2",
-		"PATH=" + filepath.Dir(goBinary) + string(os.PathListSeparator) + "/usr/bin:/bin"}
+		"PATH="+filepath.Dir(goBinary)+string(os.PathListSeparator)+"/usr/bin:/bin")
 	for _, key := range []string{"GOCACHE", "GOMODCACHE"} {
 		value := os.Getenv(key)
 		if value == "" {
