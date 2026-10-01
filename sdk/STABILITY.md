@@ -14,6 +14,14 @@ The generated support matrix and `plugin-kit-ai.Supported()` describe runtime-ev
 ## Public-Beta
 Current SDK beta surface added after the first promotion:
 
+- Cursor `StopEvent`, `StopStatus` and its constants, `ModelParam`, empty
+  `StopResponse`, registrar `OnStop`/`OnStopContext`, `App.Cursor`,
+  `App.RunCursorObserver`, `CursorObserverIO` and `NewCursorObserverPipeIO`.
+  Invocation `CursorStop` is reserved, beta and stop-only. The
+  [generated guide](../docs/generated/cursor_stop.md) states IO ownership and
+  cancellation limits. Native client/Windows pipe qualification is pending;
+  neither all-Cursor stability nor installed integration is claimed.
+
 - Gemini `NotificationEvent`, `NotificationType`,
   `NotificationTypeToolPermission`, `NotificationResponse`, and
   `(*gemini.Registrar).OnNotification` (invocation `GeminiNotification`). This
