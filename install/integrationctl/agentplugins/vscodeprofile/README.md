@@ -59,6 +59,9 @@ represent absent settings; other inputs must be one UTF-8 JSONC object. As an
 interim admission restriction, `//` comments terminated by bare CR refuse
 before AST parsing. CRLF/LF line comments, CR whitespace, CR in block comments
 and escaped CR in strings remain supported; foreign bytes are never normalized.
+Terminal `//` comments at EOF are accepted through a temporary hujson parsing
+terminator removed from AST trivia before packing. Original input and actual
+output budgets apply; no synthetic newline reaches results or digests.
 Duplicates are refused in the edited shape: the root location selector and all
 location keys, including equivalent escape spellings. Unknown foreign settings, duplicate
 foreign keys, number lexemes and lone surrogate escapes remain opaque. Location

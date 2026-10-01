@@ -1,6 +1,7 @@
 package vscodeprofile
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -24,10 +25,15 @@ func parseSettings(body []byte, pluginRoot string) (*document, error) {
 	if len(body) == 0 {
 		body = []byte("{}")
 	}
-	ast, err := hujson.Parse(body)
+	// hujson requires LF to terminate // comments, while native JSONC accepts
+	// EOF. Preflight bounds original bytes and guards bare CR before this copy.
+	ast, err := hujson.Parse(append(bytes.Clone(body), '\n'))
 	if err != nil {
 		return nil, fmt.Errorf("malformed JSONC")
 	}
+	// A successful parse places the synthetic LF in root trailing trivia.
+	// Remove it before any mutation/packing; real output is budgeted by Plan.
+	ast.AfterExtra = ast.AfterExtra[:len(ast.AfterExtra)-1]
 	root, ok := ast.Value.(*hujson.Object)
 	if !ok {
 		return nil, fmt.Errorf("settings must be an object")
