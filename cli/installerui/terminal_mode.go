@@ -36,7 +36,7 @@ func terminalMode(cfg TerminalConfig) (TerminalMode, error) {
 		return "", err
 	}
 	width, height, err := term.GetSize(int(cfg.Output.Fd()))
-	rich := (runtime.GOOS == "linux" || runtime.GOOS == "darwin") && os.Getenv("TERM") != "" && os.Getenv("TERM") != "dumb" && err == nil && width >= 40 && height >= 10
+	rich := richTerminalAvailable(width, height, err)
 	if mode == ModeRich && !rich {
 		return "", ErrUnavailable
 	}
@@ -44,4 +44,9 @@ func terminalMode(cfg TerminalConfig) (TerminalMode, error) {
 		return ModePlain, nil
 	}
 	return ModeRich, nil
+}
+
+func richTerminalAvailable(width, height int, sizeErr error) bool {
+	termName := os.Getenv("TERM")
+	return (runtime.GOOS == "linux" || runtime.GOOS == "darwin") && termName != "" && termName != "dumb" && sizeErr == nil && width >= 40 && height >= 10
 }

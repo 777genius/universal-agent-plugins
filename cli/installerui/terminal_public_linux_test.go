@@ -135,7 +135,7 @@ func TestTerminalMultiSelectContract(t *testing.T) {
 				if tc.name == "retry-invalid" && mode == ModePlain {
 					want = []string{"beta"}
 				}
-				if !errors.Is(err, tc.wantErr) || got.Cancelled != tc.cancel || got.Accepted != (tc.wantErr == nil && !tc.cancel) || !reflect.DeepEqual(nonNil(got.IDs), nonNil(want)) {
+				if !errors.Is(err, tc.wantErr) || got.Cancelled != tc.cancel || got.Accepted != (tc.wantErr == nil && !tc.cancel) || !reflect.DeepEqual(nonNil(got.IDs), nonNil(want)) { //nolint:misspell // Preserve the existing public cancellation API.
 					t.Fatalf("%+v %v want=%v output=%q", got, err, want, out)
 				}
 				if len(got.IDs) > 0 {
@@ -168,7 +168,7 @@ func TestTerminalModePromptDescriptors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer data.Close()
+	defer func() { _ = data.Close() }()
 	if _, err := NewTerminal(TerminalConfig{Input: slave, Output: data, Mode: ModePlain}); !errors.Is(err, ErrUnavailable) {
 		t.Fatal(err)
 	}
@@ -176,8 +176,8 @@ func TestTerminalModePromptDescriptors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pipe.Close()
-	defer writer.Close()
+	defer func() { _ = pipe.Close() }()
+	defer func() { _ = writer.Close() }()
 	if _, err := NewTerminal(TerminalConfig{Input: pipe, Output: slave}); !errors.Is(err, ErrUnavailable) {
 		t.Fatal(err)
 	}
@@ -342,8 +342,9 @@ func TestTerminalViewportResizePTY(t *testing.T) {
 
 func TestTerminalConfirmationSummaryPTY(t *testing.T) {
 	p, master, _ := publicTestTerminal(t, ModeRich)
-	summary := []string{strings.Repeat("a", 1000) + "/first-scope-suffix"}
-	for i := 0; i < 20; i++ {
+	summary := make([]string, 0, 22)
+	summary = append(summary, strings.Repeat("a", 1000)+"/first-scope-suffix")
+	for i := range 20 {
 		summary = append(summary, fmt.Sprintf("Unit%d: explicit choice", i))
 	}
 	summary = append(summary, "/other-complete-scope/chosen-final-suffix")

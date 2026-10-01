@@ -44,6 +44,7 @@ ANSI = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x
 SELECT = r'(?i)(choose targets|select (?:the )?(?:clients|targets)|detected supported clients)'
 CONFIRM = r'(?i)(install[^\r\n]*\?|apply[^\r\n]*\?|proceed[^\r\n]*\?|confirm installation)'
 LIFECYCLE = r'Have you completed activation[^\r\n]*\[y/N\]'
+EMPTY_SELECTION = r'(?i)(at least (?:one|1\b)|select one|cannot be empty|must select)'
 
 
 def check(condition, message):
@@ -78,7 +79,7 @@ def cancel_empty_selection(session, fixture, confirmation):
     # Include every byte from before the invalid submit through cancellation drain.
     offset = len(session.raw)
     session.send(selection_keys(session.raw, set()))
-    session.wait(r'(?i)(at least (?:one|1\b)|select one|cannot be empty|must select)',
+    session.wait(EMPTY_SELECTION,
                  'empty-validation', after=offset)
     fixture.unchanged()
     session.send(b'\x1b')

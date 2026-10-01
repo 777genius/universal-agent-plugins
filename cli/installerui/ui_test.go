@@ -62,7 +62,7 @@ func TestLegacySelectionRows(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, err := u.SelectMany(context.Background(), SelectRequest{Title: "Legacy", Options: []Option{{"all", "All ID"}, {"none", "None ID"}}, Defaults: tc.defaults})
-			if err != nil || !reflect.DeepEqual(got.IDs, tc.want) || got.Cancelled != tc.cancel || got.Accepted == tc.cancel {
+			if err != nil || !reflect.DeepEqual(got.IDs, tc.want) || got.Cancelled != tc.cancel || got.Accepted == tc.cancel { //nolint:misspell // Preserve the existing public cancellation API.
 				t.Fatalf("%+v %v", got, err)
 			}
 		})

@@ -63,7 +63,7 @@ func (s *formSession) result(ctx context.Context, runErr error) error {
 		return errors.Join(failures...)
 	}
 	if errors.Is(runErr, huh.ErrUserAborted) {
-		return formCancelled{}
+		return formCanceled{}
 	}
 	if runErr != nil {
 		return fmt.Errorf("terminal prompt: %w", runErr)
@@ -105,7 +105,8 @@ func cleanupError(err, cleanup error) error {
 }
 
 func (p terminalRenderer) configureForm(form *huh.Form, session *formSession, config formInput) {
-	options := []tea.ProgramOption{tea.WithInput(session.input), tea.WithOutput(session.output), tea.WithoutSignalHandler(), tea.WithFilter(session.filter(p.Output, config))}
+	options := make([]tea.ProgramOption, 0, 5)
+	options = append(options, tea.WithInput(session.input), tea.WithOutput(session.output), tea.WithoutSignalHandler(), tea.WithFilter(session.filter(p.Output, config)))
 	profile := colorprofile.ANSI
 	if p.NoColor {
 		profile = colorprofile.Ascii
@@ -116,7 +117,7 @@ func (p terminalRenderer) configureForm(form *huh.Form, session *formSession, co
 
 // A user gesture may become a clean cancellation only while it is the sole
 // outcome. Joining any cleanup failure changes the concrete error type.
-type formCancelled struct{}
+type formCanceled struct{}
 
-func (formCancelled) Error() string { return ErrCancelled.Error() }
-func (formCancelled) Unwrap() error { return ErrCancelled }
+func (formCanceled) Error() string { return ErrCancelled.Error() }
+func (formCanceled) Unwrap() error { return ErrCancelled }

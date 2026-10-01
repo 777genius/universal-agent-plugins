@@ -1,11 +1,13 @@
 package installerui
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // This gate builds a real external main module with only the candidate CLI
@@ -19,7 +21,7 @@ func TestPublicTerminalConsumerCompile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(root)
+	defer func() { _ = os.RemoveAll(root) }()
 	module, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
@@ -59,13 +61,15 @@ func CorrectUse(ctx context.Context,in,out *os.File) error {
 	if err := os.WriteFile(filepath.Join(root, "consumer.go"), []byte(sample), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("go", "test", "-mod=mod", "-count=1", "./...")
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "test", "-mod=mod", "-count=1", "./...")
 	cmd.Dir = root
 	// Preserve only prepared build inputs and trusted tool paths, never auth env.
 	for _, key := range []string{"PATH", "TMPDIR", "GOCACHE", "GOMODCACHE"} {
 		value := os.Getenv(key)
 		if value == "" && (key == "GOCACHE" || key == "GOMODCACHE") {
-			out, err := exec.Command("go", "env", key).Output()
+			out, err := exec.CommandContext(ctx, "go", "env", key).Output()
 			if err != nil {
 				t.Fatalf("resolve prepared %s: %v", key, err)
 			}

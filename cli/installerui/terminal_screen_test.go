@@ -18,14 +18,14 @@ type terminalTestScreen struct {
 
 func newTerminalScreen(rows, cols int) *terminalTestScreen {
 	s := &terminalTestScreen{rows: rows, cols: cols}
-	for i := 0; i < rows; i++ {
+	for range rows {
 		s.grid = append(s.grid, make([]string, cols))
 	}
 	return s
 }
 func (s *terminalTestScreen) resize(rows, cols int) {
 	n := newTerminalScreen(rows, cols)
-	for i := 0; i < min(rows, s.rows); i++ {
+	for i := range min(rows, s.rows) {
 		copy(n.grid[i], s.grid[i])
 	}
 	n.row, n.col = min(s.row, rows-1), min(s.col, cols-1)
@@ -34,7 +34,7 @@ func (s *terminalTestScreen) resize(rows, cols int) {
 func (s *terminalTestScreen) feed(input string) {
 	input = s.pending + input
 	s.pending = ""
-	for len(input) > 0 {
+	for input != "" {
 		seq, w, n, state := ansi.DecodeSequence(input, 0, nil)
 		if n == 0 || state != 0 {
 			s.pending = input

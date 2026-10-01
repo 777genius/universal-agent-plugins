@@ -29,8 +29,8 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 		return Selection{}, err
 	}
 	err := p.run(ctx, form, formInput{canSubmit: func() bool { return validate(ids) == nil }, resize: resize})
-	if _, cancelled := err.(formCancelled); cancelled {
-		return Selection{Cancelled: true}, nil
+	if _, canceled := err.(formCanceled); canceled { //nolint:errorlint // Only sole user cancellation is clean; wrapped cleanup errors must fail.
+		return Selection{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.
 	}
 	if err != nil {
 		return Selection{}, err

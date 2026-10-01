@@ -55,7 +55,7 @@ func TestWindowsConsoleConsentBoundary(t *testing.T) {
 			t.Error("queued input accepted")
 		}
 		if answer == "\x1b\r" {
-			if err != nil || !result.Cancelled || result.Accepted {
+			if err != nil || !result.Cancelled || result.Accepted { //nolint:misspell // Preserve the existing public cancellation API.
 				t.Errorf("cancel result=%+v err=%v", result, err)
 			}
 		} else if err != nil {
@@ -65,6 +65,20 @@ func TestWindowsConsoleConsentBoundary(t *testing.T) {
 		cancel()
 		if line != "next-owner" || err != nil {
 			t.Fatalf("suffix=%q %v", line, err)
+		}
+		// ReadConsole may leave the key-up for the fixture's final Enter.
+		// Consume only that owned release, never flush a future owner's input.
+		var remaining uint32
+		if err := windows.GetNumberOfConsoleInputEvents(h, &remaining); err != nil {
+			t.Fatal(err)
+		}
+		if remaining == 1 {
+			record, err := readConsentRecord(h)
+			if err != nil || record.eventType != 1 || record.keyDown != 0 || record.virtualKey != 0x0d || record.char != '\r' {
+				t.Fatalf("unexpected fixture suffix event: %+v %v", record, err)
+			}
+		} else if remaining != 0 {
+			t.Fatalf("unexpected fixture suffix count: %d", remaining)
 		}
 		var after uint32
 		if err := windows.GetConsoleMode(h, &after); err != nil || before != after {

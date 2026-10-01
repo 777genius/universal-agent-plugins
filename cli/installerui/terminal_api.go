@@ -49,6 +49,13 @@ type Terminal struct {
 	mode     TerminalMode
 }
 
+// Private I/O injection is used by neutral reader/form qualification only.
+type terminalRenderer struct {
+	Input   io.Reader
+	Output  io.Writer
+	NoColor bool
+}
+
 func NewTerminal(cfg TerminalConfig) (*Terminal, error) {
 	mode, err := terminalMode(cfg)
 	if err != nil {
@@ -153,11 +160,4 @@ func (p terminalRenderer) snapshot(ctx context.Context) (func() error, error) {
 		}, nil
 	}
 	return func() error { return nil }, nil
-}
-
-// Private I/O injection is used by neutral reader/form qualification only.
-type terminalRenderer struct {
-	Input   io.Reader
-	Output  io.Writer
-	NoColor bool
 }

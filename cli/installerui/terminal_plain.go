@@ -12,7 +12,7 @@ func (t *Terminal) selectPlain(ctx context.Context, req MultiSelectRequest) (Sel
 	if err != nil {
 		return Selection{}, err
 	}
-	for attempt := 0; attempt < 3; attempt++ {
+	for range 3 {
 		if err := u.render(req.SelectRequest, true); err != nil {
 			return Selection{}, err
 		}
@@ -24,7 +24,7 @@ func (t *Terminal) selectPlain(ctx context.Context, req MultiSelectRequest) (Sel
 			return Selection{}, err
 		}
 		if terminalCancel(line) {
-			return Selection{Cancelled: true}, nil
+			return Selection{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.
 		}
 		ids, err := terminalPlainIDs(line, req)
 		if err == nil {
@@ -32,7 +32,6 @@ func (t *Terminal) selectPlain(ctx context.Context, req MultiSelectRequest) (Sel
 			if e == nil {
 				return result, nil
 			}
-			err = e
 		}
 		if _, e := fmt.Fprintln(u.out, "Invalid selection; choose a subset of the shown options."); e != nil {
 			return Selection{}, e

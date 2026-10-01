@@ -28,7 +28,7 @@ func clipLabel(s string) string {
 }
 
 func validTerminalID(id string) bool {
-	if len(id) == 0 || len(id) > 128 || !asciiLetter(id[0]) {
+	if id == "" || len(id) > 128 || !asciiLetter(id[0]) {
 		return false
 	}
 	switch strings.ToLower(id) {
@@ -36,7 +36,7 @@ func validTerminalID(id string) bool {
 		return false
 	}
 	for _, c := range []byte(id) {
-		if !asciiLetter(c) && !(c >= '0' && c <= '9') && !strings.ContainsRune("_.:-", rune(c)) {
+		if !asciiLetter(c) && (c < '0' || c > '9') && !strings.ContainsRune("_.:-", rune(c)) {
 			return false
 		}
 	}

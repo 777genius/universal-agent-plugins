@@ -70,7 +70,7 @@ func targetResult(req prompt.TargetSelectionRequest, result installerui.Selectio
 	if err != nil {
 		return prompt.TargetSelectionResult{}, adapterError(err)
 	}
-	if result.Cancelled {
+	if result.Cancelled { //nolint:misspell // Preserve the existing public cancellation API.
 		return prompt.TargetSelectionResult{}, prompt.ErrPromptCanceled
 	}
 	ids := make([]domain.ClientID, len(result.IDs))
@@ -92,7 +92,7 @@ func confirmationResult(result installerui.Confirmation, err error) (prompt.Conf
 	if err != nil {
 		return prompt.ConfirmationResult{}, adapterError(err)
 	}
-	if result.Cancelled {
+	if result.Cancelled { //nolint:misspell // Preserve the existing public cancellation API.
 		return prompt.ConfirmationResult{}, prompt.ErrPromptCanceled
 	}
 	return prompt.ConfirmationResult{Accepted: result.Accepted}, nil

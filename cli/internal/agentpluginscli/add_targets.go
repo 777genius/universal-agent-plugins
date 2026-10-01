@@ -177,7 +177,7 @@ func promptYesNoDefault(ctx context.Context, reader io.Reader, writer, alternate
 	if err != nil {
 		return false, normalizeTerminalConsentError(err)
 	}
-	if result.Cancelled {
+	if result.Cancelled { //nolint:misspell // Preserve the existing public cancellation API.
 		return false, prompt.ErrPromptCanceled
 	}
 	return result.Accepted, nil

@@ -34,8 +34,8 @@ func (p terminalRenderer) confirm(ctx context.Context, req ConfirmRequest, queue
 		}
 	}
 	err := p.run(ctx, form, formInput{queued: queued, resize: layout.resize, onKey: layout.key})
-	if _, cancelled := err.(formCancelled); cancelled {
-		return Confirmation{Cancelled: true}, nil
+	if _, canceled := err.(formCanceled); canceled { //nolint:errorlint // Only sole user cancellation is clean; wrapped cleanup errors must fail.
+		return Confirmation{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.
 	}
 	if err != nil {
 		return Confirmation{}, err
