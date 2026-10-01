@@ -31,8 +31,8 @@ func TestDarwinVirtualTTYConsent(t *testing.T) {
 			cmd.Stdin = slave
 			cmd.ExtraFiles = []*os.File{master}
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
-			// Closing this parent's slave lets the child observe EOF after closing its
-			// own last terminal handle; inherited fd3 belongs only to the controller.
+			// Discard the parent's unneeded physical input alias after starting the
+			// child; fd3 belongs only to the child's test controller.
 			if err := cmd.Start(); err != nil {
 				t.Fatal(err)
 			}
@@ -74,5 +74,5 @@ func TestDarwinVirtualTTYConsentChild(t *testing.T) {
 	// remains in this fresh subprocess to hide the virtual backend's behavior.
 	master := os.NewFile(3, "TEST-virtual-consent-controller")
 	defer master.Close()
-	testConsentPTYCase(t, func(*testing.T) (*os.File, *os.File) { return master, os.Stdin }, name)
+	testConsentPTYCase(t, func(*testing.T) (*os.File, *os.File) { return master, os.Stdin }, name, "TEST-VIRTUAL-CONSENT-OWNER-END")
 }

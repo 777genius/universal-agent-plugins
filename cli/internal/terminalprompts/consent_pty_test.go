@@ -24,10 +24,10 @@ func TestConsentPTYBoundary(t *testing.T) {
 }
 
 func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File)) {
-	testConsentPTYCase(t, openPTY, "")
+	testConsentPTYCase(t, openPTY, "", "")
 }
 
-func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File), selectedCase string) {
+func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File), selectedCase, endMarker string) {
 	t.Setenv("TERM", "xterm-256color")
 	for _, tc := range []struct {
 		name, selection, confirmation, remaining string
@@ -103,6 +103,10 @@ func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.Fi
 							t.Errorf("toggled confirmation write=%d %v", n, e)
 						}
 					}
+					if endMarker != "" && bytes.Contains(output.Bytes(), []byte(endMarker)) {
+						drained <- output.Bytes()
+						return
+					}
 					if err != nil {
 						drained <- output.Bytes()
 						return
@@ -133,6 +137,10 @@ func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.Fi
 				t.Errorf("selection changed terminal: got %+v want %+v", selected, before)
 			}
 			result, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?", Default: tc.defaultYes})
+			t.Logf("confirmation accepted=%v error=%v", result.Accepted, err)
+			if !errors.Is(err, tc.wantErr) || result.Accepted != tc.accepted {
+				t.Fatalf("confirmation=%+v %v; want accepted=%v", result, err, tc.accepted)
+			}
 			after, restoreErr := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
 			if restoreErr != nil {
 				t.Fatal(restoreErr)
@@ -153,6 +161,14 @@ func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.Fi
 					t.Errorf("plain handoff changed terminal: got %+v want %+v", afterLine, before)
 				}
 			}
+			// Virtual controlling TTYs can remain open until the session exits.
+			// A test-only output frame ends capture after all owner assertions,
+			// preserving the complete ordered render without requiring EOF.
+			if endMarker != "" {
+				if _, e := io.WriteString(slave, endMarker+"\n"); e != nil {
+					t.Fatal(e)
+				}
+			}
 			slave.Close()
 			var output []byte
 			select {
@@ -162,9 +178,6 @@ func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.Fi
 			}
 			drained <- output
 			t.Logf("selection batch=%x separate confirmation=%x accepted=%v error=%v\n%s", tc.selection, tc.confirmation, result.Accepted, err, output)
-			if !errors.Is(err, tc.wantErr) || result.Accepted != tc.accepted {
-				t.Fatalf("confirmation=%+v %v; want accepted=%v", result, err, tc.accepted)
-			}
 			switch tc.name {
 			case "fresh-default-yes":
 				if !bytes.Contains(output, []byte("✓ Yes")) {
