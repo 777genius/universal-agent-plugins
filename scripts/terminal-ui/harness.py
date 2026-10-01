@@ -186,7 +186,7 @@ class Fixture:
         }))
         for client in ('codex', 'cursor'):
             (self.home / ('.' + client)).mkdir()
-            if os.name == 'nt': continue  # config-only discovery; no runtime on PATH
+            if os.name == 'nt': continue  # desktop evidence below; no runtime on PATH
             stub = self.bin / client
             stub.write_text('#!/bin/sh\n'
                             'printf "%s\\n" "$0 $*" >> "$STUB_LOG"\n'
@@ -214,6 +214,12 @@ class Fixture:
             self.env[key] = str(self.home / path)
         if include_opencode:
             (Path(self.env['XDG_CONFIG_HOME']) / 'opencode').mkdir(parents=True)
+        if os.name == 'nt':
+            # Cursor config alone is not editor evidence. Seed the existing
+            # Windows desktop discovery path; inert TEST bytes are never run.
+            editor = Path(self.env['LOCALAPPDATA']) / 'Programs/cursor/Cursor.exe'
+            editor.parent.mkdir(parents=True)
+            editor.write_bytes(b'synthetic TEST Cursor editor; never executable')
         # Existing executable-cache seam, only inside this disposable fixture.
         # This is a SYNTHETIC scanner protocol response, not security evidence.
         machine = {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
