@@ -110,6 +110,14 @@ jobs:
               if [[ "$U2_REQUIRE_NATIVE" == windows ]]; then go_bin="$(cygpath -m "$go_bin")"; fi
               env -i PATH="$PATH" SystemRoot="${SYSTEMROOT:-${SystemRoot:-}}" \
                 HOME="$U2_TEST_SCRATCH/home" USERPROFILE="$U2_TEST_SCRATCH/profile" \
+                APPDATA="$U2_TEST_SCRATCH/home" LOCALAPPDATA="$U2_TEST_SCRATCH/profile" \
+                TMPDIR="$U2_TEST_SCRATCH/tmp" TEMP="$U2_TEST_SCRATCH/tmp" TMP="$U2_TEST_SCRATCH/tmp" \
+                GOMODCACHE="$U2_TEST_SCRATCH/modcache" GOCACHE="$U2_TEST_SCRATCH/gocache" \
+                GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOMAXPROCS=2 \
+                "$go_bin" telemetry off
+              env -i PATH="$PATH" SystemRoot="${SYSTEMROOT:-${SystemRoot:-}}" \
+                HOME="$U2_TEST_SCRATCH/home" USERPROFILE="$U2_TEST_SCRATCH/profile" \
+                APPDATA="$U2_TEST_SCRATCH/home" LOCALAPPDATA="$U2_TEST_SCRATCH/profile" \
                 TMPDIR="$U2_TEST_SCRATCH/tmp" TEMP="$U2_TEST_SCRATCH/tmp" TMP="$U2_TEST_SCRATCH/tmp" \
                 GOMODCACHE="$U2_TEST_SCRATCH/modcache" GOCACHE="$U2_TEST_SCRATCH/gocache" \
                 GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOMAXPROCS=2 \
