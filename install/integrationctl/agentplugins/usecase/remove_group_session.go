@@ -128,7 +128,9 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 		return err
 	}
 	outcome, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-		Client: targetInput.Client, DeclaredName: session.installation.DeclaredName,
+		RemoveOwnedEntry: client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects),
+		SelectedDelivery: client.SelectedDelivery,
+		Client:           targetInput.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: client.Activation, Interactive: targetInput.Interactive, ExternalUninstalled: targetInput.ExternalUninstalled,
 		Confirmed: false, PhysicalArtifactID: client.PhysicalArtifact, BackendExecutable: targetInput.BackendExecutable,
 		ManagedArtifactPath: client.TargetLocator,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -115,8 +116,13 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	if !sameNativeBackend(prior.input.Client.ClientID, target.Client.ClientID) {
 		return false, fmt.Errorf("targets collide on physical backend %s", key)
 	}
-	if (domain.ClientTraitsFor(prior.input.Client.ClientID).BindsNativeProfileRoot || domain.ClientTraitsFor(target.Client.ClientID).BindsNativeProfileRoot) && prior.input.Client.ConfigRoot != target.Client.ConfigRoot {
+	if (prior.plan.SelectedDelivery.EffectiveTraits(prior.input.Client.ClientID).BindsNativeProfileRoot || plan.SelectedDelivery.EffectiveTraits(target.Client.ClientID).BindsNativeProfileRoot) && prior.input.Client.ConfigRoot != target.Client.ConfigRoot {
 		return false, fmt.Errorf("targets select different native profile roots for physical backend %s", key)
+	}
+	// Coalescing discards one plan, so all frozen authority, including revision
+	// digests, must agree. SameSelection deliberately excludes those digests.
+	if !reflect.DeepEqual(prior.plan.SelectedDelivery, plan.SelectedDelivery) {
+		return false, fmt.Errorf("targets select different delivery facts for physical backend %s", key)
 	}
 	if prior.noChange {
 		session.result.Targets[targetIndex].NoChange = true
