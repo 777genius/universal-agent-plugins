@@ -110,7 +110,7 @@ func TestUnambiguousCRTriviaPreservesExactDisabledSnapshot(t *testing.T) {
 func TestDistinctDriveURIPathsKeepExactReceiptAndDisabledRepair(t *testing.T) {
 	id := identity()
 	id.SettingsPath, id.PluginRoot = `C:\lab\profile\settings.json`, `C:\lab\plugins\通知`
-	body := []byte(`{"chat.pluginLocations":{"/D:/lab/plugins/通知":false,"\\C:\\lab\\plugins\\other":true}}`)
+	body := []byte(`{"chat.pluginLocations":{"/D:/lab/plugins/通知":false,"\\C:\\lab\\plugins\\foreign":true}}`)
 	owned := plan(t, vp.Request{Settings: body, Identity: id, Action: vp.Install})
 	if owned.Receipt.Identity != id || !bytes.Contains(owned.Settings, body[1:len(body)-2]) {
 		t.Fatal("foreign spelling or exact receipt identity changed")
@@ -124,7 +124,7 @@ func TestDistinctDriveURIPathsKeepExactReceiptAndDisabledRepair(t *testing.T) {
 	}
 	repaired := plan(t, vp.Request{Settings: body, Identity: id, Action: vp.Repair, Previous: observed.Receipt})
 	locations := decoded(t, repaired.Settings)["chat.pluginLocations"].(map[string]any)
-	if !repaired.Disabled || *repaired.Receipt != *observed.Receipt || locations[id.PluginRoot] != false || locations["/D:/lab/plugins/通知"] != false || locations[`\C:\lab\plugins\other`] != true {
+	if !repaired.Disabled || *repaired.Receipt != *observed.Receipt || locations[id.PluginRoot] != false || locations["/D:/lab/plugins/通知"] != false || locations[`\C:\lab\plugins\foreign`] != true {
 		t.Fatal("disabled repair adopted/renamed foreign spelling or lost receipt")
 	}
 }

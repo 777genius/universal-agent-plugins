@@ -89,7 +89,11 @@ func TestEOFCommentOriginalAndOutputByteBudgets(t *testing.T) {
 	if len(fit.Settings) != vp.MaxSettingsBytes || !fit.Changed || fit.Receipt == nil {
 		t.Fatal("exact real output byte limit not accepted")
 	}
-	checkEOFForeign(t, fit.Settings, fitInput[bytes.Index(fitInput, []byte("//")):])
+	fitSuffix := bytes.Index(fitInput, []byte("//"))
+	if fitSuffix < 0 {
+		t.Fatal("exact-limit fixture is missing its EOF comment")
+	}
+	checkEOFForeign(t, fit.Settings, fitInput[fitSuffix:])
 	refused(t, vp.Request{Settings: pad(base, len(fitInput)+1), Identity: id, Action: vp.Install})
 	disabled := bytes.Replace(seed.Settings, []byte(`"/lab/plugins/通知":true`), []byte(`"/lab/plugins/通知":false`), 1)
 	bounded := pad(disabled, vp.MaxSettingsBytes)
@@ -104,7 +108,11 @@ func TestEOFCommentOriginalAndOutputByteBudgets(t *testing.T) {
 	if !removed.Changed || removed.Receipt != nil || len(removed.Settings) >= len(bounded) {
 		t.Fatal("bounded EOF removal failed")
 	}
-	checkEOFForeign(t, removed.Settings, bounded[bytes.Index(bounded, []byte("//")):])
+	boundedSuffix := bytes.Index(bounded, []byte("//"))
+	if boundedSuffix < 0 {
+		t.Fatal("bounded fixture is missing its EOF comment")
+	}
+	checkEOFForeign(t, removed.Settings, bounded[boundedSuffix:])
 	oversized := append(bytes.Clone(bounded), 'x')
 	refused(t, vp.Request{Settings: oversized, Identity: id, Action: vp.Remove, Previous: noOp.Receipt})
 	if _, err := vp.VerifyOwned(oversized, id, noOp.Receipt); !errors.Is(err, vp.ErrConflict) {

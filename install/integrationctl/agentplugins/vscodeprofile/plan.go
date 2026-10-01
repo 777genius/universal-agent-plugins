@@ -106,7 +106,8 @@ func reconcileAbsent(req Request, doc *document) (Result, error) {
 	}
 }
 
-func conflict(err error) error { return fmt.Errorf("%w: %v", ErrConflict, err) }
+// Wrap only ErrConflict; the secondary diagnostic carries no public authority.
+func conflict(err error) error { return fmt.Errorf("%w: %s", ErrConflict, err.Error()) }
 
 // VerifyOwned checks the exact current identity and selector. Native false is
 // an accepted disabled transition from true, never evidence to re-enable.

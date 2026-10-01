@@ -62,7 +62,7 @@ func absolutePath(p string) (string, bool) {
 	if strings.HasPrefix(p, "/") && !strings.HasPrefix(p, "//") && !strings.Contains(p, "\\") {
 		return path.Clean(p), true
 	}
-	if len(p) < 3 || !((p[0] >= 'a' && p[0] <= 'z') || (p[0] >= 'A' && p[0] <= 'Z')) || p[1] != ':' || p[2] != '\\' || strings.Contains(p, "/") {
+	if len(p) < 3 || (p[0] < 'a' || p[0] > 'z') && (p[0] < 'A' || p[0] > 'Z') || p[1] != ':' || p[2] != '\\' || strings.Contains(p, "/") {
 		return "", false
 	}
 	rest := strings.ReplaceAll(p[2:], "\\", "/")

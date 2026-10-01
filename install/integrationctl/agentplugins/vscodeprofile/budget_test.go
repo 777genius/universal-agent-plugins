@@ -54,7 +54,7 @@ func TestMalformedSnapshotsRefuseOriginalBytes(t *testing.T) {
 	for _, body := range [][]byte{
 		[]byte(`[]`), []byte(`null`), []byte(`{`), []byte(`{} {}`), []byte(`{"x":NaN}`),
 		[]byte(`{"x":/*unterminated`), []byte(`{"x":"unterminated`),
-		[]byte{'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'},
+		{'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'},
 	} {
 		refused(t, vp.Request{Settings: body, Identity: identity(), Action: vp.Install})
 	}
