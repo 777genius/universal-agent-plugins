@@ -41,29 +41,7 @@ func cursorProfile() PlatformProfile {
 			{Kind: ManagedArtifactPortableSkills, SourceRoot: authoredPath("skills"), OutputRoot: "skills"},
 			{Kind: ManagedArtifactPortableMCP, Path: ".mcp.json"},
 		},
-		Scaffold: ScaffoldMeta{
-			RequiredFiles: []string{
-				authoredPath("plugin.yaml"),
-				authoredPath("README.md"),
-				"CLAUDE.md",
-				"AGENTS.md",
-			},
-			OptionalFiles: []string{
-				authoredPath("mcp/servers.yaml"),
-				authoredPath("skills/{{.ProjectName}}/SKILL.md"),
-			},
-			ForbiddenFiles: []string{
-				"launcher.yaml",
-			},
-			TemplateFiles: []TemplateFile{
-				{Path: authoredPath("plugin.yaml"), Template: "plugin.yaml.tmpl"},
-				{Path: authoredPath("README.md"), Template: "cursor.README.md.tmpl"},
-				{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
-				{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
-				{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl"},
-				{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl"},
-			},
-		},
+		Scaffold: cursorScaffold(),
 		Validate: ValidateMeta{
 			RequiredFiles: []string{
 				"README.md",
@@ -117,29 +95,7 @@ func cursorWorkspaceProfile() PlatformProfile {
 			{Kind: ManagedArtifactPortableMCP, Path: ".cursor/mcp.json"},
 			{Kind: ManagedArtifactMirror, ComponentKind: "rules", SourceRoot: authoredPath("targets/cursor-workspace/rules"), OutputRoot: ".cursor/rules"},
 		},
-		Scaffold: ScaffoldMeta{
-			RequiredFiles: []string{
-				authoredPath("plugin.yaml"),
-				authoredPath("README.md"),
-				authoredPath("targets/cursor-workspace/rules/project.mdc"),
-				"CLAUDE.md",
-				"AGENTS.md",
-			},
-			OptionalFiles: []string{
-				authoredPath("targets/cursor-workspace/AGENTS.md"),
-			},
-			ForbiddenFiles: []string{
-				"launcher.yaml",
-			},
-			TemplateFiles: []TemplateFile{
-				{Path: authoredPath("plugin.yaml"), Template: "plugin.yaml.tmpl"},
-				{Path: authoredPath("README.md"), Template: "cursor-workspace.README.md.tmpl"},
-				{Path: authoredPath("targets/cursor-workspace/rules/project.mdc"), Template: "cursor.rule.mdc.tmpl"},
-				{Path: authoredPath("targets/cursor-workspace/AGENTS.md"), Template: "cursor.AGENTS.md.tmpl", Extra: true},
-				{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl"},
-				{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl"},
-			},
-		},
+		Scaffold: cursorWorkspaceScaffold(),
 		Validate: ValidateMeta{
 			RequiredFiles: []string{
 				"README.md",
@@ -147,6 +103,58 @@ func cursorWorkspaceProfile() PlatformProfile {
 			ForbiddenFiles: []string{
 				"launcher.yaml",
 			},
+		},
+	}
+}
+
+func cursorScaffold() ScaffoldMeta {
+	return ScaffoldMeta{
+		RequiredFiles: []string{
+			authoredPath("plugin.yaml"),
+			authoredPath("README.md"),
+			"CLAUDE.md",
+			"AGENTS.md",
+		},
+		OptionalFiles: []string{
+			authoredPath("mcp/servers.yaml"),
+			authoredPath("skills/{{.ProjectName}}/SKILL.md"),
+		},
+		ForbiddenFiles: []string{
+			"launcher.yaml",
+		},
+		TemplateFiles: []TemplateFile{
+			{Path: authoredPath("plugin.yaml"), Template: "plugin.yaml.tmpl"},
+			{Path: authoredPath("README.md"), Template: "cursor.README.md.tmpl"},
+			{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl"},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl"},
+		},
+	}
+}
+
+func cursorWorkspaceScaffold() ScaffoldMeta {
+	return ScaffoldMeta{
+		RequiredFiles: []string{
+			authoredPath("plugin.yaml"),
+			authoredPath("README.md"),
+			authoredPath("targets/cursor-workspace/rules/project.mdc"),
+			"CLAUDE.md",
+			"AGENTS.md",
+		},
+		OptionalFiles: []string{
+			authoredPath("targets/cursor-workspace/AGENTS.md"),
+		},
+		ForbiddenFiles: []string{
+			"launcher.yaml",
+		},
+		TemplateFiles: []TemplateFile{
+			{Path: authoredPath("plugin.yaml"), Template: "plugin.yaml.tmpl"},
+			{Path: authoredPath("README.md"), Template: "cursor-workspace.README.md.tmpl"},
+			{Path: authoredPath("targets/cursor-workspace/rules/project.mdc"), Template: "cursor.rule.mdc.tmpl"},
+			{Path: authoredPath("targets/cursor-workspace/AGENTS.md"), Template: "cursor.AGENTS.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl"},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl"},
 		},
 	}
 }
