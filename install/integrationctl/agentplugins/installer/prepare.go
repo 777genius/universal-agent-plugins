@@ -16,26 +16,32 @@ import (
 
 // PreparedOperation owns a sealed source snapshot until Close or a terminal Apply.
 type PreparedOperation struct {
-	engine    *Engine
-	mu        sync.Mutex
-	closed    bool
-	busy      bool
-	applied   bool
-	req       Request
-	plan      Plan
-	snapshot  domain.PackageSnapshot
-	snapshots []domain.PackageSnapshot
-	envelope  domain.PackageEnvelope
-	envelopes []domain.PackageEnvelope
-	client    domain.DetectedClient
-	clients   []domain.DetectedClient
-	detected  map[domain.ClientID]domain.DetectedClient
-	facts     BindingFacts
-	artifact  string
+	engine       *Engine
+	mu           sync.Mutex
+	closed       bool
+	busy         bool
+	applied      bool
+	req          Request
+	plan         Plan
+	snapshot     domain.PackageSnapshot
+	snapshots    []domain.PackageSnapshot
+	envelope     domain.PackageEnvelope
+	envelopes    []domain.PackageEnvelope
+	client       domain.DetectedClient
+	clients      []domain.DetectedClient
+	detected     map[domain.ClientID]domain.DetectedClient
+	facts        BindingFacts
+	openCodeHost *OpenCodePreparedHost
+	artifact     string
 }
 
 func (p *PreparedOperation) Plan() Plan {
 	out := p.plan
+	if p.plan.OpenCodeProfile != nil {
+		profile := p.plan.OpenCodeProfile.Clone()
+		out.OpenCodeProfile = &profile
+	}
+	out.OpenCodeSelections = cloneOpenCodeSelections(p.plan.OpenCodeSelections)
 	out.RequiredMissing = append([]string(nil), p.plan.RequiredMissing...)
 	out.Delivery = cloneDeliveryPlan(p.plan.Delivery)
 	out.Client.RequiredComponents = slices.Clone(p.plan.Client.RequiredComponents)
@@ -94,6 +100,15 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 	if req.Assessment != nil {
 		assessment := *req.Assessment
 		copied.Assessment = &assessment
+	}
+	if len(copied.Targets) == 1 {
+		target := copied.Targets[0]
+		copied.ClientID = target.ClientID
+		copied.ClientConfigRoot = target.ClientConfigRoot
+		copied.ClientExecutable = firstNonEmpty(target.ClientExecutable, copied.ClientExecutable)
+		copied.PackageRoot = firstNonEmpty(target.PackageRoot, copied.PackageRoot)
+		copied.ExternalUninstalled = target.ExternalUninstalled
+		copied.Targets = nil
 	}
 	if len(copied.Targets) > 1 {
 		return e.prepareGroup(ctx, copied)
@@ -199,10 +214,14 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		_ = handle.closeLocked()
 		return nil, err
 	}
+	if err := e.prepareOpenCodeHost(ctx, handle); err != nil {
+		_ = handle.closeLocked()
+		return nil, err
+	}
 	helper, _ := e.helper()
 	svc := e.lifecycle(helper, BindingFacts{}, handle.detected)
 	preview, err := dry(svc, usecase.AddInput{
-		Envelope: handle.envelope, Client: client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
+		Envelope: handle.envelope, Client: handle.client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 	})
@@ -373,6 +392,11 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		Client: ClientResult{ClientID: string(client.ClientID), Activation: string(preview.Activation.Activation),
 			Authentication: string(preview.Activation.Authentication), Policy: string(preview.Activation.Policy), Verification: string(preview.Activation.Verification)},
 		RequiresConfirmation: preview.RequiresConfirmation,
+	}
+	if handle.openCodeHost != nil {
+		profile := handle.openCodeHost.Profile()
+		handle.plan.OpenCodeProfile = &profile
+		handle.plan.OpenCodeSelections = handle.openCodeHost.Selections()
 	}
 	handle.facts = BindingFacts{
 		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,

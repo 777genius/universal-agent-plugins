@@ -44,6 +44,10 @@ const (
 
 var capabilities = [...]Capability{LocalPluginDual, GlobalSkillDirectory, MCPStdio, MCPStreamableHTTP, ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}
 
+// Identity of the owner-supplied per-capability qualification ledger. This
+// checkpoint consumes its exact generic facts; platform/product E2E is pending.
+const qualificationEvidenceID = "lane-a-freeze:sha256:b71c518fb9027e3c639c93c338a64fc404a2219e7d839b65971efa8c438e781f"
+
 type VersionEvidence struct {
 	Version            string
 	Source             string
@@ -107,7 +111,29 @@ func Resolve(e VersionEvidence) Profile {
 		return p
 	}
 	p.Version = e.Version
-	core := strings.SplitN(strings.SplitN(e.Version, "+", 2)[0], "-", 2)[0]
+	p = classifyHostFamily(p, e.Version)
+	if p.Family == Unsupported || p.Family == LegacyV1 {
+		return p
+	}
+	// No prerelease, build variant, new minor or major inherits semantic support.
+	switch e.Version {
+	case "1.18.33", "1.18.34", "2.0.21":
+		p.Qualification = "tested_exact"
+		p.EvidenceID = qualificationEvidenceID
+		p.Reason = "generic_qualified"
+		for _, c := range []Capability{LocalPluginDual, GlobalSkillDirectory, MCPStdio, MCPStreamableHTTP} {
+			p.Capabilities[c] = Supported
+		}
+	default:
+		p.Reason = "version_unqualified"
+	}
+	return p
+}
+
+func numberAtLeast(a, b string) bool { return len(a) > len(b) || len(a) == len(b) && a >= b }
+
+func classifyHostFamily(p Profile, version string) Profile {
+	core := strings.SplitN(strings.SplitN(version, "+", 2)[0], "-", 2)[0]
 	parts := strings.Split(core, ".")
 	switch parts[0] {
 	case "1":
@@ -136,19 +162,5 @@ func Resolve(e VersionEvidence) Profile {
 		p.Capabilities[LocalPluginDual] = SupportUnsupported
 		return p
 	}
-	// No prerelease, build variant, new minor or major inherits semantic support.
-	switch e.Version {
-	case "1.18.33", "1.18.34", "2.0.21":
-		p.Qualification = "tested_exact"
-		p.EvidenceID = "p0-lane-a-20261001-generic-" + e.Version
-		p.Reason = "generic_qualified"
-		for _, c := range []Capability{LocalPluginDual, GlobalSkillDirectory, MCPStdio, MCPStreamableHTTP} {
-			p.Capabilities[c] = Supported
-		}
-	default:
-		p.Reason = "version_unqualified"
-	}
 	return p
 }
-
-func numberAtLeast(a, b string) bool { return len(a) > len(b) || len(a) == len(b) && a >= b }

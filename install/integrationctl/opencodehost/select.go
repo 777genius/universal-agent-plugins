@@ -34,12 +34,8 @@ func (s Selection) Clone() Selection {
 // only: ArtifactID and Adapter are empty, so it cannot be used as a codec choice.
 func Select(p Profile, requirements []ArtifactRequirement) (Selection, error) {
 	candidates := slices.Clone(requirements)
-	ids := map[string]bool{}
-	for _, r := range candidates {
-		if r.ID == "" || ids[r.ID] || !validRequirement(r) {
-			return Selection{}, ErrInvalidRequirement
-		}
-		ids[r.ID] = true
+	if err := validateRequirements(candidates); err != nil {
+		return Selection{}, err
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].ID == candidates[j].ID {
@@ -52,18 +48,7 @@ func Select(p Profile, requirements []ArtifactRequirement) (Selection, error) {
 		if !eligible(p, r.Adapter) {
 			continue
 		}
-		s := Selection{ArtifactID: r.ID, Adapter: r.Adapter}
-		for _, c := range r.Required {
-			switch p.Capabilities[c] {
-			case Supported:
-			case Unverified:
-				s.Unverified = append(s.Unverified, c)
-			default:
-				s.Missing = append(s.Missing, c)
-			}
-		}
-		slices.Sort(s.Missing)
-		slices.Sort(s.Unverified)
+		s := capabilitySelection(p, r)
 		if len(s.Missing) == 0 && len(s.Unverified) == 0 {
 			return s, nil
 		}
@@ -86,7 +71,7 @@ func eligible(p Profile, a AdapterID) bool {
 	case DualPlacement:
 		return true // owned bytes only, independent of runtime
 	case SkillDirectory:
-		return p.Family == ModernV1 || p.Family == LegacyV1 || p.Family == V2
+		return p.Capabilities[GlobalSkillDirectory] == Supported && (p.Family == ModernV1 || p.Family == LegacyV1 || p.Family == V2)
 	case ConfigV1:
 		return p.ConfigDialect == DialectV1
 	case ConfigV2:
@@ -129,4 +114,31 @@ func allowed(a AdapterID, c Capability) bool {
 		return c == LocalPluginDual || c == ObserverCompletion || c == ObserverQuestion || c == ObserverPermission || c == ObserverTerminalError
 	}
 	return false
+}
+
+func validateRequirements(candidates []ArtifactRequirement) error {
+	ids := map[string]bool{}
+	for _, r := range candidates {
+		if r.ID == "" || ids[r.ID] || !validRequirement(r) {
+			return ErrInvalidRequirement
+		}
+		ids[r.ID] = true
+	}
+	return nil
+}
+
+func capabilitySelection(p Profile, r ArtifactRequirement) Selection {
+	s := Selection{ArtifactID: r.ID, Adapter: r.Adapter}
+	for _, c := range r.Required {
+		switch p.Capabilities[c] {
+		case Supported:
+		case Unverified:
+			s.Unverified = append(s.Unverified, c)
+		default:
+			s.Missing = append(s.Missing, c)
+		}
+	}
+	slices.Sort(s.Missing)
+	slices.Sort(s.Unverified)
+	return s
 }
