@@ -3,6 +3,7 @@ package vscodelocalhooks_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -154,24 +155,91 @@ func probeWindowsPowerShell(t *testing.T, ps, home string, env []string) []byte 
 		// directly from this process and dispose only the acquired Process wrapper.
 		`Mark 'get-process-before'; $currentProcess=[System.Diagnostics.Process]::GetCurrentProcess(); try { $metadata['ProcessPath']=$currentProcess.MainModule.FileName } finally { $currentProcess.Dispose() }; Mark 'get-process-after'`,
 		`$metadata['ConsoleCodePage']=[Console]::OutputEncoding.CodePage; $metadata['NativeInputCodePage']=$OutputEncoding.CodePage; Mark 'encodings'`,
-		`Mark 'convert-json-before'; $json=$metadata | ConvertTo-Json -Compress; Mark 'convert-json-after'; $json`,
+		// Fixed-order UTF-8/Base64 ASCII transport uses only core .NET Framework
+		// string[]/GetBytes(string)/ToBase64String(byte[])/Join(string,string[]).
+		`Mark 'metadata-output-before'; [string[]]$fields=@($metadata['Major'],$metadata['Minor'],$metadata['Edition'],$metadata['ProcessPath'],$metadata['ConsoleCodePage'],$metadata['NativeInputCodePage']); [string[]]$encoded=foreach ($field in $fields) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($field)) }; [Console]::WriteLine([string]::Join(';',$encoded)); Mark 'metadata-output-after'`,
 	}, "; ")
 	stdout, stderr, code := runObservedWindowsPowerShell(t, ps, command, home, env, phaseFile)
-	var got struct {
-		Major, Minor                         int
-		Edition, ProcessPath                 string
-		ConsoleCodePage, NativeInputCodePage int
-	}
 	if code != 0 || len(stderr) != 0 {
 		t.Fatalf("PS5.1 version probe failed: code=%d stderr=%q", code, stderr)
 	}
-	if err := json.Unmarshal(bytes.TrimPrefix(stdout, []byte{0xef, 0xbb, 0xbf}), &got); err != nil {
+	got, err := decodeWindowsMetadata(stdout)
+	if err != nil {
+		t.Fatal("PS5.1 metadata transport", err)
+	}
+	facts, err := json.Marshal(got)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Major != 5 || got.Minor != 1 || got.Edition != "Desktop" || !equalWindowsPath(got.ProcessPath, ps) {
-		t.Fatalf("actual system Windows PowerShell 5.1 required: %s", stdout)
+		t.Fatalf("actual system Windows PowerShell 5.1 required: %s", facts)
 	}
-	return stdout
+	return facts
+}
+
+type windowsMetadata struct {
+	Major, Minor                         int
+	Edition, ProcessPath                 string
+	ConsoleCodePage, NativeInputCodePage int
+}
+
+// Require a complete Console.WriteLine record, exactly six canonical Base64
+// fields, valid UTF-8 and canonical nonnegative 32-bit decimal runtime numbers.
+func decodeWindowsMetadata(stdout []byte) (windowsMetadata, error) {
+	var got windowsMetadata
+	if !bytes.HasSuffix(stdout, []byte("\r\n")) {
+		return got, errors.New("metadata record is incomplete")
+	}
+	fields := strings.Split(string(stdout[:len(stdout)-2]), ";")
+	if len(fields) != 6 {
+		return got, errors.New("metadata requires exactly six fields")
+	}
+	for i, field := range fields {
+		value, err := base64.StdEncoding.Strict().DecodeString(field)
+		if err != nil || base64.StdEncoding.EncodeToString(value) != field || !utf8.Valid(value) {
+			return got, errors.New("metadata field is not canonical UTF-8/Base64")
+		}
+		fields[i] = string(value)
+	}
+	for i, dst := range map[int]*int{0: &got.Major, 1: &got.Minor, 4: &got.ConsoleCodePage, 5: &got.NativeInputCodePage} {
+		value, err := strconv.ParseUint(fields[i], 10, 31)
+		if err != nil || strconv.FormatUint(value, 10) != fields[i] {
+			return got, errors.New("metadata numeric field is invalid")
+		}
+		*dst = int(value)
+	}
+	got.Edition, got.ProcessPath = fields[2], fields[3]
+	return got, nil
+}
+
+// Red: accepting truncated/extra/corrupt fields or losing Unicode/control bytes.
+func TestTESTWindowsMetadataTransport(t *testing.T) {
+	const wire = "NQ==;MQ==;RGVza3RvcA==;QzpcVEVTVCDDvCDkuK3mlocg8J+YgFx0YWIJbGluZQpxdW90ZSJzbGFzaFwuZXhl;NjUwMDE=;MjAxMjc=\r\n"
+	got, err := decodeWindowsMetadata([]byte(wire))
+	want := windowsMetadata{5, 1, "Desktop", "C:\\TEST ü 中文 😀\\tab\tline\nquote\"slash\\.exe", 65001, 20127}
+	if err != nil || got != want {
+		t.Fatalf("metadata facts changed: got %#v error=%v want %#v", got, err, want)
+	}
+	for name, bad := range map[string]string{
+		"missing-field":    strings.Replace(wire, ";MjAxMjc=", "", 1),
+		"extra-field":      strings.Replace(wire, "\r\n", ";MA==\r\n", 1),
+		"truncated":        strings.TrimSuffix(wire, "\r\n"),
+		"extra-record":     wire + "\r\n",
+		"invalid-base64":   strings.Replace(wire, "NQ==", "!Q==", 1),
+		"noncanonical-pad": strings.Replace(wire, "NQ==", "NR==", 1),
+		"embedded-newline": strings.Replace(wire, "NQ==", "NQ==\r\n", 1),
+		"invalid-utf8":     strings.Replace(wire, "RGVza3RvcA==", "/w==", 1),
+		"empty-number":     strings.Replace(wire, "NQ==", "", 1),
+		"signed-number":    strings.Replace(wire, "NQ==", "KzU=", 1),
+		"leading-zero":     strings.Replace(wire, "NQ==", "MDU=", 1),
+		"overflow":         strings.Replace(wire, "NQ==", "MjE0NzQ4MzY0OA==", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := decodeWindowsMetadata([]byte(bad)); err == nil {
+				t.Fatal("malformed metadata accepted")
+			}
+		})
+	}
 }
 
 func equalWindowsPath(a, b string) bool {
