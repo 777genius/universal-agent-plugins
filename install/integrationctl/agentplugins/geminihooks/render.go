@@ -69,13 +69,16 @@ func renderCommand(shell Shell, argv []string, observer bool) (string, error) {
 	}
 	if shell == Bash {
 		// exec stays inside the subshell so failure cannot replace/exit the
-		// outer shell. The guard also handles a caller's errexit setting.
-		command = "(" + command + ") >/dev/null 2>&1 || :; printf '{}\\n'; exit 0"
+		// outer shell. Redirect the whole guard to also discard the supervising
+		// shell's signal diagnostics. The guard handles the caller's errexit.
+		command = "{ (" + command + ") || :; } >/dev/null 2>&1; printf '{}\\n'; exit 0"
 	} else {
-		// Consume all PowerShell streams, catch invocation errors, and exit
-		// before Gemini's appended LASTEXITCODE check. Console.Write emits LF
-		// exactly on Windows too. No settings-variable tokens are introduced.
-		command = "try { " + command + " *>&1 | Out-Null } catch {}; [Console]::Out.Write(\"{}`n\"); exit 0"
+		// In-process scripts can bypass PowerShell streams through Console.
+		// Silence both writers as well as all streams and invocation errors.
+		// Emit exact bytes through the underlying stdout, then exit before
+		// Gemini's LASTEXITCODE check. No settings variables are introduced.
+		command = "[Console]::SetOut([IO.TextWriter]::Null); [Console]::SetError([IO.TextWriter]::Null); try { " + command +
+			" *>&1 | Out-Null } catch {}; [Console]::OpenStandardOutput().Write([byte[]](123,125,10),0,3); exit 0"
 	}
 	if err := safeString(command); err != nil {
 		return "", err

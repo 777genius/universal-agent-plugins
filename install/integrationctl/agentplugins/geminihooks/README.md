@@ -49,10 +49,13 @@ keeps the exact generic command rendering and behavior. Observer argv uses the
 same literal validation and quoting as `RenderArgv`; the planner wraps that
 invocation in the existing native shell. All observer output is discarded,
 then the shell emits exactly `{}\n` and exits zero, including a removed/missing
-executable, nonzero exit status, or a thrown PowerShell invocation. Bash uses a
-guarded subshell; PowerShell consumes all streams and catches invocation errors,
-then exits before Gemini's appended native exit-code check. No additional
-executable, delivery policy or application-specific command participates.
+executable, nonzero exit status, self-SIGTERM/SIGKILL of a Bash handler, or a
+thrown/terminating PowerShell invocation. Bash redirects the whole guarded
+subshell group, including supervising-shell signal diagnostics. PowerShell
+silences `Console.Out`/`Console.Error` for in-process scripts, consumes all streams
+and catches invocation errors, then writes the three neutral bytes directly to
+standard output and exits before Gemini's appended native exit-code check. No
+additional executable, delivery policy or application-specific command participates.
 
 This opt-in addresses Gemini 0.62.0's cached hook lifecycle: deleting a helper
 while Gemini remains alive leaves its cached command callable. Naked Bash
@@ -123,9 +126,15 @@ activation. No actual agent, credentials or real project is exercised.
 
 `go test ./geminihooks/...` also runs the observer contract fixtures. They record
 exact argv through a real executable, exercise cached-command deletion and exits
-0/2/127, assert full stdout `{}\n`, empty stderr and exit zero, and retain naked
-command negative controls. Available Bash, pwsh and Windows PowerShell execute
-directly; observer cases skip only unavailable shell executables. PowerShell
-cases include the real hookRunner exit-code suffix and a thrown script invocation.
+0/2/127 and Bash self-SIGTERM/SIGKILL (also with errexit), assert full stdout
+`{}\n`, empty stderr and exit zero, and retain naked command negative controls.
+Available Bash, pwsh and Windows PowerShell execute directly; native-shell cases
+skip unavailable executables and Unix signal fixtures skip Windows. PowerShell
+cases include the real hookRunner exit-code suffix and in-process scripts writing
+directly to `Console.Out`/`Console.Error` before normal completion, throw or a
+terminating error.
+Child-only Bash redirection and pipeline-only PowerShell redirection remain
+behavioral red controls. The missing-executable naked control tests failure of
+the complete neutral contract; PowerShell may report the error with exit zero.
 Unavailable Windows PowerShell execution remains pending native Windows CI
 qualification; Linux Bash evidence cannot qualify Windows.

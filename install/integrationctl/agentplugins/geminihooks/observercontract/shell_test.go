@@ -99,6 +99,11 @@ func TestObserverNativeShellContract(t *testing.T) {
 			}
 			if shell.kind == gh.PowerShell {
 				t.Run("thrown invocation", func(t *testing.T) { assertThrownInvocation(t, shell, executable) })
+				for _, failure := range []string{"success", "throw", "terminating error"} {
+					t.Run("direct console/"+failure, func(t *testing.T) {
+						assertConsoleInvocation(t, shell, executable, failure)
+					})
+				}
 			}
 		})
 	}
@@ -133,6 +138,11 @@ func assertNativeContract(t *testing.T, shell nativeShell, executable string, st
 		}
 		return
 	}
+	assertRecordedArgv(t, record, args)
+}
+
+func assertRecordedArgv(t *testing.T, record string, args []string) {
+	t.Helper()
 	body, err := os.ReadFile(record)
 	if err != nil {
 		t.Fatal("real child did not record argv:", err)
@@ -141,13 +151,26 @@ func assertNativeContract(t *testing.T, shell nativeShell, executable string, st
 	if err = json.Unmarshal(body, &actual); err != nil || !reflect.DeepEqual(actual, args) {
 		t.Fatalf("argv = %q, want %q; decode: %v", actual, args, err)
 	}
-	t.Logf("actual %s argv: %q", shell.name, actual)
+	t.Logf("actual handler argv: %q", actual)
+}
+
+func clearRecordedArgv(t *testing.T, record string) {
+	t.Helper()
+	if err := os.Remove(record); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
 }
 
 func assertNeutral(t *testing.T, stdout string, stderr string, err error) {
 	t.Helper()
-	if err != nil || stdout != "{}\n" || stderr != "" {
-		t.Fatalf("neutral contract: stdout=%q stderr=%q status=%v; want exact {} LF, empty stderr, exit0", stdout, stderr, err)
+	if stdout != "{}\n" {
+		t.Errorf("neutral stdout=%q; want exact {} LF bytes", stdout)
+	}
+	if stderr != "" {
+		t.Errorf("neutral stderr=%q; want empty", stderr)
+	}
+	if err != nil {
+		t.Errorf("neutral status=%v; want exit0", err)
 	}
 }
 
@@ -160,8 +183,9 @@ func assertGeneric(t *testing.T, status string, stdout string, stderr string, er
 		return
 	}
 	// Behavioral red control: the original naked invocation cannot meet the
-	// observer contract on deletion/nonzero, regardless of native error text.
-	if err == nil || (stdout == "{}\n" && stderr == "") {
+	// observer contract on deletion/nonzero, regardless of native error text
+	// or exit status (PowerShell can report a missing command with exit zero).
+	if err == nil && stdout == "{}\n" && stderr == "" {
 		t.Fatalf("naked invocation unexpectedly neutral: %q %q %v", stdout, stderr, err)
 	}
 	if status != "missing" {
