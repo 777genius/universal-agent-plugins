@@ -30,15 +30,16 @@ func (e *Engine) reconcileGroupHostHandoff(ctx context.Context, prepared *Prepar
 			continue
 		}
 		facts := BindingFacts{
-			InstallationID: firstNonEmpty(installation.InstallationID, installationID),
-			ClientID:       binding.ClientID,
-			BindingID:      binding.ClientBindingID,
-			Scope:          binding.Scope,
-			TargetPath:     binding.TargetLocator,
-			DataRoot:       receipt.Locator,
-			DataReceiptID:  binding.DataReceiptID,
-			OperationID:    prepared.req.OperationID,
-			TreeDigest:     recordedBindingDigest(binding, planClientDigest(prepared.plan, binding.ClientID)),
+			InstallationID:   firstNonEmpty(installation.InstallationID, installationID),
+			ClientID:         binding.ClientID,
+			BindingID:        binding.ClientBindingID,
+			Scope:            binding.Scope,
+			TargetPath:       binding.TargetLocator,
+			DataRoot:         receipt.Locator,
+			DataReceiptID:    binding.DataReceiptID,
+			OperationID:      prepared.req.OperationID,
+			SelectedDelivery: binding.SelectedDelivery,
+			TreeDigest:       recordedBindingDigest(binding, planClientDigest(prepared.plan, binding.ClientID)),
 		}
 		if err := e.cfg.OnCommittedBinding(ctx, facts); err != nil {
 			e.attachLiveGroupResult(result, prepared, installation)
@@ -84,7 +85,8 @@ func (e *Engine) attachLiveGroupResult(result *Result, prepared *PreparedOperati
 			result.Client = item
 			result.Binding = BindingFacts{
 				InstallationID: result.InstallationID, ClientID: binding.ClientID,
-				BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
+				SelectedDelivery: binding.SelectedDelivery,
+				BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 				DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,
 				OperationID: prepared.req.OperationID, TreeDigest: item.TreeDigest,
 			}

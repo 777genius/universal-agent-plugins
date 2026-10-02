@@ -414,7 +414,7 @@ def run_case(name, args):
                 terminal.wait('POWERSHELL_LAUNCH_' + nonce)
             terminal.wait(r'Choose one or more by number or id, comma-separated \[Enter keeps defaults\]:')
             check('codex' in clean(terminal.raw).lower() and 'cursor' in clean(terminal.raw).lower(),
-                  'expected both config-only clients')
+                  'expected Codex config and synthetic Cursor editor discovery')
             fixture.unchanged()
             if name == 'resize':
                 check(terminal.k.ResizePseudoConsole(terminal.hpc, COORD(60, 15)) == 0, 'resize failed')

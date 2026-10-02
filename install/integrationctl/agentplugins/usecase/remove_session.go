@@ -39,6 +39,9 @@ func (session *removeSession) loadRemoveTarget() error {
 	if err != nil {
 		return err
 	}
+	if err := validateDeliverySelection(client.SelectedDelivery, session.input.SelectedDelivery); err != nil {
+		return err
+	}
 	if err := validateNativeBinding(client, session.input.Client); err != nil {
 		return err
 	}
@@ -54,7 +57,7 @@ func (session *removeSession) loadRemoveTarget() error {
 		InstallationID:   installation.InstallationID,
 		Plugin:           installation.DeclaredName,
 		ClientID:         session.input.Client.ClientID,
-		AffectedSurfaces: preparedAffectedSurfaces(client, session.input.Client.ClientID),
+		AffectedSurfaces: preparedAffectedSurfaces(client, session.input.Client.ClientID, client.SelectedDelivery),
 	}
 	if len(session.result.AffectedSurfaces) == 0 {
 		session.result.AffectedSurfaces = []string{client.ClientID}
@@ -63,14 +66,16 @@ func (session *removeSession) loadRemoveTarget() error {
 }
 
 func (session *removeSession) deactivateRemoveTarget() error {
-	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID) && session.input.Confirmed && !session.input.DryRun
+	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery) && session.input.Confirmed && !session.input.DryRun
 	if nativeAttempt {
-		if err := session.service.beginNativeAttempt(session.installation.InstallationID, session.clientKey); err != nil {
+		if err := session.service.beginNativeAttempt(session.installation.InstallationID, session.clientKey, domain.NativeIntentRemove, session.client.SelectedDelivery); err != nil {
 			return err
 		}
 	}
 	deactivation, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-		Client: session.input.Client, DeclaredName: session.installation.DeclaredName,
+		RemoveOwnedEntry: session.client.SelectedDelivery.OwnsProfileEntry(session.client.NativeObjects),
+		SelectedDelivery: session.client.SelectedDelivery,
+		Client:           session.input.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: session.client.Activation, Interactive: session.input.Interactive,
 		ExternalUninstalled: session.input.ExternalUninstalled,
 		Confirmed:           session.input.Confirmed && !session.input.DryRun,
@@ -103,7 +108,7 @@ func (session *removeSession) reloadAfterExternalRemoval() error {
 	if err != nil {
 		return err
 	}
-	if session.result.Deactivation.ExternalRemovalComplete && !nativeLifecycleClient(session.input.Client.ClientID) && session.client.Activation == domain.ActivationActive {
+	if session.result.Deactivation.ExternalRemovalComplete && !nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery) && session.client.Activation == domain.ActivationActive {
 		if err := session.service.markDeactivated(state, session.installationIndex, session.clientKey); err != nil {
 			return err
 		}

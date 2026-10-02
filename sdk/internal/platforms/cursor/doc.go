@@ -1,6 +1,3 @@
-// Package cursor reserves the Cursor target identity in the internal platform tree.
-//
-// Cursor is currently scaffold/generate/import/validate only. It intentionally has
-// no runtime event implementation in the SDK yet, but it still needs a distinct
-// internal package so descriptor metadata does not alias existing platform internals.
+// Package cursor implements the beta native stop observer codec. Packaging
+// profiles remain separate; this codec does not qualify a native client build.
 package cursor

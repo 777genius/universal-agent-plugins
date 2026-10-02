@@ -187,7 +187,7 @@ class Fixture:
         }))
         for client in ('codex', 'cursor'):
             (self.home / ('.' + client)).mkdir()
-            if os.name == 'nt': continue  # config-only discovery; no runtime on PATH
+            if os.name == 'nt': continue  # desktop evidence below; no runtime on PATH
             stub = self.bin / client
             stub.write_text('#!/bin/sh\n'
                             'printf "%s\\n" "$0 $*" >> "$STUB_LOG"\n'
@@ -215,6 +215,12 @@ class Fixture:
             self.env[key] = str(self.home / path)
         if include_opencode:
             (Path(self.env['XDG_CONFIG_HOME']) / 'opencode').mkdir(parents=True)
+        if os.name == 'nt':
+            # Cursor config alone is not editor evidence. Seed the existing
+            # Windows desktop discovery path; inert TEST bytes are never run.
+            editor = Path(self.env['LOCALAPPDATA']) / 'Programs/cursor/Cursor.exe'
+            editor.parent.mkdir(parents=True)
+            editor.write_bytes(b'synthetic TEST Cursor editor; never executable')
         # Existing executable-cache seam, only inside this disposable fixture.
         # This is a SYNTHETIC scanner protocol response, not security evidence.
         machine = {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
@@ -384,14 +390,19 @@ class Session:
         while time.monotonic() < deadline and self.pump(0):
             pass
 
-    def wait(self, marker, label, after=0):
+    def wait(self, marker, label, after=0, suffix=None):
+        def ready():
+            text = clean(self.raw[after:])
+            match = re.search(marker, text)
+            return match and (suffix is None or re.match(suffix, text[match.end():]))
+
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
-            if re.search(marker, clean(self.raw[after:])):
+            if ready():
                 self.frame(label); return len(self.raw)
             if self.process.poll() is not None:
                 self.pump(0)
-                if re.search(marker, clean(self.raw[after:])):
+                if ready():
                     self.frame(label); return len(self.raw)
                 raise AssertionError(f'exited {self.process.returncode} before {label}')
             self.pump(min(0.1, max(0, deadline - time.monotonic())))
@@ -677,7 +688,10 @@ def run_case(name, binary, root, args):
                 session.send(b'\x1b'); session.finish(1)
                 assert_paste_stayed_in_selection(session.raw[offset:], args.confirmation)
                 fixture.unchanged(); return
-            session.wait(args.confirmation, 'confirmation', after=offset)
+            # Plain output can split the title from its default/input suffix.
+            # Observe both on this prompt line within the same wait deadline.
+            session.wait(args.confirmation, 'confirmation', after=offset,
+                         suffix=r'[^\r\n]*\[Y/n\] ' if plain else None)
             if not plain and name != 'queued':
                 session.wait(r'(?s)Yes.*?No.*?enter submit', 'confirmation-controls', after=offset)
             fixture.unchanged()

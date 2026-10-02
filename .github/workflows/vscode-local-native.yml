@@ -1,0 +1,131 @@
+name: VS Code Local native argv
+
+on:
+  pull_request:
+    paths:
+      - 'install/integrationctl/agentplugins/vscodelocalhooks/**'
+      - 'install/integrationctl/agentplugins/go.mod'
+      - 'install/integrationctl/agentplugins/go.sum'
+      - '.github/workflows/vscode-local-native.yml'
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Native diagnostic runner selection
+        type: choice
+        default: all
+        options:
+          - all
+          - windows
+          - darwin
+
+permissions:
+  contents: read
+
+# Shell transport only: no VS Code GUI, model, auth, installer or desktop proof.
+jobs:
+  native:
+    name: Local argv / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.os == 'windows' && '[{"runner":"windows-latest","os":"windows","required_test":"TestTESTWindowsPowerShell51Process"}]' || inputs.os == 'darwin' && '[{"runner":"macos-latest","os":"darwin","required_test":"TestTESTShellArgvProcess"}]' || '[{"runner":"windows-latest","os":"windows","required_test":"TestTESTWindowsPowerShell51Process"},{"runner":"macos-latest","os":"darwin","required_test":"TestTESTShellArgvProcess"}]') }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+        working-directory: install/integrationctl/agentplugins
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+      GOENV: 'off'
+      GOMAXPROCS: '2'
+      U2_REQUIRE_NATIVE: ${{ matrix.os }}
+      U2_REQUIRED_TEST: ${{ matrix.required_test }}
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - name: Qualify exact public renderer on native system shell
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          scratch="$RUNNER_TEMP/TEST-vscode-local-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if [[ "$U2_REQUIRE_NATIVE" == windows ]]; then scratch="$(cygpath -m "$scratch")"; fi
+          mkdir "$scratch"
+          mkdir -p "$scratch"/{home,profile,tmp,modcache,gocache,evidence}
+          printf 'U2_TEST_SCRATCH=%s\n' "$scratch" >> "$GITHUB_ENV"
+          printf '%s\n' "$EXPECTED_HEAD" > "$scratch/evidence/head.txt"
+          go_bin="$(command -v go)"
+          if [[ "$U2_REQUIRE_NATIVE" == windows ]]; then go_bin="$(cygpath -m "$go_bin")"; fi
+          # Resolve just this leaf's pinned dependency into an owned cache before
+          # offline execution. No full-module dependency sweep or new dependency.
+          env -i PATH="$PATH" SystemRoot="${SYSTEMROOT:-${SystemRoot:-}}" HOME="$scratch/home" USERPROFILE="$scratch/profile" \
+            TMPDIR="$scratch/tmp" TEMP="$scratch/tmp" TMP="$scratch/tmp" \
+            GOMODCACHE="$scratch/modcache" GOCACHE="$scratch/gocache" GOENV=off GOWORK=off GOTOOLCHAIN=local \
+            "$go_bin" mod download github.com/tailscale/hujson
+          native_env=(env -i PATH="$PATH" SystemRoot="${SYSTEMROOT:-${SystemRoot:-}}" \
+            HOME="$scratch/home" USERPROFILE="$scratch/profile" APPDATA="$scratch/home" LOCALAPPDATA="$scratch/profile" \
+            TMPDIR="$scratch/tmp" TEMP="$scratch/tmp" TMP="$scratch/tmp" \
+            GOMODCACHE="$scratch/modcache" GOCACHE="$scratch/gocache" GOENV=off GOWORK=off GOTOOLCHAIN=local \
+            GOPROXY=off GOSUMDB=off GOMAXPROCS=2 U2_REQUIRE_NATIVE="$U2_REQUIRE_NATIVE")
+          "${native_env[@]}" "$go_bin" env -json GOHOSTOS GOOS GOARCH GOVERSION > "$scratch/evidence/go-env.json"
+          test "$("${native_env[@]}" "$go_bin" env GOHOSTOS)" = "$U2_REQUIRE_NATIVE"
+          test "$("${native_env[@]}" "$go_bin" env GOVERSION)" = go1.26.8
+          set +e
+          "${native_env[@]}" "$go_bin" test -p 2 -count=1 -timeout=3m -json ./vscodelocalhooks \
+            > "$scratch/evidence/test.json" 2> "$scratch/evidence/test.stderr"
+          result=$?
+          set -e
+          printf '%s\n' "$result" > "$scratch/evidence/test-exit.txt"
+          cat "$scratch/evidence/test.json"
+          cat "$scratch/evidence/test.stderr"
+          test "$result" = 0
+          # A skipped/missing native test can never qualify this lane even if
+          # other tests pass. Require its own terminal pass in Go's event stream.
+          grep -F '"Action":"pass"' "$scratch/evidence/test.json" | grep -F "\"Test\":\"$U2_REQUIRED_TEST\""
+          "${native_env[@]}" "$go_bin" vet -p 2 ./vscodelocalhooks > "$scratch/evidence/vet.txt" 2>&1
+      - name: Retain exact-head native process facts and failures
+        if: always() && env.U2_TEST_SCRATCH != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: TEST-vscode-local-${{ matrix.os }}-${{ github.run_attempt }}
+          path: ${{ env.U2_TEST_SCRATCH }}/evidence
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove owned TEST profiles, executables and caches
+        if: always() && env.U2_TEST_SCRATCH != ''
+        run: |
+          set -euo pipefail
+          case "$U2_TEST_SCRATCH" in
+            */TEST-vscode-local-*)
+              go_bin="$(command -v go)"
+              if [[ "$U2_REQUIRE_NATIVE" == windows ]]; then go_bin="$(cygpath -m "$go_bin")"; fi
+              env -i PATH="$PATH" SystemRoot="${SYSTEMROOT:-${SystemRoot:-}}" \
+                HOME="$U2_TEST_SCRATCH/home" USERPROFILE="$U2_TEST_SCRATCH/profile" \
+                APPDATA="$U2_TEST_SCRATCH/home" LOCALAPPDATA="$U2_TEST_SCRATCH/profile" \
+                TMPDIR="$U2_TEST_SCRATCH/tmp" TEMP="$U2_TEST_SCRATCH/tmp" TMP="$U2_TEST_SCRATCH/tmp" \
+                GOMODCACHE="$U2_TEST_SCRATCH/modcache" GOCACHE="$U2_TEST_SCRATCH/gocache" \
+                GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOMAXPROCS=2 \
+                "$go_bin" telemetry off
+              env -i PATH="$PATH" SystemRoot="${SYSTEMROOT:-${SystemRoot:-}}" \
+                HOME="$U2_TEST_SCRATCH/home" USERPROFILE="$U2_TEST_SCRATCH/profile" \
+                APPDATA="$U2_TEST_SCRATCH/home" LOCALAPPDATA="$U2_TEST_SCRATCH/profile" \
+                TMPDIR="$U2_TEST_SCRATCH/tmp" TEMP="$U2_TEST_SCRATCH/tmp" TMP="$U2_TEST_SCRATCH/tmp" \
+                GOMODCACHE="$U2_TEST_SCRATCH/modcache" GOCACHE="$U2_TEST_SCRATCH/gocache" \
+                GOENV=off GOWORK=off GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off GOMAXPROCS=2 \
+                "$go_bin" clean -modcache
+              rm -rf -- "$U2_TEST_SCRATCH"
+              ;;
+            *) exit 1 ;;
+          esac

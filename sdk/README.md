@@ -30,6 +30,8 @@ Root package:
 - `(*plugin-kit-ai.App).Claude()`
 - `(*plugin-kit-ai.App).Codex()`
 - `(*plugin-kit-ai.App).Gemini()`
+- `(*plugin-kit-ai.App).Cursor()` (`public-beta`, stop only)
+- `(*plugin-kit-ai.App).RunCursorObserver(ctx)` (`public-beta`)
 - `(*plugin-kit-ai.App).Run()`
 - `(*plugin-kit-ai.App).RunContext(ctx)`
 - `plugin-kit-ai.Supported()`
@@ -39,6 +41,7 @@ Platform packages:
 - `github.com/777genius/plugin-kit-ai/sdk/claude`
 - `github.com/777genius/plugin-kit-ai/sdk/codex`
 - `github.com/777genius/plugin-kit-ai/sdk/gemini`
+- `github.com/777genius/plugin-kit-ai/sdk/cursor` (`public-beta`)
 
 ## Runtime Contract Boundary
 
@@ -72,6 +75,7 @@ Platform packages:
   - `claude/ConfigChange` (`public-beta`)
   - `claude/WorktreeCreate` (`public-beta`)
   - `claude/WorktreeRemove` (`public-beta`)
+  - `cursor/stop` (`public-beta`, invocation `CursorStop`; native qualification pending)
   - `codex/Stop` (`public-beta`, invocation name `CodexStop`)
   - `codex/SubagentStop` (`public-beta`, invocation name `CodexSubagentStop`)
   - `codex/PreToolUse` (`public-beta`, invocation name `CodexPreToolUse`)
@@ -245,3 +249,20 @@ Filtering sensitive message/details, choosing notifications, and delivering them
 belong to consumers. The SDK supplies no notification configuration or delivery
 policy. Existing `AfterAgent` behavior is unchanged; an observation does not prove
 a successful final turn, and no native turn/request/root identifier is invented.
+
+## Cursor stop beta observer
+
+The descriptor-derived [Cursor stop guide](../docs/generated/cursor_stop.md)
+explains typed native fields, the fixed `{}\n` observer response and exclusive
+process IPC ownership. On Linux/macOS, pipes or connected anonymous
+AF_UNIX/SOCK_STREAM sockets with empty local AND peer names are accepted; named
+sockets (including Linux abstract names), network sockets and other files are
+refused. Transferred handles and aliases require exclusive ownership and close
+before return. The runner has one four-second budget with a 100 ms output
+reserve; cancellation interrupts owned IO and joins its callback. Consumer
+callbacks must honor their context. `RunCursorObserver` honors `Config.IO`;
+arbitrary caller IO must cooperate with cancellation and cannot be forcibly
+interrupted. The observer remains public-beta; manual package activation and
+pending native qualification retain their existing availability limits.
+This source slice proves SDK protocol handling only. It does not qualify native
+Cursor IDE/CLI, installation, delivery or availability.

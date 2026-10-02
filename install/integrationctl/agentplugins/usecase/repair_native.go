@@ -21,7 +21,7 @@ func (session *repairSession) repairNative() (AddResult, error) {
 	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
 	if clientVerifyErr != nil {
-		if !nativeLifecycleClient(session.input.Client.ClientID) {
+		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 			return session.result, clientVerifyErr
 		}
 		return session.reapplyIntactNative(delivery)

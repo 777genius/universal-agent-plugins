@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/muesli/cancelreader"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalreader"
 )
 
 // A per-question cancel reader owns only its wakeup descriptors. It never
@@ -25,7 +25,7 @@ func readCancelable(ctx context.Context, reader io.Reader) (line string, err err
 	if info.Mode().IsRegular() {
 		return readLine(ctx, reader)
 	}
-	cr, e := cancelreader.NewReader(f)
+	cr, e := terminalreader.New(f)
 	if e != nil {
 		return "", fmt.Errorf("prepare prompt input: %w", e)
 	}

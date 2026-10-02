@@ -9,6 +9,8 @@ import (
 	"sync"
 
 	"github.com/muesli/cancelreader"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalreader"
 )
 
 type formSession struct {
@@ -34,7 +36,7 @@ func (p terminalRenderer) formSession(ctx context.Context, cancel context.Cancel
 	source := p.Input
 	if f, ok := p.Input.(*os.File); ok {
 		var err error
-		s.owned, err = cancelreader.NewReader(f)
+		s.owned, err = terminalreader.New(f)
 		if err != nil {
 			return nil, fmt.Errorf("prepare terminal input: %w", err)
 		}
