@@ -110,7 +110,22 @@ func prepareOpenCodeNativeApply(configRoot, activePath string, previous, desired
 			return nil, err
 		}
 	}
-	if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
+	if crossOpenCodeDialect(previous, desired) {
+		candidate := &openCodeNativeApply{projection: projection, previous: previous, desired: desired}
+		if _, err := openCodeTransitionRequest(candidate); err != nil {
+			return nil, err
+		}
+		for _, objects := range [][]domain.NativeObjectOwnership{previous, desired} {
+			for _, object := range objects {
+				if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if err := preflightDesiredOpenCodeObjects(configRoot, projection, shared.ObjectMap(previous), shared.ObjectMap(desired)); err != nil {
+			return nil, err
+		}
+	} else if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
 		return nil, err
 	}
 	if err := confirmOpenCodeConfigSelection(configRoot, projection, previous, desired); err != nil {

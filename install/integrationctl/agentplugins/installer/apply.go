@@ -40,6 +40,13 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
 	var result Result
 	var err error
+	// Preserve the prepared root-identity refusal before the stored journal
+	// scanner touches a root that may have been replaced by a symlink.
+	if host := prepared.openCodeHost; host != nil && openCodeRootIdentity(prepared.client.ConfigRoot) != host.Root() {
+		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
+		attachNextActions(&result)
+		return result, ErrPlanChanged
+	}
 	view, inspectErr := e.Inspect(ctx)
 	if inspectErr != nil || view.Recovery.Required {
 		reason := view.Recovery.Reason

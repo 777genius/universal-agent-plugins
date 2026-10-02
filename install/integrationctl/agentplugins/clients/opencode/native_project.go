@@ -19,6 +19,9 @@ import (
 )
 
 func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
+	if empty, err := emptyOpenCodeNativePlan(envelope, plan); err != nil || empty {
+		return err
+	}
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("OpenCode config root is unavailable")
@@ -239,6 +242,9 @@ func openCodeStringMap(value any) (map[string]string, error) {
 }
 
 func BuildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+	if empty, err := emptyOpenCodeNativePlan(envelope, plan); err != nil || empty {
+		return nil, err
+	}
 	projection, err := ReadOpenCodeProjection(stagingRoot)
 	if err != nil {
 		return nil, err
@@ -315,4 +321,27 @@ func openCodeSkillOwnership(stagingRoot string, envelope domain.PackageEnvelope,
 	}
 	return domain.NativeObjectOwnership{ObjectID: "opencode-skill:" + component.Name, Kind: openCodeSkillKind,
 		LogicalName: component.Name, Path: target, SourceRelative: filepath.ToSlash(filepath.Dir(relative)), ManagedDigest: digest, ProtectionClass: "managed"}, nil
+}
+
+// No desired native objects require neither a config selection nor a dialect.
+// Stored cleanup stays in the native reconciler and never uses this shortcut.
+func hasPlannedOpenCodeNative(plan domain.DeliveryPlan) bool {
+	for _, component := range plan.Components {
+		if component.Support != domain.SupportUnsupported && (component.Kind == domain.ComponentSkill || component.Kind == domain.ComponentMCPServer) {
+			return true
+		}
+	}
+	return false
+}
+
+func emptyOpenCodeNativePlan(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) (bool, error) {
+	if hasPlannedOpenCodeNative(plan) {
+		return false, nil
+	}
+	// An omitted plan for a native package is incomplete evidence, unlike an
+	// explicit plan excluding unsupported components or a metadata-only package.
+	if len(plan.Components) == 0 && (len(envelope.Skills) > 0 || len(envelope.MCP.Servers) > 0) {
+		return false, fmt.Errorf("OpenCode desired native component plan is required")
+	}
+	return true, nil
 }

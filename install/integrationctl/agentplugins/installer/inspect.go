@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
@@ -53,6 +54,19 @@ func (e *Engine) observe() (Inspection, error) {
 		return out.Recovery.Journals[i].OperationID < out.Recovery.Journals[j].OperationID
 	})
 	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
+	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: e.store}}).Pending()
+	if err != nil {
+		out.Recovery.Required = true
+		out.Recovery.Reason = err.Error()
+		return out, err
+	}
+	for _, p := range pending {
+		if p.Root == "" {
+			out.Recovery.Receipts = append(out.Recovery.Receipts, PendingReceipt{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase})
+		} else {
+			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
+		}
+	}
 	out.Recovery.Required = len(out.Recovery.Journals) > 0 || len(out.Recovery.Receipts) > 0
 	return out, nil
 }

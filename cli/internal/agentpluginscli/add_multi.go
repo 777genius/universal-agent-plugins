@@ -163,6 +163,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	combined.Targets = combined.Targets[:0]
 	service := lifecycleService(app, detected)
+	service.PrepareHostsForPreview = !opts.dryRun
 	inputs := make([]usecase.AddInput, len(selected))
 	for index, client := range selected {
 		clientPackage := cloneLoadedPackage(loaded)

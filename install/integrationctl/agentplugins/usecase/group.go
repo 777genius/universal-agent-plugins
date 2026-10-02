@@ -168,6 +168,16 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.validateGroupInput(); err != nil {
 		return GroupResult{}, err
 	}
+	targets, err := session.service.prepareHostInputs(ctx, session.input.Targets, input.DryRun)
+	if err != nil {
+		return GroupResult{}, err
+	}
+	session.input.Targets = targets
+	checks, err := session.service.prepareHostInputs(ctx, session.input.CompatibilityChecks, input.DryRun)
+	if err != nil {
+		return GroupResult{}, err
+	}
+	session.input.CompatibilityChecks = checks
 	if err := session.ensureGroupID(); err != nil {
 		return GroupResult{}, err
 	}
@@ -190,6 +200,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if session.input.DryRun || !session.input.Confirmed {
 		return session.result, nil
 	}
+	if err := session.revalidateHosts(); err != nil {
+		return session.result, err
+	}
 	if err := session.stageGroupDeliveries(); err != nil {
 		// Staging can prepare a locked runtime after the read-only preflight.
 		// No managed package or client was committed, but this is an apply-time
@@ -198,6 +211,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	defer session.cleanupStaged()
+	if err := session.revalidateHosts(); err != nil {
+		return session.result, err
+	}
 	if err := session.reobserveGroupIdentity(); err != nil {
 		return session.result, err
 	}

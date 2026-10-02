@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -33,6 +34,8 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 		return err
 	}
 	previous := []string{}
+	var source nativeconfig.Codec
+	var receipts []nativeconfig.Receipt
 	if managed != nil {
 		for _, object := range managed.NativeObjects {
 			stored, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
@@ -42,9 +45,10 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 			if !mcp {
 				continue
 			}
-			if stored != codec {
+			if source != "" && source != stored {
 				return nativeconfig.ErrNativeMigrationRequired
 			}
+			source = stored
 			owned := nativeconfig.Receipt{Version: "1", Path: object.Path, Codec: stored, Name: object.LogicalName, Digest: object.ManagedDigest}
 			present, exactlyOwned, err := guard.Kernel.Inspect(paths, stored, object.LogicalName, &owned)
 			if err != nil {
@@ -54,7 +58,14 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 				return fmt.Errorf("prior OpenCode MCP server %q is not exactly owned: %w", object.LogicalName, nativeconfig.ErrNotOwned)
 			}
 			previous = append(previous, object.LogicalName)
+			receipts = append(receipts, owned)
 		}
+	}
+	if source != "" && source != codec {
+		sort.Slice(receipts, func(i, j int) bool { return receipts[i].Name < receipts[j].Name })
+		names := domain.SelectedMCPNames(plan)
+		sort.Strings(names)
+		return guard.Kernel.CheckDialectTransition(paths, source, codec, receipts, names)
 	}
 	// Disabled foreign entries reserve their names even though they do not
 	// participate in the active callable namespace. They cannot be adopted.

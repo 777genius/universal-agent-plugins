@@ -65,6 +65,22 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 			return domain.ActivationOutcome{}, err
 		}
 	}
+	if nativeLifecycleClient(request.Client.ClientID) && !request.VerifyOnly {
+		state, err := service.StateStore.Load()
+		if err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+		for _, installation := range state.Installations {
+			if installation.InstallationID != installationID {
+				continue
+			}
+			client, ok := installation.Clients[bindingID]
+			if !ok || client.NativeActivationAttempt == "" {
+				return domain.ActivationOutcome{}, fmt.Errorf("native attempt disappeared")
+			}
+			request.NativeAttempt = domain.NativeAttemptIdentity{OperationID: client.NativeActivationAttempt, InstallationID: installationID, BindingID: bindingID, NativeRoot: request.Client.ConfigRoot}
+		}
+	}
 	return service.Activator.Activate(ctx, request)
 }
 
@@ -105,4 +121,23 @@ func (service Service) completeNativeRemoval(installationID, bindingID string, r
 		return service.persistLifecycleState(state)
 	}
 	return fmt.Errorf("installation disappeared before recording native removal")
+}
+
+// A deliberate profile change must materialize the new projection even when
+// portable package bytes/revision are unchanged. Stored operations have no host.
+func nativeDialectProjectionChanged(client domain.ClientBinding, plan domain.DeliveryPlan) bool {
+	if client.ClientID != "opencode" || plan.OpenCodeHost == nil {
+		return false
+	}
+	authority, ok := plan.OpenCodeHost.(interface{ ConfigDialect() string })
+	if !ok {
+		return false
+	}
+	target := authority.ConfigDialect()
+	for _, object := range client.NativeObjects {
+		if object.Kind == "opencode_global_mcp_server" && target == "opencode_v2" || object.Kind == "opencode_v2_global_mcp_server" && target == "opencode_v1" {
+			return true
+		}
+	}
+	return false
 }

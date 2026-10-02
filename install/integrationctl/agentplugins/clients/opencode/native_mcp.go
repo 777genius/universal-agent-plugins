@@ -303,8 +303,8 @@ func preflightDesiredOpenCodeObjects(configRoot string, projection OpenCodeProje
 			if prior.Kind != object.Kind {
 				_, priorMCP, _ := nativeconfig.OpenCodeCodecForKind(prior.Kind)
 				_, nextMCP, _ := nativeconfig.OpenCodeCodecForKind(object.Kind)
-				if priorMCP && nextMCP {
-					return nativeconfig.ErrNativeMigrationRequired
+				if priorMCP && nextMCP && prior.LogicalName == object.LogicalName && prior.Path == object.Path {
+					continue
 				}
 			}
 			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {

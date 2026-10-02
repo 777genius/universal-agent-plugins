@@ -25,6 +25,9 @@ func (*Adapter) OwnedOpenCodeNativeRequirements(objects []domain.NativeObjectOwn
 }
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.Client.OpenCodeHost == nil && hasPlannedOpenCodeNative(*plan) {
+		return clients.ErrOpenCodeAdapterUnavailable
+	}
 	if in.Client.OpenCodeHost != nil {
 		skills, transports, err := clients.PlannedOpenCodeNativeRequirements(in.Envelope, *plan)
 		if err != nil {
