@@ -18,7 +18,7 @@ type seamStager struct {
 }
 
 func (s seamStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
-	if s.serverName != "" && s.projectArgs != nil {
+	if s.serverName != "" && s.projectArgs != nil && !selectedNativeOnly(plan.SelectedDelivery) {
 		return domain.StagedDelivery{}, fmt.Errorf("host projection requires owned plugin data")
 	}
 	return s.Stager.Stage(ctx, envelope, plan, operationID, hints)
@@ -45,7 +45,7 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 }
 
 func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(BindingFacts) ([]string, error), facts BindingFacts) (domain.PackageEnvelope, error) {
-	if serverName == "" || args == nil {
+	if serverName == "" || args == nil || selectedNativeOnly(facts.SelectedDelivery) {
 		return envelope, nil
 	}
 	raw, err := json.Marshal(envelope.MCP.Servers)

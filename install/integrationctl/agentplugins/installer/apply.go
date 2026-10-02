@@ -65,7 +65,7 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 	}
 	if !prepared.plan.NoChange {
 		if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
-			if _, err = e.helper(); err != nil {
+			if _, err = e.preparedHelper(prepared); err != nil {
 				result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
 				attachNextActions(&result)
 				return result, err
@@ -147,7 +147,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 			return committed, err
 		}
 	}
-	helper, err := e.helper()
+	helper, err := e.preparedHelper(prepared)
 	if err != nil {
 		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
@@ -266,14 +266,17 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 		return Result{Operation: OpRemove, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	helper, _ := e.helper()
-	svc := e.lifecycle(helper, prepared.facts, prepared.detected)
+	svc := e.removalLifecycle(ctx, prepared, e.lifecycle(helper, prepared.facts, prepared.detected))
 	e.report(ProgressStage)
+	if err := e.confirmRemoveBindings(ctx, prepared); err != nil {
+		return removalConflict(Result{Operation: OpRemove, Binding: prepared.facts}, err)
+	}
 	removed, err := svc.Remove(ctx, usecase.RemoveInput{
 		Selector: prepared.plan.InstallationID, Client: prepared.client, Scope: domain.ScopeUser,
 		Confirmed: true, OperationID: prepared.req.OperationID, BackendExecutable: prepared.req.ClientExecutable,
-		ExternalUninstalled: prepared.req.ExternalUninstalled,
+		ExternalUninstalled: prepared.req.ExternalUninstalled, SelectedDelivery: prepared.plan.SelectedDelivery,
 	})
-	result := Result{Operation: OpRemove, InstallationID: removed.InstallationID, Binding: prepared.facts}
+	result := Result{Operation: OpRemove, InstallationID: removed.InstallationID, Binding: prepared.facts, Mutated: removed.Mutated, Client: removalClientResult(prepared.facts)}
 	if err == nil {
 		result.Outcome = OutcomeCompleted
 		if !removed.Mutated {

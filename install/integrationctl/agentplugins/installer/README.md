@@ -5,7 +5,8 @@ Public process-local installer API for a standard local Agent Plugins package
 for **install**, **update**, **repair**, **refresh_projection**, and **remove** are published. One
 client uses `Request.ClientID`. Two explicitly registered clients use
 `Request.Targets` for install/update/repair with the same operation verb.
-Group removal retains its Claude/Codex boundary. `install-group` as an operation name is invalid.
+Historical group removal retains its Claude/Codex boundary. Selected removal
+requires the explicitly registered adapter's typed native-intent reconciler. `install-group` as an operation name is invalid.
 Two PackageRoot values in one install or update group stay unpublished.
 Repair of mixed live revisions uses per-target PackageRoot so each binding
 keeps its exact recorded digest. Group Repair with one PackageRoot across
@@ -73,9 +74,35 @@ assessment remains a separate decision.
 come from committed state; activation checks the matching committed selection,
 including its staged projection digest. Empty selections retain historical
 behavior. This is a public contract checkpoint with injected TEST adapters;
-actual NewLocal activation, selected removal, native-intent Inspect/Recover and
-conditional MCP helper composition remain separate work. It grants no native
-VS Code, Windows or macOS qualification.
+the default registry and actual NewLocal availability are unchanged. It grants
+no native VS Code, Windows or macOS qualification.
+
+Selected single/group removal freezes the complete persisted binding and data
+receipt through Plan, BindingFacts, result and RemoveInput. It validates every
+profile, target, managed digest and native scope before observers and repeats
+validation after them, under the one service lock, and at native dispatch and
+return. Constructor facts never replace removal authority. A historical adapter
+without the typed reconciler and read-only native registry capability refuses a
+persisted Local selection before commands. CLI registry inspection is ineligible
+for selected removal; the registered adapter reads its exact persisted profile.
+
+Inspect includes exact `Recovery.NativeIntents`: installation/binding/profile,
+pending direction/attempt, complete selected tuple/components/selector and a
+digest of the persisted binding. It acquires no mutation or profile lock. Recover
+requires that exact typed observation and StateRoot, revalidates under one retained
+process lock, and invokes the selected Service reconciler with persisted facts.
+`Recovery.StateDigest` binds all state scopes; each complete journal is hashed.
+Checks before and after every reconciler and before kernel reads/acknowledgement
+reject new journals, changed receipts and foreign bindings. Only successful
+existing kernel/service transitions advance the retained expected scope.
+Journal recovery remains supported; stale/missing/foreign scopes and uncertain
+attempts stay unresolved. Native intent diagnostic JSON exposes existing domain
+facts, but a JSON round trip cannot restore the operational typed observation.
+
+A complete selected Local plan without MCP needs no absent managed helper and
+skips host MCP argument projection, including a package with no MCP server.
+Selected MCP, historical plans and explicitly configured helper paths retain
+helper validation. No Local adapter is automatically registered by this seam.
 
 Prepare copies `Request` and reports canonical `Plan.TreeDigest` with algorithm
 `agentplugins-tree-sha256-v1`. That value is the packagedigest source identity,
@@ -133,9 +160,9 @@ required components. The external sample's flagged path runs install → inspect
 uses `Request.Targets` for the same verbs on Claude+Codex together.
 
 Codex artifact removal requires `Request.ExternalUninstalled`. Confirmed Apply
-does not invent that attestation. A missing or relative helper is rejected
+does not invent that attestation. A required missing helper or relative configured helper is rejected
 before the state file is written. Confirmed Apply returns `recovery_required`
-when Inspect sees a pending journal or unfinished receipt; it does not recover
+when Inspect sees a pending journal, unfinished receipt or native intent; it does not recover
 as a side effect of install/remove. Close during Apply returns `ErrHandleBusy`
 without releasing the sealed snapshot. Install of a different TreeDigest for an
 active binding returns `ErrUpdateRequired` before mutation. Update of one live
