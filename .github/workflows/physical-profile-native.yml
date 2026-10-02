@@ -37,6 +37,29 @@ jobs:
         with:
           go-version: '1.26.8'
           cache: false
+      - name: Create canonical Windows TEST temp root
+        if: runner.os == 'Windows'
+        run: |
+          python - <<'PY_TEMP'
+          import os, pathlib, tempfile
+          parent = pathlib.Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+          root = pathlib.Path(tempfile.mkdtemp(prefix='physical-profile-TEST-', dir=parent))
+          if str(root.resolve(strict=True)) != str(root):
+              raise SystemExit('Windows TEST temp root has noncanonical spelling')
+          print('Fresh canonical Windows TEST temp root:', root)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'TEMP={root}\nTMP={root}\n')
+          PY_TEMP
+      - name: Verify inherited Windows TEST temp root
+        if: runner.os == 'Windows'
+        run: |
+          python - <<'PY_TEMP'
+          import os, pathlib, tempfile
+          root = os.environ['TEMP']
+          if os.environ['TMP'] != root or tempfile.gettempdir() != root or str(pathlib.Path(root).resolve(strict=True)) != root:
+              raise SystemExit('Windows TEST temp root was not inherited canonically')
+          print('Inherited canonical Windows TEST temp root:', root)
+          PY_TEMP
       - name: Native directory and legacy identity contracts
         working-directory: install/integrationctl
         run: |
