@@ -29,7 +29,7 @@ func (e *Engine) validateGroupTargets(req Request) error {
 	}
 	seen := map[string]struct{}{}
 	for _, target := range targets {
-		if !e.SupportsClient(target.ClientID) || (req.Operation == OpRemove && target.ClientID != "claude" && target.ClientID != "codex") {
+		if !e.SupportsClient(target.ClientID) {
 			return fmt.Errorf("%w: client %q is not in this beta", ErrUnsupported, target.ClientID)
 		}
 		if _, ok := seen[target.ClientID]; ok {

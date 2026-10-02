@@ -94,13 +94,13 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 }
 
 func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (*usecase.GroupResult, error) {
-	if _, err := e.helper(); err != nil {
+	if _, err := e.preparedHelper(prepared); err != nil {
 		return nil, err
 	}
 	if err := e.ensureDirs(); err != nil {
 		return nil, err
 	}
-	helper, err := e.helper()
+	helper, err := e.preparedHelper(prepared)
 	if err != nil {
 		return nil, err
 	}

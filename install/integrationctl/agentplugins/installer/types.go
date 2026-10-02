@@ -232,10 +232,13 @@ type Inspection struct {
 
 // RecoveryObservation is the §5.8 read-only pending-transaction view.
 type RecoveryObservation struct {
-	Required bool
-	Journals []PendingJournal
-	Receipts []PendingReceipt
-	Reason   string
+	// StateDigest binds all persisted bindings, receipts and installation facts.
+	StateDigest   string
+	Required      bool
+	Journals      []PendingJournal
+	NativeIntents []PendingNativeIntent
+	Receipts      []PendingReceipt
+	Reason        string
 }
 
 // PendingJournal is one open directory-swap journal.
