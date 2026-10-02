@@ -248,38 +248,45 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 	if !ok {
 		e.report(ProgressPrepare)
 		e.report(ProgressPreflight)
-		handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected}
-		helperVersion, helperDigest := e.helperIdentity()
-		handle.plan = Plan{
-			Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
-			InstallationID: installation.InstallationID, HelperVersion: helperVersion,
-			HelperDigest: helperDigest, NoChange: true,
-		}
-		handle.facts = BindingFacts{
-			InstallationID: installation.InstallationID, ClientID: string(client.ClientID),
-			OperationID: req.OperationID,
-		}
-		return handle, nil
+		handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
+		return e.prepareAbsentRemoval(handle, installation.InstallationID), nil
 	}
-	e.report(ProgressPrepare)
-	e.report(ProgressPreflight)
 	if err := e.removalPreflight(ctx, client, binding, receipt); err != nil {
 		return nil, err
 	}
-	handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected}
+	handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
 	helperVersion, helperDigest := e.helperIdentity()
 	handle.plan = Plan{
 		Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
 		TargetPath: binding.TargetLocator, InstallationID: installation.InstallationID,
 		BindingID: binding.ClientBindingID, HelperVersion: helperVersion, HelperDigest: helperDigest,
+		SelectedDelivery: binding.SelectedDelivery, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest),
+		Client: liveClientResult(binding, req.RequiredComponents, installation.Source.TreeDigest),
 	}
 	handle.facts = BindingFacts{
 		InstallationID: installation.InstallationID, ClientID: string(client.ClientID),
 		BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 		DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID, OperationID: req.OperationID,
+		SelectedDelivery: binding.SelectedDelivery, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest),
 	}
 	handle.artifact = binding.PhysicalArtifact
+	e.report(ProgressPrepare)
+	e.report(ProgressPreflight)
 	return handle, nil
+}
+
+func (e *Engine) prepareAbsentRemoval(handle *PreparedOperation, installationID string) *PreparedOperation {
+	helperVersion, helperDigest := e.helperIdentity()
+	handle.plan = Plan{
+		Operation: OpRemove, ClientID: string(handle.client.ClientID), ConfigRoot: handle.client.ConfigRoot,
+		InstallationID: installationID, HelperVersion: helperVersion,
+		HelperDigest: helperDigest, NoChange: true,
+	}
+	handle.facts = BindingFacts{
+		InstallationID: installationID, ClientID: string(handle.client.ClientID),
+		OperationID: handle.req.OperationID,
+	}
+	return handle
 }
 
 // removalPreflight is the §5.5.2 read-only check: exact target, persisted path,
@@ -287,6 +294,12 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 // EnsureData, invoke a helper, or deactivate the client. Apply repeats it
 // before UAP Remove.
 func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedClient, binding domain.ClientBinding, receipt domain.DataReceipt) error {
+	if err := e.validateRemovalBinding(client, binding); err != nil {
+		return err
+	}
+	if err := e.confirmSelectedNativeEntry(ctx, client, binding); err != nil {
+		return err
+	}
 	digest := managedPackageDigest(binding)
 	if digest == "" {
 		return fmt.Errorf("%w: managed package digest is missing; refusing removal", ErrInvalidRequest)

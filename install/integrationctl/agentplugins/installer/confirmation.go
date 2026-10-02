@@ -78,6 +78,9 @@ func confirmationLifecycle(prepared *PreparedOperation, svc usecase.Service, cap
 }
 
 func (e *Engine) confirmDeliveries(ctx context.Context, prepared *PreparedOperation) error {
+	if prepared.req.Operation == OpRemove {
+		return e.confirmRemoveBindings(ctx, prepared)
+	}
 	if len(prepared.deliveries) == 0 {
 		return nil
 	}
