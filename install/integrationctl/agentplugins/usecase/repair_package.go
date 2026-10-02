@@ -68,6 +68,9 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 		return domain.StagedDelivery{}, err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, session.plan, &session.client)
+	if err == nil {
+		delivery.NativeObjects, err = retainRecordedLocalSelector(session.plan.SelectedDelivery, session.client, delivery.NativeObjects)
+	}
 	if err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, err

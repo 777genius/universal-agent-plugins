@@ -255,6 +255,10 @@ func reconcilePreservedNativeObjects(client domain.ClientBinding, nativeObjects 
 			reconciled = append(reconciled, object)
 		}
 	}
+	reconciled, err := retainRecordedLocalSelector(client.SelectedDelivery, client, reconciled)
+	if err != nil {
+		return nil, err
+	}
 	return &reconciled, nil
 }
 
