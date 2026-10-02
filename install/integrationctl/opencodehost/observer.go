@@ -23,6 +23,86 @@ type NativeObserverDescriptor struct {
 // NativeObserverEvidence returns only the three exact Linux amd64 native serve
 // descriptors. Lookup alone grants nothing; there is no version inheritance.
 func NativeObserverEvidence(version string) (NativeObserverDescriptor, bool) {
+	d, ok := qualifiedLinuxObserverEvidence(version)
+	if !ok {
+		return NativeObserverDescriptor{}, false
+	}
+	return NativeObserverEvidenceForImage(version, "linux", "amd64", d.Tuple.ImageSHA256)
+}
+
+// NativeObserverEvidenceForImage recognizes only literal exact image cells.
+// A native_source_pending descriptor records byte identity, not qualification;
+// neither lookup nor its informational capability names grant runtime authority.
+// No platform, image or version is inferred when an input is missing.
+func NativeObserverEvidenceForImage(version, goos, goarch, imageSHA256 string) (NativeObserverDescriptor, bool) {
+	for _, d := range nativeObserverQualifications() {
+		if observerImageMatches(d.Tuple, version, goos, goarch, imageSHA256) {
+			return d, true
+		}
+	}
+	for _, d := range nativeObserverCandidates() {
+		if observerImageMatches(d.Tuple, version, goos, goarch, imageSHA256) {
+			return d, true
+		}
+	}
+	return NativeObserverDescriptor{}, false
+}
+
+func observerImageMatches(t NativeObserverTuple, version, goos, goarch, imageSHA256 string) bool {
+	return t.Version == version && t.GOOS == goos && t.GOARCH == goarch && t.ImageSHA256 == imageSHA256
+}
+
+// This closed source table is the qualification merge seam: future independently
+// reviewed per-image descriptors belong here as literal data. There is no public
+// setter, environment override or inheritance from a candidate's source mapping.
+// Qualified rows take precedence over candidates for the same exact image cell.
+func nativeObserverQualifications() []NativeObserverDescriptor {
+	floor, _ := qualifiedLinuxObserverEvidence("1.18.33")
+	current, _ := qualifiedLinuxObserverEvidence("1.18.34")
+	v2, _ := qualifiedLinuxObserverEvidence("2.0.21")
+	return []NativeObserverDescriptor{floor, current, v2}
+}
+
+// Custody input SHA256: 28c63700240d3fbdbbae33dbc0b2ca734e52c3f5965263e2500b74bbad491d5c.
+// These eight extracted image pins have no reviewed observer qualification.
+// Source identifiers describe intended mapping only; evidence stays empty.
+func nativeObserverCandidates() [8]NativeObserverDescriptor {
+	images := [...]NativeObserverTuple{
+		{Version: "1.18.33", GOOS: "linux", GOARCH: "arm64", ImageSHA256: "986fef2069a03b5181a9ec920786836f98fe3e4950c630941908687854e42757"},
+		{Version: "2.0.21", GOOS: "linux", GOARCH: "arm64", ImageSHA256: "d2f4c9ee106d9930d20ca5cf5f2c2216aab6fed836992cf24979d9481242c01c"},
+		{Version: "1.18.33", GOOS: "darwin", GOARCH: "amd64", ImageSHA256: "f53aae8eb68d832ab1bcd27bed88c02de910be61f4b5f90068ae8e93d5e794c9"},
+		{Version: "2.0.21", GOOS: "darwin", GOARCH: "amd64", ImageSHA256: "4642b7da61279c8aa5d389d9f29454936e449fea6bc510689e9cc976fff6579f"},
+		{Version: "1.18.33", GOOS: "darwin", GOARCH: "arm64", ImageSHA256: "139ddeb6a46ba276827bb8f79c7b28208621746e4fd6914d9ae71cc1a0a57524"},
+		{Version: "2.0.21", GOOS: "darwin", GOARCH: "arm64", ImageSHA256: "0b2b68c1efaf20a29aaf636c2ffccc1abb56243a82f48cce45e257d232e03442"},
+		{Version: "1.18.33", GOOS: "windows", GOARCH: "amd64", ImageSHA256: "52f60248a576b34c9a6dcaa27e0a7f08089af35bcdc0dfb10c04d3e00a98314c"},
+		{Version: "2.0.21", GOOS: "windows", GOARCH: "amd64", ImageSHA256: "ec7a3909bad41ef88e4650f737ab6f0b0c402a7f49a588812d0a79820c2dfc1f"},
+	}
+	var candidates [8]NativeObserverDescriptor
+	for i, tuple := range images {
+		tuple.Entry = "official_native_serve_default_dual_autoload"
+		tuple.NativeAdapterSHA256 = "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901"
+		switch tuple.Version {
+		case "1.18.33":
+			tuple.Adapter = ObserverV1
+			tuple.ReaderContract = "v1_source_causal_sync_callback_tombstones"
+			tuple.ProvenanceBasis = "v1_assistant_completed_or_assistant_created_lower_bound"
+			tuple.UpstreamCommit = "51ef4be1d3c122f18fefb510dca8d778571f4f18"
+		case "2.0.21":
+			tuple.Adapter = ObserverV2
+			tuple.ReaderContract = "v2_direct_asynciterable_data_sparse_error_end_checkpoint_after_prepare"
+			tuple.ProvenanceBasis = "v2_native_envelope_created"
+			tuple.UpstreamCommit = "8a8bd622a3d7dc29ccf30ec17f84e363ed95ed72"
+		}
+		candidates[i] = NativeObserverDescriptor{
+			Tuple:        tuple,
+			NativeStatus: "native_source_pending",
+			Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError},
+		}
+	}
+	return candidates
+}
+
+func qualifiedLinuxObserverEvidence(version string) (NativeObserverDescriptor, bool) {
 	d := NativeObserverDescriptor{
 		NativeStatus: "native_source_qualified",
 		Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError},
@@ -74,8 +154,8 @@ func NativeObserverEvidence(version string) (NativeObserverDescriptor, bool) {
 // result only within that verified runtime/reader lifetime; changes revoke it.
 func BindNativeObserver(e VersionEvidence, actual NativeObserverTuple) Profile {
 	p := Resolve(e)
-	d, ok := NativeObserverEvidence(e.Version)
-	if !ok || e.Source != "host_runtime" || e.ProbeStatus != "ok" || e.ExecutableIdentity == "" || actual != d.Tuple {
+	d, ok := NativeObserverEvidenceForImage(actual.Version, actual.GOOS, actual.GOARCH, actual.ImageSHA256)
+	if !ok || d.NativeStatus != "native_source_qualified" || actual.Version != e.Version || e.Source != "host_runtime" || e.ProbeStatus != "ok" || e.ExecutableIdentity == "" || actual != d.Tuple {
 		return p
 	}
 	p.nativeObserver = d.Tuple
@@ -87,8 +167,9 @@ func BindNativeObserver(e VersionEvidence, actual NativeObserverTuple) Profile {
 }
 
 func (p Profile) observerSupport(adapter AdapterID, c Capability) Support {
-	d, ok := NativeObserverEvidence(p.Version)
-	if ok && p.nativeIdentity != "" && p.nativeObserver == d.Tuple && adapter == d.Tuple.Adapter {
+	t := p.nativeObserver
+	d, ok := NativeObserverEvidenceForImage(t.Version, t.GOOS, t.GOARCH, t.ImageSHA256)
+	if ok && d.NativeStatus == "native_source_qualified" && t.Version == p.Version && p.nativeIdentity != "" && t == d.Tuple && adapter == d.Tuple.Adapter {
 		if c == LocalPluginDual {
 			return Supported
 		}
