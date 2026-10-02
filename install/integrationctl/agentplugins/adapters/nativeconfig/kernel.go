@@ -332,11 +332,11 @@ func (kernel Kernel) compareAndSwap(path string, expected []byte, expectedExists
 	if files, ok := kernel.files.(conditionalFileIO); ok {
 		return files.CompareAndSwap(path, expected, expectedExists, next, mode)
 	}
-	current, _, exists, err := kernel.files.ReadNoFollow(path)
+	current, currentMode, exists, err := kernel.files.ReadNoFollow(path)
 	if err != nil {
 		return fmt.Errorf("re-read native config at replacement boundary: %w", err)
 	}
-	if exists != expectedExists || !bytes.Equal(current, expected) {
+	if exists != expectedExists || !bytes.Equal(current, expected) || expectedExists && currentMode.Perm() != mode.Perm() {
 		return ErrConcurrentChange
 	}
 	return kernel.files.WriteAtomic(path, next, mode)

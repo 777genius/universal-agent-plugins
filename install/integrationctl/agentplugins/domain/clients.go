@@ -380,13 +380,14 @@ type StagedDelivery struct {
 }
 
 type ActivationRequest struct {
-	Client            DetectedClient `json:"client"`
-	Plan              DeliveryPlan   `json:"plan"`
-	Delivery          StagedDelivery `json:"delivery"`
-	DeclaredName      string         `json:"declared_name"`
-	Replacing         bool           `json:"replacing"`
-	Interactive       bool           `json:"interactive"`
-	BackendExecutable string         `json:"-"`
+	NativeAttempt     NativeAttemptIdentity `json:"-"`
+	Client            DetectedClient        `json:"client"`
+	Plan              DeliveryPlan          `json:"plan"`
+	Delivery          StagedDelivery        `json:"delivery"`
+	DeclaredName      string                `json:"declared_name"`
+	Replacing         bool                  `json:"replacing"`
+	Interactive       bool                  `json:"interactive"`
+	BackendExecutable string                `json:"-"`
 	// PreviousNativeObjects binds replacement preflight to the exact native
 	// objects recorded by the currently installed package revision.
 	PreviousNativeObjects []NativeObjectOwnership `json:"-"`

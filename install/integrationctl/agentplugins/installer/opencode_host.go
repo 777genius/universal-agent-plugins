@@ -46,14 +46,14 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 		return errors.New("host_target_unverified")
 	}
 	profile := opencodehost.Resolve(evidence.VersionEvidence)
-	// Phase 1 cannot change stored ownership dialect, including cleanup of
-	// the last declaration. Durable native/skill/state recovery is phase 2.
-	if ownedCodec != "" {
+	// Removing all MCP declarations remains stored-dialect cleanup, outside the
+	// closed same-ID transition. Retain its existing cross-profile refusal.
+	if ownedCodec != "" && len(transports) == 0 {
 		selected, err := opencode.DesiredOpenCodeCodec(newOpenCodePreparedHost(executable, openCodeRootIdentity(handle.client.ConfigRoot), target.Environment, evidence.VersionEvidence, profile, nil))
 		if err != nil {
 			return err
 		}
-		if ownedCodec != selected {
+		if selected != ownedCodec {
 			return nativeconfig.ErrNativeMigrationRequired
 		}
 	}

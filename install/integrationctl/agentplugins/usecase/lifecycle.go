@@ -174,6 +174,18 @@ func (service Service) updateLifecycle(installationID, clientBindingID string, o
 }
 
 func (service Service) updateActivationResult(installationID, clientBindingID string, outcome domain.ActivationOutcome, activationErr error, previousNativeObjects []domain.NativeObjectOwnership) (bool, error) {
+	// A discoverable native record owns this exact state decision. Generic
+	// failure/lifecycle timestamps cannot change its bound old/target snapshot.
+	if fence, ok := service.Kernel.NativeRecovery.(ports.NativeTransitionActivationFence); ok {
+		held, err := fence.HoldsActivation(installationID, clientBindingID)
+		if err != nil {
+			return false, err
+		}
+		if held {
+			return outcome.NativeEffect == domain.NativeEffectCommitted, nil
+		}
+	}
+
 	switch outcome.NativeEffect {
 	case domain.NativeEffectCommitted:
 		confirmed := append([]domain.NativeObjectOwnership(nil), outcome.NativeObjects...)

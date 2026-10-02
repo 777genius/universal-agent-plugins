@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -61,7 +62,8 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		projectArgs: e.cfg.ProjectArgs,
 		facts:       facts,
 	}
-	inner := providers.Activator{Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
+	transitions := opencode.NativeTransitions{PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
+	inner := providers.Activator{OpenCodeTransitions: transitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver
 	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {
 		observer = providers.NativeIdentityObserver{
@@ -74,7 +76,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		Activator:          seamActivator{inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
 		PluginData:         providers.PluginDataManager{Base: e.cfg.PluginDataBase},
 		Lock:               processlock.Lock{Path: e.cfg.LockFile},
-		Kernel:             transaction.Kernel{StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
+		Kernel:             transaction.Kernel{NativeRecovery: transitions, StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
 		NativeObserver:     observer,
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},
 	}
