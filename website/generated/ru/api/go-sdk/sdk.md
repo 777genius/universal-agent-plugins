@@ -39,6 +39,7 @@ import "github.com/777genius/plugin-kit-ai/sdk"
   - func \(a \*App\) RunContext\(ctx context.Context\) int
   - func \(a \*App\) RunCursorObserver\(ctx context.Context\) \(code int\)
   - func \(a \*App\) Use\(mw Middleware\)
+  - func \(a \*App\) VSCodeLocal\(\) \*vscodelocal.Registrar
 - type CapabilityID
 - type Config
 - type CursorObserverIO
@@ -215,6 +216,14 @@ func (a *App) Use(mw Middleware)
 ```
 
 Use appends middleware that wraps all subsequent handler dispatch.
+
+### func \(\*App\) VSCodeLocal
+
+```go
+func (a *App) VSCodeLocal() *vscodelocal.Registrar
+```
+
+VSCodeLocal returns a registrar for beta Local Stop/SubagentStop observers. This optional runtime API does not qualify native installation or availability.
 
 ## type CapabilityID
 

@@ -5,6 +5,7 @@ import (
 	internal_codex "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/codex"
 	internal_cursor "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/cursor"
 	internal_gemini "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/gemini"
+	internal_vscode_local "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/vscodelocal"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 )
 
@@ -251,6 +252,20 @@ var registry = map[key]runtime.Descriptor{
 		Carrier:  runtime.CarrierStdinJSON,
 		Decode:   internal_cursor.DecodeStop,
 		Encode:   internal_cursor.EncodeStop,
+	},
+	{platform: "vscode-local", event: "Stop"}: {
+		Platform: "vscode-local",
+		Event:    "Stop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_vscode_local.DecodeStop,
+		Encode:   internal_vscode_local.EncodeObserver,
+	},
+	{platform: "vscode-local", event: "SubagentStop"}: {
+		Platform: "vscode-local",
+		Event:    "SubagentStop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_vscode_local.DecodeSubagentStop,
+		Encode:   internal_vscode_local.EncodeObserver,
 	},
 }
 

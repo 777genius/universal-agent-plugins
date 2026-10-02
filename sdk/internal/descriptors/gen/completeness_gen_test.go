@@ -8,10 +8,10 @@ import (
 func TestGeneratedRegistryCompleteness(t *testing.T) {
 	profiles := defs.Profiles()
 	events := defs.Events()
-	if len(profiles) != 6 {
+	if len(profiles) != 7 {
 		t.Fatalf("profiles count = %d", len(profiles))
 	}
-	if len(events) != 34 {
+	if len(events) != 36 {
 		t.Fatalf("events count = %d", len(events))
 	}
 	entries := AllSupportEntries()
@@ -42,7 +42,7 @@ func TestGeneratedRegistryCompleteness(t *testing.T) {
 		if len(profile.TransportModes) == 0 {
 			t.Fatalf("missing transport modes for %s", profile.Platform)
 		}
-		if profile.Status != "deferred" {
+		if profile.Status != "deferred" && !profile.RuntimeOnly {
 			if len(profile.Scaffold.RequiredFiles) == 0 || len(profile.Scaffold.TemplateFiles) == 0 {
 				t.Fatalf("missing scaffold metadata for %s", profile.Platform)
 			}
