@@ -16,22 +16,24 @@ import (
 
 // PreparedOperation owns a sealed source snapshot until Close or a terminal Apply.
 type PreparedOperation struct {
-	engine    *Engine
-	mu        sync.Mutex
-	closed    bool
-	busy      bool
-	applied   bool
-	req       Request
-	plan      Plan
-	snapshot  domain.PackageSnapshot
-	snapshots []domain.PackageSnapshot
-	envelope  domain.PackageEnvelope
-	envelopes []domain.PackageEnvelope
-	client    domain.DetectedClient
-	clients   []domain.DetectedClient
-	detected  map[domain.ClientID]domain.DetectedClient
-	facts     BindingFacts
-	artifact  string
+	engine     *Engine
+	mu         sync.Mutex
+	closed     bool
+	busy       bool
+	applied    bool
+	req        Request
+	plan       Plan
+	snapshot   domain.PackageSnapshot
+	snapshots  []domain.PackageSnapshot
+	envelope   domain.PackageEnvelope
+	envelopes  []domain.PackageEnvelope
+	client     domain.DetectedClient
+	clients    []domain.DetectedClient
+	detected   map[domain.ClientID]domain.DetectedClient
+	facts      BindingFacts
+	artifact   string
+	deliveries []preparedDeliveryPlan
+	recorded   domain.StateFileV2
 }
 
 func (p *PreparedOperation) Plan() Plan {
@@ -199,8 +201,13 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		_ = handle.closeLocked()
 		return nil, err
 	}
+	handle.recorded, err = e.store.Load()
+	if err != nil {
+		_ = handle.closeLocked()
+		return nil, err
+	}
 	helper, _ := e.helper()
-	svc := e.lifecycle(helper, BindingFacts{}, handle.detected)
+	svc := confirmationLifecycle(handle, e.lifecycle(helper, BindingFacts{}, handle.detected), true)
 	preview, err := dry(svc, usecase.AddInput{
 		Envelope: handle.envelope, Client: client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
 		PersistAuthoritativeObservations: e.persistObservations,
@@ -369,7 +376,7 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		BindingID:      domain.ComputeClientBindingID(firstNonEmpty(req.InstallationID, preview.InstallationID), string(preview.Plan.ClientID), string(preview.Plan.Scope), preview.Plan.ActivePath),
 		HelperVersion:  helperVersion, HelperDigest: helperDigest,
 		RequiredMissing: missing, NoChange: preview.NoChange,
-		Delivery: deliveryPlan(preview.Plan),
+		Delivery: deliveryPlan(preview.Plan), SelectedDelivery: preview.Plan.SelectedDelivery,
 		Client: ClientResult{ClientID: string(client.ClientID), Activation: string(preview.Activation.Activation),
 			Authentication: string(preview.Activation.Authentication), Policy: string(preview.Activation.Policy), Verification: string(preview.Activation.Verification)},
 		RequiresConfirmation: preview.RequiresConfirmation,
@@ -377,8 +384,10 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 	handle.facts = BindingFacts{
 		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,
 		BindingID: handle.plan.BindingID, Scope: string(preview.Plan.Scope),
-		TargetPath: handle.plan.TargetPath, OperationID: req.OperationID, TreeDigest: snapshot.TreeDigest,
+		SelectedDelivery: preview.Plan.SelectedDelivery,
+		TargetPath:       handle.plan.TargetPath, OperationID: req.OperationID, TreeDigest: snapshot.TreeDigest,
 	}
+	handle.req.InstallationID = handle.plan.InstallationID
 	handle.artifact = preview.Plan.PhysicalArtifactID
 	if len(missing) != 0 {
 		_ = handle.closeLocked()

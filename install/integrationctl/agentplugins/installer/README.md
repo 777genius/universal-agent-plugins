@@ -3,8 +3,9 @@
 Public process-local installer API for a standard local Agent Plugins package
 (`plugin.json` + MCP/skills). Constructor, inspect, Recover, and prepare/apply
 for **install**, **update**, **repair**, **refresh_projection**, and **remove** are published. One
-client uses `Request.ClientID`. Claude+Codex together uses `Request.Targets`
-with the same operation verb. `install-group` as an operation name is invalid.
+client uses `Request.ClientID`. Two explicitly registered clients use
+`Request.Targets` for install/update/repair with the same operation verb.
+Group removal retains its Claude/Codex boundary. `install-group` as an operation name is invalid.
 Two PackageRoot values in one install or update group stay unpublished.
 Repair of mixed live revisions uses per-target PackageRoot so each binding
 keeps its exact recorded digest. Group Repair with one PackageRoot across
@@ -57,6 +58,24 @@ Same-root group Repair assesses that snapshot once. `New`, Inspect, Discover,
 and Recover do not invoke Assess. Coarse `Config.Progress` phases are
 observational. The engine does not import Notifications types and does not
 query a live Claude/Codex identity by default.
+
+Prepare freezes the selected adapter's complete `SelectedDelivery` through the
+public Plan/DeliveryPlan and each group PlanTarget. Apply regenerates that
+adapter plan before effects, repeats all-target and recorded-binding checks after
+preflight/stage observers before mutation locks or native discovery, and guards
+the use case's subsequent replan too. Changed mode, physical/profile identity, tuple, components, digests or owned
+selector authority returns `ErrPlanChanged`. The prepared installation identity
+is reused for the commit. These typed fields use `json:"-"`: diagnostic JSON
+cannot be replayed as confirmation authority. The existing digest-bound content
+assessment remains a separate decision.
+
+`BindingFacts` in `OnCommittedBinding`, and Result binding/client selections,
+come from committed state; activation checks the matching committed selection,
+including its staged projection digest. Empty selections retain historical
+behavior. This is a public contract checkpoint with injected TEST adapters;
+actual NewLocal activation, selected removal, native-intent Inspect/Recover and
+conditional MCP helper composition remain separate work. It grants no native
+VS Code, Windows or macOS qualification.
 
 Prepare copies `Request` and reports canonical `Plan.TreeDigest` with algorithm
 `agentplugins-tree-sha256-v1`. That value is the packagedigest source identity,
