@@ -35,6 +35,13 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 		return session.result, fmt.Errorf("managed package changed after refresh preflight; rerun refresh: %w", err)
 	}
 	if !changed {
+		facts, local := session.plan.SelectedDelivery.LocalFacts()
+		if local && !selectionChanged && !facts.NativeStop && len(facts.MCPServers) == 0 && len(facts.Skills) == 0 && confirmedNativeProjection(session.client.NativeObjects, delivery.NativeObjects) {
+			// Prepared/package-valid is the certain Local registration result,
+			// not an outstanding activation. Verify the retained empty route
+			// through the existing native maintenance path without a new attempt.
+			return session.repairNative()
+		}
 		if selectionChanged {
 			if err := session.persistRefreshedSelection(); err != nil {
 				return session.result, err

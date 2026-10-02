@@ -85,6 +85,9 @@ func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt 
 		return domain.StagedDelivery{}, err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, session.plan, session.managedBinding)
+	if err == nil && session.managedBinding != nil {
+		delivery.NativeObjects, err = retainRecordedLocalSelector(session.plan.SelectedDelivery, *session.managedBinding, delivery.NativeObjects)
+	}
 	if err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		if dataCreated {
