@@ -9,7 +9,7 @@ import (
 )
 
 func (e *Engine) prepareGroup(ctx context.Context, req Request) (*PreparedOperation, error) {
-	if err := validateGroupTargets(req.Targets); err != nil {
+	if err := e.validateGroupTargets(req); err != nil {
 		return nil, err
 	}
 	switch req.Operation {
@@ -22,13 +22,14 @@ func (e *Engine) prepareGroup(ctx context.Context, req Request) (*PreparedOperat
 	}
 }
 
-func validateGroupTargets(targets []ClientTarget) error {
+func (e *Engine) validateGroupTargets(req Request) error {
+	targets := req.Targets
 	if len(targets) != 2 {
-		return fmt.Errorf("%w: group operations accept exactly two Claude/Codex targets", ErrInvalidRequest)
+		return fmt.Errorf("%w: group operations accept exactly two targets", ErrInvalidRequest)
 	}
 	seen := map[string]struct{}{}
 	for _, target := range targets {
-		if target.ClientID != "claude" && target.ClientID != "codex" {
+		if !e.SupportsClient(target.ClientID) || (req.Operation == OpRemove && target.ClientID != "claude" && target.ClientID != "codex") {
 			return fmt.Errorf("%w: client %q is not in this beta", ErrUnsupported, target.ClientID)
 		}
 		if _, ok := seen[target.ClientID]; ok {
