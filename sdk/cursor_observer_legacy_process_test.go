@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/777genius/plugin-kit-ai/sdk"
+	pluginkitai "github.com/777genius/plugin-kit-ai/sdk"
 	"github.com/777genius/plugin-kit-ai/sdk/platformmeta"
 )
 
@@ -72,7 +72,8 @@ func TestCursorObserverLegacyInvocations(t *testing.T) {
 		var out, diag bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &diag
 		err := cmd.Run()
-		if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 1 || out.Len() != 0 || !strings.Contains(diag.String(), "decode Cursor stop input") {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 || out.Len() != 0 || !strings.Contains(diag.String(), "decode Cursor stop input") {
 			t.Fatal("ordinary SDK error/output policy changed")
 		}
 	})
@@ -95,7 +96,7 @@ func TestCursorObserverLegacyInvocations(t *testing.T) {
 // adds unrelated events, or converts the workspace packaging target to runtime.
 func TestCursorStopSupportContract(t *testing.T) {
 	count := 0
-	for _, entry := range sdk.Supported() {
+	for _, entry := range pluginkitai.Supported() {
 		if entry.Platform != "cursor" {
 			continue
 		}

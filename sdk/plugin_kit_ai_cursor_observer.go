@@ -29,10 +29,13 @@ type CursorObserverIO interface {
 // output/cleanup. An already expired context receives at most 100 ms output
 // grace. Cancellation stops dispatch but does not cancel the neutral response.
 //
-// Default process IO transfers stdin/stdout pipe ownership to this call; the
+// Default process IO transfers stdin/stdout IPC ownership to this call; the
 // handles are closed before return. On Linux/macOS they are made pollable and
-// deadline-capable. Other hosts require deadline-capable pipes or injected
-// CursorObserverIO; unsupported/broken/full output is a no-response limitation.
+// deadline-capable: pipes or connected anonymous UNIX stream sockets with empty
+// local/peer names only, including Node/libuv socketpair stdio. Named/network
+// sockets and other files are unsupported. Other hosts require pollable pipes
+// or injected CursorObserverIO; unsupported/broken/full output is a no-response
+// limitation.
 // Config.IO is honored: arbitrary caller IO remains caller-owned and runs
 // synchronously. Its read must honor ctx; its ordinary WriteStdout must return
 // promptly. Non-closeable IO cannot be forcibly interrupted by this API.
@@ -43,11 +46,12 @@ type CursorObserverIO interface {
 // proves a protocol observation, never task success or notification delivery.
 func (a *App) RunCursorObserver(ctx context.Context) (code int) {
 	engine := a.cursorObserverEngine()
-	if _, ok := engine.IO.(process.IO); ok {
-		owned := newCursorProcessIO()
-		engine.IO = owned
-		defer owned.close()
-	} else if owned, ok := engine.IO.(*cursorPipeIO); ok {
+	switch owned := engine.IO.(type) {
+	case process.IO:
+		prepared := newCursorProcessIO()
+		engine.IO = prepared
+		defer prepared.close()
+	case *cursorPipeIO:
 		defer owned.close()
 	}
 	deadline := time.Now().Add(cursorObserverBudget)
@@ -95,14 +99,21 @@ func (a *App) cursorObserverEngine() runtime.Engine {
 }
 
 func writeCursorNeutral(ctx context.Context, hostIO IO) (code int) {
-	code = 1
-	defer func() { _ = recover() }()
+	written := false
+	defer func() {
+		_ = recover()
+		if !written {
+			code = 1
+		}
+	}()
 	response := []byte("{}\n")
 	if bounded, ok := hostIO.(CursorObserverIO); ok {
 		if bounded.WriteStdoutContext(ctx, response) == nil {
+			written = true
 			return 0
 		}
 	} else if hostIO.WriteStdout(response) == nil {
+		written = true
 		return 0
 	}
 	return 1

@@ -2,9 +2,6 @@
 package gemini
 
 import (
-	"path/filepath"
-	"strings"
-
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -29,16 +26,16 @@ func (*Adapter) ID() domain.ClientID { return domain.ClientGemini }
 // DetectSurfaces probes the Gemini CLI and its configuration directory, which
 // GEMINI_CLI_HOME may relocate away from the user home.
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
-	homeRoot := host.HomeDir()
-	if configured := strings.TrimSpace(host.Env("GEMINI_CLI_HOME")); configured != "" {
-		homeRoot = configured
+	configRoot, err := detectedProfileRoot(host)
+	if err != nil {
+		return clients.Detection{Err: err}
 	}
-	configRoot := filepath.Join(homeRoot, ".gemini")
+	executable := host.LookPath("gemini")
 	return clients.Detection{
 		ConfigRoot:     configRoot,
-		ExecutablePath: host.LookPath("gemini"),
+		ExecutablePath: executable,
 		Surfaces: []domain.ClientSurface{
-			host.BinarySurface("gemini_cli", "gemini"),
+			host.ResolvedBinarySurface("gemini_cli", executable),
 			host.DirectorySurface("gemini_config", configRoot),
 		},
 	}

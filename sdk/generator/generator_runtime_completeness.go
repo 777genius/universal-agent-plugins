@@ -35,6 +35,11 @@ func renderCompletenessTest(m model) string {
 	b.WriteString("\t\t}\n")
 	b.WriteString("\t}\n")
 	b.WriteString("}\n")
+	renderSupportEntriesOrderTest(&b)
+	return b.String()
+}
+
+func renderSupportEntriesOrderTest(b *strings.Builder) {
 	b.WriteString("\n")
 	b.WriteString("func TestSupportEntriesPreserveEventOrder(t *testing.T) {\n")
 	b.WriteString("\tt.Parallel()\n\n")
@@ -48,7 +53,6 @@ func renderCompletenessTest(m model) string {
 	b.WriteString("\t\t}\n")
 	b.WriteString("\t}\n")
 	b.WriteString("}\n")
-	return b.String()
 }
 
 func fmtString(name string, count int) string {

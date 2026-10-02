@@ -38,13 +38,23 @@ func TestCLIContinuesWhenUnselectedCodexDetectionFails(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	// Editor evidence is independent of leftover config or an agent binary.
+	editor := filepath.Join(home, "test-cursor-editor")
+	if err := os.WriteFile(editor, []byte("synthetic editor fixture"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	badProfile := filepath.Join(home, "codex-profile-is-a-file")
 	if err := os.WriteFile(badProfile, []byte("invalid"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	fixture.app.Detector = clientdetect.Detector{
 		HomeDir: home, GOOS: "linux", Environment: map[string]string{"CODEX_HOME": badProfile},
-		LookPath: func(string) (string, error) { return "", exec.ErrNotFound },
+		LookPath: func(name string) (string, error) {
+			if name == "cursor" {
+				return editor, nil
+			}
+			return "", exec.ErrNotFound
+		},
 		Lstat:    os.Lstat, ReadDir: os.ReadDir, EvalSymlinks: filepath.EvalSymlinks,
 		Registry: clientregistry.Default(),
 	}

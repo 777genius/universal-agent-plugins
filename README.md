@@ -23,7 +23,18 @@ See [Build plugins](#build-plugins) below to create and check a package.
 
 ### Quick start
 
-Choose your operating system and run the commands below.
+With Node.js 22+, run:
+
+```bash
+npx universal-agent-plugins add context7
+```
+
+The CLI automatically finds compatible agents, including Codex and Claude Code.
+Choose agents if several are found; a single detected agent is selected automatically.
+Follow the printed setup steps, then start a new agent session.
+
+<details>
+<summary>Other installation options</summary>
 
 <details>
 <summary><strong>macOS</strong></summary>
@@ -69,47 +80,11 @@ irm https://raw.githubusercontent.com/777genius/universal-agent-plugins/main/ins
 
 </details>
 
-<details>
-<summary><strong>Any OS with Node.js 22+ (npx)</strong></summary>
-
-Run on a supported desktop OS without permanently installing the CLI:
+To install the latest installer globally with Node.js 22+:
 
 ```bash
-npx universal-agent-plugins add context7
+npm install -g universal-agent-plugins
 ```
-
-</details>
-
-The CLI finds compatible agents installed on your computer.
-
-1. Choose one or more agents if prompted. If only one is found, it is selected automatically.
-2. Follow any activation or sign-in instructions printed by the CLI.
-3. Start a new agent session and try the plugin.
-
-For the verified Context7 setup in ChatGPT and Kiro:
-
-```bash
-npx universal-agent-plugins add context7 --target chatgpt,kiro
-```
-
-- ChatGPT: the CLI guides you to create a Developer Mode app for
-  `https://mcp.context7.com/mcp` with **No authentication**, accepts the
-  resulting `asdk_app_...` ID, and prepares a personal marketplace package.
-  You still install that package and select Context7 in a new chat. When other
-  clients are selected too, the CLI installs them first and reports ChatGPT as
-  a separate setup step instead of cancelling the whole batch.
-- Kiro: the CLI installs its owned skills and MCP entry while preserving
-  unrelated configuration. On macOS and Windows it reports the remaining
-  Kiro OAuth/restart step instead of claiming automatic runtime verification.
-
-The same retained installation supports repeat add, update, repair, remove,
-and reinstall. ChatGPT availability still depends on an account or workspace
-where Developer Mode and custom apps are enabled.
-
-See the [real Context7 ChatGPT and Kiro E2E evidence](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
-
-<details>
-<summary>Installation details</summary>
 
 Homebrew and the installers select the native binary for your OS and architecture.
 The installer scripts verify its published SHA-256 and reported version, then
@@ -136,6 +111,12 @@ selected agent.
 
 ## Any Agent Plugins 1.0 package
 
+Install from the registry, a local folder, or a GitHub repository pinned to an
+exact commit. `plugin.json` is the sole supported authoring manifest.
+
+<details>
+<summary>Package layout and portability</summary>
+
 The installed package is standard-first:
 
 ```text
@@ -152,8 +133,9 @@ You can also install a local package or a pinned GitHub package without adding
 it to the registry. Direct-install examples are collected near the end of this
 README.
 
-`plugin.json` is the sole supported authoring manifest. Other manifest formats
-are ignored and cannot override it.
+Other manifest formats are ignored and cannot override `plugin.json`.
+
+</details>
 
 ## Supported clients
 
@@ -161,37 +143,76 @@ The CLI has adapters for:
 
 | Client | Delivery |
 | --- | --- |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> Codex | managed package or OpenAI compatibility package |
-| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | verified publisher app binding, or guided personal Context7 app and marketplace preparation |
-| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> Cursor | native Agent Plugin and MCP/skills projection |
-| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin and managed marketplace path |
-| <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | prepared Copilot-compatible package |
-| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | managed skills and MCP configuration; client OAuth/restart when required |
-| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | client-specific skills/MCP projection |
-| <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | client-specific configuration projection |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | client-specific configuration projection |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | client-specific configuration projection |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | client-specific configuration projection |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> Codex | plugin package prepared for Codex |
+| <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> ChatGPT | app setup; Context7 includes guided personal setup (Developer Mode and custom apps required) |
+| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> Cursor | native plugin with skills and MCP servers |
+| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> GitHub Copilot CLI | native plugin installed through a managed marketplace |
+| <img src="landing/public/client-icons/vscode.svg" width="24" height="24" alt="" align="middle"> VS Code | plugin package prepared for Copilot |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> Kiro | skills and MCP setup; OAuth/restart may be required |
+| <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> Claude Code | native Claude Code plugin installation |
+| <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> Gemini CLI | skills and MCP configuration |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | skills and MCP configuration |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | skills and MCP configuration |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | MCP configured; skills prepared for manual use |
 
-Compatibility is package-specific. A schema pass means that the package is
-well-formed; it does not prove runtime, OAuth, or activation in every client.
-The CLI prints installed, prepared, activation required, and authentication
-pending as separate outcomes.
+Compatibility depends on the package and client. The CLI tells you what is
+installed, prepared, or still needs activation or sign-in.
 
 See the [client compatibility evidence](https://777genius.github.io/universal-agent-plugins/docs/en/reference/client-compatibility.html)
 for tested client versions, platforms, and release-specific limitations.
+
+<details>
+<summary>Context7 setup for ChatGPT and Kiro</summary>
+
+```bash
+npx universal-agent-plugins add context7 --target chatgpt,kiro
+```
+
+- ChatGPT: the CLI guides you to create a Developer Mode app for
+  `https://mcp.context7.com/mcp` with **No authentication**, accepts the
+  resulting `asdk_app_...` ID, and prepares a personal marketplace package.
+  You still install that package and select Context7 in a new chat. When other
+  clients are selected too, the CLI installs them first and reports ChatGPT as
+  a separate setup step instead of cancelling the whole batch.
+- Kiro: the CLI installs its owned skills and MCP entry while preserving
+  unrelated configuration. On macOS and Windows it reports the remaining
+  Kiro OAuth/restart step instead of claiming automatic runtime verification.
+
+The same retained installation supports repeat add, update, repair, remove,
+and reinstall. ChatGPT availability still depends on an account or workspace
+where Developer Mode and custom apps are enabled.
+
+See the [real Context7 ChatGPT and Kiro E2E evidence](docs/CONTEXT7_CHATGPT_KIRO_E2E.md).
+
+</details>
+
+<details>
+<summary>Compatibility and Codex MCP transport limits</summary>
+
+A schema pass means that the package is well-formed; it does not prove runtime,
+OAuth, or activation in every client.
 
 For Codex, declared MCP SSE is unsupported; stdio and Streamable HTTP retain
 their existing adapter support. Valid SSE components are excluded from Codex
 delivery without invalidating the package. See [transport evidence and lifecycle
 behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 
+</details>
+
 ## Find and verify plugins
 
-search combines the reviewed Registry Directory with a signed public Discovery
+Use `agentplugins search` or browse the registry to find plugins.
+Reviewed registry entries and unreviewed discovery results are labelled separately.
+
+<details>
+<summary>How discovery results are verified</summary>
+
+`search` combines the reviewed Registry Directory with a signed public Discovery
 Index containing conformant package paths. Discovery records are
 unreviewed metadata, not endorsements. They install only through a
 publisher-qualified exact-SHA selector and are validated again before mutation.
+
+</details>
 
 The registry is optional for direct installs, but it makes reviewed short names,
 provenance, compatibility notes, and safe discovery convenient:
@@ -201,11 +222,20 @@ provenance, compatibility notes, and safe discovery convenient:
 
 ## Lifecycle safety
 
+The CLI checks packages before installation and changes only files it manages.
+Use `--dry-run` to preview changes. OAuth and consent stay under your control.
+No install telemetry is sent.
+
+<details>
+<summary>Ownership and rollback</summary>
+
 Before changing a client, the CLI validates the source and preflights every
-selected target. --dry-run prints the same plan without writing. Managed files
+selected target. `--dry-run` prints the same plan without writing. Managed files
 and state are committed together; failures roll back what ownership proves safe
-or stop with a repair command. OAuth and consent remain visible and controlled
-by you. No install telemetry is sent.
+or stop with a repair command. Preview does not activate a plugin or sign you in.
+Repair checks managed files; it does not prove external OAuth or runtime behavior.
+
+</details>
 
 The CLI is an independent community project. It is not affiliated with OpenAI,
 Agent Plugins, or the vendors shown above.
@@ -221,15 +251,12 @@ agentplugins search docs
 agentplugins info context7
 
 # Install in specific agents
-agentplugins add context7 --target codex,cursor,kiro
-
-# Prepare Context7 for ChatGPT and Kiro
-agentplugins add context7 --target chatgpt,kiro
+agentplugins add context7 --target codex,claude
 
 # Manage an installed plugin
-agentplugins update context7 --target codex,cursor
-agentplugins repair context7 --target codex,cursor
-agentplugins remove context7 --target codex,cursor
+agentplugins update context7 --target codex,claude
+agentplugins repair context7 --target codex,claude
+agentplugins remove context7 --target codex,claude
 agentplugins outdated --all
 agentplugins update --all
 agentplugins doctor
@@ -237,7 +264,12 @@ agentplugins doctor
 # Install a local Agent Plugins 1.0 package
 agentplugins validate ./my-plugin
 agentplugins add ./my-plugin
+```
 
+<details>
+<summary>Install directly from an exact GitHub commit</summary>
+
+```bash
 # Install the only Agent Plugins package found at an exact commit
 agentplugins add \
   owner/repository@0123456789abcdef0123456789abcdef01234567
@@ -257,21 +289,27 @@ path and package digest are stored for safe replay. Direct full-SHA installation
 remain immutable; use `switch` to move to another exact source. `repair` reapplies
 the recorded source, and `remove` changes only files owned by the CLI.
 
+</details>
+
 ## Build plugins
 
-Create a portable Agent Plugins 1.0 package from a root `plugin.json`, with
-optional `skills/` and `mcp.json`. The same package can then be checked and
-installed across supported agents. `agentplugins author` is the public
-authoring entrypoint.
+Create a portable Agent Plugins 1.0 package manually from a root `plugin.json`, with
+optional `skills/` and `mcp.json`, then validate and install it with the commands
+above. The current npm and native installer releases do not include
+`agentplugins author`.
 
-Install the latest npm release (Node.js 22+):
-
-```bash
-npm install -g universal-agent-plugins
-```
-
-[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases) use the `agentplugins-v*` tag prefix.
+The [Build guide](website/source/en/build/index.md) covers package structure,
+remote MCP, stdio MCP, hybrid packages, and the handoff to installation. Its
+authoring commands require a qualified authoring build or a source build.
 See the [Use / Build quickstart](https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html).
+[Native Agent Plugins releases](https://github.com/777genius/universal-agent-plugins/releases) use the `agentplugins-v*` tag prefix.
+
+<details>
+<summary>Qualified/source-build authoring commands (not in the current installer release)</summary>
+
+In qualified authoring builds, `agentplugins author` is the public authoring
+entrypoint. These examples require such a build or a current source build;
+installing the latest npm or native installer does not provide them.
 
 Create and check a Skill package:
 
@@ -282,13 +320,8 @@ agentplugins author inspect ./my-plugin
 agentplugins author test ./my-plugin
 ```
 
-The [Build guide](website/source/en/build/index.md) also covers remote MCP,
-stdio MCP, hybrid packages, extra Skills, compatibility checks, and the handoff
-to installation.
-
-Newer source builds also include JSON maintenance and a continuous MCP
-development loop. These commands are not part of the current released binary
-yet. Plan mode is read-only, and `--write` is
+Current source builds also include JSON maintenance, dependency bootstrap, and
+a continuous MCP development loop. Plan mode is read-only, and `--write` is
 required for JSON maintenance changes:
 
 ```bash
@@ -301,18 +334,21 @@ agentplugins author dev ./my-plugin
 ```
 
 Native import reads only the explicit strict-JSON file, skips unsafe or
-credential-bearing servers, and publishes only to an absent output. Source-only
-commands become supported installation guidance after the next signed
-`agentplugins` release passes the public-channel checks.
+credential-bearing servers, and publishes only to an absent output. These
+commands become supported installation guidance after a signed `agentplugins`
+authoring release passes the public-channel checks.
 
 Authoring validation and project doctor are distinct from installer
-`agentplugins validate` and `agentplugins doctor`. MCP execution is available
-through `author test` and `author dev`. Dependency bootstrap, client projection,
+`agentplugins validate` and `agentplugins doctor`. In qualified/source builds,
+MCP execution is available through `author test` and `author dev`.
+Dependency bootstrap is supported in qualified/source builds. Client projection,
 export/bundle, and publication are not exposed by the current authoring CLI.
 OAuth and activation inside a supported client still require client-specific
 verification.
 `plugin.json` is the only supported authoring manifest. JSON maintenance does
 not add a YAML reader, fallback, or migration workflow.
+
+</details>
 
 ## Contributing
 

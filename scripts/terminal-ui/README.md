@@ -143,8 +143,10 @@ Pinned Windows archive SHA256:
 Origin: `https://github.com/777genius/lintai/releases/download/v0.1.3/`.
 A raw executable also works with the required trusted `--scanner-sha256`.
 The runner freezes its own CLI copy and records native OS/Python and hashes.
-There are no Windows runtime stubs: discovery must find exactly the two synthetic
-config-only profiles with an empty PATH. No real agent is installed or launched.
+There are no Windows runtime stubs: discovery must find exactly two synthetic
+profiles with an empty client PATH. Codex uses config evidence; Cursor uses an
+inert TEST file at `LOCALAPPDATA/Programs/cursor/Cursor.exe`, since config alone
+does not establish editor presence. No real agent is installed or launched.
 
 Default cases: default Yes, explicit No, Cursor Yes → activation No, selection and
 confirmation Ctrl+C, Ctrl+Z/Enter EOF, and resize. Every case gets a new fixture.

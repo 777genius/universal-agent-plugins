@@ -52,19 +52,19 @@ func DecodeStop(env runtime.Envelope) (any, string, error) {
 
 func validateStop(dto *StopInput) error {
 	if dto.HookEventName != "stop" {
-		return fmt.Errorf("Cursor observer requires native stop event")
+		return fmt.Errorf("cursor observer requires native stop event")
 	}
 	if !validID(dto.ConversationID) || !validID(dto.GenerationID) {
-		return fmt.Errorf("Cursor stop IDs must be nonempty, at most 256 UTF-8 bytes and contain no controls")
+		return fmt.Errorf("cursor stop IDs must be nonempty, at most 256 UTF-8 bytes and contain no controls")
 	}
 	if dto.LoopCount != nil && (*dto.LoopCount < 0 || int64(*dto.LoopCount) > 2147483647) {
-		return fmt.Errorf("Cursor stop loop_count outside observer admission range")
+		return fmt.Errorf("cursor stop loop_count outside observer admission range")
 	}
 	return nil
 }
 
 func validID(id string) bool {
-	if len(id) == 0 || len(id) > 256 || !utf8.ValidString(id) {
+	if id == "" || len(id) > 256 || !utf8.ValidString(id) {
 		return false
 	}
 	for _, r := range id {

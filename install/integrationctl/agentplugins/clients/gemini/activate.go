@@ -26,6 +26,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if err := validateProfile(request.Client.ConfigRoot, request.Plan.NativeRegistryRoot); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
 	automatic := request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
 	return shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
 		Automatic:         automatic,
@@ -45,6 +48,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 // Deactivate removes managed Gemini native objects.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
+	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
+		return outcome, err
+	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove its managed Gemini CLI skills and MCP entries automatically")
 		return outcome, nil

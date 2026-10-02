@@ -17,8 +17,13 @@ The format is inspired by Keep a Changelog; versions follow SemVer. This unrelea
 - Cursor native `stop` observer (`public-beta`): descriptor-generated `CursorStop`
   registrar/metadata, documented DTO with pointer presence, empty response,
   `App.Cursor()` and opt-in `App.RunCursorObserver(ctx)` with owned Linux/macOS
-  pipe deadlines and fixed `{}\n`. Injected IO remains supported under the
-  documented cooperation contract. Native qualification is pending. Ordinary
+  pipes or connected anonymous AF_UNIX/SOCK_STREAM sockets (empty local AND peer
+  names), deadlines and fixed `{}\n`. Named/abstract/network sockets and other
+  files are refused. Transferred IO requires exclusive ownership; cancellation
+  interrupts IO and joins its callback within one four-second budget with a
+  100 ms output reserve. Injected IO and consumer callbacks retain their
+  cooperation contract. Manual package activation and pending native
+  qualification retain their availability limits. Ordinary
   SDK output and permission exits remain unchanged.
 
 - Codex stdin-JSON lifecycle hooks (`public-beta`): `codex/Stop`, `codex/SubagentStop`, `codex/PreToolUse`, and `codex/PermissionRequest` with prefixed invocation names `CodexStop`, `CodexSubagentStop`, `CodexPreToolUse`, `CodexPermissionRequest` (bare event names stay owned by Claude in the flat resolver). These invocation names are now reserved: `codex.RegisterCustomJSON` with any of them fails registration with a "conflicts with built-in invocation" error instead of being silently shadowed.

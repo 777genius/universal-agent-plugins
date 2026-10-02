@@ -36,9 +36,9 @@ func ReadGeminiNativeObjects(activeRoot string, envelope domain.PackageEnvelope,
 }
 
 func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, pluginDataPath string, writeDescriptor bool) ([]domain.NativeObjectOwnership, error) {
-	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
-	if configRoot == "" || !filepath.IsAbs(configRoot) {
-		return nil, fmt.Errorf("the Gemini config root is unavailable")
+	configRoot := plan.NativeRegistryRoot
+	if err := validateProfile(configRoot, ""); err != nil {
+		return nil, err
 	}
 	objects := make([]domain.NativeObjectOwnership, 0, len(plan.Components))
 	for _, component := range plan.Components {

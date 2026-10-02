@@ -18,6 +18,11 @@ jobs:
         with:
           persist-credentials: false
 
+      # Frozen exporter tests need the audited factory fixture independently
+      # of the current CLI source. Fetch one exact commit, not full history.
+      - name: Fetch audited documentation test fixture
+        run: git fetch --no-tags --depth=1 origin 0506dd888029ad69d07dd5263669fb53766dbdf9
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.25.13"

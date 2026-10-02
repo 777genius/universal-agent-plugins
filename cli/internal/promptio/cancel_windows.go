@@ -12,8 +12,6 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-
 	"golang.org/x/sys/windows"
 )
 
@@ -230,17 +228,17 @@ func readConsoleAnswer(ctx context.Context, cooked bool, read func([]uint16) (ui
 			return "", fmt.Errorf("read prompt: %w", err)
 		}
 		if n == 0 {
-			return "", prompt.ErrPromptInputClosed
+			return "", io.EOF
 		}
 		switch b[0] {
 		case 0x1a:
 			if !cooked {
-				return "", prompt.ErrPromptInputClosed
+				return "", io.EOF
 			}
 			closed = true
 		case '\n':
 			if closed {
-				return "", prompt.ErrPromptInputClosed
+				return "", io.EOF
 			}
 			line := strings.TrimSuffix(string(utf16.Decode(units)), "\r")
 			if len(line) > 4096 {

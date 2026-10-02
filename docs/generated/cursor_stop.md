@@ -38,7 +38,7 @@ code := app.RunCursorObserver(ctx) // pass code to the process exit after cleanu
 
 The process invocation is CursorStop (case folded), with one JSON object on
 stdin, terminated by EOF. Input is capped by the public MaxPayloadBytes (1 MiB).
-A pipe kept open is interrupted at the dispatch cutoff; even a syntactically
+An IPC input kept open is interrupted at the dispatch cutoff; even a syntactically
 complete frame without EOF is not dispatched. Trailing JSON is rejected by the
 existing encoding/json decoder. Unknown top-level fields are tolerated.
 
@@ -76,25 +76,29 @@ The runner invokes callbacks synchronously: a callback that ignores its context
 cannot be forcibly recovered in Go and needs an external process watchdog.
 A forced kill cannot guarantee any response or delivery success.
 
-Default App IO transfers exclusive stdin/stdout pipe ownership to this entrypoint.
-On Linux/macOS, blocking inherited pipes become pollable owned duplicates; both
-originals and duplicates close before return. Input and output deadlines bound
-real OS pipe IO. Cancellation moves the poller deadline and joins its short
-callback; there is no abandoned IO goroutine. On other systems only already
-Go-deadline-capable pipes are supported; synchronous inherited Windows handles
-are not qualified by this slice. File/terminal output is outside the pipe contract.
+Default App IO transfers exclusive stdin/stdout IPC ownership to this entrypoint.
+On Linux/macOS, pipes or connected anonymous AF_UNIX/SOCK_STREAM sockets with
+empty local AND peer names become pollable owned duplicates, including inherited
+Node/libuv socketpair stdio. Named sockets (including Linux abstract names),
+network sockets and other files/terminals are refused. Both originals and
+duplicates close before return. Input and output deadlines bound real OS IPC.
+Cancellation moves the poller deadline and joins its short callback; there is
+no abandoned IO goroutine. On other systems only already Go-deadline-capable
+pipes are supported; synchronous inherited Windows handles are not qualified
+by this slice.
 
 Config.IO is honored. Caller-owned IO remains caller-owned. ReadStdin must honor
 its context and stop all IO before returning; a plain WriteStdout must return
 promptly. Arbitrary non-closeable caller IO cannot be forcibly interrupted.
 To provide cancellable output implement the public CursorObserverIO extension,
 whose WriteStdoutContext has the same cleanup obligation. To inject exclusively
-owned real pipes directly, use NewCursorObserverPipeIO(stdin, stdout); this
-transfers two distinct pipe files, and the runner closes prepared handles before
-return. Do not reuse those handles or invoke ordinary RunContext on that IO.
+owned real IPC directly, use NewCursorObserverPipeIO(stdin, stdout); this
+transfers two distinct files satisfying the same pipe/socket contract, and the
+runner closes prepared handles before return. Do not borrow, reuse or concurrently
+access those handles or their aliases, or invoke ordinary RunContext on that IO.
 
 The S-IO consumer is an independent Go1.22 module using only public imports.
-It verifies real no-EOF/oversize/malformed stdin, panic/callback error, cancelled
+It verifies real no-EOF/oversize/malformed stdin, panic/callback error, canceled
 contexts, broken/full output, and process/goroutine/descriptor cleanup after the
 runner returns. Legacy invocation checks use the same public consumer. Injected
 protocol evidence is not native Cursor/client integration or rendered visibility.

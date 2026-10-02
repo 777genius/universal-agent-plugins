@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/777genius/plugin-kit-ai/sdk"
+	pluginkitai "github.com/777genius/plugin-kit-ai/sdk"
 	"github.com/777genius/plugin-kit-ai/sdk/cursor"
 )
 
@@ -20,6 +20,7 @@ type cursorCallerIO struct {
 	stderr      string
 	readPanic   bool
 	outputError bool
+	outputPanic bool
 	deadline    time.Time
 }
 
@@ -32,6 +33,9 @@ func (b *cursorCallerIO) ReadStdin(ctx context.Context) ([]byte, error) {
 }
 func (b *cursorCallerIO) WriteStdout(p []byte) error {
 	b.writes++
+	if b.outputPanic {
+		panic("private output content")
+	}
 	if b.outputError {
 		return errors.New("output unavailable")
 	}
@@ -43,10 +47,11 @@ func (b *cursorCallerIO) WriteStderr(s string) error { b.stderr += s; return nil
 // Red: Config.IO is ignored, dispatch bytes are merged into the neutral response,
 // a transport/decode/middleware panic escapes, or a caller-owned handle is closed.
 func TestCursorObserverInjectedIO(t *testing.T) {
-	for _, mode := range []string{"normal", "read panic", "middleware panic", "output error", "cancelled"} {
+	for _, mode := range []string{"normal", "read panic", "middleware panic", "output error", "output panic", "canceled"} {
 		t.Run(mode, func(t *testing.T) {
 			boundary := &cursorCallerIO{input: []byte(cursorInput), readPanic: mode == "read panic", outputError: mode == "output error"}
-			app := sdk.New(sdk.Config{Args: []string{"TEST", "CursorStop"}, IO: boundary})
+			boundary.outputPanic = mode == "output panic"
+			app := pluginkitai.New(pluginkitai.Config{Args: []string{"TEST", "CursorStop"}, IO: boundary})
 			calls := 0
 			app.Cursor().OnStopContext(func(ctx context.Context, e *cursor.StopEvent) (*cursor.StopResponse, error) {
 				calls++
@@ -56,23 +61,23 @@ func TestCursorObserverInjectedIO(t *testing.T) {
 				return &cursor.StopResponse{}, nil
 			})
 			if mode == "middleware panic" {
-				app.Use(func(sdk.Next) sdk.Next { panic("private middleware content") })
+				app.Use(func(pluginkitai.Next) pluginkitai.Next { panic("private middleware content") })
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
-			if mode == "cancelled" {
+			if mode == "canceled" {
 				cancel()
 			}
 			code := app.RunCursorObserver(ctx)
 			wantCode, wantOutput := 0, "{}\n"
-			if mode == "output error" {
+			if mode == "output error" || mode == "output panic" {
 				wantCode, wantOutput = 1, ""
 			}
 			if code != wantCode || boundary.out.String() != wantOutput || boundary.writes != 1 || boundary.stderr != "" {
 				t.Fatalf("injected IO: code=%d out=%q writes=%d stderr=%q", code, boundary.out.String(), boundary.writes, boundary.stderr)
 			}
 			wantCalls := 0
-			if mode == "normal" || mode == "output error" {
+			if mode == "normal" || mode == "output error" || mode == "output panic" {
 				wantCalls = 1
 			}
 			if calls != wantCalls {
@@ -98,11 +103,11 @@ func (b *cursorContextIO) WriteStdoutContext(ctx context.Context, p []byte) erro
 	return b.WriteStdout(p)
 }
 
-// Red: an injected cancellable writer receives the cancelled work context and
+// Red: an injected cancellable writer receives the canceled work context and
 // cannot emit the fixed response, or caller's earlier deadline is extended.
 func TestCursorObserverInjectedOutputContext(t *testing.T) {
 	boundary := &cursorContextIO{cursorCallerIO: cursorCallerIO{input: []byte(cursorInput)}}
-	app := sdk.New(sdk.Config{Args: []string{"TEST", "CursorStop"}, IO: boundary})
+	app := pluginkitai.New(pluginkitai.Config{Args: []string{"TEST", "CursorStop"}, IO: boundary})
 	app.Cursor().OnStopContext(func(ctx context.Context, _ *cursor.StopEvent) (*cursor.StopResponse, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()

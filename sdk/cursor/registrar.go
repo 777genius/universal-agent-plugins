@@ -2,6 +2,7 @@ package cursor
 
 import (
 	"context"
+
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 )
 
