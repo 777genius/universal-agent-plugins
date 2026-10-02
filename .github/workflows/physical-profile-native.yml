@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - 'install/integrationctl/adapters/directoryidentity/**'
-      - 'install/integrationctl/adapters/dirswap/identity*'
+      - 'install/integrationctl/adapters/dirswap/**'
       - 'install/integrationctl/agentplugins/adapters/profileauthority/**'
       - 'install/integrationctl/agentplugins/domain/profile_authority.go'
       - '.github/workflows/physical-profile-native.yml'

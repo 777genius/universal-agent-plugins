@@ -93,6 +93,8 @@ func changeModeForDrift(t *testing.T, path string, unixMode os.FileMode) {
 	mode := unixMode
 	if runtime.GOOS == "windows" {
 		mode = 0400 // Read-only attribute, not an ACL mutation.
+	} else if mode == before.Mode().Perm() {
+		mode ^= 0200
 	}
 	t.Cleanup(func() {
 		if err := os.Chmod(path, before.Mode().Perm()); err != nil {
