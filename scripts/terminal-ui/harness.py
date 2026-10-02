@@ -390,14 +390,19 @@ class Session:
         while time.monotonic() < deadline and self.pump(0):
             pass
 
-    def wait(self, marker, label, after=0):
+    def wait(self, marker, label, after=0, suffix=None):
+        def ready():
+            text = clean(self.raw[after:])
+            match = re.search(marker, text)
+            return match and (suffix is None or re.match(suffix, text[match.end():]))
+
         deadline = time.monotonic() + self.timeout
         while time.monotonic() < deadline:
-            if re.search(marker, clean(self.raw[after:])):
+            if ready():
                 self.frame(label); return len(self.raw)
             if self.process.poll() is not None:
                 self.pump(0)
-                if re.search(marker, clean(self.raw[after:])):
+                if ready():
                     self.frame(label); return len(self.raw)
                 raise AssertionError(f'exited {self.process.returncode} before {label}')
             self.pump(min(0.1, max(0, deadline - time.monotonic())))
@@ -683,7 +688,10 @@ def run_case(name, binary, root, args):
                 session.send(b'\x1b'); session.finish(1)
                 assert_paste_stayed_in_selection(session.raw[offset:], args.confirmation)
                 fixture.unchanged(); return
-            session.wait(args.confirmation, 'confirmation', after=offset)
+            # Plain output can split the title from its default/input suffix.
+            # Observe both on this prompt line within the same wait deadline.
+            session.wait(args.confirmation, 'confirmation', after=offset,
+                         suffix=r'[^\r\n]*\[Y/n\] ' if plain else None)
             if not plain and name != 'queued':
                 session.wait(r'(?s)Yes.*?No.*?enter submit', 'confirmation-controls', after=offset)
             fixture.unchanged()

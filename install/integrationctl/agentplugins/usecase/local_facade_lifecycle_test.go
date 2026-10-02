@@ -6,11 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
-	"github.com/tailscale/hujson"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -21,8 +16,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tailscale/hujson"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -1128,10 +1129,10 @@ func TestFacadeLifecycleRecoveryScopeChanges(t *testing.T) {
 // A genuine directory publication journal is already observed along with a
 // real child's native intent. Only its legitimate committed phase may advance.
 func TestReviewR2InitialJournalWithNativeIntent(t *testing.T) {
-	for _, cancelled := range []bool{false, true} {
+	for _, canceled := range []bool{false, true} {
 		name := "matching"
-		if cancelled {
-			name = "cancelled"
+		if canceled {
+			name = "canceled"
 		}
 		t.Run(name, func(t *testing.T) {
 			root := localProcessRoot(t)
@@ -1184,7 +1185,7 @@ func TestReviewR2InitialJournalWithNativeIntent(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
-			if cancelled {
+			if canceled {
 				cancel()
 			}
 			result, err := e.Recover(ctx, view)
@@ -1192,9 +1193,9 @@ func TestReviewR2InitialJournalWithNativeIntent(t *testing.T) {
 			if inspectErr != nil {
 				t.Fatal(inspectErr)
 			}
-			if cancelled {
+			if canceled {
 				if !errors.Is(err, context.Canceled) || a.reconciliations != 0 || !bytes.Equal(lifecycleStateBytes(t, root), []byte(before[filepath.Join(root, "state", "state-v2.json")])) || len(after.Recovery.Journals) != 1 || len(after.Recovery.NativeIntents) != 1 {
-					t.Fatalf("cancelled recovery consumed scope: %+v %v", result, err)
+					t.Fatalf("canceled recovery consumed scope: %+v %v", result, err)
 				}
 			} else {
 				if err != nil || result.Outcome != installer.OutcomeCompleted || after.Recovery.Required || a.reconciliations != 1 {
@@ -1354,8 +1355,8 @@ func lifecycleObservedPublication(t *testing.T, root, id string, stateCommitted 
 // a changed, missing or newly pending journal must never be overwritten/adopted.
 func TestFacadeLifecycleInitialKernelForeignScopes(t *testing.T) {
 	for _, kind := range []string{"state", "changed-journal", "missing-journal", "new-journal"} {
-		for _, cancelled := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/cancelled=%t", kind, cancelled), func(t *testing.T) {
+		for _, canceled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/canceled=%t", kind, canceled), func(t *testing.T) {
 				root := localProcessRoot(t)
 				runFacadeLifecycleCrash(t, root, domain.NativeIntentRegister)
 				receipt := lifecycleObservedPublication(t, root, "TEST-initial", true)
@@ -1412,7 +1413,7 @@ func TestFacadeLifecycleInitialKernelForeignScopes(t *testing.T) {
 						lifecycleObservedPublication(t, root, "TEST-new-foreign", false)
 					}
 					foreign = lifecycleFiles(t, root)
-					if cancelled {
+					if canceled {
 						cancel()
 					}
 				}}
@@ -1423,7 +1424,7 @@ func TestFacadeLifecycleInitialKernelForeignScopes(t *testing.T) {
 				if foreign == nil || !errors.Is(recoverErr, installer.ErrPlanChanged) || result.Outcome != installer.OutcomeConflict || a.reconciliations != 0 || inspectErr != nil || len(after.Recovery.NativeIntents) != 1 || !stateKept || !bytes.Equal(profile, lifecycleProfileBytes(t, root)) {
 					t.Fatal("initial recovery consumed late foreign authority or native intent")
 				}
-				if cancelled && !errors.Is(recoverErr, context.Canceled) {
+				if canceled && !errors.Is(recoverErr, context.Canceled) {
 					t.Fatal("caller cancellation lost")
 				}
 			})
@@ -1614,7 +1615,7 @@ func TestFacadeLifecycleRemovalObserverCancellation(t *testing.T) {
 			view, inspectErr := e.Inspect(t.Context())
 			persisted := independentSelectedBinding(t, mustLoadFacadeState(t, root))
 			if errors.Is(applyErr, context.Canceled) != strings.HasSuffix(mode, "cancel") || a.removals != 0 || inspectErr != nil || !view.Recovery.Required || !reflect.DeepEqual(persisted, approved) || !bytes.Equal(observed, lifecycleStateBytes(t, root)) || !bytes.Equal(beforeProfile, lifecycleProfileBytes(t, root)) {
-				t.Fatalf("cancelled observer lost cause or uncertainty: outcome=%s error=%v removals=%d inspect=%v", result.Outcome, applyErr, a.removals, inspectErr)
+				t.Fatalf("canceled observer lost cause or uncertainty: outcome=%s error=%v removals=%d inspect=%v", result.Outcome, applyErr, a.removals, inspectErr)
 			}
 			if changed := errors.Is(applyErr, installer.ErrPlanChanged); changed != strings.HasPrefix(mode, "foreign") {
 				t.Fatalf("complete dispatch scope comparison missing or adopted drift: %v", applyErr)
@@ -1835,7 +1836,7 @@ func TestFacadeLifecycleRemovalContextSemantics(t *testing.T) {
 				err := dispatch.Err()
 				if mode == "matching" {
 					if err != nil || context.Cause(dispatch) != nil {
-						t.Fatalf("matching context cancelled: %v", err)
+						t.Fatalf("matching context canceled: %v", err)
 					}
 					select {
 					case <-dispatch.Done():

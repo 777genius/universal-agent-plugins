@@ -84,11 +84,11 @@ func (e *Engine) confirmRemoveBindings(ctx context.Context, prepared *PreparedOp
 	if !ok {
 		return fmt.Errorf("%w: removal installation disappeared", ErrPlanChanged)
 	}
-	clients := prepared.clients
-	if len(clients) == 0 {
-		clients = []domain.DetectedClient{prepared.client}
+	removalClients := prepared.clients
+	if len(removalClients) == 0 {
+		removalClients = []domain.DetectedClient{prepared.client}
 	}
-	for _, client := range clients {
+	for _, client := range removalClients {
 		old, oldReceipt, oldOK := findBinding(before, client.ClientID)
 		binding, receipt, found := findBinding(live, client.ClientID)
 		if oldOK != found || !reflect.DeepEqual(old, binding) || !reflect.DeepEqual(oldReceipt, receipt) {

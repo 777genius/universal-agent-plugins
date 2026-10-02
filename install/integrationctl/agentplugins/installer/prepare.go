@@ -249,17 +249,7 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 		e.report(ProgressPrepare)
 		e.report(ProgressPreflight)
 		handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
-		helperVersion, helperDigest := e.helperIdentity()
-		handle.plan = Plan{
-			Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
-			InstallationID: installation.InstallationID, HelperVersion: helperVersion,
-			HelperDigest: helperDigest, NoChange: true,
-		}
-		handle.facts = BindingFacts{
-			InstallationID: installation.InstallationID, ClientID: string(client.ClientID),
-			OperationID: req.OperationID,
-		}
-		return handle, nil
+		return e.prepareAbsentRemoval(handle, installation.InstallationID), nil
 	}
 	if err := e.removalPreflight(ctx, client, binding, receipt); err != nil {
 		return nil, err
@@ -283,6 +273,20 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 	e.report(ProgressPrepare)
 	e.report(ProgressPreflight)
 	return handle, nil
+}
+
+func (e *Engine) prepareAbsentRemoval(handle *PreparedOperation, installationID string) *PreparedOperation {
+	helperVersion, helperDigest := e.helperIdentity()
+	handle.plan = Plan{
+		Operation: OpRemove, ClientID: string(handle.client.ClientID), ConfigRoot: handle.client.ConfigRoot,
+		InstallationID: installationID, HelperVersion: helperVersion,
+		HelperDigest: helperDigest, NoChange: true,
+	}
+	handle.facts = BindingFacts{
+		InstallationID: installationID, ClientID: string(handle.client.ClientID),
+		OperationID: handle.req.OperationID,
+	}
+	return handle
 }
 
 // removalPreflight is the §5.5.2 read-only check: exact target, persisted path,

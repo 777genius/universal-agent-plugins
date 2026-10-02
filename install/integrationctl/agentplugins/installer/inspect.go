@@ -297,6 +297,10 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 		}
 		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
 	}
+	return e.finishRecovery(observed)
+}
+
+func (e *Engine) finishRecovery(observed Inspection) (Result, error) {
 	after, afterErr := e.observe()
 	if afterErr != nil || after.Recovery.Required {
 		reason := after.Recovery.Reason
