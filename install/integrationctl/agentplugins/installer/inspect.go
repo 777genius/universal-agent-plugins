@@ -312,6 +312,7 @@ func planClientDigest(plan Plan, clientID string) string {
 
 func liveClientResult(binding domain.ClientBinding, required []string, fallbackDigest string) ClientResult {
 	return ClientResult{
+		SelectedDelivery:   binding.SelectedDelivery,
 		ClientID:           binding.ClientID,
 		BindingID:          binding.ClientBindingID,
 		TreeDigest:         recordedBindingDigest(binding, fallbackDigest),

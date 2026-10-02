@@ -84,6 +84,11 @@ func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedO
 	var result Result
 	var err error
 	e.report(ProgressPreflight)
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
+		attachNextActions(&result)
+		return result, err
+	}
 	if len(prepared.req.Targets) > 1 {
 		result, err = e.applyGroup(ctx, prepared)
 	} else {
@@ -146,8 +151,11 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	if err != nil {
 		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
-	svc := e.lifecycle(helper, prepared.facts, prepared.detected)
+	svc := confirmationLifecycle(prepared, e.lifecycle(helper, prepared.facts, prepared.detected), false)
 	e.report(ProgressStage)
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		return Result{Operation: prepared.req.Operation, Outcome: OutcomeConflict, Reason: "plan_changed"}, err
+	}
 	added, err := call(svc, usecase.AddInput{
 		Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, Confirmed: true,
 		InstallationID: prepared.req.InstallationID, OperationID: prepared.req.OperationID,
@@ -180,7 +188,8 @@ func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase
 				result.InstallationID = firstNonEmpty(installation.InstallationID, installationID)
 				result.Binding = BindingFacts{
 					InstallationID: result.InstallationID, ClientID: string(prepared.client.ClientID),
-					BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
+					SelectedDelivery: binding.SelectedDelivery,
+					BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 					DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,
 					OperationID: prepared.req.OperationID, TreeDigest: recordedBindingDigest(binding, prepared.plan.TreeDigest),
 				}
@@ -199,6 +208,11 @@ func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase
 }
 
 func (e *Engine) finishMutatingPackage(result Result, added usecase.AddResult, committed bool, err error) (Result, error) {
+	if errors.Is(err, ErrPlanChanged) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "plan_changed"
+		return result, err
+	}
 	if errors.Is(err, ErrUpdateRequired) {
 		result.Outcome = OutcomeConflict
 		result.Reason = "update_required"
@@ -303,7 +317,8 @@ func (e *Engine) liveBinding(prepared *PreparedOperation) (Result, domain.Client
 	result.InstallationID = firstNonEmpty(installation.InstallationID, installationID)
 	result.Binding = BindingFacts{
 		InstallationID: result.InstallationID, ClientID: string(prepared.client.ClientID),
-		BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
+		SelectedDelivery: binding.SelectedDelivery,
+		BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 		DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,
 		OperationID: prepared.req.OperationID, TreeDigest: recordedBindingDigest(binding, prepared.plan.TreeDigest),
 	}

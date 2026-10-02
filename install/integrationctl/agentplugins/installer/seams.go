@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -29,6 +30,7 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 	facts.DataRoot = data
 	facts.ClientID = string(plan.ClientID)
 	facts.Scope = string(plan.Scope)
+	facts.SelectedDelivery = plan.SelectedDelivery
 	if envelope.TreeDigest != "" {
 		facts.TreeDigest = envelope.TreeDigest
 	}
@@ -89,6 +91,11 @@ type seamActivator struct {
 }
 
 func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if !request.Plan.SelectedDelivery.IsZero() {
+		if _, err := a.committedFacts(request); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+	}
 	// UAP resume marks VerifyOnly even when activation never finished. Convert
 	// that path to a mutating resume; already-activated VerifyOnly stays read-only.
 	resume := request.VerifyOnly && a.hostHandoffPending(request)
@@ -163,7 +170,7 @@ func (a seamActivator) Deactivate(ctx context.Context, request domain.Deactivati
 func (a seamActivator) committedFacts(request domain.ActivationRequest) (BindingFacts, error) {
 	facts := a.facts
 	if a.store == nil {
-		return facts, nil
+		return uncommittedFacts(facts, request.Plan.SelectedDelivery)
 	}
 	state, err := a.store.Load()
 	if err != nil {
@@ -171,12 +178,16 @@ func (a seamActivator) committedFacts(request domain.ActivationRequest) (Binding
 	}
 	installation, ok := findInstall(state, facts.InstallationID)
 	if !ok {
-		return facts, nil
+		return uncommittedFacts(facts, request.Plan.SelectedDelivery)
 	}
 	for _, binding := range installation.Clients {
 		if binding.TargetLocator != request.Plan.ActivePath || binding.ClientID != string(request.Plan.ClientID) {
 			continue
 		}
+		if !reflect.DeepEqual(binding.SelectedDelivery, request.Plan.SelectedDelivery) {
+			return BindingFacts{}, fmt.Errorf("%w: committed delivery differs from activation plan", ErrPlanChanged)
+		}
+		facts.SelectedDelivery = binding.SelectedDelivery
 		receipt := installation.DataReceipts[binding.DataReceiptID]
 		facts.BindingID = binding.ClientBindingID
 		facts.Scope = binding.Scope
@@ -186,6 +197,13 @@ func (a seamActivator) committedFacts(request domain.ActivationRequest) (Binding
 		facts.ClientID = binding.ClientID
 		facts.TreeDigest = recordedBindingDigest(binding, facts.TreeDigest)
 		return facts, nil
+	}
+	return uncommittedFacts(facts, request.Plan.SelectedDelivery)
+}
+
+func uncommittedFacts(facts BindingFacts, selected domain.SelectedDelivery) (BindingFacts, error) {
+	if !selected.IsZero() {
+		return BindingFacts{}, fmt.Errorf("%w: selected delivery has no committed binding", ErrPlanChanged)
 	}
 	return facts, nil
 }

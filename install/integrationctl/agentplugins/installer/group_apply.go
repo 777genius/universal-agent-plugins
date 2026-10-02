@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,16 +28,22 @@ func (e *Engine) applyGroup(ctx context.Context, prepared *PreparedOperation) (R
 	if prepared.plan.NoChange && !pending {
 		result.Outcome = OutcomeUnchanged
 		result.NoChange = true
-		for _, target := range prepared.plan.Targets {
-			result.Targets = append(result.Targets, ClientResult{
-				ClientID: target.ClientID, BindingID: target.BindingID, TreeDigest: target.TreeDigest,
-			})
+		state, err := e.store.Load()
+		if err != nil {
+			return result, err
+		}
+		if installation, ok := findInstall(state, prepared.plan.InstallationID); ok {
+			e.attachLiveGroupResult(&result, prepared, installation)
 		}
 		return result, nil
 	}
 	got, err := e.mutateGroup(ctx, prepared)
 	if err != nil && got == nil {
-		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
+		outcome, reason := OutcomeIncomplete, err.Error()
+		if errors.Is(err, ErrPlanChanged) {
+			outcome, reason = OutcomeConflict, "plan_changed"
+		}
+		return Result{Operation: prepared.req.Operation, Outcome: outcome, Reason: reason}, err
 	}
 	return e.finishGroup(prepared, result, pending, *got, err)
 }
@@ -58,6 +65,10 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	if err != nil {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = err.Error()
+		if errors.Is(err, ErrPlanChanged) {
+			result.Outcome = OutcomeConflict
+			result.Reason = "plan_changed"
+		}
 		if strings.Contains(err.Error(), "run update separately") {
 			result.Outcome = OutcomeConflict
 			result.Reason = "update_required"
@@ -93,7 +104,7 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 	if err != nil {
 		return nil, err
 	}
-	svc := e.lifecycle(helper, prepared.facts, prepared.detected)
+	svc := confirmationLifecycle(prepared, e.lifecycle(helper, prepared.facts, prepared.detected), false)
 	envelopes := prepared.envelopes
 	if len(envelopes) == 0 {
 		envelopes = make([]domain.PackageEnvelope, len(prepared.req.Targets))
@@ -106,6 +117,11 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 		return nil, err
 	}
 	e.report(ProgressStage)
+	// Recheck every target after host observers, before the group can lock or
+	// discover the first native identity. Keep each actual replan guarded too.
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		return nil, err
+	}
 	group := usecase.GroupInput{
 		Targets: inputs, CompatibilityChecks: inputs,
 		OperationGroupID: firstNonEmpty(prepared.req.OperationID, "group"),
