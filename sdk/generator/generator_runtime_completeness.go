@@ -29,12 +29,17 @@ func renderCompletenessTest(m model) string {
 	b.WriteString("\tfor _, profile := range profiles {\n")
 	b.WriteString("\t\tif profile.Status == \"\" { t.Fatalf(\"missing status for %s\", profile.Platform) }\n")
 	b.WriteString("\t\tif len(profile.TransportModes) == 0 { t.Fatalf(\"missing transport modes for %s\", profile.Platform) }\n")
-	b.WriteString("\t\tif profile.Status != \"deferred\" {\n")
+	b.WriteString("\t\tif profile.Status != \"deferred\" && !profile.RuntimeOnly {\n")
 	b.WriteString("\t\t\tif len(profile.Scaffold.RequiredFiles) == 0 || len(profile.Scaffold.TemplateFiles) == 0 { t.Fatalf(\"missing scaffold metadata for %s\", profile.Platform) }\n")
 	b.WriteString("\t\t\tif len(profile.Validate.RequiredFiles) == 0 { t.Fatalf(\"missing validate metadata for %s\", profile.Platform) }\n")
 	b.WriteString("\t\t}\n")
 	b.WriteString("\t}\n")
 	b.WriteString("}\n")
+	renderSupportEntriesOrderTest(&b)
+	return b.String()
+}
+
+func renderSupportEntriesOrderTest(b *strings.Builder) {
 	b.WriteString("\n")
 	b.WriteString("func TestSupportEntriesPreserveEventOrder(t *testing.T) {\n")
 	b.WriteString("\tt.Parallel()\n\n")
@@ -48,7 +53,6 @@ func renderCompletenessTest(m model) string {
 	b.WriteString("\t\t}\n")
 	b.WriteString("\t}\n")
 	b.WriteString("}\n")
-	return b.String()
 }
 
 func fmtString(name string, count int) string {

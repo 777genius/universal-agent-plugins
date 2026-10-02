@@ -212,7 +212,7 @@
   "cursor": {
     "Error": "",
     "Plan": {
-      "Activation": "manual_activation_required",
+      "Activation": "prepared",
       "ActivePath": "\u003croot\u003e/clients/cursor/plugins/local/demo-0123456789ab",
       "Authentication": "not_checked",
       "ClientID": "cursor",
@@ -221,7 +221,7 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
-          "Support": "native"
+          "Support": "prepared"
         }
       ],
       "DeclaredName": "demo",
@@ -243,11 +243,12 @@
       "TargetRoot": "\u003croot\u003e/clients/cursor/plugins/local",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "reload Cursor, then verify the plugin appears before using its components"
+        "reload Cursor, then verify the prepared plugin and selected components are visible and enabled"
       ],
       "Verification": "package_validated",
       "Warnings": [
-        "authentication_not_catalog_verified"
+        "authentication_not_catalog_verified",
+        "Cursor editor package discovery is unverified; agent CLI plugins and native Stop are not qualified"
       ]
     }
   },

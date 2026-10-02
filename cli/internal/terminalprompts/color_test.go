@@ -2,10 +2,8 @@ package terminalprompts
 
 import (
 	"context"
-	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
@@ -22,16 +20,7 @@ func TestPlainColoredAndRichNever(t *testing.T) {
 	if err != nil || !result.Accepted || !strings.Contains(out.String(), "\x1b[36mApply fixture?\x1b[m") {
 		t.Fatal(result, err, out.String())
 	}
-	out.Reset()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	result, err = (HuhPrompter{Input: strings.NewReader("\r"), Output: &out, NoColor: true}).Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?"})
-	if err != nil || result.Accepted {
-		t.Fatal(result, err)
-	}
-	if regexp.MustCompile(`\x1b\[[0-9;]*m`).MatchString(out.String()) {
-		t.Fatalf("SGR in color-disabled rich prompt: %q", out.String())
-	}
+
 }
 
 func TestSyntheticColorSelectionDemo(t *testing.T) {

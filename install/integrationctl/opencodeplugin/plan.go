@@ -86,7 +86,7 @@ func Plan(in Input) (Placement, error) {
 	if in.OwnedSHA256 != "" && !validDigest(in.OwnedSHA256) {
 		return Placement{}, errors.New("owned SHA256 must be 64 lowercase hex characters")
 	}
-	root, err := configRoot(in)
+	root, err := ResolveConfigRoot(in)
 	if err != nil {
 		return Placement{}, err
 	}
@@ -124,6 +124,15 @@ func Plan(in Input) (Placement, error) {
 		out.Action = Replace
 	}
 	return out, nil
+}
+
+// ResolveConfigRoot selects Override, then XDGConfigHome/opencode, then
+// HomeDir/.config/opencode. The selected input must be a clean absolute
+// directory path; an invalid value is an error, never a fallback.
+// It uses only HomeDir, XDGConfigHome and Override, without reading environment
+// or filesystem state. Filename, digests and Existing are ignored.
+func ResolveConfigRoot(in Input) (string, error) {
+	return configRoot(in)
 }
 
 func configRoot(in Input) (string, error) {

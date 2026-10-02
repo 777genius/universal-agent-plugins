@@ -43,6 +43,9 @@ func TestEventsPreserveStableBucketOrder(t *testing.T) {
 		{platform: "codex", event: "SubagentStop"},
 		{platform: "codex", event: "PreToolUse"},
 		{platform: "codex", event: "PermissionRequest"},
+		{platform: "cursor", event: "stop"},
+		{platform: "vscode-local", event: "Stop"},
+		{platform: "vscode-local", event: "SubagentStop"},
 	}
 	if len(events) != len(want) {
 		t.Fatalf("events count = %d want %d", len(events), len(want))

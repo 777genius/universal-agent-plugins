@@ -212,6 +212,11 @@ def json_plan(fixture, binary, evidence, targets, timeout):
 def check_auth_unknown(plan):
     check(plan['authentication'] == 'not_checked', 'plan overstated authentication')
     check(plan['verification'] == 'package_validated', 'plan overstated runtime/installation verification')
+    if plan.get('client_id') == 'cursor':
+        check(plan['activation'] == 'prepared' and plan['status'] == 'manual_activation_required',
+              'Cursor package preparation overstated activation')
+        check('Cursor editor package discovery is unverified; agent CLI plugins and native Stop are not qualified'
+              in plan['warnings'], 'Cursor discovery uncertainty missing')
 
 
 def run_case(case, binary, evidence, timeout=8):
@@ -323,9 +328,12 @@ def run_case(case, binary, evidence, timeout=8):
                                                   'Target: cursor', 'Authentication:', 'Verification:')),
                   'full client-specific plan missing before consent')
             check('Target: codex' not in text, 'unselected target entered plan')
+            check(re.search(r'Cursor\s+! MANUAL STEP', text) and
+                  'Cursor editor package discovery is unverified' in text,
+                  'Cursor manual preparation/discovery uncertainty missing')
             fixture.unchanged()
             if kind in ('skill', 'mixed'):
-                check(re.search(r'Skill:\s+guide\s+·\s+native', text),
+                check(re.search(r'Skill:\s+guide\s+·\s+prepared', text),
                       'skill support decision missing')
             if kind == 'mixed':
                 check(re.search(r'MCP server:\s+fixture\s+·\s+unsupported', text) and
@@ -338,7 +346,7 @@ def run_case(case, binary, evidence, timeout=8):
                 check('Verification: package validated' in text, 'verification overstated')
                 check('Installed and verified' not in text and 'Ready' not in text, 'plan falsely claimed usability')
             if kind == 'http-auth':
-                check(re.search(r'MCP server:\s+fixture\s+·\s+native', text),
+                check(re.search(r'MCP server:\s+fixture\s+·\s+prepared', text),
                       'HTTP support decision missing')
                 check('Authentication: not checked' in text, 'HTTP auth status overstated')
                 check(re.search(r'(?i)verify.*authentication', text), 'missing actionable auth guidance')
@@ -355,13 +363,17 @@ def run_case(case, binary, evidence, timeout=8):
                     plan = records[0]['output']['result']['plan']
                     check_auth_unknown(plan)
                     components = {(c['kind'], c['name']): c for c in plan['components']}
+                    check(len(components) == len(plan['components']) == (2 if action == 'partial-plan' else 1),
+                          'selected component count changed')
                     mcp = components[('mcp_server', 'fixture')]
                     if action == 'partial-plan':
-                        check(components[('skill', 'guide')]['support'] == 'native', 'healthy skill lost')
+                        check(components[('skill', 'guide')] ==
+                              {'kind': 'skill', 'name': 'guide', 'support': 'prepared'}, 'healthy skill lost')
                         check(mcp['support'] == 'unsupported' and mcp['reason'] == 'stdio_runtime_unavailable',
                               'missing runtime skip differs from contract')
                     else:
-                        check(mcp['support'] == 'native', 'HTTP component lost')
+                        check(mcp == {'kind': 'mcp_server', 'name': 'fixture', 'support': 'prepared'},
+                              'HTTP component lost')
                         check(requests == [], 'installation unexpectedly contacted HTTP endpoint')
                 return
             send(session, b'\r')

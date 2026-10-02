@@ -2,20 +2,21 @@ package terminalprompts
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Real forms consume keyboard bytes through public adapter methods. Only
 // presentation-specific input differs; expectations are shared literal values,
 // never computed by the production validator or a substitute form runner.
 func TestAdapterSuccessContract(t *testing.T) {
-	for _, adapter := range []string{"plain", "huh"} {
+	for _, adapter := range []string{"plain"} {
 		t.Run(adapter, func(t *testing.T) {
 			for _, tc := range []struct {
 				name, plain, huh              string

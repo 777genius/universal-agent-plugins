@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/spf13/cobra"
 )
 
 const securityFindingPreviewLimit = 3
@@ -31,7 +32,7 @@ func authorizeSecurityAssessment(cmd *cobra.Command, app App, opts *options, loa
 			var err error
 			writer, err = promptio.VisibleOutput(writer, cmd.ErrOrStderr())
 			if err != nil {
-				return err
+				return prompt.NormalizeIOError(err)
 			}
 		}
 		checked := &planWriter{writer: writer}

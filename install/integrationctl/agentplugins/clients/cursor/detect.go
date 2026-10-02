@@ -22,12 +22,18 @@ var (
 // ID reports the client this adapter serves.
 func (*Adapter) ID() domain.ClientID { return domain.ClientCursor }
 
-// DetectSurfaces probes the Cursor CLI, its configuration directory and the
-// desktop application.
+// DetectSurfaces reports editor and agent binary presence separately. The
+// retained package preparation contract is for the editor; neither presence
+// nor a leftover directory qualifies native agent plugins or Stop events.
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
-	configRoot := filepath.Join(host.HomeDir(), ".cursor")
+	configRoot, err := detectedProfileRoot(host)
+	if err != nil {
+		return clients.Detection{Err: err}
+	}
+	editor := host.LookPath("cursor")
 	surfaces := []domain.ClientSurface{
-		host.BinarySurface("cursor_cli", "cursor"),
+		host.ResolvedBinarySurface("cursor_editor", editor),
+		host.BinarySurface("cursor_agent", "cursor-agent"),
 		host.DirectorySurface("cursor_config", configRoot),
 	}
 	if host.GOOS() == "darwin" {
@@ -38,8 +44,9 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 		surfaces = append(surfaces, host.LinuxDesktopSurface("cursor_desktop", "cursor.desktop"))
 	}
 	return clients.Detection{
-		ConfigRoot:     configRoot,
-		ExecutablePath: host.LookPath("cursor"),
-		Surfaces:       surfaces,
+		ConfigRoot:          configRoot,
+		ExecutablePath:      editor,
+		Surfaces:            surfaces,
+		SelectionSurfaceIDs: []string{"cursor_editor", "cursor_desktop"},
 	}
 }

@@ -11,8 +11,6 @@ import (
 	"testing"
 	"time"
 	"unicode/utf16"
-
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 )
 
 func TestWindowsConsoleLineBoundary(t *testing.T) {
@@ -36,7 +34,7 @@ func TestWindowsConsoleLineBoundary(t *testing.T) {
 				return uint32(n), nil
 			}
 			line, err := readConsoleAnswer(context.Background(), true, read)
-			if line != tt.want || (tt.closed && !errors.Is(err, prompt.ErrPromptInputClosed)) || (!tt.closed && err != nil) {
+			if line != tt.want || (tt.closed && !errors.Is(err, io.EOF)) || (!tt.closed && err != nil) {
 				t.Fatalf("first answer: %q %v", line, err)
 			}
 			// Inspect the native queue, not just a second read through this helper:
@@ -122,7 +120,7 @@ func TestWindowsConsoleRawEOFDoesNotWaitForEnter(t *testing.T) {
 		b[0] = 0x1a
 		return 1, nil
 	})
-	if !errors.Is(err, prompt.ErrPromptInputClosed) {
+	if !errors.Is(err, io.EOF) {
 		t.Fatal(err)
 	}
 }

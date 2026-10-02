@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 
-from harness import Fixture, Session, Screen, SELECT, CONFIRM, LIFECYCLE, check, clean, hashes
+from harness import Fixture, Session, Screen, SELECT, CONFIRM, LIFECYCLE, EMPTY_SELECTION, check, clean, hashes
 
 TARGETS = ('codex', 'cursor')
 SETS = {'codex': ('codex',), 'cursor': ('cursor',), 'both': TARGETS}
@@ -259,7 +259,7 @@ def run_case(name, binary, evidence, timeout):
                              b'\ry\r' if name == 'queued-yes' else
                              b'\r \r' if name == 'queued-space' else b'\r')
                 if name == 'neither':
-                    session.wait(r'(?i)(at least one|select one|cannot be empty|must select)',
+                    session.wait(EMPTY_SELECTION,
                                  'empty-validation')
                     selected_frame(session, available, ())
                     fixture.unchanged()
