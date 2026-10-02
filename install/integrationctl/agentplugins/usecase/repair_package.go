@@ -118,6 +118,10 @@ func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery
 }
 
 func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelivery, beforeDigest string, verifiedState domain.ActivationOutcome) (AddResult, error) {
+	if err := session.service.revalidateHost(session.ctx, session.input.Client); err != nil {
+		return session.result, err
+	}
+
 	// The user or client can change the native object while staging runs. Repair
 	// may replace the exact absent/digest-mismatched object reviewed above, but
 	// never a different object that appeared after preflight.

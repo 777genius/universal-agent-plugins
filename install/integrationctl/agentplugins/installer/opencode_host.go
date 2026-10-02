@@ -2,23 +2,21 @@ package installer
 
 import (
 	"context"
-	"errors"
-	"path/filepath"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
 // OpenCodeProbe is a trusted composition port. It receives a fresh target copy
 // on each call; production defaults to the one bounded explicit-target facade.
-type OpenCodeProbe func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error)
+type OpenCodeProbe = hostprep.Probe
 
-var ErrHostTargetRequired = errors.New("host_target_required")
-var errOpenCodeTransportUnsupported = errors.New("host_transport_unsupported")
+var ErrHostTargetRequired = hostprep.ErrHostTargetRequired
+var errOpenCodeTransportUnsupported = hostprep.ErrTransportUnsupported
 
 func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperation) error {
 	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](e.cfg.Registry, handle.client.ClientID)
@@ -33,23 +31,17 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 	if !skills && len(transports) == 0 && !previousEffects {
 		return nil
 	}
-	executable := handle.req.ClientExecutable
-	if executable == "" {
-		return ErrHostTargetRequired
-	}
-	target := clientdetect.ProbeTarget{Executable: executable, Environment: e.cfg.OpenCodeProbeEnvironment}
-	evidence, err := e.cfg.OpenCodeProbe(ctx, target.Clone())
+	preparer, err := hostprep.New(e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
 	if err != nil {
 		return err
 	}
-	if evidence.ProbeStatus != "ok" || evidence.Source != "executable_version" || evidence.ExecutableIdentity == "" {
-		return errors.New("host_target_unverified")
+	host, err := preparer.Prepare(ctx, handle.req.ClientExecutable, handle.client.ConfigRoot, skills, transports)
+	if err != nil {
+		return err
 	}
-	profile := opencodehost.Resolve(evidence.VersionEvidence)
-	// Removing all MCP declarations remains stored-dialect cleanup, outside the
-	// closed same-ID transition. Retain its existing cross-profile refusal.
+	// Preserve the facade's prior-effect and cross-profile cleanup fence.
 	if ownedCodec != "" && len(transports) == 0 {
-		selected, err := opencode.DesiredOpenCodeCodec(newOpenCodePreparedHost(executable, openCodeRootIdentity(handle.client.ConfigRoot), target.Environment, evidence.VersionEvidence, profile, nil))
+		selected, err := opencode.DesiredOpenCodeCodec(host)
 		if err != nil {
 			return err
 		}
@@ -57,14 +49,7 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 			return nativeconfig.ErrNativeMigrationRequired
 		}
 	}
-	selections, err := selectOpenCodeNative(profile, skills, transports)
-	if err != nil {
-		return err
-	}
-	host := newOpenCodePreparedHost(executable, openCodeRootIdentity(handle.client.ConfigRoot), target.Environment, evidence.VersionEvidence, profile, selections)
-	if err := host.ValidateNative(skills, transports); err != nil {
-		return err
-	}
+	profile := host.Profile()
 	handle.openCodeHost = host
 	handle.client.OpenCodeHost = host
 	handle.client.Version = profile.Version
@@ -112,35 +97,17 @@ func (e *Engine) previousOpenCodeEffects(handle *PreparedOperation, consumer cli
 }
 
 func (e *Engine) revalidateOpenCodeHost(ctx context.Context, handle *PreparedOperation) error {
-	host := handle.openCodeHost
-	if host == nil {
+	if handle.openCodeHost == nil {
 		return nil
 	}
-	executable, environment := host.Target()
-	evidence, err := e.cfg.OpenCodeProbe(ctx, clientdetect.ProbeTarget{Executable: executable, Environment: environment})
-	if err != nil || evidence.VersionEvidence != host.Evidence() || openCodeRootIdentity(handle.client.ConfigRoot) != host.Root() {
+	preparer, err := hostprep.New(e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
+	if err != nil {
+		return err
+	}
+	if err := preparer.RevalidateOpenCodeHost(ctx, handle.client); err != nil {
 		return ErrPlanChanged
 	}
 	return nil
-}
-
-// Resolve existing ancestors too: a not-yet-created config root can be beneath
-// a directory symlink. Creation of ordinary missing directories preserves it.
-func openCodeRootIdentity(root string) string {
-	var tail []string
-	for current := root; ; current = filepath.Dir(current) {
-		if resolved, err := filepath.EvalSymlinks(current); err == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return canonicalRoot(resolved)
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return ""
-		}
-		tail = append(tail, filepath.Base(current))
-	}
 }
 
 func cloneOpenCodeSelections(in []opencodehost.Selection) []opencodehost.Selection {
@@ -153,3 +120,5 @@ func cloneOpenCodeSelections(in []opencodehost.Selection) []opencodehost.Selecti
 	}
 	return out
 }
+
+func openCodeRootIdentity(root string) string { return hostprep.RootIdentity(root) }

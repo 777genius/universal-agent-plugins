@@ -29,6 +29,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -80,7 +81,12 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 	}
 	stager := newManagedStager(clientRegistry, paths, helperExecutable)
 	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
+	hostPreparer, err := hostprep.New(nil, nil)
+	if err != nil {
+		return agentpluginscli.App{}, err
+	}
 	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
+	lifecycle.OpenCodeHosts = hostPreparer
 	installerRegistry, err := clients.NewRegistry(claude.New(), codex.New())
 	if err != nil {
 		return agentpluginscli.App{}, err

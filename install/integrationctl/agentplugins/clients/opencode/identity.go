@@ -24,6 +24,9 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 }
 
 func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
+	if managed == nil && !hasPlannedOpenCodeNative(plan) {
+		return clients.RegistryClear, nil
+	}
 	root := strings.TrimSpace(plan.NativeRegistryRoot)
 	if root == "" {
 		return clients.RegistryIndeterminate, nil

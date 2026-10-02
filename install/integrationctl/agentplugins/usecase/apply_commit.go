@@ -42,6 +42,10 @@ func (session *applySession) stageAndCommit() (AddResult, error) {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return session.result, fmt.Errorf("MCP namespace changed before commit: %w", err)
 	}
+	if err := session.service.revalidateHost(session.ctx, session.input.Client); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return session.result, err
+	}
 	previousClient := domain.ClientBinding{}
 	if session.existing {
 		previousClient = session.state.Installations[session.installationIndex].Clients[session.clientBindingID]

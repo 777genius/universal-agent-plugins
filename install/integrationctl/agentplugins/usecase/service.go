@@ -17,7 +17,12 @@ import (
 )
 
 type Service struct {
-	StateStore transaction.StateStore
+	// OpenCodeHosts is the trusted preparation boundary; offline dry-run never calls it.
+	OpenCodeHosts ports.OpenCodeHostPreparer
+	// PrepareHostsForPreview authorizes online host preparation for a mutation's
+	// plan-first pass. Offline callers leave this false, including CLI --dry-run.
+	PrepareHostsForPreview bool
+	StateStore             transaction.StateStore
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
@@ -129,6 +134,11 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := session.validateApplyInput(); err != nil {
 		return AddResult{}, err
 	}
+	prepared, err := session.service.prepareHostInputs(ctx, []AddInput{session.input}, session.input.DryRun)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.input = prepared[0]
 	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
 	if err != nil {
 		return AddResult{}, err
@@ -150,6 +160,9 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	if session.input.DryRun {
 		return session.dryRunPath()
+	}
+	if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
+		return session.result, err
 	}
 	done, result, err := session.noChangeOrResume()
 	if done {

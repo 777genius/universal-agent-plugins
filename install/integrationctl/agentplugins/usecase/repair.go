@@ -17,6 +17,11 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	if err := session.validateRepairInput(); err != nil {
 		return AddResult{}, err
 	}
+	prepared, err := session.service.prepareHostInputs(ctx, []AddInput{session.input}, session.input.DryRun)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.input = prepared[0]
 	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
 	if err != nil {
 		return AddResult{}, err
@@ -29,6 +34,11 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 	}
 	if err := session.verifyRepairPreconditions(); err != nil {
 		return session.result, err
+	}
+	if !session.input.DryRun {
+		if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
+			return session.result, err
+		}
 	}
 	if session.verifyErr == nil {
 		return session.repairNative()
@@ -46,6 +56,11 @@ func (service Service) RefreshProjection(ctx context.Context, input AddInput) (A
 	if err := session.validateRepairInput(); err != nil {
 		return AddResult{}, err
 	}
+	prepared, err := session.service.prepareHostInputs(ctx, []AddInput{session.input}, session.input.DryRun)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.input = prepared[0]
 	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
 	if err != nil {
 		return AddResult{}, err
@@ -58,6 +73,11 @@ func (service Service) RefreshProjection(ctx context.Context, input AddInput) (A
 	}
 	if err := session.verifyRepairPreconditions(); err != nil {
 		return session.result, err
+	}
+	if !session.input.DryRun {
+		if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
+			return session.result, err
+		}
 	}
 	return session.refreshIntactProjection()
 }
