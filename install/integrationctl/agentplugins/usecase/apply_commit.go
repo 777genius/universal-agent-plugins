@@ -94,6 +94,9 @@ func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt 
 	}
 	if err := sealStagedSelection(&session.plan, delivery); err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
+		if dataCreated {
+			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
+		}
 		return domain.StagedDelivery{}, err
 	}
 	session.result.Plan = session.plan
