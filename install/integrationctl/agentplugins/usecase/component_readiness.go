@@ -28,6 +28,9 @@ func (service Service) preflightComponents(envelope domain.PackageEnvelope, plan
 			return fmt.Errorf("local component readiness changed; retaining the entire installed package: %s", readinessMessages(*plan))
 		}
 	}
+	if err := plan.SelectedDelivery.ValidatePlan(*plan, envelope.TreeDigest); err != nil {
+		return err
+	}
 	return rejectEmptySupportedComponents(plan)
 }
 
@@ -61,7 +64,7 @@ type stdioHelperProbe struct {
 
 func (service Service) preflightOneStdio(envelope domain.PackageEnvelope, plan *domain.DeliveryPlan, server domain.MCPServer, probe *stdioHelperProbe) (*domain.ComponentReadinessError, error) {
 	var failure *domain.ComponentReadinessError
-	if domain.ClientTraitsFor(plan.ClientID).UsesManagedStdioLauncher {
+	if plan.SelectedDelivery.EffectiveTraits(plan.ClientID).UsesManagedStdioLauncher {
 		var err error
 		failure, err = service.checkedManagedStdioHelper(envelope.SnapshotRoot, probe)
 		if err != nil {
@@ -171,6 +174,9 @@ func markStdioReadinessSkip(plan *domain.DeliveryPlan, name string, failure *dom
 }
 
 func rejectEmptySupportedComponents(plan *domain.DeliveryPlan) error {
+	if facts, ok := plan.SelectedDelivery.LocalFacts(); ok && facts.NativeStop {
+		return nil
+	}
 	supported := false
 	for _, c := range plan.Components {
 		if c.Support != domain.SupportUnsupported {

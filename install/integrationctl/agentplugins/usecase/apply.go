@@ -202,7 +202,7 @@ func (session *applySession) resolveBinding() error {
 }
 
 func (session *applySession) adoptSharedBinding() {
-	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		return
 	}
 	for key, binding := range session.state.Installations[session.installationIndex].Clients {
@@ -298,7 +298,7 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, err
 		}
 	}
-	if nativeLifecycleClient(session.input.Client.ClientID) {
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		_, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
 		if err != nil {
 			return true, session.result, err

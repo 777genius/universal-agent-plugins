@@ -302,7 +302,8 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
-	PersonalChatGPTPreparation bool `json:"-"`
+	SelectedDelivery           SelectedDelivery `json:"-"`
+	PersonalChatGPTPreparation bool             `json:"-"`
 
 	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
@@ -407,6 +408,8 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
+	RemoveOwnedEntry    bool                    `json:"-"`
+	SelectedDelivery    SelectedDelivery        `json:"-"`
 	Client              DetectedClient          `json:"client"`
 	DeclaredName        string                  `json:"declared_name"`
 	CurrentActivation   ActivationState         `json:"current_activation"`
@@ -426,3 +429,5 @@ type DeactivationOutcome struct {
 	UserActions             []string        `json:"user_actions,omitempty"`
 	LocalActions            []string        `json:"-"`
 }
+
+func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

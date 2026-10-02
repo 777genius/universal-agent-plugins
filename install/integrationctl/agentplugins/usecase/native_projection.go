@@ -17,7 +17,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	if delivery.ArtifactDigest == "" {
 		return delivery, false, fmt.Errorf("managed package receipt is missing")
 	}
-	if !nativeLifecycleClient(input.Client.ClientID) {
+	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
 		return delivery, true, nil
 	}
