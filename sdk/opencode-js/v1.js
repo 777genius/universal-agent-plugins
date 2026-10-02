@@ -263,7 +263,18 @@ export function createObserver(options) {
       return;
     }
     if (strict && ['session.updated', 'session.deleted'].includes(type) && id(nativeSessionID(event))) {
-      const s = state(nativeSessionID(event));
+      const sid = nativeSessionID(event), s = state(sid), info = p.info;
+      // Native Session.touch/title updates publish the complete next Info.
+      // An unchanged root/location is not a turn transition: keep its revision
+      // and pending work. This snapshot grants no authority; strict rootStatus
+      // still reads public session.get after the final messages checkpoint.
+      if (type === 'session.updated' && object(info) && info.id === sid &&
+          (p.sessionID === undefined || p.sessionID === sid) && info.parentID === undefined &&
+          typeof options.location === 'string' && info.directory === options.location &&
+          object(info.time) &&
+          Number.isSafeInteger(info.time.created) && info.time.created >= 0 &&
+          Number.isSafeInteger(info.time.updated) && info.time.updated >= 0 &&
+          info.time.archived === undefined && info.time.compacting === undefined && info.revert === undefined) return;
       s.rootSession = undefined; s.scopeMatched = false; s.cancelled = true;
       s.questions.clear(); s.permissions.clear(); s.revision++; return;
     }

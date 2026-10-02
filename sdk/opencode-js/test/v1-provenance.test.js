@@ -326,3 +326,198 @@ test('strict V1 saturated scope ingress preserves unrelated roots and unknown/gl
     assert.equal(h.out.length, 1); assert.equal(h.out[0].sessionID, 'session');
   } finally { release(); await Promise.all([job, ...work]); h.observer.dispose(); }
 });
+
+// Independently transcribed from the frozen native Session.patch/touch source:
+// Updated carries the complete next Info, not the partial time.updated patch.
+// IDs/content below are inert; positions/order come from floor-cause.md.
+const touchedRoot = { id: 'session', slug: 'TEST-root', projectID: 'TEST-project',
+  directory: 'TEST-location', title: 'TEST ordinary turn', version: '1.18.33',
+  time: { created: 1790867856000, updated: 1790867856743 } };
+const touch = (updated, extra = {}) => native('session.updated', { sessionID: 'session',
+  info: { ...touchedRoot, ...extra, time: { ...touchedRoot.time, updated, ...extra.time } } });
+const sameUser = { ...user, time: { created: 1790867856700 }, summary: { title: 'TEST turn', diffs: [] } };
+const completion = { version: 1, kind: 'turn_idle_verified', sessionID: 'session', turnID: 'user',
+  messageID: 'assistant', rootSession: true, provenance: { generation: 'v1',
+    observationID: '["v1","session","user","turn_idle_verified","assistant"]',
+    nativeTime: final.time.completed, timeBasis: 'assistant_completed' } };
+
+for (const initialTouches of [true, false]) {
+  for (const heldRead of ['messages', 'get']) {
+    test(`native Session.touch ${initialTouches ? 'sequence' : 'during final lookup alone'} preserves ordinary completion while ${heldRead} is pending`, async () => {
+      let release;
+      const pause = new Promise((r) => { release = r; }), reads = { messages: 0, get: 0 };
+      const h = setup({ client: { session: {
+        messages: async ({ path }) => {
+          assert.equal(path.id, 'session'); reads.messages++;
+          if (heldRead === 'messages') await pause;
+          return { data: [{ info: sameUser }, { info: final }] };
+        },
+        get: async ({ path }) => {
+          assert.equal(path.id, 'session'); reads.get++;
+          if (heldRead === 'get') await pause;
+          return { data: touchedRoot };
+        },
+      } } });
+      const jobs = [];
+      try {
+        await h.observer.observe(native('message.updated', { info: sameUser })); // 4
+        if (initialTouches) await h.observer.observe(touch(1790867856743)); // 7
+        await h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'busy' } })); // 8
+        await h.observer.observe(native('message.updated', { info: assistant })); // 9
+        if (initialTouches) await h.observer.observe(touch(1790867856750)); // 10
+        await h.observer.observe(native('message.updated', { info: sameUser })); // 13
+        await h.observer.observe(native('message.updated', { info: final })); // 120
+        await h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'busy' } })); // 121
+        jobs.push(h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'idle' } }))); // 122
+        jobs.push(h.observer.observe(native('session.idle', { sessionID: 'session' }))); // 123
+        await new Promise(setImmediate); // Leave both final native checkpoints pending.
+        await h.observer.observe(touch(1790867857074, { title: 'TEST renamed ordinary turn' })); // 124
+        await h.observer.observe(native('message.updated', { info: sameUser })); // 127
+        assert.deepEqual(h.out, []);
+        release(); await Promise.all(jobs);
+        assert.deepEqual(h.out, [completion]);
+        assert.equal(reads.messages, 2); assert.equal(reads.get, 2);
+        await h.observer.observe(touch(1790867857075));
+        await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        assert.deepEqual(h.out, [completion]);
+        h.observer.dispose();
+        await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        assert.deepEqual(h.out, [completion]);
+      } finally { release(); await Promise.all(jobs); h.observer.dispose(); }
+    });
+  }
+}
+
+test('same-root Updated never substitutes cached scope for the final public get/messages authority', async () => {
+  for (const changed of ['directory', 'ancestry', 'identity', 'failed-get', 'current-user', 'answer-scope']) {
+    let getCalls = 0, completing = false;
+    const newUser = { ...sameUser, id: 'next-user', time: { created: final.time.completed + 1 } },
+      newAnswer = { ...final, parentID: newUser.id };
+    const h = setup({ client: { session: {
+      messages: async () => completing ? [changed === 'current-user' ? sameUser : newUser,
+        changed === 'answer-scope' ? { ...newAnswer, path: { cwd: 'other-location' } } : newAnswer] : [sameUser, assistant],
+      get: async () => {
+        getCalls++;
+        if (!completing) return touchedRoot;
+        if (changed === 'failed-get') throw new Error('TEST native read unavailable');
+        return { ...touchedRoot, ...(changed === 'directory' ? { directory: 'other-location' } : {}),
+          ...(changed === 'ancestry' ? { parentID: 'native-parent' } : {}),
+          ...(changed === 'identity' ? { id: 'different-native-session' } : {}) };
+      },
+    } } });
+    try {
+      await h.observer.observe(native('message.updated', { info: sameUser }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      await h.observer.observe(native('question.asked', ask));
+      assert.equal(h.out.length, 1); assert.equal(getCalls, 1); // Warm an actually read root/scope cache.
+      completing = true;
+      await h.observer.observe(native('message.updated', { info: newUser }));
+      await h.observer.observe(touch(final.time.completed + 2));
+      await h.observer.observe(native('message.updated', { info: newAnswer }));
+      await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+      assert.equal(h.out.length, 1, changed);
+      assert.equal(getCalls, ['current-user', 'answer-scope'].includes(changed) ? 1 : 2, changed);
+    } finally { h.observer.dispose(); }
+  }
+});
+
+const unsafeUpdates = [
+  ['changed directory', { info: { ...touchedRoot, directory: 'other-location' } }],
+  ['changed ancestry', { info: { ...touchedRoot, parentID: 'native-parent' } }],
+  ['malformed ancestry', { info: { ...touchedRoot, parentID: null } }],
+  ['missing directory', { info: { ...touchedRoot, directory: undefined } }],
+  ['malformed time', { info: { ...touchedRoot, time: null } }],
+  ['archive transition', { info: { ...touchedRoot, time: { ...touchedRoot.time, archived: 0 } } }],
+  ['compaction transition', { info: { ...touchedRoot, time: { ...touchedRoot.time, compacting: final.time.completed } } }],
+  ['revert transition', { info: { ...touchedRoot, revert: { messageID: 'user' } } }],
+  ['conflicting native identity', { sessionID: 'other-session', info: touchedRoot }],
+];
+
+for (const heldRead of ['messages', 'get']) {
+  test(`deletion and unsafe Updated suppress completion during pending final ${heldRead}`, async () => {
+    for (const [reason, event] of [['deleted', native('session.deleted', { info: touchedRoot })],
+      ...unsafeUpdates.map(([reason, properties]) => [reason, native('session.updated', properties)])]) {
+      let release;
+      const pause = new Promise((r) => { release = r; }), reads = { messages: 0, get: 0 };
+      const h = setup({ client: { session: {
+        messages: async () => { reads.messages++; if (heldRead === 'messages') await pause; return [sameUser, final]; },
+        get: async () => { reads.get++; if (heldRead === 'get') await pause; return touchedRoot; },
+      } } });
+      let job;
+      try {
+        await h.observer.observe(native('message.updated', { info: sameUser }));
+        await h.observer.observe(native('message.updated', { info: final }));
+        job = h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        await new Promise(setImmediate); assert.equal(reads[heldRead], 1, reason);
+        await h.observer.observe(event);
+        // Neither a busy callback nor the same user nor a later safe touch may reopen it.
+        await h.observer.observe(native('session.status', { sessionID: 'session', status: { type: 'busy' } }));
+        await h.observer.observe(native('message.updated', { info: sameUser }));
+        await h.observer.observe(touch(final.time.completed + 1));
+        release(); await job;
+        await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+        assert.deepEqual(h.out, [], reason);
+      } finally { release(); await job; h.observer.dispose(); }
+    }
+  });
+}
+
+test('routine Updated preserves preparation at full ingress capacity; unsafe lifecycle still aborts synchronously', async () => {
+  for (const [reason, properties] of unsafeUpdates) {
+    let enter, release, preparation;
+    const entered = new Promise((r) => { enter = r; }), pause = new Promise((r) => { release = r; });
+    const h = setup({ beforeEmit: async (_fact, handoff) => {
+      preparation = handoff; enter(); await pause; return true;
+    } });
+    let job; const fillers = [];
+    try {
+      await h.observer.observe(native('message.updated', { info: user }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      job = h.observer.observe(native('question.asked', ask)); await entered;
+      for (let i = 0; i < 255; i++) fillers.push(h.observer.observe(native('session.idle', { sessionID: `capacity-${i}` })));
+      const routine = h.observer.observe(touch(final.time.completed + 1));
+      assert.equal(preparation.signal.aborted, false, reason);
+      assert.equal(preparation.isCurrent(), true, reason);
+      const closed = h.observer.observe(native('session.updated', properties));
+      assert.equal(preparation.signal.aborted, true, reason);
+      assert.equal(preparation.isCurrent(), false, reason);
+      release(); await Promise.all([job, routine, closed, ...fillers]);
+      assert.deepEqual(h.out, [], reason); assert.equal(h.diagnostics.includes('job_capacity'), false, reason);
+    } finally { release(); await Promise.all([job, ...fillers]); h.observer.dispose(); }
+  }
+});
+
+// A prior read rejection/unsafe turn is not authority for a later genuine user.
+// The new turn must still obtain its own public native scope/ancestry proof.
+test('a fresh genuine user after an unsafe turn can complete only with fresh public native authority', async () => {
+  for (const prior of ['cached-child', 'cached-foreign-directory', 'scope-control', 'delete-control']) {
+    let fresh = false, getCalls = 0;
+    const nextUser = { ...sameUser, id: 'fresh-user', time: { created: final.time.completed + 1 } },
+      nextFinal = { ...final, parentID: nextUser.id };
+    const h = setup({ client: { session: {
+      messages: async () => fresh ? [nextUser, nextFinal] : [sameUser, assistant],
+      get: async () => {
+        getCalls++;
+        return { ...touchedRoot, ...(!fresh && prior === 'cached-child' ? { parentID: 'native-parent' } : {}),
+          ...(!fresh && prior === 'cached-foreign-directory' ? { directory: 'other-location' } : {}) };
+      },
+    } } });
+    try {
+      await h.observer.observe(native('message.updated', { info: sameUser }));
+      await h.observer.observe(native('message.updated', { info: assistant }));
+      await h.observer.observe(native('question.asked', ask));
+      if (prior.endsWith('control')) await h.observer.observe(native(prior === 'delete-control' ? 'session.deleted' : 'session.updated',
+        { info: { ...touchedRoot, directory: 'other-location' } }));
+      const earlierFacts = h.out.length;
+      fresh = true;
+      await h.observer.observe(native('message.updated', { info: nextUser }));
+      await h.observer.observe(touch(final.time.completed + 2));
+      await h.observer.observe(native('message.updated', { info: nextFinal }));
+      await h.observer.observe(native('session.idle', { sessionID: 'session' }));
+      assert.equal(getCalls, 2, prior);
+      assert.equal(h.out.length, earlierFacts + 1, prior);
+      assert.equal(h.out.at(-1).kind, 'turn_idle_verified', prior);
+      assert.equal(h.out.at(-1).turnID, nextUser.id, prior);
+    } finally { h.observer.dispose(); }
+  }
+});
