@@ -101,7 +101,7 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	request.Plan.LocalEntryObservation = request.Plan.LocalEntryObservation.Clone()
 	request.Plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.Plan.PreviousNativeObjects...)
 	outcome, err := service.Activator.Activate(ctx, request)
-	if before.LocalEntryObservation == nil && outcome.LocalEntryObservation == nil {
+	if before.LocalEntryObservation == nil && outcome.LocalEntryObservation == nil && outcome.NativeEffect != domain.NativeEffectUncertain {
 		return outcome, err
 	}
 	after, loadErr := service.activationBinding(installationID, bindingID)
@@ -114,6 +114,9 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	outcome.LocalEntryObservation = outcome.LocalEntryObservation.Clone()
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
+	}
+	if err == nil && outcome.NativeEffect == domain.NativeEffectUncertain {
+		return outcome, fmt.Errorf("selected native activation outcome is uncertain")
 	}
 	return outcome, err
 }
