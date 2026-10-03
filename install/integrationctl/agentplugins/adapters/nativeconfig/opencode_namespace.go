@@ -77,6 +77,10 @@ func checkOpenCodeNamespace(active []string, proposed []string) error {
 }
 
 func openCodeActiveMCPNames(entries *hujson.Object) ([]string, error) {
+	return openCodeActiveMCPNamesForCodec(entries, CodecOpenCode)
+}
+
+func openCodeActiveMCPNamesForCodec(entries *hujson.Object, codec Codec) ([]string, error) {
 	if entries == nil {
 		return nil, nil
 	}
@@ -92,15 +96,19 @@ func openCodeActiveMCPNames(entries *hujson.Object) ([]string, error) {
 		if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
 			return nil, fmt.Errorf("%w: OpenCode MCP server %q must be an object", ErrMalformed, name)
 		}
-		if name == "servers" && openCodeNestedServers(fields) {
+		if codec == CodecOpenCode && name == "servers" && openCodeNestedServers(fields) {
 			return nil, ErrOpenCodeV2Namespace
 		}
-		if enabled, ok := fields["enabled"]; ok {
+		activityKey := "enabled"
+		if codec == CodecOpenCodeV2 {
+			activityKey = "disabled"
+		}
+		if activity, ok := fields[activityKey]; ok {
 			var value bool
-			if err := json.Unmarshal(enabled, &value); err != nil || string(enabled) == "null" {
-				return nil, fmt.Errorf("%w: OpenCode MCP server %q has invalid enabled value", ErrMalformed, name)
+			if err := json.Unmarshal(activity, &value); err != nil || string(activity) == "null" {
+				return nil, fmt.Errorf("%w: OpenCode MCP server %q has invalid %s value", ErrMalformed, name, activityKey)
 			}
-			if !value {
+			if codec == CodecOpenCode && !value || codec == CodecOpenCodeV2 && value {
 				continue
 			}
 		}
@@ -122,6 +130,17 @@ func openCodeNestedServers(fields map[string]json.RawMessage) bool {
 // process-inert and never modifies the config or starts OpenCode/MCP servers.
 // previous names are omitted only when the same operation removes them.
 func (kernel Kernel) CheckOpenCodeNamespace(paths Paths, proposed, previous []string) error {
+	return kernel.CheckOpenCodeNamespaceForCodec(paths, CodecOpenCode, proposed, previous)
+}
+
+// CheckOpenCodeNamespaceForCodec is the closed dialect-aware preflight for a
+// future prepared host. The legacy helper stays V1. This is a conservative name
+// collision policy, not proof of a running host's tool catalog or mixed roots.
+// proposed contains only names that the prepared operation will leave active.
+func (kernel Kernel) CheckOpenCodeNamespaceForCodec(paths Paths, codec Codec, proposed, previous []string) error {
+	if codec != CodecOpenCode && codec != CodecOpenCodeV2 {
+		return fmt.Errorf("unsupported OpenCode namespace codec %q", codec)
+	}
 	if err := kernel.RequireFileIO(); err != nil {
 		return err
 	}
@@ -146,12 +165,17 @@ func (kernel Kernel) CheckOpenCodeNamespace(paths Paths, proposed, previous []st
 		if err != nil {
 			return err
 		}
-		entries, err = collection(doc, "mcp", false)
+		if codec == CodecOpenCodeV2 {
+			if err := requireOpenCodeV2Root(doc); err != nil {
+				return err
+			}
+		}
+		entries, err = codecCollection(doc, codec, false)
 		if err != nil {
 			return err
 		}
 	}
-	active, err := openCodeActiveMCPNames(entries)
+	active, err := openCodeActiveMCPNamesForCodec(entries, codec)
 	if err != nil {
 		return err
 	}
