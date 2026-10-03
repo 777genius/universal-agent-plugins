@@ -116,7 +116,7 @@ func (service Service) preflightActivation(input AddInput, plan domain.DeliveryP
 		return nil
 	}
 	return preflighter.PreflightActivation(domain.ActivationRequest{
-		Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable,
+		Client: input.Client, Plan: cloneLocalObservationPlan(plan), BackendExecutable: input.BackendExecutable,
 		VerifyOnly: input.DryRun,
 	})
 }

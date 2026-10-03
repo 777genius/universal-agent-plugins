@@ -5,10 +5,12 @@ package domain
 // logical client; a nil map means the planner falls back to the one its
 // composition root configured.
 type PlanRequest struct {
-	Envelope           PackageEnvelope
-	Client             DetectedClient
-	Scope              InstallScope
-	PhysicalArtifactID string
-	InstallIntent      InstallIntent
-	Detected           map[ClientID]DetectedClient
+	PreviousNativeObjects []NativeObjectOwnership `json:"-"`
+	LocalEntryObservation *LocalEntryObservation  `json:"-"`
+	Envelope              PackageEnvelope
+	Client                DetectedClient
+	Scope                 InstallScope
+	PhysicalArtifactID    string
+	InstallIntent         InstallIntent
+	Detected              map[ClientID]DetectedClient
 }

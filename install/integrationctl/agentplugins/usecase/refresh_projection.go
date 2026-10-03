@@ -68,6 +68,7 @@ func (session *repairSession) hasEmptyLocalMaintenanceRoute(delivery domain.Stag
 }
 
 func (session *repairSession) activateRefreshedProjection(delivery domain.StagedDelivery) (AddResult, error) {
+	previousObservation := session.plan.LocalEntryObservation.Clone()
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan, Delivery: delivery,
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
@@ -83,7 +84,7 @@ func (session *repairSession) activateRefreshedProjection(delivery domain.Staged
 		}
 	}
 	session.result.Activation = outcome
-	changed, updateErr := session.service.updateActivationResult(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects)
+	changed, updateErr := session.service.updateActivationResultWithObservation(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects, previousObservation)
 	session.result.Mutated = session.result.Mutated || changed
 	if updateErr != nil {
 		if activationErr != nil {

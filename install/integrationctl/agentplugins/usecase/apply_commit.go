@@ -77,7 +77,7 @@ func (session *applySession) prepareCommitResources() (operationID string, dataR
 }
 
 func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt domain.DataReceipt, dataCreated bool) (domain.StagedDelivery, error) {
-	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, session.plan, operationID, session.input.Hints, dataReceipt.Locator)
+	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, cloneLocalObservationPlan(session.plan), operationID, session.input.Hints, dataReceipt.Locator)
 	if err != nil {
 		if dataCreated {
 			_ = session.service.PluginData.PurgeData(context.Background(), dataReceipt)
@@ -168,6 +168,7 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 }
 
 func (session *applySession) activateCommitted(delivery domain.StagedDelivery, previousClient domain.ClientBinding) (AddResult, error) {
+	previousObservation := session.plan.LocalEntryObservation.Clone()
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, session.clientBindingID, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan, Delivery: domain.StagedDelivery{
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath,
@@ -187,7 +188,7 @@ func (session *applySession) activateCommitted(delivery domain.StagedDelivery, p
 		}
 		session.result.Activation = outcome
 	}
-	if _, updateErr := session.service.updateActivationResult(session.installationID, session.clientBindingID, outcome, activationErr, previousClient.NativeObjects); updateErr != nil {
+	if _, updateErr := session.service.updateActivationResultWithObservation(session.installationID, session.clientBindingID, outcome, activationErr, previousClient.NativeObjects, previousObservation); updateErr != nil {
 		if activationErr != nil {
 			return session.result, fmt.Errorf("activate client: %w; persist activation state: %w", activationErr, updateErr)
 		}

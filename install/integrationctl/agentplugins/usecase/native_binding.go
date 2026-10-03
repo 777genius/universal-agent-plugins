@@ -8,6 +8,9 @@ import (
 )
 
 func validateNativeBinding(client domain.ClientBinding, detected domain.DetectedClient) error {
+	if err := client.ValidateLocalEntryObservation(); err != nil {
+		return err
+	}
 	if client.NativeActivationAttempt != "" {
 		return fmt.Errorf("native activation attempt %s is unresolved; review client state before another mutation", client.NativeActivationAttempt)
 	}

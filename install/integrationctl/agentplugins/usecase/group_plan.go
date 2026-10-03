@@ -121,7 +121,7 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	}
 	// Coalescing discards one plan, so all frozen authority, including revision
 	// digests, must agree. SameSelection deliberately excludes those digests.
-	if !reflect.DeepEqual(prior.plan.SelectedDelivery, plan.SelectedDelivery) {
+	if !reflect.DeepEqual(prior.plan.SelectedDelivery, plan.SelectedDelivery) || !prior.plan.LocalEntryObservation.Equal(plan.LocalEntryObservation) || !reflect.DeepEqual(prior.plan.PreviousNativeObjects, plan.PreviousNativeObjects) {
 		return false, fmt.Errorf("targets select different delivery facts for physical backend %s", key)
 	}
 	if prior.noChange {

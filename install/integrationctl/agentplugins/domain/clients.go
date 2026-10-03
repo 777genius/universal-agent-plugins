@@ -302,8 +302,10 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
-	SelectedDelivery           SelectedDelivery `json:"-"`
-	PersonalChatGPTPreparation bool             `json:"-"`
+	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
+	LocalEntryObservation      *LocalEntryObservation  `json:"-"`
+	SelectedDelivery           SelectedDelivery        `json:"-"`
+	PersonalChatGPTPreparation bool                    `json:"-"`
 
 	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
@@ -391,14 +393,15 @@ type ActivationRequest struct {
 }
 
 type ActivationOutcome struct {
-	Activation             ActivationState     `json:"activation"`
-	Authentication         AuthenticationState `json:"authentication"`
-	Policy                 PolicyState         `json:"policy"`
-	Verification           VerificationState   `json:"verification"`
-	UserActions            []string            `json:"user_actions,omitempty"`
-	LocalActions           []string            `json:"-"`
-	ActivationAttested     bool                `json:"activation_attested,omitempty"`
-	AuthenticationAttested bool                `json:"authentication_attested,omitempty"`
+	LocalEntryObservation  *LocalEntryObservation `json:"-"`
+	Activation             ActivationState        `json:"activation"`
+	Authentication         AuthenticationState    `json:"authentication"`
+	Policy                 PolicyState            `json:"policy"`
+	Verification           VerificationState      `json:"verification"`
+	UserActions            []string               `json:"user_actions,omitempty"`
+	LocalActions           []string               `json:"-"`
+	ActivationAttested     bool                   `json:"activation_attested,omitempty"`
+	AuthenticationAttested bool                   `json:"authentication_attested,omitempty"`
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`
@@ -408,18 +411,19 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
-	RemoveOwnedEntry    bool                    `json:"-"`
-	SelectedDelivery    SelectedDelivery        `json:"-"`
-	Client              DetectedClient          `json:"client"`
-	DeclaredName        string                  `json:"declared_name"`
-	CurrentActivation   ActivationState         `json:"current_activation"`
-	Interactive         bool                    `json:"interactive"`
-	ExternalUninstalled bool                    `json:"external_uninstalled"`
-	Confirmed           bool                    `json:"confirmed"`
-	PhysicalArtifactID  string                  `json:"physical_artifact_id"`
-	BackendExecutable   string                  `json:"-"`
-	ManagedArtifactPath string                  `json:"-"`
-	NativeObjects       []NativeObjectOwnership `json:"-"`
+	LocalEntryObservation *LocalEntryObservation  `json:"-"`
+	RemoveOwnedEntry      bool                    `json:"-"`
+	SelectedDelivery      SelectedDelivery        `json:"-"`
+	Client                DetectedClient          `json:"client"`
+	DeclaredName          string                  `json:"declared_name"`
+	CurrentActivation     ActivationState         `json:"current_activation"`
+	Interactive           bool                    `json:"interactive"`
+	ExternalUninstalled   bool                    `json:"external_uninstalled"`
+	Confirmed             bool                    `json:"confirmed"`
+	PhysicalArtifactID    string                  `json:"physical_artifact_id"`
+	BackendExecutable     string                  `json:"-"`
+	ManagedArtifactPath   string                  `json:"-"`
+	NativeObjects         []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationOutcome struct {

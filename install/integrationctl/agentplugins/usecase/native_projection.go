@@ -39,7 +39,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		}
 		dataPath = receipt.Locator
 	}
-	projected, err := projector.ProjectActiveNative(ctx, input.Envelope, plan, delivery.ArtifactDigest, dataPath)
+	projected, err := projector.ProjectActiveNative(ctx, input.Envelope, cloneLocalObservationPlan(plan), delivery.ArtifactDigest, dataPath)
 	if err != nil {
 		return delivery, false, err
 	}

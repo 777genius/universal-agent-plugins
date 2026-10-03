@@ -53,7 +53,7 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 		}
 		target.dataReceipt, target.dataCreated = receipt, created
 	}
-	delivery, err := session.service.stagePackage(session.ctx, target.input.Envelope, target.plan, operationID, target.input.Hints, target.dataReceipt.Locator)
+	delivery, err := session.service.stagePackage(session.ctx, target.input.Envelope, cloneLocalObservationPlan(target.plan), operationID, target.input.Hints, target.dataReceipt.Locator)
 	if err != nil {
 		return err
 	}

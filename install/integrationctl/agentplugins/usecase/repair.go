@@ -83,5 +83,5 @@ func (service Service) verifyRepairPrecondition(ctx context.Context, activePath,
 
 func sameLifecycleOutcome(left, right domain.ActivationOutcome) bool {
 	return left.Activation == right.Activation && left.Authentication == right.Authentication &&
-		left.Policy == right.Policy && left.Verification == right.Verification
+		left.Policy == right.Policy && left.Verification == right.Verification && left.LocalEntryObservation.Equal(right.LocalEntryObservation)
 }
