@@ -1,0 +1,99 @@
+name: Physical profile native
+
+on:
+  pull_request:
+    paths:
+      - 'install/integrationctl/adapters/directoryidentity/**'
+      - 'install/integrationctl/adapters/dirswap/**'
+      - 'install/integrationctl/agentplugins/adapters/profileauthority/**'
+      - 'install/integrationctl/agentplugins/domain/profile_authority.go'
+      - '.github/workflows/physical-profile-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Physical profile / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    env:
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      CGO_ENABLED: '0'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.8'
+          cache: false
+      - name: Create canonical Windows TEST temp root
+        if: runner.os == 'Windows'
+        run: |
+          python - <<'PY_TEMP'
+          import os, pathlib, tempfile
+          parent = pathlib.Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+          root = pathlib.Path(tempfile.mkdtemp(prefix='physical-profile-TEST-', dir=parent))
+          if str(root.resolve(strict=True)) != str(root):
+              raise SystemExit('Windows TEST temp root has noncanonical spelling')
+          print('Fresh canonical Windows TEST temp root:', root)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env:
+              env.write(f'TEMP={root}\nTMP={root}\n')
+          PY_TEMP
+      - name: Verify inherited Windows TEST temp root
+        if: runner.os == 'Windows'
+        run: |
+          python - <<'PY_TEMP'
+          import os, pathlib, tempfile
+          root = os.environ['TEMP']
+          if os.environ['TMP'] != root or tempfile.gettempdir() != root or str(pathlib.Path(root).resolve(strict=True)) != root:
+              raise SystemExit('Windows TEST temp root was not inherited canonically')
+          print('Inherited canonical Windows TEST temp root:', root)
+          PY_TEMP
+      - name: Native directory and legacy identity contracts
+        working-directory: install/integrationctl
+        run: |
+          set -o pipefail
+          go test -count=1 -timeout=3m -v ./adapters/directoryidentity ./adapters/dirswap | tee "$RUNNER_TEMP/physical-profile-native.log"
+      - name: Require actual positive native qualification
+        env:
+          NATIVE_OS: ${{ runner.os }}
+        run: |
+          python - <<'PY_NATIVE'
+          import os, pathlib, platform
+          text = (pathlib.Path(os.environ['RUNNER_TEMP']) / 'physical-profile-native.log').read_text(encoding='utf-8')
+          print('Native host:', platform.platform(), platform.machine())
+          markers = [
+              'QUALIFICATION=SUPPORTED; same-byte replacement denied',
+              'QUALIFICATION=SUPPORTED; substituted ancestor denied with unchanged child',
+              'FRESH_PROCESS_REVALIDATED',
+          ]
+          markers.append({
+              'Linux': 'ACTUAL_IOCTL=SUCCESS; fd_tuple=SUPPORTED;',
+              'macOS': 'ACTUAL_DARWIN_REQUEST=<nil>;',
+              'Windows': 'ACTUAL_NTFS_HELD_DIRECTORY=',
+          }[os.environ['NATIVE_OS']])
+          missing = [marker for marker in markers if marker not in text]
+          if missing:
+              raise SystemExit('Native positive not qualified: ' + ', '.join(missing))
+          print('All actual native positive qualifications observed')
+          PY_NATIVE
+      - name: Profile domain bridge and strict persistence contracts
+        working-directory: install/integrationctl/agentplugins
+        run: go test -count=1 -timeout=3m -v ./adapters/profileauthority
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: physical-profile-native-${{ runner.os }}
+          path: ${{ runner.temp }}/physical-profile-native.log
+          if-no-files-found: error

@@ -3,10 +3,11 @@
 package dirswap
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 )
 
 func directoryIdentity(path string, info os.FileInfo) (string, error) {
-	return "", fmt.Errorf("durable directory identity is unsupported on this platform")
+	return directoryidentity.LegacyIdentity(path, info)
 }
