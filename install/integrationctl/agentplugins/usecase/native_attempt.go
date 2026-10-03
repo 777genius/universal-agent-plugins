@@ -106,6 +106,7 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 		return outcome, loadErr
 	}
 	if !reflect.DeepEqual(before, after) {
+		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, fmt.Errorf("activation callback changed frozen binding authority")
 	}
 	outcome.LocalEntryObservation = outcome.LocalEntryObservation.Clone()
