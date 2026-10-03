@@ -27,7 +27,7 @@ func TestIndependentLocalNeitherSelected(t *testing.T) {
 	engine := f.engine(t, true)
 	installed := applyLocal(t, engine, f.request(installer.OpInstall, ""))
 	binding := onlyLocalBinding(t, loadLocalState(t, f.state))
-	if string(before) != string(readLocal(t, f.settings)) || binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
+	if string(before) != string(readLocal(t, f.settings)) || binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) || binding.LocalEntryObservation != nil {
 		t.Fatal("neither selection invented native effect or ownership")
 	}
 	for _, path := range []string{hookPath(), "mcp.json", "skills/notify/SKILL.md"} {
@@ -46,7 +46,7 @@ func TestIndependentLocalNeitherSelected(t *testing.T) {
 		t.Fatal("prepared-only repeat changed exact durable bytes")
 	}
 	after := onlyLocalBinding(t, loadLocalState(t, f.state))
-	if len(after.NativeObjects) != 1 || after.NativeObjects[0].Kind != "managed_package_directory" || after.PendingNativeIntent != nil || after.NativeActivationAttempt != "" {
+	if len(after.NativeObjects) != 1 || after.NativeObjects[0].Kind != "managed_package_directory" || after.PendingNativeIntent != nil || after.NativeActivationAttempt != "" || after.LocalEntryObservation != nil {
 		t.Fatal("empty unowned route manufactured native authority")
 	}
 }
@@ -57,6 +57,7 @@ func TestIndependentLocalNeitherSelected(t *testing.T) {
 // 040 has no confirmed-ownership projector input: retain this strict no-op
 // assertion for the brokered carrier composition, rather than accepting churn.
 func TestLocalOwnedToEmptyRetainsSelector(t *testing.T) {
+	t.Run("historical-nil", func(t *testing.T) { assertHistoricalAbsentRefusal(t, true) })
 	f := freshLocal(t, false)
 	engine := f.engine(t, true)
 	installed := applyLocal(t, engine, f.request(installer.OpInstall, ""))
@@ -96,20 +97,16 @@ func TestLocalOwnedToEmptyRetainsSelector(t *testing.T) {
 			t.Errorf("owned-empty %s changed durable state: confirmed ownership must reach the existing projector", op)
 		}
 	}
-	binding := onlyLocalBinding(t, loadLocalState(t, f.state))
+	binding := assertLocalObservation(t, f, false)
 	absent := []byte(`{"chat.pluginLocations":{},"TEST-late-foreign":true}`)
 	writeLocal(t, f.settings, absent, 0600)
-	h, err := engine.Prepare(t.Context(), f.request(installer.OpRepair, installed.InstallationID))
-	if h != nil {
-		defer func() { _ = h.Close() }()
-	}
-	if err == nil {
-		_, err = engine.Apply(t.Context(), h, installer.Decision{Confirmed: true})
-	}
-	if err == nil || string(readLocal(t, f.settings)) != string(absent) {
-		t.Fatal("empty transition forged absent restoration authority")
+	applyLocal(t, engine, f.request(installer.OpRepair, installed.InstallationID))
+	assertLocalObservation(t, f, false)
+	if !strings.Contains(string(readLocal(t, f.settings)), quoteLocal(facts.Registration.Selector)+":false") || !strings.Contains(string(readLocal(t, f.settings)), `"TEST-late-foreign":true`) {
+		t.Fatal("owned empty repair lost false/foreign bytes")
 	}
 	if !binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
 		t.Fatal("lost prior authority")
 	}
+	assertStableLocal(t, f, engine, installed.InstallationID, false)
 }
