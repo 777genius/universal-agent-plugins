@@ -1,6 +1,9 @@
 package installer
 
-import "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
+)
 
 // Operation is the process-local lifecycle verb. Install, update, repair, and
 // remove are published. Two registered mutation targets use Request.Targets.
@@ -55,8 +58,8 @@ type Request struct {
 	// native plugin was already removed, or was never activated. Confirmed
 	// Apply does not invent this fact.
 	ExternalUninstalled bool
-	// Targets selects two clients in one operation. Empty means the single
-	// ClientID fields. Group operations keep the same Operation verb.
+	// Targets selects one explicit client or two Claude/Codex clients in a group.
+	// Empty means the single ClientID fields. Groups keep the same Operation verb.
 	Targets []ClientTarget
 	// KnownTargets carries host-observed facts for installed sibling bindings
 	// that are not selected by this operation. The installer verifies BindingID
@@ -99,6 +102,8 @@ type BindingFacts struct {
 // Plan is an immutable copy for presentation. Operational paths are included
 // because the embedding host already chose explicit roots.
 type Plan struct {
+	OpenCodeProfile    *opencodehost.Profile    `json:",omitempty"`
+	OpenCodeSelections []opencodehost.Selection `json:",omitempty"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
 	SelectedDelivery     domain.SelectedDelivery `json:"-"`
 	Operation            Operation
