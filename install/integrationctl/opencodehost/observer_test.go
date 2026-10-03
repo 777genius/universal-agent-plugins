@@ -282,19 +282,21 @@ var observerFacts = [4]host.Capability{host.ObserverCompletion, host.ObserverQue
 
 // Independent exact cells from TASK-INPUTS/contract.md and the frozen custody
 // input (SHA256 28c63700240d3fbdbbae33dbc0b2ca734e52c3f5965263e2500b74bbad491d5c).
-// Archive custody proves these image bytes only, never observer qualification.
-var pendingNativeHosts = []struct {
+// Archive custody proves image bytes; the separately reviewed amendment binds
+// current source evidence and an actual reader witness for each exact image.
+var qualifiedNativeHosts = []struct {
 	version, goos, goarch, image string
 	adapter                      host.AdapterID
+	readerProof                  string
 }{
-	{"1.18.33", "linux", "arm64", "986fef2069a03b5181a9ec920786836f98fe3e4950c630941908687854e42757", host.ObserverV1},
-	{"2.0.21", "linux", "arm64", "d2f4c9ee106d9930d20ca5cf5f2c2216aab6fed836992cf24979d9481242c01c", host.ObserverV2},
-	{"1.18.33", "darwin", "amd64", "f53aae8eb68d832ab1bcd27bed88c02de910be61f4b5f90068ae8e93d5e794c9", host.ObserverV1},
-	{"2.0.21", "darwin", "amd64", "4642b7da61279c8aa5d389d9f29454936e449fea6bc510689e9cc976fff6579f", host.ObserverV2},
-	{"1.18.33", "darwin", "arm64", "139ddeb6a46ba276827bb8f79c7b28208621746e4fd6914d9ae71cc1a0a57524", host.ObserverV1},
-	{"2.0.21", "darwin", "arm64", "0b2b68c1efaf20a29aaf636c2ffccc1abb56243a82f48cce45e257d232e03442", host.ObserverV2},
-	{"1.18.33", "windows", "amd64", "52f60248a576b34c9a6dcaa27e0a7f08089af35bcdc0dfb10c04d3e00a98314c", host.ObserverV1},
-	{"2.0.21", "windows", "amd64", "ec7a3909bad41ef88e4650f737ab6f0b0c402a7f49a588812d0a79820c2dfc1f", host.ObserverV2},
+	{"1.18.33", "linux", "arm64", "986fef2069a03b5181a9ec920786836f98fe3e4950c630941908687854e42757", host.ObserverV1, "c0324e2ef2f6cbbd01928365b08fc3630077cac28fb3a0116947058c4c9567a2"},
+	{"2.0.21", "linux", "arm64", "d2f4c9ee106d9930d20ca5cf5f2c2216aab6fed836992cf24979d9481242c01c", host.ObserverV2, "0bd94e3d931627d350359f1d5e7b29450237b98d2c2e2768f68ab6d944754e04"},
+	{"1.18.33", "darwin", "amd64", "f53aae8eb68d832ab1bcd27bed88c02de910be61f4b5f90068ae8e93d5e794c9", host.ObserverV1, "2a7c72fb56ad69c08b7dd6eab5351aa0b20277684ef6fee0d59a43b47c353ada"},
+	{"2.0.21", "darwin", "amd64", "4642b7da61279c8aa5d389d9f29454936e449fea6bc510689e9cc976fff6579f", host.ObserverV2, "4b15b7bad6b64de07f5b91c9da52d8fc032cacec829c54cafaadd1086c29116f"},
+	{"1.18.33", "darwin", "arm64", "139ddeb6a46ba276827bb8f79c7b28208621746e4fd6914d9ae71cc1a0a57524", host.ObserverV1, "bbf07afffe9cb83a2de78c5be9d4e95b24581d88dee83a8f7301cdb687303ad2"},
+	{"2.0.21", "darwin", "arm64", "0b2b68c1efaf20a29aaf636c2ffccc1abb56243a82f48cce45e257d232e03442", host.ObserverV2, "e1cf86b4ded224cd1507a376bc79c056f3187f365830d1cc7e8a1721c2ce22d6"},
+	{"1.18.33", "windows", "amd64", "52f60248a576b34c9a6dcaa27e0a7f08089af35bcdc0dfb10c04d3e00a98314c", host.ObserverV1, "cd7409a4a5b5d09215f5ea0e92c71948ac769465b30aebb722154de9aea6f1f5"},
+	{"2.0.21", "windows", "amd64", "ec7a3909bad41ef88e4650f737ab6f0b0c402a7f49a588812d0a79820c2dfc1f", host.ObserverV2, "0e752ddd0428d50ed24cb5f07a4025505a356ad922559c870f19a2ae6402ddce"},
 }
 
 func assertObserverSelectionsDenied(t *testing.T, p host.Profile, adapter host.AdapterID) {
@@ -309,18 +311,29 @@ func assertObserverSelectionsDenied(t *testing.T, p host.Profile, adapter host.A
 	}
 }
 
-// RED at baseline is API/candidate discovery: the exact-image lookup does not
-// exist. After discovery, RED means premature binding or selection authority,
-// including any single capability after copied evidence or forged public flags.
-func TestKnownNativeCandidatesStayPendingAndCannotBind(t *testing.T) {
-	for _, tc := range pendingNativeHosts {
+// RED at the pending baseline means the accepted exact image cannot bind.
+// Copied Linux evidence, public flags and serialized profiles remain denied.
+func TestQualifiedNativeCellsRequireTheirExactEvidence(t *testing.T) {
+	for _, tc := range qualifiedNativeHosts {
 		t.Run(tc.version+"/"+tc.goos+"/"+tc.goarch, func(t *testing.T) {
 			d, ok := host.NativeObserverEvidenceForImage(tc.version, tc.goos, tc.goarch, tc.image)
-			if !ok || d.NativeStatus != "native_source_pending" || d.Tuple.Version != tc.version || d.Tuple.GOOS != tc.goos || d.Tuple.GOARCH != tc.goarch || d.Tuple.ImageSHA256 != tc.image || d.Tuple.Adapter != tc.adapter || d.Capabilities != observerFacts {
-				t.Fatalf("missing exact pending cell: %+v", d)
+			if !ok || d.NativeStatus != "native_source_qualified" || d.Tuple.Version != tc.version || d.Tuple.GOOS != tc.goos || d.Tuple.GOARCH != tc.goarch || d.Tuple.ImageSHA256 != tc.image || d.Tuple.Adapter != tc.adapter || d.Capabilities != observerFacts {
+				t.Fatalf("missing exact qualified cell: %+v", d)
 			}
-			if d.Tuple.EvidenceID != "" || d.Tuple.EvidenceHashes != ([4]string{}) {
-				t.Fatalf("candidate acquired qualification evidence: %+v", d.Tuple)
+			expectedHashes := [4]string{"6568a59ddc5bc120162f374b62eb9f849d1d0d989183b4d72b94630071f573ea", tc.readerProof, "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "b7664499f49b738f16905c41dec31128ecd8529045274848f57e62a90a062cf9"}
+			expectedID := "native-observer:" + tc.version + ":sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901"
+			for _, hash := range expectedHashes {
+				expectedID += ":sha256:" + hash
+			}
+			if d.Tuple.EvidenceID != expectedID || d.Tuple.EvidenceHashes != expectedHashes {
+				t.Fatalf("qualified cell missing independently accepted evidence: %+v", d.Tuple)
+			}
+			bound := host.BindNativeObserver(runtimeEvidence(tc.version), d.Tuple)
+			for _, facts := range [][]host.Capability{{host.ObserverCompletion}, {host.ObserverQuestion}, {host.ObserverPermission}, {host.ObserverTerminalError}, observerFacts[:]} {
+				selection, err := host.Select(bound, observerRequirements(tc.adapter, facts...))
+				if err != nil || selection.Adapter != tc.adapter || selection.ArtifactID != "native-observer" {
+					t.Fatalf("accepted exact image binding: %+v %v", selection, err)
+				}
 			}
 			original := d
 			linux, _ := host.NativeObserverEvidence(tc.version)
@@ -333,10 +346,10 @@ func TestKnownNativeCandidatesStayPendingAndCannotBind(t *testing.T) {
 			d.Tuple.EvidenceID = linux.Tuple.EvidenceID
 			d.Tuple.EvidenceHashes = linux.Tuple.EvidenceHashes
 			d.Capabilities[0] = host.MCPStdio
-			for _, actual := range []host.NativeObserverTuple{original.Tuple, copiedEvidence, copiedLinux, d.Tuple} {
+			for _, actual := range []host.NativeObserverTuple{copiedEvidence, copiedLinux, d.Tuple} {
 				p := host.BindNativeObserver(runtimeEvidence(tc.version), actual)
 				if !reflect.DeepEqual(p, host.Resolve(runtimeEvidence(tc.version))) {
-					t.Fatal("pending tuple changed generic resolution or acquired private authority")
+					t.Fatal("foreign evidence changed generic resolution or acquired private authority")
 				}
 				assertNoObserver(t, p, tc.adapter, observerFacts[:])
 				assertObserverSelectionsDenied(t, p, tc.adapter)
@@ -357,11 +370,11 @@ func TestKnownNativeCandidatesStayPendingAndCannotBind(t *testing.T) {
 			}
 			fresh, ok := host.NativeObserverEvidenceForImage(tc.version, tc.goos, tc.goarch, tc.image)
 			if !ok || fresh != original {
-				t.Fatal("candidate snapshot mutation changed closed lookup")
+				t.Fatal("qualified snapshot mutation changed closed lookup")
 			}
 			if tc.version == "1.18.33" {
 				if current, ok := host.NativeObserverEvidenceForImage("1.18.34", tc.goos, tc.goarch, tc.image); ok || current != (host.NativeObserverDescriptor{}) {
-					t.Fatal("pending floor image inherited unsupported current cell")
+					t.Fatal("qualified floor image inherited unsupported current cell")
 				}
 			}
 		})
@@ -379,10 +392,10 @@ func TestExactImageLookupDeniesUnknownAndMixedCells(t *testing.T) {
 		}
 		tuples = append(tuples, d.Tuple)
 	}
-	for _, tc := range pendingNativeHosts {
+	for _, tc := range qualifiedNativeHosts {
 		d, ok := host.NativeObserverEvidenceForImage(tc.version, tc.goos, tc.goarch, tc.image)
 		if !ok {
-			t.Fatal("missing pending test cell")
+			t.Fatal("missing qualified test cell")
 		}
 		tuples = append(tuples, d.Tuple)
 	}
