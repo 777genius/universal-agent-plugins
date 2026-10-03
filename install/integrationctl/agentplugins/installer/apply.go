@@ -414,24 +414,32 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 			configRoot = facts.ConfigRoot
 			executable = facts.Executable
 		}
-		client, err := e.detectedClient(Request{
-			Operation: OpUpdate, ClientID: binding.ClientID, ClientConfigRoot: configRoot,
-			ClientExecutable: executable,
-		})
+		check, err := e.compatibilityBindingCheck(binding, configRoot, executable, target)
 		if err != nil {
-			return nil, fmt.Errorf("%w: binding %s (%s): %w", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
+			return nil, err
 		}
-		check := target
-		check.Client = client
-		if client.ClientID == target.Client.ClientID {
-			// The selected client's prepared authority must survive update's
-			// compatibility preview; sibling checks remain observational.
-			check.Client = target.Client
-		}
-		check.BackendExecutable = client.ExecutablePath
 		checks = append(checks, check)
 	}
 	return checks, nil
+}
+
+func (e *Engine) compatibilityBindingCheck(binding domain.ClientBinding, configRoot, executable string, target usecase.AddInput) (usecase.AddInput, error) {
+	client, err := e.detectedClient(Request{
+		Operation: OpUpdate, ClientID: binding.ClientID, ClientConfigRoot: configRoot,
+		ClientExecutable: executable,
+	})
+	if err != nil {
+		return usecase.AddInput{}, fmt.Errorf("%w: binding %s (%s): %w", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
+	}
+	check := target
+	check.Client = client
+	if client.ClientID == target.Client.ClientID {
+		// The selected client's prepared authority must survive update's
+		// compatibility preview; sibling checks remain observational.
+		check.Client = target.Client
+	}
+	check.BackendExecutable = client.ExecutablePath
+	return check, nil
 }
 
 func attachNextActions(result *Result) {
