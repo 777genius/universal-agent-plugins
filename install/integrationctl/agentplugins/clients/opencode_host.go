@@ -20,10 +20,10 @@ type OpenCodeHostProfileConsumer interface {
 func OpenCodeNativeRequirements(envelope domain.PackageEnvelope) (bool, []string) {
 	var transports []string
 	if len(envelope.MCP.Servers) > 0 {
-		transports = make([]string, len(envelope.MCP.Servers))
+		transports = make([]string, 0, len(envelope.MCP.Servers))
 	}
-	for i, server := range envelope.MCP.Servers {
-		transports[i] = server.Type
+	for _, server := range envelope.MCP.Servers {
+		transports = append(transports, server.Type)
 	}
 	slices.Sort(transports)
 	return len(envelope.Skills) > 0, transports
