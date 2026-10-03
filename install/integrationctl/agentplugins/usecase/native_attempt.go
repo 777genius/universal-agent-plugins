@@ -101,12 +101,6 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	request.Plan.LocalEntryObservation = request.Plan.LocalEntryObservation.Clone()
 	request.Plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.Plan.PreviousNativeObjects...)
 	outcome, err := service.Activator.Activate(ctx, request)
-	if before.LocalEntryObservation == nil && outcome.LocalEntryObservation == nil {
-		if ctx.Err() != nil {
-			return outcome, ctx.Err()
-		}
-		return outcome, err
-	}
 	after, loadErr := service.activationBinding(installationID, bindingID)
 	if loadErr != nil {
 		return outcome, loadErr
