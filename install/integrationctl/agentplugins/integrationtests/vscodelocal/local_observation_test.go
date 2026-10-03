@@ -3,6 +3,7 @@ package vscodelocal_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -62,7 +63,9 @@ func TestLocalObservedReceiptRestoresBoolean(t *testing.T) {
 			h, err := engine.Prepare(t.Context(), f.request(installer.OpRepair, installed.InstallationID))
 			must(t, err)
 			declined, err := engine.Apply(t.Context(), h, installer.Decision{})
-			must(t, err)
+			if !errors.Is(err, installer.ErrCancelled) || declined.Outcome != installer.OutcomeCancelled {
+				t.Fatalf("unconfirmed repair: outcome=%s err=%v", declined.Outcome, err)
+			}
 			must(t, h.Close())
 			if declined.Mutated {
 				t.Fatal("unconfirmed repair wrote")
