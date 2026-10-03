@@ -96,10 +96,10 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 			return domain.ActivationOutcome{}, err
 		}
 	}
-	// UAP resume marks VerifyOnly even when activation never finished. Convert
-	// that path to a mutating resume; already-activated VerifyOnly stays read-only.
+	// Legacy resume marks VerifyOnly even when activation never finished.
+	// Selected deliveries keep verification read-only; confirmed repair owns effects.
 	// Preview carries only installation identity and must remain read-only.
-	resume := request.VerifyOnly && a.facts.BindingID != "" && a.hostHandoffPending(request)
+	resume := request.VerifyOnly && request.Plan.SelectedDelivery.IsZero() && a.facts.BindingID != "" && a.hostHandoffPending(request)
 	if resume {
 		request.VerifyOnly = false
 	} else if a.onCommitted != nil && !request.VerifyOnly {

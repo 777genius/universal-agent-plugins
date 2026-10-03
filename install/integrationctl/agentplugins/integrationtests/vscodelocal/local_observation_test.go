@@ -70,7 +70,7 @@ func TestLocalObservedReceiptRestoresBoolean(t *testing.T) {
 			if declined.Mutated {
 				t.Fatal("unconfirmed repair wrote")
 			}
-			assertLocalFiles(t, before)
+			assertLocalFilesWithCancelledFixture(t, before, f)
 			repaired := applyLocal(t, engine, f.request(installer.OpRepair, installed.InstallationID))
 			if !repaired.Mutated {
 				t.Fatal("confirmed same-revision repair did not restore entry")
@@ -174,6 +174,21 @@ func snapshotLocalFiles(t *testing.T, paths ...string) map[string]localFileSnaps
 }
 func assertLocalFiles(t *testing.T, before map[string]localFileSnapshot) {
 	t.Helper()
+	assertLocalFilesWithCancelledFixture(t, before, nil)
+}
+
+func assertLocalFilesWithCancelledFixture(t *testing.T, before map[string]localFileSnapshot, cancelled *localFixture) {
+	t.Helper()
+	scratchRoot := ""
+	if cancelled != nil {
+		// f.engine sets StateRoot and leaves TempRoot at its documented default.
+		// Prepare/Close may change only this directory's mtime, not its children.
+		scratchRoot = filepath.Join(cancelled.state, "tmp")
+		old, ok := before[scratchRoot]
+		if !ok || !old.info.IsDir() {
+			t.Fatal("owned scratch root was not a snapshotted directory")
+		}
+	}
 	roots := make([]string, 0, len(before))
 	for path := range before {
 		roots = append(roots, path)
@@ -184,7 +199,8 @@ func assertLocalFiles(t *testing.T, before map[string]localFileSnapshot) {
 	}
 	for path, old := range before {
 		now, ok := after[path]
-		if !ok || !os.SameFile(old.info, now.info) || old.info.Mode() != now.info.Mode() || !old.info.ModTime().Equal(now.info.ModTime()) || !bytes.Equal(old.body, now.body) {
+		ownedScratchDirectory := path == scratchRoot && ok && old.info.IsDir() && now.info.IsDir()
+		if !ok || !os.SameFile(old.info, now.info) || old.info.Mode() != now.info.Mode() || (!ownedScratchDirectory && !old.info.ModTime().Equal(now.info.ModTime())) || !bytes.Equal(old.body, now.body) {
 			t.Fatalf("read-only/stable path changed: %s", path)
 		}
 	}
