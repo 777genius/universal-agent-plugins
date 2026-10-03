@@ -112,13 +112,13 @@ func frozenPlanningBinding(input AddInput, installation *domain.Installation) (*
 	}
 	var found *domain.ClientBinding
 	for _, binding := range installation.Clients {
-		if binding.ClientID != string(input.Client.ClientID) || binding.Scope != string(input.Scope) {
+		if !matchesPlanningBinding(input, installation, binding) {
 			continue
 		}
 		if found != nil {
-			return nil, fmt.Errorf("conflicting exact client/scope bindings before planning")
+			return nil, fmt.Errorf("conflicting exact or shared client/scope bindings before planning")
 		}
-		if !binding.SelectedDelivery.IsZero() && (binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil) {
+		if (!binding.SelectedDelivery.IsZero() || sharesPhysicalBackend(input.Client.ClientID, binding.SelectedDelivery)) && (binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil) {
 			return nil, fmt.Errorf("pending Local attempt forbids replacement planning")
 		}
 		if err := binding.ValidateLocalEntryObservation(); err != nil {
@@ -129,6 +129,20 @@ func frozenPlanningBinding(input AddInput, installation *domain.Installation) (*
 		found = &binding
 	}
 	return found, nil
+}
+
+// Historical shared backends freeze their existing physical owner's authority
+// before either logical surface reaches the planner. Selected Local stays exact.
+func matchesPlanningBinding(input AddInput, installation *domain.Installation, binding domain.ClientBinding) bool {
+	if binding.Scope != string(input.Scope) {
+		return false
+	}
+	if !sharesPhysicalBackend(input.Client.ClientID, binding.SelectedDelivery) {
+		return binding.ClientID == string(input.Client.ClientID)
+	}
+	return binding.Materialization != domain.MaterializationAbsent &&
+		binding.PhysicalArtifact == domain.ComputePhysicalArtifactID(input.Envelope.Manifest.Name, installation.InstallationID) &&
+		sameNativeBackend(domain.ClientID(binding.ClientID), input.Client.ClientID)
 }
 
 func validatePlannedObservation(plan domain.DeliveryPlan, observation *domain.LocalEntryObservation, objects []domain.NativeObjectOwnership) error {
