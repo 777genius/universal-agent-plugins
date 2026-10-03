@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -31,6 +32,13 @@ func (e *Engine) validateGroupTargets(req Request) error {
 	for _, target := range targets {
 		if !e.SupportsClient(target.ClientID) {
 			return fmt.Errorf("%w: client %q is not in this beta", ErrUnsupported, target.ClientID)
+		}
+		if req.Operation == OpInstall || req.Operation == OpUpdate || req.Operation == OpRepair {
+			consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](e.cfg.Registry, domain.ClientID(target.ClientID))
+			if ok && consumer.UsesOpenCodeHostProfile() {
+				// Group handles do not yet retain per-target native host snapshots.
+				return fmt.Errorf("%w: grouped native host authority is unavailable for %s", ErrUnsupported, target.ClientID)
+			}
 		}
 		if _, ok := seen[target.ClientID]; ok {
 			return fmt.Errorf("%w: duplicate client %s", ErrInvalidRequest, target.ClientID)

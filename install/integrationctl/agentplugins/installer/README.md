@@ -5,6 +5,9 @@ Public process-local installer API for a standard local Agent Plugins package
 for **install**, **update**, **repair**, **refresh_projection**, and **remove** are published. One
 client uses `Request.ClientID`. Two explicitly registered clients use
 `Request.Targets` for install/update/repair with the same operation verb.
+OpenCode install/update/repair groups return `ErrUnsupported` before preparation:
+per-target native host snapshots are not part of the group handle yet. Single-target
+OpenCode keeps its explicit Prepare/Apply host authority contract.
 Historical group removal retains its Claude/Codex boundary. Selected removal
 requires the explicitly registered adapter's typed native-intent reconciler. `install-group` as an operation name is invalid.
 Two PackageRoot values in one install or update group stay unpublished.

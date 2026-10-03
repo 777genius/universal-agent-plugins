@@ -16,6 +16,12 @@ func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope dom
 
 // Project writes OpenCode's native projection and records the objects it owns.
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if in.Plan.OpenCodeHost != nil {
+		skills, transports := clients.OpenCodeNativeRequirements(in.Envelope)
+		if err := in.Plan.OpenCodeHost.ValidateNative(skills, transports); err != nil {
+			return nil, err
+		}
+	}
 	if err := ProjectOpenCodeNative(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath); err != nil {
 		return nil, err
 	}
