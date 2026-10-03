@@ -384,7 +384,7 @@ func TestQualifiedNativeCellsRequireTheirExactEvidence(t *testing.T) {
 // RED means an absent/unknown input, registry architecture alias, platform swap,
 // cross-cell image, or version variant is silently inferred or inherits authority.
 func TestExactImageLookupDeniesUnknownAndMixedCells(t *testing.T) {
-	var tuples []host.NativeObserverTuple
+	tuples := make([]host.NativeObserverTuple, 0, len(nativeHosts)+len(qualifiedNativeHosts))
 	for _, tc := range nativeHosts {
 		d, ok := host.NativeObserverEvidenceForImage(tc.version, "linux", "amd64", tc.image)
 		if !ok {
