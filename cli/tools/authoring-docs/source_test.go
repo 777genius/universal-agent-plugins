@@ -66,6 +66,10 @@ func committedFixture(t *testing.T) string {
 // layout migration. It is a test input, not a new public documentation pin.
 const sourceFixtureSHA = "0506dd888029ad69d07dd5263669fb53766dbdf9"
 
+// The domain pins advanced after sourceFixtureSHA. Use their already-pinned
+// historical bytes, independently checked below, rather than current S1 source.
+const sourceFixtureDomainSHA = "a36f4b424b2b9f40dad5119ee8890f256ece4517"
+
 func newSourceFixture(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs("../../..")
@@ -87,10 +91,14 @@ func newSourceFixture(t *testing.T) string {
 		if want, ok := pinned[path]; ok && (e != nil || fmt.Sprintf("%x", sha256.Sum256(b)) != want) {
 			// Current factory implementations may evolve; the rejection tests
 			// must begin with the unchanged audited source contract.
-			cmd := exec.CommandContext(t.Context(), "git", "-C", root, "show", sourceFixtureSHA+":"+path)
+			sha := sourceFixtureSHA
+			if strings.HasPrefix(path, "install/integrationctl/agentplugins/domain/") {
+				sha = sourceFixtureDomainSHA
+			}
+			cmd := exec.CommandContext(t.Context(), "git", "-C", root, "show", sha+":"+path)
 			b, e = cmd.Output()
 			if e != nil {
-				t.Fatalf("audited fixture input %s unavailable; fetch %s: %v", path, sourceFixtureSHA, e)
+				t.Fatalf("audited fixture input %s unavailable; fetch %s: %v", path, sha, e)
 			}
 			if fmt.Sprintf("%x", sha256.Sum256(b)) != want {
 				t.Fatalf("audited fixture fingerprint differs: %s", path)
