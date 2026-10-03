@@ -68,6 +68,9 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 		return domain.StagedDelivery{}, err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, session.plan, &session.client)
+	if err == nil {
+		delivery.NativeObjects, err = retainRecordedLocalSelector(session.plan.SelectedDelivery, session.client, delivery.NativeObjects)
+	}
 	if err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, err
@@ -86,6 +89,11 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 			return domain.StagedDelivery{}, fmt.Errorf("prepare locked MCP runtime before repair activation: %w", err)
 		}
 	}
+	if err := sealStagedSelection(&session.plan, delivery); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return domain.StagedDelivery{}, err
+	}
+	session.result.Plan = session.plan
 	session.input.OperationID = operationID
 	return delivery, nil
 }
@@ -124,6 +132,7 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 	kernel := session.service.Kernel
 	kernel.StateStore = session.service.StateStore
 	desiredClient := session.client
+	desiredClient.SelectedDelivery = session.plan.SelectedDelivery
 	desiredClient.Materialization = domain.MaterializationMaterialized
 	desiredClient.Activation = verifiedState.Activation
 	desiredClient.Authentication = verifiedState.Authentication
@@ -158,10 +167,10 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {
-	if nativeLifecycleClient(session.input.Client.ClientID) {
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		return session.reapplyRepairedNative(delivery)
 	}
-	if domain.ClientTraitsFor(session.input.Client.ClientID).UsesManagedStdioLauncher {
+	if session.plan.SelectedDelivery.EffectiveTraits(session.input.Client.ClientID).UsesManagedStdioLauncher {
 		return session.verifyRepairedLauncher(delivery)
 	}
 	_ = verifiedState

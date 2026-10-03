@@ -35,13 +35,19 @@ func NativeObserverEvidence(version string) (NativeObserverDescriptor, bool) {
 // neither lookup nor its informational capability names grant runtime authority.
 // No platform, image or version is inferred when an input is missing.
 func NativeObserverEvidenceForImage(version, goos, goarch, imageSHA256 string) (NativeObserverDescriptor, bool) {
+	return NativeObserverEvidenceForEntry(version, goos, goarch, imageSHA256, "official_native_serve_default_dual_autoload")
+}
+
+// NativeObserverEvidenceForEntry selects one exact independently qualified entry.
+// Recognizing another entry never inherits the serve descriptor or its evidence.
+func NativeObserverEvidenceForEntry(version, goos, goarch, imageSHA256, entry string) (NativeObserverDescriptor, bool) {
 	for _, d := range nativeObserverQualifications() {
-		if observerImageMatches(d.Tuple, version, goos, goarch, imageSHA256) {
+		if observerImageMatches(d.Tuple, version, goos, goarch, imageSHA256) && d.Tuple.Entry == entry {
 			return d, true
 		}
 	}
 	for _, d := range nativeObserverCandidates() {
-		if observerImageMatches(d.Tuple, version, goos, goarch, imageSHA256) {
+		if observerImageMatches(d.Tuple, version, goos, goarch, imageSHA256) && d.Tuple.Entry == entry {
 			return d, true
 		}
 	}
@@ -174,6 +180,175 @@ func nativeObserverQualifications() []NativeObserverDescriptor {
 			Adapter:             ObserverV2,
 			EvidenceHashes:      [4]string{"6568a59ddc5bc120162f374b62eb9f849d1d0d989183b4d72b94630071f573ea", "0e752ddd0428d50ed24cb5f07a4025505a356ad922559c870f19a2ae6402ddce", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "b7664499f49b738f16905c41dec31128ecd8529045274848f57e62a90a062cf9"},
 		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		// Exact local-entry SOURCE amendment 73f2c805; each live proof is entry-specific.
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "0abbb7c32ab0294c0a7bfa2705f9ff0df5dce5ab721d1f00cccfe393f2a11427",
+			GOOS:                "linux",
+			GOARCH:              "amd64",
+			Entry:               "official_native_tui_default_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:f6f3fa9165082fcb9e48b687b878e3c7d9932b7bc87126e743d8b2cff85c7ce9:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "f6f3fa9165082fcb9e48b687b878e3c7d9932b7bc87126e743d8b2cff85c7ce9", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "0abbb7c32ab0294c0a7bfa2705f9ff0df5dce5ab721d1f00cccfe393f2a11427",
+			GOOS:                "linux",
+			GOARCH:              "amd64",
+			Entry:               "official_native_run_local_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:942378e878a6dcc1fc00a484cb2b91d2e78b5b3b136c4f19c2ed90b2ee8b04e7:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "942378e878a6dcc1fc00a484cb2b91d2e78b5b3b136c4f19c2ed90b2ee8b04e7", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "986fef2069a03b5181a9ec920786836f98fe3e4950c630941908687854e42757",
+			GOOS:                "linux",
+			GOARCH:              "arm64",
+			Entry:               "official_native_tui_default_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:0ff9cd338937ddc37e3af930384b1ee5ea2ece10e210e8252ca459b4744715ba:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "0ff9cd338937ddc37e3af930384b1ee5ea2ece10e210e8252ca459b4744715ba", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "986fef2069a03b5181a9ec920786836f98fe3e4950c630941908687854e42757",
+			GOOS:                "linux",
+			GOARCH:              "arm64",
+			Entry:               "official_native_run_local_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:a721c36a8ad13e724a2b902eacbc5744d0b1631b810aed736c2d268d194559f6:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "a721c36a8ad13e724a2b902eacbc5744d0b1631b810aed736c2d268d194559f6", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "f53aae8eb68d832ab1bcd27bed88c02de910be61f4b5f90068ae8e93d5e794c9",
+			GOOS:                "darwin",
+			GOARCH:              "amd64",
+			Entry:               "official_native_tui_default_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:b5c8707263de154d6655be577c83bc14cd2fcea094e76fc918cd781d6f5a06df:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "b5c8707263de154d6655be577c83bc14cd2fcea094e76fc918cd781d6f5a06df", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "f53aae8eb68d832ab1bcd27bed88c02de910be61f4b5f90068ae8e93d5e794c9",
+			GOOS:                "darwin",
+			GOARCH:              "amd64",
+			Entry:               "official_native_run_local_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:7c4eed8eda68a1268303566ebe1aa1bf0f3fde8ec4e43d4883cbbecd62f08682:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "7c4eed8eda68a1268303566ebe1aa1bf0f3fde8ec4e43d4883cbbecd62f08682", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "139ddeb6a46ba276827bb8f79c7b28208621746e4fd6914d9ae71cc1a0a57524",
+			GOOS:                "darwin",
+			GOARCH:              "arm64",
+			Entry:               "official_native_tui_default_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:7422f61d53ba2ddff0ba13feb786b56177e8d430c4cb6206916f9fa90608a89d:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "7422f61d53ba2ddff0ba13feb786b56177e8d430c4cb6206916f9fa90608a89d", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "139ddeb6a46ba276827bb8f79c7b28208621746e4fd6914d9ae71cc1a0a57524",
+			GOOS:                "darwin",
+			GOARCH:              "arm64",
+			Entry:               "official_native_run_local_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:792eb54b386494917f2f1db04253067e0685dcbca61315b44bad2e08d543fd62:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "792eb54b386494917f2f1db04253067e0685dcbca61315b44bad2e08d543fd62", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "52f60248a576b34c9a6dcaa27e0a7f08089af35bcdc0dfb10c04d3e00a98314c",
+			GOOS:                "windows",
+			GOARCH:              "amd64",
+			Entry:               "official_native_run_local_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:e649f0dc8e5728b3dc3b26693f082c64f864e24966c3d3f54ffb7706df88e52f:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "e649f0dc8e5728b3dc3b26693f082c64f864e24966c3d3f54ffb7706df88e52f", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.34",
+			ImageSHA256:         "9ca0b9953d49997601655e54f846a3efa464f237e47c6f1b04716d0f2e64c4c2",
+			GOOS:                "linux",
+			GOARCH:              "amd64",
+			Entry:               "official_native_tui_default_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "aec0b9a6d8898f68f923aaf08b7306d931fd9d76",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.34:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:36e2e4916ded9ea9759e45547625a1eb9ed1b8849fa04f0f5713465413b4a74a:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "36e2e4916ded9ea9759e45547625a1eb9ed1b8849fa04f0f5713465413b4a74a", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.34",
+			ImageSHA256:         "9ca0b9953d49997601655e54f846a3efa464f237e47c6f1b04716d0f2e64c4c2",
+			GOOS:                "linux",
+			GOARCH:              "amd64",
+			Entry:               "official_native_run_local_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "aec0b9a6d8898f68f923aaf08b7306d931fd9d76",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.34:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:6500fb712c5a01f73f30120b2338ac8e1fda7b509a6dca6552780d052f8389ba:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "6500fb712c5a01f73f30120b2338ac8e1fda7b509a6dca6552780d052f8389ba", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
+		{Tuple: NativeObserverTuple{
+			Version:             "1.18.33",
+			ImageSHA256:         "52f60248a576b34c9a6dcaa27e0a7f08089af35bcdc0dfb10c04d3e00a98314c",
+			GOOS:                "windows",
+			GOARCH:              "amd64",
+			Entry:               "official_native_tui_default_dual_autoload",
+			ReaderContract:      "v1_source_causal_sync_callback_tombstones",
+			ProvenanceBasis:     "v1_assistant_completed_or_assistant_created_lower_bound",
+			UpstreamCommit:      "51ef4be1d3c122f18fefb510dca8d778571f4f18",
+			NativeAdapterSHA256: "d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901",
+			EvidenceID:          "native-observer:1.18.33:sha256:d2d75185eb6283d6f8a34d2019aa201ada9ec9ea9db578b4f2f28dd7d9d8d901:sha256:73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4:sha256:0b9d7578a419e07becaa67a885e4a5971b220581d3ec2f805085e84ad8258af8:sha256:59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f:sha256:26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308",
+			Adapter:             ObserverV1,
+			EvidenceHashes:      [4]string{"73f2c805e0a5ea8785621bcd9f90c14ef6f8685fdeba699b6f2c0cbc97ca49f4", "0b9d7578a419e07becaa67a885e4a5971b220581d3ec2f805085e84ad8258af8", "59368f673e651f00e8a4d0a675365ba15f0752eacabc3e2ea68a2e91cf6b166f", "26d17b7bb6eb3b3a1e61d342784c4df569cbb1845fa473f5776553c64cd33308"},
+		}, NativeStatus: "native_source_qualified", Capabilities: [4]Capability{ObserverCompletion, ObserverQuestion, ObserverPermission, ObserverTerminalError}},
 	}
 }
 
@@ -268,7 +443,7 @@ func qualifiedLinuxObserverEvidence(version string) (NativeObserverDescriptor, b
 // result only within that verified runtime/reader lifetime; changes revoke it.
 func BindNativeObserver(e VersionEvidence, actual NativeObserverTuple) Profile {
 	p := Resolve(e)
-	d, ok := NativeObserverEvidenceForImage(actual.Version, actual.GOOS, actual.GOARCH, actual.ImageSHA256)
+	d, ok := NativeObserverEvidenceForEntry(actual.Version, actual.GOOS, actual.GOARCH, actual.ImageSHA256, actual.Entry)
 	if !ok || d.NativeStatus != "native_source_qualified" || actual.Version != e.Version || e.Source != "host_runtime" || e.ProbeStatus != "ok" || e.ExecutableIdentity == "" || actual != d.Tuple {
 		return p
 	}
@@ -282,7 +457,7 @@ func BindNativeObserver(e VersionEvidence, actual NativeObserverTuple) Profile {
 
 func (p Profile) observerSupport(adapter AdapterID, c Capability) Support {
 	t := p.nativeObserver
-	d, ok := NativeObserverEvidenceForImage(t.Version, t.GOOS, t.GOARCH, t.ImageSHA256)
+	d, ok := NativeObserverEvidenceForEntry(t.Version, t.GOOS, t.GOARCH, t.ImageSHA256, t.Entry)
 	if ok && d.NativeStatus == "native_source_qualified" && t.Version == p.Version && p.nativeIdentity != "" && t == d.Tuple && adapter == d.Tuple.Adapter {
 		if c == LocalPluginDual {
 			return Supported

@@ -18,8 +18,10 @@ func nativeLocator(requested string) (string, []string, error) {
 	current := volume + string(os.PathSeparator)
 	pending := requested[len(volume):]
 	var chain []string
-	for components := 0; components < 4096; components++ {
-		pending = strings.TrimLeftFunc(pending, func(r rune) bool { return r < 128 && os.IsPathSeparator(uint8(r)) })
+	for range 4096 {
+		pending = strings.TrimLeftFunc(pending, func(r rune) bool {
+			return r == rune(os.PathSeparator) || r == '/'
+		})
 		if pending == "" {
 			return current, chain, nil
 		}
@@ -69,7 +71,7 @@ func nativeLinkRemainder(locator, link, remainder string) (string, string, error
 		volume := filepath.VolumeName(link)
 		base = volume + string(os.PathSeparator)
 		link = link[len(volume):]
-	} else if filepath.VolumeName(link) != "" || len(link) > 0 && os.IsPathSeparator(link[0]) {
+	} else if filepath.VolumeName(link) != "" || link != "" && os.IsPathSeparator(link[0]) {
 		// Drive-relative/root-relative Windows links have no pinned base.
 		return "", "", ErrUnverifiedProbeTarget
 	}

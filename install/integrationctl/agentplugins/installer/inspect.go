@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -28,8 +31,18 @@ func (e *Engine) observe() (Inspection, error) {
 		out.Recovery.Reason = err.Error()
 		return out, err
 	}
+	out.Recovery.StateDigest, err = recoveryStateDigest(state)
+	if err != nil {
+		return out, err
+	}
 	installations, bindingIndex := inspectInstallations(state)
 	out.Installations = installations
+	out.Recovery.NativeIntents, err = inspectNativeIntents(state)
+	if err != nil {
+		out.Recovery.Required = true
+		out.Recovery.Reason = err.Error()
+		return out, err
+	}
 	open, err := dirswap.Manager{JournalDir: e.cfg.OperationsDir}.ListOpen()
 	if err != nil {
 		out.Recovery.Required = true
@@ -53,7 +66,7 @@ func (e *Engine) observe() (Inspection, error) {
 		return out.Recovery.Journals[i].OperationID < out.Recovery.Journals[j].OperationID
 	})
 	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
-	out.Recovery.Required = len(out.Recovery.Journals) > 0 || len(out.Recovery.Receipts) > 0
+	out.Recovery.Required = len(out.Recovery.Journals) > 0 || len(out.Recovery.Receipts) > 0 || len(out.Recovery.NativeIntents) > 0
 	return out, nil
 }
 
@@ -137,11 +150,19 @@ func unfinishedReceipts(state domain.StateFileV2, open map[string]dirswap.Receip
 }
 
 func journalDigest(receipt dirswap.Receipt) string {
-	if receipt.PublishedDigest != "" {
-		return receipt.PublishedDigest
-	}
-	sum := sha256.Sum256([]byte(receipt.OperationID + "\n" + receipt.Phase + "\n" + receipt.PublishedIdentity))
+	// Receipt is a concrete JSON value with no fallible MarshalJSON method.
+	raw, _ := json.Marshal(receipt)
+	sum := sha256.Sum256(raw)
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func recoveryStateDigest(state domain.StateFileV2) (string, error) {
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
 }
 
 func pendingIdentity(obs RecoveryObservation) []string {
@@ -151,6 +172,9 @@ func pendingIdentity(obs RecoveryObservation) []string {
 	}
 	for _, receipt := range obs.Receipts {
 		keys = append(keys, "receipt|"+receipt.OperationID+"|"+receipt.Phase+"|"+receipt.BindingID)
+	}
+	for _, pending := range obs.NativeIntents {
+		keys = append(keys, nativeObservationIdentity(pending))
 	}
 	sort.Strings(keys)
 	return keys
@@ -176,24 +200,59 @@ func leftoverSwapArtifacts(obs RecoveryObservation) bool {
 }
 
 func liveWithinObserved(live, observed RecoveryObservation) bool {
-	want := map[string]bool{}
-	for _, key := range pendingIdentity(observed) {
-		want[key] = true
+	if len(live.NativeIntents) != 0 || len(observed.NativeIntents) != 0 {
+		return reflect.DeepEqual(live, observed)
 	}
-	for _, key := range pendingIdentity(live) {
-		if !want[key] {
+	// Historical journal recovery permits work already recovered by another
+	// cooperating process, but every remaining scope must still match exactly.
+	if live.Required && live.StateDigest != observed.StateDigest {
+		return false
+	}
+	for _, journal := range live.Journals {
+		if !containsJournal(observed.Journals, journal) {
+			return false
+		}
+	}
+	for _, receipt := range live.Receipts {
+		if !containsReceipt(observed.Receipts, receipt) {
 			return false
 		}
 	}
 	return true
 }
+func containsJournal(items []PendingJournal, want PendingJournal) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
+func containsReceipt(items []PendingReceipt, want PendingReceipt) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}
 
 // Recover finishes already recorded UAP transactions for the observed scope.
-// It does not install another revision or activate a client. A new pending
+// It reconciles only persisted selected native intents, without rediscovery. A new pending
 // operation that was not in observed returns ErrPlanChanged without recovery.
 func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, error) {
 	if ctx == nil {
 		return Result{Outcome: OutcomeIncomplete, Reason: "context is required"}, fmt.Errorf("%w: context is required", ErrInvalidRequest)
+	}
+	if observed.StateRoot != e.cfg.StateRoot {
+		return Result{Outcome: OutcomeConflict, Reason: "plan_changed"}, ErrPlanChanged
+	}
+	initial, err := e.observe()
+	if err != nil {
+		return Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, initial.Recovery, false, err)}, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+	}
+	if !liveWithinObserved(initial.Recovery, observed.Recovery) {
+		return Result{Outcome: OutcomeConflict, Reason: "plan_changed"}, ErrPlanChanged
 	}
 	if err := e.ensureDirs(); err != nil {
 		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
@@ -230,10 +289,18 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 		}
 		return Result{Outcome: OutcomeUnchanged, Reason: "already_recovered", Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, nil)}, nil
 	}
-	if err := svc.Kernel.Recover(ctx); err != nil {
+	if err := e.recoverNativeIntents(ctx, svc, live.Recovery); err != nil {
 		after, afterErr := e.observe()
-		return Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+		result := Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}
+		if errors.Is(err, ErrPlanChanged) {
+			result.Outcome, result.Reason = OutcomeConflict, "plan_changed"
+		}
+		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
 	}
+	return e.finishRecovery(observed)
+}
+
+func (e *Engine) finishRecovery(observed Inspection) (Result, error) {
 	after, afterErr := e.observe()
 	if afterErr != nil || after.Recovery.Required {
 		reason := after.Recovery.Reason
@@ -291,6 +358,10 @@ func classifyRecovery(before, after RecoveryObservation, observedAfter bool, rec
 	for _, receipt := range before.Receipts {
 		place(receipt, "receipt|"+receipt.OperationID+"|"+receipt.Phase+"|"+receipt.BindingID)
 	}
+	for _, pending := range before.NativeIntents {
+		b := pending.Binding
+		place(PendingReceipt{OperationID: pending.Intent.AttemptID, InstallationID: b.InstallationID, BindingID: b.BindingID, TargetPath: b.TargetPath, Phase: "native_" + string(pending.Intent.Direction)}, nativeObservationIdentity(pending))
+	}
 	return report
 }
 
@@ -312,6 +383,7 @@ func planClientDigest(plan Plan, clientID string) string {
 
 func liveClientResult(binding domain.ClientBinding, required []string, fallbackDigest string) ClientResult {
 	return ClientResult{
+		SelectedDelivery:   binding.SelectedDelivery,
 		ClientID:           binding.ClientID,
 		BindingID:          binding.ClientBindingID,
 		TreeDigest:         recordedBindingDigest(binding, fallbackDigest),

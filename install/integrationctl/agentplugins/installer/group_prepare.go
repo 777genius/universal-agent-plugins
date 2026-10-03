@@ -37,8 +37,13 @@ func (e *Engine) prepareMutatingGroup(ctx context.Context, req Request) (*Prepar
 		_ = handle.closeLocked()
 		return nil, err
 	}
+	handle.recorded, err = e.store.Load()
+	if err != nil {
+		_ = handle.closeLocked()
+		return nil, err
+	}
 	helper, _ := e.helper()
-	svc := e.lifecycle(helper, BindingFacts{}, handle.detected)
+	svc := confirmationLifecycle(handle, e.lifecycle(helper, BindingFacts{}, handle.detected), true)
 	preview, err := e.previewGroup(ctx, svc, req, inputs)
 	if err != nil {
 		_ = handle.closeLocked()
@@ -137,6 +142,8 @@ func (e *Engine) planMutatingGroup(handle *PreparedOperation, roots []string, en
 		NoChange: groupPreviewUnchanged(preview),
 	}
 	if len(preview.Targets) > 0 {
+		handle.plan.SelectedDelivery = preview.Targets[0].Plan.SelectedDelivery
+		handle.plan.Delivery = deliveryPlan(preview.Targets[0].Plan)
 		handle.plan.TargetPath = preview.Targets[0].Plan.ActivePath
 		handle.plan.BindingID = domain.ComputeClientBindingID(handle.plan.InstallationID, string(preview.Targets[0].Plan.ClientID), string(preview.Targets[0].Plan.Scope), preview.Targets[0].Plan.ActivePath)
 		handle.artifact = preview.Targets[0].Plan.PhysicalArtifactID
@@ -147,11 +154,13 @@ func (e *Engine) planMutatingGroup(handle *PreparedOperation, roots []string, en
 			ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
 			TargetPath: target.Plan.ActivePath, TreeDigest: envelopes[i].TreeDigest,
 			BindingID: domain.ComputeClientBindingID(handle.plan.InstallationID, string(target.Plan.ClientID), string(target.Plan.Scope), target.Plan.ActivePath),
-			NoChange:  target.NoChange,
+			NoChange:  target.NoChange, SelectedDelivery: target.Plan.SelectedDelivery,
 		})
 	}
+	handle.req.InstallationID = handle.plan.InstallationID
 	handle.facts = BindingFacts{
-		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,
+		SelectedDelivery: handle.plan.SelectedDelivery,
+		InstallationID:   handle.plan.InstallationID, ClientID: handle.plan.ClientID,
 		BindingID: handle.plan.BindingID, TargetPath: handle.plan.TargetPath,
 		OperationID: req.OperationID, TreeDigest: envelopes[0].TreeDigest,
 	}

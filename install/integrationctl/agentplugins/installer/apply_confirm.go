@@ -8,6 +8,9 @@ import (
 )
 
 func (e *Engine) confirmPreparedPlan(ctx context.Context, prepared *PreparedOperation) error {
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		return err
+	}
 	plan := prepared.plan
 	if len(plan.Targets) > 1 {
 		return e.confirmGroupPlan(ctx, prepared)

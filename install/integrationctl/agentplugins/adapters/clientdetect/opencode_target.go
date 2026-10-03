@@ -104,9 +104,7 @@ func ProbeOpenCodeTarget(ctx context.Context, target ProbeTarget) (ProbeEvidence
 		return failedOpenCodeProbe(ctx, evidence, err)
 	}
 	version := strings.TrimSpace(stdout)
-	if strings.HasPrefix(version, "opencode v") {
-		version = strings.TrimPrefix(version, "opencode v")
-	}
+	version = strings.TrimPrefix(version, "opencode v")
 	if !opencodehost.ValidVersion(version) {
 		evidence.ProbeStatus = "malformed"
 		return evidence, errors.New("probe_malformed")

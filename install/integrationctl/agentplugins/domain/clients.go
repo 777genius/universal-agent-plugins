@@ -309,6 +309,7 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	SelectedDelivery           SelectedDelivery      `json:"-"`
 	OpenCodeHost               OpenCodeHostAuthority `json:"-"`
 	PersonalChatGPTPreparation bool                  `json:"-"`
 
@@ -415,6 +416,8 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
+	RemoveOwnedEntry    bool                    `json:"-"`
+	SelectedDelivery    SelectedDelivery        `json:"-"`
 	Client              DetectedClient          `json:"client"`
 	DeclaredName        string                  `json:"declared_name"`
 	CurrentActivation   ActivationState         `json:"current_activation"`
@@ -434,3 +437,5 @@ type DeactivationOutcome struct {
 	UserActions             []string        `json:"user_actions,omitempty"`
 	LocalActions            []string        `json:"-"`
 }
+
+func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

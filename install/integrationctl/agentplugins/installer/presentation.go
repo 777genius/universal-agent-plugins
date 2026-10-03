@@ -8,8 +8,8 @@ import (
 
 func deliveryPlan(plan domain.DeliveryPlan) DeliveryPlan {
 	out := DeliveryPlan{
-		ActivePath: plan.ActivePath,
-		Status:     string(plan.Status), PackageMode: string(plan.PackageMode), InstallIntent: string(plan.InstallIntent),
+		ActivePath: plan.ActivePath, SelectedDelivery: plan.SelectedDelivery,
+		Status: string(plan.Status), PackageMode: string(plan.PackageMode), InstallIntent: string(plan.InstallIntent),
 		PhysicalArtifactID: plan.PhysicalArtifactID, Activation: string(plan.Activation),
 		Authentication: string(plan.Authentication), Policy: string(plan.Policy), Verification: string(plan.Verification),
 		UserActions: slices.Clone(plan.UserActions), LocalActions: slices.Clone(plan.LocalActions), Warnings: slices.Clone(plan.Warnings),

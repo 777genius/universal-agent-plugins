@@ -11,6 +11,7 @@ import (
 )
 
 type RemoveInput struct {
+	SelectedDelivery    domain.SelectedDelivery
 	Selector            string
 	Client              domain.DetectedClient
 	Scope               domain.InstallScope

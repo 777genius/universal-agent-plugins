@@ -126,7 +126,12 @@
       {
         "Detected": true,
         "Evidence": "executable_on_path",
-        "ID": "cursor_cli"
+        "ID": "cursor_editor"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "cursor_agent"
       },
       {
         "Detected": true,

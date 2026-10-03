@@ -105,19 +105,23 @@ func (c Config) resolved() (Config, error) {
 		}
 		out.ClientExecutables = cloned
 	}
-	if out.OpenCodeProbe == nil {
-		out.OpenCodeProbe = clientdetect.ProbeOpenCodeTarget
+	return out.resolvedOpenCodeProbe()
+}
+
+func (c Config) resolvedOpenCodeProbe() (Config, error) {
+	if c.OpenCodeProbe == nil {
+		c.OpenCodeProbe = clientdetect.ProbeOpenCodeTarget
 	}
-	env := out.OpenCodeProbeEnvironment
+	env := c.OpenCodeProbeEnvironment
 	if env == nil {
 		env = clientdetect.OpenCodeProbeEnvironment()
 	}
 	var err error
-	out.OpenCodeProbeEnvironment, err = clientdetect.CopyOpenCodeProbeEnvironment(env)
+	c.OpenCodeProbeEnvironment, err = clientdetect.CopyOpenCodeProbeEnvironment(env)
 	if err != nil {
 		return Config{}, fmt.Errorf("%w: host_target_invalid", ErrInvalidConfig)
 	}
-	return out, nil
+	return c, nil
 }
 
 func validRoot(p string) bool {

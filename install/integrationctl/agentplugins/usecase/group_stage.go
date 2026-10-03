@@ -62,6 +62,10 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return err
 	}
+	if err := sealStagedSelection(&target.plan, delivery); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return err
+	}
 	target.delivery = delivery
 	if target.dataReceipt.Locator != "" {
 		if err := session.service.PluginData.PrepareRuntime(session.ctx, target.input.Envelope, target.plan, target.dataReceipt.Locator); err != nil {
