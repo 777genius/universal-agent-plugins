@@ -33,6 +33,14 @@ func (p terminalRenderer) confirm(ctx context.Context, req ConfirmRequest, queue
 			return Confirmation{}, err
 		}
 	}
+	// The snapshot already decided decline or cancellation. Do not combine its
+	// synthetic gesture with the next owner's still-queued terminal suffix.
+	if len(queued) > 0 {
+		if err := ctx.Err(); err != nil {
+			return Confirmation{}, err
+		}
+		return Confirmation{Cancelled: queued[0] != '\r'}, nil //nolint:misspell // Public cancellation field.
+	}
 	err := p.run(ctx, form, formInput{queued: queued, resize: layout.resize, onKey: layout.key})
 	if _, canceled := err.(formCanceled); canceled { //nolint:errorlint // Only sole user cancellation is clean; wrapped cleanup errors must fail.
 		return Confirmation{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.

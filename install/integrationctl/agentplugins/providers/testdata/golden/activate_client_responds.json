@@ -152,13 +152,13 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": [
-        "reload Cursor with Developer: Reload Window, then verify demo from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible; local plugin imports must be allowed"
+        "reload Cursor with Developer: Reload Window, then verify demo from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible; native discovery remains unverified"
       ],
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
-        "reload Cursor and verify the local plugin is visible before using its components"
+        "reload Cursor and verify the prepared plugin and selected components are visible and enabled"
       ],
       "Verification": "package_validated"
     }

@@ -223,6 +223,7 @@ func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID
 		}
 		if clearAttempt {
 			client.NativeActivationAttempt = ""
+			client.PendingNativeIntent = nil
 		}
 		installation.Clients[clientBindingID] = client
 		installation.UpdatedAt = client.UpdatedAt
@@ -253,6 +254,10 @@ func reconcilePreservedNativeObjects(client domain.ClientBinding, nativeObjects 
 		if object.Kind != "managed_package_directory" {
 			reconciled = append(reconciled, object)
 		}
+	}
+	reconciled, err := retainRecordedLocalSelector(client.SelectedDelivery, client, reconciled)
+	if err != nil {
+		return nil, err
 	}
 	return &reconciled, nil
 }

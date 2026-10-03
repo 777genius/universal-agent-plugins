@@ -19,7 +19,7 @@ func nativeLocator(requested string) (string, []string, error) {
 	pending := requested[len(volume):]
 	var chain []string
 	for components := 0; components < 4096; components++ {
-		pending = strings.TrimLeftFunc(pending, func(r rune) bool { return r < 128 && os.IsPathSeparator(uint8(r)) })
+		pending = strings.TrimLeft(pending, string(os.PathSeparator)+"/")
 		if pending == "" {
 			return current, chain, nil
 		}

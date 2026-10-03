@@ -397,7 +397,7 @@ func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObs
 // that failure mode, so they keep going through the ordinary, immediate
 // CLI-inclusive check.
 func (service Service) observeGroupRecoveryEligibility(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) bool {
-	if !domain.ClientTraitsFor(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
+	if !plan.SelectedDelivery.EffectiveTraits(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
 		return false
 	}
 	observation, err := service.preparedIdentityObservation(ctx, client, plan, managed)

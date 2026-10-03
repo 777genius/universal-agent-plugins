@@ -19,7 +19,7 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	if err := validatePersonalMapping(input, installation); err != nil {
 		return domain.DeliveryPlan{}, err
 	}
-	return service.Planner.Plan(ctx, domain.PlanRequest{
+	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
 		Envelope:           input.Envelope,
 		Client:             input.Client,
 		Scope:              input.Scope,
@@ -27,6 +27,13 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		InstallIntent:      input.InstallIntent,
 		Detected:           service.Detected,
 	})
+	if err != nil {
+		return plan, err
+	}
+	if err := validateSelectedPlan(&plan, input.Envelope, installation, input.refreshSelectedDelivery); err != nil {
+		return plan, err
+	}
+	return plan, nil
 }
 
 func resolvePersistedIntent(input *AddInput, installation *domain.Installation) error {

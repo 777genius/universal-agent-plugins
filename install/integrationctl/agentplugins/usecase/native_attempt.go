@@ -21,7 +21,7 @@ func (service Service) persistLifecycleState(desired domain.StateFileV2) error {
 // beginNativeAttempt is called under the service mutation lock, before an
 // adapter can change client configuration. A retained marker means a previous
 // effect could not be reconciled and forbids another blind mutation.
-func (service Service) beginNativeAttempt(installationID, bindingID string) error {
+func (service Service) beginNativeAttempt(installationID, bindingID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery) error {
 	state, err := service.StateStore.Load()
 	if err != nil {
 		return err
@@ -44,6 +44,15 @@ func (service Service) beginNativeAttempt(installationID, bindingID string) erro
 		state.Installations = append([]domain.Installation(nil), state.Installations...)
 		installation.Clients = cloneClientBindings(installation.Clients)
 		client.NativeActivationAttempt = attemptID
+		if err := validateDeliverySelection(client.SelectedDelivery, selected); err != nil {
+			return err
+		}
+		if !selected.IsZero() {
+			client.PendingNativeIntent = &domain.PendingNativeIntent{AttemptID: attemptID, Direction: direction, Delivery: client.SelectedDelivery, RemoveOwnedEntry: direction == domain.NativeIntentRemove && client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects)}
+			if err := client.PendingNativeIntent.Validate(client); err != nil {
+				return err
+			}
+		}
 		installation.Clients[bindingID] = client
 		state.Installations[i] = installation
 		return service.persistLifecycleState(state)
@@ -60,8 +69,11 @@ func cloneClientBindings(source map[string]domain.ClientBinding) map[string]doma
 }
 
 func (service Service) activateWithNativeAttempt(ctx context.Context, installationID, bindingID string, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	if nativeLifecycleClient(request.Client.ClientID) && !request.VerifyOnly {
-		if err := service.beginNativeAttempt(installationID, bindingID); err != nil {
+	if err := request.Plan.SelectedDelivery.ValidatePlan(request.Plan, selectedCanonicalDigest(request.Plan)); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if nativeLifecycleClient(request.Client.ClientID, request.Plan.SelectedDelivery) && !request.VerifyOnly {
+		if err := service.beginNativeAttempt(installationID, bindingID, domain.NativeIntentRegister, request.Plan.SelectedDelivery); err != nil {
 			return domain.ActivationOutcome{}, err
 		}
 	}
@@ -87,6 +99,7 @@ func (service Service) completeNativeRemoval(installationID, bindingID string, r
 		state.Installations = append([]domain.Installation(nil), state.Installations...)
 		installation.Clients = cloneClientBindings(installation.Clients)
 		client.NativeActivationAttempt = ""
+		client.PendingNativeIntent = nil
 		if removed {
 			ownedPackage := make([]domain.NativeObjectOwnership, 0, 1)
 			for _, object := range client.NativeObjects {

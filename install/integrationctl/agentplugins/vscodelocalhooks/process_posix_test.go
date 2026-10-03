@@ -1,13 +1,15 @@
+//go:build linux || darwin
+
 package vscodelocalhooks_test
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -41,6 +43,11 @@ func TestTESTArgvRecorder(t *testing.T) {
 // Red: apostrophe/expansion/empty/control/path quoting changes argv, or executes
 // an injection sentinel. Actual target /bin/sh -c, with no ambient child env.
 func TestTESTShellArgvProcess(t *testing.T) {
+	requireNativeHost(t)
+	target, field := linux(), "linux"
+	if runtime.GOOS == "darwin" {
+		target, field = hooks.Target{Shell: hooks.MacOSSH}, "osx"
+	}
 	root := t.TempDir() // Test runner must place TMPDIR in its own TEST scratch.
 	home := filepath.Join(root, "TEST-HOME")
 	profile := filepath.Join(root, "TEST-USERPROFILE")
@@ -61,18 +68,15 @@ func TestTESTShellArgvProcess(t *testing.T) {
 		"$SHELL", "~/.config", "--looks-like-a-flag", home,
 	}
 	args := append([]string{"-test.run=^TestTESTArgvRecorder$", "--"}, values...)
-	body, err := hooks.Render(linux(), []hooks.Spec{{Event: hooks.Stop, Executable: recorder, Args: args, TimeoutSeconds: 5}})
+	body, err := hooks.Render(target, []hooks.Spec{{Event: hooks.Stop, Executable: recorder, Args: args, TimeoutSeconds: 5}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var native map[string]map[string][]struct{ Linux string }
-	if err := json.Unmarshal(body, &native); err != nil {
-		t.Fatal(err)
-	}
-	command := native["hooks"]["Stop"][0].Linux
+	command := nativePlatformCommand(t, body, field)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	child := exec.CommandContext(ctx, "/bin/sh", "-c", command)
+	child.WaitDelay = time.Second
 	child.Dir = home // Reproduce observed default homedir, not inferred workspace.
 	child.Env = []string{"HOME=" + home, "USERPROFILE=" + profile, "PATH=/TEST-no-PATH", "SHELL=/TEST-not-a-shell", "U2_TEST_RECORDER=1", "TEST_LITERAL=TEST-expansion-would-be-a-defect", "TMPDIR=" + root, "LC_ALL=C"}
 	output, err := child.Output()
@@ -92,20 +96,4 @@ func TestTESTShellArgvProcess(t *testing.T) {
 	}
 	t.Logf("TEST rendered native file: %s", body)
 	t.Logf("TEST shell recorder result: %s", output)
-}
-
-func copyTestExecutable(t *testing.T, destination string) {
-	t.Helper()
-	source, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, err := os.ReadFile(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(destination, body, 0700); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("TEST inert recorder SHA-256: %x", sha256.Sum256(body))
 }

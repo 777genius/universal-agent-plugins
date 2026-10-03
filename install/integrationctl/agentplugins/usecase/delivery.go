@@ -36,7 +36,7 @@ func openAIOAuthApplies(clientID domain.ClientID, envelope domain.PackageEnvelop
 // plan so activation and user-facing results still describe what the caller
 // selected.
 func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.StagedDelivery, error) {
-	if !sharesPhysicalBackend(plan.ClientID) {
+	if !sharesPhysicalBackend(plan.ClientID, plan.SelectedDelivery) {
 		return delivery, nil
 	}
 	owner := plan.ClientID
@@ -98,6 +98,9 @@ func newOperationID() (string, error) {
 }
 
 func packageNeedsPluginData(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) bool {
+	if facts, ok := plan.SelectedDelivery.LocalFacts(); ok && facts.NativeStop {
+		return true
+	}
 	for _, name := range domain.SelectedMCPNames(plan) {
 		server := envelope.MCP.Servers[name]
 		if server.Type == "stdio" {

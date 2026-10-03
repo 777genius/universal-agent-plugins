@@ -10,8 +10,10 @@ type PlatformProfile struct {
 	InternalImport  string
 	TransportModes  []runtime.TransportMode
 	LiveTestProfile string
-	Scaffold        ScaffoldMeta
-	Validate        ValidateMeta
+	// RuntimeOnly excludes optional observers from authoring/install qualification.
+	RuntimeOnly bool
+	Scaffold    ScaffoldMeta
+	Validate    ValidateMeta
 }
 
 type EventDescriptor struct {

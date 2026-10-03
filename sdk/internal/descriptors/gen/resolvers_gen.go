@@ -110,5 +110,14 @@ func ResolveInvocation(args []string, _ runtime.Env) (runtime.Invocation, error)
 	if strings.EqualFold(raw, "CodexPermissionRequest") {
 		return runtime.Invocation{Platform: "codex", Event: "PermissionRequest", RawName: raw}, nil
 	}
+	if strings.EqualFold(raw, "CursorStop") {
+		return runtime.Invocation{Platform: "cursor", Event: "stop", RawName: raw}, nil
+	}
+	if strings.EqualFold(raw, "VSCodeLocalStop") {
+		return runtime.Invocation{Platform: "vscode-local", Event: "Stop", RawName: raw}, nil
+	}
+	if strings.EqualFold(raw, "VSCodeLocalSubagentStop") {
+		return runtime.Invocation{Platform: "vscode-local", Event: "SubagentStop", RawName: raw}, nil
+	}
 	return runtime.Invocation{}, fmt.Errorf("unknown invocation %q", raw)
 }
