@@ -9,6 +9,20 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+## Already built with UAP
+
+<table>
+  <tr>
+    <td width="104" align="center">
+      <a href="https://github.com/777genius/agent-notifications"><img src="landing/public/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
+    </td>
+    <td>
+      <strong><a href="https://github.com/777genius/agent-notifications">Agent Notifications</a></strong><br />
+      Desktop notifications, sounds, and click-to-focus for AI coding agents.
+    </td>
+  </tr>
+</table>
+
 [Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/) ·
 [Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 

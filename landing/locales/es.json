@@ -371,6 +371,11 @@
       "sourceDescription": "Los paquetes revisados y el descubrimiento de la comunidad permanecen claramente etiquetados y su fuente está disponible antes de la instalación.",
       "standardDescription": "Los paquetes se leen desde Agent Plugins 1.0 {manifest}, sin un segundo manifiesto de instalación."
     },
+    "builtWith": {
+      "title": "Ya creado con UAP",
+      "agentNotificationsDescription": "Notificaciones de escritorio, sonidos y enfoque de la ventana con un clic para agentes de programación con IA.",
+      "viewRepository": "Ver en GitHub"
+    },
     "faq": {
       "eyebrow": "Preguntas frecuentes",
       "title": "Preguntas comunes",

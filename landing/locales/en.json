@@ -388,6 +388,11 @@
       "sourceDescription": "Reviewed packages and community discovery remain clearly labeled, with their source available before install.",
       "standardDescription": "Packages are read from Agent Plugins 1.0 {manifest}, without a second install manifest."
     },
+    "builtWith": {
+      "title": "Already built with UAP",
+      "agentNotificationsDescription": "Desktop notifications, sounds, and click-to-focus for AI coding agents.",
+      "viewRepository": "View on GitHub"
+    },
     "faq": {
       "eyebrow": "FAQ",
       "title": "Common questions",
