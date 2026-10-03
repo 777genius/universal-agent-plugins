@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
@@ -36,6 +37,129 @@ type observedCoreAdapter struct {
 	interruptFirst  bool
 	effects         int
 	absenceEffect   domain.NativeEffectState
+}
+
+type nilObservationCallbackAdapter struct {
+	observedCoreAdapter
+	afterEffect func(domain.ActivationRequest, domain.ActivationOutcome)
+}
+
+func (a *nilObservationCallbackAdapter) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	a.calls++
+	if err := ctx.Err(); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	outcome, err := a.observedCoreAdapter.Activate(ctx, env, req)
+	if err == nil && !req.VerifyOnly && a.afterEffect != nil {
+		a.afterEffect(req, outcome)
+	}
+	return outcome, err
+}
+
+// PR393 RED condition: a first selected registration commits real profile bytes,
+// then its callback cancels with nil observations. Apply must expose cancellation
+// and retain durable pending authority rather than acknowledge success and resend.
+func TestNilObservationCallbackCancellation(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		t.Run(fmt.Sprint(canceled), func(t *testing.T) {
+			root := localProcessRoot(t)
+			profilePath := filepath.Join(root, "profile", "settings.json")
+			foreign := []byte(`{"chat.pluginLocations":{"/TEST-foreign":false},"foreign.setting":"original"}`)
+			if err := os.WriteFile(profilePath, foreign, 0600); err != nil {
+				t.Fatal(err)
+			}
+			a := &nilObservationCallbackAdapter{observedCoreAdapter: observedCoreAdapter{testEffectLocalAdapter: testEffectLocalAdapter{testLocalAdapter: testLocalAdapter{Adapter: vscode.New()}, root: root}}}
+			engine := localTestEngine(t, filepath.Join(root, "state"), a)
+			prepared, err := engine.Prepare(t.Context(), installerRequest(root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = prepared.Close() }()
+			store := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			var pending domain.ClientBinding
+			var effectProfile []byte
+			a.afterEffect = func(req domain.ActivationRequest, outcome domain.ActivationOutcome) {
+				state, err := store.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				pending = localOnlyBinding(t, state)
+				if req.Plan.SelectedDelivery.IsZero() || req.Plan.LocalEntryObservation != nil || pending.LocalEntryObservation != nil || outcome.LocalEntryObservation != nil || outcome.NativeEffect != domain.NativeEffectCommitted {
+					t.Fatal("fixture did not reach selected nil-observation committed callback")
+				}
+				if pending.NativeActivationAttempt == "" || pending.PendingNativeIntent == nil || pending.PendingNativeIntent.LocalEntryObservation != nil || pending.PendingNativeIntent.Direction != domain.NativeIntentRegister {
+					t.Fatal("real callback lacks durable first-registration pending evidence")
+				}
+				if err := pending.PendingNativeIntent.Validate(pending); err != nil {
+					t.Fatal(err)
+				}
+				effectProfile, err = os.ReadFile(profilePath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				f := mustFacts(t, pending)
+				id := vp.Identity{SettingsPath: f.SettingsPath, ProfileID: f.ProfileIdentity, PluginRoot: f.Registration.Selector, PackageID: f.Registration.ObjectID, PackageDigest: f.CanonicalDigest, ProjectionDigest: f.ProjectionDigest}
+				if result, err := vp.VerifyRecordedEntry(effectProfile, id, true); err != nil || result.Receipt == nil {
+					t.Fatalf("callback lacks actual parser-verified registration: %v", err)
+				}
+				if !bytes.Contains(effectProfile, []byte(`"foreign.setting":"original"`)) || !bytes.Contains(effectProfile, []byte(`"/TEST-foreign":false`)) {
+					t.Fatal("registration lost foreign profile bytes")
+				}
+				if canceled {
+					cancel()
+				}
+			}
+			_, applyErr := engine.Apply(ctx, prepared, confirmedDecision())
+			if a.calls != 1 || effectProfile == nil {
+				t.Fatal("fixture did not execute exactly one real registration callback")
+			}
+			if canceled && !errors.Is(applyErr, context.Canceled) {
+				t.Fatalf("committed nil-observation callback cancellation must reach public Apply: got %v", applyErr)
+			}
+			if !canceled && applyErr != nil {
+				t.Fatalf("normal nil-observation callback failed: %v", applyErr)
+			}
+			state, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			live := localOnlyBinding(t, state)
+			profile, err := os.ReadFile(profilePath)
+			if err != nil || !bytes.Equal(profile, effectProfile) || live.LocalEntryObservation != nil {
+				t.Fatalf("Apply changed committed profile or nil receipt: %v", err)
+			}
+			if !canceled {
+				if live.NativeActivationAttempt != "" || live.PendingNativeIntent != nil || !live.SelectedDelivery.OwnsProfileEntry(live.NativeObjects) {
+					t.Fatal("normal nil-observation registration was not acknowledged")
+				}
+				return
+			}
+			if live.NativeActivationAttempt != pending.NativeActivationAttempt || !reflect.DeepEqual(live.PendingNativeIntent, pending.PendingNativeIntent) || live.SelectedDelivery.OwnsProfileEntry(live.NativeObjects) {
+				t.Fatal("cancellation cleared pending evidence or acknowledged selector ownership")
+			}
+			stateBeforeRetry, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			service := localGroupService(t, root, a)
+			input := localGroupInput(t, root)
+			input.InstallationID = state.Installations[0].InstallationID
+			input.Confirmed = true
+			if _, err := service.Repair(t.Context(), input); err == nil || !strings.Contains(err.Error(), "pending Local attempt") || a.calls != 1 {
+				t.Fatalf("pending cancellation allowed blind callback resend: calls=%d err=%v", a.calls, err)
+			}
+			stateAfterRetry, err := os.ReadFile(store.Path)
+			if err != nil || !bytes.Equal(stateBeforeRetry, stateAfterRetry) {
+				t.Fatalf("refused retry changed durable pending evidence: %v", err)
+			}
+			profile, err = os.ReadFile(profilePath)
+			if err != nil || !bytes.Equal(profile, effectProfile) {
+				t.Fatalf("refused retry changed committed foreign/profile bytes: %v", err)
+			}
+		})
+	}
 }
 
 // The read-only native projection is existing confirmed selector ownership,
