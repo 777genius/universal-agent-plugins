@@ -165,99 +165,134 @@ func TestNilObservationCallbackCancellation(t *testing.T) {
 // A real host handoff may write Store state, but it cannot replace frozen
 // ownership authority and then have a nil-observation activation acknowledge it.
 func TestNilObservationHostCallbackCannotReplaceBindingAuthority(t *testing.T) {
-	root := localProcessRoot(t)
-	profilePath := filepath.Join(root, "profile", "settings.json")
-	foreign := []byte(`{"chat.pluginLocations":{"/TEST-foreign":false},"foreign.setting":"original"}`)
-	if err := os.WriteFile(profilePath, foreign, 0600); err != nil {
-		t.Fatal(err)
-	}
-	foreignDirectory := filepath.Join(root, "TEST-foreign-package")
-	if err := os.Mkdir(foreignDirectory, 0700); err != nil {
-		t.Fatal(err)
-	}
-	foreignFile := filepath.Join(foreignDirectory, "keep.txt")
-	if err := os.WriteFile(foreignFile, []byte("foreign-owned"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	store := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
-	a := &nilObservationCallbackAdapter{observedCoreAdapter: observedCoreAdapter{testEffectLocalAdapter: testEffectLocalAdapter{testLocalAdapter: testLocalAdapter{Adapter: vscode.New()}, root: root}}}
-	var pending domain.ClientBinding
-	handoffs := 0
-	engine := facadeEngine(t, root, a, installer.Config{OnCommittedBinding: func(_ context.Context, facts installer.BindingFacts) error {
-		handoffs++
-		state, err := store.Load()
-		if err != nil {
-			return err
-		}
-		pending = localOnlyBinding(t, state)
-		if pending.ClientBindingID != facts.BindingID || pending.NativeActivationAttempt == "" || pending.PendingNativeIntent == nil || pending.LocalEntryObservation != nil {
-			t.Fatal("handoff did not reach the frozen selected nil-observation binding")
-		}
-		changed := pending
-		changed.NativeObjects = append([]domain.NativeObjectOwnership(nil), pending.NativeObjects...)
-		replaced := false
-		for i := range changed.NativeObjects {
-			if changed.NativeObjects[i].Kind == "managed_package_directory" {
-				changed.NativeObjects[i].Path = foreignDirectory
-				replaced = true
+	for _, downgradeSelection := range []bool{false, true} {
+		t.Run(fmt.Sprint(downgradeSelection), func(t *testing.T) {
+			root := localProcessRoot(t)
+			profilePath := filepath.Join(root, "profile", "settings.json")
+			foreign := []byte(`{"chat.pluginLocations":{"/TEST-foreign":false},"foreign.setting":"original"}`)
+			if err := os.WriteFile(profilePath, foreign, 0600); err != nil {
+				t.Fatal(err)
 			}
-		}
-		if !replaced {
-			t.Fatal("handoff fixture lacks committed package authority")
-		}
-		state.Installations[0].Clients[pending.ClientBindingID] = changed
-		return store.Save(state)
-	}})
-	prepared, err := engine.Prepare(t.Context(), installerRequest(root))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = prepared.Close() }()
-	_, applyErr := engine.Apply(t.Context(), prepared, confirmedDecision())
-	if handoffs != 1 || a.calls != 1 {
-		t.Fatalf("fixture did not execute one real handoff and activation: handoffs=%d activation=%d", handoffs, a.calls)
-	}
-	if applyErr == nil || !strings.Contains(applyErr.Error(), "activation callback changed frozen binding authority") {
-		t.Fatalf("public Apply acknowledged callback-replaced nil-observation authority: %v", applyErr)
-	}
-	state, err := store.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	live := localOnlyBinding(t, state)
-	if live.NativeActivationAttempt != pending.NativeActivationAttempt || !reflect.DeepEqual(live.PendingNativeIntent, pending.PendingNativeIntent) || live.LocalEntryObservation != nil || live.SelectedDelivery.OwnsProfileEntry(live.NativeObjects) {
-		t.Fatal("refusal cleared pending authority or acknowledged the selector")
-	}
-	profile, err := os.ReadFile(profilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := mustFacts(t, pending)
-	id := vp.Identity{SettingsPath: f.SettingsPath, ProfileID: f.ProfileIdentity, PluginRoot: f.Registration.Selector, PackageID: f.Registration.ObjectID, PackageDigest: f.CanonicalDigest, ProjectionDigest: f.ProjectionDigest}
-	if result, err := vp.VerifyRecordedEntry(profile, id, true); err != nil || result.Receipt == nil {
-		t.Fatalf("refusal hid or rolled back the already committed profile effect: %v", err)
-	}
-	if !bytes.Contains(profile, []byte(`"foreign.setting":"original"`)) || !bytes.Contains(profile, []byte(`"/TEST-foreign":false`)) {
-		t.Fatal("activation lost foreign profile entries")
-	}
-	if body, err := os.ReadFile(foreignFile); err != nil || string(body) != "foreign-owned" {
-		t.Fatalf("activation changed the foreign directory claimed by the callback: %v", err)
-	}
-	stateBeforeRetry, err := os.ReadFile(store.Path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	service := localGroupService(t, root, a)
-	input := localGroupInput(t, root)
-	input.InstallationID, input.Confirmed = state.Installations[0].InstallationID, true
-	if _, err := service.Repair(t.Context(), input); err == nil || !strings.Contains(err.Error(), "pending Local attempt") || a.calls != 1 || handoffs != 1 {
-		t.Fatalf("pending callback tampering allowed blind activation resend: %v", err)
-	}
-	if after, err := os.ReadFile(store.Path); err != nil || !bytes.Equal(stateBeforeRetry, after) {
-		t.Fatalf("refused retry changed pending state: %v", err)
-	}
-	if after, err := os.ReadFile(profilePath); err != nil || !bytes.Equal(profile, after) {
-		t.Fatalf("refused retry changed committed profile: %v", err)
+			foreignDirectory := filepath.Join(root, "TEST-foreign-package")
+			if err := os.Mkdir(foreignDirectory, 0700); err != nil {
+				t.Fatal(err)
+			}
+			foreignFile := filepath.Join(foreignDirectory, "keep.txt")
+			if err := os.WriteFile(foreignFile, []byte("foreign-owned"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			store := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
+			a := &nilObservationCallbackAdapter{observedCoreAdapter: observedCoreAdapter{testEffectLocalAdapter: testEffectLocalAdapter{testLocalAdapter: testLocalAdapter{Adapter: vscode.New()}, root: root}}}
+			var pending domain.ClientBinding
+			handoffs := 0
+			engine := facadeEngine(t, root, a, installer.Config{OnCommittedBinding: func(_ context.Context, facts installer.BindingFacts) error {
+				handoffs++
+				state, err := store.Load()
+				if err != nil {
+					return err
+				}
+				pending = localOnlyBinding(t, state)
+				if pending.ClientBindingID != facts.BindingID || pending.NativeActivationAttempt == "" || pending.PendingNativeIntent == nil || pending.LocalEntryObservation != nil {
+					t.Fatal("handoff did not reach the frozen selected nil-observation binding")
+				}
+				if downgradeSelection {
+					return nil // The downgrade callback runs only after the real native write.
+				}
+				changed := pending
+				changed.NativeObjects = append([]domain.NativeObjectOwnership(nil), pending.NativeObjects...)
+				replaced := false
+				for i := range changed.NativeObjects {
+					if changed.NativeObjects[i].Kind == "managed_package_directory" {
+						changed.NativeObjects[i].Path = foreignDirectory
+						replaced = true
+					}
+				}
+				if !replaced {
+					t.Fatal("handoff fixture lacks committed package authority")
+				}
+				state.Installations[0].Clients[pending.ClientBindingID] = changed
+				return store.Save(state)
+			}})
+			if downgradeSelection {
+				a.afterEffect = func(req domain.ActivationRequest, outcome domain.ActivationOutcome) {
+					if outcome.NativeEffect != domain.NativeEffectCommitted || outcome.LocalEntryObservation != nil || req.Plan.SelectedDelivery.IsZero() {
+						t.Fatal("downgrade callback did not follow a selected committed nil-observation effect")
+					}
+					state, err := store.Load()
+					if err != nil {
+						t.Fatal(err)
+					}
+					pending = localOnlyBinding(t, state)
+					changed := pending
+					changed.SelectedDelivery = domain.SelectedDelivery{}
+					changed.PendingNativeIntent = nil
+					state.Installations[0].Clients[pending.ClientBindingID] = changed
+					if err := store.Save(state); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			prepared, err := engine.Prepare(t.Context(), installerRequest(root))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = prepared.Close() }()
+			_, applyErr := engine.Apply(t.Context(), prepared, confirmedDecision())
+			if handoffs != 1 || a.calls != 1 {
+				t.Fatalf("fixture did not execute one real handoff and activation: handoffs=%d activation=%d", handoffs, a.calls)
+			}
+			if applyErr == nil || !strings.Contains(applyErr.Error(), "activation callback changed frozen binding authority") {
+				t.Fatalf("public Apply acknowledged callback-replaced nil-observation authority: %v", applyErr)
+			}
+			state, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			live := localOnlyBinding(t, state)
+			wantPending := pending.PendingNativeIntent
+			if downgradeSelection {
+				wantPending = nil // The host already removed it; refusal must retain the attempt.
+			}
+			if live.NativeActivationAttempt != pending.NativeActivationAttempt || !reflect.DeepEqual(live.PendingNativeIntent, wantPending) || live.LocalEntryObservation != nil || live.SelectedDelivery.IsZero() != downgradeSelection {
+				t.Fatal("refusal cleared the attempt or hid the callback's committed state change")
+			}
+			for _, object := range live.NativeObjects {
+				if object.ObjectID == "TEST-profile-entry" {
+					t.Fatal("refusal acknowledged returned selector ownership")
+				}
+			}
+			profile, err := os.ReadFile(profilePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f := mustFacts(t, pending)
+			id := vp.Identity{SettingsPath: f.SettingsPath, ProfileID: f.ProfileIdentity, PluginRoot: f.Registration.Selector, PackageID: f.Registration.ObjectID, PackageDigest: f.CanonicalDigest, ProjectionDigest: f.ProjectionDigest}
+			if result, err := vp.VerifyRecordedEntry(profile, id, true); err != nil || result.Receipt == nil {
+				t.Fatalf("refusal hid or rolled back the already committed profile effect: %v", err)
+			}
+			if !bytes.Contains(profile, []byte(`"foreign.setting":"original"`)) || !bytes.Contains(profile, []byte(`"/TEST-foreign":false`)) {
+				t.Fatal("activation lost foreign profile entries")
+			}
+			if body, err := os.ReadFile(foreignFile); err != nil || string(body) != "foreign-owned" {
+				t.Fatalf("activation changed the foreign directory claimed by the callback: %v", err)
+			}
+			stateBeforeRetry, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			service := localGroupService(t, root, a)
+			input := localGroupInput(t, root)
+			input.InstallationID, input.Confirmed = state.Installations[0].InstallationID, true
+			if _, err := service.Repair(t.Context(), input); err == nil || a.calls != 1 || handoffs != 1 {
+				t.Fatalf("pending callback tampering allowed blind activation resend: %v", err)
+			}
+			if after, err := os.ReadFile(store.Path); err != nil || !bytes.Equal(stateBeforeRetry, after) {
+				t.Fatalf("refused retry changed pending state: %v", err)
+			}
+			if after, err := os.ReadFile(profilePath); err != nil || !bytes.Equal(profile, after) {
+				t.Fatalf("refused retry changed committed profile: %v", err)
+			}
+		})
 	}
 }
 
