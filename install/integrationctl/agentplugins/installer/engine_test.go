@@ -518,6 +518,135 @@ func skipWindowsLauncherExecuteBit(t *testing.T) {
 	}
 }
 
+func TestPreparedInstallIdentitySurvivesPublicHandoff(t *testing.T) {
+	ctx := testCtx(t)
+	probe := buildProbe(t)
+	for _, group := range []bool{false, true} {
+		for _, explicit := range []bool{false, true} {
+			name := "single/default"
+			if group {
+				name = "group/default"
+			}
+			if explicit {
+				name = strings.Replace(name, "default", "explicit", 1)
+			}
+			t.Run(name, func(t *testing.T) {
+				base, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				pkg, config := filepath.Join(base, "package"), filepath.Join(base, "codex-config")
+				writePackage(t, pkg, probe)
+				claudeConfig := filepath.Join(base, "claude-config")
+				for _, root := range []string{config, claudeConfig} {
+					if err := os.MkdirAll(root, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var callbacks []BindingFacts
+				cfg := testConfig(t, Config{
+					StateRoot: filepath.Join(base, "state"), HelperExecutable: probe,
+					Runner: &recordingCodexRunner{}, EnableNativeObserver: !group,
+					OnCommittedBinding: func(_ context.Context, facts BindingFacts) error {
+						callbacks = append(callbacks, facts)
+						return nil
+					},
+				})
+				if group {
+					cfg.Runner = listingRunner{configRoot: claudeConfig}
+				}
+				eng, err := New(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := Request{Operation: OpInstall, PackageRoot: pkg, ClientID: "codex",
+					ClientConfigRoot: config, ClientExecutable: probe, OperationID: "prepared-identity",
+					RequiredComponents: []string{"mcp", "skills"}}
+				if explicit {
+					req.InstallationID = "00000000-0000-4000-8000-000000000082"
+				}
+				if group {
+					req.Targets = []ClientTarget{
+						{ClientID: "codex", ClientConfigRoot: config, ClientExecutable: probe},
+						{ClientID: "claude", ClientConfigRoot: claudeConfig, ClientExecutable: probe},
+					}
+				}
+				prepared, err := eng.Prepare(ctx, req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = prepared.Close() }()
+				plan := prepared.Plan()
+				if plan.InstallationID == "" || plan.TreeDigest == "" || (explicit && plan.InstallationID != req.InstallationID) {
+					t.Fatalf("prepared identity: %+v", plan)
+				}
+				result, err := eng.Apply(ctx, prepared, Decision{Confirmed: true})
+				if err != nil || result.Outcome != OutcomeCompleted || (!group && !result.Mutated) {
+					t.Fatalf("apply: %+v %v", result, err)
+				}
+				view, err := eng.Inspect(ctx)
+				wantBindings := 1
+				if group {
+					wantBindings = 2
+				}
+				if err != nil || view.Recovery.Required || len(view.Installations) != 1 || len(view.Installations[0].Bindings) != wantBindings || len(callbacks) != wantBindings {
+					t.Fatalf("inspect/callback count: %+v %v callbacks=%+v", view, err, callbacks)
+				}
+				installation := view.Installations[0]
+				if result.InstallationID != plan.InstallationID || installation.InstallationID != plan.InstallationID || installation.TreeDigest != plan.TreeDigest {
+					t.Errorf("prepared identity changed: plan=%s result=%s inspect=%s", plan.InstallationID, result.InstallationID, installation.InstallationID)
+				}
+				if result.Binding.InstallationID != plan.InstallationID || result.Binding.BindingID != plan.BindingID || result.Binding.TargetPath != plan.TargetPath || result.Binding.TreeDigest != plan.TreeDigest {
+					t.Errorf("prepared binding changed: plan=%+v result=%+v", plan, result.Binding)
+				}
+				if !group && (result.Delivery == nil || result.Delivery.ActivePath != plan.Delivery.ActivePath || result.Delivery.ActivePath != plan.TargetPath) {
+					t.Errorf("prepared physical path changed: plan=%+v result=%+v", plan.Delivery, result.Delivery)
+				}
+				seen := map[string]bool{}
+				for _, facts := range callbacks {
+					if seen[facts.ClientID] || facts.InstallationID != installation.InstallationID || facts.DataRoot == "" || facts.DataReceiptID == "" || facts.OperationID != req.OperationID {
+						t.Errorf("committed callback identity/data: %+v", facts)
+					}
+					seen[facts.ClientID] = true
+					if facts.ClientID == plan.ClientID && facts != result.Binding {
+						t.Errorf("callback differs from result: callback=%+v result=%+v", facts, result.Binding)
+					}
+					matched := false
+					for _, binding := range installation.Bindings {
+						if binding.ClientID != facts.ClientID {
+							continue
+						}
+						matched = true
+						if facts.BindingID != binding.BindingID || facts.Scope != binding.Scope || facts.TargetPath != binding.TargetPath || facts.DataRoot != binding.DataRoot || facts.TreeDigest != binding.TreeDigest {
+							t.Errorf("callback differs from inspect: callback=%+v inspect=%+v", facts, binding)
+						}
+						wantActivation := domain.ActivationActive
+						if group && binding.ClientID == "codex" {
+							wantActivation = domain.ActivationManual
+						}
+						if binding.Materialization != string(domain.MaterializationMaterialized) || binding.Activation != string(wantActivation) {
+							t.Errorf("binding not materialized/activated: %+v", binding)
+						}
+					}
+					if !matched {
+						t.Errorf("callback has no inspected binding: %+v", facts)
+					}
+					for _, target := range plan.Targets {
+						if target.ClientID == facts.ClientID && (target.BindingID != facts.BindingID || target.TargetPath != facts.TargetPath || target.TreeDigest != facts.TreeDigest) {
+							t.Errorf("prepared group target changed: plan=%+v callback=%+v", target, facts)
+						}
+					}
+					for _, path := range []string{facts.TargetPath, facts.DataRoot} {
+						if info, err := os.Stat(path); err != nil || !info.IsDir() {
+							t.Errorf("committed physical directory %q: %v", path, err)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestInstallInspectRepeatRemove(t *testing.T) {
 	skipWindowsLauncherExecuteBit(t)
 	ctx := testCtx(t)

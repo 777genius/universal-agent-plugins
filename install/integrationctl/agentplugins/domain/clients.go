@@ -268,12 +268,19 @@ type ClientSurface struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
+// OpenCodeHostAuthority is a read-only, immutable prepared-host port. It does
+// no probing. The client contract owns the closed parent profile snapshot.
+type OpenCodeHostAuthority interface {
+	ValidateNative(skills bool, transports []string) error
+}
+
 type DetectedClient struct {
-	ClientID    ClientID        `json:"client_id"`
-	DisplayName string          `json:"display_name"`
-	Status      DetectionStatus `json:"status"`
-	Version     string          `json:"version,omitempty"`
-	Surfaces    []ClientSurface `json:"surfaces,omitempty"`
+	OpenCodeHost OpenCodeHostAuthority `json:"-"`
+	ClientID     ClientID              `json:"client_id"`
+	DisplayName  string                `json:"display_name"`
+	Status       DetectionStatus       `json:"status"`
+	Version      string                `json:"version,omitempty"`
+	Surfaces     []ClientSurface       `json:"surfaces,omitempty"`
 	// ExecutablePath and ConfigRoot are operational locators. They must never be
 	// emitted by the public JSON renderer because they can reveal the user home.
 	ExecutablePath string `json:"-"`
@@ -302,8 +309,9 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
-	SelectedDelivery           SelectedDelivery `json:"-"`
-	PersonalChatGPTPreparation bool             `json:"-"`
+	SelectedDelivery           SelectedDelivery      `json:"-"`
+	OpenCodeHost               OpenCodeHostAuthority `json:"-"`
+	PersonalChatGPTPreparation bool                  `json:"-"`
 
 	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`

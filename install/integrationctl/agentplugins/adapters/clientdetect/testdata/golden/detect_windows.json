@@ -5,6 +5,7 @@
     "DetectionError": null,
     "DisplayName": "ChatGPT",
     "ExecutablePath": "",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -21,6 +22,7 @@
     "DetectionError": null,
     "DisplayName": "Claude Code",
     "ExecutablePath": "\u003chome\u003e/bin/claude",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -42,6 +44,7 @@
     "DetectionError": null,
     "DisplayName": "Cline",
     "ExecutablePath": "",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -73,6 +76,7 @@
     "DetectionError": null,
     "DisplayName": "OpenAI Codex",
     "ExecutablePath": "\u003chome\u003e/bin/codex",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -94,6 +98,7 @@
     "DetectionError": null,
     "DisplayName": "GitHub Copilot CLI",
     "ExecutablePath": "\u003chome\u003e/bin/copilot",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -115,6 +120,7 @@
     "DetectionError": null,
     "DisplayName": "Cursor",
     "ExecutablePath": "\u003chome\u003e/bin/cursor",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -146,6 +152,7 @@
     "DetectionError": null,
     "DisplayName": "Gemini CLI",
     "ExecutablePath": "\u003chome\u003e/bin/gemini",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -167,6 +174,7 @@
     "DetectionError": null,
     "DisplayName": "Kiro",
     "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -198,12 +206,18 @@
     "DetectionError": null,
     "DisplayName": "OpenCode",
     "ExecutablePath": "\u003chome\u003e/bin/opencode",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
         "Detected": true,
         "Evidence": "executable_on_path",
         "ID": "opencode_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "opencode2_cli"
       },
       {
         "Detected": true,
@@ -224,6 +238,7 @@
     "DetectionError": null,
     "DisplayName": "Visual Studio Code",
     "ExecutablePath": "\u003chome\u003e/bin/code",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
@@ -250,6 +265,7 @@
     "DetectionError": null,
     "DisplayName": "Windsurf / Devin",
     "ExecutablePath": "\u003chome\u003e/bin/windsurf",
+    "OpenCodeHost": null,
     "Status": "detected",
     "Surfaces": [
       {
