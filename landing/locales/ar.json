@@ -234,6 +234,11 @@
       "sourceDescription": "تبقى الحزم المراجعة والاكتشافات المجتمعية موسومة بوضوح، مع إتاحة مصدرها قبل التثبيت.",
       "standardDescription": "تُقرأ الحزم من Agent Plugins 1.0 {manifest}، من دون بيان تثبيت ثانٍ."
     },
+    "builtWith": {
+      "title": "مشاريع بُنيت بالفعل باستخدام UAP",
+      "agentNotificationsDescription": "إشعارات سطح المكتب والأصوات والانتقال إلى النافذة بنقرة لوكلاء البرمجة بالذكاء الاصطناعي.",
+      "viewRepository": "عرض على GitHub"
+    },
     "faq": {
       "eyebrow": "الأسئلة الشائعة",
       "title": "أسئلة شائعة",

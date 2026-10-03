@@ -371,6 +371,11 @@
       "sourceDescription": "已审查的软件包和社区发现仍然有清晰的标签，并且在安装之前可以获取其来源。",
       "standardDescription": "包从代理插件 1.0 {manifest} 读取，无需第二个安装清单。"
     },
+    "builtWith": {
+      "title": "已使用 UAP 构建",
+      "agentNotificationsDescription": "为 AI 编程代理提供桌面通知、声音提醒和点击切换到对应窗口。",
+      "viewRepository": "在 GitHub 上查看"
+    },
     "faq": {
       "eyebrow": "常见问题解答",
       "title": "常见问题",
