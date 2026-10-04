@@ -9,6 +9,7 @@ import {
   formatSecurityDate,
 } from '../utils/securityPresentation.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
+import { isKnownLocale } from '../data/i18n.ts';
 
 const messages = JSON.parse(
   readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
@@ -37,10 +38,11 @@ test('card and detail reviewed badges render one localized word', () => {
   for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
     const code = filename.replace('.json', '');
+    assert.ok(isKnownLocale(code), `${filename}: supported locale`);
     const messages = JSON.parse(
       readFileSync(new URL(`../locales/${filename}`, import.meta.url), 'utf8'),
     );
-    const { t } = createI18n({
+    const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({
       legacy: false,
       locale: code,
       fallbackLocale: false,
