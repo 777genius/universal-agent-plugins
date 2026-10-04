@@ -114,6 +114,9 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
 	}
+	if err == nil && outcome.NativeEffect == domain.NativeEffectUncertain {
+		return outcome, fmt.Errorf("selected native activation outcome is uncertain")
+	}
 	return outcome, err
 }
 

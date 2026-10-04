@@ -226,7 +226,11 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		return nil, err
 	}
 	helper, _ := e.helper()
-	svc := confirmationLifecycle(handle, e.lifecycle(helper, BindingFacts{}, handle.detected), true)
+	previewFacts := BindingFacts{}
+	if installation, ok := findInstall(handle.recorded, req.InstallationID); ok {
+		previewFacts.InstallationID = installation.InstallationID
+	}
+	svc := confirmationLifecycle(handle, e.lifecycle(helper, previewFacts, handle.detected), true)
 	preview, err := dry(svc, usecase.AddInput{
 		Envelope: handle.envelope, Client: handle.client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
 		PersistAuthoritativeObservations: e.persistObservations,

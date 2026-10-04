@@ -2,6 +2,7 @@ package vscode
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -9,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/vscodeprofile"
 )
 
 func (a *LocalAdapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
@@ -70,11 +72,34 @@ func (a *LocalAdapter) selectPlan(in clients.PlanInput, plan *domain.DeliveryPla
 	facts := domain.LocalDeliveryFacts{ProfileRoot: root, SettingsPath: settings, ProfileIdentity: root, SettingsIdentity: settings,
 		Tuple: a.config.QualifiedTuple, NativeStop: a.config.NativeStop, MCPServers: a.config.MCPServers, Skills: a.config.Skills,
 		CanonicalDigest: in.Envelope.TreeDigest, Registration: domain.OwnedProfileEntry{ObjectID: localObjectID(settings, plan.ActivePath), Selector: plan.ActivePath, DesiredValue: &enabled}}
-	// Validate selected native JSONC/boolean shape without granting ownership.
-	// Only persisted native objects or a matching pending intent authorize effects.
-	if _, err := inspectRegistration(nativeconfig.New(), facts, true); err != nil {
+	selected, err := domain.NewLocalDelivery(facts)
+	if err != nil {
 		return err
 	}
+	if _, err := localRecordedReceipt(selected, in.PreviousNativeObjects, in.LocalEntryObservation); err != nil {
+		return err
+	}
+	owned, err := ownedLocalObjects(facts, in.PreviousNativeObjects)
+	if err != nil {
+		return err
+	}
+	if owned {
+		_, err = inspectObservedRegistration(nativeconfig.New(), selected, in.PreviousNativeObjects, in.LocalEntryObservation)
+		if errors.Is(err, vscodeprofile.ErrRecordedEntryAbsent) && in.LocalEntryObservation != nil {
+			basis := in.LocalEntryObservation.Facts().RevisionBasis
+			old, _ := basis.LocalFacts()
+			if old.CanonicalDigest == facts.CanonicalDigest && selected.SameSelection(basis) {
+				err = nil
+			}
+		} // Positive absence at an unchanged recorded selection; never a receipt.
+	} else {
+		_, err = inspectRegistration(nativeconfig.New(), facts, false)
+	}
+	if err != nil {
+		return err
+	}
+	plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), in.PreviousNativeObjects...)
+	plan.LocalEntryObservation = in.LocalEntryObservation.Clone()
 	return clients.SelectLocalDelivery(plan, facts)
 }
 

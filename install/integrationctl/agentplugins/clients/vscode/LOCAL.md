@@ -32,7 +32,7 @@ matching native booleans alone grant no authority. Optional MCP uses the genuine
 constructor/preparation alone does not advertise helper readiness.
 
 Registration owns only the selected `chat.pluginLocations[activePath]` boolean.
-Public pure Plan/VerifyOwned preserve foreign JSONC, comments and native false.
+Public pure Plan/VerifyRecordedEntry preserve foreign JSONC, comments and native false.
 Identical unowned booleans and nonboolean drift conflict. Exact-file native
 writes use the existing writer lock, CAS, readback and rollback. Linux attributed
 profiles refuse changed writes because this kernel cannot preserve ACL/xattrs.
@@ -48,32 +48,49 @@ matched reconciler. Removal uses a confirmed recorded reverse decision and only
 patches the owned selector; late foreign edits survive and retries are idempotent.
 A direct adapter reconciliation test is not public Engine recovery proof.
 
-## Exact 040 foundation limitations
+## Observed receipt consumer
 
-An empty unowned route repeats without changing state or settings. An already
-owned selector survives deselection and stays disabled, but 040 supplies no prior
-receipt to either projector. Omitting the undesired entry then differs from
-retained ownership and produces maintenance state churn. The strict owned-to-empty
-consumer control records this unresolved carrier gap. Full corrective acceptance
-requires the brokered confirmed-ownership input; current profile values cannot
-substitute for it. No core carrier or selected authority is changed here.
+The selected Local consumer carries actual parser/Plan receipts through the
+frozen core observation contract. First install records a receipt after the
+owned native write and exact readback. Confirmed maintenance can record native
+false without rewriting the profile; desired true and selector ownership remain
+independent. Matching public install repeats preserve durable state/profile bytes, file
+identity, mtime and UpdatedAt. A fresh Store/Engine consumes the recorded sealed basis.
+The adapter consumes positively classified absence at the recorded revision;
+public intact-package Repair qualification is still blocked as described below.
 
-Public Apply requires a helper even with no selected MCP. Public Remove omits
-selected reverse authority. Inspect omits native pending attempts and Recover
-has no selected reconciler input. These remain separately owned lifecycle work;
-no unapproved repair source was copied. The real exit-91 child fixture is ready
-for composition with the independently approved repair and full public recovery.
+Historical nil may observe present bytes only with independently recorded
+ownership; it cannot restore absence. Corrupt nonnull authority never falls back
+to nil. Update/refresh verifies the old receipt against native bytes before real
+Plan(Update) returns the new sealed basis. Missing revision transitions, stale
+receipts, nonboolean drift, false-to-true drift and unowned same-value collisions
+refuse. Inspection and VerifyOnly never write or return an absent verified receipt.
+An owned selector survives empty selection; an unowned empty route creates no
+entry authority. Preparation remains prepared/package-valid, live activation unknown.
 
-040 also cannot persist an observed native-false receipt separately from frozen
-desired true. Until an approved receipt contract exists, missing formerly owned
-true refuses additive repair rather than risking re-enabling a disappeared false.
-A present false remains unchanged across repeat/update/refresh/repair.
+Actual adapter-delegating registration/removal children witness native effects
+with matching durable intent before death and acknowledgement. Fresh public
+Inspect observes the exact attempt without writes; typed Recover runs under the
+existing mutation lock. Present registration verification acknowledges actual
+false with unchanged effect and no registration resend. Certain removal clears
+entry authority and preserves late foreign siblings. Errors, cancellation, unknown
+effects, callback drift and ambiguous acknowledgements retain the predecessor and
+pending authority. Direct reconciler controls remain narrower evidence. Storage
+visibility injection uses the public usecase/StateStore port with actual NewLocal
+and real files; Engine exposes no Store injection seam.
 
-Consumer tests live in the test-only `integrationtests/vscodelocal` package,
-explicitly composing actual NewLocal, public Engine and real filesystem/process
-boundaries. Adapter tests need no upward planner/provider or self imports; the
-existing architecture/lint configuration remains unchanged. All original
-filesystem, installed managed-stdio and exit-91 crash assertions are retained.
-Independent root review is required before integration. Native VS Code/agent
-execution, Windows CI and downstream AN qualification have not run. This
-candidate does not qualify executable release or installed AN.
+Consumer tests use disposable TEST profiles, actual NewLocal, public Engine and
+real filesystem/process boundaries. Authentic historical nil snapshots were
+captured from the compiling frozen old consumer before editing, independently
+loaded through real Store, then relocated for isolated tests without clearing any
+candidate observation. Existing architecture and lint rules are unchanged.
+
+Single and group preview preparation carry the recorded InstallationID in
+BindingFacts, allowing selected read-only Repair to inspect the committed binding.
+Selected VerifyOnly requests stay read-only instead of entering legacy mutating
+resume. The focused consumer lifecycle and race checks pass, including recorded
+true/false Repair/restoration and owned-empty maintenance. Their strict assertions
+remain in place; no nil observation is substituted. Independent source review and
+final public composition CI are separate gates. Native SDK/VS Code/agent execution, physical P2, non-Linux metadata,
+default registration, installed AN notifications and executable release remain
+unqualified. No platform availability or production grant follows.

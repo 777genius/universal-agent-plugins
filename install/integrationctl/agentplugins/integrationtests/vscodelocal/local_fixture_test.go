@@ -39,6 +39,10 @@ func TestMain(m *testing.M) {
 		_ = json.NewEncoder(os.Stdout).Encode(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--TEST-local-crash" {
+		os.Args = []string{os.Args[0], "-test.run=^TestLocalCrashChild$"}
+		os.Exit(m.Run())
+	}
 	os.Exit(m.Run())
 }
 

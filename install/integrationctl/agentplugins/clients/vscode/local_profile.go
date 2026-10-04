@@ -93,7 +93,15 @@ func (*LocalAdapter) ValidateBindingProfile(root string, binding domain.ClientBi
 	if !binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
 		return fmt.Errorf("local exact owned selector receipt required")
 	}
-	_, err = inspectRegistration(nativeconfig.New(), facts, true)
+	if binding.LocalEntryObservation != nil && !localSameBasis(binding.SelectedDelivery, binding.LocalEntryObservation) {
+		if binding.PendingNativeIntent == nil {
+			return fmt.Errorf("local recorded observation is stale")
+		}
+		if err := binding.PendingNativeIntent.Validate(binding); err != nil {
+			return err
+		}
+	}
+	_, err = inspectObservedRegistration(nativeconfig.New(), binding.SelectedDelivery, binding.NativeObjects, binding.LocalEntryObservation)
 	return err
 }
 

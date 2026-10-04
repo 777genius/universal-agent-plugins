@@ -7,65 +7,119 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
-// Red: native profile bytes precede committed pending intent; child death loses
-// the exact selected native decision. Wrapper DELEGATES unchanged genuine
-// NewLocal.Activate, then exits 91. No synthetic lifecycle or profile parser.
+// Regression: exit91 happens without a real native effect, or public recovery
+// adopts a selector/resends registration. Existing direct reconciler controls
+// could not prove the actual child effect or Engine's locked acknowledgement.
 func TestLocalActualProcessCrashRetainsReadyRecoveryFixture(t *testing.T) {
-	f := freshLocal(t, false)
-	child := exec.CommandContext(t.Context(), f.runtime, "-test.run=^TestLocalCrashChild$", "-test.v")
-	child.Env = []string{"HOME=" + f.root, "USERPROFILE=" + f.root, "TMPDIR=" + f.root, "AN_LOCAL_TEST_ROOT=" + f.root, "PATH=/usr/bin:/bin"}
-	output, err := runLocalProcess(t, child)
-	var exited *exec.ExitError
-	if !errors.As(err, &exited) || exited.ExitCode() != 91 {
-		t.Fatalf("actual child crash: %v / %s", err, output)
+	for _, direction := range []domain.NativeIntentDirection{domain.NativeIntentRegister, domain.NativeIntentRemove} {
+		t.Run(string(direction), func(t *testing.T) {
+			f := freshLocal(t, false)
+			id := ""
+			if direction == domain.NativeIntentRemove {
+				installed := applyLocal(t, f.engine(t, true), f.request(installer.OpInstall, ""))
+				id = installed.InstallationID
+				facts, _ := installed.Binding.SelectedDelivery.LocalFacts()
+				disableLocal(t, f, facts.Registration.Selector)
+				applyLocal(t, f.engine(t, true), f.request(installer.OpInstall, id))
+				assertLocalObservation(t, f, false)
+			}
+			child := exec.CommandContext(t.Context(), f.runtime, "--TEST-local-crash")
+			child.Env = []string{"HOME=" + f.root, "USERPROFILE=" + f.root, "TMPDIR=" + f.root, "AN_LOCAL_TEST_ROOT=" + f.root, "AN_LOCAL_DIRECTION=" + string(direction), "AN_LOCAL_ID=" + id, "PATH=/usr/bin:/bin"}
+			output, err := runLocalProcess(t, child)
+			var exited *exec.ExitError
+			if !errors.As(err, &exited) || exited.ExitCode() != 91 {
+				t.Fatalf("actual child crash: %v / %s", err, output)
+			}
+			var witness localCrashWitness
+			must(t, json.Unmarshal(output, &witness))
+			binding := onlyLocalBinding(t, loadLocalState(t, f.state))
+			intent := binding.PendingNativeIntent
+			if intent == nil {
+				t.Fatal("actual effect lost pending intent")
+			}
+			must(t, intent.Validate(binding))
+			facts, _ := intent.Delivery.LocalFacts()
+			if witness.Attempt != intent.AttemptID || witness.Direction != direction || witness.Selector != facts.Registration.Selector || witness.StateDigest != testDigest(readLocal(t, filepath.Join(f.state, "state-v2.json"))) || witness.ProfileDigest != testDigest(readLocal(t, f.settings)) {
+				t.Fatal("parent could not independently match child effect/intent witness")
+			}
+			if direction == domain.NativeIntentRegister {
+				if binding.LocalEntryObservation != nil || binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
+					t.Fatal("unacknowledged first registration invented ownership")
+				}
+				if !strings.Contains(string(readLocal(t, f.settings)), quoteLocal(facts.Registration.Selector)+":true") {
+					t.Fatal("child did not register actual selector")
+				}
+				disableLocal(t, f, facts.Registration.Selector)
+			} else if strings.Contains(string(readLocal(t, f.settings)), quoteLocal(facts.Registration.Selector)+":") {
+				t.Fatal("child did not remove selector")
+			}
+			late := strings.Replace(string(readLocal(t, f.settings)), `"foreign":`, `"TEST-recovery-late":false,"foreign":`, 1)
+			writeLocal(t, f.settings, []byte(late), 0600)
+			assertForeign(t, readLocal(t, f.settings))
+			observer := &lockedLocalRecovery{LocalAdapter: f.adapter, t: t, state: f.state}
+			f.registry, err = clients.NewRegistry(observer)
+			must(t, err)
+			engine := f.engine(t, true)
+			before := snapshotLocalFiles(t, f.state, f.settings, filepath.Dir(f.settings))
+			view, err := engine.Inspect(t.Context())
+			must(t, err)
+			assertLocalFiles(t, before)
+			if !view.Recovery.Required || len(view.Recovery.NativeIntents) != 1 || view.Recovery.NativeIntents[0].Intent.AttemptID != intent.AttemptID {
+				t.Fatal("public Inspect lost exact pending attempt")
+			}
+			profile := snapshotLocalFiles(t, f.settings)
+			recovered, err := engine.Recover(t.Context(), view)
+			must(t, err)
+			if recovered.Outcome != installer.OutcomeCompleted || len(recovered.Recovery.Resolved) != 1 || len(recovered.Recovery.Remaining) != 0 || len(recovered.Recovery.Unknown) != 0 || observer.calls != 1 || observer.effects != 0 {
+				t.Fatalf("public acknowledgement differs: %+v calls=%d resends=%d", recovered, observer.calls, observer.effects)
+			}
+			assertLocalFiles(t, profile)
+			b := onlyLocalBinding(t, loadLocalState(t, f.state))
+			if b.PendingNativeIntent != nil || b.NativeActivationAttempt != "" {
+				t.Fatal("durable acknowledgement left intent")
+			}
+			if direction == domain.NativeIntentRegister {
+				assertLocalObservation(t, f, false)
+			} else if b.LocalEntryObservation != nil || b.SelectedDelivery.OwnsProfileEntry(b.NativeObjects) {
+				t.Fatal("certain removal retained entry authority")
+			}
+			after := snapshotLocalFiles(t, filepath.Join(f.state, "state-v2.json"), f.settings, filepath.Dir(f.settings))
+			current, err := engine.Inspect(t.Context())
+			must(t, err)
+			again, err := engine.Recover(t.Context(), current)
+			must(t, err)
+			if again.Outcome != installer.OutcomeUnchanged || observer.calls != 1 {
+				t.Fatal("second Recover resent or mutated")
+			}
+			assertLocalFiles(t, after)
+			t.Logf("actual child witness=%s; public Recover acknowledged %s under existing lock; zero registration resends", output, direction)
+		})
 	}
-	state := loadLocalState(t, f.state)
-	binding := onlyLocalBinding(t, state)
-	intent := binding.PendingNativeIntent
-	if intent == nil || intent.AttemptID != binding.NativeActivationAttempt || intent.Direction != domain.NativeIntentRegister {
-		t.Fatal("actual native effect lacks durable matching intent")
-	}
-	facts, _ := intent.Delivery.LocalFacts()
-	if facts.SettingsPath != f.settings || facts.Registration.Selector != binding.TargetLocator || facts.ProjectionDigest == "" {
-		t.Fatal("pending physical projection authority differs")
-	}
-	assertForeign(t, readLocal(t, f.settings))
-	// Inspect is the genuine public base API; it currently omits native attempts.
-	view, err := f.engine(t, true).Inspect(t.Context())
-	must(t, err)
-	if view.Recovery.Required {
-		t.Log("public native recovery now observable; compose approved facade reconciler control")
-	} else {
-		t.Log("FOUNDATION GAP: Inspect omitted actual pending Local native attempt; Recover has no selected reconciler input")
-	}
-	// Existing adapter contract, explicitly NOT public facade recovery. It reads
-	// the pending entry under recorded authority despite another constructor.
-	other := freshLocal(t, false)
-	before := readLocal(t, f.settings)
-	reconciled, err := other.adapter.ReconcileNativeIntent(t.Context(), *intent)
-	must(t, err)
-	if reconciled.NativeEffect != domain.NativeEffectUnchanged || len(reconciled.NativeObjects) != 1 || string(before) != string(readLocal(t, f.settings)) {
-		t.Fatal("recorded registration reconciliation redirected or wrote bytes")
-	}
-	encoded, err := json.Marshal(intent)
-	must(t, err)
-	t.Logf("actual exit91 pending intent %s; state_sha256=%s profile_sha256=%s", encoded, testDigest(readLocal(t, filepath.Join(f.state, "state-v2.json"))), testDigest(before))
 }
 
+type localCrashWitness struct {
+	Attempt, Selector, StateDigest, ProfileDigest string
+	Direction                                     domain.NativeIntentDirection
+}
+
+// TestMain dispatch keeps the child off m.Run, so ordinary runs add no skips.
 func TestLocalCrashChild(t *testing.T) {
 	root := os.Getenv("AN_LOCAL_TEST_ROOT")
 	if root == "" {
-		t.Skip("owned child only")
-	}
+		return
+	} // Actual child dispatch is qualified by the parent test.
 	f := &localFixture{root: root, pkg: filepath.Join(root, "package"), settings: filepath.Join(root, "selected-profile", "settings.json"), state: filepath.Join(root, "state"), runtime: filepath.Join(root, "TEST runtime ' Ω $(touch sentinel)")}
 	cfg := vscode.LocalConfig{ProfileSettingsPath: f.settings, QualifiedTuple: vscode.SourceQualifiedTESTTuple("linux"), TargetShell: linuxTarget(), NativeStop: true, HookSpecs: localSpecs(f.runtime), DeclaredHookDigest: testDigest(readLocal(t, filepath.Join(f.pkg, hookPath())))}
 	a, err := vscode.NewLocal(cfg)
@@ -73,7 +127,11 @@ func TestLocalCrashChild(t *testing.T) {
 	wrapped := &crashLocal{LocalAdapter: a, t: t, state: f.state}
 	f.registry, err = clients.NewRegistry(wrapped)
 	must(t, err)
-	applyLocal(t, f.engine(t, true), f.request(installer.OpInstall, ""))
+	op := installer.OpInstall
+	if os.Getenv("AN_LOCAL_DIRECTION") == string(domain.NativeIntentRemove) {
+		op = installer.OpRemove
+	}
+	applyLocal(t, f.engine(t, true), f.request(op, os.Getenv("AN_LOCAL_ID")))
 	t.Fatal("genuine native effect did not exit")
 }
 
@@ -83,23 +141,95 @@ type crashLocal struct {
 	state string
 }
 
-func (a *crashLocal) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	binding := onlyLocalBinding(a.t, loadLocalState(a.t, a.state))
-	if binding.PendingNativeIntent == nil || binding.PendingNativeIntent.Direction != domain.NativeIntentRegister {
-		a.t.Fatal("native effect before durable pending intent")
+func (a *crashLocal) pending(direction domain.NativeIntentDirection) domain.ClientBinding {
+	b := onlyLocalBinding(a.t, loadLocalState(a.t, a.state))
+	if b.PendingNativeIntent == nil || b.PendingNativeIntent.Direction != direction {
+		a.t.Fatal("effect before matching durable intent")
 	}
-	outcome, err := a.LocalAdapter.Activate(ctx, env, req)
-	if err == nil && !req.VerifyOnly && outcome.NativeEffect == domain.NativeEffectCommitted {
-		os.Exit(91)
-	}
-	return outcome, err
+	must(a.t, b.PendingNativeIntent.Validate(b))
+	return b
 }
+func (a *crashLocal) die(b domain.ClientBinding) {
+	after := onlyLocalBinding(a.t, loadLocalState(a.t, a.state))
+	if !reflect.DeepEqual(b, after) {
+		a.t.Fatal("child acknowledged before witness")
+	}
+	f, _ := b.SelectedDelivery.LocalFacts()
+	body := readLocal(a.t, f.SettingsPath)
+	register := b.PendingNativeIntent.Direction == domain.NativeIntentRegister
+	if register != strings.Contains(string(body), quoteLocal(f.Registration.Selector)+":true") {
+		a.t.Fatal("actual effect not witnessed")
+	}
+	if !register && strings.Contains(string(body), quoteLocal(f.Registration.Selector)+":") {
+		a.t.Fatal("owned removal left selector")
+	}
+	assertForeign(a.t, body)
+	w := localCrashWitness{Attempt: b.PendingNativeIntent.AttemptID, Direction: b.PendingNativeIntent.Direction, Selector: f.Registration.Selector, StateDigest: testDigest(readLocal(a.t, filepath.Join(a.state, "state-v2.json"))), ProfileDigest: testDigest(body)}
+	must(a.t, json.NewEncoder(os.Stdout).Encode(w))
+	os.Exit(91)
+}
+func (a *crashLocal) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if req.VerifyOnly {
+		return a.LocalAdapter.Activate(ctx, env, req)
+	}
+	b := a.pending(domain.NativeIntentRegister)
+	if !b.PendingNativeIntent.LocalEntryObservation.Equal(req.Plan.LocalEntryObservation) {
+		a.t.Fatal("register predecessor differs")
+	}
+	out, err := a.LocalAdapter.Activate(ctx, env, req)
+	if err == nil && out.NativeEffect == domain.NativeEffectCommitted && out.LocalEntryObservation != nil {
+		a.die(b)
+	}
+	return out, err
+}
+func (a *crashLocal) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	b := a.pending(domain.NativeIntentRemove)
+	if req.LocalEntryObservation == nil || !b.LocalEntryObservation.Equal(req.LocalEntryObservation) {
+		a.t.Fatal("remove lost frozen observation")
+	}
+	out, err := a.LocalAdapter.Deactivate(ctx, env, req)
+	if err == nil && out.ExternalRemovalComplete {
+		a.die(b)
+	}
+	return out, err
+}
+
+type lockedLocalRecovery struct {
+	*vscode.LocalAdapter
+	t              *testing.T
+	state          string
+	calls, effects int
+}
+
+func (a *lockedLocalRecovery) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if !req.VerifyOnly {
+		a.effects++
+		a.t.Error("Recover resent registration")
+	}
+	return a.LocalAdapter.Activate(ctx, env, req)
+}
+func (a *lockedLocalRecovery) ReconcileNativeIntent(ctx context.Context, intent domain.PendingNativeIntent) (domain.ActivationOutcome, error) {
+	a.calls++
+	// Probe the existing lock: no second lock is acquired or wraps recovery.
+	release, err := (processlock.Lock{Path: filepath.Join(a.state, "mutation.lock")}).Acquire(ctx)
+	if !errors.Is(err, processlock.ErrActive) {
+		if release != nil {
+			must(a.t, release())
+		}
+		a.t.Fatal("public Recover did not retain existing lock")
+	}
+	b := onlyLocalBinding(a.t, loadLocalState(a.t, a.state))
+	must(a.t, intent.Validate(b))
+	return a.LocalAdapter.ReconcileNativeIntent(ctx, intent)
+}
+
 func loadLocalState(t *testing.T, root string) domain.StateFileV2 {
 	t.Helper()
-	var state domain.StateFileV2
-	must(t, json.Unmarshal(readLocal(t, filepath.Join(root, "state-v2.json")), &state))
+	state, err := (statev2.Store{Path: filepath.Join(root, "state-v2.json")}).Load()
+	must(t, err)
 	return state
 }
+
 func onlyLocalBinding(t *testing.T, state domain.StateFileV2) domain.ClientBinding {
 	t.Helper()
 	if len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
@@ -125,7 +255,7 @@ func TestLocalRecordedReverseReconciliationPreservesLateForeign(t *testing.T) {
 	writeLocal(t, f.settings, []byte(edited), 0600)
 	other := freshLocal(t, false)
 	otherBefore := readLocal(t, other.settings)
-	intent := domain.PendingNativeIntent{AttemptID: "TEST-owned-reverse", Direction: domain.NativeIntentRemove, RemoveOwnedEntry: true, Delivery: installed.Binding.SelectedDelivery}
+	intent := domain.PendingNativeIntent{AttemptID: "TEST-owned-reverse", Direction: domain.NativeIntentRemove, RemoveOwnedEntry: true, Delivery: installed.Binding.SelectedDelivery, LocalEntryObservation: onlyLocalBinding(t, loadLocalState(t, f.state)).LocalEntryObservation}
 	_, err := other.adapter.ReconcileNativeIntent(t.Context(), intent)
 	must(t, err)
 	after := readLocal(t, f.settings)

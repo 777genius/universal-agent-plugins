@@ -43,7 +43,11 @@ func (e *Engine) prepareMutatingGroup(ctx context.Context, req Request) (*Prepar
 		return nil, err
 	}
 	helper, _ := e.helper()
-	svc := confirmationLifecycle(handle, e.lifecycle(helper, BindingFacts{}, handle.detected), true)
+	previewFacts := BindingFacts{}
+	if installation, ok := findInstall(handle.recorded, req.InstallationID); ok {
+		previewFacts.InstallationID = installation.InstallationID
+	}
+	svc := confirmationLifecycle(handle, e.lifecycle(helper, previewFacts, handle.detected), true)
 	preview, err := e.previewGroup(ctx, svc, req, inputs)
 	if err != nil {
 		_ = handle.closeLocked()

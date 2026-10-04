@@ -60,25 +60,12 @@ func TestLocalPublicEngineMaintenanceAndTwoProfiles(t *testing.T) {
 	if len(inspect.Installations) != 1 || inspect.Recovery.Required {
 		t.Fatalf("completed state inspect differs: %+v", inspect)
 	}
-	// 040's public Remove does not pass selected authority. Keep exact evidence;
-	// the approved lifecycle composition must run the successful remove control.
-	handle, err := engine.Prepare(t.Context(), f.request(installer.OpRemove, installed.InstallationID))
-	must(t, err)
-	defer func() { _ = handle.Close() }()
-	removed, err := engine.Apply(t.Context(), handle, installer.Decision{Confirmed: true})
-	if err == nil {
-		if strings.Contains(string(readLocal(t, f.settings)), facts.Registration.Selector) {
-			t.Fatal("remove left owned selector")
-		}
-		return
+	removed := applyLocal(t, engine, f.request(installer.OpRemove, installed.InstallationID))
+	if removed.Outcome != installer.OutcomeCompleted || strings.Contains(string(readLocal(t, f.settings)), facts.Registration.Selector) {
+		t.Fatal("public removal left owned selector")
 	}
-	if !strings.Contains(err.Error(), "selected delivery mode differs") && !strings.Contains(err.Error(), "Local selected delivery required") {
-		t.Fatalf("unexpected removal failure: %+v / %v", removed, err)
-	}
-	t.Log("FOUNDATION GAP: public Remove omitted persisted SelectedDelivery; no CLI/profile cleanup accepted")
-	if string(readLocal(t, f.settings)) != nativeFalse {
-		t.Fatal("failed remove changed profile")
-	}
+	assertForeign(t, readLocal(t, f.settings))
+
 }
 
 // Red: native-only actualconstructor fabricates helper readiness or falls back
@@ -247,34 +234,11 @@ func TestLocalPhysicalProfileAndReadOnlyRegistry(t *testing.T) {
 
 var _ clients.RegistryInspector = (*vscode.LocalAdapter)(nil)
 
-// Red: observing false fails to persist its native boolean receipt, then
-// absent-entry repair resurrects true. This exercises the exact 040 contract
-// gap: outcomes carry objects, but immutable selected bool authority stays true.
-// Until that receipt can be recorded, absence must retain bytes and refuse.
+// Regression: genuine historical nil restores a vanished disabled entry.
+// The original refusal is retained against authentic old consumer state; the
+// separate observed tests qualify receipt-bearing false restoration.
 func TestLocalDisabledThenAbsentCannotBeReenabled(t *testing.T) {
-	f := freshLocal(t, false)
-	engine := f.engine(t, true)
-	installed := applyLocal(t, engine, f.request(installer.OpInstall, ""))
-	facts, _ := installed.Binding.SelectedDelivery.LocalFacts()
-	disabled := []byte(`{"chat.pluginLocations":{` + quoteLocal(facts.Registration.Selector) + `:false}}`)
-	writeLocal(t, f.settings, disabled, 0600)
-	applyLocal(t, engine, f.request(installer.OpRepair, installed.InstallationID))
-	absent := []byte(`{"chat.pluginLocations":{},"TEST-late-foreign":true}`)
-	writeLocal(t, f.settings, absent, 0600)
-	handle, err := engine.Prepare(t.Context(), f.request(installer.OpRepair, installed.InstallationID))
-	if handle != nil {
-		defer func() { _ = handle.Close() }()
-	}
-	if err == nil {
-		_, err = engine.Apply(t.Context(), handle, installer.Decision{Confirmed: true})
-	}
-	if err == nil {
-		t.Fatal("lost false receipt: absent repair silently re-enabled Local")
-	}
-	if string(readLocal(t, f.settings)) != string(absent) {
-		t.Fatal("absent disabled repair changed profile bytes")
-	}
-	t.Log("CONTRACT GAP: 040 cannot persist observed false receipt separately from immutable selected desired bool")
+	assertHistoricalAbsentRefusal(t, false)
 }
 
 // Red: changed declared bytes or a native schema change survives constructor
