@@ -134,6 +134,10 @@ func physicalWholeRecoveryBeforeSave(t *testing.T, fault string) {
 		if err := os.Mkdir(p2, 0700); err != nil {
 			t.Fatal(err)
 		}
+	case "missing-backup":
+		if err := os.Rename(secondJournal.BackupPath, secondJournal.BackupPath+"-TEST-moved"); err != nil {
+			t.Fatal(err)
+		}
 	case "digest":
 		before, err := os.Stat(secondJournal.BackupPath)
 		if err != nil {
@@ -198,7 +202,7 @@ func physicalWholeRecoveryBeforeSave(t *testing.T, fault string) {
 }
 
 func TestPhysicalProfileWholeRecoveryBeforeSave(t *testing.T) {
-	for _, fault := range []string{"profile", "digest", "terminal", "unsupported"} {
+	for _, fault := range []string{"profile", "digest", "missing-backup", "terminal", "unsupported"} {
 		t.Run(fault, func(t *testing.T) { physicalWholeRecoveryBeforeSave(t, fault) })
 	}
 }

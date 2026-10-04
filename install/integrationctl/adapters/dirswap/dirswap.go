@@ -875,6 +875,39 @@ func validatePhysicalRoles(r Receipt) error {
 			return err
 		}
 	}
+	return validateRequiredPhysicalRoles(r)
+}
+
+// A pending decision also needs its remaining recovery object. Checking only
+// present roles would let a missing late backup evade whole-journal preflight.
+func validateRequiredPhysicalRoles(r Receipt) error {
+	switch r.Phase {
+	case PhaseActivated, PhaseCommitPending, PhaseCommitted:
+		if r.Operation == OperationSwap {
+			if err := matchesPublication(r, r.ActivePath); err != nil {
+				return err
+			}
+		} else if err := requireMissing(r.ActivePath); err != nil {
+			return err
+		}
+		if r.Phase != PhaseActivated {
+			// Finalization can already have deleted the proven original backup.
+			return nil
+		}
+	case PhaseRolledBack:
+		return requireRollbackResult(r)
+	}
+	if r.HadActive {
+		backup, err := realDirectoryExists(r.BackupPath)
+		if err != nil {
+			return err
+		}
+		if backup {
+			return matchesBackup(r, r.BackupPath)
+		}
+		// Before backup rename or after rollback, the original can be active.
+		return matchesBackup(r, r.ActivePath)
+	}
 	return nil
 }
 func matchesObject(path string, expected *directoryidentity.Entry) error {
