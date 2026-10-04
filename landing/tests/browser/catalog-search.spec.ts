@@ -22,7 +22,7 @@ test('catalog groups duplicate sources and tolerates a small typo', async ({ pag
   await expect(group).toHaveCount(1);
   const alternatives = group.locator('.plugin-other-sources');
   await expect(alternatives).toBeVisible();
-  await expect(group.locator('.plugin-card__ribbon')).toHaveText('reviewed listing');
+  await expect(group.locator('.plugin-card__ribbon')).toHaveText('Reviewed');
   await alternatives.locator('summary').click();
   await expect(alternatives.locator('li')).not.toHaveCount(0);
   await expect(group).not.toContainText('777genius/universal-agent-plugins-registry');
