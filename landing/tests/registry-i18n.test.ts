@@ -22,6 +22,39 @@ const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], string, fals
 const translate = (key: string, params: Record<string, string | number> = {}, plural?: number) =>
   plural === undefined ? t(key, params) : t(key, params, plural);
 
+test('card and detail reviewed badges render one localized word', () => {
+  const expected: Record<string, string> = {
+    en: 'Reviewed',
+    ru: 'Проверено',
+    uk: 'Перевірено',
+    zh: '已审核',
+    es: 'Revisado',
+    hi: 'समीक्षित',
+    ar: 'مراجَع',
+    pt: 'Revisado',
+    fr: 'Vérifié',
+  };
+  for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
+    if (!filename.endsWith('.json')) continue;
+    const code = filename.replace('.json', '');
+    const messages = JSON.parse(
+      readFileSync(new URL(`../locales/${filename}`, import.meta.url), 'utf8'),
+    );
+    const { t } = createI18n({
+      legacy: false,
+      locale: code,
+      fallbackLocale: false,
+      messages: { [code]: messages },
+    }).global;
+    for (const surface of ['card', 'detail']) {
+      const label = t(`registryUi.${surface}.reviewedListing`);
+      assert.ok(expected[code], `${code}: agreed reviewed badge translation`);
+      assert.equal(label, expected[code], `${code}: ${surface}`);
+      assert.doesNotMatch(label, /\s/u, `${code}: ${surface} must stay one word`);
+    }
+  }
+});
+
 test('registry English messages compile and interpolate every declared placeholder', (context) => {
   const errors = context.mock.method(console, 'error', () => {});
   function visit(value: unknown, path: string) {

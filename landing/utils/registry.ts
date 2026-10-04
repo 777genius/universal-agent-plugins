@@ -1181,17 +1181,39 @@ export function githubSourceUrl(
 
 export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
   if (!plugin.built_in) return undefined;
-
-  const filename = plugin.icon?.path.startsWith('assets/plugin-icons/')
-    ? plugin.icon.path.split('/').at(-1)
-    : undefined;
-  if (filename === 'context7.png') return 'plugin-icons/context7.svg';
-  if (filename === 'greptile.png') return 'plugin-icons/greptile.svg';
-  if (filename === 'heroku.png') return 'plugin-icons/heroku.svg';
-  if (filename?.endsWith('.svg')) return `plugin-icons/${filename}`;
-
-  // Reuse Cloudflare's publisher mark for its product family. Other packages
-  // stay iconless unless the Directory owns a real package or publisher logo.
-  if (plugin.name.startsWith('cloudflare-')) return 'plugin-icons/cloudflare.svg';
-  return undefined;
+  // Local presentation assets are owned explicitly; package metadata cannot
+  // select arbitrary files or make an external discovery entry load a logo.
+  const icons: Record<string, string> = {
+    'agent-code-navigator': 'agent-code-navigator',
+    atlassian: 'atlassian',
+    'chrome-devtools': 'googlechrome',
+    cloudflare: 'cloudflare',
+    'cloudflare-bindings': 'cloudflare',
+    'cloudflare-docs': 'cloudflare',
+    'cloudflare-observability': 'cloudflare',
+    'cloudflare-radar': 'cloudflare',
+    context7: 'context7',
+    'docker-hub': 'docker',
+    figma: 'figma',
+    firebase: 'firebase',
+    firecrawl: 'firecrawl',
+    github: 'github',
+    gitlab: 'gitlab',
+    greptile: 'greptile',
+    heroku: 'heroku',
+    'hubspot-crm': 'hubspot',
+    'hubspot-developer': 'hubspot',
+    linear: 'linear',
+    neon: 'neon',
+    notion: 'notion',
+    playwright: 'playwright',
+    sentry: 'sentry',
+    statsig: 'statsig',
+    stripe: 'stripe',
+    supabase: 'supabase',
+    tinyfish: 'tinyfish',
+    vercel: 'vercel',
+  };
+  const icon = Object.hasOwn(icons, plugin.name) ? icons[plugin.name] : undefined;
+  return icon ? `plugin-icons/${icon}.svg` : undefined;
 }
