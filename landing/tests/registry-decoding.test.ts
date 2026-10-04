@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire, registerHooks } from 'node:module';
 import { test } from 'node:test';
+import { effectScope, onScopeDispose, ref, shallowRef, watch, type EffectScope } from 'vue';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { pathToFileURL } from 'node:url';
 import type { RegistryIndex } from '../types/registry';
@@ -17,7 +18,7 @@ const aliases = registerHooks({
     return nextResolve(specifier, context);
   },
 });
-const { useRegistryPage, useRegistry } = await import('../composables/useRegistry.ts');
+const { useRegistryPage: loadRegistryPage, useRegistry } = await import('../composables/useRegistry.ts');
 aliases.deregister();
 
 // Exact captured Pages response bytes; catalog and Codex were byte-identical.
@@ -30,7 +31,13 @@ const empty = bytes('empty');
 
 test('production registry loader decodes octet-stream and fails closed before state assignment', async (t) => {
   const states = new Map<string, { value: unknown }>();
-  const ref = (value?: unknown) => ({ value });
+  const scopes: EffectScope[] = [];
+  const discoveryStatus = ref({ state: 'idle', count: 0 });
+  function useRegistryPage(options?: Parameters<typeof loadRegistryPage>[0]) {
+    const scope = effectScope();
+    scopes.push(scope);
+    return scope.run(() => loadRegistryPage(options))!;
+  }
   let body = catalog;
   let httpStatus = 200;
   let baseURL = '/';
@@ -49,20 +56,21 @@ test('production registry loader decodes octet-stream and fails closed before st
     $fetch: decoder,
     useRuntimeConfig: () => ({ public: { baseURL } }),
     useI18n: () => createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8')) } }).global,
-    onScopeDispose: () => {},
+    onScopeDispose,
+    watch,
     useState: (key: string, init?: () => unknown) => {
       if (!states.has(key)) states.set(key, ref(init?.()));
       return states.get(key);
     },
-    useDiscoveryStatus: () => ref({ state: 'idle', count: 0 }),
-    shallowRef: ref,
+    useDiscoveryStatus: () => discoveryStatus,
+    shallowRef,
     // Only Nuxt's async-data/ref shell is substituted; the production composable,
     // endpoint selection, state writes, and actual ofetch decoder execute intact.
     useAsyncData: async (_key: string, load: () => Promise<RegistryIndex>) => {
       try {
-        return { data: ref(await load()), error: ref() };
+        return { data: shallowRef(await load()), error: shallowRef() };
       } catch (error) {
-        return { data: ref(), error: ref(error) };
+        return { data: shallowRef(), error: shallowRef(error) };
       }
     },
     createError: (options: object) => Object.assign(new Error(), options),
@@ -72,6 +80,7 @@ test('production registry loader decodes octet-stream and fails closed before st
   );
   Object.assign(globalThis, globals);
   t.after(() => {
+    scopes.forEach((scope) => scope.stop());
     for (const [key, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, key, descriptor);
       else Reflect.deleteProperty(globalThis, key);

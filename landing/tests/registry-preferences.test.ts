@@ -22,6 +22,11 @@ const messages = JSON.parse(
   readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
 );
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
+const discoveryStatus = ref({ state: 'current', count: 0 });
+const discoveryHelpers = runInNewContext(
+  stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '') + '\n({ useDiscoveryIsStale });',
+  { computed, useState: () => discoveryStatus },
+);
 const common = {
   computed,
   ref,
@@ -30,6 +35,7 @@ const common = {
   ...registryDomain,
   ...filters,
   pluginCommands,
+  ...discoveryHelpers,
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
