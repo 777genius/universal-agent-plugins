@@ -43,8 +43,8 @@ func (e *Engine) selectedReconciler(clientID string, selected domain.SelectedDel
 	if err := selected.Validate(); err != nil {
 		return nil, err
 	}
-	if _, ok := selected.CursorFacts(); ok && clientID != string(domain.ClientCursor) {
-		return nil, fmt.Errorf("%w: Cursor selection on another client", ErrInvalidRequest)
+	if err := selected.ValidateClient(domain.ClientID(clientID)); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 	adapter, ok := e.cfg.Registry.Lookup(domain.ClientID(clientID))
 	if !ok {
@@ -273,7 +273,7 @@ func (e *Engine) confirmRemovalState(approved domain.StateFileV2, cause error) e
 
 func validateSelectedBindingIdentity(binding domain.ClientBinding) error {
 	if f, ok := binding.SelectedDelivery.CursorFacts(); ok {
-		if binding.ClientID != string(domain.ClientCursor) || binding.Scope != string(domain.ScopeUser) || f.ProfileRoot != binding.NativeProfileRoot || f.ProjectionDigest != managedPackageDigest(binding) || binding.PackageRevision == nil || f.CanonicalDigest != binding.PackageRevision.TreeDigest {
+		if binding.SelectedDelivery.ValidateClient(domain.ClientID(binding.ClientID)) != nil || binding.Scope != string(domain.ScopeUser) || f.ProfileRoot != binding.NativeProfileRoot || f.ProjectionDigest != managedPackageDigest(binding) || binding.PackageRevision == nil || f.CanonicalDigest != binding.PackageRevision.TreeDigest {
 			return fmt.Errorf("%w: Cursor binding authority differs", ErrInvalidRequest)
 		}
 		return binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects)

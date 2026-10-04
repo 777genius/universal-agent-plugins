@@ -79,18 +79,7 @@ func (service Service) updateActivationResultWithObservation(installationID, bin
 
 func validateObservedOutcome(binding domain.ClientBinding, outcome domain.ActivationOutcome, previous *domain.LocalEntryObservation) error {
 	if f, ok := binding.SelectedDelivery.CursorFacts(); ok {
-		if previous != nil || outcome.LocalEntryObservation != nil {
-			return fmt.Errorf("Cursor outcome carries Local observation")
-		}
-		receipt := f.PlannedReceipt
-		if binding.PendingNativeIntent != nil {
-			planned, _ := binding.PendingNativeIntent.Delivery.CursorFacts()
-			receipt = planned.PlannedReceipt
-		}
-		if outcome.NativeEffect != domain.NativeEffectCommitted && outcome.NativeEffect != domain.NativeEffectUnchanged || len(outcome.NativeObjects) != 1 || outcome.NativeObjects[0] != binding.SelectedDelivery.CursorOwnership(receipt) {
-			return fmt.Errorf("Cursor acknowledgement differs from actual planned ownership")
-		}
-		return nil
+		return validateCursorObservedOutcome(binding, outcome, previous, f)
 	}
 	observation := outcome.LocalEntryObservation
 	if observation == nil {
@@ -117,6 +106,21 @@ func validateObservedOutcome(binding domain.ClientBinding, outcome domain.Activa
 	}
 	if outcome.NativeEffect == domain.NativeEffectUnchanged && !binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) && binding.PendingNativeIntent == nil {
 		return fmt.Errorf("unchanged Local observation has no independent owned predecessor")
+	}
+	return nil
+}
+
+func validateCursorObservedOutcome(binding domain.ClientBinding, outcome domain.ActivationOutcome, previous *domain.LocalEntryObservation, f domain.CursorDeliveryFacts) error {
+	if previous != nil || outcome.LocalEntryObservation != nil {
+		return fmt.Errorf("cursor outcome carries Local observation")
+	}
+	receipt := f.PlannedReceipt
+	if binding.PendingNativeIntent != nil {
+		planned, _ := binding.PendingNativeIntent.Delivery.CursorFacts()
+		receipt = planned.PlannedReceipt
+	}
+	if outcome.NativeEffect != domain.NativeEffectCommitted && outcome.NativeEffect != domain.NativeEffectUnchanged || len(outcome.NativeObjects) != 1 || outcome.NativeObjects[0] != binding.SelectedDelivery.CursorOwnership(receipt) {
+		return fmt.Errorf("cursor acknowledgement differs from actual planned ownership")
 	}
 	return nil
 }
@@ -176,7 +180,7 @@ func (service Service) activateReadOnlyWithObservation(ctx context.Context, bind
 	}
 	if _, ok := binding.SelectedDelivery.CursorFacts(); ok {
 		if !binding.SelectedDelivery.SameSelection(request.Plan.SelectedDelivery) || binding.SelectedDelivery.CanonicalDigest() != request.Plan.SelectedDelivery.CanonicalDigest() || binding.SelectedDelivery.ProjectionDigest() != request.Plan.SelectedDelivery.ProjectionDigest() {
-			return domain.ActivationOutcome{}, fmt.Errorf("Cursor read-only request changed binding authority")
+			return domain.ActivationOutcome{}, fmt.Errorf("cursor read-only request changed binding authority")
 		}
 		// Verification reads acknowledged authority, not a fresh mutation basis.
 		request.Plan.SelectedDelivery = binding.SelectedDelivery

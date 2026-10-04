@@ -94,7 +94,7 @@ func (d SelectedDelivery) ValidatePlan(plan DeliveryPlan, canonicalDigest string
 			return fmt.Errorf("selected Cursor plan differs from fixed client/scope/package")
 		}
 		if authority := plan.ProfileAuthority(); authority != nil && authority.Facts().CanonicalRoot != f.ProfileRoot {
-			return fmt.Errorf("Cursor packet differs from frozen physical root")
+			return fmt.Errorf("cursor packet differs from frozen physical root")
 		}
 		return nil
 	}
@@ -140,21 +140,25 @@ func (d SelectedDelivery) SharesBackend(id ClientID) bool {
 	return d.IsZero() && len(BackendSiblings(id)) > 0
 }
 
+// ValidateClient keeps the fixed Cursor client identity with its selection.
+// Historical and Local selections retain their existing caller validations.
+func (d SelectedDelivery) ValidateClient(id ClientID) error {
+	if _, ok := d.CursorFacts(); ok && id != ClientCursor {
+		return fmt.Errorf("cursor selection on another client")
+	}
+	return nil
+}
+
 func (d SelectedDelivery) validateCursor() error {
 	f := d.cursor
 	if d.local != nil || f.CursorVersion != "2026.09.28-64d2043" || f.TargetOS != "linux" || f.TargetArch != "amd64" || f.Shell != "cursor-linux-user-3.22.12-single-quote" {
 		return fmt.Errorf("unknown Cursor selection or qualification tuple")
 	}
-	for _, p := range []string{f.ProfileRoot, f.HooksPath, f.Executable, f.Selector} {
-		if !deliveryText(p) || !filepath.IsAbs(p) || filepath.Clean(p) != p {
-			return fmt.Errorf("Cursor requires exact absolute authority paths")
-		}
-	}
-	if f.HooksPath != filepath.Join(f.ProfileRoot, "hooks.json") || !deliveryText(f.ProfileIdentity) || !deliveryText(f.QualificationID) || !deliveryText(f.ObjectID) {
-		return fmt.Errorf("Cursor profile or object identity is incomplete")
+	if err := validateCursorProfile(f); err != nil {
+		return err
 	}
 	if !deliveryDigest(f.CanonicalDigest) || !deliveryDigest(f.EntryDigest) || !deliveryDigest(f.OriginalRawDigest) || f.ProjectionDigest != "" && !deliveryDigest(f.ProjectionDigest) {
-		return fmt.Errorf("Cursor revision or attempt basis is incomplete")
+		return fmt.Errorf("cursor revision or attempt basis is incomplete")
 	}
 	if !f.OriginalExists && f.OriginalRawDigest != "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
 		return fmt.Errorf("absent Cursor original has nonempty raw digest")
@@ -162,10 +166,22 @@ func (d SelectedDelivery) validateCursor() error {
 	return d.ValidateCursorReceipt(f.PlannedReceipt)
 }
 
+func validateCursorProfile(f CursorDeliveryFacts) error {
+	for _, p := range []string{f.ProfileRoot, f.HooksPath, f.Executable, f.Selector} {
+		if !deliveryText(p) || !filepath.IsAbs(p) || filepath.Clean(p) != p {
+			return fmt.Errorf("cursor requires exact absolute authority paths")
+		}
+	}
+	if f.HooksPath != filepath.Join(f.ProfileRoot, "hooks.json") || !deliveryText(f.ProfileIdentity) || !deliveryText(f.QualificationID) || !deliveryText(f.ObjectID) {
+		return fmt.Errorf("cursor profile or object identity is incomplete")
+	}
+	return nil
+}
+
 func (d SelectedDelivery) ValidateCursorReceipt(r CursorHookReceipt) error {
 	f, ok := d.CursorFacts()
 	if !ok || r.Version != 1 || r.Event != "stop" || r.Executable != f.Executable || r.Selector != f.Selector || r.Shell != f.Shell || r.EntryDigest != f.EntryDigest || !deliveryDigest(r.RemainderDigest) {
-		return fmt.Errorf("Cursor receipt differs from frozen Stop specification")
+		return fmt.Errorf("cursor receipt differs from frozen Stop specification")
 	}
 	return nil
 }
@@ -184,7 +200,7 @@ func (d SelectedDelivery) ValidateCursorObjects(objects []NativeObjectOwnership)
 			continue
 		}
 		if !selected {
-			return fmt.Errorf("Cursor receipt on an unselected binding")
+			return fmt.Errorf("cursor receipt on an unselected binding")
 		}
 		count++
 		if count > 1 {
@@ -194,7 +210,7 @@ func (d SelectedDelivery) ValidateCursorObjects(objects []NativeObjectOwnership)
 			return err
 		}
 		if o != d.CursorOwnership(o.CursorReceipt) {
-			return fmt.Errorf("Cursor object differs from frozen selection")
+			return fmt.Errorf("cursor object differs from frozen selection")
 		}
 	}
 	return nil

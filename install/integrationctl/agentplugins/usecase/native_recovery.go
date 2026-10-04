@@ -111,7 +111,7 @@ func validateNativeReconciliation(intent domain.PendingNativeIntent, outcome dom
 	if f, ok := intent.Delivery.CursorFacts(); ok {
 		expected := intent.Delivery.CursorOwnership(f.PlannedReceipt)
 		if len(outcome.NativeObjects) != 1 || outcome.NativeObjects[0] != expected || outcome.LocalEntryObservation != nil {
-			return fmt.Errorf("Cursor recovery outcome differs from recorded planned receipt")
+			return fmt.Errorf("cursor recovery outcome differs from recorded planned receipt")
 		}
 		return nil
 	}

@@ -51,28 +51,33 @@ func (service Service) beginNativeAttemptWithObservation(installationID, binding
 		if err := validateDeliverySelection(client.SelectedDelivery, selected); err != nil {
 			return err
 		}
-		if !selected.IsZero() {
-			client.PendingNativeIntent = &domain.PendingNativeIntent{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority), ProfileNamespace: client.ProfileNamespace, LocalEntryObservation: client.LocalEntryObservation.Clone(), AttemptID: attemptID, Direction: direction, Delivery: client.SelectedDelivery, RemoveOwnedEntry: direction == domain.NativeIntentRemove && client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects)}
-			if _, ok := selected.CursorFacts(); ok {
-				// Selection is the attempt packet, not acknowledged ownership. Keep
-				// the old whole owned object separately until actual readback succeeds.
-				client.SelectedDelivery = selected
-				client.PendingNativeIntent.Delivery = selected
-				for _, object := range client.NativeObjects {
-					if object.Kind == "cursor_user_stop" {
-						client.PendingNativeIntent.PreviousCursorObject = object
-					}
-				}
-			}
-			if err := client.PendingNativeIntent.Validate(client); err != nil {
-				return err
-			}
+		if err := prepareSelectedNativeIntent(&client, attemptID, direction, selected); err != nil {
+			return err
 		}
 		installation.Clients[bindingID] = client
 		state.Installations[i] = installation
 		return service.persistLifecycleState(state)
 	}
 	return fmt.Errorf("installation disappeared before native activation")
+}
+
+func prepareSelectedNativeIntent(client *domain.ClientBinding, attemptID string, direction domain.NativeIntentDirection, selected domain.SelectedDelivery) error {
+	if selected.IsZero() {
+		return nil
+	}
+	client.PendingNativeIntent = &domain.PendingNativeIntent{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority), ProfileNamespace: client.ProfileNamespace, LocalEntryObservation: client.LocalEntryObservation.Clone(), AttemptID: attemptID, Direction: direction, Delivery: client.SelectedDelivery, RemoveOwnedEntry: direction == domain.NativeIntentRemove && client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects)}
+	if _, ok := selected.CursorFacts(); ok {
+		// Selection is the attempt packet, not acknowledged ownership. Keep
+		// the old whole owned object separately until actual readback succeeds.
+		client.SelectedDelivery = selected
+		client.PendingNativeIntent.Delivery = selected
+		for _, object := range client.NativeObjects {
+			if object.Kind == "cursor_user_stop" {
+				client.PendingNativeIntent.PreviousCursorObject = object
+			}
+		}
+	}
+	return client.PendingNativeIntent.Validate(*client)
 }
 
 func cloneClientBindings(source map[string]domain.ClientBinding) map[string]domain.ClientBinding {

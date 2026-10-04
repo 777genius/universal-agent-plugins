@@ -95,6 +95,15 @@ func TestSelectedCursorPacketSealingAndAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A valid packet must not authorize another registered client or an unknown
+	// identity when generic Store and installer callers delegate this guard.
+	for _, client := range append(ClientDefinitions(), ClientDefinition{}, ClientDefinition{ID: "unknown"}) {
+		id := client.ID
+		err := selected.ValidateClient(id)
+		if (err == nil) != (id == ClientCursor) {
+			t.Fatalf("Cursor client linkage for %q: %v", id, err)
+		}
+	}
 	sealed, err := selected.WithProjectionDigest(digest)
 	if err != nil {
 		t.Fatal(err)

@@ -47,33 +47,41 @@ func (intent PendingNativeIntent) Validate(binding ClientBinding) error {
 		return fmt.Errorf("pending reverse decision differs from confirmed entry ownership")
 	}
 	if f, ok := intent.Delivery.CursorFacts(); ok {
-		if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
-			return fmt.Errorf("pending Cursor packet differs from binding attempt packet")
-		}
-		if binding.ClientID != string(ClientCursor) || binding.Scope != string(ScopeUser) || binding.NativeProfileRoot != f.ProfileRoot || f.ProjectionDigest == "" || f.ProjectionDigest != binding.SelectedDelivery.ProjectionDigest() || binding.PackageRevision == nil || f.CanonicalDigest != binding.PackageRevision.TreeDigest || f.CanonicalDigest != binding.SelectedDelivery.CanonicalDigest() {
-			return fmt.Errorf("pending Cursor intent revision/profile differs from binding")
-		}
-		if err := binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects); err != nil {
-			return err
-		}
-		var previous NativeObjectOwnership
-		for _, object := range binding.NativeObjects {
-			if object.Kind == "cursor_user_stop" {
-				previous = object
-			}
-		}
-		if intent.PreviousCursorObject != previous {
-			return fmt.Errorf("pending Cursor original predecessor changed")
-		}
-		return nil
+		return intent.validateCursorBinding(binding, f)
 	}
+	return intent.validateLocalBinding(binding)
+}
+
+func (intent PendingNativeIntent) validateLocalBinding(binding ClientBinding) error {
 	if intent.PreviousCursorObject != (NativeObjectOwnership{}) {
-		return fmt.Errorf("Cursor predecessor on Local intent")
+		return fmt.Errorf("cursor predecessor on Local intent")
 	}
 	facts, _ := intent.Delivery.LocalFacts()
 	bound, _ := binding.SelectedDelivery.LocalFacts()
 	if facts.ProjectionDigest == "" || facts.ProjectionDigest != bound.ProjectionDigest || facts.CanonicalDigest != bound.CanonicalDigest || facts.Registration.Selector != binding.TargetLocator || binding.PackageRevision == nil || facts.CanonicalDigest != binding.PackageRevision.TreeDigest {
 		return fmt.Errorf("pending native intent package/projection authority is incomplete")
+	}
+	return nil
+}
+
+func (intent PendingNativeIntent) validateCursorBinding(binding ClientBinding, f CursorDeliveryFacts) error {
+	if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
+		return fmt.Errorf("pending Cursor packet differs from binding attempt packet")
+	}
+	if binding.ClientID != string(ClientCursor) || binding.Scope != string(ScopeUser) || binding.NativeProfileRoot != f.ProfileRoot || f.ProjectionDigest == "" || f.ProjectionDigest != binding.SelectedDelivery.ProjectionDigest() || binding.PackageRevision == nil || f.CanonicalDigest != binding.PackageRevision.TreeDigest || f.CanonicalDigest != binding.SelectedDelivery.CanonicalDigest() {
+		return fmt.Errorf("pending Cursor intent revision/profile differs from binding")
+	}
+	if err := binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects); err != nil {
+		return err
+	}
+	var previous NativeObjectOwnership
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "cursor_user_stop" {
+			previous = object
+		}
+	}
+	if intent.PreviousCursorObject != previous {
+		return fmt.Errorf("pending Cursor original predecessor changed")
 	}
 	return nil
 }

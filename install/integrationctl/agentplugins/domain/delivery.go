@@ -252,7 +252,7 @@ func decodeCursorValue(raw []byte, target any) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	token, err := d.Token()
 	if err != nil || token != json.Delim('{') {
-		return fmt.Errorf("Cursor carrier must be an object")
+		return fmt.Errorf("cursor carrier must be an object")
 	}
 	seen := map[string]bool{}
 	for d.More() {
@@ -293,7 +293,7 @@ func (f *CursorDeliveryFacts) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	if _, exists := fields["original_exists"]; !exists || string(fields["original_exists"]) == "null" {
-		return fmt.Errorf("Cursor original existence must be explicit")
+		return fmt.Errorf("cursor original existence must be explicit")
 	}
 	*f = CursorDeliveryFacts(decoded)
 	return nil

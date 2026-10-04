@@ -374,7 +374,11 @@ func TestCursorSelectedUnownedCollisionBeforeGrant(t *testing.T) {
 	e := lifecycleFacadeEngine(t, root, a, false)
 	h, err := e.Prepare(t.Context(), cursorIntentRequest(root))
 	if h != nil {
-		defer h.Close()
+		defer func() {
+			if err := h.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
 	}
 	if !errors.Is(err, cursorhooks.ErrConflict) {
 		t.Fatalf("expected actual pure-planner collision before grant: %v", err)
@@ -471,7 +475,11 @@ func TestCursorSelectedProcessRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer func() {
+		if err := h.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if _, err := e.Apply(t.Context(), h, confirmedDecision()); err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +499,11 @@ func TestCursorSelectedProcessRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer update.Close()
+	defer func() {
+		if err := update.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	if _, err := e.Apply(t.Context(), update, confirmedDecision()); err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +555,7 @@ func cursorPureReceipt(r domain.CursorHookReceipt) *cursorhooks.Receipt {
 	return &cursorhooks.Receipt{Version: r.Version, Event: r.Event, Spec: cursorhooks.HookSpec{Executable: r.Executable, Selector: r.Selector}, Shell: cursorhooks.ShellContract(r.Shell), EntryDigest: r.EntryDigest, RemainderDigest: r.RemainderDigest}
 }
 func cursorRawDigest(body []byte) string { return fmt.Sprintf("sha256:%x", sha256.Sum256(body)) }
-func (a *testCursorIntentAdapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (a *testCursorIntentAdapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) (err error) {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -552,7 +564,7 @@ func (a *testCursorIntentAdapter) RefinePlan(ctx context.Context, in clients.Pla
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { err = errors.Join(err, file.Close()) }()
 	original := file.Original()
 	if original.Exists && len(original.Body) == 0 {
 		return fmt.Errorf("present empty hook document")
@@ -576,13 +588,13 @@ func (a *testCursorIntentAdapter) RefinePlan(ctx context.Context, in clients.Pla
 	plan.SelectedDelivery, err = domain.NewCursorDelivery(domain.CursorDeliveryFacts{ProfileRoot: in.Client.ConfigRoot, HooksPath: path, ProfileIdentity: "TEST-Cursor-profile", CursorVersion: "2026.09.28-64d2043", TargetOS: "linux", TargetArch: "amd64", QualificationID: "TEST-injected-contract", Executable: receipt.Executable, Selector: receipt.Selector, Shell: receipt.Shell, ObjectID: "TEST-Cursor-Stop", EntryDigest: receipt.EntryDigest, CanonicalDigest: in.Envelope.TreeDigest, PlannedReceipt: receipt, OriginalExists: original.Exists, OriginalRawDigest: cursorRawDigest(original.Body)})
 	return err
 }
-func (a *testCursorIntentAdapter) plannedFile(selected domain.SelectedDelivery, objects []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, apply bool) error {
+func (a *testCursorIntentAdapter) plannedFile(selected domain.SelectedDelivery, objects []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, apply bool) (err error) {
 	f, _ := selected.CursorFacts()
 	file, err := kernel.BeginExactFile(f.HooksPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { err = errors.Join(err, file.Close()) }()
 	original := file.Original()
 	if original.Exists != f.OriginalExists || cursorRawDigest(original.Body) != f.OriginalRawDigest {
 		return fmt.Errorf("stale exact Cursor original")
@@ -612,7 +624,9 @@ func (a *testCursorIntentAdapter) plannedFile(selected domain.SelectedDelivery, 
 	}
 	a.effects++
 	if a.crash {
-		os.Exit(91)
+		// Return immediately after the real effect, without readback or an
+		// acknowledgement. Activate exits once this ExactFile scope closes.
+		return nil
 	}
 	actual, err := os.ReadFile(f.HooksPath)
 	if err != nil {
@@ -662,6 +676,9 @@ func (a *testCursorIntentAdapter) Activate(ctx context.Context, env clients.Env,
 	}
 	if err := a.plannedFile(req.Plan.SelectedDelivery, req.Plan.PreviousNativeObjects, env.NativeConfig, true); err != nil {
 		return domain.ActivationOutcome{NativeEffect: domain.NativeEffectUncertain}, err
+	}
+	if a.crash {
+		os.Exit(91)
 	}
 	f, _ := req.Plan.SelectedDelivery.CursorFacts()
 	return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectCommitted, NativeObjects: []domain.NativeObjectOwnership{req.Plan.SelectedDelivery.CursorOwnership(f.PlannedReceipt)}}, nil
