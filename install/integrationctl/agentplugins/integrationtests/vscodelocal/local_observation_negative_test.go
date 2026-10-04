@@ -458,7 +458,7 @@ type ambiguousLocalStore struct {
 }
 
 func (s *ambiguousLocalStore) Save(next domain.StateFileV2) error {
-	old, err := s.Store.Load()
+	old, err := s.Load()
 	if err != nil {
 		return err
 	}

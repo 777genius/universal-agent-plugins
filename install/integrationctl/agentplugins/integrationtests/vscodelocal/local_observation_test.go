@@ -177,13 +177,13 @@ func assertLocalFiles(t *testing.T, before map[string]localFileSnapshot) {
 	assertLocalFilesWithCancelledFixture(t, before, nil)
 }
 
-func assertLocalFilesWithCancelledFixture(t *testing.T, before map[string]localFileSnapshot, cancelled *localFixture) {
+func assertLocalFilesWithCancelledFixture(t *testing.T, before map[string]localFileSnapshot, canceled *localFixture) {
 	t.Helper()
 	scratchRoot := ""
-	if cancelled != nil {
+	if canceled != nil {
 		// f.engine sets StateRoot and leaves TempRoot at its documented default.
 		// Prepare/Close may change only this directory's mtime, not its children.
-		scratchRoot = filepath.Join(cancelled.state, "tmp")
+		scratchRoot = filepath.Join(canceled.state, "tmp")
 		old, ok := before[scratchRoot]
 		if !ok || !old.info.IsDir() {
 			t.Fatal("owned scratch root was not a snapshotted directory")

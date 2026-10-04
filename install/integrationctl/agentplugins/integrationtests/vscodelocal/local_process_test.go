@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
