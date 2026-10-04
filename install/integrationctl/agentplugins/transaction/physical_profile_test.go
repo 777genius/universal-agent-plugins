@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 type physicalPort struct{}
@@ -36,7 +37,17 @@ func (s *physicalCountingStore) Save(state domain.StateFileV2) error {
 func physicalTransaction(t *testing.T, id string) (Kernel, DirectoryMutation, string) {
 	t.Helper()
 	k, m, store := transactionFixture(t, id)
-	profile := filepath.Join(t.TempDir(), "TEST-profile")
+	base, err := filepath.EvalSymlinks(m.OwnedBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.OwnedBase = base
+	m.ActivePath = filepath.Join(base, filepath.Base(m.ActivePath))
+	m.StagingPath = filepath.Join(base, filepath.Base(m.StagingPath))
+	store.Path = filepath.Join(filepath.Dir(base), filepath.Base(store.Path))
+	k.StateStore = store
+	k.Directory.JournalDir = filepath.Join(filepath.Dir(base), filepath.Base(k.Directory.JournalDir))
+	profile := filepath.Join(physicalTempDir(t), "TEST-profile")
 	if err := os.Mkdir(profile, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -90,12 +101,12 @@ func physicalWholeRecoveryBeforeSave(t *testing.T, fault string) {
 		}
 		return nil
 	}
-	secondBase := filepath.Join(t.TempDir(), "managed")
+	secondBase := filepath.Join(physicalTempDir(t), "managed")
 	secondActive := filepath.Join(secondBase, "plugin")
 	secondStaging := filepath.Join(secondBase, "staging")
 	writeTransactionBody(t, secondActive, "old")
 	writeTransactionBody(t, secondStaging, "new")
-	p2 := filepath.Join(t.TempDir(), "TEST-second-profile")
+	p2 := filepath.Join(physicalTempDir(t), "TEST-second-profile")
 	if err := os.Mkdir(p2, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +297,7 @@ func TestPhysicalProfileSharedDataMissingVerifierBeforeIntent(t *testing.T) {
 	k.Namespace = filepath.Dir(store.Path)
 	state := m.DesiredState
 	first := state.Installations[0].Clients[m.ClientBindingID]
-	data, _, err := (providers.PluginDataManager{Base: filepath.Join(t.TempDir(), "TEST-data")}).EnsureData(t.Context(), m.InstallationID, first.PhysicalArtifact, first.Scope)
+	data, _, err := (providers.PluginDataManager{Base: filepath.Join(physicalTempDir(t), "TEST-data")}).EnsureData(t.Context(), m.InstallationID, first.PhysicalArtifact, first.Scope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +343,7 @@ func TestPhysicalProfileSharedDataJournalScopes(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := state.Installations[0].Clients[m.ClientBindingID]
-	dataManager := providers.PluginDataManager{Base: filepath.Join(t.TempDir(), "TEST-data")}
+	dataManager := providers.PluginDataManager{Base: filepath.Join(physicalTempDir(t), "TEST-data")}
 	data, _, err := dataManager.EnsureData(t.Context(), m.InstallationID, first.PhysicalArtifact, first.Scope)
 	if err != nil {
 		t.Fatal(err)
@@ -340,7 +351,7 @@ func TestPhysicalProfileSharedDataJournalScopes(t *testing.T) {
 	first.DataReceiptID = data.DataReceiptID
 	state.Installations[0].DataReceipts = map[string]domain.DataReceipt{data.DataReceiptID: data}
 	state.Installations[0].Clients[m.ClientBindingID] = first
-	profile := filepath.Join(t.TempDir(), "TEST-peer-profile")
+	profile := filepath.Join(physicalTempDir(t), "TEST-peer-profile")
 	if err := os.Mkdir(profile, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -467,4 +478,13 @@ func TestPhysicalProfileSharedDataJournalScopes(t *testing.T) {
 	if err != nil || !bytes.Equal(raw, after) {
 		t.Fatal("terminal refusal changed journal")
 	}
+}
+
+func physicalTempDir(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }

@@ -1,11 +1,11 @@
 package clients
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"io/fs"
 	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // HostDetector is the read-only surface probe of one client. It returns what it

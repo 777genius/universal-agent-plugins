@@ -6,13 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 )
 
@@ -419,7 +419,7 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 	if err := pathpolicy.ValidateLeafID(input.OperationID); err != nil {
 		return Receipt{}, fmt.Errorf("unsafe directory swap operation id: %w", err)
 	}
-	if err := pathpolicy.ValidateLeafID(input.ClientBindingID); err != nil && !(len(input.ProfileOwners) > 0 && input.DataReceiptID != "" && input.ClientBindingID == "") {
+	if err := pathpolicy.ValidateLeafID(input.ClientBindingID); err != nil && (len(input.ProfileOwners) == 0 || input.DataReceiptID == "" || input.ClientBindingID != "") {
 		return Receipt{}, fmt.Errorf("unsafe directory swap client binding id: %w", err)
 	}
 	if input.Sequence < 1 {
@@ -598,7 +598,7 @@ func (manager Manager) validateReceipt(receipt Receipt) error {
 	if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 		return fmt.Errorf("unsafe directory swap receipt operation id: %w", err)
 	}
-	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil && !(receipt.SchemaVersion == 5 && receipt.DataReceiptID != "" && receipt.ClientBindingID == "") {
+	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil && (receipt.SchemaVersion != 5 || receipt.DataReceiptID == "" || receipt.ClientBindingID != "") {
 		return fmt.Errorf("unsafe directory swap receipt client binding id: %w", err)
 	}
 	if receipt.Sequence < 1 {
@@ -836,6 +836,10 @@ func (manager Manager) validatePhysical(r Receipt) error {
 	if r.OldObject != nil && r.OldObject.CanonicalPath != r.ActivePath || r.PublishedObject != nil && r.PublishedObject.CanonicalPath != r.StagingPath {
 		return fmt.Errorf("physical object proof has wrong original role")
 	}
+	return validatePhysicalRoles(r)
+}
+
+func validatePhysicalRoles(r Receipt) error {
 	quarantineOld := r.Phase == PhaseCommitPending || r.Phase == PhaseCommitted
 	for _, role := range []struct {
 		path string

@@ -158,7 +158,7 @@ func newLoader() (loader.Loader, error) {
 }
 
 func profileClients(detected map[domain.ClientID]domain.DetectedClient) []domain.DetectedClient {
-	var out []domain.DetectedClient
+	out := make([]domain.DetectedClient, 0, len(detected))
 	for _, c := range detected {
 		c.ProfileAuthority = domain.CloneProfileAuthority(c.ProfileAuthority)
 		out = append(out, c)
@@ -214,41 +214,11 @@ func (e *Engine) captureRequestProfiles(ctx context.Context, req Request) (map[d
 	}
 	installation, _ := findInstall(state, installationID)
 	for id, c := range detected {
-		var recorded *domain.ClientBinding
-		for key, b := range installation.Clients {
-			if b.ClientID != string(id) || b.Scope != string(domain.ScopeUser) {
-				continue
-			}
-			if recorded != nil || key != b.ClientBindingID {
-				return nil, fmt.Errorf("physical binding owner is ambiguous")
-			}
-			copy := b
-			recorded = &copy
+		current, err := e.captureClientProfile(ctx, installation, c)
+		if err != nil {
+			return nil, err
 		}
-		if recorded != nil {
-			if err := e.VerifyProfileAuthority(ctx, installation.InstallationID, recorded.ClientBindingID); err != nil {
-				return nil, err
-			}
-			c.ProfileAuthority = domain.CloneProfileAuthority(recorded.ProfileAuthority)
-			c.ProfileNamespace = recorded.ProfileNamespace
-		} else {
-			token, err := e.planner().CaptureProfileAuthority(ctx, c)
-			if err != nil {
-				return nil, err
-			}
-			if !token.IsZero() {
-				c.ProfileAuthority = &token
-				c.ProfileNamespace = e.cfg.StateRoot
-			}
-		}
-		if c.ProfileAuthority != nil {
-			canonical, err := filepath.EvalSymlinks(c.ConfigRoot)
-			if err != nil || canonical != c.ProfileAuthority.Facts().CanonicalRoot {
-				return nil, fmt.Errorf("selected alias differs from frozen physical profile")
-			}
-			c.ConfigRoot = canonical
-		}
-		detected[id] = c
+		detected[id] = current
 	}
 	return detected, e.prevalidatePhysical(ctx)
 }
@@ -288,4 +258,42 @@ func physicalDetected(req Request, detected map[domain.ClientID]domain.DetectedC
 		detected[id] = physicalClient(req, c)
 	}
 	return detected
+}
+
+func (e *Engine) captureClientProfile(ctx context.Context, installation domain.Installation, c domain.DetectedClient) (domain.DetectedClient, error) {
+	var recorded *domain.ClientBinding
+	for key, b := range installation.Clients {
+		if b.ClientID != string(c.ClientID) || b.Scope != string(domain.ScopeUser) {
+			continue
+		}
+		if recorded != nil || key != b.ClientBindingID {
+			return c, fmt.Errorf("physical binding owner is ambiguous")
+		}
+		bindingCopy := b
+		recorded = &bindingCopy
+	}
+	if recorded != nil {
+		if err := e.VerifyProfileAuthority(ctx, installation.InstallationID, recorded.ClientBindingID); err != nil {
+			return c, err
+		}
+		c.ProfileAuthority = domain.CloneProfileAuthority(recorded.ProfileAuthority)
+		c.ProfileNamespace = recorded.ProfileNamespace
+	} else {
+		token, err := e.planner().CaptureProfileAuthority(ctx, c)
+		if err != nil {
+			return c, err
+		}
+		if !token.IsZero() {
+			c.ProfileAuthority = &token
+			c.ProfileNamespace = e.cfg.StateRoot
+		}
+	}
+	if c.ProfileAuthority != nil {
+		canonical, err := filepath.EvalSymlinks(c.ConfigRoot)
+		if err != nil || canonical != c.ProfileAuthority.Facts().CanonicalRoot {
+			return c, fmt.Errorf("selected alias differs from frozen physical profile")
+		}
+		c.ConfigRoot = canonical
+	}
+	return c, nil
 }

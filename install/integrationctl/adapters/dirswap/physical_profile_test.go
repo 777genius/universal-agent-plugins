@@ -4,16 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 )
 
 // Regression: an unqualified TEST filesystem cannot silently authorize an opted effect.
 func TestPhysicalProfileTESTCapture(t *testing.T) {
-	token, err := directoryidentity.Capture(context.Background(), t.TempDir())
+	token, err := directoryidentity.Capture(context.Background(), physicalTempDir(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +28,16 @@ func TestPhysicalProfileTESTCapture(t *testing.T) {
 func physicalFixture(t *testing.T) (Manager, Input, string) {
 	t.Helper()
 	m, in := fixture(t)
-	profile := filepath.Join(t.TempDir(), "TEST-profile")
+	base, err := filepath.EvalSymlinks(in.OwnedBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.OwnedBase = base
+	in.ActivePath = filepath.Join(base, filepath.Base(in.ActivePath))
+	in.StagingPath = filepath.Join(base, filepath.Base(in.StagingPath))
+	m.JournalDir = filepath.Join(filepath.Dir(base), filepath.Base(m.JournalDir))
+	in.VerifyActive = verifyFixture(t, in.ActivePath)
+	profile := filepath.Join(physicalTempDir(t), "TEST-profile")
 	if err := os.Mkdir(profile, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -74,10 +85,11 @@ func TestPhysicalProfileInitialIntentDeath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(exe, "-test.run=^TestPhysicalProfileInitialIntentDeath$")
+	cmd := exec.CommandContext(t.Context(), exe, "-test.run=^TestPhysicalProfileInitialIntentDeath$")
 	cmd.Env = append(os.Environ(), "UAP_TEST_PHYSICAL_CHILD="+root)
 	out, err := cmd.CombinedOutput()
-	if exit, ok := err.(*exec.ExitError); !ok || exit.ExitCode() != 44 {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 44 {
 		t.Fatalf("child did not die at admitted boundary: %v %s", err, out)
 	}
 	raw, err := os.ReadFile(m.journalPath("TEST-death"))
@@ -158,4 +170,13 @@ func TestPhysicalProfileRolesAndTerminalCleanup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func physicalTempDir(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }

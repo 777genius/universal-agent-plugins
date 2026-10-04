@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"os"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 const (
@@ -984,7 +984,7 @@ func copyOwners(owners []domain.PhysicalProfileOwner) []domain.PhysicalProfileOw
 	return out
 }
 func neutralOwners(owners []domain.PhysicalProfileOwner) []dirswap.ProfileOwner {
-	var out []dirswap.ProfileOwner
+	out := make([]dirswap.ProfileOwner, 0, len(owners))
 	for _, o := range owners {
 		token, err := profileauthority.ToNeutral(*o.Authority)
 		if err != nil {
@@ -1234,7 +1234,10 @@ func (kernel Kernel) pendingOwners(ctx context.Context, state domain.StateFileV2
 	for _, installation := range state.Installations {
 		for key, b := range installation.Clients {
 			for _, r := range b.Receipts {
-				if r.Phase == ReceiptPhaseStateCommitted {
+				if r.Phase != ReceiptPhaseStateCommitted {
+					continue
+				}
+				{
 					scope, err := kernel.bindingOwner(ctx, installation.InstallationID, key, b)
 					if err != nil {
 						return nil, err
@@ -1321,6 +1324,23 @@ func (kernel Kernel) PrevalidateRecovery(ctx context.Context) error {
 	state, err := kernel.StateStore.Load()
 	if err != nil {
 		return err
+	}
+	if kernel.Directory.JournalDir == "" {
+		owners, err := kernel.pendingOwners(ctx, state, nil)
+		if err != nil {
+			return err
+		}
+		if len(owners) != 0 || len(kernel.Directory.RequiredOwners) != 0 {
+			return fmt.Errorf("physical recovery journal dir is required")
+		}
+		for _, installation := range state.Installations {
+			for _, binding := range installation.Clients {
+				if binding.ProfileAuthority != nil {
+					return fmt.Errorf("physical recovery journal dir is required")
+				}
+			}
+		}
+		return nil
 	}
 	kernel.Directory.Namespace = kernel.Namespace
 	open, err := kernel.Directory.ListOpen()

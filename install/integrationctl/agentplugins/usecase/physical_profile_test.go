@@ -6,6 +6,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -13,9 +17,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/vscodelocalhooks"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 type physicalLocal struct {
@@ -32,7 +33,7 @@ func (a *physicalLocal) RevalidateProfileAuthority(ctx context.Context, _ domain
 }
 func actualPhysicalLocal(t *testing.T) (string, *vscode.LocalAdapter, installer.Request) {
 	t.Helper()
-	root := t.TempDir()
+	root := physicalTempDir(t)
 	pkg := filepath.Join(root, "TEST-package")
 	profile := filepath.Join(root, "TEST-profile")
 	for _, dir := range []string{profile, filepath.Dir(filepath.Join(pkg, filepath.FromSlash(vscodelocalhooks.PluginPath)))} {
@@ -77,7 +78,11 @@ func TestPhysicalProfileHistoricalLocalCannotRecapture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer func() {
+		if err := h.Close(); err != nil {
+			t.Errorf("close prepared operation: %v", err)
+		}
+	}()
 	if _, err := eng.Apply(t.Context(), h, confirmedDecision()); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +102,11 @@ func TestPhysicalProfileHistoricalLocalCannotRecapture(t *testing.T) {
 	eng = localTestEngine(t, stateRoot, opted)
 	unexpected, prepareErr := eng.Prepare(t.Context(), req)
 	if unexpected != nil {
-		defer unexpected.Close()
+		defer func() {
+			if err := unexpected.Close(); err != nil {
+				t.Errorf("close prepared operation: %v", err)
+			}
+		}()
 	}
 	if prepareErr == nil {
 		t.Fatal("missing opted token was accepted")
@@ -130,7 +139,11 @@ func TestPhysicalProfileLocalBootstrapBeforePrepare(t *testing.T) {
 	}
 	unexpected, prepareErr := eng.Prepare(t.Context(), req)
 	if unexpected != nil {
-		defer unexpected.Close()
+		defer func() {
+			if err := unexpected.Close(); err != nil {
+				t.Errorf("close prepared operation: %v", err)
+			}
+		}()
 	}
 	if !errors.Is(prepareErr, directoryidentity.ErrBootstrapRequired) {
 		t.Fatalf("missing profile did not return bootstrap refusal: %v", prepareErr)
@@ -138,4 +151,13 @@ func TestPhysicalProfileLocalBootstrapBeforePrepare(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(root, "TEST-state")); !os.IsNotExist(err) {
 		t.Fatal("entry refusal created owned namespace")
 	}
+}
+
+func physicalTempDir(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }

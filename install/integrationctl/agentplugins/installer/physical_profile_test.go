@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -13,10 +18,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"testing"
 )
 
 type physicalEditor struct {
@@ -46,7 +47,7 @@ func (a physicalEditor) RevalidateProfileAuthority(ctx context.Context, _ domain
 }
 func physicalEngine(t *testing.T) (*Engine, Request) {
 	t.Helper()
-	root := t.TempDir()
+	root := physicalTempDir(t)
 	profile := filepath.Join(root, "TEST-profile")
 	pkg := filepath.Join(root, "TEST-package")
 	for _, dir := range []string{profile, filepath.Join(pkg, "skills", "TEST")} {
@@ -87,7 +88,11 @@ func TestPhysicalProfileBootstrapBeforePrepare(t *testing.T) {
 			}
 			unexpected, prepareErr := e.Prepare(t.Context(), req)
 			if unexpected != nil {
-				defer unexpected.Close()
+				defer func() {
+					if err := unexpected.Close(); err != nil {
+						t.Errorf("close prepared operation: %v", err)
+					}
+				}()
 			}
 			if _, err := os.Lstat(e.cfg.StateRoot); !os.IsNotExist(err) {
 				t.Fatalf("bootstrap/reservation created namespace: prepare=%v stat=%v", prepareErr, err)
@@ -112,7 +117,11 @@ func TestPhysicalProfileExactOwnerAndImmutableAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer func() {
+		if err := h.Close(); err != nil {
+			t.Errorf("close prepared operation: %v", err)
+		}
+	}()
 	p := h.Plan()
 	if p.ProfileAuthority == nil || p.ProfileAuthority.Facts().CanonicalRoot != canonical {
 		t.Fatal("prepared token did not freeze canonical spelling")
@@ -190,7 +199,11 @@ func TestPhysicalProfileHandoffDriftRetainsCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer func() {
+		if err := h.Close(); err != nil {
+			t.Errorf("close prepared operation: %v", err)
+		}
+	}()
 	result, err := e.Apply(t.Context(), h, Decision{Confirmed: true})
 	if err == nil || calls != 1 {
 		t.Fatalf("callback did not fence next effect: calls=%d %v", calls, err)
@@ -220,7 +233,11 @@ func TestPhysicalProfileLateGroupTargetBeforePrepare(t *testing.T) {
 	req.Targets = []ClientTarget{{ClientID: "codex", ClientConfigRoot: req.ClientConfigRoot, ClientExecutable: req.ClientExecutable}, {ClientID: "claude", ClientConfigRoot: filepath.Join(filepath.Dir(req.ClientConfigRoot), "TEST-late-missing"), ClientExecutable: req.ClientExecutable}}
 	unexpected, prepareErr := e.Prepare(t.Context(), req)
 	if unexpected != nil {
-		defer unexpected.Close()
+		defer func() {
+			if err := unexpected.Close(); err != nil {
+				t.Errorf("close prepared operation: %v", err)
+			}
+		}()
 	}
 	if _, err := os.Lstat(e.cfg.StateRoot); !os.IsNotExist(err) {
 		t.Fatalf("late invalid target permitted earlier namespace effects: %v", prepareErr)
@@ -253,7 +270,11 @@ func TestPhysicalProfileProjectionDriftBeforeStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer h.Close()
+	defer func() {
+		if err := h.Close(); err != nil {
+			t.Errorf("close prepared operation: %v", err)
+		}
+	}()
 	if _, err := e.Apply(t.Context(), h, Decision{Confirmed: true}); err == nil || calls != 1 {
 		t.Fatalf("projection drift reached next effect: %d %v", calls, err)
 	}
@@ -317,7 +338,11 @@ func TestPhysicalProfileCallbackCannotReplaceFrozenAuthority(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer h.Close()
+			defer func() {
+				if err := h.Close(); err != nil {
+					t.Errorf("close prepared operation: %v", err)
+				}
+			}()
 			var stateBefore []byte
 			if phase == "verifier" {
 				if _, err := e.Apply(t.Context(), h, Decision{Confirmed: true}); err != nil {
@@ -331,7 +356,11 @@ func TestPhysicalProfileCallbackCannotReplaceFrozenAuthority(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer h.Close()
+				defer func() {
+					if err := h.Close(); err != nil {
+						t.Errorf("close prepared operation: %v", err)
+					}
+				}()
 				stateBefore, err = os.ReadFile(e.cfg.StateFile)
 				if err != nil {
 					t.Fatal(err)
@@ -400,7 +429,11 @@ func TestPhysicalProfilePublicRecoverAfterChildDeath(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer h.Close()
+		defer func() {
+			if err := h.Close(); err != nil {
+				t.Errorf("close prepared operation: %v", err)
+			}
+		}()
 		_, err = e.Apply(t.Context(), h, Decision{Confirmed: true})
 		t.Fatalf("child never reached committed-state death: %v", err)
 	}
@@ -481,4 +514,13 @@ func TestPhysicalProfilePublicRecoverAfterChildDeath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func physicalTempDir(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
