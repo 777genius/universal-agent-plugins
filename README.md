@@ -14,6 +14,7 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
 <img width="423" height="234" alt="image" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
 <img width="1079" height="584" alt="image" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
+<img width="669" height="125" alt="image" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
 
 ## Use plugins
 
