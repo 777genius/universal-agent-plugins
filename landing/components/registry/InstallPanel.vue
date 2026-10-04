@@ -10,7 +10,8 @@ const targets = defineModel<ClientID[]>('targets', { required: true });
 const autoDetect = defineModel<boolean>('autoDetect', { required: true });
 const { asset, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
-const discoveryStale = useDiscoveryIsStale(() => props.plugin);
+const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
+const canUseSource = computed(() => isDiscovered.value || current.value);
 const autoOption = computed(() => ({
   label: t('registryUi.install.allInstalledAgentsRecommended'),
   summary: t('registryUi.install.allInstalledAgents'),
@@ -26,7 +27,10 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     disabled: !props.plugin.client_support.clients.includes(client.id),
     description: (() => {
-      if (discoveryStale.value) return t('registryUi.catalog.staleCommunityCommands');
+      if (isDiscovered.value)
+        return props.plugin.discovery?.availability === 'available'
+          ? t('registryUi.card.checkedAgainBeforeInstallation')
+          : t('registryUi.card.unavailableAtItsIndexedSource');
       if (!published.value)
         return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
@@ -88,8 +92,8 @@ function saveChoice() {
 }
 const commands = computed(() =>
   props.plugin.installable &&
-  !discoveryStale.value &&
-  current.value &&
+  props.plugin.discovery?.availability !== 'unavailable' &&
+  canUseSource.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
     : undefined,
@@ -109,7 +113,9 @@ function diagnosticText(
   return t(`registryUi.reason.${diagnostic.code}`, params);
 }
 const resolution = computed(() => resolveDistribution(props.plugin, targets.value));
-const expectedSource = computed(() => (current.value ? resolution.value.distribution : undefined));
+const expectedSource = computed(() =>
+  canUseSource.value ? resolution.value.distribution : undefined,
+);
 const expectedSourceLabel = computed(() =>
   expectedSource.value ? t(`registryUi.distribution.${expectedSource.value.kind}`) : '',
 );
@@ -124,10 +130,9 @@ const chatgptSelected = computed(
     selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding),
 );
 const unavailableDiscoveryReason = computed(() => {
-  if (discoveryStale.value) return t('registryUi.catalog.staleCommunityCommands');
-  if (props.plugin.installable) return '';
   if (props.plugin.discovery?.availability === 'unavailable')
     return t('registryUi.install.thisPackageIsNoLongerAvailableFromItsSource');
+  if (props.plugin.installable) return '';
   if (!props.plugin.components.length)
     return t(
       'registryUi.install.weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet',
@@ -227,7 +232,11 @@ watch(availableClients, (next) => {
         :command="commands.remove"
       />
     </div>
-    <p v-if="!unavailableDiscoveryReason && expired" class="install-panel__notice" role="status">
+    <p
+      v-if="!isDiscovered && !unavailableDiscoveryReason && expired"
+      class="install-panel__notice"
+      role="status"
+    >
       <strong>{{ t('registryUi.install.commandsUnavailableStaleDirectory') }}</strong>
       {{
         t(
@@ -236,7 +245,7 @@ watch(availableClients, (next) => {
       }}
     </p>
     <p
-      v-else-if="!unavailableDiscoveryReason && !published"
+      v-else-if="!isDiscovered && !unavailableDiscoveryReason && !published"
       class="install-panel__notice"
       role="status"
     >
@@ -268,7 +277,9 @@ watch(availableClients, (next) => {
       {{ t('registryUi.install.chatgptFinish', { name: plugin.display_name }) }}
     </p>
     <p
-      v-if="!unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && current"
+      v-if="
+        !unavailableDiscoveryReason && !autoDetect && resolution.fallback_reason && canUseSource
+      "
       class="install-panel__notice"
     >
       <strong>{{
@@ -279,7 +290,7 @@ watch(availableClients, (next) => {
       {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
     </p>
     <p
-      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && current"
+      v-else-if="!unavailableDiscoveryReason && !autoDetect && !hasCompleteSource && canUseSource"
       class="install-panel__notice"
     >
       <strong>{{ t('registryUi.install.noSingleSourceServesThisTargetSet') }}</strong>

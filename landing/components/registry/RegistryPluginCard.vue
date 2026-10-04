@@ -106,8 +106,8 @@ const selectedDistribution = computed(() =>
 );
 const canInstall = computed(() =>
   isDiscovered.value
-    ? !discoveryStale.value &&
-      props.plugin.installable &&
+    ? props.plugin.installable &&
+      props.plugin.discovery?.availability !== 'unavailable' &&
       (autoDetect.value || Boolean(selectedDistribution.value))
     : current.value &&
       (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value)),
@@ -131,11 +131,9 @@ const targetOptions = computed(() =>
     disabled: !props.plugin.client_support.clients.includes(client.id),
     description: (() => {
       if (isDiscovered.value)
-        return discoveryStale.value
-          ? t('registryUi.catalog.staleCommunityCommands')
-          : props.plugin.discovery?.availability === 'available'
-            ? t('registryUi.card.checkedAgainBeforeInstallation')
-            : t('registryUi.card.unavailableAtItsIndexedSource');
+        return props.plugin.discovery?.availability === 'available'
+          ? t('registryUi.card.checkedAgainBeforeInstallation')
+          : t('registryUi.card.unavailableAtItsIndexedSource');
       if (!published.value)
         return t('registryUi.card.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.card.unavailableSignedDirectorySnapshotExpired');
@@ -286,13 +284,6 @@ function updateAutoDetect(value: boolean) {
       </AppTooltip>
       <span aria-hidden="true"> · </span>{{ t('registryUi.card.agentPlugins10') }}
     </p>
-    <p v-if="discoveryStale" class="plugin-card__author" role="status">
-      {{
-        t('registryUi.catalog.staleCommunityListing', {
-          expired: plugin.discovery?.expires_at ?? '',
-        })
-      }}
-    </p>
     <SecurityAssessmentBadge
       v-if="plugin.security && !discoveryStale"
       :plugin="plugin"
@@ -349,9 +340,7 @@ function updateAutoDetect(value: boolean) {
       </button>
       <span v-else class="plugin-card__unavailable">{{
         isDiscovered
-          ? discoveryStale
-            ? t('registryUi.catalog.staleCommunityCommands')
-            : t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
+          ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
           : expired
             ? t('registryUi.card.commandsDisabledBecauseTheDirectoryIsTemporarilyStale')
             : !published
