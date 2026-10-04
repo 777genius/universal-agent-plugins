@@ -54,6 +54,9 @@ func (e *Engine) selectedReconciler(clientID string, selected domain.SelectedDel
 }
 
 func (e *Engine) validateRemovalBinding(client domain.DetectedClient, binding domain.ClientBinding) error {
+	if err := binding.ValidateLocalEntryObservation(); err != nil {
+		return err
+	}
 	if binding.ClientID != string(client.ClientID) || binding.Scope != string(domain.ScopeUser) || binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
 		return fmt.Errorf("%w: removal binding scope or native attempt differs", ErrInvalidRequest)
 	}
@@ -228,7 +231,7 @@ func (e *Engine) confirmRemoveDispatch(ctx context.Context, prepared *PreparedOp
 		}
 	}
 	binding.NativeActivationAttempt, binding.PendingNativeIntent = "", nil
-	if !reflect.DeepEqual(binding, old) || !reflect.DeepEqual(receipt, oldReceipt) || !reflect.DeepEqual(request.SelectedDelivery, old.SelectedDelivery) || !reflect.DeepEqual(request.NativeObjects, old.NativeObjects) {
+	if !reflect.DeepEqual(binding, old) || !reflect.DeepEqual(receipt, oldReceipt) || !reflect.DeepEqual(request.SelectedDelivery, old.SelectedDelivery) || !reflect.DeepEqual(request.NativeObjects, old.NativeObjects) || !request.LocalEntryObservation.Equal(old.LocalEntryObservation) {
 		return scope, ErrPlanChanged
 	}
 	// Keep the already recorded Service attempt in the comparison. An observer
@@ -284,6 +287,8 @@ type selectedNativeInspection interface {
 }
 
 func (e *Engine) confirmSelectedNativeEntry(ctx context.Context, client domain.DetectedClient, binding domain.ClientBinding) error {
+	binding.LocalEntryObservation = binding.LocalEntryObservation.Clone()
+	binding.PendingNativeIntent = binding.PendingNativeIntent.Clone()
 	if binding.SelectedDelivery.IsZero() {
 		return nil
 	}
@@ -293,6 +298,7 @@ func (e *Engine) confirmSelectedNativeEntry(ctx context.Context, client domain.D
 	}
 	facts, _ := binding.SelectedDelivery.LocalFacts()
 	plan := domain.DeliveryPlan{ClientID: client.ClientID, Scope: domain.ScopeUser, ActivePath: binding.TargetLocator,
+		LocalEntryObservation: binding.LocalEntryObservation.Clone(), PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
 		PhysicalArtifactID: binding.PhysicalArtifact, SelectedDelivery: binding.SelectedDelivery, NativeRegistryRoot: facts.ProfileRoot}
 	finding, err := adapter.InspectNativeRegistry(ctx, clients.Env{NativeConfig: nativeconfig.New()}, client, plan, &binding)
 	if err != nil {

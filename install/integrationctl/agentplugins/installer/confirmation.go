@@ -37,6 +37,8 @@ func (p confirmationPlanner) Plan(ctx context.Context, request domain.PlanReques
 			return domain.DeliveryPlan{}, err
 		}
 	}
+	request = cloneObservedPlanRequest(request)
+	frozenRequest := cloneObservedPlanRequest(request)
 	plan, err := p.inner.Plan(ctx, request)
 	if err != nil {
 		if !p.capture {
@@ -45,13 +47,16 @@ func (p confirmationPlanner) Plan(ctx context.Context, request domain.PlanReques
 		return plan, err
 	}
 	if p.capture {
-		p.prepared.deliveries = append(p.prepared.deliveries, preparedDeliveryPlan{request: request, plan: plan})
+		p.prepared.deliveries = append(p.prepared.deliveries, preparedDeliveryPlan{request: frozenRequest, plan: cloneObservedDeliveryPlan(plan)})
 		return plan, nil
 	}
 	matched := false
 	for _, frozen := range p.prepared.deliveries {
 		if frozen.request.Client.ClientID == request.Client.ClientID && frozen.request.Scope == request.Scope {
 			matched = true
+			if !frozen.request.LocalEntryObservation.Equal(frozenRequest.LocalEntryObservation) || !reflect.DeepEqual(frozen.request.PreviousNativeObjects, frozenRequest.PreviousNativeObjects) {
+				return plan, ErrPlanChanged
+			}
 			if err := confirmDeliveryPlan(frozen.plan, plan); err != nil {
 				return plan, err
 			}
@@ -66,7 +71,7 @@ func (p confirmationPlanner) Plan(ctx context.Context, request domain.PlanReques
 func confirmDeliveryPlan(frozen, current domain.DeliveryPlan) error {
 	// SameSelection/SameProfile intentionally discard revision fields. Use the
 	// complete-value semantics of usecase group coalescing at this boundary too.
-	if frozen.ActivePath != current.ActivePath || !reflect.DeepEqual(frozen.SelectedDelivery, current.SelectedDelivery) {
+	if frozen.ActivePath != current.ActivePath || !reflect.DeepEqual(frozen.SelectedDelivery, current.SelectedDelivery) || !frozen.LocalEntryObservation.Equal(current.LocalEntryObservation) || !reflect.DeepEqual(frozen.PreviousNativeObjects, current.PreviousNativeObjects) {
 		return fmt.Errorf("%w: selected delivery differs from confirmed plan", ErrPlanChanged)
 	}
 	return nil
@@ -92,7 +97,7 @@ func (e *Engine) confirmDeliveries(ctx context.Context, prepared *PreparedOperat
 		return err
 	}
 	for _, frozen := range prepared.deliveries {
-		current, err := e.planner().Plan(ctx, frozen.request)
+		current, err := e.planner().Plan(ctx, cloneObservedPlanRequest(frozen.request))
 		if err != nil {
 			return fmt.Errorf("%w: regenerate selected plan: %w", ErrPlanChanged, err)
 		}
@@ -116,9 +121,21 @@ func confirmRecordedDeliveries(prepared *PreparedOperation, current domain.State
 		if delivery.plan.SelectedDelivery.IsZero() && old.SelectedDelivery.IsZero() && live.SelectedDelivery.IsZero() {
 			continue
 		}
-		if oldOK != liveOK || old.ClientBindingID != live.ClientBindingID || !reflect.DeepEqual(old.SelectedDelivery, live.SelectedDelivery) {
+		if oldOK != liveOK || old.ClientBindingID != live.ClientBindingID || !reflect.DeepEqual(old.SelectedDelivery, live.SelectedDelivery) || !old.LocalEntryObservation.Equal(live.LocalEntryObservation) || !reflect.DeepEqual(old.PendingNativeIntent, live.PendingNativeIntent) || !reflect.DeepEqual(old.NativeObjects, live.NativeObjects) {
 			return fmt.Errorf("%w: recorded delivery differs from prepared binding", ErrPlanChanged)
 		}
 	}
 	return nil
+}
+
+func cloneObservedPlanRequest(request domain.PlanRequest) domain.PlanRequest {
+	request.LocalEntryObservation = request.LocalEntryObservation.Clone()
+	request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
+	return request
+}
+
+func cloneObservedDeliveryPlan(plan domain.DeliveryPlan) domain.DeliveryPlan {
+	plan.LocalEntryObservation = plan.LocalEntryObservation.Clone()
+	plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), plan.PreviousNativeObjects...)
+	return plan
 }

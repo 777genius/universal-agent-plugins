@@ -1,7 +1,9 @@
 package usecase
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -21,7 +23,10 @@ func (session *repairSession) repairNative() (AddResult, error) {
 	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
 	if clientVerifyErr != nil {
-		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
+		if session.recordedAbsenceRepairable(verified, clientVerifyErr) {
+			return session.reapplyIntactNative(delivery)
+		}
+		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) || session.client.LocalEntryObservation != nil || verified.LocalEntryObservation != nil || session.ctx.Err() != nil {
 			return session.result, clientVerifyErr
 		}
 		return session.reapplyIntactNative(delivery)
@@ -30,6 +35,7 @@ func (session *repairSession) repairNative() (AddResult, error) {
 }
 
 func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery) (AddResult, error) {
+	previousObservation := session.plan.LocalEntryObservation.Clone()
 	// The package bytes are intact but an owned native projection is not.
 	// A confirmed repair may reconstruct an absent exact-owned object. The
 	// provider still observes the live object before any effect and rejects
@@ -49,7 +55,7 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome
-	changed, err := session.service.updateActivationResult(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects)
+	changed, err := session.service.updateActivationResultWithObservation(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects, previousObservation)
 	if err != nil {
 		return session.result, fmt.Errorf("persist repaired native lifecycle: %w", err)
 	}
@@ -62,6 +68,14 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 
 func (session *repairSession) correctIntactLifecycle(verified domain.ActivationOutcome) (AddResult, error) {
 	corrected := session.client
+	if session.client.LocalEntryObservation != nil || verified.LocalEntryObservation != nil {
+		if err := validateObservedOutcome(session.client, verified, session.client.LocalEntryObservation); err != nil {
+			return session.result, err
+		}
+	}
+	if verified.LocalEntryObservation != nil {
+		corrected.LocalEntryObservation = verified.LocalEntryObservation.Clone()
+	}
 	corrected.Materialization = domain.MaterializationMaterialized
 	if corrected.Verification == domain.VerificationFailed {
 		corrected.Verification = domain.VerificationPackageValid
@@ -95,4 +109,31 @@ func (session *repairSession) correctIntactLifecycle(verified domain.ActivationO
 	}
 	session.result.Mutated = true
 	return session.result, nil
+}
+
+// Only a positively classified absence at the exact independently owned,
+// recorded revision can use the existing confirmation/effect path. Verification
+// has already rechecked callback context and the complete frozen binding.
+func (session *repairSession) recordedAbsenceRepairable(outcome domain.ActivationOutcome, err error) bool {
+	// A multi-error or unrelated terminal error cannot classify pure absence.
+	for {
+		if _, multiple := err.(interface{ Unwrap() []error }); multiple {
+			return false
+		}
+		next := errors.Unwrap(err)
+		if next == nil {
+			break
+		}
+		err = next
+	}
+	var absent *domain.LocalEntryAbsence
+	binding := session.client
+	return session.ctx.Err() == nil && outcome.NativeEffect == domain.NativeEffectUnchanged && outcome.LocalEntryObservation == nil &&
+		errors.As(err, &absent) && absent.Matches(binding.LocalEntryObservation) &&
+		binding.NativeActivationAttempt == "" && binding.PendingNativeIntent == nil &&
+		binding.ValidateLocalEntryObservation() == nil &&
+		binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) &&
+		binding.LocalEntryObservation.Equal(session.plan.LocalEntryObservation) &&
+		reflect.DeepEqual(binding.SelectedDelivery, session.plan.SelectedDelivery) &&
+		reflect.DeepEqual(binding.LocalEntryObservation.Facts().RevisionBasis, session.plan.SelectedDelivery)
 }

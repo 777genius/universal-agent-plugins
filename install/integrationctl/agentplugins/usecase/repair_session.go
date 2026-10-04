@@ -161,7 +161,7 @@ func (session *repairSession) persistRepair(client domain.ClientBinding) error {
 	session.installation.Clients[session.clientKey] = client
 	session.installation.UpdatedAt = client.UpdatedAt
 	session.state.Installations[session.index] = session.installation
-	return session.service.StateStore.Save(session.state)
+	return session.service.persistLifecycleState(session.state)
 }
 
 func repairMismatchKind(err error) (*ports.VerificationError, bool) {

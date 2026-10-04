@@ -87,14 +87,14 @@ func validateNativeIdentityObservation(observation domain.NativeIdentityObservat
 
 func (service Service) nativeIdentityObservation(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
 	if service.NativeObserver != nil {
-		return service.NativeObserver.ObserveNativeIdentity(ctx, client, plan, managed)
+		return service.NativeObserver.ObserveNativeIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	}
 	return service.filesystemIdentityObservation(ctx, plan, managed)
 }
 
 func (service Service) preparedIdentityObservation(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
 	if observer, ok := service.NativeObserver.(PreparedIdentityObserver); ok {
-		return observer.ObservePreparedIdentity(ctx, client, plan, managed)
+		return observer.ObservePreparedIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	}
 	return service.filesystemIdentityObservation(ctx, plan, managed)
 }

@@ -127,10 +127,11 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 	if err != nil {
 		return err
 	}
-	outcome, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-		RemoveOwnedEntry: client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects),
-		SelectedDelivery: client.SelectedDelivery,
-		Client:           targetInput.Client, DeclaredName: session.installation.DeclaredName,
+	outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, clientKey, domain.DeactivationRequest{
+		LocalEntryObservation: client.LocalEntryObservation.Clone(),
+		RemoveOwnedEntry:      client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects),
+		SelectedDelivery:      client.SelectedDelivery,
+		Client:                targetInput.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: client.Activation, Interactive: targetInput.Interactive, ExternalUninstalled: targetInput.ExternalUninstalled,
 		Confirmed: false, PhysicalArtifactID: client.PhysicalArtifact, BackendExecutable: targetInput.BackendExecutable,
 		ManagedArtifactPath: client.TargetLocator,

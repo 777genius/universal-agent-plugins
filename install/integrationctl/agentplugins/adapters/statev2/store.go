@@ -144,6 +144,9 @@ func normalizeCurrentState(state *domain.StateFileV2) {
 }
 
 func decodeStrictJSON(body []byte, target any) error {
+	if err := rejectShadowedObservations(body); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -265,6 +268,9 @@ func Validate(state domain.StateFileV2) error {
 			}
 		}
 		for mapKey, client := range installation.Clients {
+			if err := validateObservationLinkage(client); err != nil {
+				return err
+			}
 			if mapKey == "" || mapKey != client.ClientBindingID {
 				return fmt.Errorf("%s client map key does not match client_binding_id", prefix)
 			}

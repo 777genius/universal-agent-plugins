@@ -34,13 +34,25 @@ func (service Service) RecoverNativeIntent(ctx context.Context, installationID, 
 	if err != nil {
 		return err
 	}
+	previousObservation := binding.LocalEntryObservation.Clone()
 	intent := *binding.PendingNativeIntent
+	intent.LocalEntryObservation = intent.LocalEntryObservation.Clone()
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, managedDigest(binding)); err != nil {
 		return fmt.Errorf("verify native recovery package: %w", err)
 	}
 	outcome, err := reconciler.ReconcileNativeIntent(ctx, intent)
 	if err != nil {
 		return err
+	}
+	current, loadErr := service.activationBinding(installationID, bindingID)
+	if loadErr != nil {
+		return loadErr
+	}
+	if !reflect.DeepEqual(binding, current) {
+		return fmt.Errorf("native recovery callback changed frozen predecessor")
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	if err := validateNativeReconciliation(intent, outcome); err != nil {
 		return err
@@ -51,8 +63,18 @@ func (service Service) RecoverNativeIntent(ctx context.Context, installationID, 
 	// The certain pending effect is now acknowledged, even when recovery only
 	// read the entry written before death. Unchanged retry policy would discard
 	// this newly established receipt and retain only pre-attempt ownership.
-	outcome.NativeEffect = domain.NativeEffectCommitted
-	_, err = service.updateActivationResult(installationID, bindingID, outcome, nil, binding.NativeObjects)
+	if outcome.LocalEntryObservation == nil && previousObservation == nil {
+		outcome.NativeEffect = domain.NativeEffectCommitted
+	}
+	// This register intent and its exact outcome selector were validated above.
+	// A verified unchanged receipt can acknowledge that predeclared selector even
+	// on first registration, where no previous external ownership was confirmed.
+	// Ordinary unchanged callers continue to pass only their frozen prior objects.
+	acknowledgedObjects := binding.NativeObjects
+	if outcome.LocalEntryObservation != nil && outcome.NativeEffect == domain.NativeEffectUnchanged {
+		acknowledgedObjects = append([]domain.NativeObjectOwnership(nil), outcome.NativeObjects...)
+	}
+	_, err = service.updateActivationResultWithObservation(installationID, bindingID, outcome, nil, acknowledgedObjects, previousObservation)
 	return err
 }
 

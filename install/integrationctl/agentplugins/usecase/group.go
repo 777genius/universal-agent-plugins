@@ -335,7 +335,7 @@ func (service Service) observeGroupNativeIdentity(ctx context.Context, client do
 	if !repair || service.NativeObserver == nil {
 		return service.observeNativeIdentity(ctx, client, plan, managed)
 	}
-	observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, client, plan, managed)
+	observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	if err != nil {
 		return fmt.Errorf("observe native identity for %s: %w", client.ClientID, err)
 	}
@@ -451,7 +451,7 @@ func (service Service) groupRecoveryPostApplyVerify(planned []plannedGroupTarget
 		for _, target := range recovering {
 			// Eligibility already required a non-nil NativeObserver; recovering
 			// can only be true when that held at preflight time.
-			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, target.plan, target.managed)
+			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, cloneLocalObservationPlan(target.plan), cloneLocalObservationBinding(target.managed))
 			if err != nil {
 				return fmt.Errorf("verify restored native identity for %s: %w", target.input.Client.ClientID, err)
 			}

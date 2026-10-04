@@ -17,13 +17,20 @@ const (
 // before native effects. Reverse removal authority is as durable as registration.
 // SelectedDelivery carries only the owned entry, never foreign document bytes.
 type PendingNativeIntent struct {
-	RemoveOwnedEntry bool                  `json:"remove_owned_entry"`
-	AttemptID        string                `json:"attempt_id"`
-	Direction        NativeIntentDirection `json:"direction"`
-	Delivery         SelectedDelivery      `json:"selected_delivery"`
+	LocalEntryObservation *LocalEntryObservation `json:"local_entry_observation,omitempty"`
+	RemoveOwnedEntry      bool                   `json:"remove_owned_entry"`
+	AttemptID             string                 `json:"attempt_id"`
+	Direction             NativeIntentDirection  `json:"direction"`
+	Delivery              SelectedDelivery       `json:"selected_delivery"`
 }
 
 func (intent PendingNativeIntent) Validate(binding ClientBinding) error {
+	if !intent.LocalEntryObservation.Equal(binding.LocalEntryObservation) {
+		return fmt.Errorf("pending native intent observation differs from frozen predecessor")
+	}
+	if err := binding.ValidateLocalEntryObservation(); err != nil {
+		return err
+	}
 	if intent.AttemptID == "" || intent.AttemptID != binding.NativeActivationAttempt {
 		return fmt.Errorf("pending native intent attempt differs from binding")
 	}
@@ -70,4 +77,13 @@ func (d SelectedDelivery) OwnsProfileEntry(objects []NativeObjectOwnership) bool
 		}
 	}
 	return false
+}
+
+func (intent *PendingNativeIntent) Clone() *PendingNativeIntent {
+	if intent == nil {
+		return nil
+	}
+	clone := *intent
+	clone.LocalEntryObservation = intent.LocalEntryObservation.Clone()
+	return &clone
 }

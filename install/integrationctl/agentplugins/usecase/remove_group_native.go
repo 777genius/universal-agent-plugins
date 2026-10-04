@@ -12,14 +12,15 @@ func (session *removeGroupSession) removeGroupNative() error {
 		item := &session.planned[plannedIndex]
 		nativeAttempt := nativeLifecycleClient(item.input.Client.ClientID, item.client.SelectedDelivery)
 		if nativeAttempt {
-			if err := session.service.beginNativeAttempt(session.installation.InstallationID, item.clientKey, domain.NativeIntentRemove, item.client.SelectedDelivery); err != nil {
+			if err := session.service.beginNativeAttemptWithObservation(session.installation.InstallationID, item.clientKey, domain.NativeIntentRemove, item.client.SelectedDelivery, item.client.LocalEntryObservation.Clone()); err != nil {
 				return err
 			}
 		}
-		outcome, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-			RemoveOwnedEntry: item.client.SelectedDelivery.OwnsProfileEntry(item.client.NativeObjects),
-			SelectedDelivery: item.client.SelectedDelivery,
-			Client:           item.input.Client, DeclaredName: session.installation.DeclaredName,
+		outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, item.clientKey, domain.DeactivationRequest{
+			LocalEntryObservation: item.client.LocalEntryObservation.Clone(),
+			RemoveOwnedEntry:      item.client.SelectedDelivery.OwnsProfileEntry(item.client.NativeObjects),
+			SelectedDelivery:      item.client.SelectedDelivery,
+			Client:                item.input.Client, DeclaredName: session.installation.DeclaredName,
 			CurrentActivation: item.client.Activation, Interactive: item.input.Interactive, ExternalUninstalled: item.input.ExternalUninstalled,
 			Confirmed: true, PhysicalArtifactID: item.client.PhysicalArtifact, BackendExecutable: item.input.BackendExecutable,
 			ManagedArtifactPath: item.client.TargetLocator,

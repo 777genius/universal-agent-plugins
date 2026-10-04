@@ -63,7 +63,7 @@ func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (d
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
-	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, session.plan, operationID, session.input.Hints, dataPath)
+	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, cloneLocalObservationPlan(session.plan), operationID, session.input.Hints, dataPath)
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
@@ -178,6 +178,7 @@ func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery,
 }
 
 func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelivery) (AddResult, error) {
+	previousObservation := session.plan.LocalEntryObservation.Clone()
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan,
 		Delivery: domain.StagedDelivery{
@@ -191,7 +192,7 @@ func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelive
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome
-	if _, updateErr := session.service.updateActivationResult(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects); updateErr != nil {
+	if _, updateErr := session.service.updateActivationResultWithObservation(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects, previousObservation); updateErr != nil {
 		if activationErr != nil {
 			return session.result, fmt.Errorf("reapply repaired native state: %w; persist verification state: %w", activationErr, updateErr)
 		}

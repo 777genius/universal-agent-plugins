@@ -19,17 +19,37 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	if err := validatePersonalMapping(input, installation); err != nil {
 		return domain.DeliveryPlan{}, err
 	}
+	binding, err := frozenPlanningBinding(*input, installation)
+	if err != nil {
+		return domain.DeliveryPlan{}, err
+	}
+	var observation *domain.LocalEntryObservation
+	var objects []domain.NativeObjectOwnership
+	if binding != nil {
+		observation = binding.LocalEntryObservation.Clone()
+		objects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
+	}
 	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
-		Envelope:           input.Envelope,
-		Client:             input.Client,
-		Scope:              input.Scope,
-		PhysicalArtifactID: physicalID,
-		InstallIntent:      input.InstallIntent,
-		Detected:           service.Detected,
+		LocalEntryObservation: observation.Clone(),
+		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),
+		Envelope:              input.Envelope,
+		Client:                input.Client,
+		Scope:                 input.Scope,
+		PhysicalArtifactID:    physicalID,
+		InstallIntent:         input.InstallIntent,
+		Detected:              service.Detected,
 	})
 	if err != nil {
 		return plan, err
 	}
+	// Historical planners need not expose native predecessors; selected planners do.
+	if !plan.SelectedDelivery.IsZero() {
+		if err := validatePlannedObservation(plan, observation, objects); err != nil {
+			return plan, err
+		}
+	}
+	plan.LocalEntryObservation = observation.Clone()
+	plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), objects...)
 	if err := validateSelectedPlan(&plan, input.Envelope, installation, input.refreshSelectedDelivery); err != nil {
 		return plan, err
 	}

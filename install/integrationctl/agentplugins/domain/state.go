@@ -159,22 +159,23 @@ type ClientPackageRevision struct {
 }
 
 type ClientBinding struct {
-	SelectedDelivery    SelectedDelivery       `json:"selected_delivery,omitzero"`
-	PendingNativeIntent *PendingNativeIntent   `json:"pending_native_intent,omitempty"`
-	InstallIntent       InstallIntent          `json:"install_intent,omitempty"`
-	ClientBindingID     string                 `json:"client_binding_id"`
-	ClientID            string                 `json:"client_id"`
-	Scope               string                 `json:"scope"`
-	TargetLocator       string                 `json:"target_locator"`
-	PhysicalArtifact    string                 `json:"physical_artifact_id"`
-	Materialization     MaterializationState   `json:"materialization"`
-	Activation          ActivationState        `json:"activation"`
-	Authentication      AuthenticationState    `json:"authentication"`
-	Policy              PolicyState            `json:"policy"`
-	Verification        VerificationState      `json:"verification"`
-	PackageRevision     *ClientPackageRevision `json:"package_revision,omitempty"`
-	DataReceiptID       string                 `json:"data_receipt_id,omitempty"`
-	AffectedSurfaces    []string               `json:"affected_surfaces,omitempty"`
+	LocalEntryObservation *LocalEntryObservation `json:"local_entry_observation,omitempty"`
+	SelectedDelivery      SelectedDelivery       `json:"selected_delivery,omitzero"`
+	PendingNativeIntent   *PendingNativeIntent   `json:"pending_native_intent,omitempty"`
+	InstallIntent         InstallIntent          `json:"install_intent,omitempty"`
+	ClientBindingID       string                 `json:"client_binding_id"`
+	ClientID              string                 `json:"client_id"`
+	Scope                 string                 `json:"scope"`
+	TargetLocator         string                 `json:"target_locator"`
+	PhysicalArtifact      string                 `json:"physical_artifact_id"`
+	Materialization       MaterializationState   `json:"materialization"`
+	Activation            ActivationState        `json:"activation"`
+	Authentication        AuthenticationState    `json:"authentication"`
+	Policy                PolicyState            `json:"policy"`
+	Verification          VerificationState      `json:"verification"`
+	PackageRevision       *ClientPackageRevision `json:"package_revision,omitempty"`
+	DataReceiptID         string                 `json:"data_receipt_id,omitempty"`
+	AffectedSurfaces      []string               `json:"affected_surfaces,omitempty"`
 	// NativeProfileRoot binds a registration to its selected native profile.
 	NativeProfileRoot string `json:"native_profile_root,omitempty"`
 	// NativeActivationAttempt marks a potentially unacknowledged native effect.

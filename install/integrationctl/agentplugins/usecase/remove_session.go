@@ -68,14 +68,15 @@ func (session *removeSession) loadRemoveTarget() error {
 func (session *removeSession) deactivateRemoveTarget() error {
 	nativeAttempt := nativeLifecycleClient(session.input.Client.ClientID, session.client.SelectedDelivery) && session.input.Confirmed && !session.input.DryRun
 	if nativeAttempt {
-		if err := session.service.beginNativeAttempt(session.installation.InstallationID, session.clientKey, domain.NativeIntentRemove, session.client.SelectedDelivery); err != nil {
+		if err := session.service.beginNativeAttemptWithObservation(session.installation.InstallationID, session.clientKey, domain.NativeIntentRemove, session.client.SelectedDelivery, session.client.LocalEntryObservation.Clone()); err != nil {
 			return err
 		}
 	}
-	deactivation, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-		RemoveOwnedEntry: session.client.SelectedDelivery.OwnsProfileEntry(session.client.NativeObjects),
-		SelectedDelivery: session.client.SelectedDelivery,
-		Client:           session.input.Client, DeclaredName: session.installation.DeclaredName,
+	deactivation, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, session.clientKey, domain.DeactivationRequest{
+		LocalEntryObservation: session.client.LocalEntryObservation.Clone(),
+		RemoveOwnedEntry:      session.client.SelectedDelivery.OwnsProfileEntry(session.client.NativeObjects),
+		SelectedDelivery:      session.client.SelectedDelivery,
+		Client:                session.input.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: session.client.Activation, Interactive: session.input.Interactive,
 		ExternalUninstalled: session.input.ExternalUninstalled,
 		Confirmed:           session.input.Confirmed && !session.input.DryRun,

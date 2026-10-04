@@ -100,9 +100,11 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		}
 	}
 	return domain.ClientBinding{
-		SelectedDelivery: plan.SelectedDelivery,
-		InstallIntent:    input.InstallIntent,
-		ClientBindingID:  clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
+		SelectedDelivery:      plan.SelectedDelivery,
+		LocalEntryObservation: previous.LocalEntryObservation.Clone(),
+		PendingNativeIntent:   previous.PendingNativeIntent.Clone(),
+		InstallIntent:         input.InstallIntent,
+		ClientBindingID:       clientBindingID, ClientID: bindingClientID, Scope: string(input.Scope),
 		TargetLocator: plan.ActivePath, PhysicalArtifact: plan.PhysicalArtifactID,
 		Materialization: domain.MaterializationStaged, Activation: domain.ActivationPrepared,
 		Authentication: plan.Authentication, Policy: domain.PolicyAllowed,
