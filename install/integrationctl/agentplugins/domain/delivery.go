@@ -46,7 +46,10 @@ type CursorDeliveryFacts struct {
 
 func NewCursorDelivery(facts CursorDeliveryFacts) (SelectedDelivery, error) {
 	result := SelectedDelivery{mode: DeliveryCursorUserStopV1, cursor: facts}
-	return result, result.Validate()
+	if err := result.Validate(); err != nil {
+		return SelectedDelivery{}, err
+	}
+	return result, nil
 }
 func (d SelectedDelivery) CursorFacts() (CursorDeliveryFacts, bool) {
 	return d.cursor, d.mode == DeliveryCursorUserStopV1

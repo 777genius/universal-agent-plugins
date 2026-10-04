@@ -137,6 +137,15 @@ func TestSelectedCursorPacketSealingAndAuthority(t *testing.T) {
 	if selected.OwnsProfileEntry([]NativeObjectOwnership{selected.CursorOwnership(CursorHookReceipt{})}) {
 		t.Fatal("zero receipt grants ownership")
 	}
+	invalid := f
+	invalid.PlannedReceipt = CursorHookReceipt{}
+	rejected, err := NewCursorDelivery(invalid)
+	if err == nil {
+		t.Fatal("constructor accepted zero receipt authority")
+	}
+	if facts, ok := rejected.CursorFacts(); !rejected.IsZero() || rejected.Mode() != "" || ok || facts != (CursorDeliveryFacts{}) {
+		t.Fatalf("failed constructor retained Cursor authority: %+v", rejected)
+	}
 	owned := selected.CursorOwnership(r)
 	if !selected.OwnsProfileEntry([]NativeObjectOwnership{owned}) || selected.OwnsProfileEntry([]NativeObjectOwnership{owned, owned}) {
 		t.Fatal("ownership is absent or duplicated")
