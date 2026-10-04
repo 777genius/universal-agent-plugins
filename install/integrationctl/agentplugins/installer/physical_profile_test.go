@@ -5,13 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -355,6 +358,126 @@ func TestPhysicalProfileCallbackCannotReplaceFrozenAuthority(t *testing.T) {
 				if _, err := os.Lstat(e.cfg.StateFile); !os.IsNotExist(err) {
 					t.Fatal("callback authorized state Save")
 				}
+			}
+		})
+	}
+}
+
+// Regression: real death after the state commit bypasses the public recovery fence.
+type physicalDeathStore struct{ transaction.StateStore }
+
+func (s physicalDeathStore) Save(state domain.StateFileV2) error {
+	if err := s.StateStore.Save(state); err != nil {
+		return err
+	}
+	for _, i := range state.Installations {
+		for _, b := range i.Clients {
+			for _, r := range b.Receipts {
+				if r.Phase == transaction.ReceiptPhaseStateCommitted {
+					os.Exit(71)
+				}
+			}
+		}
+	}
+	return nil
+}
+func TestPhysicalProfilePublicRecoverAfterChildDeath(t *testing.T) {
+	if raw := os.Getenv("TEST_PHYSICAL_DEATH_REQUEST"); raw != "" {
+		var req Request
+		if err := json.Unmarshal([]byte(raw), &req); err != nil {
+			t.Fatal(err)
+		}
+		registry, err := clients.NewRegistry(physicalEditor{Adapter: codex.New()})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, err := New(Config{StateRoot: os.Getenv("TEST_PHYSICAL_DEATH_STATE"), HelperExecutable: req.ClientExecutable, Registry: registry, TrustedLocalPackages: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.store = physicalDeathStore{e.store}
+		h, err := e.Prepare(t.Context(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer h.Close()
+		_, err = e.Apply(t.Context(), h, Decision{Confirmed: true})
+		t.Fatalf("child never reached committed-state death: %v", err)
+	}
+	for _, replace := range []bool{false, true} {
+		t.Run(fmt.Sprint(replace), func(t *testing.T) {
+			e, req := physicalEngine(t)
+			// Death bypasses snapshot Close; make only this fixture's orphan scratch removable after assertions.
+			t.Cleanup(func() {
+				scratch := filepath.Join(e.cfg.StateRoot, "tmp")
+				if err := filepath.WalkDir(scratch, func(path string, entry os.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if entry.IsDir() {
+						return os.Chmod(path, 0700)
+					}
+					return nil
+				}); err != nil {
+					t.Error(err)
+				}
+			})
+			raw, err := json.Marshal(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.CommandContext(t.Context(), req.ClientExecutable, "-test.run=^TestPhysicalProfilePublicRecoverAfterChildDeath$", "-test.timeout=20s")
+			cmd.Env = append(os.Environ(), "TEST_PHYSICAL_DEATH_REQUEST="+string(raw), "TEST_PHYSICAL_DEATH_STATE="+e.cfg.StateRoot)
+			output, err := cmd.CombinedOutput()
+			var exit *exec.ExitError
+			if !errors.As(err, &exit) || exit.ExitCode() != 71 {
+				t.Fatalf("not a committed-state death: %v %s", err, output)
+			}
+			pending := func() bool {
+				state, err := e.store.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, installation := range state.Installations {
+					for _, binding := range installation.Clients {
+						for _, receipt := range binding.Receipts {
+							if receipt.Phase == "state_committed" && len(receipt.ProfileOwners) > 0 && len(receipt.DirectoryProof) > 0 {
+								return true
+							}
+						}
+					}
+				}
+				return false
+			}
+			before, err := os.ReadFile(e.cfg.StateFile)
+			if err != nil || !pending() {
+				t.Fatalf("no durable pending decision: %v", err)
+			}
+			observed, err := e.Inspect(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if replace {
+				if err := os.Rename(req.ClientConfigRoot, req.ClientConfigRoot+"-old"); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Mkdir(req.ClientConfigRoot, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_, err = e.Recover(t.Context(), observed)
+			if (err != nil) != replace {
+				t.Fatalf("public recovery replacement=%t: %v", replace, err)
+			}
+			after, readErr := os.ReadFile(e.cfg.StateFile)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if replace && !bytes.Equal(before, after) {
+				t.Fatal("refusal altered durable state")
+			}
+			if !replace && pending() {
+				t.Fatal("public recovery left decision pending")
 			}
 		})
 	}
