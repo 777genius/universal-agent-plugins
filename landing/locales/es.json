@@ -547,6 +547,9 @@
       "disclaimer": "Los controles automatizados reducen el riesgo; no prueban que un complemento sea seguro. Revise la fuente y los permisos antes de instalar software en el que no confía."
     },
     "catalog": {
+      "staleCommunityResults": "Se muestran {count} entradas de la comunidad del último catálogo firmado, generado el {generated}, caducado el {expired}. Los comandos de instalación están pausados hasta que haya un catálogo actualizado. Las entradas revisadas siguen disponibles.",
+      "staleCommunityListing": "Entrada histórica firmada; el catálogo caducó el {expired}.",
+      "staleCommunityCommands": "Los comandos de instalación de la comunidad están pausados porque el catálogo firmado ha caducado. Puedes seguir consultando las entradas y su código fuente.",
       "explorePlugins": "Explorar complementos",
       "searchByCapabilityComponentOrSource": "Busque por capacidad, componente o fuente.",
       "allCategories": "Todas las categorias",

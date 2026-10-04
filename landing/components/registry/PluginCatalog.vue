@@ -355,7 +355,11 @@ watch([query, category, component, source, trust, client, authentication, owner]
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
           }}</template>
           <template v-else-if="discovery.state === 'stale'">{{
-            t('registryUi.catalog.communityResultsAreRefreshingReviewedListingsRemainAvailable')
+            t('registryUi.catalog.staleCommunityResults', {
+              count: n(discovery.count),
+              generated: discovery.generatedAt ?? '',
+              expired: discovery.expiresAt ?? '',
+            })
           }}</template>
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(

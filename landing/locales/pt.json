@@ -547,6 +547,9 @@
       "disclaimer": "Verificações automatizadas reduzem riscos; elas não provam que um plugin é seguro. Revise o código-fonte e as permissões antes de instalar software em que você não confia."
     },
     "catalog": {
+      "staleCommunityResults": "Exibindo {count} entradas da comunidade do último catálogo assinado, gerado em {generated}, expirado em {expired}. Os comandos de instalação estão pausados até a atualização do catálogo. As entradas revisadas continuam disponíveis.",
+      "staleCommunityListing": "Entrada histórica assinada; o catálogo expirou em {expired}.",
+      "staleCommunityCommands": "Os comandos de instalação da comunidade estão pausados porque o catálogo assinado expirou. Você ainda pode consultar as entradas e o código-fonte.",
       "explorePlugins": "Explorar plugins",
       "searchByCapabilityComponentOrSource": "Pesquise por recurso, componente ou fonte.",
       "allCategories": "Todas as categorias",

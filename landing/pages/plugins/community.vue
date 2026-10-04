@@ -17,6 +17,7 @@ const plugin = computed(() =>
       item.trust_state === 'conformant_unreviewed' && item.install_source === requestedSource.value,
   ),
 );
+const discoveryStale = useDiscoveryIsStale(() => plugin.value ?? {});
 const discoverySettled = computed(() =>
   ['current', 'cached', 'stale', 'unavailable'].includes(discovery.value.state),
 );
@@ -71,7 +72,7 @@ usePageSeo(
             <div>
               <div class="plugin-profile__meta">
                 {{
-                  plugin.installable
+                  plugin.installable && !discoveryStale
                     ? t('registryUi.community.communityPlugin')
                     : t('registryUi.community.communityListing')
                 }}
@@ -80,6 +81,13 @@ usePageSeo(
             </div>
           </div>
           <p class="plugin-profile__description">{{ plugin.description }}</p>
+          <p v-if="discoveryStale" role="status">
+            {{
+              t('registryUi.catalog.staleCommunityListing', {
+                expired: plugin.discovery?.expires_at ?? '',
+              })
+            }}
+          </p>
 
           <dl class="plugin-facts">
             <div>
@@ -89,7 +97,7 @@ usePageSeo(
             <div>
               <dt>
                 {{
-                  sourceUnavailable
+                  sourceUnavailable || discoveryStale
                     ? t('registryUi.community.lastKnownAgents')
                     : t('registryUi.community.worksWith')
                 }}
@@ -98,7 +106,9 @@ usePageSeo(
                 {{
                   availableClients.length
                     ? availableClients.map((client) => client.name).join(', ')
-                    : plugin.client_support.resolution === 'install_time' && plugin.installable
+                    : plugin.client_support.resolution === 'install_time' &&
+                        plugin.installable &&
+                        !discoveryStale
                       ? t('registryUi.community.detectedAtInstallTime')
                       : t('registryUi.community.notDeclared')
                 }}
@@ -107,7 +117,7 @@ usePageSeo(
             <div>
               <dt>
                 {{
-                  sourceUnavailable
+                  sourceUnavailable || discoveryStale
                     ? t('registryUi.community.lastKnownComponents')
                     : t('registryUi.community.components')
                 }}
@@ -132,7 +142,7 @@ usePageSeo(
             </div>
           </dl>
 
-          <SecurityAssessmentPanel v-if="plugin.security" :plugin="plugin" />
+          <SecurityAssessmentPanel v-if="plugin.security && !discoveryStale" :plugin="plugin" />
         </article>
 
         <InstallPanel v-model:targets="targets" v-model:auto-detect="autoDetect" :plugin="plugin" />

@@ -85,4 +85,5 @@ export interface DiscoveryBundle {
   bytes: Record<'pointer' | 'envelope' | 'snapshot' | 'search', Uint8Array>;
   etags: Partial<Record<'pointer' | 'envelope' | 'snapshot' | 'search', string>>;
   source: 'remote' | 'cache';
+  freshness: 'current' | 'stale';
 }

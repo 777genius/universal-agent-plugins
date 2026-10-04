@@ -547,6 +547,9 @@
       "disclaimer": "Les contrôles automatisés réduisent les risques ; ils ne prouvent pas qu'un plugin est sûr. Vérifiez la source et les autorisations avant d'installer un logiciel auquel vous ne faites pas confiance."
     },
     "catalog": {
+      "staleCommunityResults": "Affichage de {count} entrées communautaires du dernier catalogue signé, créé le {generated}, expiré le {expired}. Les commandes d'installation sont suspendues jusqu'à sa mise à jour. Les entrées examinées restent disponibles.",
+      "staleCommunityListing": "Entrée historique signée ; catalogue expiré le {expired}.",
+      "staleCommunityCommands": "Les commandes d'installation communautaires sont suspendues car le catalogue signé a expiré. Les entrées et leur code source restent consultables.",
       "explorePlugins": "Explorer les plugins",
       "searchByCapabilityComponentOrSource": "Recherchez par fonctionnalité, composant ou source.",
       "allCategories": "Toutes les catégories",

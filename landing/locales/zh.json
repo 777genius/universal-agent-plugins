@@ -547,6 +547,9 @@
       "disclaimer": "自动化检查降低风险；他们并不能证明插件是安全的。在安装您不信任的软件之前，请检查来源和权限。"
     },
     "catalog": {
+      "staleCommunityResults": "显示最新签名目录中的 {count} 个社区条目，生成于 {generated}，已于 {expired} 过期。社区安装命令已暂停，等待新目录。已审核的条目仍可使用。",
+      "staleCommunityListing": "历史签名条目；目录已于 {expired} 过期。",
+      "staleCommunityCommands": "签名目录已过期，社区安装命令已暂停。仍可浏览条目和源代码。",
       "explorePlugins": "探索插件",
       "searchByCapabilityComponentOrSource": "按功能、组件或来源搜索。",
       "allCategories": "所有类别",

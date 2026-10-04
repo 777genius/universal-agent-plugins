@@ -22,6 +22,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/configure-pages@v6
+        id: pages
+
       # Keep docs on its own packageManager; landing uses a newer lockfile format.
       - uses: pnpm/action-setup@v5
         id: pnpm-docs
@@ -88,7 +91,7 @@ jobs:
         env:
           REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
           PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
-          PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/
+          PRODUCT_PAGES_ORIGIN: ${{ steps.pages.outputs.base_url }}/
         run: |
           previous="${RUNNER_TEMP}/uap-previous-mirror.json"
           if ! curl --fail --silent --show-error --location --max-time 30 \
@@ -106,20 +109,20 @@ jobs:
       - name: Build landing
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          NUXT_APP_BASE_URL: /universal-agent-plugins/
-          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          NUXT_APP_BASE_URL: ${{ steps.pages.outputs.base_path }}/
+          NUXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
           NUXT_PUBLIC_GITHUB_REPO: 777genius/universal-agent-plugins
-          NUXT_PUBLIC_DOCS_URL: https://777genius.github.io/universal-agent-plugins/docs/en/
-          NUXT_PUBLIC_QUICKSTART_URL: https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html
-          NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml
+          NUXT_PUBLIC_DOCS_URL: ${{ steps.pages.outputs.base_url }}/docs/en/
+          NUXT_PUBLIC_QUICKSTART_URL: ${{ steps.pages.outputs.base_url }}/docs/en/guide/quickstart.html
+          NUXT_PUBLIC_DOCS_SITEMAP_URL: ${{ steps.pages.outputs.base_url }}/docs/sitemap.xml
           NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
         working-directory: landing
         run: pnpm generate
 
       - name: Build public docs under /docs
         env:
-          DOCS_BASE_PATH: /universal-agent-plugins/docs/
-          DOCS_HOSTNAME: https://777genius.github.io
+          DOCS_BASE_PATH: ${{ steps.pages.outputs.base_path }}/docs/
+          DOCS_HOSTNAME: ${{ steps.pages.outputs.origin }}
           GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
           GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
           DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
@@ -139,12 +142,10 @@ jobs:
       - name: Assemble GitHub Pages artifact
         env:
           UAP_VERIFIED_MIRROR: ${{ runner.temp }}/uap-registry-mirror
-          NUXT_APP_BASE_URL: /universal-agent-plugins/
-          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          NUXT_APP_BASE_URL: ${{ steps.pages.outputs.base_path }}/
+          NUXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
         working-directory: landing
         run: pnpm run build:pages
-
-      - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v5
         with:
