@@ -24,6 +24,7 @@ const targetlessFixture = {
   installable: true,
   components: [],
   trust_state: 'conformant_unreviewed',
+  source: { repository: 'example/targetless-fixture', revision: 'a'.repeat(40), path: '' },
   client_support: { resolution: 'install_time', clients: [] },
   discovery: { availability: 'available' },
 };
@@ -31,12 +32,12 @@ const targetlessFixture = {
 const messages = JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'));
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
 
-function panelState({ installable = true, autoDetect = true, current = true, stale = false } = {}) {
+function panelState({ installable = true, autoDetect = true, current = true, stale = false, reviewed = false } = {}) {
   return runInNewContext(script, {
     ref,
     useI18n: () => i18n,
     useInstallPreferencesStore: () => ({ package: { identity: '' }, readPackage: () => ({ targetIds: [], autoDetect: true, expanded: false }), selectPackage: () => {} }),
-    defineProps: () => ({ plugin: { ...targetlessFixture, installable } }),
+    defineProps: () => ({ plugin: { ...targetlessFixture, installable, trust_state: reviewed ? 'reviewed' : 'conformant_unreviewed' } }),
     defineModel: (name: string) => ({ value: name === 'targets' ? [] : autoDetect }),
     computed: (read: () => unknown) => ({
       get value() {
@@ -64,16 +65,16 @@ test('installable install-time fixture with no targets exposes all four automati
   for (const action of ['add', 'update', 'repair', 'remove']) {
     assert.equal(
       state.commands.value[action],
-      `npx universal-agent-plugins ${action} ${action === 'add' ? targetlessFixture.install_source : targetlessFixture.name}`,
+      `npx universal-agent-plugins ${action} ${action === 'add' ? `github:example/targetless-fixture@${'a'.repeat(40)}` : targetlessFixture.name}`,
     );
     assert.equal(state.commands.value[action].includes('--target'), false);
   }
   assert.equal(state.unavailableDiscoveryReason.value, '');
 });
 
-test('targetless fixture cannot bypass explicit selection or snapshot authority', () => {
+test('targetless fixture cannot bypass explicit selection and reviewed commands retain Directory authority', () => {
   assert.equal(panelState({ autoDetect: false }).commands.value, undefined);
-  assert.equal(panelState({ current: false }).commands.value, undefined);
+  assert.equal(panelState({ current: false, reviewed: true }).commands.value, undefined);
 });
 
 test('non-installable targetless fixture has an explicit reason and no commands', () => {
@@ -82,10 +83,10 @@ test('non-installable targetless fixture has an explicit reason and no commands'
   assert.match(state.unavailableDiscoveryReason.value, /doesn't include any tools/);
 });
 
-test('stale community snapshot cannot mint automatic or explicit commands even with a fresh Directory', () => {
-  for (const autoDetect of [true, false]) {
-    const state = panelState({ stale: true, autoDetect, current: true });
-    assert.equal(state.commands.value, undefined);
-    assert.match(state.unavailableDiscoveryReason.value, /catalog has expired/);
+test('community automatic commands remain available regardless of catalog or reviewed Directory age', () => {
+  for (const current of [true, false]) {
+    const state = panelState({ stale: true, current });
+    assert.equal(state.commands.value.add, `npx universal-agent-plugins add github:example/targetless-fixture@${'a'.repeat(40)}`);
+    assert.equal(state.unavailableDiscoveryReason.value, '');
   }
 });

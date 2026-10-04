@@ -14,6 +14,8 @@ import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { discoveryPlugin } from '../utils/discovery.ts';
+import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
 import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-router';
 
 const fixture = JSON.parse(
@@ -75,6 +77,31 @@ function card(props = packageProps()) {
     'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authLabel, toggleInstall',
   );
 }
+
+test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
+  setActivePinia(createPinia());
+  const data = signedDiscoveryFixture({ generated: '2000-01-01T00:00:00Z', expires: '2000-01-02T00:00:00Z' });
+  const plugin = discoveryPlugin(data.snapshot.records[0]!, data.snapshot);
+  const expected = `npx universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
+  const instance = card(packageProps(plugin));
+  assert.equal(instance.state.command.value, expected);
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  assert.equal(instance.state.command.value, `${expected} --target codex`);
+  instance.stop();
+  const panel = setup('InstallPanel', {
+    defineProps: () => ({ plugin }),
+    defineModel: (name: string) => name === 'targets' ? ref(['codex']) : ref(false),
+    useDirectoryStatus: () => ({ current: ref(false), published: ref(false), expired: ref(true) }),
+  }, 'commands, unavailableDiscoveryReason');
+  assert.equal(panel.state.commands.value.add, `${expected} --target codex`);
+  assert.equal(panel.state.unavailableDiscoveryReason.value, '');
+  panel.stop();
+  const unavailable = discoveryPlugin({ ...data.snapshot.records[0]!, availability: 'unavailable' }, data.snapshot);
+  const blocked = card(packageProps(unavailable));
+  assert.equal(blocked.state.command.value, '');
+  blocked.stop();
+});
 
 test('catalog SSR defaults do not populate install preferences; valid manual selection survives locale remount', async () => {
   setActivePinia(createPinia());

@@ -72,7 +72,7 @@ usePageSeo(
             <div>
               <div class="plugin-profile__meta">
                 {{
-                  plugin.installable && !discoveryStale
+                  plugin.installable
                     ? t('registryUi.community.communityPlugin')
                     : t('registryUi.community.communityListing')
                 }}
@@ -81,13 +81,6 @@ usePageSeo(
             </div>
           </div>
           <p class="plugin-profile__description">{{ plugin.description }}</p>
-          <p v-if="discoveryStale" role="status">
-            {{
-              t('registryUi.catalog.staleCommunityListing', {
-                expired: plugin.discovery?.expires_at ?? '',
-              })
-            }}
-          </p>
 
           <dl class="plugin-facts">
             <div>
@@ -97,7 +90,7 @@ usePageSeo(
             <div>
               <dt>
                 {{
-                  sourceUnavailable || discoveryStale
+                  sourceUnavailable
                     ? t('registryUi.community.lastKnownAgents')
                     : t('registryUi.community.worksWith')
                 }}
@@ -106,9 +99,7 @@ usePageSeo(
                 {{
                   availableClients.length
                     ? availableClients.map((client) => client.name).join(', ')
-                    : plugin.client_support.resolution === 'install_time' &&
-                        plugin.installable &&
-                        !discoveryStale
+                    : plugin.client_support.resolution === 'install_time' && plugin.installable
                       ? t('registryUi.community.detectedAtInstallTime')
                       : t('registryUi.community.notDeclared')
                 }}
@@ -117,7 +108,7 @@ usePageSeo(
             <div>
               <dt>
                 {{
-                  sourceUnavailable || discoveryStale
+                  sourceUnavailable
                     ? t('registryUi.community.lastKnownComponents')
                     : t('registryUi.community.components')
                 }}

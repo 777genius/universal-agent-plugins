@@ -375,19 +375,12 @@ watch([query, category, component, source, trust, client, authentication, owner]
       <div>
         <div class="catalog-count" aria-live="polite">{{ catalogSummary }}</div>
         <p
-          v-if="['loading', 'stale', 'unavailable'].includes(discovery.state)"
+          v-if="['loading', 'unavailable'].includes(discovery.state)"
           class="discovery-status"
           :class="`discovery-status--${discovery.state}`"
         >
           <template v-if="discovery.state === 'loading'">{{
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
-          }}</template>
-          <template v-else-if="discovery.state === 'stale'">{{
-            t('registryUi.catalog.staleCommunityResults', {
-              count: n(discovery.count),
-              generated: discovery.generatedAt ?? '',
-              expired: discovery.expiresAt ?? '',
-            })
           }}</template>
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(
