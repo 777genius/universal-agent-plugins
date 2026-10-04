@@ -110,10 +110,20 @@ func matchesProof(path, expectedIdentity, expectedDigest string) error {
 }
 
 func matchesPublication(receipt Receipt, path string) error {
+	if receipt.SchemaVersion == 5 {
+		if err := matchesObject(path, receipt.PublishedObject); err != nil {
+			return err
+		}
+	}
 	return matchesProof(path, receipt.PublishedIdentity, receipt.PublishedDigest)
 }
 
 func matchesBackup(receipt Receipt, path string) error {
+	if receipt.SchemaVersion == 5 {
+		if err := matchesObject(path, receipt.OldObject); err != nil {
+			return err
+		}
+	}
 	return matchesProof(path, receipt.BackupIdentity, receipt.BackupDigest)
 }
 

@@ -199,6 +199,7 @@ func cloneLocalObservationBinding(binding *domain.ClientBinding) *domain.ClientB
 		return nil
 	}
 	clone := *binding
+	clone.ProfileAuthority = domain.CloneProfileAuthority(binding.ProfileAuthority)
 	clone.LocalEntryObservation = binding.LocalEntryObservation.Clone()
 	clone.PendingNativeIntent = binding.PendingNativeIntent.Clone()
 	clone.NativeObjects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)

@@ -52,7 +52,7 @@ func (service Service) beginNativeAttemptWithObservation(installationID, binding
 			return err
 		}
 		if !selected.IsZero() {
-			client.PendingNativeIntent = &domain.PendingNativeIntent{LocalEntryObservation: client.LocalEntryObservation.Clone(), AttemptID: attemptID, Direction: direction, Delivery: client.SelectedDelivery, RemoveOwnedEntry: direction == domain.NativeIntentRemove && client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects)}
+			client.PendingNativeIntent = &domain.PendingNativeIntent{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority), ProfileNamespace: client.ProfileNamespace, LocalEntryObservation: client.LocalEntryObservation.Clone(), AttemptID: attemptID, Direction: direction, Delivery: client.SelectedDelivery, RemoveOwnedEntry: direction == domain.NativeIntentRemove && client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects)}
 			if err := client.PendingNativeIntent.Validate(client); err != nil {
 				return err
 			}

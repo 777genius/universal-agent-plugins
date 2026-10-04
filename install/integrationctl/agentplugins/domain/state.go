@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 const (
 	LegacyStateSchemaVersion   = 2
 	PreviousStateSchemaVersion = 3
@@ -132,17 +134,20 @@ type NativeObjectOwnership struct {
 }
 
 type MutationReceipt struct {
-	OperationID      string `json:"operation_id"`
-	OperationGroupID string `json:"operation_group_id,omitempty"`
-	Sequence         int    `json:"sequence"`
-	MutationType     string `json:"mutation_type"`
-	ClientBindingID  string `json:"client_binding_id"`
-	ActivePath       string `json:"active_path,omitempty"`
-	StagingPath      string `json:"staging_path,omitempty"`
-	BackupPath       string `json:"backup_path,omitempty"`
-	BeforeDigest     string `json:"before_digest,omitempty"`
-	AfterDigest      string `json:"after_digest,omitempty"`
-	Phase            string `json:"phase"`
+	DirectoryProof   json.RawMessage        `json:"physical_directory_proof,omitempty"`
+	ProfileOwners    []PhysicalProfileOwner `json:"profile_owners,omitempty"`
+	DataReceiptID    string                 `json:"data_receipt_id,omitempty"`
+	OperationID      string                 `json:"operation_id"`
+	OperationGroupID string                 `json:"operation_group_id,omitempty"`
+	Sequence         int                    `json:"sequence"`
+	MutationType     string                 `json:"mutation_type"`
+	ClientBindingID  string                 `json:"client_binding_id"`
+	ActivePath       string                 `json:"active_path,omitempty"`
+	StagingPath      string                 `json:"staging_path,omitempty"`
+	BackupPath       string                 `json:"backup_path,omitempty"`
+	BeforeDigest     string                 `json:"before_digest,omitempty"`
+	AfterDigest      string                 `json:"after_digest,omitempty"`
+	Phase            string                 `json:"phase"`
 }
 
 // ClientPackageRevision records the exact portable package revision that was
@@ -159,6 +164,8 @@ type ClientPackageRevision struct {
 }
 
 type ClientBinding struct {
+	ProfileAuthority      *ProfileAuthority      `json:"profile_authority,omitempty"`
+	ProfileNamespace      string                 `json:"profile_namespace,omitempty"`
 	LocalEntryObservation *LocalEntryObservation `json:"local_entry_observation,omitempty"`
 	SelectedDelivery      SelectedDelivery       `json:"selected_delivery,omitzero"`
 	PendingNativeIntent   *PendingNativeIntent   `json:"pending_native_intent,omitempty"`
@@ -237,4 +244,24 @@ type StateFileV2 struct {
 	SchemaVersion       int               `json:"schema_version"`
 	Installations       []Installation    `json:"installations"`
 	TransactionReceipts []MutationReceipt `json:"transaction_receipts,omitempty"`
+}
+
+// PhysicalProfileOwner freezes durable scope independently of a surviving binding.
+type PhysicalProfileOwner struct {
+	Namespace       string            `json:"namespace"`
+	InstallationID  string            `json:"installation_id"`
+	ClientID        string            `json:"client_id"`
+	ClientBindingID string            `json:"client_binding_id"`
+	Authority       *ProfileAuthority `json:"authority"`
+}
+
+func CloneProfileAuthority(a *ProfileAuthority) *ProfileAuthority {
+	if a == nil {
+		return nil
+	}
+	copied := *a
+	return &copied
+}
+func SameProfileAuthority(a, b *ProfileAuthority) bool {
+	return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
 }

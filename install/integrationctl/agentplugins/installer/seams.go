@@ -11,6 +11,7 @@ import (
 )
 
 type seamStager struct {
+	profileCheck func(context.Context) error
 	providers.Stager
 	serverName  string
 	projectArgs func(BindingFacts) ([]string, error)
@@ -25,7 +26,13 @@ func (s seamStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, 
 }
 
 func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints, data string) (domain.StagedDelivery, error) {
+	if s.profileCheck != nil {
+		if err := s.profileCheck(ctx); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
 	facts := s.facts
+	facts.ProfileAuthority = plan.ProfileAuthority()
 	facts.TargetPath = plan.ActivePath
 	facts.DataRoot = data
 	facts.ClientID = string(plan.ClientID)
@@ -40,6 +47,11 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 	projected, err := projectArgs(envelope, s.serverName, s.projectArgs, facts)
 	if err != nil {
 		return domain.StagedDelivery{}, err
+	}
+	if s.profileCheck != nil {
+		if err := s.profileCheck(ctx); err != nil {
+			return domain.StagedDelivery{}, err
+		}
 	}
 	return s.Stager.StageWithPluginData(ctx, projected, plan, operationID, hints, data)
 }
@@ -63,6 +75,7 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 	if server.Decoded == nil {
 		server.Decoded = map[string]any{}
 	}
+	facts.ProfileAuthority = domain.CloneProfileAuthority(facts.ProfileAuthority)
 	replacement, err := args(facts)
 	if err != nil {
 		return domain.PackageEnvelope{}, err
@@ -82,9 +95,10 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 }
 
 type seamActivator struct {
-	inner       providers.Activator
-	onCommitted func(context.Context, BindingFacts) error
-	store       interface {
+	profileCheck func(context.Context) error
+	inner        providers.Activator
+	onCommitted  func(context.Context, BindingFacts) error
+	store        interface {
 		Load() (domain.StateFileV2, error)
 	}
 	facts BindingFacts
@@ -108,6 +122,11 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 			return domain.ActivationOutcome{}, err
 		}
 		if err := a.onCommitted(ctx, facts); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+	}
+	if a.profileCheck != nil {
+		if err := a.profileCheck(ctx); err != nil {
 			return domain.ActivationOutcome{}, err
 		}
 	}
@@ -188,6 +207,7 @@ func (a seamActivator) committedFacts(request domain.ActivationRequest) (Binding
 		if !reflect.DeepEqual(binding.SelectedDelivery, request.Plan.SelectedDelivery) {
 			return BindingFacts{}, fmt.Errorf("%w: committed delivery differs from activation plan", ErrPlanChanged)
 		}
+		facts.ProfileAuthority = domain.CloneProfileAuthority(binding.ProfileAuthority)
 		facts.SelectedDelivery = binding.SelectedDelivery
 		receipt := installation.DataReceipts[binding.DataReceiptID]
 		facts.BindingID = binding.ClientBindingID

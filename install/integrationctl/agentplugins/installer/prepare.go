@@ -39,6 +39,8 @@ type PreparedOperation struct {
 
 func (p *PreparedOperation) Plan() Plan {
 	out := p.plan
+	out.ProfileAuthority = domain.CloneProfileAuthority(p.plan.ProfileAuthority)
+	out.Client.ProfileAuthority = domain.CloneProfileAuthority(p.plan.Client.ProfileAuthority)
 	if p.plan.OpenCodeProfile != nil {
 		profile := p.plan.OpenCodeProfile.Clone()
 		out.OpenCodeProfile = &profile
@@ -46,9 +48,13 @@ func (p *PreparedOperation) Plan() Plan {
 	out.OpenCodeSelections = cloneOpenCodeSelections(p.plan.OpenCodeSelections)
 	out.RequiredMissing = append([]string(nil), p.plan.RequiredMissing...)
 	out.Delivery = cloneDeliveryPlan(p.plan.Delivery)
+	out.Delivery.ProfileAuthority = domain.CloneProfileAuthority(p.plan.ProfileAuthority)
 	out.Client.RequiredComponents = slices.Clone(p.plan.Client.RequiredComponents)
 	if len(p.plan.Targets) > 0 {
 		out.Targets = append([]PlanTarget(nil), p.plan.Targets...)
+		for i := range out.Targets {
+			out.Targets[i].ProfileAuthority = domain.CloneProfileAuthority(out.Targets[i].ProfileAuthority)
+		}
 	}
 	return out
 }
@@ -94,15 +100,7 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
 		return nil, fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
 	}
-	copied := req
-	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
-	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
-	copied.Targets = append([]ClientTarget(nil), req.Targets...)
-	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
-	if req.Assessment != nil {
-		assessment := *req.Assessment
-		copied.Assessment = &assessment
-	}
+	copied := clonePrepareRequest(req)
 	if len(copied.Targets) == 1 {
 		target := copied.Targets[0]
 		copied.ClientID = target.ClientID
@@ -111,6 +109,16 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 		copied.PackageRoot = firstNonEmpty(target.PackageRoot, copied.PackageRoot)
 		copied.ExternalUninstalled = target.ExternalUninstalled
 		copied.Targets = nil
+	}
+	if len(copied.Targets) > 1 {
+		if err := e.validateGroupTargets(copied); err != nil {
+			return nil, err
+		}
+	}
+	var authorityErr error
+	copied.physical, authorityErr = e.captureRequestProfiles(ctx, copied)
+	if authorityErr != nil {
+		return nil, authorityErr
 	}
 	if len(copied.Targets) > 1 {
 		return e.prepareGroup(ctx, copied)
@@ -188,11 +196,7 @@ func (e *Engine) requireExistingBinding(req Request) error {
 }
 
 func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Operation, allowDigestRewrite bool, dry func(usecase.Service, usecase.AddInput) (usecase.AddResult, error)) (*PreparedOperation, error) {
-	client, err := e.detectedClient(req)
-	if err != nil {
-		return nil, err
-	}
-	detected, err := e.detectedClients(req)
+	client, detected, err := e.preparedClients(req)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +207,9 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		return nil, err
 	}
 	e.report(ProgressPrepare)
+	if err := e.checkRequestProfiles(ctx, req); err != nil {
+		return nil, err
+	}
 	snapshot, err := snapshotRequestPackage(ctx, e.cfg.TempRoot, req)
 	if err != nil {
 		return nil, err
@@ -252,6 +259,8 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 	if err != nil {
 		return nil, err
 	}
+	client = physicalClient(req, client)
+	detected = physicalDetected(req, detected)
 	selector := req.Selector
 	if selector == "" {
 		selector = req.InstallationID
@@ -279,14 +288,14 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 	}
 	handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
 	helperVersion, helperDigest := e.helperIdentity()
-	handle.plan = Plan{
+	handle.plan = Plan{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority),
 		Operation: OpRemove, ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
 		TargetPath: binding.TargetLocator, InstallationID: installation.InstallationID,
 		BindingID: binding.ClientBindingID, HelperVersion: helperVersion, HelperDigest: helperDigest,
 		SelectedDelivery: binding.SelectedDelivery, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest),
 		Client: liveClientResult(binding, req.RequiredComponents, installation.Source.TreeDigest),
 	}
-	handle.facts = BindingFacts{
+	handle.facts = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(handle.client.ProfileAuthority),
 		InstallationID: installation.InstallationID, ClientID: string(client.ClientID),
 		BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 		DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID, OperationID: req.OperationID,
@@ -300,12 +309,12 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 
 func (e *Engine) prepareAbsentRemoval(handle *PreparedOperation, installationID string) *PreparedOperation {
 	helperVersion, helperDigest := e.helperIdentity()
-	handle.plan = Plan{
+	handle.plan = Plan{ProfileAuthority: domain.CloneProfileAuthority(handle.client.ProfileAuthority),
 		Operation: OpRemove, ClientID: string(handle.client.ClientID), ConfigRoot: handle.client.ConfigRoot,
 		InstallationID: installationID, HelperVersion: helperVersion,
 		HelperDigest: helperDigest, NoChange: true,
 	}
-	handle.facts = BindingFacts{
+	handle.facts = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(handle.client.ProfileAuthority),
 		InstallationID: installationID, ClientID: string(handle.client.ClientID),
 		OperationID: handle.req.OperationID,
 	}
@@ -404,7 +413,7 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 	req, snapshot, client, envelope := handle.req, handle.snapshot, handle.client, handle.envelope
 	missing := missingRequired(envelope, req.RequiredComponents)
 	helperVersion, helperDigest := e.helperIdentity()
-	handle.plan = Plan{
+	handle.plan = Plan{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority),
 		Operation: op, SourceRoot: firstNonEmpty(req.SourceRoot, req.PackageRoot), TreeDigest: snapshot.TreeDigest,
 		DigestAlgorithm: snapshot.DigestAlgorithm, ClientID: string(client.ClientID),
 		ConfigRoot: client.ConfigRoot, TargetPath: preview.Plan.ActivePath,
@@ -422,7 +431,7 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		handle.plan.OpenCodeProfile = &profile
 		handle.plan.OpenCodeSelections = handle.openCodeHost.Selections()
 	}
-	handle.facts = BindingFacts{
+	handle.facts = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(handle.client.ProfileAuthority),
 		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,
 		BindingID: handle.plan.BindingID, Scope: string(preview.Plan.Scope),
 		SelectedDelivery: preview.Plan.SelectedDelivery,
@@ -435,4 +444,17 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		return nil, fmt.Errorf("%w: %v", ErrIncomplete, missing)
 	}
 	return handle, nil
+}
+
+func clonePrepareRequest(req Request) Request {
+	copied := req
+	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
+	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
+	copied.Targets = append([]ClientTarget(nil), req.Targets...)
+	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
+	if req.Assessment != nil {
+		assessment := *req.Assessment
+		copied.Assessment = &assessment
+	}
+	return copied
 }
