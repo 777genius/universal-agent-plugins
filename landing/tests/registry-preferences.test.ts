@@ -14,6 +14,7 @@ import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-router';
 
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
@@ -35,6 +36,7 @@ const common = {
   ...registryDomain,
   ...filters,
   pluginCommands,
+  onScopeDispose: Vue.onScopeDispose,
   ...discoveryHelpers,
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
@@ -237,6 +239,71 @@ test('catalog Show more survives language remount and filter changes replace its
   await nextTick();
   assert.equal(changedInitial.state.displayLimit.value, 48);
   changedInitial.stop();
+});
+
+test('clearing search during URL navigation persists the latest input and external navigation still restores filters', async () => {
+  setActivePinia(createPinia());
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: {} }] });
+  await router.push('/');
+  const route = reactive({
+    get path() { return router.currentRoute.value.path; },
+    get query() { return router.currentRoute.value.query; },
+    get hash() { return router.currentRoute.value.hash; },
+  });
+  function barrier() {
+    let release!: () => void;
+    let enter!: () => void;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    return { release, enter, wait, entered };
+  }
+  let gate = barrier();
+  router.beforeEach(async to => {
+    if (to.query.q !== 'gitlab') return;
+    const blocked = gate;
+    blocked.enter();
+    await blocked.wait;
+  });
+  const writes: Promise<unknown>[] = [];
+  const instance = setup('PluginCatalog', {
+    defineProps: () => ({ plugins: [fixture] }),
+    withDefaults: (value: unknown) => value,
+    useRoute: () => route,
+    useRouter: () => ({ replace: (target: RouteLocationRaw) => {
+      const write = router.replace(target);
+      writes.push(write);
+      return write;
+    } }),
+    useDiscoveryStatus: () => ref({ state: 'idle' }),
+    canonicalPath: (path: string) => path,
+  }, 'query, client');
+  try {
+    instance.state.query.value = 'gitlab';
+    await gate.entered;
+    instance.state.query.value = '';
+    await nextTick();
+    gate.release();
+    await writes[0];
+    await nextTick();
+    await writes.at(-1);
+    await nextTick();
+    assert.equal(instance.state.query.value, '');
+    assert.equal(router.currentRoute.value.query.q, undefined);
+
+    gate = barrier();
+    instance.state.query.value = 'gitlab';
+    await gate.entered;
+    await router.replace({ query: { q: 'external', client: 'cursor' } });
+    gate.release();
+    await writes.at(-1);
+    await nextTick();
+    assert.equal(instance.state.query.value, 'external');
+    assert.equal(instance.state.client.value, 'cursor');
+    assert.equal(router.currentRoute.value.query.q, 'external');
+  } finally {
+    gate.release();
+    instance.stop();
+  }
 });
 
 
