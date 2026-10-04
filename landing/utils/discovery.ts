@@ -108,20 +108,38 @@ export class BrowserDiscoveryCache implements DiscoveryCache {
 }
 
 export async function loadDiscovery(options: DiscoveryLoadOptions): Promise<DiscoveryBundle> {
+  return loadAuthenticatedDiscovery(options, true);
+}
+
+// Browsing historical signed metadata grants no installation authority.
+export async function loadDiscoveryForDisplay(
+  options: DiscoveryLoadOptions,
+): Promise<DiscoveryBundle> {
+  return loadAuthenticatedDiscovery(options, false);
+}
+
+async function loadAuthenticatedDiscovery(
+  options: DiscoveryLoadOptions,
+  requireFresh: boolean,
+): Promise<DiscoveryBundle> {
   const fetcher = options.fetcher ?? fetch;
   const now = options.now ?? new Date();
   const cachedRaw = await options.cache?.load().catch(() => undefined);
   const cached = cachedRaw
-    ? await verifyDiscovery(cachedRaw.bytes, options.trust, cachedRaw.etags, now).catch(
-        () => undefined,
-      )
+    ? await verifyAuthenticatedDiscovery(
+        cachedRaw.bytes,
+        options.trust,
+        cachedRaw.etags,
+        now,
+        requireFresh,
+      ).catch(() => undefined)
     : undefined;
   const pointerResponse = await fetchSignedArtifact(
     new URL('latest.json', options.origin),
     16 << 10,
     fetcher,
     'Discovery',
-    cachedRaw?.etags.pointer,
+    cached?.etags.pointer,
   ).catch((error: unknown) => ({ error }));
 
   if ('error' in pointerResponse || pointerResponse.notModified) {
@@ -175,11 +193,17 @@ export async function loadDiscovery(options: DiscoveryLoadOptions): Promise<Disc
       envelope: responses.envelope.etag,
       search: responses.search.etag,
     };
-    const verified = await verifyDiscovery(bytes, options.trust, etags, now);
+    const verified = await verifyAuthenticatedDiscovery(
+      bytes,
+      options.trust,
+      etags,
+      now,
+      requireFresh,
+    );
     await options.cache?.store({ bytes, etags }).catch(() => undefined);
     return { ...verified, source: 'remote' };
   } catch (error) {
-    if (error instanceof DiscoveryEquivocationError) throw error;
+    if (error instanceof DiscoveryEquivocationError && requireFresh) throw error;
     if (cached) return { ...cached, source: 'cache' };
     throw error;
   }
@@ -190,6 +214,16 @@ export async function verifyDiscovery(
   trust: DiscoveryTrust,
   etags: DiscoveryBundle['etags'] = {},
   now = new Date(),
+): Promise<DiscoveryBundle> {
+  return verifyAuthenticatedDiscovery(bytes, trust, etags, now, true);
+}
+
+async function verifyAuthenticatedDiscovery(
+  bytes: Record<ArtifactName, Uint8Array>,
+  trust: DiscoveryTrust,
+  etags: DiscoveryBundle['etags'],
+  now: Date,
+  requireFresh: boolean,
 ): Promise<DiscoveryBundle> {
   const pointer = parsePointer(bytes.pointer);
   const envelope = parseCanonicalJSON<DiscoveryEnvelope>(bytes.envelope, 'Discovery', 'envelope');
@@ -230,7 +264,14 @@ export async function verifyDiscovery(
   const key = await crypto.subtle.importKey('raw', publicKey, { name: 'Ed25519' }, false, [
     'verify',
   ]);
-  if (!(await crypto.subtle.verify('Ed25519', key, signature, signedMessage(signatureDomain, bytes.snapshot)))) {
+  if (
+    !(await crypto.subtle.verify(
+      'Ed25519',
+      key,
+      signature,
+      signedMessage(signatureDomain, bytes.snapshot),
+    ))
+  ) {
     throw new Error('Discovery signature is invalid');
   }
   for (let index = 0; index < snapshot.records.length; index += 1) {
@@ -247,8 +288,9 @@ export async function verifyDiscovery(
   const expires = parseUTCTimestamp(snapshot.expires_at, 'Discovery');
   if (now.getTime() < generated.getTime())
     throw new Error('Discovery local clock is before generation time');
-  if (now.getTime() >= expires.getTime()) throw new Error('Discovery snapshot is stale');
-  return { pointer, envelope, snapshot, search, bytes, etags, source: 'cache' };
+  const freshness = now.getTime() >= expires.getTime() ? 'stale' : 'current';
+  if (requireFresh && freshness === 'stale') throw new Error('Discovery snapshot is stale');
+  return { pointer, envelope, snapshot, search, bytes, etags, source: 'cache', freshness };
 }
 
 export function discoveryPlugin(
@@ -552,12 +594,7 @@ function assertRecords(records: DiscoveryRecord[], full: boolean, generated: Dat
       'Discovery',
       'record',
     );
-    assertExactKeys(
-      record.components,
-      ['extensions', 'mcp', 'skills'],
-      'Discovery',
-      'components',
-    );
+    assertExactKeys(record.components, ['extensions', 'mcp', 'skills'], 'Discovery', 'components');
     if (full && record.author) {
       const authorKeys = Object.keys(record.author);
       if (

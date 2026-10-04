@@ -31,7 +31,7 @@ const targetlessFixture = {
 const messages = JSON.parse(readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'));
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], 'en', false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
 
-function panelState({ installable = true, autoDetect = true, current = true } = {}) {
+function panelState({ installable = true, autoDetect = true, current = true, stale = false } = {}) {
   return runInNewContext(script, {
     ref,
     useI18n: () => i18n,
@@ -49,6 +49,7 @@ function panelState({ installable = true, autoDetect = true, current = true } = 
       expired: { value: !current },
       published: { value: true },
     }),
+    useDiscoveryIsStale: () => ({ value: stale }),
     clients: [{ id: 'codex', name: 'Codex', icon: 'codex.svg' }],
     resolveDistribution: () => ({ unavailable_reason: 'No compatible source.' }),
     expectedDistribution: () => undefined,
@@ -79,4 +80,12 @@ test('non-installable targetless fixture has an explicit reason and no commands'
   const state = panelState({ installable: false });
   assert.equal(state.commands.value, undefined);
   assert.match(state.unavailableDiscoveryReason.value, /doesn't include any tools/);
+});
+
+test('stale community snapshot cannot mint automatic or explicit commands even with a fresh Directory', () => {
+  for (const autoDetect of [true, false]) {
+    const state = panelState({ stale: true, autoDetect, current: true });
+    assert.equal(state.commands.value, undefined);
+    assert.match(state.unavailableDiscoveryReason.value, /catalog has expired/);
+  }
 });

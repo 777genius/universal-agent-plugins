@@ -10,6 +10,7 @@ const targets = defineModel<ClientID[]>('targets', { required: true });
 const autoDetect = defineModel<boolean>('autoDetect', { required: true });
 const { asset, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
+const discoveryStale = useDiscoveryIsStale(() => props.plugin);
 const autoOption = computed(() => ({
   label: t('registryUi.install.allInstalledAgentsRecommended'),
   summary: t('registryUi.install.allInstalledAgents'),
@@ -25,6 +26,7 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     disabled: !props.plugin.client_support.clients.includes(client.id),
     description: (() => {
+      if (discoveryStale.value) return t('registryUi.catalog.staleCommunityCommands');
       if (!published.value)
         return t('registryUi.install.unavailableReviewDataIsNotInstallationAuthority');
       if (expired.value) return t('registryUi.install.unavailableSignedDirectorySnapshotExpired');
@@ -64,11 +66,15 @@ watch(
   { immediate: true, flush: 'sync' },
 );
 const choicePending = ref(false);
-watch([targets, autoDetect], () => {
-  if (!choicePending.value) return;
-  choicePending.value = false;
-  saveChoice();
-}, { flush: 'post' });
+watch(
+  [targets, autoDetect],
+  () => {
+    if (!choicePending.value) return;
+    choicePending.value = false;
+    saveChoice();
+  },
+  { flush: 'post' },
+);
 function saveChoice() {
   preferences.selectPackage(
     props.plugin.install_source,
@@ -82,6 +88,7 @@ function saveChoice() {
 }
 const commands = computed(() =>
   props.plugin.installable &&
+  !discoveryStale.value &&
   current.value &&
   (autoDetect.value || (targets.value.length > 0 && hasCompleteSource.value))
     ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value)
@@ -117,6 +124,7 @@ const chatgptSelected = computed(
     selectedTargets.value.some((target) => target.client === 'chatgpt' && target.app_binding),
 );
 const unavailableDiscoveryReason = computed(() => {
+  if (discoveryStale.value) return t('registryUi.catalog.staleCommunityCommands');
   if (props.plugin.installable) return '';
   if (props.plugin.discovery?.availability === 'unavailable')
     return t('registryUi.install.thisPackageIsNoLongerAvailableFromItsSource');

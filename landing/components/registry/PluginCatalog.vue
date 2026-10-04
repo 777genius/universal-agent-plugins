@@ -32,8 +32,18 @@ const owner = ref('all');
 const route = useRoute();
 const router = useRouter();
 const filterRefs = [query, category, component, source, trust, client, authentication, owner];
+let pendingFilterValues: string[] | undefined;
+let syncingFilters = false;
+let disposed = false;
+onScopeDispose(() => {
+  disposed = true;
+});
 function restoreFilters() {
-  restoreCatalogQuery(route.query).forEach((value, index) => {
+  const values = restoreCatalogQuery(route.query);
+  // A completed own write may describe input that the user already changed.
+  // Other navigation still restores its filters, including back and locale changes.
+  if (JSON.stringify(values) === JSON.stringify(pendingFilterValues)) return;
+  values.forEach((value, index) => {
     filterRefs[index]!.value = value;
   });
 }
@@ -200,16 +210,34 @@ function clearFilters() {
   mobileFiltersOpen.value = false;
 }
 
+async function syncCatalogQuery() {
+  if (syncingFilters) return;
+  syncingFilters = true;
+  try {
+    while (!disposed) {
+      const values = filterRefs.map((filter) => filter.value);
+      if (JSON.stringify(values) === JSON.stringify(restoreCatalogQuery(route.query))) break;
+      pendingFilterValues = values;
+      const failure = await router.replace({
+        path: canonicalPath(route.path),
+        query: catalogQuery(values, route.query) as LocationQueryRaw,
+        hash: route.hash,
+      });
+      if (failure) {
+        pendingFilterValues = undefined;
+        restoreFilters();
+        break;
+      }
+    }
+  } finally {
+    pendingFilterValues = undefined;
+    syncingFilters = false;
+  }
+}
+
 watch([query, category, component, source, trust, client, authentication, owner], () => {
   catalogUi.reconcile(family.value, fingerprint.value);
-  const values = filterRefs.map((filter) => filter.value);
-  if (JSON.stringify(values) !== JSON.stringify(restoreCatalogQuery(route.query))) {
-    void router.replace({
-      path: canonicalPath(route.path),
-      query: catalogQuery(values, route.query) as LocationQueryRaw,
-      hash: route.hash,
-    });
-  }
+  void syncCatalogQuery();
 });
 </script>
 
@@ -355,7 +383,11 @@ watch([query, category, component, source, trust, client, authentication, owner]
             t('registryUi.catalog.findingMoreCommunityPluginsOnGithub')
           }}</template>
           <template v-else-if="discovery.state === 'stale'">{{
-            t('registryUi.catalog.communityResultsAreRefreshingReviewedListingsRemainAvailable')
+            t('registryUi.catalog.staleCommunityResults', {
+              count: n(discovery.count),
+              generated: discovery.generatedAt ?? '',
+              expired: discovery.expiresAt ?? '',
+            })
           }}</template>
           <template v-else-if="discovery.state === 'unavailable'">{{
             t(
