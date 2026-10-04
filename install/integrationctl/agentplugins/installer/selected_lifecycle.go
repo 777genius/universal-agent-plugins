@@ -16,6 +16,9 @@ import (
 )
 
 func selectedNativeOnly(selected domain.SelectedDelivery) bool {
+	if _, ok := selected.CursorFacts(); ok {
+		return true
+	}
 	facts, ok := selected.LocalFacts()
 	return ok && len(facts.MCPServers) == 0
 }
@@ -39,6 +42,9 @@ func (e *Engine) selectedReconciler(clientID string, selected domain.SelectedDel
 	}
 	if err := selected.Validate(); err != nil {
 		return nil, err
+	}
+	if _, ok := selected.CursorFacts(); ok && clientID != string(domain.ClientCursor) {
+		return nil, fmt.Errorf("%w: Cursor selection on another client", ErrInvalidRequest)
 	}
 	adapter, ok := e.cfg.Registry.Lookup(domain.ClientID(clientID))
 	if !ok {
@@ -266,6 +272,12 @@ func (e *Engine) confirmRemovalState(approved domain.StateFileV2, cause error) e
 }
 
 func validateSelectedBindingIdentity(binding domain.ClientBinding) error {
+	if f, ok := binding.SelectedDelivery.CursorFacts(); ok {
+		if binding.ClientID != string(domain.ClientCursor) || binding.Scope != string(domain.ScopeUser) || f.ProfileRoot != binding.NativeProfileRoot || f.ProjectionDigest != managedPackageDigest(binding) || binding.PackageRevision == nil || f.CanonicalDigest != binding.PackageRevision.TreeDigest {
+			return fmt.Errorf("%w: Cursor binding authority differs", ErrInvalidRequest)
+		}
+		return binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects)
+	}
 	facts, ok := binding.SelectedDelivery.LocalFacts()
 	if !ok || binding.Scope != string(domain.ScopeUser) || facts.ProfileRoot != binding.NativeProfileRoot || facts.Registration.Selector != binding.TargetLocator || facts.ProjectionDigest != managedPackageDigest(binding) || binding.PackageRevision == nil || facts.CanonicalDigest != binding.PackageRevision.TreeDigest {
 		return fmt.Errorf("%w: selected package/profile authority differs", ErrInvalidRequest)
@@ -296,10 +308,9 @@ func (e *Engine) confirmSelectedNativeEntry(ctx context.Context, client domain.D
 	if !ok || adapter.UsesNativeRegistryExecutable() {
 		return fmt.Errorf("%w: selected client has no read-only profile inspection", ErrUnsupported)
 	}
-	facts, _ := binding.SelectedDelivery.LocalFacts()
 	plan := domain.DeliveryPlan{ClientID: client.ClientID, Scope: domain.ScopeUser, ActivePath: binding.TargetLocator,
 		LocalEntryObservation: binding.LocalEntryObservation.Clone(), PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
-		PhysicalArtifactID: binding.PhysicalArtifact, SelectedDelivery: binding.SelectedDelivery, NativeRegistryRoot: facts.ProfileRoot}
+		PhysicalArtifactID: binding.PhysicalArtifact, SelectedDelivery: binding.SelectedDelivery, NativeRegistryRoot: binding.SelectedDelivery.ProfileRoot()}
 	finding, err := adapter.InspectNativeRegistry(ctx, clients.Env{NativeConfig: nativeconfig.New()}, client, plan, &binding)
 	if err != nil {
 		return err

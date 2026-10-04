@@ -28,9 +28,9 @@ func validateSelectedPlan(plan *domain.DeliveryPlan, envelope domain.PackageEnve
 		if err := validatePlannedSelection(binding.SelectedDelivery, plan.SelectedDelivery, refresh); err != nil {
 			return err
 		}
-		if facts, ok := binding.SelectedDelivery.LocalFacts(); ok && facts.CanonicalDigest == envelope.TreeDigest {
+		if !binding.SelectedDelivery.IsZero() && binding.SelectedDelivery.CanonicalDigest() == envelope.TreeDigest {
 			var err error
-			plan.SelectedDelivery, err = plan.SelectedDelivery.WithProjectionDigest(facts.ProjectionDigest)
+			plan.SelectedDelivery, err = plan.SelectedDelivery.WithProjectionDigest(binding.SelectedDelivery.ProjectionDigest())
 			if err != nil {
 				return err
 			}
@@ -65,8 +65,7 @@ func sealStagedSelection(plan *domain.DeliveryPlan, delivery domain.StagedDelive
 }
 
 func selectedCanonicalDigest(plan domain.DeliveryPlan) string {
-	facts, _ := plan.SelectedDelivery.LocalFacts()
-	return facts.CanonicalDigest
+	return plan.SelectedDelivery.CanonicalDigest()
 }
 
 func validatePlannedSelection(recorded, selected domain.SelectedDelivery, refresh bool) error {

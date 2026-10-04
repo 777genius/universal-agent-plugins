@@ -100,6 +100,13 @@ func retainRecordedLocalSelector(selected domain.SelectedDelivery, client domain
 	}
 	facts, _ := client.SelectedDelivery.LocalFacts()
 	expected := facts.Registration.Ownership(facts.SettingsPath)
+	if _, ok := client.SelectedDelivery.CursorFacts(); ok {
+		for _, object := range client.NativeObjects {
+			if object.Kind == "cursor_user_stop" {
+				expected = object
+			}
+		}
+	}
 	// OwnsProfileEntry established an exact recorded match. Require uniqueness
 	// rather than allowing a duplicate or foreign receipt to supply authority.
 	var recorded domain.NativeObjectOwnership
@@ -116,7 +123,14 @@ func retainRecordedLocalSelector(selected domain.SelectedDelivery, client domain
 	present := false
 	for _, object := range projected {
 		if object.ObjectID == recorded.ObjectID || object.Kind == recorded.Kind {
-			if present || !reflect.DeepEqual(object, recorded) {
+			matches := reflect.DeepEqual(object, recorded)
+			if f, ok := selected.CursorFacts(); ok && client.PendingNativeIntent != nil && client.PendingNativeIntent.Direction == domain.NativeIntentRegister {
+				// Only acknowledgement of the recorded attempt may replace the old
+				// receipt. Package projection continues to retain its original remainder.
+				planned, _ := client.PendingNativeIntent.Delivery.CursorFacts()
+				matches = object == selected.CursorOwnership(planned.PlannedReceipt) && f.EntryDigest == planned.EntryDigest
+			}
+			if present || !matches {
 				return nil, fmt.Errorf("desired Local projection conflicts with recorded selector ownership")
 			}
 			present = true
@@ -135,6 +149,33 @@ func validateRetainedLocalAuthority(selected domain.SelectedDelivery, client dom
 	}
 	if err := selected.Validate(); err != nil {
 		return err
+	}
+	if f, ok := client.SelectedDelivery.CursorFacts(); ok {
+		if err := client.SelectedDelivery.ValidateCursorObjects(client.NativeObjects); err != nil {
+			return err
+		}
+		if !client.SelectedDelivery.SameSelection(selected) || client.NativeProfileRoot != f.ProfileRoot || client.PackageRevision == nil || client.PackageRevision.TreeDigest != f.CanonicalDigest || f.ProjectionDigest == "" || managedDigest(client) != f.ProjectionDigest {
+			return fmt.Errorf("retained Cursor receipt differs from binding authority")
+		}
+		packages := 0
+		for _, object := range client.NativeObjects {
+			if object.Kind == "managed_package_directory" {
+				packages++
+				if object.Path != client.TargetLocator || object.ManagedDigest != f.ProjectionDigest {
+					return fmt.Errorf("retained Cursor package receipt differs from binding")
+				}
+			}
+		}
+		if packages != 1 {
+			return fmt.Errorf("retained Cursor requires one managed package receipt")
+		}
+		if client.PendingNativeIntent != nil {
+			return client.PendingNativeIntent.Validate(client)
+		}
+		if client.NativeActivationAttempt != "" {
+			return fmt.Errorf("unresolved Cursor attempt")
+		}
+		return nil
 	}
 	facts, _ := client.SelectedDelivery.LocalFacts()
 	if !client.SelectedDelivery.SameProfile(selected) || client.TargetLocator != facts.Registration.Selector || client.NativeProfileRoot != facts.ProfileRoot {
