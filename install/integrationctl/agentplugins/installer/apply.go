@@ -40,6 +40,9 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
 	var result Result
 	var err error
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return Result{Operation: op, Outcome: OutcomeConflict, Reason: "profile_changed"}, err
+	}
 	view, inspectErr := e.Inspect(ctx)
 	if inspectErr != nil || view.Recovery.Required {
 		reason := view.Recovery.Reason
@@ -75,6 +78,9 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 				attachNextActions(&result)
 				return result, err
 			}
+		}
+		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+			return result, err
 		}
 		if err = e.ensureDirs(); err != nil {
 			result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
@@ -145,12 +151,19 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	// A projection refresh invokes the host handoff from its dedicated
 	// post-commit activation path, including an identical-output retry.
 	if committed, binding, ok := e.liveBinding(prepared); ok && prepared.req.Operation != OpRefreshProjection && hostHandoffPending(binding) && e.cfg.OnCommittedBinding != nil {
+		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+			return committed, err
+		}
+		committed.Binding.ProfileAuthority = domain.CloneProfileAuthority(committed.Binding.ProfileAuthority)
 		if err := e.cfg.OnCommittedBinding(ctx, committed.Binding); err != nil {
 			committed.Outcome = OutcomeIncomplete
 			committed.Reason = err.Error()
 			e.report(ProgressCommit)
 			return committed, err
 		}
+	}
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete}, err
 	}
 	helper, err := e.preparedHelper(prepared)
 	if err != nil {
@@ -171,6 +184,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		Mutated: added.Mutated, RequiresConfirmation: added.RequiresConfirmation}
 	if added.Plan.ClientID != "" {
 		delivery := deliveryPlan(added.Plan)
+		delivery.ProfileAuthority = added.Plan.ProfileAuthority()
 		result.Delivery = &delivery
 	}
 	if added.Activation.UserActions != nil {
@@ -191,7 +205,7 @@ func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase
 			if binding, receipt, ok := findBinding(installation, prepared.client.ClientID); ok {
 				committed = true
 				result.InstallationID = firstNonEmpty(installation.InstallationID, installationID)
-				result.Binding = BindingFacts{
+				result.Binding = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 					InstallationID: result.InstallationID, ClientID: string(prepared.client.ClientID),
 					SelectedDelivery: binding.SelectedDelivery,
 					BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
@@ -323,7 +337,7 @@ func (e *Engine) liveBinding(prepared *PreparedOperation) (Result, domain.Client
 		return result, domain.ClientBinding{}, false
 	}
 	result.InstallationID = firstNonEmpty(installation.InstallationID, installationID)
-	result.Binding = BindingFacts{
+	result.Binding = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 		InstallationID: result.InstallationID, ClientID: string(prepared.client.ClientID),
 		SelectedDelivery: binding.SelectedDelivery,
 		BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,

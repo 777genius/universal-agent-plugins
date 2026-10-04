@@ -17,7 +17,10 @@ import (
 )
 
 type Service struct {
-	StateStore transaction.StateStore
+	PhysicalAuthority ports.PhysicalProfileAuthority
+	PhysicalProfiles  []domain.DetectedClient
+	profileCheck      func() error
+	StateStore        transaction.StateStore
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
@@ -130,6 +133,16 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := session.validateApplyInput(); err != nil {
 		return AddResult{}, err
 	}
+	if err := session.resolveInstallation(); err != nil {
+		return AddResult{}, err
+	}
+	var err error
+	service, frozen, err := service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.service, session.input.Client = service, frozen[0]
+	session.input.InstallationID = session.installationID
 	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
 	if err != nil {
 		return AddResult{}, err
@@ -171,6 +184,15 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 }
 
 func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool) (ports.UnlockFunc, error) {
+	if err := service.checkProfiles(ctx); err != nil {
+		return nil, err
+	}
+	kernel := service.Kernel
+	kernel.StateStore = service.StateStore
+	kernel.PhysicalAuthority = service.authorityPort()
+	if err := kernel.PrevalidateRecovery(ctx); err != nil {
+		return nil, err
+	}
 	if dryRun || !confirmed {
 		return nil, nil
 	}
@@ -191,8 +213,13 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 		_ = release()
 		return nil, err
 	}
-	kernel := service.Kernel
+	if err := service.checkProfiles(ctx); err != nil {
+		_ = release()
+		return nil, err
+	}
+	kernel = service.Kernel
 	kernel.StateStore = service.StateStore
+	kernel.PhysicalAuthority = service.authorityPort()
 	if err := kernel.Recover(ctx); err != nil {
 		_ = release()
 		return nil, fmt.Errorf("recover interrupted mutation: %w", err)

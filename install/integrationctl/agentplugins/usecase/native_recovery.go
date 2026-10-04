@@ -25,20 +25,31 @@ func (service Service) RecoverNativeIntent(ctx context.Context, installationID, 
 	if reconciler == nil || service.StateStore == nil || service.Stager == nil {
 		return fmt.Errorf("native recovery requires state, stager and selected reconciler")
 	}
+	binding, err := service.pendingNativeBinding(installationID, bindingID, attemptID)
+	if err != nil {
+		return err
+	}
+	service, err = service.freezeNativeRecoveryProfile(ctx, installationID, binding)
+	if err != nil {
+		return err
+	}
 	release, err := service.beginMutation(ctx, false, true)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = release() }()
-	binding, err := service.pendingNativeBinding(installationID, bindingID, attemptID)
+	binding, err = service.pendingNativeBinding(installationID, bindingID, attemptID)
 	if err != nil {
 		return err
 	}
 	previousObservation := binding.LocalEntryObservation.Clone()
-	intent := *binding.PendingNativeIntent
+	intent := *binding.PendingNativeIntent.Clone()
 	intent.LocalEntryObservation = intent.LocalEntryObservation.Clone()
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, managedDigest(binding)); err != nil {
 		return fmt.Errorf("verify native recovery package: %w", err)
+	}
+	if err := service.checkProfiles(ctx); err != nil {
+		return err
 	}
 	outcome, err := reconciler.ReconcileNativeIntent(ctx, intent)
 	if err != nil {
@@ -60,22 +71,7 @@ func (service Service) RecoverNativeIntent(ctx context.Context, installationID, 
 	if intent.Direction == domain.NativeIntentRemove {
 		return service.completeNativeRemoval(installationID, bindingID, true)
 	}
-	// The certain pending effect is now acknowledged, even when recovery only
-	// read the entry written before death. Unchanged retry policy would discard
-	// this newly established receipt and retain only pre-attempt ownership.
-	if outcome.LocalEntryObservation == nil && previousObservation == nil {
-		outcome.NativeEffect = domain.NativeEffectCommitted
-	}
-	// This register intent and its exact outcome selector were validated above.
-	// A verified unchanged receipt can acknowledge that predeclared selector even
-	// on first registration, where no previous external ownership was confirmed.
-	// Ordinary unchanged callers continue to pass only their frozen prior objects.
-	acknowledgedObjects := binding.NativeObjects
-	if outcome.LocalEntryObservation != nil && outcome.NativeEffect == domain.NativeEffectUnchanged {
-		acknowledgedObjects = append([]domain.NativeObjectOwnership(nil), outcome.NativeObjects...)
-	}
-	_, err = service.updateActivationResultWithObservation(installationID, bindingID, outcome, nil, acknowledgedObjects, previousObservation)
-	return err
+	return service.acknowledgeNativeRecovery(installationID, bindingID, binding, outcome, previousObservation)
 }
 
 func (service Service) pendingNativeBinding(installationID, bindingID, attemptID string) (domain.ClientBinding, error) {
@@ -119,4 +115,35 @@ func validateNativeReconciliation(intent domain.PendingNativeIntent, outcome dom
 		return fmt.Errorf("native recovery returned ownership outside the predeclared selector/value")
 	}
 	return nil
+}
+
+func (service Service) freezeNativeRecoveryProfile(ctx context.Context, installationID string, binding domain.ClientBinding) (Service, error) {
+	client := domain.DetectedClient{ClientID: domain.ClientID(binding.ClientID), ConfigRoot: binding.NativeProfileRoot, ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority), ProfileNamespace: binding.ProfileNamespace}
+	if client.ProfileAuthority != nil {
+		client.ConfigRoot = client.ProfileAuthority.Facts().CanonicalRoot
+	}
+	returnService, _, err := service.freezeProfiles(ctx, installationID, []domain.DetectedClient{client}, false)
+	if err != nil {
+		return service, err
+	}
+	return returnService, nil
+}
+
+func (service Service) acknowledgeNativeRecovery(installationID, bindingID string, binding domain.ClientBinding, outcome domain.ActivationOutcome, previousObservation *domain.LocalEntryObservation) error {
+	// The certain pending effect is now acknowledged, even when recovery only
+	// read the entry written before death. Unchanged retry policy would discard
+	// this newly established receipt and retain only pre-attempt ownership.
+	if outcome.LocalEntryObservation == nil && previousObservation == nil {
+		outcome.NativeEffect = domain.NativeEffectCommitted
+	}
+	// This register intent and its exact outcome selector were validated above.
+	// A verified unchanged receipt can acknowledge that predeclared selector even
+	// on first registration, where no previous external ownership was confirmed.
+	// Ordinary unchanged callers continue to pass only their frozen prior objects.
+	acknowledgedObjects := binding.NativeObjects
+	if outcome.LocalEntryObservation != nil && outcome.NativeEffect == domain.NativeEffectUnchanged {
+		acknowledgedObjects = append([]domain.NativeObjectOwnership(nil), outcome.NativeObjects...)
+	}
+	_, err := service.updateActivationResultWithObservation(installationID, bindingID, outcome, nil, acknowledgedObjects, previousObservation)
+	return err
 }

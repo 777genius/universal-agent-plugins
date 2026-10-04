@@ -111,7 +111,9 @@ func (session *groupSession) applyGroupKernel() error {
 	if len(mutations) == 0 {
 		session.clearCreatedPluginData()
 		for _, target := range session.planned {
-			session.reportGroupProgress(target, GroupProgressConfigured)
+			if err := session.reportGroupProgress(target, GroupProgressConfigured); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -132,7 +134,9 @@ func (session *groupSession) applyGroupKernel() error {
 	}
 	session.clearCreatedPluginData()
 	for _, target := range session.planned {
-		session.reportGroupProgress(target, GroupProgressConfigured)
+		if err := session.reportGroupProgress(target, GroupProgressConfigured); err != nil {
+			return err
+		}
 	}
 	return nil
 }

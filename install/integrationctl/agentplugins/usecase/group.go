@@ -153,14 +153,25 @@ type plannedGroupTarget struct {
 	requireAbsent bool
 }
 
-func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) {
+func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) error {
 	if session.input.Progress == nil {
-		return
+		return nil
 	}
 	for _, index := range target.resultIndexes {
+		if session.service.profileCheck != nil {
+			if err := session.service.checkProfiles(session.ctx); err != nil {
+				return err
+			}
+		}
 		result := session.result.Targets[index]
 		session.input.Progress(GroupProgressEvent{ClientID: result.Plan.ClientID, Phase: phase, Result: result})
+		if session.service.profileCheck != nil {
+			if err := session.service.checkProfiles(session.ctx); err != nil {
+				return err
+			}
+		}
 	}
+	return nil
 }
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
@@ -171,6 +182,13 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.ensureGroupID(); err != nil {
 		return GroupResult{}, err
 	}
+	if err := session.resolveGroupInstallation(); err != nil {
+		return GroupResult{}, err
+	}
+	if err := session.freezeGroupProfiles(); err != nil {
+		return GroupResult{}, err
+	}
+	service = session.service
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
 	if err != nil {
 		return GroupResult{}, err
@@ -203,7 +221,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	}
 	session.buildDesiredGroupState()
 	for _, target := range session.planned {
-		session.reportGroupProgress(target, GroupProgressConfiguring)
+		if err := session.reportGroupProgress(target, GroupProgressConfiguring); err != nil {
+			return session.result, err
+		}
 	}
 	if err := session.applyGroupKernel(); err != nil {
 		return session.result, err
@@ -494,6 +514,24 @@ func validateGroupRecoveryVerification(observation domain.NativeIdentityObservat
 	expected := managedDigest(*managed)
 	if expected == "" || observation.Digest == "" || expected != observation.Digest {
 		return fmt.Errorf("restored digest does not match the recorded receipt")
+	}
+	return nil
+}
+
+func (session *groupSession) freezeGroupProfiles() error {
+	selected := make([]domain.DetectedClient, len(session.input.Targets))
+	for i, t := range session.input.Targets {
+		selected[i] = t.Client
+	}
+	service, frozen, err := session.service.freezeProfiles(session.ctx, session.installationID, selected, true)
+	if err != nil {
+		return err
+	}
+	session.service = service
+	session.input.Targets = append([]AddInput(nil), session.input.Targets...)
+	for i := range session.input.Targets {
+		session.input.Targets[i].Client = frozen[i]
+		session.input.Targets[i].InstallationID = session.installationID
 	}
 	return nil
 }

@@ -17,6 +17,8 @@ const (
 // before native effects. Reverse removal authority is as durable as registration.
 // SelectedDelivery carries only the owned entry, never foreign document bytes.
 type PendingNativeIntent struct {
+	ProfileAuthority      *ProfileAuthority      `json:"profile_authority,omitempty"`
+	ProfileNamespace      string                 `json:"profile_namespace,omitempty"`
 	LocalEntryObservation *LocalEntryObservation `json:"local_entry_observation,omitempty"`
 	RemoveOwnedEntry      bool                   `json:"remove_owned_entry"`
 	AttemptID             string                 `json:"attempt_id"`
@@ -25,10 +27,7 @@ type PendingNativeIntent struct {
 }
 
 func (intent PendingNativeIntent) Validate(binding ClientBinding) error {
-	if !intent.LocalEntryObservation.Equal(binding.LocalEntryObservation) {
-		return fmt.Errorf("pending native intent observation differs from frozen predecessor")
-	}
-	if err := binding.ValidateLocalEntryObservation(); err != nil {
+	if err := intent.validatePredecessor(binding); err != nil {
 		return err
 	}
 	if intent.AttemptID == "" || intent.AttemptID != binding.NativeActivationAttempt {
@@ -84,6 +83,20 @@ func (intent *PendingNativeIntent) Clone() *PendingNativeIntent {
 		return nil
 	}
 	clone := *intent
+	clone.ProfileAuthority = CloneProfileAuthority(intent.ProfileAuthority)
 	clone.LocalEntryObservation = intent.LocalEntryObservation.Clone()
 	return &clone
+}
+
+func (intent PendingNativeIntent) validatePredecessor(binding ClientBinding) error {
+	if !SameProfileAuthority(intent.ProfileAuthority, binding.ProfileAuthority) || intent.ProfileNamespace != binding.ProfileNamespace {
+		return fmt.Errorf("pending intent physical authority differs from binding")
+	}
+	if !intent.LocalEntryObservation.Equal(binding.LocalEntryObservation) {
+		return fmt.Errorf("pending native intent observation differs from frozen predecessor")
+	}
+	if err := binding.ValidateLocalEntryObservation(); err != nil {
+		return err
+	}
+	return nil
 }
