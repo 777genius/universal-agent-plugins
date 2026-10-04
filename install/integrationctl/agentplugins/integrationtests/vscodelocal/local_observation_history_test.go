@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -28,6 +29,9 @@ import (
 // it never clears an observation or calls candidate install/maintenance.
 func historicalLocal(t *testing.T, empty bool) (*localFixture, string) {
 	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("captured historical fixtures use the Linux source tuple; native qualification remains separate")
+	}
 	encoded := historicalSelected
 	if empty {
 		encoded = historicalEmpty

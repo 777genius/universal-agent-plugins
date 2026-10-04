@@ -85,12 +85,12 @@ captured from the compiling frozen old consumer before editing, independently
 loaded through real Store, then relocated for isolated tests without clearing any
 candidate observation. Existing architecture and lint rules are unchanged.
 
-The complete focused consumer gate has not passed. Frozen facade preparation
-constructs its activation seam with empty BindingFacts; selected readonly Repair
-then fails with "selected delivery has no committed binding" before NewLocal.
-Public intact-package Repair/restoration and the complete owned-empty maintenance
-sequence remain unqualified. Those strict assertions stay in the tests. The
-consumer does not change the frozen facade or substitute a nil observation.
-Independent root review and current-main composition CI remain separate. Native SDK/VS Code/agent execution, physical P2, non-Linux metadata,
+Single and group preview preparation carry the recorded InstallationID in
+BindingFacts, allowing selected read-only Repair to inspect the committed binding.
+Selected VerifyOnly requests stay read-only instead of entering legacy mutating
+resume. The focused consumer lifecycle and race checks pass, including recorded
+true/false Repair/restoration and owned-empty maintenance. Their strict assertions
+remain in place; no nil observation is substituted. Independent source review and
+final public composition CI are separate gates. Native SDK/VS Code/agent execution, physical P2, non-Linux metadata,
 default registration, installed AN notifications and executable release remain
 unqualified. No platform availability or production grant follows.
