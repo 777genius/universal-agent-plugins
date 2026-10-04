@@ -297,3 +297,17 @@ func (e *Engine) captureClientProfile(ctx context.Context, installation domain.I
 	}
 	return c, nil
 }
+
+func (e *Engine) preparedClients(req Request) (domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
+	client, err := e.detectedClient(req)
+	if err != nil {
+		return domain.DetectedClient{}, nil, err
+	}
+	detected, err := e.detectedClients(req)
+	if err != nil {
+		return domain.DetectedClient{}, nil, err
+	}
+	client = physicalClient(req, client)
+	detected = physicalDetected(req, detected)
+	return client, detected, nil
+}

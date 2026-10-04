@@ -100,15 +100,7 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
 		return nil, fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
 	}
-	copied := req
-	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
-	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
-	copied.Targets = append([]ClientTarget(nil), req.Targets...)
-	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
-	if req.Assessment != nil {
-		assessment := *req.Assessment
-		copied.Assessment = &assessment
-	}
+	copied := clonePrepareRequest(req)
 	if len(copied.Targets) == 1 {
 		target := copied.Targets[0]
 		copied.ClientID = target.ClientID
@@ -204,16 +196,10 @@ func (e *Engine) requireExistingBinding(req Request) error {
 }
 
 func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Operation, allowDigestRewrite bool, dry func(usecase.Service, usecase.AddInput) (usecase.AddResult, error)) (*PreparedOperation, error) {
-	client, err := e.detectedClient(req)
+	client, detected, err := e.preparedClients(req)
 	if err != nil {
 		return nil, err
 	}
-	detected, err := e.detectedClients(req)
-	if err != nil {
-		return nil, err
-	}
-	client = physicalClient(req, client)
-	detected = physicalDetected(req, detected)
 	if err := e.validatePackageRoots(req); err != nil {
 		return nil, err
 	}
@@ -458,4 +444,17 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		return nil, fmt.Errorf("%w: %v", ErrIncomplete, missing)
 	}
 	return handle, nil
+}
+
+func clonePrepareRequest(req Request) Request {
+	copied := req
+	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
+	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
+	copied.Targets = append([]ClientTarget(nil), req.Targets...)
+	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
+	if req.Assessment != nil {
+		assessment := *req.Assessment
+		copied.Assessment = &assessment
+	}
+	return copied
 }

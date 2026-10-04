@@ -254,11 +254,8 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 	if !liveWithinObserved(initial.Recovery, observed.Recovery) {
 		return Result{Outcome: OutcomeConflict, Reason: "plan_changed"}, ErrPlanChanged
 	}
-	if err := e.lifecycle(nil, BindingFacts{}, nil).Kernel.PrevalidateRecovery(ctx); err != nil {
-		return Result{Outcome: OutcomeRecovery, Reason: err.Error()}, err
-	}
-	if err := e.ensureDirs(); err != nil {
-		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
+	if result, err := e.prepareRecovery(ctx); err != nil {
+		return result, err
 	}
 	svc := e.lifecycle(nil, BindingFacts{}, nil)
 	release, err := svc.Lock.Acquire(ctx)
@@ -397,4 +394,14 @@ func liveClientResult(binding domain.ClientBinding, required []string, fallbackD
 		Verification:       string(binding.Verification),
 		RequiredComponents: append([]string(nil), required...),
 	}
+}
+
+func (e *Engine) prepareRecovery(ctx context.Context) (Result, error) {
+	if err := e.lifecycle(nil, BindingFacts{}, nil).Kernel.PrevalidateRecovery(ctx); err != nil {
+		return Result{Outcome: OutcomeRecovery, Reason: err.Error()}, err
+	}
+	if err := e.ensureDirs(); err != nil {
+		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
+	}
+	return Result{}, nil
 }

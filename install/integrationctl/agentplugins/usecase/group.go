@@ -185,20 +185,10 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.resolveGroupInstallation(); err != nil {
 		return GroupResult{}, err
 	}
-	selected := make([]domain.DetectedClient, len(session.input.Targets))
-	for i, t := range session.input.Targets {
-		selected[i] = t.Client
-	}
-	service, frozen, err := service.freezeProfiles(ctx, session.installationID, selected, true)
-	if err != nil {
+	if err := session.freezeGroupProfiles(); err != nil {
 		return GroupResult{}, err
 	}
-	session.service = service
-	session.input.Targets = append([]AddInput(nil), session.input.Targets...)
-	for i := range session.input.Targets {
-		session.input.Targets[i].Client = frozen[i]
-		session.input.Targets[i].InstallationID = session.installationID
-	}
+	service = session.service
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
 	if err != nil {
 		return GroupResult{}, err
@@ -524,6 +514,24 @@ func validateGroupRecoveryVerification(observation domain.NativeIdentityObservat
 	expected := managedDigest(*managed)
 	if expected == "" || observation.Digest == "" || expected != observation.Digest {
 		return fmt.Errorf("restored digest does not match the recorded receipt")
+	}
+	return nil
+}
+
+func (session *groupSession) freezeGroupProfiles() error {
+	selected := make([]domain.DetectedClient, len(session.input.Targets))
+	for i, t := range session.input.Targets {
+		selected[i] = t.Client
+	}
+	service, frozen, err := session.service.freezeProfiles(session.ctx, session.installationID, selected, true)
+	if err != nil {
+		return err
+	}
+	session.service = service
+	session.input.Targets = append([]AddInput(nil), session.input.Targets...)
+	for i := range session.input.Targets {
+		session.input.Targets[i].Client = frozen[i]
+		session.input.Targets[i].InstallationID = session.installationID
 	}
 	return nil
 }
