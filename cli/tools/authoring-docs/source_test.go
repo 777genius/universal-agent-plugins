@@ -68,7 +68,7 @@ const sourceFixtureSHA = "0506dd888029ad69d07dd5263669fb53766dbdf9"
 
 // The domain pins advanced after sourceFixtureSHA. Use their already-pinned
 // historical bytes, independently checked below, rather than current S1 source.
-const sourceFixtureDomainSHA = "a36f4b424b2b9f40dad5119ee8890f256ece4517"
+const sourceFixtureDomainSHA = "c77c9975eb41d81bcca178b2974ecc6cd1eb1d22"
 
 func newSourceFixture(t *testing.T) string {
 	t.Helper()

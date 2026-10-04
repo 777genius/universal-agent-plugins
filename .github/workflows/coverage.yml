@@ -23,7 +23,7 @@ jobs:
       - name: Fetch audited documentation test fixture
         run: |
           git fetch --no-tags --depth=1 origin 0506dd888029ad69d07dd5263669fb53766dbdf9
-          git fetch --no-tags --depth=1 origin a36f4b424b2b9f40dad5119ee8890f256ece4517
+          git fetch --no-tags --depth=1 origin c77c9975eb41d81bcca178b2974ecc6cd1eb1d22
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
