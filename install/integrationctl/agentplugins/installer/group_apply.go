@@ -97,6 +97,9 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 	if _, err := e.preparedHelper(prepared); err != nil {
 		return nil, err
 	}
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return nil, err
+	}
 	if err := e.ensureDirs(); err != nil {
 		return nil, err
 	}
@@ -117,6 +120,9 @@ func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (
 	inputs, _, err := e.groupAddInputs(req, envelopes, false, true)
 	if err != nil {
 		return nil, err
+	}
+	for i := range inputs {
+		inputs[i].Client = physicalClient(prepared.req, inputs[i].Client)
 	}
 	e.report(ProgressStage)
 	// Recheck every target after host observers, before the group can lock or

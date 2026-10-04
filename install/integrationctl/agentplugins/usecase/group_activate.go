@@ -49,7 +49,9 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 		target.noChange = false
 	}
 	session.assignActivationOutcome(target, outcome, activationErr, persistErr, lifecycleChanged)
-	session.reportGroupProgress(target, GroupProgressActivated)
+	if err := session.reportGroupProgress(target, GroupProgressActivated); err != nil {
+		return err
+	}
 	logicalTotal := len(session.result.Targets)
 	if persistErr != nil {
 		session.externalFailed += len(target.resultIndexes)

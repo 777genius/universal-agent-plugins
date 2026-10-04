@@ -13,6 +13,7 @@ func (e *Engine) prepareRemoveGroup(ctx context.Context, req Request) (*Prepared
 	if err != nil {
 		return nil, err
 	}
+	detected = physicalDetected(req, detected)
 	selector := firstNonEmpty(req.Selector, req.InstallationID)
 	if selector == "" {
 		return nil, fmt.Errorf("%w: remove requires InstallationID or Selector", ErrInvalidRequest)
@@ -104,9 +105,10 @@ func (e *Engine) planRemoveGroup(ctx context.Context, handle *PreparedOperation,
 		if err != nil {
 			return nil, err
 		}
+		client = physicalClient(req, client)
 		handle.clients = append(handle.clients, client)
 		binding, receipt, found := findBinding(installation, client.ClientID)
-		item := PlanTarget{ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot, NoChange: !found}
+		item := PlanTarget{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority), ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot, NoChange: !found}
 		adapter, _ := e.cfg.Registry.Lookup(client.ClientID)
 		_, selectedCapable := adapter.(usecase.NativeIntentReconciler)
 		// An absent selected target has no authority to dispatch. Keep its zero
@@ -137,6 +139,7 @@ func (e *Engine) planRemoveGroup(ctx context.Context, handle *PreparedOperation,
 
 func setRemoveGroupPrimary(handle *PreparedOperation, client domain.DetectedClient, item PlanTarget, binding domain.ClientBinding, receipt domain.DataReceipt) {
 	handle.plan.Client = liveClientResult(binding, handle.req.RequiredComponents, item.TreeDigest)
+	handle.plan.ProfileAuthority = domain.CloneProfileAuthority(binding.ProfileAuthority)
 	handle.plan.SelectedDelivery = binding.SelectedDelivery
 	handle.plan.TreeDigest = item.TreeDigest
 	handle.plan.ClientID = item.ClientID
@@ -145,7 +148,7 @@ func setRemoveGroupPrimary(handle *PreparedOperation, client domain.DetectedClie
 	handle.plan.BindingID = item.BindingID
 	handle.client = client
 	handle.artifact = binding.PhysicalArtifact
-	handle.facts = BindingFacts{
+	handle.facts = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 		InstallationID: handle.plan.InstallationID, ClientID: item.ClientID,
 		BindingID: item.BindingID, Scope: binding.Scope, TargetPath: item.TargetPath,
 		DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,

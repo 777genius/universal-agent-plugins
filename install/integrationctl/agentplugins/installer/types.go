@@ -33,6 +33,7 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
+	physical    map[domain.ClientID]domain.DetectedClient
 	Operation   Operation
 	PackageRoot string
 	// SourceRoot is the stable absolute local source identity when PackageRoot
@@ -92,6 +93,7 @@ type Decision struct {
 
 // BindingFacts is the typed committed-binding view for host seams.
 type BindingFacts struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
 	SelectedDelivery                           domain.SelectedDelivery `json:"-"`
 	InstallationID, ClientID, BindingID, Scope string
@@ -102,6 +104,7 @@ type BindingFacts struct {
 // Plan is an immutable copy for presentation. Operational paths are included
 // because the embedding host already chose explicit roots.
 type Plan struct {
+	ProfileAuthority   *domain.ProfileAuthority `json:"-"`
 	OpenCodeProfile    *opencodehost.Profile    `json:",omitempty"`
 	OpenCodeSelections []opencodehost.Selection `json:",omitempty"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
@@ -128,6 +131,7 @@ type Plan struct {
 // DeliveryPlan is the provider's presentation snapshot, without mutation APIs.
 // LocalActions may contain host paths and are for private human output only.
 type DeliveryPlan struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
 	SelectedDelivery                                       domain.SelectedDelivery `json:"-"`
 	ActivePath                                             string
@@ -143,6 +147,7 @@ type PlanDiagnostic struct{ Severity, Boundary, Code, Path, Item, Message string
 
 // PlanTarget is one client's prepared identity in a group handle.
 type PlanTarget struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
 	SelectedDelivery                                        domain.SelectedDelivery `json:"-"`
 	ClientID, ConfigRoot, TargetPath, BindingID, TreeDigest string
@@ -186,6 +191,7 @@ type NextAction struct {
 
 // ClientResult is the public per-client lifecycle view. Mapping is not a bool.
 type ClientResult struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
 	SelectedDelivery                                                  domain.SelectedDelivery `json:"-"`
 	ClientID, BindingID, TreeDigest                                   string

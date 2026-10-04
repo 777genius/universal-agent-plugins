@@ -38,6 +38,27 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 	if err := session.validateRemoveGroupInput(); err != nil {
 		return RemoveGroupResult{}, err
 	}
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return RemoveGroupResult{}, err
+	}
+	_, installation, err := findInstallation(state, input.Selector)
+	if err != nil {
+		return RemoveGroupResult{}, err
+	}
+	selected := make([]domain.DetectedClient, len(input.Targets))
+	for i, t := range input.Targets {
+		selected[i] = t.Client
+	}
+	service, frozen, err := service.freezeProfiles(ctx, installation.InstallationID, selected, false)
+	if err != nil {
+		return RemoveGroupResult{}, err
+	}
+	session.service = service
+	session.input.Targets = append([]RemoveInput(nil), input.Targets...)
+	for i := range session.input.Targets {
+		session.input.Targets[i].Client = frozen[i]
+	}
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
 	if err != nil {
 		return RemoveGroupResult{}, err

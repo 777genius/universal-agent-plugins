@@ -93,6 +93,9 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		bindingClientID = previous.ClientID
 	}
 	profileRoot := previous.NativeProfileRoot
+	if token := plan.ProfileAuthority(); token != nil {
+		profileRoot = token.Facts().CanonicalRoot
+	}
 	if profileRoot == "" && plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).BindsNativeProfileRoot {
 		profileRoot = input.Client.ConfigRoot
 		if facts, ok := plan.SelectedDelivery.LocalFacts(); ok {
@@ -100,6 +103,7 @@ func stagedClientBinding(previous domain.ClientBinding, input AddInput, plan dom
 		}
 	}
 	return domain.ClientBinding{
+		ProfileAuthority: plan.ProfileAuthority(), ProfileNamespace: plan.ProfileNamespace(),
 		SelectedDelivery:      plan.SelectedDelivery,
 		LocalEntryObservation: previous.LocalEntryObservation.Clone(),
 		PendingNativeIntent:   previous.PendingNativeIntent.Clone(),

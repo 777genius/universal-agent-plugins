@@ -22,7 +22,9 @@ func (session *groupSession) cleanupStaged() {
 func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
-		session.reportGroupProgress(*target, GroupProgressPreparing)
+		if err := session.reportGroupProgress(*target, GroupProgressPreparing); err != nil {
+			return err
+		}
 		if target.noChange {
 			if target.managed != nil && session.existing {
 				installation := session.state.Installations[session.installationIndex]

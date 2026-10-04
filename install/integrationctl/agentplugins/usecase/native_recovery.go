@@ -25,20 +25,35 @@ func (service Service) RecoverNativeIntent(ctx context.Context, installationID, 
 	if reconciler == nil || service.StateStore == nil || service.Stager == nil {
 		return fmt.Errorf("native recovery requires state, stager and selected reconciler")
 	}
+	binding, err := service.pendingNativeBinding(installationID, bindingID, attemptID)
+	if err != nil {
+		return err
+	}
+	client := domain.DetectedClient{ClientID: domain.ClientID(binding.ClientID), ConfigRoot: binding.NativeProfileRoot, ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority), ProfileNamespace: binding.ProfileNamespace}
+	if client.ProfileAuthority != nil {
+		client.ConfigRoot = client.ProfileAuthority.Facts().CanonicalRoot
+	}
+	service, _, err = service.freezeProfiles(ctx, installationID, []domain.DetectedClient{client}, false)
+	if err != nil {
+		return err
+	}
 	release, err := service.beginMutation(ctx, false, true)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = release() }()
-	binding, err := service.pendingNativeBinding(installationID, bindingID, attemptID)
+	binding, err = service.pendingNativeBinding(installationID, bindingID, attemptID)
 	if err != nil {
 		return err
 	}
 	previousObservation := binding.LocalEntryObservation.Clone()
-	intent := *binding.PendingNativeIntent
+	intent := *binding.PendingNativeIntent.Clone()
 	intent.LocalEntryObservation = intent.LocalEntryObservation.Clone()
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, managedDigest(binding)); err != nil {
 		return fmt.Errorf("verify native recovery package: %w", err)
+	}
+	if err := service.checkProfiles(ctx); err != nil {
+		return err
 	}
 	outcome, err := reconciler.ReconcileNativeIntent(ctx, intent)
 	if err != nil {

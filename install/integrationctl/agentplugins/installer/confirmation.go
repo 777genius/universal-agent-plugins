@@ -39,7 +39,11 @@ func (p confirmationPlanner) Plan(ctx context.Context, request domain.PlanReques
 	}
 	request = cloneObservedPlanRequest(request)
 	frozenRequest := cloneObservedPlanRequest(request)
+	if err := p.prepared.engine.checkPreparedProfiles(ctx, p.prepared); err != nil {
+		return domain.DeliveryPlan{}, err
+	}
 	plan, err := p.inner.Plan(ctx, request)
+	plan = plan.WithProfileAuthority(frozenRequest.Client.ProfileAuthority, frozenRequest.Client.ProfileNamespace)
 	if err != nil {
 		if !p.capture {
 			return plan, fmt.Errorf("%w: regenerate selected plan: %w", ErrPlanChanged, err)
@@ -71,7 +75,7 @@ func (p confirmationPlanner) Plan(ctx context.Context, request domain.PlanReques
 func confirmDeliveryPlan(frozen, current domain.DeliveryPlan) error {
 	// SameSelection/SameProfile intentionally discard revision fields. Use the
 	// complete-value semantics of usecase group coalescing at this boundary too.
-	if frozen.ActivePath != current.ActivePath || !reflect.DeepEqual(frozen.SelectedDelivery, current.SelectedDelivery) || !frozen.LocalEntryObservation.Equal(current.LocalEntryObservation) || !reflect.DeepEqual(frozen.PreviousNativeObjects, current.PreviousNativeObjects) {
+	if !domain.SameProfileAuthority(frozen.ProfileAuthority(), current.ProfileAuthority()) || frozen.ProfileNamespace() != current.ProfileNamespace() || frozen.ActivePath != current.ActivePath || !reflect.DeepEqual(frozen.SelectedDelivery, current.SelectedDelivery) || !frozen.LocalEntryObservation.Equal(current.LocalEntryObservation) || !reflect.DeepEqual(frozen.PreviousNativeObjects, current.PreviousNativeObjects) {
 		return fmt.Errorf("%w: selected delivery differs from confirmed plan", ErrPlanChanged)
 	}
 	return nil
@@ -101,6 +105,7 @@ func (e *Engine) confirmDeliveries(ctx context.Context, prepared *PreparedOperat
 		if err != nil {
 			return fmt.Errorf("%w: regenerate selected plan: %w", ErrPlanChanged, err)
 		}
+		current = current.WithProfileAuthority(frozen.request.Client.ProfileAuthority, frozen.request.Client.ProfileNamespace)
 		if err := confirmDeliveryPlan(frozen.plan, current); err != nil {
 			return err
 		}
@@ -118,10 +123,10 @@ func confirmRecordedDeliveries(prepared *PreparedOperation, current domain.State
 		id := delivery.request.Client.ClientID
 		old, _, oldOK := findBinding(before, id)
 		live, _, liveOK := findBinding(after, id)
-		if delivery.plan.SelectedDelivery.IsZero() && old.SelectedDelivery.IsZero() && live.SelectedDelivery.IsZero() {
+		if old.ProfileAuthority == nil && live.ProfileAuthority == nil && delivery.plan.ProfileAuthority() == nil && delivery.plan.SelectedDelivery.IsZero() && old.SelectedDelivery.IsZero() && live.SelectedDelivery.IsZero() {
 			continue
 		}
-		if oldOK != liveOK || old.ClientBindingID != live.ClientBindingID || !reflect.DeepEqual(old.SelectedDelivery, live.SelectedDelivery) || !old.LocalEntryObservation.Equal(live.LocalEntryObservation) || !reflect.DeepEqual(old.PendingNativeIntent, live.PendingNativeIntent) || !reflect.DeepEqual(old.NativeObjects, live.NativeObjects) {
+		if !domain.SameProfileAuthority(old.ProfileAuthority, live.ProfileAuthority) || old.ProfileNamespace != live.ProfileNamespace || oldOK != liveOK || old.ClientBindingID != live.ClientBindingID || !reflect.DeepEqual(old.SelectedDelivery, live.SelectedDelivery) || !old.LocalEntryObservation.Equal(live.LocalEntryObservation) || !reflect.DeepEqual(old.PendingNativeIntent, live.PendingNativeIntent) || !reflect.DeepEqual(old.NativeObjects, live.NativeObjects) {
 			return fmt.Errorf("%w: recorded delivery differs from prepared binding", ErrPlanChanged)
 		}
 	}
@@ -129,6 +134,7 @@ func confirmRecordedDeliveries(prepared *PreparedOperation, current domain.State
 }
 
 func cloneObservedPlanRequest(request domain.PlanRequest) domain.PlanRequest {
+	request.Client.ProfileAuthority = domain.CloneProfileAuthority(request.Client.ProfileAuthority)
 	request.LocalEntryObservation = request.LocalEntryObservation.Clone()
 	request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 	return request

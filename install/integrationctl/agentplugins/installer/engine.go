@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -55,11 +56,28 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 	paths := pathpolicy.Policy{}
 	plan := e.planner()
 	nativeKernel := nativeconfig.New()
+	frozenProfiles := profileClients(detected)
+	profileCheck := func(ctx context.Context) error {
+		for _, c := range frozenProfiles {
+			token := domain.ProfileAuthority{}
+			if c.ProfileAuthority != nil {
+				token = *c.ProfileAuthority
+				if c.ProfileNamespace != e.cfg.StateRoot {
+					return ErrPlanChanged
+				}
+			}
+			if err := plan.RevalidateProfileAuthority(ctx, c.ClientID, token); err != nil {
+				return err
+			}
+		}
+		return e.prevalidatePhysical(ctx)
+	}
 	stager := seamStager{
-		Stager:      providers.Stager{LauncherSource: helper, Registry: e.cfg.Registry, Paths: paths},
-		serverName:  e.cfg.ServerName,
-		projectArgs: e.cfg.ProjectArgs,
-		facts:       facts,
+		profileCheck: profileCheck,
+		Stager:       providers.Stager{LauncherSource: helper, Registry: e.cfg.Registry, Paths: paths},
+		serverName:   e.cfg.ServerName,
+		projectArgs:  e.cfg.ProjectArgs,
+		facts:        facts,
 	}
 	inner := providers.Activator{Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver
@@ -70,11 +88,12 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 	}
 	return usecase.Service{
 		StateStore: e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager,
-		Detected:           detected,
-		Activator:          seamActivator{inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
-		PluginData:         providers.PluginDataManager{Base: e.cfg.PluginDataBase},
-		Lock:               processlock.Lock{Path: e.cfg.LockFile},
-		Kernel:             transaction.Kernel{StateStore: e.store, Directory: dirswap.Manager{JournalDir: e.cfg.OperationsDir}},
+		Detected:          detected,
+		Activator:         seamActivator{profileCheck: profileCheck, inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
+		PluginData:        providers.PluginDataManager{Base: e.cfg.PluginDataBase},
+		Lock:              processlock.Lock{Path: e.cfg.LockFile},
+		Kernel:            transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: plan, StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}},
+		PhysicalAuthority: plan, PhysicalProfiles: profileClients(detected),
 		NativeObserver:     observer,
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},
 	}
@@ -136,4 +155,137 @@ func newLoader() (loader.Loader, error) {
 		return loader.Loader{}, err
 	}
 	return loader.Loader{Registry: reg}, nil
+}
+
+func profileClients(detected map[domain.ClientID]domain.DetectedClient) []domain.DetectedClient {
+	var out []domain.DetectedClient
+	for _, c := range detected {
+		c.ProfileAuthority = domain.CloneProfileAuthority(c.ProfileAuthority)
+		out = append(out, c)
+	}
+	return out
+}
+
+// VerifyProfileAuthority addresses only the recorded owner in this engine's explicit namespace.
+func (e *Engine) VerifyProfileAuthority(ctx context.Context, installationID, bindingID string) error {
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
+	state, err := e.store.Load()
+	if err != nil {
+		return err
+	}
+	installation, ok := findInstall(state, installationID)
+	if !ok || installation.InstallationID != installationID {
+		return ErrNotInstalled
+	}
+	binding, ok := installation.Clients[bindingID]
+	if !ok || binding.ClientBindingID != bindingID || binding.ClientID == "" {
+		return ErrNotInstalled
+	}
+	token := domain.ProfileAuthority{}
+	if binding.ProfileAuthority != nil {
+		token = *binding.ProfileAuthority
+		if token.IsZero() || binding.ProfileNamespace != e.cfg.StateRoot || binding.NativeProfileRoot != token.Facts().CanonicalRoot || bindingID != domain.ComputeClientBindingID(installationID, binding.ClientID, binding.Scope, binding.TargetLocator) {
+			return fmt.Errorf("recorded physical owner is malformed")
+		}
+	}
+	return e.planner().RevalidateProfileAuthority(ctx, domain.ClientID(binding.ClientID), token)
+}
+func (e *Engine) captureRequestProfiles(ctx context.Context, req Request) (map[domain.ClientID]domain.DetectedClient, error) {
+	detected, err := e.detectedClients(req)
+	if err != nil {
+		return nil, err
+	}
+	state, err := e.store.Load()
+	if err != nil {
+		return nil, err
+	}
+	installationID := firstNonEmpty(req.InstallationID, req.Selector)
+	if installationID == "" {
+		for _, i := range state.Installations {
+			if i.Source.CanonicalSource == firstNonEmpty(req.SourceRoot, req.PackageRoot) {
+				if installationID != "" {
+					return nil, ErrAmbiguousInstallations
+				}
+				installationID = i.InstallationID
+			}
+		}
+	}
+	installation, _ := findInstall(state, installationID)
+	for id, c := range detected {
+		var recorded *domain.ClientBinding
+		for key, b := range installation.Clients {
+			if b.ClientID != string(id) || b.Scope != string(domain.ScopeUser) {
+				continue
+			}
+			if recorded != nil || key != b.ClientBindingID {
+				return nil, fmt.Errorf("physical binding owner is ambiguous")
+			}
+			copy := b
+			recorded = &copy
+		}
+		if recorded != nil {
+			if err := e.VerifyProfileAuthority(ctx, installation.InstallationID, recorded.ClientBindingID); err != nil {
+				return nil, err
+			}
+			c.ProfileAuthority = domain.CloneProfileAuthority(recorded.ProfileAuthority)
+			c.ProfileNamespace = recorded.ProfileNamespace
+		} else {
+			token, err := e.planner().CaptureProfileAuthority(ctx, c)
+			if err != nil {
+				return nil, err
+			}
+			if !token.IsZero() {
+				c.ProfileAuthority = &token
+				c.ProfileNamespace = e.cfg.StateRoot
+			}
+		}
+		if c.ProfileAuthority != nil {
+			canonical, err := filepath.EvalSymlinks(c.ConfigRoot)
+			if err != nil || canonical != c.ProfileAuthority.Facts().CanonicalRoot {
+				return nil, fmt.Errorf("selected alias differs from frozen physical profile")
+			}
+			c.ConfigRoot = canonical
+		}
+		detected[id] = c
+	}
+	return detected, e.prevalidatePhysical(ctx)
+}
+func (e *Engine) checkPreparedProfiles(ctx context.Context, p *PreparedOperation) error {
+	return e.checkRequestProfiles(ctx, p.req)
+}
+func (e *Engine) checkRequestProfiles(ctx context.Context, req Request) error {
+	for _, c := range req.physical {
+		token := domain.ProfileAuthority{}
+		if c.ProfileAuthority != nil {
+			token = *c.ProfileAuthority
+			if c.ProfileNamespace != e.cfg.StateRoot {
+				return ErrPlanChanged
+			}
+		}
+		if err := e.planner().RevalidateProfileAuthority(ctx, c.ClientID, token); err != nil {
+			return err
+		}
+	}
+	return e.prevalidatePhysical(ctx)
+}
+func (e *Engine) prevalidatePhysical(ctx context.Context) error {
+	if err := (transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: e.planner(), StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}}).PrevalidateRecovery(ctx); err != nil {
+		return fmt.Errorf("read installation state and pending authority: %w", err)
+	}
+	return nil
+}
+func physicalClient(req Request, c domain.DetectedClient) domain.DetectedClient {
+	if frozen, ok := req.physical[c.ClientID]; ok {
+		frozen.ProfileAuthority = domain.CloneProfileAuthority(frozen.ProfileAuthority)
+		return frozen
+	}
+	return c
+}
+func physicalDetected(req Request, detected map[domain.ClientID]domain.DetectedClient) map[domain.ClientID]domain.DetectedClient {
+	for id, c := range detected {
+		detected[id] = physicalClient(req, c)
+	}
+	return detected
 }

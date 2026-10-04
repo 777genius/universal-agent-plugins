@@ -171,7 +171,7 @@ type removalDispatchScope struct {
 }
 
 func (s removalDispatchScope) confirm(cause error) error {
-	journals, err := (dirswap.Manager{JournalDir: s.engine.cfg.OperationsDir}).ListOpen()
+	journals, err := (dirswap.Manager{Namespace: s.engine.cfg.StateRoot, JournalDir: s.engine.cfg.OperationsDir}).ListOpen()
 	if err != nil || !reflect.DeepEqual(journals, s.journals) {
 		cause = errors.Join(cause, ErrPlanChanged, err)
 	}
@@ -207,7 +207,7 @@ func (e *Engine) confirmRemoveDispatch(ctx context.Context, prepared *PreparedOp
 		return scope, err
 	}
 	scope.state = state
-	scope.journals, err = (dirswap.Manager{JournalDir: e.cfg.OperationsDir}).ListOpen()
+	scope.journals, err = (dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}).ListOpen()
 	if err != nil {
 		return scope, errors.Join(ErrPlanChanged, err)
 	}
@@ -241,7 +241,7 @@ func (e *Engine) confirmRemoveDispatch(ctx context.Context, prepared *PreparedOp
 }
 
 func (e *Engine) confirmRemovalPreflight(ctx context.Context, client domain.DetectedClient, binding domain.ClientBinding, receipt domain.DataReceipt, approved domain.StateFileV2) error {
-	manager := dirswap.Manager{JournalDir: e.cfg.OperationsDir}
+	manager := dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}
 	journals, err := manager.ListOpen()
 	if err != nil {
 		return errors.Join(ErrPlanChanged, err)

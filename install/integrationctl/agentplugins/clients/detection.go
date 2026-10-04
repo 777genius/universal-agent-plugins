@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"io/fs"
 	"os"
 
@@ -80,3 +81,6 @@ type VersionProbeEnvironment interface {
 type ProfileBindingValidator interface {
 	ValidateBindingProfile(root string, binding domain.ClientBinding) error
 }
+
+// PhysicalProfileAuthority is the single optional port, shared with the planner.
+type PhysicalProfileAuthority = ports.PhysicalProfileAuthority

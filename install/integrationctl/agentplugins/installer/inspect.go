@@ -43,7 +43,7 @@ func (e *Engine) observe() (Inspection, error) {
 		out.Recovery.Reason = err.Error()
 		return out, err
 	}
-	open, err := dirswap.Manager{JournalDir: e.cfg.OperationsDir}.ListOpen()
+	open, err := dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}.ListOpen()
 	if err != nil {
 		out.Recovery.Required = true
 		out.Recovery.Reason = err.Error()
@@ -254,6 +254,9 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 	if !liveWithinObserved(initial.Recovery, observed.Recovery) {
 		return Result{Outcome: OutcomeConflict, Reason: "plan_changed"}, ErrPlanChanged
 	}
+	if err := e.lifecycle(nil, BindingFacts{}, nil).Kernel.PrevalidateRecovery(ctx); err != nil {
+		return Result{Outcome: OutcomeRecovery, Reason: err.Error()}, err
+	}
 	if err := e.ensureDirs(); err != nil {
 		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
@@ -382,7 +385,7 @@ func planClientDigest(plan Plan, clientID string) string {
 }
 
 func liveClientResult(binding domain.ClientBinding, required []string, fallbackDigest string) ClientResult {
-	return ClientResult{
+	return ClientResult{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 		SelectedDelivery:   binding.SelectedDelivery,
 		ClientID:           binding.ClientID,
 		BindingID:          binding.ClientBindingID,

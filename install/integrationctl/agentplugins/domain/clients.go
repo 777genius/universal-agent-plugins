@@ -275,12 +275,14 @@ type OpenCodeHostAuthority interface {
 }
 
 type DetectedClient struct {
-	OpenCodeHost OpenCodeHostAuthority `json:"-"`
-	ClientID     ClientID              `json:"client_id"`
-	DisplayName  string                `json:"display_name"`
-	Status       DetectionStatus       `json:"status"`
-	Version      string                `json:"version,omitempty"`
-	Surfaces     []ClientSurface       `json:"surfaces,omitempty"`
+	ProfileAuthority *ProfileAuthority     `json:"-"`
+	ProfileNamespace string                `json:"-"`
+	OpenCodeHost     OpenCodeHostAuthority `json:"-"`
+	ClientID         ClientID              `json:"client_id"`
+	DisplayName      string                `json:"display_name"`
+	Status           DetectionStatus       `json:"status"`
+	Version          string                `json:"version,omitempty"`
+	Surfaces         []ClientSurface       `json:"surfaces,omitempty"`
 	// ExecutablePath and ConfigRoot are operational locators. They must never be
 	// emitted by the public JSON renderer because they can reveal the user home.
 	ExecutablePath string `json:"-"`
@@ -309,6 +311,8 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	profileAuthority           *ProfileAuthority       `json:"-"`
+	profileNamespace           string                  `json:"-"`
 	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
 	LocalEntryObservation      *LocalEntryObservation  `json:"-"`
 	SelectedDelivery           SelectedDelivery        `json:"-"`
@@ -355,9 +359,11 @@ type DeliveryPlan struct {
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
 type DeliveryTarget struct {
-	TargetAnchor string `json:"-"`
-	TargetRoot   string `json:"-"`
-	ActivePath   string `json:"-"`
+	profileAuthority *ProfileAuthority `json:"-"`
+	profileNamespace string            `json:"-"`
+	TargetAnchor     string            `json:"-"`
+	TargetRoot       string            `json:"-"`
+	ActivePath       string            `json:"-"`
 }
 
 type OpenAIMCPAuthHint struct {
@@ -443,3 +449,23 @@ type DeactivationOutcome struct {
 }
 
 func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }
+
+func (p DeliveryPlan) WithProfileAuthority(token *ProfileAuthority, namespace string) DeliveryPlan {
+	p.profileAuthority = CloneProfileAuthority(token)
+	p.profileNamespace = namespace
+	return p
+}
+func (p DeliveryPlan) ProfileAuthority() *ProfileAuthority {
+	return CloneProfileAuthority(p.profileAuthority)
+}
+func (p DeliveryPlan) ProfileNamespace() string { return p.profileNamespace }
+
+func (p DeliveryTarget) WithProfileAuthority(token *ProfileAuthority, namespace string) DeliveryTarget {
+	p.profileAuthority = CloneProfileAuthority(token)
+	p.profileNamespace = namespace
+	return p
+}
+func (p DeliveryTarget) ProfileAuthority() *ProfileAuthority {
+	return CloneProfileAuthority(p.profileAuthority)
+}
+func (p DeliveryTarget) ProfileNamespace() string { return p.profileNamespace }
