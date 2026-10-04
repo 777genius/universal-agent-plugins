@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -293,6 +294,141 @@ func TestNilObservationHostCallbackCannotReplaceBindingAuthority(t *testing.T) {
 				t.Fatalf("refused retry changed committed profile: %v", err)
 			}
 		})
+	}
+}
+
+// Only the first service read after the real callback is faulted. Callback
+// reads and writes use Store directly; all other service operations remain real.
+type postCallbackReloadFailureStore struct {
+	statev2.Store
+	armed          bool
+	loadError      error
+	failures       int
+	recoveredLoads int
+}
+
+func (s *postCallbackReloadFailureStore) Load() (domain.StateFileV2, error) {
+	if s.armed {
+		s.armed = false
+		s.failures++
+		return domain.StateFileV2{}, s.loadError
+	}
+	state, err := s.Store.Load()
+	if err == nil && s.failures != 0 {
+		s.recoveredLoads++
+	}
+	return state, err
+}
+
+// A failed post-callback reload cannot establish frozen authority. In particular,
+// a valid downgrade must not route a committed effect into legacy acknowledgement.
+func TestNilObservationReloadFailureCannotAcknowledgeDowngradedBinding(t *testing.T) {
+	root := localProcessRoot(t)
+	profilePath := filepath.Join(root, "profile", "settings.json")
+	foreign := []byte(`{"chat.pluginLocations":{"/TEST-foreign":false},"foreign.setting":"original"}`)
+	if err := os.WriteFile(profilePath, foreign, 0600); err != nil {
+		t.Fatal(err)
+	}
+	a := &nilObservationCallbackAdapter{observedCoreAdapter: observedCoreAdapter{testEffectLocalAdapter: testEffectLocalAdapter{testLocalAdapter: testLocalAdapter{Adapter: vscode.New()}, root: root}}}
+	service := localGroupService(t, root, a)
+	input := localGroupInput(t, root)
+	input.InstallationID = "00000000-0000-4000-8000-000000000079"
+	input.Confirmed = true
+	// Derive the expected selector from fixture inputs, independently of the
+	// callback's SelectedDelivery, returned objects, and persisted binding.
+	suffix := sha256.Sum256([]byte(input.InstallationID))
+	selector := filepath.Join(root, "state", "managed", "clients", string(input.Client.ClientID), fmt.Sprintf("%s-%x", input.Envelope.Manifest.Name, suffix[:6]))
+	realStore := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
+	reloadError := errors.New("TEST one post-callback reload failure")
+	faultStore := &postCallbackReloadFailureStore{Store: realStore, loadError: reloadError}
+	service.StateStore = faultStore
+	var pending domain.ClientBinding
+	var effectProfile []byte
+	var receiptIdentity vp.Identity
+	a.afterEffect = func(req domain.ActivationRequest, outcome domain.ActivationOutcome) {
+		state, err := realStore.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		pending = localOnlyBinding(t, state)
+		if req.Plan.SelectedDelivery.IsZero() || req.Plan.LocalEntryObservation != nil || pending.LocalEntryObservation != nil || outcome.LocalEntryObservation != nil || outcome.NativeEffect != domain.NativeEffectCommitted {
+			t.Fatal("fixture did not reach selected nil-observation committed callback")
+		}
+		if pending.NativeActivationAttempt == "" || pending.PendingNativeIntent == nil || pending.PendingNativeIntent.LocalEntryObservation != nil || pending.PendingNativeIntent.Direction != domain.NativeIntentRegister {
+			t.Fatal("real callback lacks durable first-registration pending evidence")
+		}
+		if err := pending.PendingNativeIntent.Validate(pending); err != nil {
+			t.Fatal(err)
+		}
+		f := mustFacts(t, pending)
+		if f.Registration.Selector != selector || f.SettingsPath != profilePath || f.CanonicalDigest != input.Envelope.TreeDigest || len(outcome.NativeObjects) != 1 || outcome.NativeObjects[0].Kind != "profile_plugin_location" || outcome.NativeObjects[0].LogicalName != selector {
+			t.Fatal("callback did not write and return the independently selected fixture entry")
+		}
+		effectProfile, err = os.ReadFile(profilePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		receiptIdentity = vp.Identity{SettingsPath: profilePath, ProfileID: "TEST-profile", PluginRoot: selector, PackageID: "TEST-profile-entry", PackageDigest: input.Envelope.TreeDigest, ProjectionDigest: f.ProjectionDigest}
+		if result, err := vp.VerifyRecordedEntry(effectProfile, receiptIdentity, true); err != nil || result.Receipt == nil || result.Receipt.Identity.PluginRoot != selector || !result.Receipt.Enabled {
+			t.Fatalf("callback lacks actual parser-verified registration: %v", err)
+		}
+		if !bytes.Contains(effectProfile, []byte(`"foreign.setting":"original"`)) || !bytes.Contains(effectProfile, []byte(`"/TEST-foreign":false`)) {
+			t.Fatal("registration lost foreign profile bytes")
+		}
+		changed := pending
+		changed.SelectedDelivery = domain.SelectedDelivery{}
+		changed.PendingNativeIntent = nil
+		state.Installations[0].Clients[pending.ClientBindingID] = changed
+		if err := realStore.Save(state); err != nil {
+			t.Fatal(err)
+		}
+		// Bypass the fault wrapper: establish a valid durable downgrade before
+		// arming exactly the next service post-callback activationBinding read.
+		fresh, err := realStore.Load()
+		if err != nil || !reflect.DeepEqual(localOnlyBinding(t, fresh), changed) {
+			t.Fatalf("real Store did not retain the valid callback downgrade: %v", err)
+		}
+		faultStore.armed = true
+	}
+	_, applyErr := service.Add(t.Context(), input)
+	if !errors.Is(applyErr, reloadError) {
+		t.Fatalf("public Add lost post-callback reload error identity: %v", applyErr)
+	}
+	if a.calls != 1 || effectProfile == nil || faultStore.armed || faultStore.failures != 1 || faultStore.recoveredLoads == 0 {
+		t.Fatalf("fixture did not reach one failed reload followed by successful real reads: calls=%d failures=%d recovered=%d", a.calls, faultStore.failures, faultStore.recoveredLoads)
+	}
+	freshStore := statev2.Store{Path: realStore.Path}
+	state, err := freshStore.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := localOnlyBinding(t, state)
+	profile, err := os.ReadFile(profilePath)
+	if err != nil || !bytes.Equal(profile, effectProfile) {
+		t.Fatalf("failed reload changed committed profile/foreign bytes: %v", err)
+	}
+	if result, err := vp.VerifyRecordedEntry(profile, receiptIdentity, true); err != nil || result.Receipt == nil || result.Receipt.Identity.PluginRoot != selector || !result.Receipt.Enabled {
+		t.Fatalf("fresh read lost actual registration receipt: %v", err)
+	}
+	if !live.SelectedDelivery.IsZero() || live.PendingNativeIntent != nil || live.LocalEntryObservation != nil {
+		t.Fatal("refusal hid the callback's valid historical nil-observation downgrade")
+	}
+	if live.NativeActivationAttempt != pending.NativeActivationAttempt || !reflect.DeepEqual(live.NativeObjects, pending.NativeObjects) {
+		t.Error("failed post-callback reload cleared retained attempt or acknowledged returned profile objects")
+	}
+	stateBeforeRetry, err := os.ReadFile(realStore.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshService := localGroupService(t, root, a)
+	if _, err := freshService.Repair(t.Context(), input); err == nil || a.calls != 1 {
+		t.Errorf("fresh retry did not refuse blind callback resend: calls=%d err=%v", a.calls, err)
+	}
+	if after, err := os.ReadFile(realStore.Path); err != nil || !bytes.Equal(stateBeforeRetry, after) {
+		t.Errorf("refused retry changed durable state: %v", err)
+	}
+	if after, err := os.ReadFile(profilePath); err != nil || !bytes.Equal(effectProfile, after) {
+		t.Errorf("refused retry changed committed profile/foreign bytes: %v", err)
 	}
 }
 
