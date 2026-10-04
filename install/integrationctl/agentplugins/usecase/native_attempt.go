@@ -103,6 +103,7 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	outcome, err := service.Activator.Activate(ctx, request)
 	after, loadErr := service.activationBinding(installationID, bindingID)
 	if loadErr != nil {
+		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, loadErr
 	}
 	if !reflect.DeepEqual(before, after) {
