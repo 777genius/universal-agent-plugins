@@ -3,6 +3,7 @@ package installer
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,15 +11,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"sort"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/cursorhooks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -688,4 +694,326 @@ func TestPhysicalProfileCompatibilityLegacyNil(t *testing.T) {
 	if check.Client.ProfileAuthority != nil || check.Client.ProfileNamespace != "" {
 		t.Fatal("legacy compatibility client gained physical authority")
 	}
+}
+
+// The selected public adapter contract uses real Capture, Cursor's projector,
+// pure hook planning and ExactFile acknowledgement. No editor process is run.
+type physicalSelectedCursor struct {
+	physicalCompatibilityCursor
+	selector string
+}
+
+func (a physicalSelectedCursor) RefinePlan(ctx context.Context, in clients.PlanInput, p *domain.DeliveryPlan) error {
+	if err := a.Adapter.RefinePlan(ctx, in, p); err != nil {
+		return err
+	}
+	if in.Client.ProfileAuthority == nil {
+		return fmt.Errorf("missing physical qualification")
+	}
+	original, err := nativeconfig.New().ReadExactFile(filepath.Join(in.Client.ConfigRoot, "hooks.json"))
+	if err != nil {
+		return err
+	}
+	if info, err := os.Lstat(in.Client.ExecutablePath); err != nil || !info.Mode().IsRegular() {
+		return fmt.Errorf("TEST executable is not a regular file: %v", err)
+	}
+	p.SelectedDelivery, err = physicalCursorSelection(in.Client.ConfigRoot, in.Client.ExecutablePath, a.selector, in.Envelope.TreeDigest, original.Body, original.Exists)
+	return err
+}
+
+func physicalCursorSelection(root, executable, selector, digest string, raw []byte, exists bool) (domain.SelectedDelivery, error) {
+	planned, err := cursorhooks.Plan(cursorhooks.Request{Operation: cursorhooks.Install, Document: raw, Shell: cursorhooks.LinuxUserShell32212, ExecutableVerified: true, Specs: []cursorhooks.HookSpec{{Executable: executable, Selector: selector}}})
+	if err != nil {
+		return domain.SelectedDelivery{}, err
+	}
+	r := planned.Receipt
+	receipt := domain.CursorHookReceipt{Version: r.Version, Event: r.Event, Executable: r.Spec.Executable, Selector: r.Spec.Selector, Shell: string(r.Shell), EntryDigest: r.EntryDigest, RemainderDigest: r.RemainderDigest}
+	return domain.NewCursorDelivery(domain.CursorDeliveryFacts{ProfileRoot: root, HooksPath: filepath.Join(root, "hooks.json"), ProfileIdentity: "TEST-physical", CursorVersion: "2026.09.28-64d2043", TargetOS: "linux", TargetArch: "amd64", QualificationID: "TEST-projection-contract", Executable: executable, Selector: selector, Shell: receipt.Shell, ObjectID: "TEST-stop", EntryDigest: receipt.EntryDigest, CanonicalDigest: digest, PlannedReceipt: receipt, OriginalExists: exists, OriginalRawDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(raw))})
+}
+
+func (a physicalSelectedCursor) Activate(ctx context.Context, _ clients.Env, r domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	f, ok := r.Plan.SelectedDelivery.CursorFacts()
+	if !ok || r.Client.ProfileAuthority == nil {
+		return domain.ActivationOutcome{}, fmt.Errorf("missing selection/token")
+	}
+	if err := profileauthority.Revalidate(ctx, *r.Client.ProfileAuthority); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	file, err := nativeconfig.New().BeginExactFile(f.HooksPath)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	defer file.Close()
+	original := file.Original()
+	if original.Exists != f.OriginalExists || fmt.Sprintf("sha256:%x", sha256.Sum256(original.Body)) != f.OriginalRawDigest {
+		return domain.ActivationOutcome{}, fmt.Errorf("hook basis changed")
+	}
+	planned, err := cursorhooks.Plan(cursorhooks.Request{Operation: cursorhooks.Install, Document: original.Body, Shell: cursorhooks.LinuxUserShell32212, ExecutableVerified: true, Specs: []cursorhooks.HookSpec{{Executable: f.Executable, Selector: f.Selector}}})
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := file.Apply(planned.Desired); err != nil {
+		return domain.ActivationOutcome{}, errors.Join(err, file.Rollback())
+	}
+	current, err := nativeconfig.New().ReadExactFile(f.HooksPath)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := cursorhooks.VerifyOwned(current.Body, planned.Receipt); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	receipt := f.PlannedReceipt
+	if receipt.EntryDigest != planned.Receipt.EntryDigest || receipt.RemainderDigest != planned.Receipt.RemainderDigest {
+		return domain.ActivationOutcome{}, fmt.Errorf("acknowledgement differs")
+	}
+	return domain.ActivationOutcome{Activation: domain.ActivationManual, NativeEffect: domain.NativeEffectCommitted, NativeObjects: []domain.NativeObjectOwnership{r.Plan.SelectedDelivery.CursorOwnership(receipt)}}, nil
+}
+
+// Plausible RED: selectedNativeOnly suppresses ProjectArgs, installing [] argv
+// even though the host reserved a selector before Prepare. Canonical input must
+// retain empty args; only the projected copy may contain the selector.
+func TestPhysicalProfileSelectedCursorMCPProjection(t *testing.T) {
+	t.Run("positive", func(t *testing.T) {
+		if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+			t.Skip("NOT_RUN selected Cursor projection: fixed Linux amd64 TEST tuple required")
+		}
+		e, req := physicalEngine(t)
+		token, err := profileauthority.Capture(t.Context(), req.ClientConfigRoot)
+		if errors.Is(err, directoryidentity.ErrUnsupported) {
+			t.Skipf("NOT_RUN selected Cursor Prepare/Apply/Store: full ancestry unsupported: %v", err)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("observed full ancestry: %+v", token.Facts())
+		if err := os.WriteFile(filepath.Join(req.ClientConfigRoot, "hooks.json"), []byte(`{"version":1,"hooks":{}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		req.ClientID, req.ClientExecutable = "cursor", filepath.Join(req.PackageRoot, "bin", "probe")
+		selector := filepath.Join(filepath.Dir(req.ClientConfigRoot), "TEST-selector")
+		a := physicalSelectedCursor{physicalCompatibilityCursor: physicalCompatibilityCursor{Adapter: cursor.New(), observe: func(_ string, c domain.DetectedClient) error {
+			if c.ProfileAuthority == nil || !c.ProfileAuthority.Equal(token) || c.ProfileNamespace != e.cfg.StateRoot {
+				return fmt.Errorf("original token/namespace lost")
+			}
+			return profileauthority.Revalidate(t.Context(), *c.ProfileAuthority)
+		}}, selector: selector}
+		e.cfg.Registry, err = clients.NewRegistry(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reservation, err := e.ReserveIdentity(IdentityRequest{ClientID: req.ClientID, InstallationID: req.InstallationID, DeclaredName: "sample-notify", ClientConfigRoot: req.ClientConfigRoot})
+		if err != nil || reservation.TargetPath == "" {
+			t.Fatalf("reservation: %+v %v", reservation, err)
+		}
+		data := filepath.Join(e.cfg.PluginDataBase, domain.ComputePhysicalArtifactID("sample-notify", req.InstallationID))
+		canonical, err := e.LocalPackageTreeDigest(t.Context(), req.PackageRoot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		originalBytes := physicalByteDigest(t, req.PackageRoot)
+		manifest, err := os.ReadFile(filepath.Join(req.PackageRoot, "plugin.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifestDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(manifest))
+		originalMCP, err := os.ReadFile(filepath.Join(req.PackageRoot, "mcp.json"))
+		if err != nil || !bytes.Contains(originalMCP, []byte(`"args":[]`)) {
+			t.Fatalf("canonical args must start empty: %s %v", originalMCP, err)
+		}
+		calls := 0
+		e.cfg.ServerName = "sample-notify"
+		e.cfg.ProjectArgs = func(f BindingFacts) ([]string, error) {
+			calls++
+			if f.DataRoot != data || f.TargetPath != reservation.TargetPath || f.BindingID != reservation.BindingID || f.TreeDigest != canonical || f.ProfileAuthority == nil || !f.ProfileAuthority.Equal(token) {
+				return nil, fmt.Errorf("foreign data/selector/token")
+			}
+			// Mutating the callback's clone cannot replace the frozen profile token.
+			*f.ProfileAuthority = domain.ProfileAuthority{}
+			return []string{"--binding", selector}, nil
+		}
+		h, err := e.Prepare(t.Context(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := h.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		before := h.Plan().SelectedDelivery
+		result, err := e.Apply(t.Context(), h, Decision{Confirmed: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if calls != 1 {
+			t.Fatalf("selected projection callback calls=%d, want 1", calls)
+		}
+		state, err := e.store.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		installation, ok := findInstall(state, req.InstallationID)
+		if !ok {
+			t.Fatal("real Store commit missing")
+		}
+		b, _, ok := findBinding(installation, domain.ClientCursor)
+		if !ok || b.PackageRevision == nil || b.PackageRevision.TreeDigest != canonical || b.PackageRevision.ManifestDigest != manifestDigest || b.SelectedDelivery.CanonicalDigest() != canonical {
+			t.Fatal("selected canonical revision changed")
+		}
+		if b.ProfileAuthority == nil || !b.ProfileAuthority.Equal(token) || b.ProfileNamespace != e.cfg.StateRoot {
+			t.Fatal("original token/namespace changed")
+		}
+		expected, _ := before.CursorFacts()
+		sealed, _ := b.SelectedDelivery.CursorFacts()
+		expected.ProjectionDigest = physicalByteDigest(t, result.Binding.TargetPath)
+		if expected != sealed || sealed.ProjectionDigest == canonical {
+			t.Fatal("seal lost original packet or projection byte digest")
+		}
+		if physicalByteDigest(t, req.PackageRoot) != originalBytes {
+			t.Fatal("canonical tree mutated")
+		}
+		actual, err := os.ReadFile(filepath.Join(result.Binding.TargetPath, "mcp.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var mcp struct {
+			Servers map[string]struct {
+				Args []string `json:"args"`
+			} `json:"mcpServers"`
+		}
+		if err := json.Unmarshal(actual, &mcp); err != nil || !reflect.DeepEqual(mcp.Servers["sample-notify"].Args, []string{"--binding", selector}) {
+			t.Fatalf("installed argv bytes: %s %v", actual, err)
+		}
+		raw, err := os.ReadFile(filepath.Join(req.PackageRoot, "mcp.json"))
+		if err != nil || !bytes.Equal(raw, originalMCP) {
+			t.Fatal("canonical MCP bytes changed")
+		}
+		ack := false
+		for _, object := range b.NativeObjects {
+			if object.Kind == "cursor_user_stop" {
+				ack = object.CursorReceipt == sealed.PlannedReceipt
+			}
+		}
+		if !ack || b.SelectedDelivery.ValidateCursorObjects(b.NativeObjects) != nil {
+			t.Fatal("actual hooks acknowledgement lost")
+		}
+		if err := e.VerifyProfileAuthority(t.Context(), req.InstallationID, b.ClientBindingID); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("refusals", func(t *testing.T) {
+		root := physicalTempDir(t)
+		digest := "sha256:" + fmt.Sprintf("%x", sha256.Sum256(nil))
+		selected, err := physicalCursorSelection(root, filepath.Join(root, "TEST-executable"), filepath.Join(root, "TEST-selector"), digest, nil, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		envelope := domain.PackageEnvelope{}
+		envelope.MCP.Servers = map[string]domain.MCPServer{"sample-notify": {Type: "stdio", Decoded: map[string]any{"args": []any{}}}}
+		good := BindingFacts{ClientID: "cursor", DataRoot: filepath.Join(root, "TEST-data"), SelectedDelivery: selected}
+		calls := 0
+		callback := func(BindingFacts) ([]string, error) {
+			calls++
+			return nil, fmt.Errorf("foreign selector/data conflict")
+		}
+		for _, name := range []string{"no-data", "relative-data", "root-data", "foreign-client", "missing-MCP", "non-stdio", "unknown-mode", "callback-conflict"} {
+			t.Run(name, func(t *testing.T) {
+				f, input := good, envelope
+				switch name {
+				case "no-data":
+					f.DataRoot = ""
+				case "relative-data":
+					f.DataRoot = "TEST-relative"
+				case "root-data":
+					f.DataRoot = string(filepath.Separator)
+				case "foreign-client":
+					f.ClientID = "codex"
+				case "missing-MCP":
+					input.MCP.Servers = nil
+				case "non-stdio":
+					input.MCP.Servers = map[string]domain.MCPServer{"sample-notify": {Type: "http", Decoded: map[string]any{"url": "https://TEST.invalid"}}}
+				case "unknown-mode":
+					if err := json.Unmarshal([]byte(`{"mode":"cursor-unknown"}`), &f.SelectedDelivery); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := projectArgs(input, "sample-notify", callback, f); err == nil {
+					t.Fatal("unsafe projection accepted")
+				}
+			})
+		}
+		if calls != 1 {
+			t.Fatalf("invalid inputs reached callback: %d", calls)
+		}
+		f, _ := selected.CursorFacts()
+		collision, err := cursorhooks.Plan(cursorhooks.Request{Operation: cursorhooks.Install, Shell: cursorhooks.LinuxUserShell32212, ExecutableVerified: true, Specs: []cursorhooks.HookSpec{{Executable: f.Executable, Selector: f.Selector}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := physicalCursorSelection(root, f.Executable, f.Selector, digest, collision.Desired, true); !errors.Is(err, cursorhooks.ErrConflict) {
+			t.Fatalf("foreign selector collision accepted: %v", err)
+		}
+		foreignData := filepath.Join(root, "TEST-foreign-data")
+		if err := os.Mkdir(foreignData, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := (providers.PluginDataManager{Base: root}).EnsureData(t.Context(), "TEST-installation", "TEST-foreign-data", "user"); err == nil {
+			t.Fatal("foreign data without owner marker accepted")
+		}
+		seam := seamStager{serverName: "sample-notify", projectArgs: callback}
+		plan := domain.DeliveryPlan{SelectedDelivery: selected, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "sample-notify", Support: domain.SupportPrepared}}}
+		if _, err := seam.Stage(t.Context(), envelope, plan, "TEST", domain.CompatibilityHints{}); err == nil {
+			t.Fatal("data-free Stage accepted selected Cursor callback")
+		}
+		seam.serverName = "TEST-unselected"
+		if _, err := seam.StageWithPluginData(t.Context(), envelope, plan, "TEST", domain.CompatibilityHints{}, good.DataRoot); err == nil {
+			t.Fatal("unselected MCP reached Stage")
+		}
+		plan.Components = nil
+		seam.serverName = "sample-notify"
+		_, _ = seam.StageWithPluginData(t.Context(), envelope, plan, "TEST", domain.CompatibilityHints{}, "")
+		if calls != 1 {
+			t.Fatal("Stop-only path invoked MCP callback")
+		}
+	})
+}
+
+// Independent implementation of the documented snapshot byte format, without
+// calling Stager.Verify or the snapshot builder that produced the sealed digest.
+func physicalByteDigest(t *testing.T, root string) string {
+	t.Helper()
+	var paths []string
+	if err := filepath.WalkDir(root, func(path string, _ os.DirEntry, err error) error {
+		if path != root {
+			paths = append(paths, path)
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(paths)
+	hash := sha256.New()
+	for _, path := range paths {
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		kind, executable, size := "dir", false, int64(0)
+		if !info.IsDir() {
+			kind, executable, size = "file", info.Mode()&0111 != 0, info.Size()
+		}
+		fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%d\x00", kind, filepath.ToSlash(rel), executable, size)
+		if !info.IsDir() {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hash.Write(body)
+		}
+	}
+	return fmt.Sprintf("sha256:%x", hash.Sum(nil))
 }
