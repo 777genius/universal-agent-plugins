@@ -7,6 +7,8 @@ on:
       - 'install/integrationctl/adapters/dirswap/**'
       - 'install/integrationctl/agentplugins/adapters/profileauthority/**'
       - 'install/integrationctl/agentplugins/domain/profile_authority.go'
+      - 'install/integrationctl/agentplugins/installer/apply.go'
+      - 'install/integrationctl/agentplugins/installer/physical_profile_test.go'
       - '.github/workflows/physical-profile-native.yml'
   workflow_dispatch:
 
@@ -91,9 +93,20 @@ jobs:
       - name: Profile domain bridge and strict persistence contracts
         working-directory: install/integrationctl/agentplugins
         run: go test -count=1 -timeout=3m -v ./adapters/profileauthority
+      - name: Require original sibling authority through public Update
+        if: runner.os == 'Linux'
+        working-directory: install/integrationctl/agentplugins
+        run: |
+          set -o pipefail
+          uname -r
+          stat -f -c '%T' / "$PWD"
+          go test -count=1 -timeout=3m -v ./installer -run '^TestPhysicalProfileUpdateCompatibilityForwarding$' 2>&1 | tee "$RUNNER_TEMP/physical-profile-sibling.log"
+          grep -F 'PASS positive public Update planner + activation-preflight original-token forwarding; selected prepared-client precedence' "$RUNNER_TEMP/physical-profile-sibling.log"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: physical-profile-native-${{ runner.os }}
-          path: ${{ runner.temp }}/physical-profile-native.log
+          path: |
+            ${{ runner.temp }}/physical-profile-native.log
+            ${{ runner.temp }}/physical-profile-sibling.log
           if-no-files-found: error
