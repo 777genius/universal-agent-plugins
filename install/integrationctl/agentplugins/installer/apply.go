@@ -447,6 +447,10 @@ func (e *Engine) compatibilityBindingCheck(binding domain.ClientBinding, configR
 	}
 	check := target
 	check.Client = client
+	// Compatibility planning and activation preflight observe the same
+	// recorded sibling owner that the shared-profile guard revalidates.
+	check.Client.ProfileAuthority = domain.CloneProfileAuthority(binding.ProfileAuthority)
+	check.Client.ProfileNamespace = binding.ProfileNamespace
 	if client.ClientID == target.Client.ClientID {
 		// The selected client's prepared authority must survive update's
 		// compatibility preview; sibling checks remain observational.
