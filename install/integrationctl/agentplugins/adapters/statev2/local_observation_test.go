@@ -196,3 +196,90 @@ func TestObservedStateCarrierShadowing(t *testing.T) {
 		t.Fatal("nil observation emitted on save")
 	}
 }
+
+// Breaking behavior: duplicate receipt/basis/object authority is hidden by the
+// JSON decoder, or a pending predecessor is replaced with newly captured facts.
+func TestCursorStateRejectsShadowAndChangedPredecessor(t *testing.T) {
+	state, key := observedStateFixture(t)
+	binding := state.Installations[0].Clients[key]
+	root := binding.NativeProfileRoot
+	digest := "sha256:" + strings.Repeat("a", 64)
+	r := domain.CursorHookReceipt{Version: 1, Event: "stop", Executable: filepath.Join(root, "observer"), Selector: filepath.Join(root, "binding"), Shell: "cursor-linux-user-3.22.12-single-quote", EntryDigest: digest, RemainderDigest: digest}
+	selected, err := domain.NewCursorDelivery(domain.CursorDeliveryFacts{ProfileRoot: root, HooksPath: filepath.Join(root, "hooks.json"), ProfileIdentity: "TEST-profile", CursorVersion: "2026.09.28-64d2043", TargetOS: "linux", TargetArch: "amd64", QualificationID: "TEST-contract", Executable: r.Executable, Selector: r.Selector, Shell: r.Shell, ObjectID: "TEST-stop", EntryDigest: digest, CanonicalDigest: digest, ProjectionDigest: digest, PlannedReceipt: r, OriginalExists: true, OriginalRawDigest: digest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding.ClientID = "cursor"
+	binding.SelectedDelivery = selected
+	binding.LocalEntryObservation = nil
+	object := selected.CursorOwnership(r)
+	binding.NativeObjects = []domain.NativeObjectOwnership{object}
+	binding.PendingNativeIntent = &domain.PendingNativeIntent{AttemptID: binding.NativeActivationAttempt, Direction: domain.NativeIntentRegister, Delivery: selected, PreviousCursorObject: object}
+	state.Installations[0].Clients[key] = binding
+	store := Store{Path: filepath.Join(t.TempDir(), "state.json")}
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if after, err := os.ReadFile(store.Path); err != nil || !bytes.Equal(after, raw) {
+		t.Fatalf("canonical Load changed raw state bytes: %v", err)
+	}
+	// Mutate the actual persisted carrier, retaining valid competing values.
+	shadow := func(body, carrier, field, alias, value string) string {
+		t.Helper()
+		start := strings.Index(body, carrier)
+		if start < 0 {
+			t.Fatal("fixture did not locate carrier")
+		}
+		needle := `"` + field + `": ` + value
+		suffix := strings.Replace(body[start:], needle, needle+`, "`+alias+`": `+value, 1)
+		if suffix == body[start:] {
+			t.Fatal("fixture did not locate authority field")
+		}
+		return body[:start] + suffix
+	}
+	quotedDigest := `"` + digest + `"`
+	ack := `"native_objects":`
+	previous := `"previous_cursor_object":`
+	equalReceipts := shadow(shadow(string(raw), ack, "remainder_digest", "remainder_digeſt", quotedDigest), previous, "remainder_digest", "remainder_digeſt", quotedDigest)
+	differentReceipts := strings.ReplaceAll(equalReceipts, `"remainder_digeſt": `+quotedDigest, `"remainder_digeſt": "sha256:`+strings.Repeat("b", 64)+`"`)
+	for _, tc := range []struct{ name, body string }{
+		{"ASCII receipt", strings.Replace(string(raw), `"version": 1`, `"version": 1, "VERSION": 1`, 1)},
+		{"ASCII basis", strings.Replace(string(raw), `"original_exists": true`, `"original_exists": true, "original_exists": false`, 1)},
+		{"ASCII object", strings.Replace(string(raw), `"object_id": "TEST-stop"`, `"object_id": "foreign", "object_id": "TEST-stop"`, 1)},
+		{"Unicode basis", shadow(string(raw), `"selected_delivery":`, "original_raw_digest", "original_raw_digeſt", quotedDigest)},
+		{"Unicode shell", shadow(string(raw), `"selected_delivery":`, "shell", "ſhell", `"`+r.Shell+`"`)},
+		{"Unicode owned object", shadow(string(raw), ack, "managed_digest", "managed_digeſt", quotedDigest)},
+		{"Unicode copied object", shadow(string(raw), previous, "managed_digest", "managed_digeſt", quotedDigest)},
+		{"Unicode copied receipt", shadow(string(raw), previous, "remainder_digest", "remainder_digeſt", quotedDigest)},
+		{"Unicode equal competing receipts", equalReceipts},
+		{"Unicode differing valid competing receipts", differentReceipts},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.body == string(raw) {
+				t.Fatal("fixture did not locate actual carrier")
+			}
+			if err := os.WriteFile(store.Path, []byte(tc.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.Load(); err == nil {
+				t.Error("shadowed Cursor authority accepted")
+			}
+			after, err := os.ReadFile(store.Path)
+			if err != nil || !bytes.Equal(after, []byte(tc.body)) {
+				t.Fatalf("Load changed raw state bytes: %v", err)
+			}
+		})
+	}
+	binding.PendingNativeIntent.PreviousCursorObject.CursorReceipt.RemainderDigest = "sha256:" + strings.Repeat("b", 64)
+	state.Installations[0].Clients[key] = binding
+	if err := store.Save(state); err == nil {
+		t.Fatal("pending predecessor could be recaptured")
+	}
+}

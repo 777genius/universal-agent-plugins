@@ -121,16 +121,29 @@ type PackageBinding struct {
 	Inventory      ComponentInventory `json:"inventory"`
 }
 
+// CursorHookReceipt carries the primitive facts of the pure hook planner.
+// Zero is no ownership proof; omitzero preserves Local and legacy wire bytes.
+type CursorHookReceipt struct {
+	Version         int    `json:"version"`
+	Event           string `json:"event"`
+	Executable      string `json:"executable"`
+	Selector        string `json:"selector"`
+	Shell           string `json:"shell"`
+	EntryDigest     string `json:"entry_digest"`
+	RemainderDigest string `json:"remainder_digest"`
+}
+
 type NativeObjectOwnership struct {
-	ObjectID        string `json:"object_id"`
-	Kind            string `json:"kind"`
-	LogicalName     string `json:"logical_name,omitempty"`
-	Path            string `json:"path,omitempty"`
-	SourceRelative  string `json:"source_relative,omitempty"`
-	BeforeDigest    string `json:"before_digest,omitempty"`
-	ManagedDigest   string `json:"managed_digest,omitempty"`
-	ProtectionClass string `json:"protection_class"`
-	UserModified    bool   `json:"user_modified,omitempty"`
+	CursorReceipt   CursorHookReceipt `json:"cursor_receipt,omitzero"`
+	ObjectID        string            `json:"object_id"`
+	Kind            string            `json:"kind"`
+	LogicalName     string            `json:"logical_name,omitempty"`
+	Path            string            `json:"path,omitempty"`
+	SourceRelative  string            `json:"source_relative,omitempty"`
+	BeforeDigest    string            `json:"before_digest,omitempty"`
+	ManagedDigest   string            `json:"managed_digest,omitempty"`
+	ProtectionClass string            `json:"protection_class"`
+	UserModified    bool              `json:"user_modified,omitempty"`
 }
 
 type MutationReceipt struct {

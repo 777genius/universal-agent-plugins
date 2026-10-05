@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -77,6 +78,9 @@ func (service Service) updateActivationResultWithObservation(installationID, bin
 }
 
 func validateObservedOutcome(binding domain.ClientBinding, outcome domain.ActivationOutcome, previous *domain.LocalEntryObservation) error {
+	if f, ok := binding.SelectedDelivery.CursorFacts(); ok {
+		return validateCursorObservedOutcome(binding, outcome, previous, f)
+	}
 	observation := outcome.LocalEntryObservation
 	if observation == nil {
 		if previous != nil {
@@ -102,6 +106,21 @@ func validateObservedOutcome(binding domain.ClientBinding, outcome domain.Activa
 	}
 	if outcome.NativeEffect == domain.NativeEffectUnchanged && !binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) && binding.PendingNativeIntent == nil {
 		return fmt.Errorf("unchanged Local observation has no independent owned predecessor")
+	}
+	return nil
+}
+
+func validateCursorObservedOutcome(binding domain.ClientBinding, outcome domain.ActivationOutcome, previous *domain.LocalEntryObservation, f domain.CursorDeliveryFacts) error {
+	if previous != nil || outcome.LocalEntryObservation != nil {
+		return fmt.Errorf("cursor outcome carries Local observation")
+	}
+	receipt := f.PlannedReceipt
+	if binding.PendingNativeIntent != nil {
+		planned, _ := binding.PendingNativeIntent.Delivery.CursorFacts()
+		receipt = planned.PlannedReceipt
+	}
+	if outcome.NativeEffect != domain.NativeEffectCommitted && outcome.NativeEffect != domain.NativeEffectUnchanged || len(outcome.NativeObjects) != 1 || outcome.NativeObjects[0] != binding.SelectedDelivery.CursorOwnership(receipt) {
+		return fmt.Errorf("cursor acknowledgement differs from actual planned ownership")
 	}
 	return nil
 }
@@ -159,6 +178,13 @@ func (service Service) activateReadOnlyWithObservation(ctx context.Context, bind
 	if err := service.revalidateReadOnlyBinding(binding); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if _, ok := binding.SelectedDelivery.CursorFacts(); ok {
+		if !binding.SelectedDelivery.SameSelection(request.Plan.SelectedDelivery) || binding.SelectedDelivery.CanonicalDigest() != request.Plan.SelectedDelivery.CanonicalDigest() || binding.SelectedDelivery.ProjectionDigest() != request.Plan.SelectedDelivery.ProjectionDigest() {
+			return domain.ActivationOutcome{}, fmt.Errorf("cursor read-only request changed binding authority")
+		}
+		// Verification reads acknowledged authority, not a fresh mutation basis.
+		request.Plan.SelectedDelivery = binding.SelectedDelivery
+	}
 	request.Plan.LocalEntryObservation = binding.LocalEntryObservation.Clone()
 	request.Plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
 	outcome, err := service.Activator.Activate(ctx, request)
@@ -207,7 +233,7 @@ func cloneLocalObservationBinding(binding *domain.ClientBinding) *domain.ClientB
 }
 
 func (service Service) deactivateWithFrozenObservation(ctx context.Context, installationID, bindingID string, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
-	if request.SelectedDelivery.IsZero() || request.LocalEntryObservation == nil {
+	if request.SelectedDelivery.IsZero() {
 		return service.Activator.Deactivate(ctx, request)
 	}
 	before, err := service.activationBinding(installationID, bindingID)
@@ -219,15 +245,13 @@ func (service Service) deactivateWithFrozenObservation(ctx context.Context, inst
 	}
 	request.LocalEntryObservation = request.LocalEntryObservation.Clone()
 	outcome, err := service.Activator.Deactivate(ctx, request)
+	contextErr := ctx.Err()
 	after, loadErr := service.activationBinding(installationID, bindingID)
 	if loadErr != nil {
-		return outcome, loadErr
+		return outcome, errors.Join(err, contextErr, loadErr)
 	}
 	if !reflect.DeepEqual(before, after) {
-		return outcome, fmt.Errorf("removal callback changed frozen authority")
+		return outcome, errors.Join(err, contextErr, fmt.Errorf("removal callback changed frozen authority"))
 	}
-	if ctx.Err() != nil {
-		return outcome, ctx.Err()
-	}
-	return outcome, err
+	return outcome, errors.Join(err, contextErr)
 }

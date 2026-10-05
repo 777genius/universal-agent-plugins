@@ -17,6 +17,7 @@ const (
 // before native effects. Reverse removal authority is as durable as registration.
 // SelectedDelivery carries only the owned entry, never foreign document bytes.
 type PendingNativeIntent struct {
+	PreviousCursorObject  NativeObjectOwnership  `json:"previous_cursor_object,omitzero"`
 	ProfileAuthority      *ProfileAuthority      `json:"profile_authority,omitempty"`
 	ProfileNamespace      string                 `json:"profile_namespace,omitempty"`
 	LocalEntryObservation *LocalEntryObservation `json:"local_entry_observation,omitempty"`
@@ -45,10 +46,42 @@ func (intent PendingNativeIntent) Validate(binding ClientBinding) error {
 	if intent.Direction == NativeIntentRemove && intent.RemoveOwnedEntry != binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
 		return fmt.Errorf("pending reverse decision differs from confirmed entry ownership")
 	}
+	if f, ok := intent.Delivery.CursorFacts(); ok {
+		return intent.validateCursorBinding(binding, f)
+	}
+	return intent.validateLocalBinding(binding)
+}
+
+func (intent PendingNativeIntent) validateLocalBinding(binding ClientBinding) error {
+	if intent.PreviousCursorObject != (NativeObjectOwnership{}) {
+		return fmt.Errorf("cursor predecessor on Local intent")
+	}
 	facts, _ := intent.Delivery.LocalFacts()
 	bound, _ := binding.SelectedDelivery.LocalFacts()
 	if facts.ProjectionDigest == "" || facts.ProjectionDigest != bound.ProjectionDigest || facts.CanonicalDigest != bound.CanonicalDigest || facts.Registration.Selector != binding.TargetLocator || binding.PackageRevision == nil || facts.CanonicalDigest != binding.PackageRevision.TreeDigest {
 		return fmt.Errorf("pending native intent package/projection authority is incomplete")
+	}
+	return nil
+}
+
+func (intent PendingNativeIntent) validateCursorBinding(binding ClientBinding, f CursorDeliveryFacts) error {
+	if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
+		return fmt.Errorf("pending Cursor packet differs from binding attempt packet")
+	}
+	if binding.ClientID != string(ClientCursor) || binding.Scope != string(ScopeUser) || binding.NativeProfileRoot != f.ProfileRoot || f.ProjectionDigest == "" || f.ProjectionDigest != binding.SelectedDelivery.ProjectionDigest() || binding.PackageRevision == nil || f.CanonicalDigest != binding.PackageRevision.TreeDigest || f.CanonicalDigest != binding.SelectedDelivery.CanonicalDigest() {
+		return fmt.Errorf("pending Cursor intent revision/profile differs from binding")
+	}
+	if err := binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects); err != nil {
+		return err
+	}
+	var previous NativeObjectOwnership
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "cursor_user_stop" {
+			previous = object
+		}
+	}
+	if intent.PreviousCursorObject != previous {
+		return fmt.Errorf("pending Cursor original predecessor changed")
 	}
 	return nil
 }
@@ -65,6 +98,17 @@ func (entry OwnedProfileEntry) Ownership(settingsPath string) NativeObjectOwners
 }
 
 func (d SelectedDelivery) OwnsProfileEntry(objects []NativeObjectOwnership) bool {
+	if _, ok := d.CursorFacts(); ok {
+		if d.ValidateCursorObjects(objects) != nil {
+			return false
+		}
+		for _, object := range objects {
+			if object.Kind == "cursor_user_stop" {
+				return true
+			}
+		}
+		return false
+	}
 	facts, ok := d.LocalFacts()
 	if !ok {
 		return false

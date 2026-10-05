@@ -13,7 +13,10 @@ func (d SelectedDelivery) Validate() error {
 	if d.IsZero() {
 		return nil
 	}
-	if d.mode != DeliveryVSCodeLocalV1 || d.local == nil {
+	if d.mode == DeliveryCursorUserStopV1 {
+		return d.validateCursor()
+	}
+	if d.mode != DeliveryVSCodeLocalV1 || d.local == nil || d.cursor != (CursorDeliveryFacts{}) {
 		return fmt.Errorf("unknown or incomplete selected delivery mode %q", d.mode)
 	}
 	facts := d.local
@@ -86,6 +89,15 @@ func (d SelectedDelivery) ValidatePlan(plan DeliveryPlan, canonicalDigest string
 	if d.IsZero() {
 		return nil
 	}
+	if f, ok := d.CursorFacts(); ok {
+		if plan.ClientID != ClientCursor || plan.Scope != ScopeUser || f.CanonicalDigest != canonicalDigest || f.ProfileRoot != plan.NativeRegistryRoot {
+			return fmt.Errorf("selected Cursor plan differs from fixed client/scope/package")
+		}
+		if authority := plan.ProfileAuthority(); authority != nil && authority.Facts().CanonicalRoot != f.ProfileRoot {
+			return fmt.Errorf("cursor packet differs from frozen physical root")
+		}
+		return nil
+	}
 	facts := d.local
 	if !supportsLocalDelivery(plan.ClientID) {
 		return fmt.Errorf("selected Local delivery belongs to a different client")
@@ -126,4 +138,80 @@ func (d SelectedDelivery) EffectiveTraits(id ClientID) ClientTraits {
 }
 func (d SelectedDelivery) SharesBackend(id ClientID) bool {
 	return d.IsZero() && len(BackendSiblings(id)) > 0
+}
+
+// ValidateClient keeps the fixed Cursor client identity with its selection.
+// Historical and Local selections retain their existing caller validations.
+func (d SelectedDelivery) ValidateClient(id ClientID) error {
+	if _, ok := d.CursorFacts(); ok && id != ClientCursor {
+		return fmt.Errorf("cursor selection on another client")
+	}
+	return nil
+}
+
+func (d SelectedDelivery) validateCursor() error {
+	f := d.cursor
+	if d.local != nil || f.CursorVersion != "2026.09.28-64d2043" || f.TargetOS != "linux" || f.TargetArch != "amd64" || f.Shell != "cursor-linux-user-3.22.12-single-quote" {
+		return fmt.Errorf("unknown Cursor selection or qualification tuple")
+	}
+	if err := validateCursorProfile(f); err != nil {
+		return err
+	}
+	if !deliveryDigest(f.CanonicalDigest) || !deliveryDigest(f.EntryDigest) || !deliveryDigest(f.OriginalRawDigest) || f.ProjectionDigest != "" && !deliveryDigest(f.ProjectionDigest) {
+		return fmt.Errorf("cursor revision or attempt basis is incomplete")
+	}
+	if !f.OriginalExists && f.OriginalRawDigest != "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+		return fmt.Errorf("absent Cursor original has nonempty raw digest")
+	}
+	return d.ValidateCursorReceipt(f.PlannedReceipt)
+}
+
+func validateCursorProfile(f CursorDeliveryFacts) error {
+	for _, p := range []string{f.ProfileRoot, f.HooksPath, f.Executable, f.Selector} {
+		if !deliveryText(p) || !filepath.IsAbs(p) || filepath.Clean(p) != p {
+			return fmt.Errorf("cursor requires exact absolute authority paths")
+		}
+	}
+	if f.HooksPath != filepath.Join(f.ProfileRoot, "hooks.json") || !deliveryText(f.ProfileIdentity) || !deliveryText(f.QualificationID) || !deliveryText(f.ObjectID) {
+		return fmt.Errorf("cursor profile or object identity is incomplete")
+	}
+	return nil
+}
+
+func (d SelectedDelivery) ValidateCursorReceipt(r CursorHookReceipt) error {
+	f, ok := d.CursorFacts()
+	if !ok || r.Version != 1 || r.Event != "stop" || r.Executable != f.Executable || r.Selector != f.Selector || r.Shell != f.Shell || r.EntryDigest != f.EntryDigest || !deliveryDigest(r.RemainderDigest) {
+		return fmt.Errorf("cursor receipt differs from frozen Stop specification")
+	}
+	return nil
+}
+
+func (d SelectedDelivery) CursorOwnership(r CursorHookReceipt) NativeObjectOwnership {
+	f, _ := d.CursorFacts()
+	return NativeObjectOwnership{ObjectID: f.ObjectID, Kind: "cursor_user_stop", Path: f.HooksPath, LogicalName: f.Selector, ManagedDigest: f.EntryDigest, ProtectionClass: "owned_selector", CursorReceipt: r}
+}
+
+// ValidateCursorObjects rejects zero, foreign and duplicate hook authority.
+func (d SelectedDelivery) ValidateCursorObjects(objects []NativeObjectOwnership) error {
+	_, selected := d.CursorFacts()
+	count := 0
+	for _, o := range objects {
+		if o.CursorReceipt == (CursorHookReceipt{}) && o.Kind != "cursor_user_stop" {
+			continue
+		}
+		if !selected {
+			return fmt.Errorf("cursor receipt on an unselected binding")
+		}
+		count++
+		if count > 1 {
+			return fmt.Errorf("duplicate Cursor owned object")
+		}
+		if err := d.ValidateCursorReceipt(o.CursorReceipt); err != nil {
+			return err
+		}
+		if o != d.CursorOwnership(o.CursorReceipt) {
+			return fmt.Errorf("cursor object differs from frozen selection")
+		}
+	}
+	return nil
 }

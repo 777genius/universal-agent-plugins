@@ -90,8 +90,7 @@ func (service Service) pendingNativeBinding(installationID, bindingID, attemptID
 		if err := binding.PendingNativeIntent.Validate(binding); err != nil {
 			return domain.ClientBinding{}, err
 		}
-		facts, _ := binding.SelectedDelivery.LocalFacts()
-		if managedDigest(binding) != facts.ProjectionDigest {
+		if managedDigest(binding) != binding.SelectedDelivery.ProjectionDigest() {
 			return domain.ClientBinding{}, fmt.Errorf("native recovery projection differs from managed directory receipt")
 		}
 		return binding, nil
@@ -106,6 +105,13 @@ func validateNativeReconciliation(intent domain.PendingNativeIntent, outcome dom
 	if intent.Direction == domain.NativeIntentRemove {
 		if len(outcome.NativeObjects) != 0 {
 			return fmt.Errorf("native removal recovery retained external ownership")
+		}
+		return nil
+	}
+	if f, ok := intent.Delivery.CursorFacts(); ok {
+		expected := intent.Delivery.CursorOwnership(f.PlannedReceipt)
+		if len(outcome.NativeObjects) != 1 || outcome.NativeObjects[0] != expected || outcome.LocalEntryObservation != nil {
+			return fmt.Errorf("cursor recovery outcome differs from recorded planned receipt")
 		}
 		return nil
 	}
