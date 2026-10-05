@@ -35,7 +35,7 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 		if len(names) == 0 {
 			callback = nil // Retain the selected Stop-only path.
 		} else if !slices.Contains(names, s.serverName) {
-			return domain.StagedDelivery{}, fmt.Errorf("Cursor projection requires selected declared MCP server %s", s.serverName)
+			return domain.StagedDelivery{}, fmt.Errorf("cursor projection requires selected declared MCP server %s", s.serverName)
 		}
 	}
 	if s.profileCheck != nil {
@@ -80,7 +80,7 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 			return domain.PackageEnvelope{}, err
 		}
 		if !filepath.IsAbs(facts.DataRoot) || filepath.Clean(facts.DataRoot) != facts.DataRoot || facts.DataRoot == string(filepath.Separator) {
-			return domain.PackageEnvelope{}, fmt.Errorf("Cursor MCP projection requires owned plugin data")
+			return domain.PackageEnvelope{}, fmt.Errorf("cursor MCP projection requires owned plugin data")
 		}
 	} else if selectedNativeOnly(facts.SelectedDelivery) {
 		return envelope, nil
@@ -98,7 +98,7 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 		return domain.PackageEnvelope{}, fmt.Errorf("package is missing declared MCP server %s", serverName)
 	}
 	if _, selected := facts.SelectedDelivery.CursorFacts(); selected && (server.Type != "stdio" || server.Decoded == nil) {
-		return domain.PackageEnvelope{}, fmt.Errorf("Cursor args projection requires declared stdio MCP server %s", serverName)
+		return domain.PackageEnvelope{}, fmt.Errorf("cursor args projection requires declared stdio MCP server %s", serverName)
 	}
 	if server.Decoded == nil {
 		server.Decoded = map[string]any{}

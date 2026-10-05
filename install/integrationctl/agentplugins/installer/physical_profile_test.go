@@ -715,8 +715,12 @@ func (a physicalSelectedCursor) RefinePlan(ctx context.Context, in clients.PlanI
 	if err != nil {
 		return err
 	}
-	if info, err := os.Lstat(in.Client.ExecutablePath); err != nil || !info.Mode().IsRegular() {
-		return fmt.Errorf("TEST executable is not a regular file: %v", err)
+	info, err := os.Lstat(in.Client.ExecutablePath)
+	if err != nil {
+		return fmt.Errorf("TEST executable: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("TEST executable is not a regular file")
 	}
 	p.SelectedDelivery, err = physicalCursorSelection(in.Client.ConfigRoot, in.Client.ExecutablePath, a.selector, in.Envelope.TreeDigest, original.Body, original.Exists)
 	return err
@@ -744,7 +748,7 @@ func (a physicalSelectedCursor) Activate(ctx context.Context, _ clients.Env, r d
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	original := file.Original()
 	if original.Exists != f.OriginalExists || fmt.Sprintf("sha256:%x", sha256.Sum256(original.Body)) != f.OriginalRawDigest {
 		return domain.ActivationOutcome{}, fmt.Errorf("hook basis changed")
@@ -919,7 +923,7 @@ func TestPhysicalProfileSelectedCursorMCPProjection(t *testing.T) {
 		calls := 0
 		callback := func(BindingFacts) ([]string, error) {
 			calls++
-			return nil, fmt.Errorf("foreign selector/data conflict")
+			return []string{"TEST-unusable-on-error"}, fmt.Errorf("foreign selector/data conflict")
 		}
 		for _, name := range []string{"no-data", "relative-data", "root-data", "foreign-client", "missing-MCP", "non-stdio", "unknown-mode", "callback-conflict"} {
 			t.Run(name, func(t *testing.T) {
@@ -1011,7 +1015,9 @@ func physicalByteDigest(t *testing.T, root string) string {
 		if !info.IsDir() {
 			kind, executable, size = "file", info.Mode()&0111 != 0, info.Size()
 		}
-		fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%d\x00", kind, filepath.ToSlash(rel), executable, size)
+		if _, err := fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%d\x00", kind, filepath.ToSlash(rel), executable, size); err != nil {
+			t.Fatal(err)
+		}
 		if !info.IsDir() {
 			body, err := os.ReadFile(path)
 			if err != nil {
