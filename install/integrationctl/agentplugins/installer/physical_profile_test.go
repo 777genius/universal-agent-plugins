@@ -22,6 +22,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/cursorhooks"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -766,7 +767,11 @@ func (a physicalSelectedCursor) Activate(ctx context.Context, _ clients.Env, r d
 	if receipt.EntryDigest != planned.Receipt.EntryDigest || receipt.RemainderDigest != planned.Receipt.RemainderDigest {
 		return domain.ActivationOutcome{}, fmt.Errorf("acknowledgement differs")
 	}
-	return domain.ActivationOutcome{Activation: domain.ActivationManual, NativeEffect: domain.NativeEffectCommitted, NativeObjects: []domain.NativeObjectOwnership{r.Plan.SelectedDelivery.CursorOwnership(receipt)}}, nil
+	outcome := shared.StartedActivation(r)
+	outcome.Activation = domain.ActivationManual
+	outcome.NativeEffect = domain.NativeEffectCommitted
+	outcome.NativeObjects = []domain.NativeObjectOwnership{r.Plan.SelectedDelivery.CursorOwnership(receipt)}
+	return outcome, nil
 }
 
 // Plausible RED: selectedNativeOnly suppresses ProjectArgs, installing [] argv
