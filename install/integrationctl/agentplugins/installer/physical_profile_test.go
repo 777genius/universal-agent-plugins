@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
@@ -16,8 +17,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cursor"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 type physicalEditor struct {
@@ -523,4 +526,166 @@ func physicalTempDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+// This seam observes the real planner and activation-preflight inputs, while
+// retaining Cursor's public preparation adapter. It does not qualify native Stop.
+type physicalCompatibilityCursor struct {
+	*cursor.Adapter
+	observe func(string, domain.DetectedClient) error
+}
+
+func (a physicalCompatibilityCursor) CaptureProfileAuthority(ctx context.Context, c domain.DetectedClient) (domain.ProfileAuthority, error) {
+	return profileauthority.Capture(ctx, c.ConfigRoot)
+}
+func (a physicalCompatibilityCursor) RevalidateProfileAuthority(ctx context.Context, _ domain.ClientID, p domain.ProfileAuthority) error {
+	return profileauthority.Revalidate(ctx, p)
+}
+func (a physicalCompatibilityCursor) RefinePlan(ctx context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if err := a.observe("planner", in.Client); err != nil {
+		return err
+	}
+	return a.Adapter.RefinePlan(ctx, in, plan)
+}
+func (a physicalCompatibilityCursor) PreflightActivation(_ clients.Env, r domain.ActivationRequest) error {
+	return a.observe("activation-preflight", r.Client)
+}
+
+// Regression: rebuilding an observational sibling drops its original token
+// before the real public Update compatibility planner or activation preflight.
+func TestPhysicalProfileUpdateCompatibilityForwarding(t *testing.T) {
+	e, req := physicalEngine(t)
+	// Only actual full-ancestry Capture can admit the affirmative fixture.
+	token, err := profileauthority.Capture(t.Context(), req.ClientConfigRoot)
+	if errors.Is(err, directoryidentity.ErrUnsupported) {
+		t.Skipf("NOT_RUN positive compatibility forwarding: full ancestry unsupported: %v", err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("physical authority ancestry: %+v", token.Facts())
+	cursorRoot := filepath.Join(filepath.Dir(req.ClientConfigRoot), "TEST-cursor")
+	if err := os.Mkdir(cursorRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var expected *domain.ProfileAuthority
+	var namespace string
+	calls := map[string]int{}
+	observe := func(phase string, c domain.DetectedClient) error {
+		if expected == nil { // Initial public installation establishes the owner.
+			return nil
+		}
+		if c.ProfileAuthority == nil || !c.ProfileAuthority.Equal(*expected) || c.ProfileNamespace != namespace {
+			return fmt.Errorf("%s lost original recorded Cursor authority/namespace", phase)
+		}
+		if err := profileauthority.Revalidate(t.Context(), *c.ProfileAuthority); err != nil {
+			return err
+		}
+		calls[phase]++
+		return nil
+	}
+	registry, err := clients.NewRegistry(physicalEditor{Adapter: codex.New()}, physicalCompatibilityCursor{cursor.New(), observe})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.cfg.Registry = registry
+	install := func(r Request) {
+		t.Helper()
+		h, err := e.Prepare(t.Context(), r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := h.Close(); err != nil {
+				t.Error(err)
+			}
+		}()
+		if _, err := e.Apply(t.Context(), h, Decision{Confirmed: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	install(req)
+	cursorReq := req
+	cursorReq.ClientID, cursorReq.ClientConfigRoot, cursorReq.OperationID = "cursor", cursorRoot, "TEST-cursor-install"
+	install(cursorReq)
+	state, err := e.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation, ok := findInstall(state, req.InstallationID)
+	if !ok {
+		t.Fatal("public install was not persisted")
+	}
+	cursorBefore, _, ok := findBinding(installation, domain.ClientCursor)
+	if !ok || cursorBefore.ProfileAuthority == nil {
+		t.Fatal("public install did not record Cursor authority")
+	}
+	expected, namespace = domain.CloneProfileAuthority(cursorBefore.ProfileAuthority), cursorBefore.ProfileNamespace
+	if namespace != e.cfg.StateRoot {
+		t.Fatal("recorded namespace differs")
+	}
+	// Candidate r2 is independent input bytes; only Codex is selected for Update.
+	if err := os.WriteFile(filepath.Join(req.PackageRoot, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sample-notify","version":"1.0.1"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	req.Operation, req.OperationID = OpUpdate, "TEST-codex-update"
+	req.KnownTargets = []TargetFacts{{ClientID: "cursor", BindingID: cursorBefore.ClientBindingID, ConfigRoot: cursorRoot, Executable: req.ClientExecutable}}
+	h, err := e.Prepare(t.Context(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := h.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	for _, phase := range []string{"planner", "activation-preflight"} {
+		if calls[phase] == 0 {
+			t.Fatalf("public Update never reached sibling %s", phase)
+		}
+	}
+	// A boundary clone must not alias the Store.Load result.
+	check, err := e.compatibilityBindingCheck(cursorBefore, cursorRoot, req.ClientExecutable, usecase.AddInput{Client: h.client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if check.Client.ProfileAuthority == cursorBefore.ProfileAuthority || check.Client.ProfileAuthority == nil || !check.Client.ProfileAuthority.Equal(*expected) {
+		t.Fatal("sibling forwarding did not clone the original token")
+	}
+	codexBefore, _, ok := findBinding(installation, domain.ClientCodex)
+	if !ok {
+		t.Fatal("selected binding missing")
+	}
+	check, err = e.compatibilityBindingCheck(codexBefore, req.ClientConfigRoot, req.ClientExecutable, usecase.AddInput{Client: h.client})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if check.Client.ProfileAuthority != h.client.ProfileAuthority || !reflect.DeepEqual(check.Client, h.client) {
+		t.Fatal("selected compatibility client lost prepared-client precedence")
+	}
+	// Prepare is an observational compatibility check, not a sibling mutation.
+	after, err := e.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, ok := findInstall(after, req.InstallationID)
+	if !ok {
+		t.Fatal("installation disappeared")
+	}
+	cursorAfter, _, ok := findBinding(current, domain.ClientCursor)
+	if !ok || !reflect.DeepEqual(cursorBefore, cursorAfter) {
+		t.Fatal("compatibility preview changed Cursor r1")
+	}
+	t.Log("PASS positive public Update planner + activation-preflight original-token forwarding; selected prepared-client precedence")
+}
+
+func TestPhysicalProfileCompatibilityLegacyNil(t *testing.T) {
+	e, req := physicalEngine(t)
+	check, err := e.compatibilityBindingCheck(domain.ClientBinding{ClientID: "codex"}, req.ClientConfigRoot, req.ClientExecutable, usecase.AddInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if check.Client.ProfileAuthority != nil || check.Client.ProfileNamespace != "" {
+		t.Fatal("legacy compatibility client gained physical authority")
+	}
 }
