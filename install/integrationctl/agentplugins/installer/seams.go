@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"reflect"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -19,13 +21,23 @@ type seamStager struct {
 }
 
 func (s seamStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
-	if s.serverName != "" && s.projectArgs != nil && !selectedNativeOnly(plan.SelectedDelivery) {
+	_, cursorSelected := plan.SelectedDelivery.CursorFacts()
+	if s.serverName != "" && s.projectArgs != nil && (cursorSelected && len(domain.SelectedMCPNames(plan)) > 0 || !selectedNativeOnly(plan.SelectedDelivery)) {
 		return domain.StagedDelivery{}, fmt.Errorf("host projection requires owned plugin data")
 	}
 	return s.Stager.Stage(ctx, envelope, plan, operationID, hints)
 }
 
 func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints, data string) (domain.StagedDelivery, error) {
+	callback := s.projectArgs
+	if _, selected := plan.SelectedDelivery.CursorFacts(); selected && s.serverName != "" && callback != nil {
+		names := domain.SelectedMCPNames(plan)
+		if len(names) == 0 {
+			callback = nil // Retain the selected Stop-only path.
+		} else if !slices.Contains(names, s.serverName) {
+			return domain.StagedDelivery{}, fmt.Errorf("cursor projection requires selected declared MCP server %s", s.serverName)
+		}
+	}
 	if s.profileCheck != nil {
 		if err := s.profileCheck(ctx); err != nil {
 			return domain.StagedDelivery{}, err
@@ -44,7 +56,7 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 	if facts.InstallationID != "" {
 		facts.BindingID = domain.ComputeClientBindingID(facts.InstallationID, facts.ClientID, facts.Scope, plan.ActivePath)
 	}
-	projected, err := projectArgs(envelope, s.serverName, s.projectArgs, facts)
+	projected, err := projectArgs(envelope, s.serverName, callback, facts)
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
@@ -57,7 +69,20 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 }
 
 func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(BindingFacts) ([]string, error), facts BindingFacts) (domain.PackageEnvelope, error) {
-	if serverName == "" || args == nil || selectedNativeOnly(facts.SelectedDelivery) {
+	if serverName == "" || args == nil {
+		return envelope, nil
+	}
+	if err := facts.SelectedDelivery.Validate(); err != nil {
+		return domain.PackageEnvelope{}, err
+	}
+	if _, selected := facts.SelectedDelivery.CursorFacts(); selected {
+		if err := facts.SelectedDelivery.ValidateClient(domain.ClientID(facts.ClientID)); err != nil {
+			return domain.PackageEnvelope{}, err
+		}
+		if !filepath.IsAbs(facts.DataRoot) || filepath.Clean(facts.DataRoot) != facts.DataRoot || facts.DataRoot == string(filepath.Separator) {
+			return domain.PackageEnvelope{}, fmt.Errorf("cursor MCP projection requires owned plugin data")
+		}
+	} else if selectedNativeOnly(facts.SelectedDelivery) {
 		return envelope, nil
 	}
 	raw, err := json.Marshal(envelope.MCP.Servers)
@@ -71,6 +96,9 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 	server, ok := servers[serverName]
 	if !ok {
 		return domain.PackageEnvelope{}, fmt.Errorf("package is missing declared MCP server %s", serverName)
+	}
+	if _, selected := facts.SelectedDelivery.CursorFacts(); selected && (server.Type != "stdio" || server.Decoded == nil) {
+		return domain.PackageEnvelope{}, fmt.Errorf("cursor args projection requires declared stdio MCP server %s", serverName)
 	}
 	if server.Decoded == nil {
 		server.Decoded = map[string]any{}

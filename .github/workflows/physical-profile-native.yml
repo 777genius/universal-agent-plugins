@@ -93,15 +93,35 @@ jobs:
       - name: Profile domain bridge and strict persistence contracts
         working-directory: install/integrationctl/agentplugins
         run: go test -count=1 -timeout=3m -v ./adapters/profileauthority
-      - name: Require original sibling authority through public Update
+      - name: Require selected Cursor projection and original sibling authority
         if: runner.os == 'Linux'
         working-directory: install/integrationctl/agentplugins
         run: |
           set -o pipefail
           uname -r
           stat -f -c '%T' / "$PWD"
-          go test -count=1 -timeout=3m -v ./installer -run '^TestPhysicalProfileUpdateCompatibilityForwarding$' 2>&1 | tee "$RUNNER_TEMP/physical-profile-sibling.log"
+          go test -count=1 -timeout=3m -v ./installer -run '^TestPhysicalProfile(UpdateCompatibilityForwarding|SelectedCursorMCPProjection)$' 2>&1 | tee "$RUNNER_TEMP/physical-profile-sibling.log"
           grep -F 'PASS positive public Update planner + activation-preflight original-token forwarding; selected prepared-client precedence' "$RUNNER_TEMP/physical-profile-sibling.log"
+          grep -F -- '--- PASS: TestPhysicalProfileSelectedCursorMCPProjection/positive' "$RUNNER_TEMP/physical-profile-sibling.log"
+          # Compare only the original seam with the same final regression fixture.
+          git fetch --no-tags --depth=1 origin 143c8df66267ce56f335b5f0cc73d5024921683a
+          git show 143c8df66267ce56f335b5f0cc73d5024921683a:install/integrationctl/agentplugins/installer/seams.go > "$RUNNER_TEMP/cursor-mcp-original-seams.go"
+          python - <<'PY_OVERLAY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          original = root / 'cursor-mcp-original-seams.go'
+          if hashlib.sha256(original.read_bytes()).hexdigest() != '1b17fbaeed93f97354b69749c00604bf8bc18048eaa2f30219c5ecdd497686a2':
+              raise SystemExit('Original Cursor seam identity mismatch')
+          source = pathlib.Path('installer/seams.go').resolve(strict=True)
+          (root / 'cursor-mcp-overlay.json').write_text(json.dumps({'Replace': {str(source): str(original)}}), encoding='utf-8')
+          PY_OVERLAY
+          set +e
+          go test -overlay "$RUNNER_TEMP/cursor-mcp-overlay.json" -count=1 -timeout=3m -v ./installer -run '^TestPhysicalProfileSelectedCursorMCPProjection$/^positive$' 2>&1 | tee "$RUNNER_TEMP/physical-profile-cursor-original.log"
+          original_status=${PIPESTATUS[0]}
+          set -e
+          test "$original_status" -ne 0
+          grep -F -- '--- FAIL: TestPhysicalProfileSelectedCursorMCPProjection/positive' "$RUNNER_TEMP/physical-profile-cursor-original.log"
+          grep -F 'selected projection callback calls=0, want 1' "$RUNNER_TEMP/physical-profile-cursor-original.log"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -109,4 +129,5 @@ jobs:
           path: |
             ${{ runner.temp }}/physical-profile-native.log
             ${{ runner.temp }}/physical-profile-sibling.log
+            ${{ runner.temp }}/physical-profile-cursor-original.log
           if-no-files-found: error
