@@ -86,9 +86,9 @@ func TestOpenCodeClientPreparationFreezesExplicitNativeTarget(t *testing.T) {
 	}
 }
 
-// Empty packages still emit a versioned projection. They must use explicit
-// qualified authority rather than inventing the old v1 codec.
-func TestOpenCodeManifestOnlyProjectionRequiresQualifiedHost(t *testing.T) {
+// Selected native effects require explicit qualified authority rather than
+// inventing the old v1 codec; zero-effect packages have a separate contract.
+func TestOpenCodeDesiredProjectionRequiresQualifiedHost(t *testing.T) {
 	root := t.TempDir()
 	registry, err := clients.NewRegistry(opencode.New())
 	if err != nil {
@@ -100,12 +100,13 @@ func TestOpenCodeManifestOnlyProjectionRequiresQualifiedHost(t *testing.T) {
 	preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: version, Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture-native-bytes"}}, nil
 	}
+	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"docs": {Type: "streamable-http", Decoded: map[string]any{"url": "https://docs.test"}}}}}
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: filepath.Join(root, "native")}
-	if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, nil, "", false); err == nil {
-		t.Fatal("manifest-only projection authorized without an explicit executable")
+	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, "", false); err == nil {
+		t.Fatal("desired projection authorized without an explicit executable")
 	}
 	client.ExecutablePath = filepath.Join(root, "selected-opencode")
-	host, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, nil, client.ExecutablePath, false)
+	host, err := preparer.PrepareClient(t.Context(), envelope, client, nil, client.ExecutablePath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,17 +114,66 @@ func TestOpenCodeManifestOnlyProjectionRequiresQualifiedHost(t *testing.T) {
 	if err := os.Mkdir(stage, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	plan := domain.DeliveryPlan{OpenCodeHost: host, NativeRegistryRoot: client.ConfigRoot, ActivePath: filepath.Join(root, "managed")}
-	if err := opencode.ProjectOpenCodeNative(stage, domain.PackageEnvelope{}, plan, ""); err != nil {
+	plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative}}, OpenCodeHost: host, NativeRegistryRoot: client.ConfigRoot, ActivePath: filepath.Join(root, "managed")}
+	if err := opencode.ProjectOpenCodeNative(stage, envelope, plan, ""); err != nil {
 		t.Fatal(err)
 	}
 	projection, err := opencode.ReadOpenCodeProjection(stage)
-	if err != nil || projection.Dialect != opencodehost.DialectV2 || len(projection.MCPServers) != 0 {
-		t.Fatalf("empty qualified projection = %+v, %v", projection, err)
+	if err != nil || projection.Dialect != opencodehost.DialectV2 || len(projection.MCPServers) != 1 {
+		t.Fatalf("qualified projection = %+v, %v", projection, err)
 	}
 	version = "2.0.22"
-	if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, nil, client.ExecutablePath, false); !errors.Is(err, opencodehost.ErrUnverifiedCapability) {
-		t.Fatalf("manifest-only projection admitted an unqualified host: %v", err)
+	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, client.ExecutablePath, false); !errors.Is(err, opencodehost.ErrUnverifiedCapability) {
+		t.Fatalf("desired projection admitted an unqualified host: %v", err)
+	}
+}
+
+// RED if metadata-only or explicitly unsupported desired components acquire a
+// codec, probe a host, choose ambiguous config, or create a native projection.
+func TestOpenCodeZeroEffectPreparationNeverProbes(t *testing.T) {
+	for _, unsupported := range []bool{false, true} {
+		t.Run(map[bool]string{false: "metadata", true: "unsupported"}[unsupported], func(t *testing.T) {
+			root := t.TempDir()
+			registry, err := clients.NewRegistry(opencode.New())
+			if err != nil {
+				t.Fatal(err)
+			}
+			preparer := NewOpenCodeClientPreparation(registry)
+			preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+				t.Fatal("zero-effect preparation probed host")
+				return clientdetect.ProbeEvidence{}, errors.New("forbidden")
+			}
+			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: root}
+			for _, name := range []string{"opencode.json", "opencode.jsonc"} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte("foreign"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			envelope := domain.PackageEnvelope{}
+			plan := domain.DeliveryPlan{NativeRegistryRoot: root}
+			if unsupported {
+				envelope.MCP.Servers = map[string]domain.MCPServer{"docs": {Type: "sse"}}
+				plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportUnsupported}}
+			}
+			for _, inert := range []bool{false, true} {
+				host, err := preparer.PrepareClient(t.Context(), envelope, client, nil, "", inert)
+				if err != nil || host != nil {
+					t.Fatalf("zero effects acquired authority: %v %v", host, err)
+				}
+			}
+			if err := opencode.ProjectOpenCodeNative(root, envelope, plan, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(root, opencode.OpenCodeProjectionFile)); !os.IsNotExist(err) {
+				t.Fatalf("zero effects wrote projection: %v", err)
+			}
+			for _, name := range []string{"opencode.json", "opencode.jsonc"} {
+				body, err := os.ReadFile(filepath.Join(root, name))
+				if err != nil || string(body) != "foreign" {
+					t.Fatalf("zero effects changed config: %s %v", body, err)
+				}
+			}
+		})
 	}
 }
 
@@ -154,7 +204,8 @@ func TestOpenCodeRevalidationRejectsRootRetargetDuringProbe(t *testing.T) {
 		return evidence, nil
 	}
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: link, ExecutablePath: filepath.Join(root, "native")}
-	host, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, nil, "", false)
+	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"docs": {Type: "streamable-http"}}}}
+	host, err := preparer.PrepareClient(t.Context(), envelope, client, nil, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,5 +225,43 @@ func TestOpenCodeRevalidationRejectsRootRetargetDuringProbe(t *testing.T) {
 	entries, err := os.ReadDir(second)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("retargeted profile mutated: %v, %v", entries, err)
+	}
+}
+
+// Empty desired declarations must not erase old cleanup effects or bypass the
+// closed receipt-kind and codec fences. No host can authorize cleanup offline.
+func TestOpenCodeEmptyDesiredCleanupRetainsAuthorityAndCodecFences(t *testing.T) {
+	registry, err := clients.NewRegistry(opencode.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparer := NewOpenCodeClientPreparation(registry)
+	probes := 0
+	preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+		probes++
+		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "2.0.21", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture-native"}}, nil
+	}
+	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: t.TempDir()}
+	for _, kind := range []string{nativeconfig.OpenCodeMCPObjectKind, "opencode_global_skill_directory"} {
+		previous := []domain.NativeObjectOwnership{{Kind: kind}}
+		if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, previous, "", true); err == nil {
+			t.Fatalf("offline cleanup %s lost authority fence", kind)
+		}
+		if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, previous, "", false); err == nil {
+			t.Fatalf("cleanup %s authorized without explicit executable", kind)
+		}
+	}
+	if probes != 0 {
+		t.Fatalf("cleanup probed without explicit target: %d", probes)
+	}
+	client.ExecutablePath = filepath.Join(t.TempDir(), "explicit-native")
+	previous := []domain.NativeObjectOwnership{{Kind: nativeconfig.OpenCodeMCPObjectKind}}
+	if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, previous, "", false); !errors.Is(err, nativeconfig.ErrNativeMigrationRequired) {
+		t.Fatalf("old V1 cleanup accepted V2 codec: %v", err)
+	}
+	for _, inert := range []bool{false, true} {
+		if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, []domain.NativeObjectOwnership{{Kind: "opencode_unknown_receipt"}}, "", inert); err == nil {
+			t.Fatal("unknown owned receipt disappeared through zero-effect shortcut")
+		}
 	}
 }

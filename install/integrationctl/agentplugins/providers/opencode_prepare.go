@@ -43,9 +43,15 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 		return client.OpenCodeHost, nil
 	}
 	skills, transports := desiredOpenCodeNativeRequirements(envelope, client.ClientID)
-	oldSkills, _ := consumer.OwnedOpenCodeNativeRequirements(previous)
-	// Even a manifest-only install emits a versioned native projection. Its
-	// codec selection is a desired effect and needs qualified host authority.
+	oldSkills, oldConfig, err := previousOpenCodeNativeRequirements(consumer, previous)
+	if err != nil {
+		return nil, err
+	}
+	// With neither selected supported effects nor owned cleanup, the native
+	// projector is inert: no dialect, host probe or config selection is needed.
+	if !skills && len(transports) == 0 && !oldSkills && !oldConfig {
+		return nil, nil
+	}
 	if processInert {
 		return offlineOpenCodeHost(client.OpenCodeHost, skills, transports)
 	}
@@ -73,7 +79,8 @@ func desiredOpenCodeNativeRequirements(envelope domain.PackageEnvelope, id domai
 		}
 	}
 	slices.Sort(transports)
-	return len(envelope.Skills) > 0, transports
+	skillSupport := definition.Capabilities.SkillSupport
+	return len(envelope.Skills) > 0 && skillSupport != "" && skillSupport != domain.SupportUnsupported, transports
 }
 
 func offlineOpenCodeHost(host domain.OpenCodeHostAuthority, skills bool, transports []string) (domain.OpenCodeHostAuthority, error) {
@@ -178,4 +185,16 @@ func (host *preparedOpenCodeClient) ValidateNative(skills bool, transports []str
 		}
 	}
 	return host.NativePrepared.ValidateNative(skills, transports)
+}
+
+// Validate claimed native kinds before the zero-effect shortcut. An unknown
+// receipt must not disappear merely because it has no desired replacement.
+func previousOpenCodeNativeRequirements(consumer clients.OpenCodeHostProfileConsumer, previous []domain.NativeObjectOwnership) (bool, bool, error) {
+	for _, object := range previous {
+		if _, _, err := nativeconfig.OpenCodeCodecForKind(object.Kind); err != nil {
+			return false, false, err
+		}
+	}
+	skills, config := consumer.OwnedOpenCodeNativeRequirements(previous)
+	return skills, config, nil
 }
