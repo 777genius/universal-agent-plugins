@@ -668,21 +668,46 @@ func TestOpenCodeAmbiguousJSONVariantsFailBeforeProjection(t *testing.T) {
 	if err := os.MkdirAll(active, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{}}}
-	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active}
+	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
+		"docs": {Name: "docs", Type: "streamable-http", Decoded: map[string]any{"url": "https://docs.test"}},
+	}}}
+	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active,
+		Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared}}}
 	if err := opencode.ProjectOpenCodeNative(active, envelope, plan, ""); !errors.Is(err, nativeconfig.ErrAmbiguousConfig) {
 		t.Fatalf("expected ambiguous config rejection, got %v", err)
 	}
 }
 
 func TestOpenCodeRejectsPackageOwnedProjectionCollision(t *testing.T) {
-	root := t.TempDir()
-	active := filepath.Join(root, "active")
-	writeOpenCodeTestFile(t, filepath.Join(active, opencode.OpenCodeProjectionFile), `{"attacker":true}`)
-	plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, NativeRegistryRoot: filepath.Join(root, "config"), ActivePath: active}
-	err := opencode.ProjectOpenCodeNative(active, domain.PackageEnvelope{}, plan, "")
-	if err == nil || !strings.Contains(err.Error(), "reserved") {
-		t.Fatalf("expected reserved projection rejection, got %v", err)
+	for _, selectedMCP := range []bool{false, true} {
+		name := "empty"
+		if selectedMCP {
+			name = "selected-mcp"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			active := filepath.Join(root, "active")
+			reserved := filepath.Join(active, opencode.OpenCodeProjectionFile)
+			writeOpenCodeTestFile(t, reserved, `{"attacker":true}`)
+			configRoot := filepath.Join(root, "config")
+			plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, NativeRegistryRoot: configRoot, ActivePath: active}
+			envelope := domain.PackageEnvelope{}
+			if selectedMCP {
+				plan.OpenCodeHost = openCodeV1FixtureProfile{}
+				plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportPrepared}}
+				envelope.MCP.Servers = map[string]domain.MCPServer{"docs": {Name: "docs", Type: "streamable-http", Decoded: map[string]any{"url": "https://docs.test"}}}
+			}
+			err := opencode.ProjectOpenCodeNative(active, envelope, plan, "")
+			if err == nil || !strings.Contains(err.Error(), "reserved") {
+				t.Fatalf("expected reserved projection rejection, got %v", err)
+			}
+			if body := readOpenCodeTestFile(t, reserved); body != `{"attacker":true}` {
+				t.Fatalf("reserved package bytes changed: %s", body)
+			}
+			if _, err := os.Stat(configRoot); !os.IsNotExist(err) {
+				t.Fatalf("reserved-path refusal touched native config root: %v", err)
+			}
+		})
 	}
 }
 

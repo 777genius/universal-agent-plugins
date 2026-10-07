@@ -19,8 +19,12 @@ import (
 )
 
 func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
-	if empty, err := emptyOpenCodeNativePlan(envelope, plan); err != nil || empty {
+	empty, err := emptyOpenCodeNativePlan(envelope, plan)
+	if err != nil {
 		return err
+	}
+	if empty {
+		return rejectOpenCodeProjectionCollision(root)
 	}
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
@@ -87,13 +91,21 @@ func writeOpenCodeProjection(root string, projection OpenCodeProjection) error {
 	if err != nil {
 		return err
 	}
-	projectionPath := filepath.Join(root, OpenCodeProjectionFile)
-	if _, err := os.Lstat(projectionPath); err == nil {
+	if err := rejectOpenCodeProjectionCollision(root); err != nil {
+		return err
+	}
+	return atomicfile.Write(filepath.Join(root, OpenCodeProjectionFile), append(body, '\n'), 0o600)
+}
+
+// Reserved operational metadata cannot come from the portable package, even
+// when this plan has no native effects and therefore never selects a codec.
+func rejectOpenCodeProjectionCollision(root string) error {
+	if _, err := os.Lstat(filepath.Join(root, OpenCodeProjectionFile)); err == nil {
 		return fmt.Errorf("package contains reserved OpenCode projection path %q", OpenCodeProjectionFile)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	return atomicfile.Write(projectionPath, append(body, '\n'), 0o600)
+	return nil
 }
 
 func NeutralOpenCodeServer(server domain.MCPServer) (nativeconfig.Server, error) {
