@@ -112,254 +112,141 @@ func transitionPaths(root string) nativeconfig.Paths {
 }
 
 func (t NativeTransitions) PersistPrepared(ctx context.Context, id domain.NativeAttemptIdentity, root string, d domain.OpenCodeTransitionPrepared, previous, desired []domain.NativeObjectOwnership) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if t.State == nil {
-		return fmt.Errorf("native transition state authority missing")
-	}
-	before, err := t.State.Load()
+	before, binding, err := t.prepareTransitionAuthority(ctx, id, previous)
 	if err != nil {
 		return err
 	}
-	i, b, err := transitionBinding(before, id)
-	if err != nil {
-		return err
-	}
-	if id.OperationID == "" || b.NativeActivationAttempt != id.OperationID {
-		return fmt.Errorf("native attempt identity changed")
-	}
-	if !reflect.DeepEqual(OpenCodeObjects(b.NativeObjects), OpenCodeObjects(previous)) {
-		return fmt.Errorf("native source ownership changed")
-	}
-	// Preserve the directory-committed package object. It is already authoritative
-	// and distinct from the external native leaves this transition owns.
-	objects := append([]domain.NativeObjectOwnership(nil), OpenCodeObjects(desired)...)
-	for _, o := range b.NativeObjects {
-		if o.Kind == "managed_package_directory" {
-			objects = append(objects, o)
-		}
-	}
-	target := cloneTransitionState(before)
-	b.NativeObjects = objects
-	b.NativeActivationAttempt = ""
-	b.Activation = domain.ActivationActive
-	b.Verification = domain.VerificationInstalled
-	b.Materialization = domain.MaterializationMaterialized
-	b.Policy = domain.PolicyAllowed
-	target.Installations[i].Clients[id.BindingID] = b
+	target := preparedTransitionState(before, id, binding, desired)
 	if t.PackageVerifier == nil {
 		return fmt.Errorf("native package verifier missing")
 	}
-	if err := t.PackageVerifier.Verify(ctx, b.TargetLocator, shared.ManagedPackageDigest(b)); err != nil {
+	if err := t.PackageVerifier.Verify(ctx, binding.TargetLocator, shared.ManagedPackageDigest(binding)); err != nil {
 		return err
 	}
-	projection, err := readTransitionFile(b.TargetLocator, filepath.Join(b.TargetLocator, OpenCodeProjectionFile), nativeconfig.MaxTransitionConfigBytes)
+	projection, err := readTransitionFile(binding.TargetLocator, filepath.Join(binding.TargetLocator, OpenCodeProjectionFile), nativeconfig.MaxTransitionConfigBytes)
 	if err != nil {
 		return err
 	}
 	r := transitionRecord{Version: 1, Type: "opencode_native_transition", Phase: "prepared", Identity: id, Root: root, ProjectionHash: transitionHash(projection), Native: d, OldState: cloneTransitionState(before), TargetState: target}
-	previousByID, desiredByID := shared.ObjectMap(OpenCodeObjects(previous)), shared.ObjectMap(OpenCodeObjects(desired))
-	names := map[string]bool{}
-	for id, o := range previousByID {
-		if o.Kind == openCodeSkillKind {
-			names[id] = true
-		}
+	r.Skills, err = prepareTransitionSkills(root, previous, desired)
+	if err != nil {
+		return err
 	}
-	for id, o := range desiredByID {
-		if o.Kind == openCodeSkillKind {
-			names[id] = true
-		}
-	}
-	for id := range names {
-		s := transitionSkill{ID: id}
-		if old, ok := previousByID[id]; ok {
-			s.Old = &old
-			s.Name = old.LogicalName
-			s.Target = old.Path
-		}
-		if next, ok := desiredByID[id]; ok {
-			s.New = &next
-			s.Name = next.LogicalName
-			s.Target = next.Path
-			s.Staged = filepath.Join(root, "new-"+s.Name)
-		}
-		s.Backup = filepath.Join(root, "old-"+s.Name)
-		if s.Old != nil {
-			digest, err := shared.DigestSkillDirectory(s.Target)
-			if !os.IsNotExist(err) {
-				if err != nil || digest != s.Old.ManagedDigest {
-					return fmt.Errorf("source skill changed")
-				}
-				s.OldExists = true
-				if err := syncTransitionTree(s.Target); err != nil {
-					return err
-				}
-			}
-		}
-		r.Skills = append(r.Skills, s)
-	}
-	sort.Slice(r.Skills, func(i, j int) bool { return r.Skills[i].ID < r.Skills[j].ID })
 	if err := validateTransitionRecord(r, root); err != nil {
 		return err
 	}
 	return writeTransitionRecord(r)
 }
 
-func validateTransitionRecord(r transitionRecord, root string) error {
-	if r.Version != 1 || r.Type != "opencode_native_transition" || r.Root != root || len(r.Skills) > maxTransitionSkills {
-		return fmt.Errorf("invalid transition record schema")
+func (t NativeTransitions) prepareTransitionAuthority(ctx context.Context, id domain.NativeAttemptIdentity, previous []domain.NativeObjectOwnership) (domain.StateFileV2, domain.ClientBinding, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.StateFileV2{}, domain.ClientBinding{}, err
 	}
-	switch r.Phase {
-	case "prepared", "native_committed", "state_committed", "cleanup_pending":
-	default:
-		return fmt.Errorf("invalid transition phase")
+	if t.State == nil {
+		return domain.StateFileV2{}, domain.ClientBinding{}, fmt.Errorf("native transition state authority missing")
 	}
-	for _, id := range []string{r.Identity.OperationID, r.Identity.InstallationID, r.Identity.BindingID} {
-		if err := pathpolicy.ValidateLeafID(id); err != nil {
-			return err
-		}
-	}
-	nativeRoot := r.Identity.NativeRoot
-	if !filepath.IsAbs(nativeRoot) || filepath.Clean(nativeRoot) != nativeRoot || filepath.Dir(root) != filepath.Join(nativeRoot, "skills") || !strings.HasPrefix(filepath.Base(root), ".agentplugins-native-") {
-		return fmt.Errorf("invalid transition root")
-	}
-	if err := pathpolicy.RequireContainedChild(nativeRoot, root); err != nil {
-		return err
-	}
-	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
-		return fmt.Errorf("transition root must be private")
-	}
-	if err := nativeconfig.ValidatePreparedTransition(transitionPaths(nativeRoot), nativePrepared(r.Native)); err != nil {
-		return err
-	}
-	_, old, err := transitionBinding(r.OldState, r.Identity)
+	before, err := t.State.Load()
 	if err != nil {
-		return err
+		return before, domain.ClientBinding{}, err
 	}
-	_, target, err := transitionBinding(r.TargetState, r.Identity)
+	_, binding, err := transitionBinding(before, id)
 	if err != nil {
-		return err
+		return before, binding, err
 	}
-	if old.NativeActivationAttempt != r.Identity.OperationID || target.NativeActivationAttempt != "" || old.PackageRevision == nil || old.TargetLocator == "" || !filepath.IsAbs(old.TargetLocator) {
-		return fmt.Errorf("invalid bound attempt/package")
+	if id.OperationID == "" || binding.NativeActivationAttempt != id.OperationID {
+		return before, binding, fmt.Errorf("native attempt identity changed")
 	}
-	oldPackage, targetPackage := []domain.NativeObjectOwnership{}, []domain.NativeObjectOwnership{}
-	for _, side := range []struct {
-		objects        []domain.NativeObjectOwnership
-		packageObjects *[]domain.NativeObjectOwnership
-	}{{old.NativeObjects, &oldPackage}, {target.NativeObjects, &targetPackage}} {
-		for _, o := range side.objects {
-			if o.Kind == "managed_package_directory" {
-				*side.packageObjects = append(*side.packageObjects, o)
-			} else {
-				_, mcp, err := nativeconfig.OpenCodeCodecForKind(o.Kind)
-				if err != nil || !mcp && o.Kind != openCodeSkillKind {
-					return fmt.Errorf("transition contains unbound native objects")
-				}
-			}
-		}
+	if !reflect.DeepEqual(OpenCodeObjects(binding.NativeObjects), OpenCodeObjects(previous)) {
+		return before, binding, fmt.Errorf("native source ownership changed")
 	}
-	if len(oldPackage) != 1 || oldPackage[0].Path != old.TargetLocator || !validTransitionHash(oldPackage[0].ManagedDigest) {
-		return fmt.Errorf("transition has no exact directory-committed package")
-	}
-	if !reflect.DeepEqual(oldPackage, targetPackage) {
-		return fmt.Errorf("transition changes directory-committed package ownership")
-	}
-	expected := cloneTransitionState(r.OldState)
-	i, b, _ := transitionBinding(expected, r.Identity)
-	b.NativeObjects = target.NativeObjects
-	b.NativeActivationAttempt = ""
-	b.Activation = domain.ActivationActive
-	b.Verification = domain.VerificationInstalled
-	b.Materialization = domain.MaterializationMaterialized
-	b.Policy = domain.PolicyAllowed
-	expected.Installations[i].Clients[r.Identity.BindingID] = b
-	if !bytes.Equal(comparableTransitionState(expected), comparableTransitionState(r.TargetState)) {
-		return fmt.Errorf("transition changes unbound state")
-	}
-	for _, side := range []struct {
-		objects []domain.NativeObjectOwnership
-		codec   string
-		source  bool
-	}{{old.NativeObjects, r.Native.SourceCodec, true}, {target.NativeObjects, r.Native.TargetCodec, false}} {
-		objects := shared.ObjectMap(OpenCodeObjects(side.objects))
-		mcpCount := 0
-		for _, o := range objects {
-			codec, mcp, err := nativeconfig.OpenCodeCodecForKind(o.Kind)
-			if err != nil {
-				return err
-			}
-			if err := validateOpenCodeObject(nativeRoot, OpenCodeProjection{}, o); err != nil {
-				return err
-			}
-			if mcp {
-				if string(codec) != side.codec {
-					return fmt.Errorf("mixed stored codecs")
-				}
-				mcpCount++
-			}
-		}
-		if mcpCount != len(r.Native.Entries) {
-			return fmt.Errorf("incomplete transition ownership")
-		}
-		for _, entry := range r.Native.Entries {
-			o, ok := objects[entry.LogicalID]
-			receipt := entry.TargetReceipt
-			if side.source {
-				receipt = entry.SourceReceipt
-			}
-			if !ok || o.LogicalName != entry.Name || o.Path != receipt.Path || o.ManagedDigest != receipt.Digest {
-				return fmt.Errorf("transition receipt/state mismatch")
-			}
-		}
-	}
-	oldObjects, nextObjects := shared.ObjectMap(OpenCodeObjects(old.NativeObjects)), shared.ObjectMap(OpenCodeObjects(target.NativeObjects))
-	skillCount := 0
-	for _, o := range oldObjects {
-		if o.Kind == openCodeSkillKind {
-			skillCount++
-		}
-	}
-	for id, o := range nextObjects {
-		if o.Kind == openCodeSkillKind {
-			if _, ok := oldObjects[id]; !ok {
-				skillCount++
-			}
-		}
-	}
-	if skillCount != len(r.Skills) {
-		return fmt.Errorf("incomplete skill intent")
-	}
-	for i, s := range r.Skills {
-		if err := pathpolicy.ValidateLeafID(s.Name); err != nil {
-			return err
-		}
-		if s.ID != "opencode-skill:"+s.Name || i > 0 && r.Skills[i-1].ID >= s.ID || s.Target != filepath.Join(nativeRoot, "skills", s.Name) || s.Backup != filepath.Join(root, "old-"+s.Name) || s.Old == nil && s.New == nil || s.Old == nil && s.OldExists {
-			return fmt.Errorf("invalid skill intent")
-		}
-		old, oldOK := oldObjects[s.ID]
-		next, nextOK := nextObjects[s.ID]
-		if oldOK != (s.Old != nil) || nextOK != (s.New != nil) || oldOK && !reflect.DeepEqual(old, *s.Old) || nextOK && !reflect.DeepEqual(next, *s.New) {
-			return fmt.Errorf("skill intent/state mismatch")
-		}
-		if s.New != nil && s.Staged != filepath.Join(root, "new-"+s.Name) || s.New == nil && s.Staged != "" {
-			return fmt.Errorf("invalid staged skill path")
-		}
-		for _, path := range []string{s.Target, s.Backup, s.Staged} {
-			if path != "" {
-				if err := pathpolicy.RequireContainedChild(nativeRoot, path); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	if !validTransitionHash(r.ProjectionHash) {
-		return fmt.Errorf("invalid projection hash")
-	}
-	return nil
+	return before, binding, nil
 }
+
+func preparedTransitionState(before domain.StateFileV2, id domain.NativeAttemptIdentity, binding domain.ClientBinding, desired []domain.NativeObjectOwnership) domain.StateFileV2 {
+	// The directory-committed package is authoritative and distinct from the
+	// external native leaves this transition owns.
+	objects := append([]domain.NativeObjectOwnership(nil), OpenCodeObjects(desired)...)
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "managed_package_directory" {
+			objects = append(objects, object)
+		}
+	}
+	return transitionTargetState(before, id, objects)
+}
+
+func transitionTargetState(before domain.StateFileV2, id domain.NativeAttemptIdentity, objects []domain.NativeObjectOwnership) domain.StateFileV2 {
+	target := cloneTransitionState(before)
+	i, binding, _ := transitionBinding(target, id)
+	binding.NativeObjects = objects
+	binding.NativeActivationAttempt = ""
+	binding.Activation = domain.ActivationActive
+	binding.Verification = domain.VerificationInstalled
+	binding.Materialization = domain.MaterializationMaterialized
+	binding.Policy = domain.PolicyAllowed
+	target.Installations[i].Clients[id.BindingID] = binding
+	return target
+}
+
+func prepareTransitionSkills(root string, previous, desired []domain.NativeObjectOwnership) ([]transitionSkill, error) {
+	previousByID := shared.ObjectMap(OpenCodeObjects(previous))
+	desiredByID := shared.ObjectMap(OpenCodeObjects(desired))
+	names := transitionSkillIDs(previousByID, desiredByID)
+	var skills []transitionSkill
+	for id := range names {
+		skill := prepareTransitionSkill(root, id, previousByID, desiredByID)
+		if err := snapshotTransitionSkill(&skill); err != nil {
+			return nil, err
+		}
+		skills = append(skills, skill)
+	}
+	sort.Slice(skills, func(i, j int) bool { return skills[i].ID < skills[j].ID })
+	return skills, nil
+}
+
+func transitionSkillIDs(previous, desired map[string]domain.NativeObjectOwnership) map[string]bool {
+	names := map[string]bool{}
+	for _, objects := range []map[string]domain.NativeObjectOwnership{previous, desired} {
+		for id, object := range objects {
+			if object.Kind == openCodeSkillKind {
+				names[id] = true
+			}
+		}
+	}
+	return names
+}
+
+func prepareTransitionSkill(root, id string, previous, desired map[string]domain.NativeObjectOwnership) transitionSkill {
+	skill := transitionSkill{ID: id}
+	if old, ok := previous[id]; ok {
+		skill.Old = &old
+		skill.Name = old.LogicalName
+		skill.Target = old.Path
+	}
+	if next, ok := desired[id]; ok {
+		skill.New = &next
+		skill.Name = next.LogicalName
+		skill.Target = next.Path
+		skill.Staged = filepath.Join(root, "new-"+skill.Name)
+	}
+	skill.Backup = filepath.Join(root, "old-"+skill.Name)
+	return skill
+}
+
+func snapshotTransitionSkill(skill *transitionSkill) error {
+	if skill.Old == nil {
+		return nil
+	}
+	digest, err := shared.DigestSkillDirectory(skill.Target)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil || digest != skill.Old.ManagedDigest {
+		return fmt.Errorf("source skill changed")
+	}
+	skill.OldExists = true
+	return syncTransitionTree(skill.Target)
+}
+
 func validTransitionHash(value string) bool {
 	if len(value) != 71 || !strings.HasPrefix(value, "sha256:") {
 		return false

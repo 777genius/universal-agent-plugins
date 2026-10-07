@@ -78,22 +78,28 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 		attachNextActions(&result)
 		return result, err
 	}
-	if !prepared.plan.NoChange {
-		if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
-			if _, err = e.preparedHelper(prepared); err != nil {
-				result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
-				attachNextActions(&result)
-				return result, err
-			}
-		}
-		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
-			return result, err
-		}
-		if err = e.ensureDirs(); err != nil {
+	return e.prepareApplyResources(ctx, prepared, op)
+}
+
+func (e *Engine) prepareApplyResources(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
+	if prepared.plan.NoChange {
+		return Result{}, nil
+	}
+	var result Result
+	if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
+		if _, err := e.preparedHelper(prepared); err != nil {
 			result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
 			attachNextActions(&result)
 			return result, err
 		}
+	}
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return result, err
+	}
+	if err := e.ensureDirs(); err != nil {
+		result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
+		attachNextActions(&result)
+		return result, err
 	}
 	return Result{}, nil
 }

@@ -70,37 +70,38 @@ func (s *openCodeRecoveryState) confirm(completed bool) error {
 			return ErrPlanChanged
 		}
 	}
-	// The recorder validates the complete active journal, including its hash
-	// and prepared authority. Only its own phase/hash can change in this guard.
-	withoutActive := func(observation RecoveryObservation, expected bool) (RecoveryObservation, error) {
-		filtered := observation
-		filtered.Journals = nil
-		found := false
-		for _, journal := range observation.Journals {
-			if journal.OperationID != s.active.OperationID {
-				filtered.Journals = append(filtered.Journals, journal)
-				continue
-			}
-			if found || journal.InstallationID != s.active.InstallationID || journal.BindingID != s.active.BindingID || journal.TargetPath != s.active.TargetPath {
-				return filtered, ErrPlanChanged
-			}
-			found = true
-		}
-		if (!expected && completed && found) || ((expected || !completed) && !found) {
-			return filtered, ErrPlanChanged
-		}
-		filtered.Required = len(filtered.Journals)+len(filtered.Receipts)+len(filtered.NativeIntents) != 0
-		return filtered, nil
-	}
-	want, err := withoutActive(s.expected, true)
+	want, err := s.withoutActiveJournal(s.expected, true, completed)
 	if err != nil {
 		return err
 	}
-	actual, err := withoutActive(view.Recovery, false)
+	actual, err := s.withoutActiveJournal(view.Recovery, false, completed)
 	if err != nil || !reflect.DeepEqual(actual, want) {
 		return ErrPlanChanged
 	}
 	return nil
+}
+
+// The recorder validates the complete active journal, including its hash
+// and prepared authority. Only its own phase/hash can change in this guard.
+func (s *openCodeRecoveryState) withoutActiveJournal(observation RecoveryObservation, expected, completed bool) (RecoveryObservation, error) {
+	filtered := observation
+	filtered.Journals = nil
+	found := false
+	for _, journal := range observation.Journals {
+		if journal.OperationID != s.active.OperationID {
+			filtered.Journals = append(filtered.Journals, journal)
+			continue
+		}
+		if found || journal.InstallationID != s.active.InstallationID || journal.BindingID != s.active.BindingID || journal.TargetPath != s.active.TargetPath {
+			return filtered, ErrPlanChanged
+		}
+		found = true
+	}
+	if (!expected && completed && found) || ((expected || !completed) && !found) {
+		return filtered, ErrPlanChanged
+	}
+	filtered.Required = len(filtered.Journals)+len(filtered.Receipts)+len(filtered.NativeIntents) != 0
+	return filtered, nil
 }
 
 func (s *openCodeRecoveryState) Load() (domain.StateFileV2, error) {

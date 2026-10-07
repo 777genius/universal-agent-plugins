@@ -36,26 +36,11 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 				}
 				continue
 			}
-			if err := validateSelectedBindingIdentity(binding); err != nil {
-				return out, err
-			}
-			intent := *binding.PendingNativeIntent
-			if err := intent.Validate(binding); err != nil {
-				return out, err
-			}
-			if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
-				return out, fmt.Errorf("native intent differs from complete binding selection")
-			}
-			body, err := json.Marshal(binding)
+			pending, err := inspectNativeIntent(installation, binding)
 			if err != nil {
 				return out, err
 			}
-			sum := sha256.Sum256(body)
-			receipt := installation.DataReceipts[binding.DataReceiptID]
-			out = append(out, PendingNativeIntent{
-				Binding: BindingFacts{InstallationID: installation.InstallationID, ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator, DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest), SelectedDelivery: binding.SelectedDelivery},
-				Intent:  intent, NativeProfileRoot: binding.NativeProfileRoot, Digest: fmt.Sprintf("sha256:%x", sum),
-			})
+			out = append(out, pending)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -65,6 +50,29 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 		return out[i].Binding.BindingID < out[j].Binding.BindingID
 	})
 	return out, nil
+}
+
+func inspectNativeIntent(installation domain.Installation, binding domain.ClientBinding) (PendingNativeIntent, error) {
+	if err := validateSelectedBindingIdentity(binding); err != nil {
+		return PendingNativeIntent{}, err
+	}
+	intent := *binding.PendingNativeIntent
+	if err := intent.Validate(binding); err != nil {
+		return PendingNativeIntent{}, err
+	}
+	if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
+		return PendingNativeIntent{}, fmt.Errorf("native intent differs from complete binding selection")
+	}
+	body, err := json.Marshal(binding)
+	if err != nil {
+		return PendingNativeIntent{}, err
+	}
+	sum := sha256.Sum256(body)
+	receipt := installation.DataReceipts[binding.DataReceiptID]
+	return PendingNativeIntent{
+		Binding: BindingFacts{InstallationID: installation.InstallationID, ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator, DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest), SelectedDelivery: binding.SelectedDelivery},
+		Intent:  intent, NativeProfileRoot: binding.NativeProfileRoot, Digest: fmt.Sprintf("sha256:%x", sum),
+	}, nil
 }
 
 func nativeObservationIdentity(pending PendingNativeIntent) string {
@@ -164,17 +172,7 @@ func (e *Engine) recoverObservedJournals(ctx context.Context, svc usecase.Servic
 		return err
 	}
 	scope.journals = nil
-	for i := range state.TransactionReceipts {
-		recoveredReceipt(&state.TransactionReceipts[i])
-	}
-	for _, installation := range state.Installations {
-		for key, binding := range installation.Clients {
-			for i := range binding.Receipts {
-				recoveredReceipt(&binding.Receipts[i])
-			}
-			installation.Clients[key] = binding
-		}
-	}
+	recoverStateReceipts(&state)
 	digest, err := recoveryStateDigest(state)
 	if err != nil {
 		return err
@@ -193,6 +191,20 @@ func (e *Engine) recoverObservedJournals(ctx context.Context, svc usecase.Servic
 	}
 	scope.expected = after.Recovery
 	return nil
+}
+
+func recoverStateReceipts(state *domain.StateFileV2) {
+	for i := range state.TransactionReceipts {
+		recoveredReceipt(&state.TransactionReceipts[i])
+	}
+	for _, installation := range state.Installations {
+		for key, binding := range installation.Clients {
+			for i := range binding.Receipts {
+				recoveredReceipt(&binding.Receipts[i])
+			}
+			installation.Clients[key] = binding
+		}
+	}
 }
 
 func recoveredReceipt(receipt *domain.MutationReceipt) {

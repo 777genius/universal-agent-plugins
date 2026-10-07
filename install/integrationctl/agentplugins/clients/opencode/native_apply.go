@@ -110,28 +110,35 @@ func prepareOpenCodeNativeApply(configRoot, activePath string, previous, desired
 			return nil, err
 		}
 	}
-	if crossOpenCodeDialect(previous, desired) {
-		candidate := &openCodeNativeApply{projection: projection, previous: previous, desired: desired}
-		if _, err := openCodeTransitionRequest(candidate); err != nil {
-			return nil, err
-		}
-		for _, objects := range [][]domain.NativeObjectOwnership{previous, desired} {
-			for _, object := range objects {
-				if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if err := preflightDesiredOpenCodeObjects(configRoot, projection, shared.ObjectMap(previous), shared.ObjectMap(desired)); err != nil {
-			return nil, err
-		}
-	} else if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
+	if err := preflightOpenCodeNativeApply(configRoot, activePath, projection, previous, desired); err != nil {
 		return nil, err
 	}
 	if err := confirmOpenCodeConfigSelection(configRoot, projection, previous, desired); err != nil {
 		return nil, err
 	}
 	return &openCodeNativeApply{rename: rename, removeAll: removeAll, kernel: kernel, projection: projection, previous: previous, desired: desired}, nil
+}
+
+func preflightOpenCodeNativeApply(configRoot, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
+	if crossOpenCodeDialect(previous, desired) {
+		candidate := &openCodeNativeApply{projection: projection, previous: previous, desired: desired}
+		if _, err := openCodeTransitionRequest(candidate); err != nil {
+			return err
+		}
+		for _, objects := range [][]domain.NativeObjectOwnership{previous, desired} {
+			for _, object := range objects {
+				if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+					return err
+				}
+			}
+		}
+		if err := preflightDesiredOpenCodeObjects(configRoot, projection, shared.ObjectMap(previous), shared.ObjectMap(desired)); err != nil {
+			return err
+		}
+	} else if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
+		return err
+	}
+	return nil
 }
 
 func confirmOpenCodeConfigSelection(configRoot string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {

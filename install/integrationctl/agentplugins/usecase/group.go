@@ -179,26 +179,7 @@ func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phas
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
 	session := &groupSession{service: service, ctx: ctx, input: input, replace: replace}
-	if err := session.validateGroupInput(); err != nil {
-		return GroupResult{}, err
-	}
-	targets, err := session.service.prepareHostInputs(ctx, session.input.Targets, input.DryRun)
-	if err != nil {
-		return GroupResult{}, err
-	}
-	session.input.Targets = targets
-	checks, err := session.service.prepareHostInputs(ctx, session.input.CompatibilityChecks, input.DryRun)
-	if err != nil {
-		return GroupResult{}, err
-	}
-	session.input.CompatibilityChecks = checks
-	if err := session.ensureGroupID(); err != nil {
-		return GroupResult{}, err
-	}
-	if err := session.resolveGroupInstallation(); err != nil {
-		return GroupResult{}, err
-	}
-	if err := session.freezeGroupProfiles(); err != nil {
+	if err := session.prepareGroupInputs(); err != nil {
 		return GroupResult{}, err
 	}
 	service = session.service
@@ -248,6 +229,29 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	return session.activateGroupTargets()
+}
+
+func (session *groupSession) prepareGroupInputs() error {
+	if err := session.validateGroupInput(); err != nil {
+		return err
+	}
+	targets, err := session.service.prepareHostInputs(session.ctx, session.input.Targets, session.input.DryRun)
+	if err != nil {
+		return err
+	}
+	session.input.Targets = targets
+	checks, err := session.service.prepareHostInputs(session.ctx, session.input.CompatibilityChecks, session.input.DryRun)
+	if err != nil {
+		return err
+	}
+	session.input.CompatibilityChecks = checks
+	if err := session.ensureGroupID(); err != nil {
+		return err
+	}
+	if err := session.resolveGroupInstallation(); err != nil {
+		return err
+	}
+	return session.freezeGroupProfiles()
 }
 
 func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {

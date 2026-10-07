@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -27,6 +26,26 @@ func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {
 	if err != nil {
 		return nil, err
 	}
+	roots, attempts := pendingTransitionAuthority(state)
+	var pending []PendingNativeTransition
+	for root := range roots {
+		if err := appendPendingTransitionRoot(root, attempts, &pending); err != nil {
+			return nil, err
+		}
+	}
+	for _, attempt := range attempts {
+		pending = append(pending, attempt)
+	}
+	sort.Slice(pending, func(i, j int) bool { return pending[i].OperationID < pending[j].OperationID })
+	for i := 1; i < len(pending); i++ {
+		if pending[i].OperationID == pending[i-1].OperationID {
+			return nil, fmt.Errorf("duplicate native transition identity")
+		}
+	}
+	return pending, nil
+}
+
+func pendingTransitionAuthority(state domain.StateFileV2) (map[string]bool, map[string]PendingNativeTransition) {
 	roots := map[string]bool{}
 	attempts := map[string]PendingNativeTransition{}
 	for _, installation := range state.Installations {
@@ -42,60 +61,64 @@ func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {
 			}
 		}
 	}
-	var pending []PendingNativeTransition
-	for root := range roots {
-		skills := filepath.Join(root, "skills")
-		if err := pathpolicy.RequireContainedChild(root, skills); err != nil {
-			return nil, err
-		}
-		entries, err := os.ReadDir(skills)
-		if os.IsNotExist(err) {
+	return roots, attempts
+}
+
+func appendPendingTransitionRoot(root string, attempts map[string]PendingNativeTransition, pending *[]PendingNativeTransition) error {
+	skills := filepath.Join(root, "skills")
+	if err := pathpolicy.RequireContainedChild(root, skills); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(skills)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".agentplugins-native-") {
 			continue
 		}
+		item, err := pendingTransitionEntry(root, skills, entry.Name())
 		if err != nil {
-			return nil, err
+			return err
 		}
-		for _, entry := range entries {
-			if !strings.HasPrefix(entry.Name(), ".agentplugins-native-") {
-				continue
-			}
-			dir := filepath.Join(skills, entry.Name())
-			if err := pathpolicy.RequireContainedChild(root, dir); err != nil {
-				return nil, err
-			}
-			if _, err := os.Lstat(filepath.Join(dir, transitionRecordFile)); os.IsNotExist(err) {
-				continue
-			} else if err != nil {
-				return nil, err
-			}
-			r, err := readTransitionRecord(dir)
-			if err != nil {
-				return nil, err
-			}
-			if r.Identity.NativeRoot != root {
-				return nil, fmt.Errorf("transition root identity mismatch")
-			}
-			_, b, err := transitionBinding(r.OldState, r.Identity)
-			if err != nil {
-				return nil, err
-			}
-			pending = append(pending, PendingNativeTransition{OperationID: r.Identity.OperationID, InstallationID: r.Identity.InstallationID, BindingID: r.Identity.BindingID, TargetPath: b.TargetLocator, Phase: r.Phase, Digest: r.Hash, Root: dir, AuthorityDigest: transitionAuthorityHash(r)})
-			delete(attempts, r.Identity.OperationID)
-			if len(pending) > nativeconfig.MaxTransitionEntries {
-				return nil, fmt.Errorf("too many native transition records")
-			}
+		if item == nil {
+			continue
+		}
+		*pending = append(*pending, *item)
+		delete(attempts, item.OperationID)
+		if len(*pending) > nativeconfig.MaxTransitionEntries {
+			return fmt.Errorf("too many native transition records")
 		}
 	}
-	for _, attempt := range attempts {
-		pending = append(pending, attempt)
+	return nil
+}
+
+func pendingTransitionEntry(root, skills, name string) (*PendingNativeTransition, error) {
+	dir := filepath.Join(skills, name)
+	if err := pathpolicy.RequireContainedChild(root, dir); err != nil {
+		return nil, err
 	}
-	sort.Slice(pending, func(i, j int) bool { return pending[i].OperationID < pending[j].OperationID })
-	for i := 1; i < len(pending); i++ {
-		if pending[i].OperationID == pending[i-1].OperationID {
-			return nil, fmt.Errorf("duplicate native transition identity")
-		}
+	if _, err := os.Lstat(filepath.Join(dir, transitionRecordFile)); os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	}
-	return pending, nil
+	r, err := readTransitionRecord(dir)
+	if err != nil {
+		return nil, err
+	}
+	if r.Identity.NativeRoot != root {
+		return nil, fmt.Errorf("transition root identity mismatch")
+	}
+	_, b, err := transitionBinding(r.OldState, r.Identity)
+	if err != nil {
+		return nil, err
+	}
+	return &PendingNativeTransition{OperationID: r.Identity.OperationID, InstallationID: r.Identity.InstallationID, BindingID: r.Identity.BindingID, TargetPath: b.TargetLocator, Phase: r.Phase, Digest: r.Hash, Root: dir, AuthorityDigest: transitionAuthorityHash(r)}, nil
+
 }
 
 func (t NativeTransitions) Recover(ctx context.Context) error {
@@ -117,252 +140,134 @@ func (t NativeTransitions) Recover(ctx context.Context) error {
 	return nil
 }
 
+type transitionReconciler struct {
+	transitions NativeTransitions
+	ctx         context.Context
+	record      transitionRecord
+	effect      domain.NativeEffectState
+}
+
 func (t NativeTransitions) Reconcile(ctx context.Context, root string) (domain.NativeEffectState, error) {
 	r, err := readTransitionRecord(root)
 	if err != nil {
 		return domain.NativeEffectUncertain, err
 	}
-	effect := domain.NativeEffectUncertain
+	q := transitionReconciler{transitions: t, ctx: ctx, record: r, effect: domain.NativeEffectUncertain}
 	observation, reconcileErr := t.Kernel.ReconcileDialectTransition(nativeconfig.TransitionRecoveryRequest{
 		Paths: transitionPaths(r.Identity.NativeRoot), Prepared: nativePrepared(r.Native),
-		Decide: func(observation nativeconfig.TransitionObservation) (nativeconfig.TransitionStateDecision, error) {
-			if err := ctx.Err(); err != nil {
-				return nativeconfig.TransitionStateUnknown, err
-			}
-			current, err := t.State.Load()
-			if err != nil {
-				return nativeconfig.TransitionStateUnknown, err
-			}
-			source := transitionStateMatches(current, r.OldState, r.Identity) || transitionStateMatches(current, sourceTransitionState(r), r.Identity)
-			target := transitionStateMatches(current, r.TargetState, r.Identity)
-			if !source && !target {
-				return nativeconfig.TransitionStateUnknown, fmt.Errorf("transition state differs from bound source and target")
-			}
-			_, binding, _ := transitionBinding(r.TargetState, r.Identity)
-			if t.PackageVerifier == nil {
-				return nativeconfig.TransitionStateUnknown, fmt.Errorf("native package verifier missing")
-			}
-			if err := t.PackageVerifier.Verify(ctx, binding.TargetLocator, shared.ManagedPackageDigest(binding)); err != nil {
-				return nativeconfig.TransitionStateUnknown, err
-			}
-			if observation == nativeconfig.TransitionSource {
-				if !source {
-					return nativeconfig.TransitionStateUnknown, fmt.Errorf("source bytes with target state")
-				}
-				return nativeconfig.TransitionStateOld, nil
-			}
-			// Prove projection and all desired skill effects before publishing receipts.
-
-			projection, err := readTransitionFile(binding.TargetLocator, filepath.Join(binding.TargetLocator, OpenCodeProjectionFile), nativeconfig.MaxTransitionConfigBytes)
-			if err != nil || transitionHash(projection) != r.ProjectionHash {
-				return nativeconfig.TransitionStateUnknown, fmt.Errorf("transition package projection changed")
-			}
-			if err := verifyTransitionTargetSkills(r); err != nil {
-				return nativeconfig.TransitionStateUnknown, err
-			}
-			r.Phase = "native_committed"
-			if err := writeTransitionRecord(r); err != nil {
-				return nativeconfig.TransitionStateUnknown, err
-			}
-			desired, err := transitionPublicationState(current, r.TargetState, r.Identity)
-			if err != nil {
-				return nativeconfig.TransitionStateUnknown, err
-			}
-			disposition, err := t.State.PersistStateDecisionWithDisposition(current, desired)
-			switch disposition {
-			case domain.StateDecisionDesired:
-				effect = domain.NativeEffectCommitted
-				return nativeconfig.TransitionStateDesired, err
-			case domain.StateDecisionOld:
-				// Old only means the exact caller preimage remains. If that preimage was
-				// already target state, it grants no source restore authority.
-				if target {
-					return nativeconfig.TransitionStateUnknown, err
-				}
-				return nativeconfig.TransitionStateOld, err
-			default:
-				return nativeconfig.TransitionStateUnknown, err
-			}
-		},
-		Complete: func(observation nativeconfig.TransitionObservation) error {
-			if observation == nativeconfig.TransitionSource {
-				if err := restoreTransitionSkills(r); err != nil {
-					return err
-				}
-				current, err := t.State.Load()
-				if err != nil {
-					return err
-				}
-				if !transitionStateMatches(current, r.OldState, r.Identity) && !transitionStateMatches(current, sourceTransitionState(r), r.Identity) {
-					return fmt.Errorf("source state changed before skill recovery")
-				}
-				desired, err := transitionPublicationState(current, sourceTransitionState(r), r.Identity)
-				if err != nil {
-					return err
-				}
-				disposition, err := t.State.PersistStateDecisionWithDisposition(current, desired)
-				if err != nil || disposition != domain.StateDecisionDesired {
-					return errors.Join(err, fmt.Errorf("source outcome durability unresolved"))
-				}
-				effect = domain.NativeEffectUnchanged
-			} else {
-				r.Phase = "state_committed"
-				if err := writeTransitionRecord(r); err != nil {
-					return err
-				}
-			}
-			r.Phase = "cleanup_pending"
-			if err := writeTransitionRecord(r); err != nil {
-				return err
-			}
-			return cleanupTransition(r)
-		},
+		Decide: q.decide, Complete: q.complete,
 	})
-	if observation == nativeconfig.TransitionTarget && effect == domain.NativeEffectCommitted && reconcileErr != nil && !nativeconfig.IsCommittedCleanup(reconcileErr) {
+	if observation == nativeconfig.TransitionTarget && q.effect == domain.NativeEffectCommitted && reconcileErr != nil && !nativeconfig.IsCommittedCleanup(reconcileErr) {
 		reconcileErr = &nativeconfig.CommittedCleanupError{Err: reconcileErr}
 	}
-	return effect, reconcileErr
+	return q.effect, reconcileErr
 }
 
-func transitionSkillDigest(root, path string) (string, bool, error) {
-	if err := pathpolicy.RequireContainedChild(root, path); err != nil {
-		return "", false, err
+func (q *transitionReconciler) decide(observation nativeconfig.TransitionObservation) (nativeconfig.TransitionStateDecision, error) {
+	if err := q.ctx.Err(); err != nil {
+		return nativeconfig.TransitionStateUnknown, err
 	}
-	digest, err := shared.DigestSkillDirectory(path)
-	if os.IsNotExist(err) {
-		return "", false, nil
+	current, err := q.transitions.State.Load()
+	if err != nil {
+		return nativeconfig.TransitionStateUnknown, err
 	}
-	return digest, err == nil, err
-}
-func verifyTransitionTargetSkills(r transitionRecord) error {
-	for _, s := range r.Skills {
-		if s.Staged != "" {
-			_, exists, err := transitionSkillDigest(r.Root, s.Staged)
-			if err != nil {
-				return err
-			}
-			if exists {
-				return fmt.Errorf("target skill has no completed exclusive staging move")
-			}
-		}
-		digest, exists, err := transitionSkillDigest(r.Identity.NativeRoot, s.Target)
-		if err != nil {
-			return err
-		}
-		if s.New == nil {
-			if exists {
-				return fmt.Errorf("removed transition skill is occupied")
-			}
-		} else if !exists || digest != s.New.ManagedDigest {
-			return fmt.Errorf("target transition skill differs from receipt")
-		}
+	source := transitionStateMatches(current, q.record.OldState, q.record.Identity) || transitionStateMatches(current, sourceTransitionState(q.record), q.record.Identity)
+	target := transitionStateMatches(current, q.record.TargetState, q.record.Identity)
+	if !source && !target {
+		return nativeconfig.TransitionStateUnknown, fmt.Errorf("transition state differs from bound source and target")
 	}
-	return nil
+	_, binding, _ := transitionBinding(q.record.TargetState, q.record.Identity)
+	if q.transitions.PackageVerifier == nil {
+		return nativeconfig.TransitionStateUnknown, fmt.Errorf("native package verifier missing")
+	}
+	if err := q.transitions.PackageVerifier.Verify(q.ctx, binding.TargetLocator, shared.ManagedPackageDigest(binding)); err != nil {
+		return nativeconfig.TransitionStateUnknown, err
+	}
+	return q.decideObservedTransition(observation, current, source, target)
+
 }
 
-func restoreTransitionSkills(r transitionRecord) error {
-	for _, s := range r.Skills {
-		current, exists, err := transitionSkillDigest(r.Identity.NativeRoot, s.Target)
-		if err != nil {
-			return err
+func (q *transitionReconciler) decideObservedTransition(observation nativeconfig.TransitionObservation, current domain.StateFileV2, source, target bool) (nativeconfig.TransitionStateDecision, error) {
+	_, binding, _ := transitionBinding(q.record.TargetState, q.record.Identity)
+	if observation == nativeconfig.TransitionSource {
+		if !source {
+			return nativeconfig.TransitionStateUnknown, fmt.Errorf("source bytes with target state")
 		}
-		backup, backupExists, err := transitionSkillDigest(r.Root, s.Backup)
-		if err != nil {
-			return err
-		}
-		if backupExists && (s.Old == nil || !s.OldExists || backup != s.Old.ManagedDigest) {
-			return fmt.Errorf("transition backup differs from source intent")
-		}
-		if s.OldExists && exists && current == s.Old.ManagedDigest && !backupExists {
-			continue
-		}
-		if exists {
-			if s.Staged != "" {
-				_, stagedExists, err := transitionSkillDigest(r.Root, s.Staged)
-				if err != nil {
-					return err
-				}
-				if stagedExists {
-					return fmt.Errorf("preserve equal foreign skill; staged move never completed")
-				}
-			}
-			if s.New == nil || current != s.New.ManagedDigest || s.OldExists && !backupExists {
-				return fmt.Errorf("preserve edited transition skill")
-			}
-			if err := os.RemoveAll(s.Target); err != nil {
-				return err
-			}
-			if err := atomicfile.SyncDirectory(filepath.Dir(s.Target)); err != nil {
-				return err
-			}
-		}
-		if s.OldExists {
-			if !backupExists {
-				return fmt.Errorf("source skill backup missing")
-			}
-			if err := renameOpenCodeDirectoryNoReplace(s.Backup, s.Target, shared.RenameDirectoryExclusive); err != nil {
-				return err
-			}
-			if err := atomicfile.SyncDirectory(filepath.Dir(s.Target)); err != nil {
-				return err
-			}
-			if err := atomicfile.SyncDirectory(r.Root); err != nil {
-				return err
-			}
-		} else if backupExists {
-			return fmt.Errorf("unexpected source skill backup")
-		}
+		return nativeconfig.TransitionStateOld, nil
 	}
-	return nil
+	// Prove projection and all desired skill effects before publishing receipts.
+
+	projection, err := readTransitionFile(binding.TargetLocator, filepath.Join(binding.TargetLocator, OpenCodeProjectionFile), nativeconfig.MaxTransitionConfigBytes)
+	if err != nil || transitionHash(projection) != q.record.ProjectionHash {
+		return nativeconfig.TransitionStateUnknown, fmt.Errorf("transition package projection changed")
+	}
+	if err := verifyTransitionTargetSkills(q.record); err != nil {
+		return nativeconfig.TransitionStateUnknown, err
+	}
+	q.record.Phase = "native_committed"
+	if err := writeTransitionRecord(q.record); err != nil {
+		return nativeconfig.TransitionStateUnknown, err
+	}
+	desired, err := transitionPublicationState(current, q.record.TargetState, q.record.Identity)
+	if err != nil {
+		return nativeconfig.TransitionStateUnknown, err
+	}
+	disposition, err := q.transitions.State.PersistStateDecisionWithDisposition(current, desired)
+	switch disposition {
+	case domain.StateDecisionDesired:
+		q.effect = domain.NativeEffectCommitted
+		return nativeconfig.TransitionStateDesired, err
+	case domain.StateDecisionOld:
+		// Old only means the exact caller preimage remains. If that preimage was
+		// already target state, it grants no source restore authority.
+		if target {
+			return nativeconfig.TransitionStateUnknown, err
+		}
+		return nativeconfig.TransitionStateOld, err
+	default:
+		return nativeconfig.TransitionStateUnknown, err
+	}
 }
-func cleanupTransition(r transitionRecord) error {
-	// All owned payloads are proved before destructive cleanup. Unknown residue
-	// is retained; an edited backup is never deleted by a path-only RemoveAll.
-	for _, s := range r.Skills {
-		for _, item := range []struct {
-			path   string
-			object *domain.NativeObjectOwnership
-		}{{s.Backup, s.Old}, {s.Staged, s.New}} {
-			if item.path == "" {
-				continue
-			}
-			digest, exists, err := transitionSkillDigest(r.Root, item.path)
-			if err != nil {
-				return err
-			}
-			if !exists {
-				continue
-			}
-			if item.object == nil || digest != item.object.ManagedDigest {
-				return fmt.Errorf("preserve changed transition residue")
-			}
-			if err := os.RemoveAll(item.path); err != nil {
-				return err
-			}
-			if err := atomicfile.SyncDirectory(r.Root); err != nil {
-				return err
-			}
+
+func (q *transitionReconciler) complete(observation nativeconfig.TransitionObservation) error {
+	if observation == nativeconfig.TransitionSource {
+		if err := q.restoreTransitionSource(); err != nil {
+			return err
+		}
+		q.effect = domain.NativeEffectUnchanged
+	} else {
+		q.record.Phase = "state_committed"
+		if err := writeTransitionRecord(q.record); err != nil {
+			return err
 		}
 	}
-	entries, err := os.ReadDir(r.Root)
+	q.record.Phase = "cleanup_pending"
+	if err := writeTransitionRecord(q.record); err != nil {
+		return err
+	}
+	return cleanupTransition(q.record)
+}
+
+func (q *transitionReconciler) restoreTransitionSource() error {
+	if err := restoreTransitionSkills(q.record); err != nil {
+		return err
+	}
+	current, err := q.transitions.State.Load()
 	if err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if entry.Name() != transitionRecordFile {
-			return fmt.Errorf("preserve unrecognized transition residue")
-		}
+	if !transitionStateMatches(current, q.record.OldState, q.record.Identity) && !transitionStateMatches(current, sourceTransitionState(q.record), q.record.Identity) {
+		return fmt.Errorf("source state changed before skill recovery")
 	}
-	if err := os.Remove(filepath.Join(r.Root, transitionRecordFile)); err != nil {
+	desired, err := transitionPublicationState(current, sourceTransitionState(q.record), q.record.Identity)
+	if err != nil {
 		return err
 	}
-	if err := atomicfile.SyncDirectory(r.Root); err != nil {
-		return err
+	disposition, err := q.transitions.State.PersistStateDecisionWithDisposition(current, desired)
+	if err != nil || disposition != domain.StateDecisionDesired {
+		return errors.Join(err, fmt.Errorf("source outcome durability unresolved"))
 	}
-	if err := os.Remove(r.Root); err != nil {
-		return err
-	}
-	return atomicfile.SyncDirectory(filepath.Dir(r.Root))
+	return nil
 }
 
 func (t NativeTransitions) HoldsActivation(installationID, bindingID string) (bool, error) {

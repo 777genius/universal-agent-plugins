@@ -53,47 +53,61 @@ func openCodeTransitionRequest(p *openCodeNativeApply) (nativeconfig.TransitionR
 		if !ok {
 			return req, nativeconfig.ErrNativeMigrationRequired
 		}
-		target, mcp, err := nativeconfig.OpenCodeCodecForKind(next.Kind)
-		if err != nil || !mcp || source == target || object.LogicalName != next.LogicalName || object.Path != next.Path {
-			return req, nativeconfig.ErrNativeMigrationRequired
-		}
-		if req.SourceCodec != "" && (req.SourceCodec != source || req.TargetCodec != target) {
-			return req, nativeconfig.ErrNativeMigrationRequired
-		}
-		req.SourceCodec, req.TargetCodec = source, target
-		old, err := receiptFromOpenCodeObject(object)
-		if err != nil {
+		if err := appendOpenCodeTransitionEntry(&req, p, object, next, source); err != nil {
 			return req, err
 		}
-		receipt, err := receiptFromOpenCodeObject(next)
-		if err != nil {
-			return req, err
-		}
-		server, ok := p.projection.MCPServers[next.LogicalName]
-		if !ok {
-			return req, fmt.Errorf("transition lacks desired server")
-		}
-		req.Entries = append(req.Entries, nativeconfig.TransitionEntry{LogicalID: object.ObjectID, Name: object.LogicalName, SourceOwned: old, TargetServer: server, TargetPlaceholders: nativeconfig.Placeholders{PackageRoot: p.projection.PackageRoot, DataRoot: p.projection.DataRoot}, DesiredReceipt: receipt})
 	}
+	if err := validateOpenCodeTransitionDesired(p, req); err != nil {
+		return req, err
+	}
+	sort.Slice(req.Entries, func(i, j int) bool { return req.Entries[i].Name < req.Entries[j].Name })
+	return req, nil
+}
+
+func appendOpenCodeTransitionEntry(req *nativeconfig.TransitionRequest, p *openCodeNativeApply, object, next domain.NativeObjectOwnership, source nativeconfig.Codec) error {
+	target, mcp, err := nativeconfig.OpenCodeCodecForKind(next.Kind)
+	if err != nil || !mcp || source == target || object.LogicalName != next.LogicalName || object.Path != next.Path {
+		return nativeconfig.ErrNativeMigrationRequired
+	}
+	if req.SourceCodec != "" && (req.SourceCodec != source || req.TargetCodec != target) {
+		return nativeconfig.ErrNativeMigrationRequired
+	}
+	req.SourceCodec, req.TargetCodec = source, target
+	old, err := receiptFromOpenCodeObject(object)
+	if err != nil {
+		return err
+	}
+	receipt, err := receiptFromOpenCodeObject(next)
+	if err != nil {
+		return err
+	}
+	server, ok := p.projection.MCPServers[next.LogicalName]
+	if !ok {
+		return fmt.Errorf("transition lacks desired server")
+	}
+	req.Entries = append(req.Entries, nativeconfig.TransitionEntry{LogicalID: object.ObjectID, Name: object.LogicalName, SourceOwned: old, TargetServer: server, TargetPlaceholders: nativeconfig.Placeholders{PackageRoot: p.projection.PackageRoot, DataRoot: p.projection.DataRoot}, DesiredReceipt: receipt})
+	return nil
+}
+
+func validateOpenCodeTransitionDesired(p *openCodeNativeApply, req nativeconfig.TransitionRequest) error {
 	count := 0
 	for _, object := range p.desired {
 		_, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
 		if err != nil {
-			return req, err
+			return err
 		}
 		if mcp {
 			count++
 		}
 	}
 	if count == 0 || count != len(req.Entries) {
-		return req, nativeconfig.ErrNativeMigrationRequired
+		return nativeconfig.ErrNativeMigrationRequired
 	}
 	codec, err := projectionCodec(p.projection)
 	if err != nil || codec != req.TargetCodec {
-		return req, nativeconfig.ErrNativeMigrationRequired
+		return nativeconfig.ErrNativeMigrationRequired
 	}
-	sort.Slice(req.Entries, func(i, j int) bool { return req.Entries[i].Name < req.Entries[j].Name })
-	return req, nil
+	return nil
 }
 
 func transitionDTO(p nativeconfig.PreparedTransition) domain.OpenCodeTransitionPrepared {
@@ -127,16 +141,8 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 	if err != nil {
 		return unchanged(err)
 	}
-	txn := &openCodeSkillTxn{durable: true, backups: map[string]openCodeBackup{}, installed: map[string]domain.NativeObjectOwnership{}, rename: p.rename, removeAll: p.removeAll}
-	if err := txn.createRoot(request.Client.ConfigRoot); err != nil {
-		return unchanged(err)
-	}
-	staged, err := txn.stageDesired(request.Delivery.ActivePath, shared.ObjectMap(p.desired))
+	txn, staged, err := stageOpenCodeTransitionSkills(request, p)
 	if err != nil {
-		return unchanged(err)
-	}
-	// Private staging must be durable before its path can be journal authority.
-	if err := syncTransitionTree(txn.root); err != nil {
 		return unchanged(err)
 	}
 	persisted := false
@@ -147,28 +153,55 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 		if err := recorder.PersistPrepared(ctx, request.NativeAttempt, txn.root, transitionDTO(prepared), request.PreviousNativeObjects, request.Delivery.NativeObjects); err != nil {
 			return err
 		}
-		if err := txn.backupPrevious(shared.ObjectMap(p.previous)); err != nil {
-			return err
-		}
-		if err := atomicfile.SyncDirectory(filepath.Join(request.Client.ConfigRoot, "skills")); err != nil {
-			return err
-		}
-		if err := atomicfile.SyncDirectory(txn.root); err != nil {
-			return err
-		}
-		if err := txn.installStaged(staged, shared.ObjectMap(p.desired)); err != nil {
-			return err
-		}
-		if err := atomicfile.SyncDirectory(filepath.Join(request.Client.ConfigRoot, "skills")); err != nil {
-			return err
-		}
-		return atomicfile.SyncDirectory(txn.root)
+		return commitOpenCodeTransitionSkills(request.Client.ConfigRoot, txn, p, staged)
 	}
 	receipts, applyErr := kernel.ApplyDialectTransition(req)
 	if !persisted {
 		_ = os.RemoveAll(txn.root)
 		return unchanged(applyErr)
 	}
+	if err := validateCommittedOpenCodeTransitionReceipts(req, receipts, applyErr); err != nil {
+		return err
+	}
+	return reconcileAppliedOpenCodeTransition(ctx, req, txn.root, recorder, receipts, applyErr)
+}
+
+func stageOpenCodeTransitionSkills(request domain.ActivationRequest, p *openCodeNativeApply) (*openCodeSkillTxn, map[string]string, error) {
+	txn := &openCodeSkillTxn{durable: true, backups: map[string]openCodeBackup{}, installed: map[string]domain.NativeObjectOwnership{}, rename: p.rename, removeAll: p.removeAll}
+	if err := txn.createRoot(request.Client.ConfigRoot); err != nil {
+		return nil, nil, err
+	}
+	staged, err := txn.stageDesired(request.Delivery.ActivePath, shared.ObjectMap(p.desired))
+	if err != nil {
+		return nil, nil, err
+	}
+	// Private staging must be durable before its path can be journal authority.
+	if err := syncTransitionTree(txn.root); err != nil {
+		return nil, nil, err
+	}
+	return txn, staged, nil
+}
+
+func commitOpenCodeTransitionSkills(configRoot string, txn *openCodeSkillTxn, p *openCodeNativeApply, staged map[string]string) error {
+	if err := txn.backupPrevious(shared.ObjectMap(p.previous)); err != nil {
+		return err
+	}
+	if err := atomicfile.SyncDirectory(filepath.Join(configRoot, "skills")); err != nil {
+		return err
+	}
+	if err := atomicfile.SyncDirectory(txn.root); err != nil {
+		return err
+	}
+	if err := txn.installStaged(staged, shared.ObjectMap(p.desired)); err != nil {
+		return err
+	}
+	if err := atomicfile.SyncDirectory(filepath.Join(configRoot, "skills")); err != nil {
+		return err
+	}
+	return atomicfile.SyncDirectory(txn.root)
+}
+
+func validateCommittedOpenCodeTransitionReceipts(req nativeconfig.TransitionRequest, receipts []nativeconfig.Receipt, applyErr error) error {
 	if applyErr == nil || nativeconfig.IsCommittedCleanup(applyErr) {
 		if len(receipts) != len(req.Entries) {
 			return fmt.Errorf("native transition committed without complete receipts; recovery required")
@@ -179,9 +212,13 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 			}
 		}
 	}
+	return nil
+}
+
+func reconcileAppliedOpenCodeTransition(ctx context.Context, req nativeconfig.TransitionRequest, root string, recorder ports.OpenCodeTransitionRecorder, receipts []nativeconfig.Receipt, applyErr error) error {
 	// Reconcile uncertain writes using persisted facts, never inverse Apply or
 	// in-memory rollback. Reopening obtains the same candidate lease and CAS.
-	effect, recoveryErr := recorder.Reconcile(ctx, txn.root)
+	effect, recoveryErr := recorder.Reconcile(ctx, root)
 	if effect == domain.NativeEffectCommitted {
 		if len(receipts) > 0 && len(receipts) != len(req.Entries) {
 			return fmt.Errorf("transition returned incomplete receipts")
@@ -195,7 +232,7 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 	if applyErr != nil {
 		applyErr = fmt.Errorf("native transition requires reconciliation: %v", applyErr)
 	}
-	err = errors.Join(applyErr, recoveryErr)
+	err := errors.Join(applyErr, recoveryErr)
 	if err == nil {
 		err = fmt.Errorf("native transition restored source")
 	}
