@@ -586,6 +586,25 @@ func TestOpenCodeV2UnknownStoredKindFailsClosed(t *testing.T) {
 	if before != v2EffectSnapshot(t, engine) {
 		t.Fatal("unknown kind refusal changed effects")
 	}
+	// Removing every desired native declaration must not reclassify an unknown
+	// stored receipt as inert metadata or proceed to an executable requirement.
+	if err := os.Remove(filepath.Join(req.PackageRoot, "mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(req.PackageRoot, "skills")); err != nil {
+		t.Fatal(err)
+	}
+	req.RequiredComponents, req.ClientExecutable = nil, ""
+	next, err = engine.Prepare(testCtx(t), req)
+	if next != nil {
+		closeOpenCodeTestHandle(t, next)
+	}
+	if err == nil || !strings.Contains(err.Error(), "unsupported OpenCode native object kind") {
+		t.Fatalf("metadata proposal bypassed unknown stored kind: %v", err)
+	}
+	if before != v2EffectSnapshot(t, engine) {
+		t.Fatal("metadata unknown-kind refusal changed effects")
+	}
 }
 
 // Desired bytes cannot select a host dialect when prepared authority is absent.

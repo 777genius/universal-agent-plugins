@@ -25,9 +25,12 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 		return nil
 	}
 	skills, transports := clients.OpenCodeNativeRequirements(handle.envelope)
-	_, ownedCodec, err := e.previousOpenCodeEffects(handle, consumer)
+	previousEffects, ownedCodec, err := e.previousOpenCodeEffects(handle, consumer)
 	if err != nil {
 		return err
+	}
+	if !skills && len(transports) == 0 && !previousEffects {
+		return nil
 	}
 	executable := handle.req.ClientExecutable
 	if executable == "" {
