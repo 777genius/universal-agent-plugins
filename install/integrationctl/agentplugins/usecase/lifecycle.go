@@ -43,18 +43,7 @@ func (service Service) resume(
 		result.RequiresConfirmation = true
 		return result, nil
 	}
-	state, err := service.StateStore.Load()
-	if err != nil {
-		return result, err
-	}
-	var installation domain.Installation
-	for _, item := range state.Installations {
-		if item.InstallationID == installationID {
-			installation = item
-			break
-		}
-	}
-	delivery, complete, err := service.activeNativeDelivery(ctx, input, result.Plan, installation, client)
+	delivery, complete, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
 	if err != nil {
 		return result, err
 	}
@@ -96,6 +85,21 @@ func (service Service) resume(
 	}
 	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
 	return result, nil
+}
+
+func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, error) {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return domain.StagedDelivery{}, false, err
+	}
+	var installation domain.Installation
+	for _, item := range state.Installations {
+		if item.InstallationID == installationID {
+			installation = item
+			break
+		}
+	}
+	return service.activeNativeDelivery(ctx, input, plan, installation, client)
 }
 
 func (service Service) resumeActivationOutcome(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, outcome domain.ActivationOutcome, activationErr error) domain.ActivationOutcome {
