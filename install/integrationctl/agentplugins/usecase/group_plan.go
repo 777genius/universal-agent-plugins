@@ -71,10 +71,13 @@ func (session *groupSession) validateGroupTarget(targetIndex int, target *AddInp
 }
 
 func (session *groupSession) planAndPreflightGroupTarget(targetIndex int, target *AddInput) (domain.DeliveryPlan, error) {
+	target.DryRun = target.DryRun || session.input.DryRun
+	target.OnlinePreview = target.OnlinePreview || session.input.OnlinePreview
 	plan, err := session.service.planInstall(session.ctx, target, domain.ComputePhysicalArtifactID(target.Envelope.Manifest.Name, session.installationID), installationIfExisting(session.state, session.installationIndex, session.existing))
 	if err != nil {
 		return domain.DeliveryPlan{}, err
 	}
+	session.result.PreparedClients = append(session.result.PreparedClients, target.Client)
 	if openAIOAuthApplies(target.Client.ClientID, target.Envelope, target.Hints) {
 		plan.Authentication = domain.AuthenticationPending
 	}
@@ -249,6 +252,18 @@ func (session *groupSession) preflightCompatibleBindings() error {
 }
 
 func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compatibleBindings map[string]bool) error {
+	check.DryRun = check.DryRun || session.input.DryRun
+	check.OnlinePreview = check.OnlinePreview || session.input.OnlinePreview
+	// A selected binding already has this operation's reviewed host. A second
+	// compatibility pass must validate that snapshot, never select a new baseline.
+	for _, prepared := range session.result.PreparedClients {
+		if prepared.ClientID == check.Client.ClientID && prepared.ExecutablePath == check.Client.ExecutablePath {
+			check.Client.OpenCodeHost = prepared.OpenCodeHost
+			check.Client.ProfileAuthority = domain.CloneProfileAuthority(prepared.ProfileAuthority)
+			check.Client.ProfileNamespace = prepared.ProfileNamespace
+			break
+		}
+	}
 	if check.Envelope.TreeDigest != session.first.Envelope.TreeDigest || check.Envelope.ManifestDigest != session.first.Envelope.ManifestDigest {
 		return fmt.Errorf("compatibility preflight must use the update candidate bytes")
 	}
@@ -256,6 +271,7 @@ func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compa
 	if err != nil {
 		return err
 	}
+	session.result.PreparedClients = append(session.result.PreparedClients, check.Client)
 	if plan.Status == domain.PlanUnsupported {
 		return fmt.Errorf("update candidate is incompatible with installed binding %s", check.Client.ClientID)
 	}

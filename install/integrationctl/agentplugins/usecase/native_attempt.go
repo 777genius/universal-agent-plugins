@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -99,6 +100,11 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	if err := request.Plan.SelectedDelivery.ValidatePlan(request.Plan, selectedCanonicalDigest(request.Plan)); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if service.ClientPreparation != nil && !request.VerifyOnly {
+		if err := service.ClientPreparation.RevalidateClient(ctx, request.Client, request.Plan); err != nil {
+			return service.refusedPreparedActivation(installationID, bindingID, err)
+		}
+	}
 	if nativeLifecycleClient(request.Client.ClientID, request.Plan.SelectedDelivery) && !request.VerifyOnly {
 		if err := service.beginNativeAttemptWithObservation(installationID, bindingID, domain.NativeIntentRegister, request.Plan.SelectedDelivery, request.Plan.LocalEntryObservation.Clone()); err != nil {
 			return domain.ActivationOutcome{}, err
@@ -113,7 +119,7 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 		request.NativeAttempt = domain.NativeAttemptIdentity{OperationID: client.NativeActivationAttempt, InstallationID: installationID, BindingID: bindingID, NativeRoot: request.Client.ConfigRoot}
 	}
 	if request.Plan.SelectedDelivery.IsZero() {
-		return service.Activator.Activate(ctx, request)
+		return service.activatePreparedClient(ctx, installationID, bindingID, request)
 	}
 	before, err := service.activationBinding(installationID, bindingID)
 	if err != nil {
@@ -124,7 +130,7 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 	}
 	request.Plan.LocalEntryObservation = request.Plan.LocalEntryObservation.Clone()
 	request.Plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.Plan.PreviousNativeObjects...)
-	outcome, err := service.Activator.Activate(ctx, request)
+	outcome, err := service.activatePreparedClient(ctx, installationID, bindingID, request)
 	after, loadErr := service.activationBinding(installationID, bindingID)
 	if loadErr != nil {
 		outcome.NativeEffect = domain.NativeEffectUncertain
@@ -205,4 +211,25 @@ func nativeDialectProjectionChanged(client domain.ClientBinding, plan domain.Del
 		}
 	}
 	return false
+}
+
+func (service Service) activatePreparedClient(ctx context.Context, installationID, bindingID string, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if service.ClientPreparation != nil && !request.VerifyOnly {
+		if err := service.ClientPreparation.RevalidateClient(ctx, request.Client, request.Plan); err != nil {
+			return service.refusedPreparedActivation(installationID, bindingID, err)
+		}
+	}
+	return service.Activator.Activate(ctx, request)
+}
+
+// A host refusal happens before the adapter runs, so preserve the existing
+// lifecycle and acknowledged objects instead of persisting an empty outcome.
+func (service Service) refusedPreparedActivation(installationID, bindingID string, refusal error) (domain.ActivationOutcome, error) {
+	binding, err := service.activationBinding(installationID, bindingID)
+	if err != nil {
+		return domain.ActivationOutcome{}, errors.Join(refusal, err)
+	}
+	outcome := lifecycleOutcome(binding)
+	outcome.NativeEffect = domain.NativeEffectUnchanged
+	return outcome, refusal
 }

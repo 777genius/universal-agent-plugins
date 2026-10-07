@@ -17,7 +17,7 @@ func (service *Service) prepareHostInputs(ctx context.Context, inputs []AddInput
 		if retained, ok := service.Detected[out[i].Client.ClientID]; ok && out[i].Client.OpenCodeHost == nil {
 			out[i].Client.OpenCodeHost = retained.OpenCodeHost
 		}
-		if ((!dryRun && !out[i].DryRun) || service.PrepareHostsForPreview) && service.OpenCodeHosts != nil {
+		if ((!dryRun && !out[i].DryRun) || service.PrepareHostsForPreview) && service.ClientPreparation == nil && service.OpenCodeHosts != nil {
 			client, err := service.OpenCodeHosts.PrepareOpenCodeHost(ctx, out[i].Client, out[i].Envelope)
 			if err != nil {
 				return nil, err
@@ -30,7 +30,7 @@ func (service *Service) prepareHostInputs(ctx context.Context, inputs []AddInput
 }
 
 func (service Service) revalidateHost(ctx context.Context, client domain.DetectedClient) error {
-	if service.OpenCodeHosts == nil || client.OpenCodeHost == nil {
+	if service.ClientPreparation != nil || service.OpenCodeHosts == nil || client.OpenCodeHost == nil {
 		return nil
 	}
 	return service.OpenCodeHosts.RevalidateOpenCodeHost(ctx, client)

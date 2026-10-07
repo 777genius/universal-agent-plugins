@@ -41,170 +41,20 @@ func (kernel Kernel) ApplyDialectTransition(req TransitionRequest) (receipts []R
 	if err := validateTransition(req); err != nil {
 		return nil, err
 	}
-	acquire := kernel.acquireLocks
-	if acquire == nil {
-		acquire = kernel.acquireCandidateLocks
-	}
-	release, err := acquire(req.Paths, req.SourceCodec)
+	release, err := kernel.acquireTransitionLease(req)
 	if err != nil {
 		return nil, err
 	}
-	if release == nil {
-		return nil, fmt.Errorf("native config lock acquirer returned no release operation")
-	}
 	committed := false
-	defer func() {
-		if releaseErr := release(); releaseErr != nil {
-			cleanup := fmt.Errorf("unlock native config: %w", releaseErr)
-			if err != nil {
-				err = errors.Join(err, cleanup)
-			} else if committed {
-				err = &CommittedCleanupError{Err: cleanup}
-			} else {
-				err = cleanup
-			}
-		}
-	}()
+	defer func() { err = releaseTransitionLease(release, committed, err) }()
 	file, err := kernel.resolve(req.Paths)
 	if err != nil {
 		return nil, err
 	}
-	if !file.exists {
-		return nil, ErrNotOwned
-	}
-	doc, err := parseDocument(file.body, file.jsonc)
+	prepared, next, receipts, err := prepareDialectTransition(file, req)
 	if err != nil {
 		return nil, err
 	}
-	mcp, err := collection(doc, "mcp", false)
-	if err != nil {
-		return nil, err
-	}
-	if mcp == nil {
-		return nil, ErrNotOwned
-	}
-	// A V1 leaf literally named servers is not a V2 container. Classify it
-	// before looking up either dialect; do not reinterpret its entry fields.
-	nested, err := transitionNestedServers(mcp)
-	if err != nil {
-		return nil, err
-	}
-	source, destination := mcp, nested
-	if req.SourceCodec == CodecOpenCodeV2 {
-		source, destination = nested, mcp
-	}
-	if source == nil {
-		return nil, ErrNotOwned
-	}
-	receipts = make([]Receipt, len(req.Entries))
-	preparedEntries := make([]PreparedTransitionEntry, len(req.Entries))
-	values := make([]hujson.Value, len(req.Entries))
-	compatibleTargets := make([]bool, len(req.Entries))
-	// Prove every source and destination before editing even the private AST.
-	for i, entry := range req.Entries {
-		member, _ := objectMember(source, entry.Name)
-		if member == nil || req.SourceCodec == CodecOpenCode && entry.Name == "servers" && nested != nil ||
-			verifyReceipt(&entry.SourceOwned, file.path, req.SourceCodec, entry.Name, member) != nil {
-			return nil, fmt.Errorf("%w: source %s", ErrNotOwned, entry.Name)
-		}
-		desired, err := DesiredReceipt(file.path, req.TargetCodec, entry.Name, entry.TargetServer, entry.TargetPlaceholders)
-		if err != nil {
-			return nil, err
-		}
-		if entry.DesiredReceipt != desired {
-			return nil, fmt.Errorf("transition desired receipt changed: %w", ErrConcurrentChange)
-		}
-		var target *hujson.ObjectMember
-		if destination != nil {
-			target, _ = objectMember(destination, entry.Name)
-			if req.TargetCodec == CodecOpenCode && entry.Name == "servers" && nested != nil {
-				target = nil // The source container, not a destination V1 leaf.
-			}
-		}
-		if target != nil {
-			if entry.TargetOwned == nil {
-				return nil, fmt.Errorf("%w: target %s", ErrCollision, entry.Name)
-			}
-			if verifyReceipt(entry.TargetOwned, file.path, req.TargetCodec, entry.Name, target) != nil {
-				return nil, fmt.Errorf("%w: target %s", ErrNotOwned, entry.Name)
-			}
-			if verifyReceipt(&desired, file.path, req.TargetCodec, entry.Name, target) != nil {
-				return nil, fmt.Errorf("%w: incompatible owned target %s", ErrCollision, entry.Name)
-			}
-			compatibleTargets[i] = true
-		} else if entry.TargetOwned != nil {
-			return nil, fmt.Errorf("%w: missing target %s", ErrNotOwned, entry.Name)
-		}
-		projected, err := projectServer(req.TargetCodec, entry.TargetServer, entry.TargetPlaceholders)
-		if err != nil {
-			return nil, err
-		}
-		values[i], err = jsonValue(projected)
-		if err != nil {
-			return nil, err
-		}
-		receipts[i] = desired
-		preparedEntries[i] = PreparedTransitionEntry{LogicalID: entry.LogicalID, Name: entry.Name, SourceReceipt: entry.SourceOwned, TargetReceipt: desired}
-		if entry.TargetOwned != nil {
-			owned := *entry.TargetOwned
-			preparedEntries[i].PreviouslyOwnedTarget = &owned
-		}
-	}
-	for _, entry := range req.Entries {
-		removeTransitionEntry(source, entry.Name)
-	}
-	if req.SourceCodec == CodecOpenCodeV2 && len(source.Members) == 0 {
-		// Only the emptied source container is removed. Retain its comments.
-		member, _ := objectMember(mcp, "servers")
-		member.Value.AfterExtra = append(bytes.Clone(source.AfterExtra), member.Value.AfterExtra...)
-		removeTransitionEntry(mcp, "servers")
-	}
-	if req.TargetCodec == CodecOpenCodeV2 {
-		if err := requireOpenCodeV2Root(doc); err != nil {
-			return nil, err
-		}
-	} else {
-		remaining, err := transitionNestedServers(mcp)
-		if err != nil {
-			return nil, err
-		}
-		if remaining != nil {
-			return nil, ErrNativeMigrationRequired
-		}
-	}
-	destination, err = codecCollection(doc, req.TargetCodec, true)
-	if err != nil {
-		return nil, err
-	}
-	proposed := map[string]bool{}
-	for i, entry := range preparedEntries {
-		if !compatibleTargets[i] {
-			setEntry(destination, entry.Name, values[i])
-		}
-		proposed[entry.Name] = true
-	}
-	active, err := openCodeActiveMCPNamesForCodec(destination, req.TargetCodec)
-	if err != nil {
-		return nil, err
-	}
-	var retained, added []string
-	for _, name := range active {
-		if proposed[name] {
-			added = append(added, name)
-		} else {
-			retained = append(retained, name)
-		}
-	}
-	if err := checkOpenCodeNamespace(retained, added); err != nil {
-		return nil, err
-	}
-	next, err := doc.render()
-	if err != nil {
-		return nil, err
-	}
-	hash := sha256.Sum256(next)
-	prepared := PreparedTransition{Path: file.path, Original: FileSnapshot{Body: bytes.Clone(file.body), Mode: file.mode, Exists: file.exists},
-		TargetBytes: bytes.Clone(next), TargetHash: fmt.Sprintf("sha256:%x", hash), SourceCodec: req.SourceCodec, TargetCodec: req.TargetCodec, Entries: preparedEntries}
 	if err := ValidatePreparedTransition(req.Paths, prepared); err != nil {
 		return nil, err
 	}
@@ -218,6 +68,225 @@ func (kernel Kernel) ApplyDialectTransition(req TransitionRequest) (receipts []R
 	}
 	committed = true
 	return receipts, nil
+}
+
+func (kernel Kernel) acquireTransitionLease(req TransitionRequest) (func() error, error) {
+	acquire := kernel.acquireLocks
+	if acquire == nil {
+		acquire = kernel.acquireCandidateLocks
+	}
+	release, err := acquire(req.Paths, req.SourceCodec)
+	if err != nil {
+		return nil, err
+	}
+	if release == nil {
+		return nil, fmt.Errorf("native config lock acquirer returned no release operation")
+	}
+	return release, nil
+}
+
+func releaseTransitionLease(release func() error, committed bool, operationErr error) error {
+	releaseErr := release()
+	if releaseErr == nil {
+		return operationErr
+	}
+	cleanup := fmt.Errorf("unlock native config: %w", releaseErr)
+	if operationErr != nil {
+		return errors.Join(operationErr, cleanup)
+	}
+	if committed {
+		return &CommittedCleanupError{Err: cleanup}
+	}
+	return cleanup
+}
+
+type transitionDocument struct {
+	document                         *document
+	mcp, nested, source, destination *hujson.Object
+}
+
+type transitionEntry struct {
+	prepared         PreparedTransitionEntry
+	value            hujson.Value
+	compatibleTarget bool
+}
+
+func prepareDialectTransition(file resolvedFile, req TransitionRequest) (PreparedTransition, []byte, []Receipt, error) {
+	doc, err := readTransitionDocument(file, req.SourceCodec)
+	if err != nil {
+		return PreparedTransition{}, nil, nil, err
+	}
+	entries := make([]transitionEntry, len(req.Entries))
+	// Prove every source and destination before editing even the private AST.
+	for i, entry := range req.Entries {
+		entries[i], err = prepareTransitionEntry(doc, file.path, req, entry)
+		if err != nil {
+			return PreparedTransition{}, nil, nil, err
+		}
+	}
+	if err := rewriteTransitionDocument(doc, req, entries); err != nil {
+		return PreparedTransition{}, nil, nil, err
+	}
+	next, err := doc.document.render()
+	if err != nil {
+		return PreparedTransition{}, nil, nil, err
+	}
+	preparedEntries := make([]PreparedTransitionEntry, len(entries))
+	receipts := make([]Receipt, len(entries))
+	for i, entry := range entries {
+		preparedEntries[i], receipts[i] = entry.prepared, entry.prepared.TargetReceipt
+	}
+	hash := sha256.Sum256(next)
+	prepared := PreparedTransition{Path: file.path, Original: FileSnapshot{Body: bytes.Clone(file.body), Mode: file.mode, Exists: file.exists},
+		TargetBytes: bytes.Clone(next), TargetHash: fmt.Sprintf("sha256:%x", hash), SourceCodec: req.SourceCodec, TargetCodec: req.TargetCodec, Entries: preparedEntries}
+	return prepared, next, receipts, nil
+}
+
+func readTransitionDocument(file resolvedFile, sourceCodec Codec) (transitionDocument, error) {
+	if !file.exists {
+		return transitionDocument{}, ErrNotOwned
+	}
+	doc, err := parseDocument(file.body, file.jsonc)
+	if err != nil {
+		return transitionDocument{}, err
+	}
+	mcp, err := collection(doc, "mcp", false)
+	if err != nil {
+		return transitionDocument{}, err
+	}
+	if mcp == nil {
+		return transitionDocument{}, ErrNotOwned
+	}
+	// A V1 leaf literally named servers is not a V2 container. Classify it
+	// before looking up either dialect; do not reinterpret its entry fields.
+	nested, err := transitionNestedServers(mcp)
+	if err != nil {
+		return transitionDocument{}, err
+	}
+	source, destination := mcp, nested
+	if sourceCodec == CodecOpenCodeV2 {
+		source, destination = nested, mcp
+	}
+	if source == nil {
+		return transitionDocument{}, ErrNotOwned
+	}
+	return transitionDocument{document: doc, mcp: mcp, nested: nested, source: source, destination: destination}, nil
+}
+
+func prepareTransitionEntry(doc transitionDocument, path string, req TransitionRequest, entry TransitionEntry) (transitionEntry, error) {
+	member, _ := objectMember(doc.source, entry.Name)
+	if member == nil || req.SourceCodec == CodecOpenCode && entry.Name == "servers" && doc.nested != nil ||
+		verifyReceipt(&entry.SourceOwned, path, req.SourceCodec, entry.Name, member) != nil {
+		return transitionEntry{}, fmt.Errorf("%w: source %s", ErrNotOwned, entry.Name)
+	}
+	desired, err := DesiredReceipt(path, req.TargetCodec, entry.Name, entry.TargetServer, entry.TargetPlaceholders)
+	if err != nil {
+		return transitionEntry{}, err
+	}
+	if entry.DesiredReceipt != desired {
+		return transitionEntry{}, fmt.Errorf("transition desired receipt changed: %w", ErrConcurrentChange)
+	}
+	compatible, err := validateTransitionTarget(doc, path, req.TargetCodec, entry, desired)
+	if err != nil {
+		return transitionEntry{}, err
+	}
+	projected, err := projectServer(req.TargetCodec, entry.TargetServer, entry.TargetPlaceholders)
+	if err != nil {
+		return transitionEntry{}, err
+	}
+	value, err := jsonValue(projected)
+	if err != nil {
+		return transitionEntry{}, err
+	}
+	prepared := PreparedTransitionEntry{LogicalID: entry.LogicalID, Name: entry.Name, SourceReceipt: entry.SourceOwned, TargetReceipt: desired}
+	if entry.TargetOwned != nil {
+		owned := *entry.TargetOwned
+		prepared.PreviouslyOwnedTarget = &owned
+	}
+	return transitionEntry{prepared: prepared, value: value, compatibleTarget: compatible}, nil
+}
+
+func validateTransitionTarget(doc transitionDocument, path string, codec Codec, entry TransitionEntry, desired Receipt) (bool, error) {
+	var target *hujson.ObjectMember
+	if doc.destination != nil {
+		target, _ = objectMember(doc.destination, entry.Name)
+		if codec == CodecOpenCode && entry.Name == "servers" && doc.nested != nil {
+			target = nil // The source container, not a destination V1 leaf.
+		}
+	}
+	if target == nil {
+		if entry.TargetOwned != nil {
+			return false, fmt.Errorf("%w: missing target %s", ErrNotOwned, entry.Name)
+		}
+		return false, nil
+	}
+	if entry.TargetOwned == nil {
+		return false, fmt.Errorf("%w: target %s", ErrCollision, entry.Name)
+	}
+	if verifyReceipt(entry.TargetOwned, path, codec, entry.Name, target) != nil {
+		return false, fmt.Errorf("%w: target %s", ErrNotOwned, entry.Name)
+	}
+	if verifyReceipt(&desired, path, codec, entry.Name, target) != nil {
+		return false, fmt.Errorf("%w: incompatible owned target %s", ErrCollision, entry.Name)
+	}
+	return true, nil
+}
+
+func rewriteTransitionDocument(doc transitionDocument, req TransitionRequest, entries []transitionEntry) error {
+	for _, entry := range req.Entries {
+		removeTransitionEntry(doc.source, entry.Name)
+	}
+	if req.SourceCodec == CodecOpenCodeV2 && len(doc.source.Members) == 0 {
+		// Only the emptied source container is removed. Retain its comments.
+		member, _ := objectMember(doc.mcp, "servers")
+		member.Value.AfterExtra = append(bytes.Clone(doc.source.AfterExtra), member.Value.AfterExtra...)
+		removeTransitionEntry(doc.mcp, "servers")
+	}
+	if err := validateTransitionRoot(doc, req.TargetCodec); err != nil {
+		return err
+	}
+	destination, err := codecCollection(doc.document, req.TargetCodec, true)
+	if err != nil {
+		return err
+	}
+	proposed := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		if !entry.compatibleTarget {
+			setEntry(destination, entry.prepared.Name, entry.value)
+		}
+		proposed[entry.prepared.Name] = true
+	}
+	return validateTransitionNamespace(destination, req.TargetCodec, proposed)
+}
+
+func validateTransitionRoot(doc transitionDocument, target Codec) error {
+	if target == CodecOpenCodeV2 {
+		return requireOpenCodeV2Root(doc.document)
+	}
+	remaining, err := transitionNestedServers(doc.mcp)
+	if err != nil {
+		return err
+	}
+	if remaining != nil {
+		return ErrNativeMigrationRequired
+	}
+	return nil
+}
+
+func validateTransitionNamespace(destination *hujson.Object, codec Codec, proposed map[string]bool) error {
+	active, err := openCodeActiveMCPNamesForCodec(destination, codec)
+	if err != nil {
+		return err
+	}
+	retained, added := make([]string, 0, len(active)), make([]string, 0, len(active))
+	for _, name := range active {
+		if proposed[name] {
+			added = append(added, name)
+		} else {
+			retained = append(retained, name)
+		}
+	}
+	return checkOpenCodeNamespace(retained, added)
 }
 
 func transitionNestedServers(mcp *hujson.Object) (*hujson.Object, error) {

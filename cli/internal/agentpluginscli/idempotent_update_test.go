@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
@@ -46,7 +47,12 @@ func TestImmediateMultiTargetUpdateReusesNativeBindings(t *testing.T) {
 	clients := make([]domain.DetectedClient, 0, len(targets))
 	names := make([]string, 0, len(targets))
 	for _, target := range targets {
-		clients = append(clients, fixtureClient(t, target))
+		client := fixtureClient(t, target)
+		if target == domain.ClientOpenCode {
+			// Direct usecase fixtures bypass the facade's host preparation.
+			client.OpenCodeHost = contracttest.OpenCodeV1Host{}
+		}
+		clients = append(clients, client)
 		names = append(names, string(target))
 	}
 	fixture := newCLIFixture(t, clients)

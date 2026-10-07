@@ -14,22 +14,35 @@ import (
 // RED: empty identity/projection incorrectly requests a codec and consults
 // ambiguous user config. No desired objects must still reconcile stored ones.
 func TestOpenCodeMetadataOnlyNoAuthorityOrConfigSelection(t *testing.T) {
+	assertOpenCodeNoEffectPlan(t, domain.PackageEnvelope{}, nil)
+}
+
+// RED if the decoder treats every MCP declaration as selected and requests a
+// host/config even when the public component plan explicitly excludes it.
+func TestOpenCodeUnselectedMCPNoAuthorityOrConfigSelection(t *testing.T) {
+	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"docs": {Type: "streamable-http", Decoded: map[string]any{"url": "https://docs.test"}}}}}
+	components := []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportUnsupported}}
+	assertOpenCodeNoEffectPlan(t, envelope, components)
+}
+
+func assertOpenCodeNoEffectPlan(t *testing.T, envelope domain.PackageEnvelope, components []domain.ComponentDecision) {
+	t.Helper()
 	root := t.TempDir()
 	for _, name := range []string{"opencode.json", "opencode.jsonc"} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("foreign"), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	plan := domain.DeliveryPlan{NativeRegistryRoot: root, ActivePath: root}
+	plan := domain.DeliveryPlan{NativeRegistryRoot: root, ActivePath: root, Components: components}
 	finding, err := InspectOpenCodeRegistry(plan, nil, nativeconfig.New())
 	if err != nil || finding != clients.RegistryClear {
 		t.Fatalf("empty identity: %v %v", finding, err)
 	}
-	objects, err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: root, Plan: plan})
+	objects, err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: root, Envelope: envelope, Plan: plan})
 	if err != nil || len(objects) != 0 {
 		t.Fatalf("empty project: %+v %v", objects, err)
 	}
-	objects, err = BuildOpenCodeNativeObjects(root, domain.PackageEnvelope{}, plan)
+	objects, err = BuildOpenCodeNativeObjects(root, envelope, plan)
 	if err != nil || len(objects) != 0 {
 		t.Fatalf("empty active objects: %+v %v", objects, err)
 	}

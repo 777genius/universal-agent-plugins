@@ -228,8 +228,10 @@ func (prepared *preparedUpdateMany) planUpdate(ctx context.Context) (*preparedUp
 	}
 	result.OperationID = operationID
 	planned, err := prepared.service.UpdateGroup(ctx, usecase.GroupInput{
-		Targets: prepared.inputs, CompatibilityChecks: prepared.compatibility, OperationGroupID: operationID, DryRun: true,
+		Targets: prepared.inputs, CompatibilityChecks: prepared.compatibility, OperationGroupID: operationID, DryRun: true, OnlinePreview: !prepared.dryRun,
 	})
+	retainPreparedClients(prepared.inputs, planned.PreparedClients)
+	retainPreparedClients(prepared.compatibility, planned.PreparedClients)
 	prepared.recordPlannedTargets(&result, planned, operationID)
 	prepared.result = result
 	if err != nil {

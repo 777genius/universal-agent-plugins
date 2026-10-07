@@ -169,6 +169,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
 		return err
 	}
+	retainPlannedClient(&input, planned.Plan)
 	input.Confirmed = true
 	result, repairErr := service.Repair(ctx, input)
 	if renderErr := renderRepairResult(cmd.OutOrStdout(), opts.format, installation, result, false); renderErr != nil && repairErr == nil {
@@ -319,6 +320,7 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return nil
 	}
 	writeProgress(app, opts.format, "Applying transactional package update...")
+	retainPlannedClient(&input, planned.Plan)
 	input.Confirmed = true
 	result, updateErr := service.Update(ctx, input)
 	if renderErr := renderUpdateResult(cmd.OutOrStdout(), opts.format, loaded.envelope, result, false); renderErr != nil && updateErr == nil {

@@ -6,9 +6,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
-	"runtime"
 	"slices"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -130,22 +128,4 @@ func (p *Preparer) RevalidateOpenCodeHost(ctx context.Context, client domain.Det
 }
 
 // Resolve existing ancestors too: missing config roots may lie beneath symlinks.
-func RootIdentity(root string) string {
-	var tail []string
-	for current := root; ; current = filepath.Dir(current) {
-		if resolved, err := filepath.EvalSymlinks(current); err == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			resolved = filepath.Clean(resolved)
-			if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-				resolved = strings.ToLower(resolved)
-			}
-			return resolved
-		}
-		if filepath.Dir(current) == current {
-			return ""
-		}
-		tail = append(tail, filepath.Base(current))
-	}
-}
+func RootIdentity(root string) string { return clientdetect.OpenCodeRootIdentity(root) }

@@ -15,6 +15,7 @@ type GroupInput struct {
 	CompatibilityChecks []AddInput
 	OperationGroupID    string
 	Progress            func(GroupProgressEvent)
+	OnlinePreview       bool
 	DryRun              bool
 	Confirmed           bool
 	Switch              bool
@@ -39,6 +40,8 @@ type GroupProgressEvent struct {
 }
 
 type GroupResult struct {
+	// PreparedClients carries immutable host snapshots to this operation's apply.
+	PreparedClients  []domain.DetectedClient   `json:"-"`
 	InstallationID   string                    `json:"installation_id"`
 	OperationGroupID string                    `json:"operation_group_id,omitempty"`
 	Targets          []AddResult               `json:"targets"`
@@ -368,6 +371,11 @@ func groupPackageUnchanged(binding domain.ClientBinding, input AddInput) bool {
 // indeterminate object remains blocking, and an existing managed object still
 // has to match its recorded ownership digest.
 func (service Service) observeGroupNativeIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding, repair bool) error {
+	if repair && service.ClientPreparation != nil {
+		if err := service.ClientPreparation.RevalidateClient(ctx, client, plan); err != nil {
+			return err
+		}
+	}
 	if !repair || service.NativeObserver == nil {
 		return service.observeNativeIdentity(ctx, client, plan, managed)
 	}
