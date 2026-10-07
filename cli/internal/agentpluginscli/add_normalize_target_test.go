@@ -6,8 +6,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// TestNormalizeTargetContract pins the exact --target vocabulary: eleven
-// canonical ids, six aliases, case and whitespace folding, and the lenient
+// TestNormalizeTargetContract pins the exact --target vocabulary: thirteen
+// canonical ids, eight aliases, case and whitespace folding, and the lenient
 // pass-through that turns an unknown name into a lowercased ClientID instead of
 // an error. Part 10 replaces this function with domain.ParseClientID, which has
 // to keep all four properties.
@@ -25,6 +25,8 @@ func TestNormalizeTargetContract(t *testing.T) {
 		"opencode": domain.ClientOpenCode,
 		"cline":    domain.ClientCline,
 		"windsurf": domain.ClientWindsurf,
+		"grok":     domain.ClientGrok,
+		"kimi":     domain.ClientKimi,
 	}
 	if len(canonical) != len(domain.SupportedClientIDs()) {
 		t.Fatalf("the table covers %d clients, the registry has %d", len(canonical), len(domain.SupportedClientIDs()))
@@ -42,6 +44,8 @@ func TestNormalizeTargetContract(t *testing.T) {
 		"gemini-cli":     domain.ClientGemini,
 		"open-code":      domain.ClientOpenCode,
 		"devin":          domain.ClientWindsurf,
+		"grok-build":     domain.ClientGrok,
+		"kimi-code":      domain.ClientKimi,
 	}
 	for input, want := range aliases {
 		if got := normalizeTarget(input); got != want {
