@@ -71,6 +71,13 @@ func openCodeRequest(t *testing.T, root, executable string) Request {
 		ClientConfigRoot: filepath.Join(root, "config"), PackageRoot: packageRoot, RequiredComponents: []string{"skills", "mcp"}}
 }
 
+func closeOpenCodeTestHandle(t *testing.T, handle *PreparedOperation) {
+	t.Helper()
+	if err := handle.Close(); err != nil {
+		t.Errorf("close prepared OpenCode handle: %v", err)
+	}
+}
+
 // Regression: real Prepare must consume the exact selected V2 while PATH points
 // at V1. The immutable explicit-target profile must admit the real V2 codec.
 // Single explicit target shape counts; prepare remains free of native effects.
@@ -94,7 +101,7 @@ func TestOpenCodePrepareExplicitV2SelectsAvailableCodec(t *testing.T) {
 	if err != nil || handle == nil || calls != 1 || observed.Version != "2.0.21" || handoffs != 0 {
 		t.Fatalf("target: handle=%v calls=%d evidence=%+v err=%v", handle, calls, observed, err)
 	}
-	defer handle.Close()
+	defer closeOpenCodeTestHandle(t, handle)
 	if handle.Plan().OpenCodeProfile.ConfigDialect != opencodehost.DialectV2 {
 		t.Fatal("explicit profile not V2")
 	}
