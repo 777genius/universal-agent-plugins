@@ -231,3 +231,41 @@ func TestOpenCodeRevalidationRejectsRootRetargetDuringProbe(t *testing.T) {
 		t.Fatalf("retargeted profile mutated: %v, %v", entries, err)
 	}
 }
+
+// Empty desired declarations must not erase old cleanup effects or bypass the
+// closed receipt-kind and codec fences. No host can authorize cleanup offline.
+func TestOpenCodeEmptyDesiredCleanupRetainsAuthorityAndCodecFences(t *testing.T) {
+	registry, err := clients.NewRegistry(opencode.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparer := NewOpenCodeClientPreparation(registry)
+	probes := 0
+	preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+		probes++
+		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "2.0.21", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture-native"}}, nil
+	}
+	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: t.TempDir()}
+	for _, kind := range []string{nativeconfig.OpenCodeMCPObjectKind, "opencode_global_skill_directory"} {
+		previous := []domain.NativeObjectOwnership{{Kind: kind}}
+		if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, previous, "", true); err == nil {
+			t.Fatalf("offline cleanup %s lost authority fence", kind)
+		}
+		if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, previous, "", false); err == nil {
+			t.Fatalf("cleanup %s authorized without explicit executable", kind)
+		}
+	}
+	if probes != 0 {
+		t.Fatalf("cleanup probed without explicit target: %d", probes)
+	}
+	client.ExecutablePath = filepath.Join(t.TempDir(), "explicit-native")
+	previous := []domain.NativeObjectOwnership{{Kind: nativeconfig.OpenCodeMCPObjectKind}}
+	if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, previous, "", false); !errors.Is(err, nativeconfig.ErrNativeMigrationRequired) {
+		t.Fatalf("old V1 cleanup accepted V2 codec: %v", err)
+	}
+	for _, inert := range []bool{false, true} {
+		if _, err := preparer.PrepareClient(t.Context(), domain.PackageEnvelope{}, client, []domain.NativeObjectOwnership{{Kind: "opencode_unknown_receipt"}}, "", inert); err == nil {
+			t.Fatal("unknown owned receipt disappeared through zero-effect shortcut")
+		}
+	}
+}

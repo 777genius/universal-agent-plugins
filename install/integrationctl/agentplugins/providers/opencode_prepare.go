@@ -42,11 +42,11 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 	if !ok || !consumer.UsesOpenCodeHostProfile() {
 		return client.OpenCodeHost, nil
 	}
-	if err := validatePreviousOpenCodeKinds(previous); err != nil {
+	skills, transports := desiredOpenCodeNativeRequirements(envelope, client.ClientID)
+	oldSkills, oldConfig, err := previousOpenCodeNativeRequirements(consumer, previous)
+	if err != nil {
 		return nil, err
 	}
-	skills, transports := desiredOpenCodeNativeRequirements(envelope, client.ClientID)
-	oldSkills, oldConfig := consumer.OwnedOpenCodeNativeRequirements(previous)
 	// With neither selected supported effects nor owned cleanup, the native
 	// projector is inert: no dialect, host probe or config selection is needed.
 	if !skills && len(transports) == 0 && !oldSkills && !oldConfig {
@@ -145,15 +145,6 @@ func (p *OpenCodeClientPreparation) prepareOpenCodeTarget(ctx context.Context, c
 	return &preparedOpenCodeClient{NativePrepared: opencodehost.NewNativePrepared(executable, root, environment, evidence.VersionEvidence, profile, selections), namespace: client.ProfileNamespace, authority: domain.CloneProfileAuthority(client.ProfileAuthority), skills: skills, transports: slices.Clone(transports)}, nil
 }
 
-func validatePreviousOpenCodeKinds(previous []domain.NativeObjectOwnership) error {
-	for _, object := range previous {
-		if _, _, err := nativeconfig.OpenCodeCodecForKind(object.Kind); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func validatePreviousOpenCodeCodec(host domain.OpenCodeHostAuthority, previous []domain.NativeObjectOwnership) error {
 	codec, err := clients.DesiredOpenCodeCodec(host)
 	if err != nil {
@@ -201,4 +192,16 @@ func (host *preparedOpenCodeClient) ValidateNative(skills bool, transports []str
 		}
 	}
 	return host.NativePrepared.ValidateNative(skills, transports)
+}
+
+// Validate claimed native kinds before the zero-effect shortcut. An unknown
+// receipt must not disappear merely because it has no desired replacement.
+func previousOpenCodeNativeRequirements(consumer clients.OpenCodeHostProfileConsumer, previous []domain.NativeObjectOwnership) (bool, bool, error) {
+	for _, object := range previous {
+		if _, _, err := nativeconfig.OpenCodeCodecForKind(object.Kind); err != nil {
+			return false, false, err
+		}
+	}
+	skills, config := consumer.OwnedOpenCodeNativeRequirements(previous)
+	return skills, config, nil
 }
