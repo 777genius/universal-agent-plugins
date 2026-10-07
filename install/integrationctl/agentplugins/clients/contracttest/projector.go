@@ -42,7 +42,7 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 	if err := os.WriteFile(outside, []byte("keep\n"), 0o644); err != nil {
 		return []string{fmt.Sprintf("write outside marker: %v", err)}
 	}
-	input := projectorInput(adapter.ID(), root, staging)
+	input := projectorInput(adapter, root, staging)
 	before := listPaths(root)
 	first, err := projector.Project(context.Background(), input)
 	if err != nil {
@@ -112,7 +112,7 @@ func listPaths(root string) map[string]struct{} {
 	return paths
 }
 
-func projectorInput(id domain.ClientID, root, staging string) clients.ProjectionInput {
+func projectorInput(adapter clients.Adapter, root, staging string) clients.ProjectionInput {
 	anchor := filepath.Join(root, "anchor")
 	target := filepath.Join(anchor, "root")
 	active := filepath.Join(target, "demo-0123456789ab")
@@ -121,15 +121,20 @@ func projectorInput(id domain.ClientID, root, staging string) clients.Projection
 	_ = os.MkdirAll(target, 0o700)
 	_ = os.MkdirAll(config, 0o700)
 	_ = os.MkdirAll(data, 0o700)
+	var host domain.OpenCodeHostAuthority
+	if consumer, ok := adapter.(clients.OpenCodeHostProfileConsumer); ok && consumer.UsesOpenCodeHostProfile() {
+		host = OpenCodeV1Host{}
+	}
 	return clients.ProjectionInput{
 		StagingPath: staging,
 		Envelope:    projectorEnvelope(),
 		Plan: domain.DeliveryPlan{
-			ClientID: id, Scope: domain.ScopeUser, Status: domain.PlanReady,
+			ClientID: adapter.ID(), Scope: domain.ScopeUser, Status: domain.PlanReady,
 			PackageMode: domain.PackageProjection, Activation: domain.ActivationPrepared,
 			PhysicalArtifactID: "demo-0123456789ab",
 			DeclaredName:       "demo", DeclaredVersion: "1.0.0",
 			NativeRegistryRoot: config,
+			OpenCodeHost:       host,
 			TargetAnchor:       anchor, TargetRoot: target, ActivePath: active,
 			Components: []domain.ComponentDecision{
 				{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportProjected},

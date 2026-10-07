@@ -491,6 +491,7 @@ func TestNativeIdentityOpenCodeReadsGlobalSkillAndMCPRegistry(t *testing.T) {
 	}
 	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
 	plan.NativeRegistryRoot = configRoot
+	plan.OpenCodeHost = openCodeV1FixtureProfile{}
 	plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
 	observation, err := (testObserver(NativeIdentityObserver{})).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientOpenCode}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityUnmanaged {

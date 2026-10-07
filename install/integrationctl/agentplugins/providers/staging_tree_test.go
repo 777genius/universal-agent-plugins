@@ -27,6 +27,9 @@ func TestStagerGoldenTreesAcrossClients(t *testing.T) {
 			t.Parallel()
 			envelope := stagingEnvelope(t)
 			plan := stagingPlan(t, definition.ID, domain.PackageProjection)
+			if definition.ID == domain.ClientOpenCode {
+				plan.OpenCodeHost = openCodeV1FixtureProfile{}
+			}
 			delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "golden", domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)

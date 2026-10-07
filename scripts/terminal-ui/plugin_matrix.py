@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Bounded real-CLI plugin fixture lane; no build, client launch, or external MCP.
+"""Bounded real-CLI plugin fixture lane; no real client launch or external MCP.
+OpenCode uses a compiled version-only native contract fixture.
 
 Run with --binary PATH --artifacts NEW_DIRECTORY. Failures stay failures. The
 synthetic scanner inherited from harness is UI evidence, not security evidence.
@@ -22,7 +23,7 @@ import tempfile
 import threading
 import time
 
-from harness import Fixture, Session, SELECT, CONFIRM, LIFECYCLE, check, clean, hashes
+from harness import Fixture, Session, SELECT, CONFIRM, LIFECYCLE, check, clean, hashes, prepare_opencode_fixture
 
 SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/'
 KINDS = ('empty', 'skill', 'stdio-missing', 'http-auth', 'mixed', 'malformed',
@@ -144,10 +145,10 @@ def seed_ten_clients(fixture):
     for path in ten_client_paths(fixture, platform.system()):
         path.mkdir(parents=True, exist_ok=True)
     # Claude selection requires its CLI surface, not only its config directory.
-    for name in ('copilot', 'code', 'kiro-cli', 'claude', 'gemini', 'opencode', 'windsurf'):
+    for name in ('copilot', 'code', 'kiro-cli', 'claude', 'gemini', 'windsurf'):
         shutil.copy2(fixture.bin / 'cursor', fixture.bin / name)
+    prepare_opencode_fixture(fixture)
     fixture.before = fixture.mutations()
-
 
 def choices(raw):
     # Only actual checkbox rows, not arbitrary client words in diagnostics.

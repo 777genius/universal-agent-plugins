@@ -95,7 +95,7 @@ func Run(ctx context.Context, o Options) (ev Evidence, err error) {
 	if o.Fixture != "" {
 		arguments, err = fixture(root, o.Fixture)
 		if err != nil {
-			return ev, err
+			return ev, contextResult(ctx, err)
 		}
 	}
 	switch server.Type {
@@ -105,25 +105,31 @@ func Run(ctx context.Context, o Options) (ev Evidence, err error) {
 	case "streamable-http":
 		ev.Transport = "streamable_http"
 		if !o.AllowNetwork {
-			return ev, fail("runtime_network_opt_in_required")
+			return ev, contextResult(ctx, fail("runtime_network_opt_in_required"))
 		}
 		err = runHTTP(ctx, server, o.Tool, arguments, &ev)
 	default:
 		err = fail("runtime_transport_unsupported")
 	}
+	return ev, contextResult(ctx, err)
+}
+
+// Classify the operation before its private-root cleanup. Cleanup failures are
+// joined by the owner afterward and retain their primary position.
+func contextResult(ctx context.Context, err error) error {
 	switch ctx.Err() {
 	case context.DeadlineExceeded:
-		return ev, errors.Join(fail("runtime_deadline_exceeded"), context.DeadlineExceeded, err)
+		return errors.Join(fail("runtime_deadline_exceeded"), context.DeadlineExceeded, err)
 	case context.Canceled:
-		return ev, errors.Join(fail("runtime_canceled"), context.Canceled, err)
+		return errors.Join(fail("runtime_canceled"), context.Canceled, err)
 	}
-	return ev, err
+	return err
 }
 
 func privateCopy(ctx context.Context, o Options) (string, string, func() error, error) {
 	base, err := os.MkdirTemp(o.Scratch, "author-mcp-")
 	if err != nil {
-		return "", "", nil, fail("runtime_sandbox_unavailable")
+		return "", "", nil, contextResult(ctx, fail("runtime_sandbox_unavailable"))
 	}
 	owned := true
 	removeAll := o.removeAll
@@ -138,6 +144,7 @@ func privateCopy(ctx context.Context, o Options) (string, string, func() error, 
 		return removeAll(base)
 	}
 	bad := func(e error) (string, string, func() error, error) {
+		e = contextResult(ctx, e)
 		if cleanupErr := cleanup(); cleanupErr != nil {
 			return "", "", nil, errors.Join(fail("runtime_cleanup_failed"), e, cleanupErr)
 		}
@@ -223,7 +230,18 @@ func privateCopy(ctx context.Context, o Options) (string, string, func() error, 
 		}
 	}
 	copyProject, err := o.Projects.Read(ctx, runtimeRoot)
-	if err != nil || copyProject.Input.Identity.TreeDigest == "" || copyProject.Input.Identity.TreeDigest != o.Project.Input.Identity.TreeDigest {
+	if err != nil {
+		// Read errors may contain private paths. Preserve cancellation identity
+		// using only its canonical sentinel, and redact genuine source failures.
+		if errors.Is(err, context.DeadlineExceeded) {
+			return bad(context.DeadlineExceeded)
+		}
+		if errors.Is(err, context.Canceled) {
+			return bad(context.Canceled)
+		}
+		return bad(fail("runtime_source_changed"))
+	}
+	if copyProject.Input.Identity.TreeDigest == "" || copyProject.Input.Identity.TreeDigest != o.Project.Input.Identity.TreeDigest {
 		return bad(fail("runtime_source_changed"))
 	}
 	return runtimeRoot, data, cleanup, nil

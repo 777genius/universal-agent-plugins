@@ -143,7 +143,7 @@ func (session *switchSession) runGroup() error {
 		return err
 	}
 	service := lifecycleService(session.app, session.detected)
-	planned, err := service.SwitchGroup(session.ctx, usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true, Switch: true})
+	planned, err := service.SwitchGroup(session.ctx, usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true, OnlinePreview: !session.opts.dryRun, Switch: true})
 	session.output.Group = &planned
 	session.output.PluginData = planned.PluginData
 	session.output.Targets = switchTargets(planned)
@@ -156,6 +156,7 @@ func (session *switchSession) runGroup() error {
 	if err := session.renderHumanPlan(); err != nil {
 		return err
 	}
+	retainPreparedClients(inputs, planned.PreparedClients)
 	applied, err := service.SwitchGroup(session.ctx, usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, Confirmed: true, Switch: true})
 	session.output.DryRun, session.output.Group = false, &applied
 	session.output.PluginData = applied.PluginData

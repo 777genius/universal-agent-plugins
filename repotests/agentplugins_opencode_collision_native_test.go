@@ -36,8 +36,8 @@ func TestAgentpluginsOpenCodeNativeToolCollision(t *testing.T) {
 				t.Fatal(err)
 			}
 			measured := openCodeVersionString(t, f, client)
-			if measured != "1.18.29" {
-				t.Fatalf("collision contract pinned to 1.18.29, got %s", measured)
+			if measured != "1.18.34" {
+				t.Fatalf("collision contract pinned to 1.18.34, got %s", measured)
 			}
 			nonce := filepath.Base(f.Root)
 			var mu sync.Mutex

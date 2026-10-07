@@ -16,6 +16,13 @@ var version = "1.18.33"
 var mode = "ok"
 
 func main() {
+	if mode == "version-only" {
+		if len(os.Args) != 2 || os.Args[1] != "--version" {
+			os.Exit(97)
+		}
+		fmt.Println(version)
+		return
+	}
 	executable, _ := os.Executable()
 	cwd, _ := os.Getwd()
 	input, _ := io.ReadAll(os.Stdin)

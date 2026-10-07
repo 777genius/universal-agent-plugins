@@ -15,9 +15,17 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
 func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataRoot string) error {
+	empty, err := emptyOpenCodeNativePlan(envelope, plan)
+	if err != nil {
+		return err
+	}
+	if empty {
+		return rejectOpenCodeProjectionCollision(root)
+	}
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
 	if configRoot == "" || !filepath.IsAbs(configRoot) {
 		return fmt.Errorf("OpenCode config root is unavailable")
@@ -27,8 +35,17 @@ func ProjectOpenCodeNative(root string, envelope domain.PackageEnvelope, plan do
 	if err != nil {
 		return err
 	}
-	projection := OpenCodeProjection{Version: 1, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
+	codec, err := DesiredOpenCodeCodec(plan.OpenCodeHost)
+	if err != nil {
+		return err
+	}
+	dialect := opencodehost.DialectV1
+	if codec == nativeconfig.CodecOpenCodeV2 {
+		dialect = opencodehost.DialectV2
+	}
+	projection := OpenCodeProjection{Version: 2, Dialect: dialect, ConfigPath: selected, ConfigJSON: jsonPath, ConfigJSONC: jsoncPath,
 		PackageRoot: plan.ActivePath, DataRoot: dataRoot, MCPServers: map[string]nativeconfig.Server{}, ResolvedCWD: map[string]bool{}}
+
 	if err := projectOpenCodeMCPServers(&projection, root, envelope, plan, dataRoot); err != nil {
 		return err
 	}
@@ -74,13 +91,21 @@ func writeOpenCodeProjection(root string, projection OpenCodeProjection) error {
 	if err != nil {
 		return err
 	}
-	projectionPath := filepath.Join(root, OpenCodeProjectionFile)
-	if _, err := os.Lstat(projectionPath); err == nil {
+	if err := rejectOpenCodeProjectionCollision(root); err != nil {
+		return err
+	}
+	return atomicfile.Write(filepath.Join(root, OpenCodeProjectionFile), append(body, '\n'), 0o600)
+}
+
+// Reserved operational metadata cannot come from the portable package, even
+// when this plan has no native effects and therefore never selects a codec.
+func rejectOpenCodeProjectionCollision(root string) error {
+	if _, err := os.Lstat(filepath.Join(root, OpenCodeProjectionFile)); err == nil {
 		return fmt.Errorf("package contains reserved OpenCode projection path %q", OpenCodeProjectionFile)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	return atomicfile.Write(projectionPath, append(body, '\n'), 0o600)
+	return nil
 }
 
 func NeutralOpenCodeServer(server domain.MCPServer) (nativeconfig.Server, error) {
@@ -229,6 +254,9 @@ func openCodeStringMap(value any) (map[string]string, error) {
 }
 
 func BuildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+	if empty, err := emptyOpenCodeNativePlan(envelope, plan); err != nil || empty {
+		return nil, err
+	}
 	projection, err := ReadOpenCodeProjection(stagingRoot)
 	if err != nil {
 		return nil, err
@@ -247,14 +275,18 @@ func BuildOpenCodeNativeObjects(stagingRoot string, envelope domain.PackageEnvel
 }
 
 func openCodeMCPOwnerships(projection OpenCodeProjection) ([]domain.NativeObjectOwnership, error) {
+	codec, err := projectionCodec(projection)
+	if err != nil {
+		return nil, err
+	}
 	objects := make([]domain.NativeObjectOwnership, 0, len(projection.MCPServers))
 	placeholders := nativeconfig.Placeholders{PackageRoot: projection.PackageRoot, DataRoot: projection.DataRoot}
 	for name, server := range projection.MCPServers {
-		receipt, err := nativeconfig.DesiredReceipt(projection.ConfigPath, nativeconfig.CodecOpenCode, name, server, placeholders)
+		receipt, err := nativeconfig.DesiredReceipt(projection.ConfigPath, codec, name, server, placeholders)
 		if err != nil {
 			return nil, err
 		}
-		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "opencode-mcp:" + name, Kind: OpenCodeMCPObjectKind,
+		objects = append(objects, domain.NativeObjectOwnership{ObjectID: "opencode-mcp:" + name, Kind: openCodeMCPKind(codec),
 			LogicalName: name, Path: receipt.Path, ManagedDigest: receipt.Digest, ProtectionClass: "managed"})
 	}
 	return objects, nil
@@ -301,4 +333,27 @@ func openCodeSkillOwnership(stagingRoot string, envelope domain.PackageEnvelope,
 	}
 	return domain.NativeObjectOwnership{ObjectID: "opencode-skill:" + component.Name, Kind: openCodeSkillKind,
 		LogicalName: component.Name, Path: target, SourceRelative: filepath.ToSlash(filepath.Dir(relative)), ManagedDigest: digest, ProtectionClass: "managed"}, nil
+}
+
+// No desired native objects require neither a config selection nor a dialect.
+// Stored cleanup stays in the native reconciler and never uses this shortcut.
+func hasPlannedOpenCodeNative(plan domain.DeliveryPlan) bool {
+	for _, component := range plan.Components {
+		if component.Support != domain.SupportUnsupported && (component.Kind == domain.ComponentSkill || component.Kind == domain.ComponentMCPServer) {
+			return true
+		}
+	}
+	return false
+}
+
+func emptyOpenCodeNativePlan(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) (bool, error) {
+	if hasPlannedOpenCodeNative(plan) {
+		return false, nil
+	}
+	// An omitted plan for a native package is incomplete evidence, unlike an
+	// explicit plan excluding unsupported components or a metadata-only package.
+	if len(plan.Components) == 0 && (len(envelope.Skills) > 0 || len(envelope.MCP.Servers) > 0) {
+		return false, fmt.Errorf("OpenCode desired native component plan is required")
+	}
+	return true, nil
 }

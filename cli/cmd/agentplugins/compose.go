@@ -109,7 +109,8 @@ func newManagedStager(clientRegistry *clients.Registry, paths pathpolicy.Policy,
 
 func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths pathpolicy.Policy, clientRegistry *clients.Registry, stager providers.Stager, runner processadapter.OS, planner clientplanner.Planner, directoryManager dirswap.Manager, mutationLock processlock.Lock, nativeKernel nativeconfig.Kernel) usecase.Service {
 	return usecase.Service{
-		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
+		ClientPreparation: providers.NewOpenCodeClientPreparation(clientRegistry),
+		StateStore:        v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
 		Activator: providers.Activator{Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		Lock:      mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
 		NativeObserver:     providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},

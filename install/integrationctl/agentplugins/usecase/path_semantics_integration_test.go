@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -20,7 +21,7 @@ func TestPortableDotPathsInstallAndExactRepair(t *testing.T) {
 		t.Run(cwd, func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
 			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
-			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
+			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, OpenCodeHost: contracttest.OpenCodeV1Host{}, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
 			input := addInput(t, client, "https://example.test/portable-dot-paths")
 			root := input.Envelope.SnapshotRoot
 			for _, dir := range []string{"bin", "data"} {
