@@ -182,6 +182,9 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
       "Verification": "installation_verified"
@@ -199,6 +202,9 @@
       "LocalActions": [
         "enable the managed plugin in Kimi Code"
       ],
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "retry client activation and verify client visibility"

@@ -210,6 +210,9 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "verify that the managed plugin is installed and enabled in Grok Build"
@@ -227,6 +230,9 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."

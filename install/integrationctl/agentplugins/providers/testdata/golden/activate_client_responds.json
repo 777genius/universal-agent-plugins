@@ -206,6 +206,9 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": null,
       "Verification": "installation_verified"
@@ -221,6 +224,9 @@
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
         "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."

@@ -143,12 +143,18 @@ func TestGrokListingProcessFixture(t *testing.T) {
 				os.Exit(82)
 			}
 		}
-		fmt.Fprint(os.Stdout, "[]")
+		if _, err := fmt.Fprint(os.Stdout, "[]"); err != nil {
+			os.Exit(82)
+		}
 	case "stall":
-		fmt.Fprint(os.Stdout, "[]")
+		if _, err := fmt.Fprint(os.Stdout, "[]"); err != nil {
+			os.Exit(82)
+		}
 		time.Sleep(17 * time.Second)
 	case "valid":
-		fmt.Fprint(os.Stdout, `[{"name":"demo","status":"installed","source":"/fixture/managed/demo","version":"2.0.0"}]`)
+		if _, err := fmt.Fprint(os.Stdout, `[{"name":"demo","status":"installed","source":"/fixture/managed/demo","version":"2.0.0"}]`); err != nil {
+			os.Exit(82)
+		}
 	default:
 		os.Exit(83)
 	}

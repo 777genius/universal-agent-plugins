@@ -185,8 +185,12 @@
   {
     "ClientID": "grok",
     "ConfigRoot": "\u003chome\u003e/.grok",
+    "DetectionError": null,
     "DisplayName": "Grok Build",
     "ExecutablePath": "\u003chome\u003e/bin/grok",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -205,8 +209,12 @@
   {
     "ClientID": "kimi",
     "ConfigRoot": "\u003chome\u003e/.kimi-code",
+    "DetectionError": null,
     "DisplayName": "Kimi Code",
     "ExecutablePath": "\u003chome\u003e/bin/kimi",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
