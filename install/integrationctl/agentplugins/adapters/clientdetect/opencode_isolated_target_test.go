@@ -174,7 +174,11 @@ func TestIsolatedOpenCodeTargetFailureCleanupAndReaping(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer process.Release()
+				defer func() {
+					if err := process.Release(); err != nil {
+						t.Errorf("release process handle: %v", err)
+					}
+				}()
 				if err := process.Signal(syscall.Signal(0)); err == nil {
 					t.Fatal("canceled probe returned before child was reaped")
 				}
