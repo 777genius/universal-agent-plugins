@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +64,62 @@ func runVersionProcess(ctx context.Context, executable string, environment []str
 		return "", "", err
 	}
 	defer func() { _ = os.RemoveAll(isolatedDir) }()
+	return runVersionProcessInDirectory(ctx, executable, environment, isolatedDir)
+}
+
+func runIsolatedOpenCodeVersion(ctx context.Context, executable string, environment []string) (string, string, error) {
+	isolatedDir, err := os.MkdirTemp("", "agentplugins-opencode-probe-")
+	if err != nil {
+		return "", "", err
+	}
+	defer func(createdDir string) { _ = os.RemoveAll(createdDir) }(isolatedDir)
+	isolatedDir, err = filepath.Abs(isolatedDir)
+	if err != nil {
+		return "", "", err
+	}
+	isolatedDir, err = filepath.EvalSymlinks(isolatedDir)
+	if err != nil {
+		return "", "", err
+	}
+	env := append([]string{}, environment...)
+	for _, root := range []struct{ key, directory string }{
+		{"HOME", "home"},
+		{"XDG_CONFIG_HOME", "config"},
+		{"XDG_CACHE_HOME", "cache"},
+		{"XDG_DATA_HOME", "data"},
+		{"XDG_STATE_HOME", "state"},
+		{"XDG_RUNTIME_DIR", "runtime"},
+		{"TMPDIR", "tmp"},
+	} {
+		path := filepath.Join(isolatedDir, root.directory)
+		if err := os.Mkdir(path, 0700); err != nil {
+			return "", "", err
+		}
+		env = append(env, root.key+"="+path)
+	}
+	env = append(env, "TMP="+filepath.Join(isolatedDir, "tmp"), "TEMP="+filepath.Join(isolatedDir, "tmp"))
+	if runtime.GOOS == "windows" {
+		env = append(env,
+			"USERPROFILE="+filepath.Join(isolatedDir, "home"),
+			"APPDATA="+filepath.Join(isolatedDir, "config"),
+			"LOCALAPPDATA="+filepath.Join(isolatedDir, "data"))
+	}
+	config := filepath.Join(isolatedDir, "opencode.json")
+	if err := os.WriteFile(config, []byte("{}\n"), 0600); err != nil {
+		return "", "", err
+	}
+	// OpenCode v2.0.21 server-process.ts and services/updater.ts accept these
+	// flags; the CLI config overlay is read by config/config.ts at startup.
+	env = append(env, "OPENCODE_CONFIG="+config,
+		"OPENCODE_CONFIG_CONTENT={}", "OPENCODE_CLI_CONFIG_CONTENT={}",
+		"OPENCODE_DISABLE_PROJECT_CONFIG=1",
+		"OPENCODE_DISABLE_MODELS_FETCH=1", "OPENCODE_DISABLE_AUTOUPDATE=1")
+	return runVersionProcessInDirectory(ctx, executable, env, isolatedDir)
+}
+
+// Both probe modes share bounded streams and synchronous Run/Wait. In
+// particular, context cancellation reaps the process before private roots go.
+func runVersionProcessInDirectory(ctx context.Context, executable string, environment []string, isolatedDir string) (string, string, error) {
 	output := &versionOutput{remaining: maximumVersionOutput}
 	command := exec.CommandContext(ctx, executable, "--version")
 	command.Dir = isolatedDir
@@ -70,7 +128,7 @@ func runVersionProcess(ctx context.Context, executable string, environment []str
 	command.Stdout = versionWriter{output: output}
 	command.Stderr = versionWriter{output: output, stderr: true}
 	command.WaitDelay = 100 * time.Millisecond
-	err = command.Run()
+	err := command.Run()
 	if output.exceeded {
 		err = errVersionOutputLimit
 	}
