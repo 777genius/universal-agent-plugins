@@ -23,7 +23,7 @@ func transitionFixture(t *testing.T, codec Codec, ext string, names ...string) (
 		body = "// foreign root comment\n" + body
 	}
 	mustWrite(t, path, body)
-	var requests []Request
+	requests := make([]Request, 0, len(names))
 	for _, name := range names {
 		requests = append(requests, Request{Paths: paths, Codec: codec, Action: ActionAdd, Name: name, Server: Server{Type: "remote", URL: "https://mcp.test/" + name}})
 	}
