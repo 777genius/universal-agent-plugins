@@ -307,6 +307,11 @@ func (kernel Kernel) writeVerified(file resolvedFile, _ Codec, next []byte) (res
 		return err
 	}
 	if err := kernel.compareAndSwap(file.path, file.body, file.exists, next, mode); err != nil {
+		if errors.Is(err, ErrConcurrentChange) {
+			// A rejected CAS never authorized our write, even if the competing
+			// writer chose next. Do not treat equal foreign output as rollback authority.
+			return fmt.Errorf("write native config: %w", err)
+		}
 		return kernel.rollbackIfStillOurs(file, next, restore, fmt.Errorf("write native config: %w", err))
 	}
 	if err := kernel.verifyAlternateAbsent(file); err != nil {
