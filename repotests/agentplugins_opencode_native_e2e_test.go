@@ -406,8 +406,8 @@ func openCodePrepareNative(t *testing.T, f *openCodeNativeFixture, client string
 	if expected := os.Getenv("AGENTPLUGINS_OPENCODE_SHA256"); len(expected) != 64 || openCodeSHA256(t, client) != expected {
 		t.Fatal("OpenCode binary SHA256 mismatch or missing pin")
 	}
-	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") != "1.18.29" {
-		t.Fatal("OpenCode requires version pin 1.18.29")
+	if os.Getenv("AGENTPLUGINS_OPENCODE_VERSION") != "1.18.34" {
+		t.Fatal("OpenCode requires version pin 1.18.34")
 	}
 	return nativeProvisionScanner(t, &nativeFixture{Root: f.Root})
 }

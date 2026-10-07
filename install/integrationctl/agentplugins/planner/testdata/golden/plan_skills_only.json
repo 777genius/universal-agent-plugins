@@ -474,7 +474,7 @@
       "LocalPreparationAuthorized": false,
       "NativeRegistryExecutable": "\u003croot\u003e/bin/opencode",
       "NativeRegistryRoot": "\u003croot\u003e/clients/opencode",
-      "OpenCodeHost": null,
+      "OpenCodeHost": {},
       "PackageMode": "prepared_package",
       "PersonalChatGPTPreparation": false,
       "PhysicalArtifactID": "demo-0123456789ab",
