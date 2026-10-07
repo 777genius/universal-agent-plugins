@@ -341,7 +341,7 @@ func TestNodeFixtureIntegrityAndStaticServer(t *testing.T) {
 	// Original generated fixture hashes pin every byte, including every transitive
 	// dependency and integrity value. No npm, Node, or SDK code is invoked here.
 	for name, b := range map[string][]byte{"package": nodePackage, "lock": nodeLock} {
-		want := map[string]string{"package": "dcf6025f7356e0f09aa50db14395f5efd33ff5934ab2404601eaba7b5f36e053", "lock": "7b78be85c710c53ae49fa43185956b587fded744ec68505df8dcd55c0e6ab3c5"}[name]
+		want := map[string]string{"package": "bc1cb14ace01508a578a216048d8258876ccfadead3e8b9536031bb232cc67bc", "lock": "a28b6fdc83360b5ec817eb25c30136253b667a65e6175dc1d603aefb6b45bf22"}[name]
 		if got := fmt.Sprintf("%x", sha256.Sum256(b)); got != want {
 			t.Fatalf("%s fixture changed: %s", name, got)
 		}
@@ -363,13 +363,13 @@ func TestNodeFixtureIntegrityAndStaticServer(t *testing.T) {
 				var doc map[string]any
 				json.Unmarshal(f.Bytes, &doc)
 				packages := doc["packages"].(map[string]any)
-				if doc["name"] != name || packages[""].(map[string]any)["name"] != name || packages["node_modules/@modelcontextprotocol/sdk"].(map[string]any)["version"] != "1.30.0" {
+				if doc["name"] != name || packages[""].(map[string]any)["name"] != name || packages["node_modules/@modelcontextprotocol/sdk"].(map[string]any)["version"] != "1.32.1" {
 					t.Fatal("lock identity/version mismatch")
 				}
 			case "package.json":
 				var doc map[string]any
 				json.Unmarshal(f.Bytes, &doc)
-				if doc["name"] != name || doc["scripts"] != nil || doc["engines"].(map[string]any)["node"] != ">=22" || doc["dependencies"].(map[string]any)["@modelcontextprotocol/sdk"] != "1.30.0" {
+				if doc["name"] != name || doc["scripts"] != nil || doc["engines"].(map[string]any)["node"] != ">=22" || doc["dependencies"].(map[string]any)["@modelcontextprotocol/sdk"] != "1.32.1" {
 					t.Fatal(doc)
 				}
 			case "src/server.mjs":

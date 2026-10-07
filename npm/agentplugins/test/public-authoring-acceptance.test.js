@@ -715,7 +715,7 @@ if (require.main === module) {
     }
     assert.throws(() => a.verifyResults(f.j, extraRoot), /only generated lane entries/);
     // Independently rendered scaffold fixtures and ordinary v1 framing pins.
-    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:5ed7b94d0370a785d970f9fc9872a42c1d60ccf9618e58f7af5640124536f4fc", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:60ff1c80d75b52635cd2b2db789348a5095e619aeeda7ea12bfee2cf03c82b87"};
+    const golden = {"skill": "sha256:383668d78b12a5ad868c895183a6d86b3441c6fedc833371250eecd8e40d9754", "mcp-remote": "sha256:2aeaa18441a1e66f8b31c9beee438f88205c9dd24a4d73dd3fc24ebfce50c005", "mcp-stdio": "sha256:e7828d33ef6a18c28bec8faffc1bbb69cf010b02e4680ced76449cd8ab98b0e5", "hybrid-remote": "sha256:66fa98b22663011eb77e8ffbe4b73f056eb94b2706fe9f9a58244d32e0935bdb", "hybrid-stdio": "sha256:4a1102e23f6f09549c9ba61d0b3efb6ea9dae4fe9deb7aab117d6137c3bdf6ca"};
     for (const lane of bridge.LANES) {
       const entries = f.evidence['projects.json'].agentplugins.entries;
       for (const cell of a.matrix) {
