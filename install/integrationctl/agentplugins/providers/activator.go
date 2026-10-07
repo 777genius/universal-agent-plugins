@@ -15,8 +15,9 @@ import (
 )
 
 type Activator struct {
-	Runner       ports.CommandRunner
-	NativeConfig *nativeconfig.Kernel
+	OpenCodeTransitions ports.OpenCodeTransitionRecorder
+	Runner              ports.CommandRunner
+	NativeConfig        *nativeconfig.Kernel
 	// Registry supplies the client adapters that own lifecycle. It is injected
 	// by the composition root and never defaulted to "every client".
 	Registry *clients.Registry
@@ -37,7 +38,7 @@ func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel) e
 }
 
 func (activator Activator) env() clients.Env {
-	return clients.Env{Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
+	return clients.Env{OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {

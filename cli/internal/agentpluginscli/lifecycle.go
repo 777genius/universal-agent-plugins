@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -26,6 +27,8 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			operationApp := app
+			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
 				if len(args) > 0 {
 					return fmt.Errorf("choose either one installation or --all")
@@ -33,7 +36,7 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 				if strings.TrimSpace(opts.target) != "" {
 					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
 				}
-				return runUpdateAll(cmd.Context(), cmd, app, opts)
+				return runUpdateAll(cmd.Context(), cmd, operationApp, opts)
 			}
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
@@ -50,7 +53,7 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runUpdateMany(cmd.Context(), cmd, app, opts, args[0], targets)
+			return runUpdateMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
 	command.Flags().BoolVar(&all, "all", false, "update every eligible tracked installation after one complete preflight")
@@ -65,6 +68,8 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			operationApp := app
+			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if strings.TrimSpace(opts.target) == "" {
 				targets, err := defaultInstalledBindingTargets(cmd.Context(), app, args[0], opts.scope, true)
 				if err != nil {
@@ -79,7 +84,7 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			_ = stdin
-			return runRepairMany(cmd.Context(), cmd, app, opts, args[0], targets)
+			return runRepairMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
 }
@@ -625,7 +630,7 @@ func lifecycleService(app App, detected map[domain.ClientID]domain.DetectedClien
 	if app.Targets != nil {
 		service.Targets = app.Targets
 	}
-	service.Detected = detected
+	service.Detected = maps.Clone(detected)
 	return service
 }
 

@@ -18,10 +18,16 @@ import (
 
 type Service struct {
 	ClientPreparation ClientPreparation
-	PhysicalAuthority ports.PhysicalProfileAuthority
-	PhysicalProfiles  []domain.DetectedClient
-	profileCheck      func() error
-	StateStore        transaction.StateStore
+	// OpenCodeHosts retains the explicit legacy preparation seam for callers
+	// without ClientPreparation; production composition uses ClientPreparation.
+	OpenCodeHosts ports.OpenCodeHostPreparer
+	// PrepareHostsForPreview authorizes online host preparation for a mutation's
+	// plan-first pass. Offline callers leave this false, including CLI --dry-run.
+	PrepareHostsForPreview bool
+	PhysicalAuthority      ports.PhysicalProfileAuthority
+	PhysicalProfiles       []domain.DetectedClient
+	profileCheck           func() error
+	StateStore             transaction.StateStore
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
@@ -144,11 +150,15 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := session.validateApplyInput(); err != nil {
 		return AddResult{}, err
 	}
+	prepared, err := session.service.prepareHostInputs(ctx, []AddInput{session.input}, session.input.DryRun)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.input = prepared[0]
 	if err := session.resolveInstallation(); err != nil {
 		return AddResult{}, err
 	}
-	var err error
-	service, frozen, err := service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
+	service, frozen, err := session.service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -175,6 +185,9 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	if session.input.DryRun {
 		return session.dryRunPath()
+	}
+	if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
+		return session.result, err
 	}
 	done, result, err := session.noChangeOrResume()
 	if done {

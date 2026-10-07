@@ -14,7 +14,7 @@ func validateTransition(req TransitionRequest) error {
 		(req.TargetCodec != CodecOpenCode && req.TargetCodec != CodecOpenCodeV2) || req.SourceCodec == req.TargetCodec {
 		return fmt.Errorf("native transition requires distinct OpenCode V1/V2 codecs")
 	}
-	if len(req.Entries) == 0 || req.PersistPrepared == nil {
+	if len(req.Entries) == 0 || len(req.Entries) > MaxTransitionEntries || req.PersistPrepared == nil {
 		return fmt.Errorf("native transition requires entries and durable PersistPrepared")
 	}
 	for i, entry := range req.Entries {
@@ -53,6 +53,9 @@ func (kernel Kernel) ApplyDialectTransition(req TransitionRequest) (receipts []R
 	}
 	prepared, next, receipts, err := prepareDialectTransition(file, req)
 	if err != nil {
+		return nil, err
+	}
+	if err := ValidatePreparedTransition(req.Paths, prepared); err != nil {
 		return nil, err
 	}
 	if err := req.PersistPrepared(prepared); err != nil {

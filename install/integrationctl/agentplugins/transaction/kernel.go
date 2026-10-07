@@ -135,6 +135,7 @@ type appliedGroupMutation struct {
 type Kernel struct {
 	Namespace         string
 	PhysicalAuthority ports.PhysicalProfileAuthority
+	NativeRecovery    ports.NativeTransitionRecovery
 	StateStore        StateStore
 	Directory         dirswap.Manager
 }
@@ -786,7 +787,12 @@ func (kernel Kernel) Recover(ctx context.Context) error {
 		state.Installations[installationIndex] = installation
 	}
 	if changed {
-		return kernel.StateStore.Save(state)
+		if err := kernel.StateStore.Save(state); err != nil {
+			return err
+		}
+	}
+	if kernel.NativeRecovery != nil {
+		return kernel.NativeRecovery.Recover(ctx)
 	}
 	return nil
 }
@@ -830,12 +836,28 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 // PersistStateDecision gives lifecycle state writes the same visibility and
 // durability handling as directory commit decisions.
 func (kernel Kernel) PersistStateDecision(before, desired domain.StateFileV2) error {
+	_, err := kernel.PersistStateDecisionWithDisposition(before, desired)
+	return err
+}
+
+// Load implements the small state authority consumed by native recovery.
+func (kernel Kernel) Load() (domain.StateFileV2, error) { return kernel.StateStore.Load() }
+
+// Only exact old visibility authorizes native restoration. Desired visibility
+// with unresolved durability deliberately remains Unknown.
+func (kernel Kernel) PersistStateDecisionWithDisposition(before, desired domain.StateFileV2) (domain.StateDecisionDisposition, error) {
 	beforeJSON, err := marshalComparableState(before)
 	if err != nil {
-		return err
+		return domain.StateDecisionUnknown, err
 	}
-	_, err = kernel.persistCommitDecision(desired, beforeJSON)
-	return err
+	old, err := kernel.persistCommitDecision(desired, beforeJSON)
+	if old {
+		return domain.StateDecisionOld, err
+	}
+	if err != nil {
+		return domain.StateDecisionUnknown, err
+	}
+	return domain.StateDecisionDesired, nil
 }
 
 func marshalComparableState(state domain.StateFileV2) ([]byte, error) {

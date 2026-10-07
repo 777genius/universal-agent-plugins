@@ -161,6 +161,10 @@ func TestOpenCodeZeroEffectPreparationNeverProbes(t *testing.T) {
 					t.Fatalf("zero effects acquired authority: %v %v", host, err)
 				}
 			}
+			unknown := []domain.NativeObjectOwnership{{Kind: "opencode_unknown"}}
+			if _, err := preparer.PrepareClient(t.Context(), envelope, client, unknown, "", true); err == nil {
+				t.Fatal("zero-effect preparation ignored unknown stored ownership")
+			}
 			if err := opencode.ProjectOpenCodeNative(root, envelope, plan, ""); err != nil {
 				t.Fatal(err)
 			}

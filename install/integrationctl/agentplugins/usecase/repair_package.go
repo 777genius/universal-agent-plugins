@@ -126,6 +126,10 @@ func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery
 }
 
 func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelivery, beforeDigest string, verifiedState domain.ActivationOutcome) (AddResult, error) {
+	if err := session.service.revalidateHost(session.ctx, session.input.Client); err != nil {
+		return session.result, err
+	}
+
 	if session.service.ClientPreparation != nil {
 		if err := session.service.ClientPreparation.RevalidateClient(session.ctx, session.input.Client, session.plan); err != nil {
 			return session.result, fmt.Errorf("prepared host changed before repair commit: %w", err)

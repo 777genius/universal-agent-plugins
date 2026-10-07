@@ -271,7 +271,7 @@ func (session *applySession) noChangeOrResume() (bool, AddResult, error) {
 		if err := session.service.observeNativeIdentity(session.ctx, session.input.Client, session.plan, session.managedBinding); err != nil {
 			return true, session.result, err
 		}
-		if !requiresComponentRemoval(session.plan) && packageRevisionMatches(previousClient.PackageRevision, session.input.Envelope) && previousClient.PackageRevision.ResolvedRevision == session.input.Envelope.Source.ResolvedRevision {
+		if !nativeDialectProjectionChanged(previousClient, session.plan) && !requiresComponentRemoval(session.plan) && packageRevisionMatches(previousClient.PackageRevision, session.input.Envelope) && previousClient.PackageRevision.ResolvedRevision == session.input.Envelope.Source.ResolvedRevision {
 			return session.finishExistingLifecycle(previousClient, "")
 		}
 	}

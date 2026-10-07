@@ -290,8 +290,9 @@ func TestOpenCodeV2FacadeRefusesForeignAndEditedOwnership(t *testing.T) {
 }
 
 // Same logical ObjectIDs cannot turn codec changes into two ordinary Apply
-// calls. Even deletion of the final declaration must retain this early fence.
-func TestOpenCodeFacadeCrossDialectRequiresMigration(t *testing.T) {
+// calls. The closed same-ID transition now succeeds; deleting all declarations
+// retains the existing cross-profile fence.
+func TestOpenCodeFacadeCrossDialectClosedTransition(t *testing.T) {
 	for _, versions := range [][2]string{{"1.18.34", "2.0.21"}, {"2.0.21", "1.18.34"}} {
 		for _, empty := range []bool{false, true} {
 			t.Run(versions[0]+"-to-"+versions[1]+map[bool]string{true: "-empty"}[empty], func(t *testing.T) {
@@ -322,6 +323,28 @@ func TestOpenCodeFacadeCrossDialectRequiresMigration(t *testing.T) {
 				}
 				before := v2EffectSnapshot(t, engine)
 				handle, err := engine.Prepare(testCtx(t), req)
+				if !empty {
+					if err != nil {
+						t.Fatal(err)
+					}
+					if _, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true}); err != nil {
+						t.Fatal(err)
+					}
+					closeOpenCodeTestHandle(t, handle)
+					state, err := engine.store.Load()
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, b := range state.Installations[0].Clients {
+						if b.NativeActivationAttempt != "" {
+							t.Fatal("transition attempt retained")
+						}
+						if err := opencode.VerifyOpenCodeNativeObjects(req.ClientConfigRoot, b.TargetLocator, b.NativeObjects, nativeconfig.New(), false); err != nil {
+							t.Fatal(err)
+						}
+					}
+					return
+				}
 				if handle != nil {
 					closeOpenCodeTestHandle(t, handle)
 				}

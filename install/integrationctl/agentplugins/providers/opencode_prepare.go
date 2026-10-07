@@ -56,14 +56,21 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 		return offlineOpenCodeHost(client.OpenCodeHost, skills, transports)
 	}
 	if frozen, ok := client.OpenCodeHost.(*preparedOpenCodeClient); ok {
+		if len(transports) == 0 {
+			if err := validatePreviousOpenCodeCodec(frozen, previous); err != nil {
+				return nil, err
+			}
+		}
 		return p.reuseOpenCodeHost(ctx, client, frozen, executable, skills || oldSkills, transports)
 	}
 	host, err := p.prepareOpenCodeTarget(ctx, client, executable, skills || oldSkills, transports)
 	if err != nil {
 		return nil, err
 	}
-	if err := validatePreviousOpenCodeCodec(host, previous); err != nil {
-		return nil, err
+	if len(transports) == 0 {
+		if err := validatePreviousOpenCodeCodec(host, previous); err != nil {
+			return nil, err
+		}
 	}
 	return host, nil
 }
