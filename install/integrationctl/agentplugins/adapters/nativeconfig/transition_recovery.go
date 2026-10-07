@@ -221,17 +221,17 @@ func (kernel Kernel) restoreTransitionPreimage(file resolvedFile, p PreparedTran
 
 // ReadTransitionFileNoFollow reuses the native no-follow opener for private
 // bounded journal/projection reads. Callers also enforce contained ancestors.
-func ReadTransitionFileNoFollow(path string, limit int64) ([]byte, error) {
+func ReadTransitionFileNoFollow(path string, limit int64) (body []byte, resultErr error) {
 	file, err := openNoFollow(path)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() > limit {
 		return nil, fmt.Errorf("invalid bounded transition file")
 	}
-	body, err := io.ReadAll(io.LimitReader(file, limit+1))
+	body, err = io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return nil, err
 	}

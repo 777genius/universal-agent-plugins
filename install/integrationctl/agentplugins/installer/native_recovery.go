@@ -31,7 +31,7 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
 			if binding.PendingNativeIntent == nil {
-				if binding.NativeActivationAttempt != "" && !(binding.ClientID == "opencode" && binding.SelectedDelivery.IsZero()) {
+				if binding.NativeActivationAttempt != "" && (binding.ClientID != "opencode" || !binding.SelectedDelivery.IsZero()) {
 					return out, fmt.Errorf("native attempt has no persisted intent; retain uncertainty")
 				}
 				continue

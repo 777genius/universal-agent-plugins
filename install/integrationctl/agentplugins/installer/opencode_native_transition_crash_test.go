@@ -42,7 +42,7 @@ func (s *nativeRecoveryDriftStore) Load() (domain.StateFileV2, error) {
 			s.drifted = true
 			// Change valid installation metadata outside native binding authority.
 			state.Installations[0].UpdatedAt = foreignRecoveryUpdatedAt
-			if err := s.StateStore.Save(state); err != nil {
+			if err := s.Save(state); err != nil {
 				return state, err
 			}
 			break
@@ -97,7 +97,7 @@ func TestOpenCodeNativeFacadeCrashRecovery(t *testing.T) {
 				t.Fatal(err)
 			}
 			result, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
-			first.Close()
+			closeOpenCodeTestHandle(t, first)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -106,7 +106,7 @@ func TestOpenCodeNativeFacadeCrashRecovery(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer next.Close()
+			defer closeOpenCodeTestHandle(t, next)
 			engine.store = nativeCrashSave{StateStore: engine.store, after: after}
 			func() {
 				defer func() {

@@ -116,8 +116,8 @@ func attachHostBridge(t *testing.T, service *Service, probe hostprep.Probe) *hos
 	service.Activator = hostBoundaryActivator{service.Activator, trace}
 	return trace
 }
-func bridgeEvidence(version, identity string) clientdetect.ProbeEvidence {
-	return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: version, Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: identity}}
+func bridgeEvidence(identity string) clientdetect.ProbeEvidence {
+	return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "1.18.34", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: identity}}
 }
 
 // RED at CF5: production service cannot qualify a desired target, even though
@@ -134,7 +134,7 @@ func TestOpenCodeHostBridgeSingleAndGroup(t *testing.T) {
 				if target.Executable != client.ExecutablePath {
 					t.Fatal("ambient target")
 				}
-				return bridgeEvidence("1.18.34", "TEST-injected-identity"), nil
+				return bridgeEvidence("TEST-injected-identity"), nil
 			})
 			input := hostBridgeInput(t, client)
 			if group {
@@ -194,7 +194,7 @@ func TestOpenCodeHostBridgePreviewIdentityChangeRefusesEntireGroup(t *testing.T)
 				t.Fatal(err)
 			}
 			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: config, ExecutablePath: filepath.Join(root, "selected-host")}
-			evidence := bridgeEvidence("1.18.34", "TEST-before")
+			evidence := bridgeEvidence("TEST-before")
 			trace := attachHostBridge(t, &service, func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 				return evidence, nil
 			})
@@ -251,7 +251,7 @@ func TestOpenCodeHostBridgeOfflineAndStoredCleanup(t *testing.T) {
 	calls := 0
 	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
-		return bridgeEvidence("1.18.34", "TEST-injected"), nil
+		return bridgeEvidence("TEST-injected"), nil
 	}, []string{"PATH="})
 	if err != nil {
 		t.Fatal(err)
@@ -313,7 +313,7 @@ func TestOpenCodeHostBridgeGroupFenceBeforeStage(t *testing.T) {
 		if calls > 1 {
 			identity = "TEST-changed"
 		}
-		return bridgeEvidence("1.18.34", identity), nil
+		return bridgeEvidence(identity), nil
 	})
 	input := hostBridgeInput(t, client)
 	other := input
@@ -336,7 +336,7 @@ func TestOpenCodeHostBridgeStoredRemoveNoLookup(t *testing.T) {
 	calls := 0
 	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
-		return bridgeEvidence("1.18.34", "TEST-stored"), nil
+		return bridgeEvidence("TEST-stored"), nil
 	}, []string{"PATH="})
 	if err != nil {
 		t.Fatal(err)
@@ -377,7 +377,7 @@ func TestOpenCodeHostBridgeGroupStoredCleanup(t *testing.T) {
 	calls := 0
 	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
-		return bridgeEvidence("1.18.34", "TEST-group-stored"), nil
+		return bridgeEvidence("TEST-group-stored"), nil
 	}, []string{"PATH="})
 	if err != nil {
 		t.Fatal(err)
@@ -421,7 +421,7 @@ func TestOpenCodeHostBridgeSingleRepair(t *testing.T) {
 	calls := 0
 	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
-		return bridgeEvidence("1.18.34", "TEST-repair"), nil
+		return bridgeEvidence("TEST-repair"), nil
 	}, []string{"PATH="})
 	if err != nil {
 		t.Fatal(err)

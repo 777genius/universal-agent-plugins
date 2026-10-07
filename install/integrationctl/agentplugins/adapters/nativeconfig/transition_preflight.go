@@ -126,7 +126,7 @@ func checkTransitionPreflightCollisions(dest *hujson.Object, target Codec, names
 	for _, name := range names {
 		if dest != nil {
 			member, _ := objectMember(dest, name)
-			if member != nil && !(target == CodecOpenCode && name == "servers") {
+			if member != nil && (target != CodecOpenCode || name != "servers") {
 				return ErrCollision
 			}
 		}

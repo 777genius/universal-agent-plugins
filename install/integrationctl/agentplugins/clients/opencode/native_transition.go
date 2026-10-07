@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
@@ -230,7 +232,7 @@ func reconcileAppliedOpenCodeTransition(ctx context.Context, req nativeconfig.Tr
 	}
 	// Do not expose a committed-cleanup tag when state visibility is unknown.
 	if applyErr != nil {
-		applyErr = fmt.Errorf("native transition requires reconciliation: %v", applyErr)
+		applyErr = errors.New("native transition requires reconciliation: " + applyErr.Error())
 	}
 	err := errors.Join(applyErr, recoveryErr)
 	if err == nil {
@@ -239,22 +241,39 @@ func reconcileAppliedOpenCodeTransition(ctx context.Context, req nativeconfig.Tr
 	return &shared.NativeEffectError{Effect: effect, Err: err}
 }
 
-func syncTransitionTree(root string) error {
-	return filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+func syncTransitionTree(root string) (resultErr error) {
+	info, err := os.Lstat(root)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("transition staging contains symlink")
+	}
+	anchor, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, anchor.Close()) }()
+	return fs.WalkDir(anchor.FS(), ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("transition staging contains symlink")
-		}
-		if entry.IsDir() {
-			return atomicfile.SyncDirectory(path)
-		}
-		file, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		err = file.Sync()
-		return errors.Join(err, file.Close())
+		return syncTransitionEntry(anchor, path, entry)
 	})
+}
+
+func syncTransitionEntry(anchor *os.Root, path string, entry fs.DirEntry) error {
+	if entry.Type()&os.ModeSymlink != 0 {
+		return fmt.Errorf("transition staging contains symlink")
+	}
+	// Directory synchronization is a no-op on Windows, matching SyncDirectory.
+	if entry.IsDir() && runtime.GOOS == "windows" {
+		return nil
+	}
+	file, err := anchor.Open(path)
+	if err != nil {
+		return err
+	}
+	err = file.Sync()
+	return errors.Join(err, file.Close())
 }

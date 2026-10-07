@@ -34,7 +34,7 @@ func TestOpenCodeNativeFacadeDurableRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true})
-		handle.Close()
+		closeOpenCodeTestHandle(t, handle)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -101,7 +101,7 @@ func TestOpenCodeNativeFacadeDurableRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handle.Close()
+	defer closeOpenCodeTestHandle(t, handle)
 	if _, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestOpenCodeNativeFacadeTransitionRefusesForeignFacts(t *testing.T) {
 				t.Fatal(err)
 			}
 			result, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
-			first.Close()
+			closeOpenCodeTestHandle(t, first)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -157,7 +157,7 @@ func TestOpenCodeNativeFacadeTransitionRefusesForeignFacts(t *testing.T) {
 			req.Operation, req.InstallationID, req.ClientExecutable = OpUpdate, result.InstallationID, v2
 			next, err := engine.Prepare(testCtx(t), req)
 			if next != nil {
-				next.Close()
+				closeOpenCodeTestHandle(t, next)
 			}
 			if err == nil {
 				t.Fatal("foreign transition facts admitted")
