@@ -170,6 +170,30 @@ class Screen:
         return '\n'.join(''.join(row).rstrip() for row in self.grid).rstrip() + '\n'
 
 
+# A real native contract fixture keeps strict executable authority enabled.
+# Cache one build for this Python process, then copy into each disposable root.
+_open_code_fixture = None
+
+
+def prepare_opencode_fixture(fixture):
+    global _open_code_fixture
+    if _open_code_fixture is None or not (Path(_open_code_fixture.name) / 'opencode-fixture').is_file():
+        scratch = os.environ.get('TMPDIR') or os.environ.get('TEMP') or str(fixture.root / 'tmp')
+        _open_code_fixture = tempfile.TemporaryDirectory(prefix='TEST-opencode-native-', dir=scratch)
+        root = Path(_open_code_fixture.name)
+        source = Path(__file__).resolve().parents[2] / 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/opencode_probe.go'
+        env = dict(os.environ)
+        env.update({'GOWORK': 'off', 'GOCACHE': str(root / 'go-cache'),
+                    'TMPDIR': str(root), 'TMP': str(root), 'TEMP': str(root)})
+        result = subprocess.run(['go', 'build', '-ldflags', '-X main.version=1.18.34 -X main.mode=version-only',
+                                 '-o', str(root / 'opencode-fixture'), str(source)],
+                                cwd=root, env=env, capture_output=True, text=True, timeout=120)
+        check(result.returncode == 0, 'native OpenCode fixture build failed: ' + result.stderr)
+    destination = fixture.bin / ('opencode.exe' if os.name == 'nt' else 'opencode')
+    shutil.copy2(Path(_open_code_fixture.name) / 'opencode-fixture', destination)
+    destination.chmod(0o700)
+
+
 class Fixture:
     def __init__(self, root, scanner_binary=None, include_opencode=False):
         self.root = Path(root)
@@ -215,6 +239,7 @@ class Fixture:
             self.env[key] = str(self.home / path)
         if include_opencode:
             (Path(self.env['XDG_CONFIG_HOME']) / 'opencode').mkdir(parents=True)
+            prepare_opencode_fixture(self)
         if os.name == 'nt':
             # Cursor config alone is not editor evidence. Seed the existing
             # Windows desktop discovery path; inert TEST bytes are never run.

@@ -191,6 +191,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 }
 
 func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, service usecase.Service, input usecase.AddInput, loaded loadedPackage, planned usecase.AddResult, activationComplete, authComplete, needsInstallConfirmation bool) error {
+	retainPlannedClient(&input, planned.Plan)
 	if opts.format == "human" {
 		if err := renderHumanPlan(cmd.OutOrStdout(), loaded.envelope, planned); err != nil {
 			return err
@@ -371,6 +372,7 @@ func attestAuthenticationComplete(ctx context.Context, cmd *cobra.Command, servi
 
 func resumeAddPhase(ctx context.Context, cmd *cobra.Command, service usecase.Service, input usecase.AddInput, envelope domain.PackageEnvelope, current usecase.AddResult, activationComplete, authComplete bool) (usecase.AddResult, error) {
 	resume := input
+	retainPlannedClient(&resume, current.Plan)
 	resume.Confirmed = true
 	resume.InstallationID = current.InstallationID
 	resume.ActivationComplete = activationComplete

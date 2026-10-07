@@ -29,6 +29,19 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		observation = binding.LocalEntryObservation.Clone()
 		objects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
 	}
+	if service.ClientPreparation != nil {
+		for _, frozen := range service.PhysicalProfiles {
+			if frozen.ClientID == input.Client.ClientID {
+				input.Client.ProfileAuthority = domain.CloneProfileAuthority(frozen.ProfileAuthority)
+				input.Client.ProfileNamespace = frozen.ProfileNamespace
+			}
+		}
+		host, err := service.ClientPreparation.PrepareClient(ctx, input.Envelope, input.Client, objects, input.BackendExecutable, input.DryRun && !input.OnlinePreview)
+		if err != nil {
+			return domain.DeliveryPlan{}, err
+		}
+		input.Client.OpenCodeHost = host
+	}
 	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
 		LocalEntryObservation: observation.Clone(),
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),

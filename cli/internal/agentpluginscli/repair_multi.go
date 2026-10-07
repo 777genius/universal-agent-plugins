@@ -272,7 +272,8 @@ func (session *repairManySession) planAndApply() error {
 }
 
 func (session *repairManySession) plan(operationID string) error {
-	planned, err := session.service.RepairGroup(session.ctx, usecase.GroupInput{Targets: session.inputs, OperationGroupID: operationID, DryRun: true, Repair: true})
+	planned, err := session.service.RepairGroup(session.ctx, usecase.GroupInput{Targets: session.inputs, OperationGroupID: operationID, DryRun: true, OnlinePreview: !session.opts.dryRun, Repair: true})
+	retainPreparedClients(session.inputs, planned.PreparedClients)
 	for index, targetResult := range planned.Targets {
 		output := newRepairResultData(session.installation, targetResult, true)
 		output.OperationID = operationID

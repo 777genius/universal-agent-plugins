@@ -17,6 +17,7 @@ import (
 )
 
 type Service struct {
+	ClientPreparation ClientPreparation
 	PhysicalAuthority ports.PhysicalProfileAuthority
 	PhysicalProfiles  []domain.DetectedClient
 	profileCheck      func() error
@@ -40,6 +41,13 @@ type Service struct {
 	NamespacePreflight MCPNamespacePreflight
 	PluginData         PluginDataManager
 	Now                func() time.Time
+}
+
+// ClientPreparation freezes explicit host authority before a desired native
+// plan. Process-inert planning must never launch a host executable.
+type ClientPreparation interface {
+	PrepareClient(context.Context, domain.PackageEnvelope, domain.DetectedClient, []domain.NativeObjectOwnership, string, bool) (domain.OpenCodeHostAuthority, error)
+	RevalidateClient(context.Context, domain.DetectedClient, domain.DeliveryPlan) error
 }
 
 type NativeIdentityState = domain.NativeIdentityState
@@ -86,15 +94,18 @@ type AddInput struct {
 	Envelope                domain.PackageEnvelope
 	Client                  domain.DetectedClient
 	Scope                   domain.InstallScope
-	DryRun                  bool
-	Confirmed               bool
-	Interactive             bool
-	Hints                   domain.CompatibilityHints
-	InstallationID          string
-	OperationID             string
-	BackendExecutable       string
-	ActivationComplete      bool
-	AuthComplete            bool
+	// OnlinePreview permits host probing during a read-only normal-operation preview.
+	// It grants no mutation or confirmation permission.
+	OnlinePreview      bool
+	DryRun             bool
+	Confirmed          bool
+	Interactive        bool
+	Hints              domain.CompatibilityHints
+	InstallationID     string
+	OperationID        string
+	BackendExecutable  string
+	ActivationComplete bool
+	AuthComplete       bool
 	// OriginMode and DirectoryResolution are supplied by the resolver. Omitting
 	// OriginMode is treated as an explicit direct source for compatibility with
 	// exact/local callers; Directory authority is never inferred from a name.

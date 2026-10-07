@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 import os
 from pathlib import Path
 import tempfile
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -37,7 +38,14 @@ class FixtureValidation(unittest.TestCase):
             self.assertEqual({p.name for p in fixture.bin.iterdir()}, {
                 'codex', 'cursor', 'copilot', 'code', 'kiro-cli', 'claude', 'gemini', 'opencode', 'windsurf'})
             for stub in fixture.bin.iterdir():
-                self.assertEqual(stub.read_bytes(), (fixture.bin / 'cursor').read_bytes())
+                if stub.name == 'opencode':
+                    self.assertFalse(stub.read_bytes().startswith(b'#!'))
+                    result = subprocess.run([str(stub), '--version'], env=fixture.env, capture_output=True, text=True, check=True)
+                    self.assertEqual(result.stdout.strip(), '1.18.34')
+                    refused = subprocess.run([str(stub), 'plugin', 'install'], env=fixture.env, capture_output=True)
+                    self.assertEqual(refused.returncode, 97)
+                else:
+                    self.assertEqual(stub.read_bytes(), (fixture.bin / 'cursor').read_bytes())
                 self.assertTrue(os.access(stub, os.X_OK))
             fixture.unchanged()
 

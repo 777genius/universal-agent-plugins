@@ -3,7 +3,6 @@ package installer
 import (
 	"context"
 	"errors"
-	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -18,7 +17,7 @@ import (
 type OpenCodeProbe func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error)
 
 var ErrHostTargetRequired = errors.New("host_target_required")
-var errOpenCodeTransportUnsupported = errors.New("host_transport_unsupported")
+var errOpenCodeTransportUnsupported = opencodehost.ErrNativeTransportUnsupported
 
 func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperation) error {
 	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](e.cfg.Registry, handle.client.ClientID)
@@ -26,12 +25,9 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 		return nil
 	}
 	skills, transports := clients.OpenCodeNativeRequirements(handle.envelope)
-	previousEffects, ownedCodec, err := e.previousOpenCodeEffects(handle, consumer)
+	_, ownedCodec, err := e.previousOpenCodeEffects(handle, consumer)
 	if err != nil {
 		return err
-	}
-	if !skills && len(transports) == 0 && !previousEffects {
-		return nil
 	}
 	executable := handle.req.ClientExecutable
 	if executable == "" {
@@ -127,20 +123,7 @@ func (e *Engine) revalidateOpenCodeHost(ctx context.Context, handle *PreparedOpe
 // Resolve existing ancestors too: a not-yet-created config root can be beneath
 // a directory symlink. Creation of ordinary missing directories preserves it.
 func openCodeRootIdentity(root string) string {
-	var tail []string
-	for current := root; ; current = filepath.Dir(current) {
-		if resolved, err := filepath.EvalSymlinks(current); err == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return canonicalRoot(resolved)
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return ""
-		}
-		tail = append(tail, filepath.Base(current))
-	}
+	return clientdetect.OpenCodeRootIdentity(root)
 }
 
 func cloneOpenCodeSelections(in []opencodehost.Selection) []opencodehost.Selection {

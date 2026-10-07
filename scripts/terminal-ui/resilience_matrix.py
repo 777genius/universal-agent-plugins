@@ -21,7 +21,7 @@ import tempfile
 import time
 import unicodedata
 
-from harness import Fixture, check, hashes, prepare_scanner, scanner_options
+from harness import Fixture, check, hashes, prepare_scanner, scanner_options, prepare_opencode_fixture
 from selection_matrix import prepare_codex_registry
 
 if os.name == "posix":
@@ -112,9 +112,10 @@ def seed_ten_clients(fixture):
         path.mkdir(parents=True, exist_ok=True)
     for name in (
             "copilot", "code", "kiro-cli", "claude", "gemini",
-            "opencode", "windsurf"):
+            "windsurf"):
         shutil.copy2(fixture.bin / "cursor", fixture.bin / name)
 
+    prepare_opencode_fixture(fixture)
 
 def prepare_copilot_registry(fixture):
     state = shlex.quote(str(fixture.root / "copilot-plugin.state"))

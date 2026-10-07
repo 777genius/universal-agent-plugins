@@ -86,6 +86,11 @@ func validateNativeIdentityObservation(observation domain.NativeIdentityObservat
 }
 
 func (service Service) nativeIdentityObservation(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
+	if service.ClientPreparation != nil {
+		if err := service.ClientPreparation.RevalidateClient(ctx, client, plan); err != nil {
+			return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
+		}
+	}
 	if service.NativeObserver != nil {
 		return service.NativeObserver.ObserveNativeIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	}
