@@ -70,6 +70,10 @@ const sourceFixtureSHA = "0506dd888029ad69d07dd5263669fb53766dbdf9"
 // historical bytes, independently checked below, rather than current S1 source.
 const sourceFixtureDomainSHA = "c77c9975eb41d81bcca178b2974ecc6cd1eb1d22"
 
+// The registry pin includes the later audited Grok/Kimi integration. Its exact
+// historical blob must still match the unchanged production fingerprint.
+const sourceFixtureRegistrySHA = "66710680c22cc0cf7cc926e1438bb9d647eff1a2"
+
 func newSourceFixture(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs("../../..")
@@ -94,6 +98,9 @@ func newSourceFixture(t *testing.T) string {
 			sha := sourceFixtureSHA
 			if strings.HasPrefix(path, "install/integrationctl/agentplugins/domain/") {
 				sha = sourceFixtureDomainSHA
+			}
+			if path == "install/integrationctl/agentplugins/domain/clients.go" {
+				sha = sourceFixtureRegistrySHA
 			}
 			cmd := exec.CommandContext(t.Context(), "git", "-C", root, "show", sha+":"+path)
 			b, e = cmd.Output()
