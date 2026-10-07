@@ -113,6 +113,74 @@ func TestOpenCodePrepareExplicitV2SelectsAvailableCodec(t *testing.T) {
 	}
 }
 
+// The old facade probes even when only package metadata will be materialized.
+// Ambiguous foreign configs and an absent host must not affect inert planning.
+func TestOpenCodeMetadataOnlyPreparationNeverProbes(t *testing.T) {
+	root := openCodeTestRoot(t)
+	helper := buildOpenCodeTarget(t, filepath.Join(root, "helper"), "1.18.33", "ok")
+	packageRoot, configRoot := filepath.Join(root, "package"), filepath.Join(root, "config")
+	manifestPath := filepath.Join(packageRoot, "plugin.json")
+	mustWriteV2(t, manifestPath, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"metadata-only","version":"1.0.0"}`))
+	foreign := map[string][]byte{
+		"opencode.json":  []byte(`{"theme":"foreign"}`),
+		"opencode.jsonc": []byte("{ // foreign comment\n\"theme\":\"preserved\"}\n"),
+	}
+	for name, body := range foreign {
+		mustWriteV2(t, filepath.Join(configRoot, name), body)
+	}
+	probes := 0
+	engine := openCodeEngine(t, Config{StateRoot: filepath.Join(root, "state"), HelperExecutable: helper,
+		EnableNativeObserver: true, Runner: forbiddenV2Runner{t},
+		OpenCodeProbe: func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+			probes++
+			return clientdetect.ProbeEvidence{}, errors.New("metadata-only preparation invoked host probe")
+		}})
+	// Fresh installs retain the generic explicit-path request contract. This
+	// nonexistent path grants no executable evidence and cannot qualify a host.
+	req := Request{Operation: OpInstall, ClientID: "opencode", PackageRoot: packageRoot,
+		ClientConfigRoot: configRoot, ClientExecutable: filepath.Join(root, "absent-host")}
+	first, err := engine.Prepare(testCtx(t), req)
+	if err != nil || first == nil || probes != 0 {
+		t.Fatalf("metadata install preparation: handle=%v probes=%d err=%v", first, probes, err)
+	}
+	defer closeOpenCodeTestHandle(t, first)
+	if plan := first.Plan(); plan.OpenCodeProfile != nil || len(plan.OpenCodeSelections) != 0 {
+		t.Fatalf("inert install acquired native qualification: %+v", plan)
+	}
+	for _, path := range []string{engine.cfg.ManagedRoot, engine.cfg.StateFile} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("preparation created managed path %s: %v", path, err)
+		}
+	}
+	installed, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
+	if err != nil || !installed.Mutated {
+		t.Fatalf("metadata fixture install: %+v %v", installed, err)
+	}
+	mustWriteV2(t, manifestPath, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"metadata-only","version":"1.0.1"}`))
+	req.Operation, req.InstallationID, req.ClientExecutable = OpUpdate, installed.InstallationID, ""
+	before := v2EffectSnapshot(t, engine)
+	update, err := engine.Prepare(testCtx(t), req)
+	if err != nil || update == nil || probes != 0 {
+		t.Fatalf("metadata update preparation: handle=%v probes=%d err=%v", update, probes, err)
+	}
+	defer closeOpenCodeTestHandle(t, update)
+	if plan := update.Plan(); plan.OpenCodeProfile != nil || len(plan.OpenCodeSelections) != 0 || plan.NoChange {
+		t.Fatalf("inert changed update acquired qualification or lost revision: %+v", plan)
+	}
+	// Successful preparation owns a temporary sealed package snapshot until
+	// Close. Release it before comparing durable package/config/state effects.
+	closeOpenCodeTestHandle(t, update)
+	if before != v2EffectSnapshot(t, engine) {
+		t.Fatal("metadata update preparation changed managed/config/state bytes")
+	}
+	for name, want := range foreign {
+		body, err := os.ReadFile(filepath.Join(configRoot, name))
+		if err != nil || string(body) != string(want) {
+			t.Fatalf("inert lifecycle changed foreign config %s: %s %v", name, body, err)
+		}
+	}
+}
+
 // Regression: changes to Request, Config env, injected port input, or returned
 // Plan/profile/selection cannot rewrite a prepared native target. Read-only
 // discovery/inspection/recovery and receipt-authorized removal never probe.

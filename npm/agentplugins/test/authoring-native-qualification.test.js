@@ -251,8 +251,8 @@ function main() {
     if(lane==='skill'||lane.startsWith('hybrid-'))skill(root,lane);
     if(lane!=='skill')write(root,'mcp.json',{$schema:'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json',mcpServers:{[lane]:{type:lane.endsWith('remote')?'streamable-http':'stdio'}}});
     if(lane.endsWith('stdio')) {
-      write(root,'package.json',{dependencies:{'@modelcontextprotocol/sdk':'1.30.0'}});
-      write(root,'package-lock.json',{packages:{'node_modules/@modelcontextprotocol/sdk':{version:'1.30.0',integrity:'sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA=='}}});
+      write(root,'package.json',{dependencies:{'@modelcontextprotocol/sdk':'1.32.1'}});
+      write(root,'package-lock.json',{packages:{'node_modules/@modelcontextprotocol/sdk':{version:'1.32.1',integrity:'sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw=='}}});
     }
     if(scenario==='yaml')write(root,'plugin.yaml','legacy');
     data.committed=true;data.effects.committed=true;

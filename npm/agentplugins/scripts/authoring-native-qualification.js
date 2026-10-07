@@ -436,10 +436,10 @@ function checkProject(value, lane) {
   }
   if (lane.endsWith("stdio")) {
     const version = value.package.dependencies["@modelcontextprotocol/sdk"];
-    exact(version, "1.30.0");
+    exact(version, "1.32.1");
     exact(value.lock.packages["node_modules/@modelcontextprotocol/sdk"].version, version);
     exact(value.lock.packages["node_modules/@modelcontextprotocol/sdk"].integrity,
-      "sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==");
+      "sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==");
   } else { exact(value.lock, null); exact(value.package, null); }
 }
 function installationCommands() {

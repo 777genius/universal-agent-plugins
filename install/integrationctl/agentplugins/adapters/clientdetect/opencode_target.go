@@ -15,6 +15,10 @@ import (
 
 const OpenCodeProbeTimeout = 10 * time.Second
 
+// IsolatedOpenCodeProbeTimeout allows cold native startup without permitting
+// callers to extend the isolated probe's finite budget.
+const IsolatedOpenCodeProbeTimeout = 30 * time.Second
+
 var (
 	ErrInvalidProbeTarget    = errors.New("host_target_invalid")
 	ErrUnverifiedProbeTarget = errors.New("host_target_unverified")
@@ -22,7 +26,7 @@ var (
 )
 
 // ProbeTarget never selects an executable from PATH. Timeout may shorten the
-// fixed maximum. Environment must contain exactly one PATH and no user config.
+// selected probe's fixed maximum. Environment contains one PATH and no config.
 type ProbeTarget struct {
 	Executable  string        `json:"-"`
 	Environment []string      `json:"-"`
@@ -77,6 +81,18 @@ func CopyOpenCodeProbeEnvironment(env []string) ([]string, error) {
 // native bytes only. Scripts/npm shims are deliberately unverified and are not
 // executed. Runtime authority is checked both sides of the version invocation.
 func ProbeOpenCodeTarget(ctx context.Context, target ProbeTarget) (ProbeEvidence, error) {
+	return probeOpenCodeTarget(ctx, target, OpenCodeProbeTimeout, runVersionProcess)
+}
+
+// ProbeIsolatedOpenCodeTarget uses private HOME, XDG and temporary roots and an
+// empty OpenCode configuration. It accepts the same strict launch environment
+// and native executable authority as ProbeOpenCodeTarget. No caller-provided
+// config or credential overrides are accepted, and cleanup follows process Wait.
+func ProbeIsolatedOpenCodeTarget(ctx context.Context, target ProbeTarget) (ProbeEvidence, error) {
+	return probeOpenCodeTarget(ctx, target, IsolatedOpenCodeProbeTimeout, runIsolatedOpenCodeVersion)
+}
+
+func probeOpenCodeTarget(ctx context.Context, target ProbeTarget, maximumTimeout time.Duration, run func(context.Context, string, []string) (string, string, error)) (ProbeEvidence, error) {
 	evidence := ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Source: "executable_version", ProbeStatus: "not_requested"}}
 	if ctx == nil {
 		return evidence, ErrInvalidProbeTarget
@@ -90,8 +106,8 @@ func ProbeOpenCodeTarget(ctx context.Context, target ProbeTarget) (ProbeEvidence
 		return evidence, err
 	}
 	timeout := target.Timeout
-	if timeout <= 0 || timeout > OpenCodeProbeTimeout {
-		timeout = OpenCodeProbeTimeout
+	if timeout <= 0 || timeout > maximumTimeout {
+		timeout = maximumTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -99,7 +115,7 @@ func ProbeOpenCodeTarget(ctx context.Context, target ProbeTarget) (ProbeEvidence
 	if err != nil {
 		return failedOpenCodeProbe(ctx, evidence, err)
 	}
-	stdout, _, err := runVersionProcess(ctx, target.Executable, target.Environment)
+	stdout, _, err := run(ctx, target.Executable, target.Environment)
 	if err != nil {
 		return failedOpenCodeProbe(ctx, evidence, err)
 	}

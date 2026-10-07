@@ -55,7 +55,8 @@ func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 }
 
 // A managed observation uses stored receipts even if the host disappeared
-// or changed dialect. Only a fresh desired registry uses prepared authority.
+// or changed dialect. Without stored MCP receipts, selected desired MCP uses
+// prepared authority; observing skills alone does not require a codec.
 func observedOpenCodeCodec(plan domain.DeliveryPlan, managed *domain.ClientBinding) (nativeconfig.Codec, error) {
 	if managed == nil {
 		return DesiredOpenCodeCodec(plan.OpenCodeHost)
@@ -76,6 +77,9 @@ func observedOpenCodeCodec(plan domain.DeliveryPlan, managed *domain.ClientBindi
 	}
 	if stored != "" {
 		return stored, nil
+	}
+	if len(domain.SelectedMCPNames(plan)) > 0 {
+		return DesiredOpenCodeCodec(plan.OpenCodeHost)
 	}
 	return nativeconfig.CodecOpenCode, nil
 }
