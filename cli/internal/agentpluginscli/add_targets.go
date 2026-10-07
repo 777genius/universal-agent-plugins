@@ -5,14 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/installerui"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -140,25 +143,57 @@ func promptYesNo(ctx context.Context, reader io.Reader, writer, alternate io.Wri
 }
 
 func promptYesNoDefault(ctx context.Context, reader io.Reader, writer, alternate io.Writer, question string, defaultYes bool) (bool, error) {
-	var err error
-	writer, err = promptio.VisibleOutput(writer, alternate)
+	if ctx == nil {
+		ctx = context.Background()
+	} // Preserve the legacy direct caller seam.
+	writer, err := promptio.VisibleOutput(writer, alternate)
 	if err != nil {
-		return false, err
+		return false, prompt.NormalizeIOError(err)
 	}
-	if _, err := fmt.Fprint(&planWriter{writer: writer}, prompt.SafeText(question)+" "); err != nil {
-		return false, err
+	title := prompt.SafeText(question)
+	for _, hint := range []string{" [y/N]", " [Y/n]", " [y/n]"} {
+		title = strings.TrimSuffix(title, hint)
 	}
-	line, err := promptio.ReadLine(ctx, reader)
+	req := installerui.ConfirmRequest{Title: title, Default: defaultYes}
+	var result installerui.Confirmation
+	if input, ok := reader.(*os.File); ok {
+		output, ok := terminaltheme.Unwrap(writer).(*os.File)
+		if !ok {
+			return false, prompt.ErrPromptUnavailable
+		}
+		t, e := installerui.NewTerminal(installerui.TerminalConfig{Input: input, Output: output, Mode: installerui.ModePlain, NoColor: !terminaltheme.For(writer).Enabled})
+		if e != nil {
+			return false, normalizeTerminalConsentError(e)
+		}
+		result, err = t.Confirm(ctx, req)
+	} else {
+		// Existing injected nonterminal callers preserve the public line API seam.
+		u, e := installerui.New(installerui.Config{Input: reader, Output: writer, ReadLine: promptio.ReadLine})
+		if e != nil {
+			return false, normalizeTerminalConsentError(e)
+		}
+		result, err = u.Confirm(ctx, req)
+	}
 	if err != nil {
-		return false, err
+		return false, normalizeTerminalConsentError(err)
 	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	if answer == "" {
-		return defaultYes, nil
+	if result.Cancelled { //nolint:misspell // Preserve the existing public cancellation API.
+		return false, prompt.ErrPromptCanceled
 	}
-	return answer == "y" || answer == "yes", nil
+	return result.Accepted, nil
+}
+
+func normalizeTerminalConsentError(err error) error {
+	if errors.Is(err, installerui.ErrUnavailable) {
+		return prompt.NormalizeIOError(errors.Join(promptio.ErrUnavailable, err))
+	}
+	if errors.Is(err, installerui.ErrCancelled) {
+		return errors.Join(prompt.ErrPromptCanceled, err)
+	}
+	return prompt.NormalizeIOError(err)
 }
 
 func readInputLine(ctx context.Context, reader io.Reader) (string, error) {
-	return promptio.ReadLine(ctx, reader)
+	line, err := promptio.ReadLine(ctx, reader)
+	return line, prompt.NormalizeIOError(err)
 }

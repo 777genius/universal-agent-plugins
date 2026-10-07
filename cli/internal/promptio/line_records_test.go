@@ -6,8 +6,6 @@ import (
 	"io"
 	"strings"
 	"testing"
-
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 )
 
 // Model canonical read boundaries, including nonempty VEOF records. This tests
@@ -51,7 +49,7 @@ func TestCanonicalRecordsPreserveNextOwner(t *testing.T) {
 
 func TestCanonicalRecordsRejectPartialEOFAndOverlong(t *testing.T) {
 	r := &canonicalRecords{records: []string{"y", "", "next\n"}}
-	if line, err := readLineBuffer(context.Background(), r, make([]byte, 4097)); line != "" || !errors.Is(err, prompt.ErrPromptInputClosed) {
+	if line, err := readLineBuffer(context.Background(), r, make([]byte, 4097)); line != "" || !errors.Is(err, io.EOF) {
 		t.Fatalf("partial consent: %q %v", line, err)
 	}
 	if len(r.records) != 1 || r.records[0] != "next\n" {

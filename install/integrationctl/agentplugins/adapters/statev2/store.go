@@ -144,6 +144,9 @@ func normalizeCurrentState(state *domain.StateFileV2) {
 }
 
 func decodeStrictJSON(body []byte, target any) error {
+	if err := rejectShadowedObservations(body); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -265,6 +268,9 @@ func Validate(state domain.StateFileV2) error {
 			}
 		}
 		for mapKey, client := range installation.Clients {
+			if err := validateObservationLinkage(client); err != nil {
+				return err
+			}
 			if mapKey == "" || mapKey != client.ClientBindingID {
 				return fmt.Errorf("%s client map key does not match client_binding_id", prefix)
 			}
@@ -358,8 +364,14 @@ func Validate(state domain.StateFileV2) error {
 		if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 			return fmt.Errorf("%s has invalid operation id: %w", prefix, err)
 		}
-		if strings.TrimSpace(receipt.ClientBindingID) == "" || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
+		sharedData := receipt.ClientBindingID == "" && receipt.DataReceiptID != "" && receipt.MutationType == "directory_remove" && len(receipt.ProfileOwners) > 0 && len(receipt.DirectoryProof) > 0
+		if (strings.TrimSpace(receipt.ClientBindingID) == "" && !sharedData) || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
 			return fmt.Errorf("%s is incomplete", prefix)
+		}
+		if receipt.DataReceiptID != "" {
+			if err := pathpolicy.ValidateLeafID(receipt.DataReceiptID); err != nil {
+				return fmt.Errorf("%s has invalid data receipt id: %w", prefix, err)
+			}
 		}
 		if !validReceiptPhase(receipt.Phase) {
 			return fmt.Errorf("%s has invalid phase %q", prefix, receipt.Phase)

@@ -2,9 +2,7 @@ package cursor
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -16,19 +14,36 @@ var (
 	_ clients.PlanRefiner  = (*Adapter)(nil)
 )
 
-// TargetRoot delivers the native package into the local plugin directory Cursor
-// itself scans, rather than under the managed root.
-func (*Adapter) TargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string) (string, string, error) {
-	if mode != domain.PackageNative {
+// TargetRoot retains the legacy editor package preparation layout. Native
+// scanning of this location remains an S4 qualification, not a path assertion.
+func (adapter *Adapter) TargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string) (string, string, error) {
+	if mode != domain.PackageNative && mode != domain.PackagePrepared {
 		return shared.ManagedTargetRoot(client, mode, managedRoot)
 	}
-	if strings.TrimSpace(client.ConfigRoot) == "" {
-		return "", "", fmt.Errorf("the Cursor config root is unavailable")
+	root, err := adapter.ResolveProfileRoot(client.ConfigRoot)
+	if err != nil {
+		return "", "", err
 	}
-	return client.ConfigRoot, filepath.Join(client.ConfigRoot, "plugins", "local"), nil
+	return root, filepath.Join(root, "plugins", "local"), nil
 }
 
-func (*Adapter) RefinePlan(_ context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
-	plan.UserActions = shared.AppendUnique(plan.UserActions, "reload Cursor, then verify the plugin appears before using its components")
+func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if plan.Status == domain.PlanUnsupported {
+		return nil
+	}
+	plan.Status = domain.PlanManualActivationRequired
+	// PackageMode describes the retained manifest/layout contract. Readiness
+	// and selected components carry preparation status independently of it.
+	plan.Activation = domain.ActivationPrepared
+	for i := range plan.Components {
+		if plan.Components[i].Support == domain.SupportNative {
+			plan.Components[i].Support = domain.SupportPrepared
+		}
+	}
+	plan.Warnings = shared.AppendUnique(plan.Warnings, "Cursor editor package discovery is unverified; agent CLI plugins and native Stop are not qualified")
+	plan.UserActions = shared.AppendUnique(plan.UserActions, "reload Cursor, then verify the prepared plugin and selected components are visible and enabled")
 	return nil
 }

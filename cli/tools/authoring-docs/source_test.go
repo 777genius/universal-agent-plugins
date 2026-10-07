@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,6 +61,15 @@ func committedFixture(t *testing.T) string {
 	}
 	return newSourceFixture(t)
 }
+
+// This committed source contains the audited factory bytes after the module
+// layout migration. It is a test input, not a new public documentation pin.
+const sourceFixtureSHA = "0506dd888029ad69d07dd5263669fb53766dbdf9"
+
+// The domain pins advanced after sourceFixtureSHA. Use their already-pinned
+// historical bytes, independently checked below, rather than current S1 source.
+const sourceFixtureDomainSHA = "c77c9975eb41d81bcca178b2974ecc6cd1eb1d22"
+
 func newSourceFixture(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs("../../..")
@@ -67,14 +78,32 @@ func newSourceFixture(t *testing.T) string {
 	}
 	dir := t.TempDir()
 	paths := []string{"docs/PHASE6_CLI_EXPORTER_PREPARATION.md"}
+	pinned := make(map[string]string, len(factoryPins))
 	for _, pin := range factoryPins {
 		paths = append(paths, pin.Path)
+		pinned[pin.Path] = pin.SHA256
 	}
 	for _, name := range adapterFiles {
 		paths = append(paths, "cli/tools/authoring-docs/"+name)
 	}
 	for _, path := range paths {
 		b, e := os.ReadFile(filepath.Join(root, path))
+		if want, ok := pinned[path]; ok && (e != nil || fmt.Sprintf("%x", sha256.Sum256(b)) != want) {
+			// Current factory implementations may evolve; the rejection tests
+			// must begin with the unchanged audited source contract.
+			sha := sourceFixtureSHA
+			if strings.HasPrefix(path, "install/integrationctl/agentplugins/domain/") {
+				sha = sourceFixtureDomainSHA
+			}
+			cmd := exec.CommandContext(t.Context(), "git", "-C", root, "show", sha+":"+path)
+			b, e = cmd.Output()
+			if e != nil {
+				t.Fatalf("audited fixture input %s unavailable; fetch %s: %v", path, sha, e)
+			}
+			if fmt.Sprintf("%x", sha256.Sum256(b)) != want {
+				t.Fatalf("audited fixture fingerprint differs: %s", path)
+			}
+		}
 		if e != nil {
 			t.Fatal(e)
 		}

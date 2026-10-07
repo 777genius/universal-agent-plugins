@@ -189,7 +189,7 @@ func (manager Manager) rollbackPublication(r Receipt, active, quarantine bool) e
 		if !movedPublication {
 			return err
 		}
-		return restoreRacedQuarantine(r, err)
+		return manager.restoreRacedQuarantine(r, err)
 	}
 	if err := requireMissing(r.ActivePath); err != nil {
 		return err
@@ -208,7 +208,12 @@ func (manager Manager) rollbackPublication(r Receipt, active, quarantine bool) e
 	return manager.inject(FaultRollbackRemoved)
 }
 
-func restoreRacedQuarantine(r Receipt, cause error) error {
+func (manager Manager) restoreRacedQuarantine(r Receipt, cause error) error {
+	if r.SchemaVersion == 5 {
+		if err := manager.validatePhysical(r); err != nil {
+			return err
+		}
+	}
 	// Never discard the raced entry, and never replace a late active entry.
 	if err := renameDirectoryExclusive(r.QuarantinePath, r.ActivePath); err != nil {
 		return fmt.Errorf("%w; restore quarantine failed: %w", cause, err)

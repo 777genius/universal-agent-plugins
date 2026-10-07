@@ -134,7 +134,7 @@ func (session *bindingChangeSession) confirm() (bool, error) {
 			var err error
 			writer, err = promptio.VisibleOutput(writer, session.cmd.ErrOrStderr())
 			if err != nil {
-				return false, err
+				return false, prompt.NormalizeIOError(err)
 			}
 		}
 		if err := renderHumanBindingPlan(writer, session.planned.Plan); err != nil {

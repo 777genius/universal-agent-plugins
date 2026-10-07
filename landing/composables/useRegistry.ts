@@ -2,7 +2,7 @@ import { withAppBase } from '~/utils/localizedRoutes';
 import type { DiscoveryBundle } from '~/types/discovery';
 import type { RegistryIndex } from '~/types/registry';
 import type { SecuritySnapshot } from '~/types/security';
-import { BrowserDiscoveryCache, discoveryPlugin, loadDiscovery } from '~/utils/discovery';
+import { BrowserDiscoveryCache, discoveryPlugin, loadDiscoveryForDisplay } from '~/utils/discovery';
 import { applySecurityAssessment, loadSecurity } from '~/utils/security';
 import { loadFirstAvailable, resolveSignedFeedOrigins } from '~/utils/signedFeeds';
 import type { RegistryProjection } from '~/utils/registryProjection';
@@ -34,6 +34,29 @@ export async function useRegistryPage(options: RegistryPageOptions = {}): Promis
     if (generation.value === ownGeneration) generation.value++;
   });
   const status = useDiscoveryStatus();
+  let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+  onScopeDispose(() => clearTimeout(expiryTimer));
+  watch(
+    () => status.value.expiresAt,
+    (expiresAt) => {
+      clearTimeout(expiryTimer);
+      if (!import.meta.client || !expiresAt || !isCurrent()) return;
+      const refresh = () => {
+        if (!isCurrent()) return;
+        const remaining = Date.parse(expiresAt) - Date.now();
+        if (remaining <= 0) {
+          status.value = { ...status.value, state: 'stale' };
+          if (registry.value)
+            registry.value.plugins = registry.value.plugins.map((plugin) => {
+              if (!plugin.discovery) return plugin;
+              const { security: _security, ...historical } = plugin;
+              return historical;
+            });
+        } else expiryTimer = setTimeout(refresh, Math.min(remaining, 60_000));
+      };
+      refresh();
+    },
+  );
   const seed = shallowRef<RegistryIndex>();
 
   if (import.meta.client && options.discovery) {
@@ -118,12 +141,14 @@ async function augmentWithDiscovery(
     registryPagesOrigin,
   });
   discoveryPromise ??= loadFirstAvailable(discoveryOrigins, (origin) =>
-    loadDiscovery({
+    loadDiscoveryForDisplay({
       origin,
       trust,
       cache: new BrowserDiscoveryCache(origin),
     }),
-  );
+  ).finally(() => {
+    discoveryPromise = undefined;
+  });
   securityPromise ??= loadFirstAvailable(securityOrigins, (origin) =>
     loadSecurity({ origin, trust }),
   )
@@ -140,10 +165,16 @@ async function augmentWithDiscovery(
     );
     registry.value.plugins = [...seed.plugins, ...discovered];
     status.value = {
-      state: bundle.source === 'remote' ? 'current' : 'cached',
+      state:
+        Date.now() >= Date.parse(bundle.snapshot.expires_at)
+          ? 'stale'
+          : bundle.source === 'remote'
+            ? 'current'
+            : 'cached',
       count: discovered.length,
       sequence: bundle.snapshot.sequence,
       generatedAt: bundle.snapshot.generated_at,
+      expiresAt: bundle.snapshot.expires_at,
     };
 
     const security = await securityPromise;
@@ -151,7 +182,9 @@ async function augmentWithDiscovery(
     await waitForCatalogInteractionToFinish();
     if (!isCurrent() || !registry.value) return;
     registry.value.plugins = registry.value.plugins.map((plugin) =>
-      applySecurityAssessment(plugin, security),
+      plugin.discovery && status.value.state === 'stale'
+        ? plugin
+        : applySecurityAssessment(plugin, security),
     );
   } catch (error) {
     if (!isCurrent() || !registry.value) return;

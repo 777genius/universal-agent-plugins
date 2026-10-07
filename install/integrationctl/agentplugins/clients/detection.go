@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // HostDetector is the read-only surface probe of one client. It returns what it
@@ -80,3 +81,6 @@ type VersionProbeEnvironment interface {
 type ProfileBindingValidator interface {
 	ValidateBindingProfile(root string, binding domain.ClientBinding) error
 }
+
+// PhysicalProfileAuthority is the single optional port, shared with the planner.
+type PhysicalProfileAuthority = ports.PhysicalProfileAuthority

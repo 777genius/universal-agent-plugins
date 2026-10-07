@@ -42,7 +42,7 @@ func TestClientTraitsAreDeclarativeAndDrivePolicy(t *testing.T) {
 		t.Fatalf("Windsurf traits = %+v", windsurf.Traits)
 	}
 	gemini, ok := ClientDefinitionFor(ClientGemini)
-	if !ok || gemini.Traits.LifecycleKind != LifecycleNativeConfig {
+	if !ok || gemini.Traits.LifecycleKind != LifecycleNativeConfig || !gemini.Traits.BindsNativeProfileRoot {
 		t.Fatalf("Gemini traits = %+v", gemini.Traits)
 	}
 	opencode, ok := ClientDefinitionFor(ClientOpenCode)

@@ -83,10 +83,12 @@ type PreparationRefiner interface {
 
 // PlanInput is everything a refiner is allowed to see.
 type PlanInput struct {
-	Envelope domain.PackageEnvelope
-	Client   domain.DetectedClient
-	Detected map[domain.ClientID]domain.DetectedClient
-	Intent   domain.InstallIntent
+	PreviousNativeObjects []domain.NativeObjectOwnership `json:"-"`
+	LocalEntryObservation *domain.LocalEntryObservation  `json:"-"`
+	Envelope              domain.PackageEnvelope
+	Client                domain.DetectedClient
+	Detected              map[domain.ClientID]domain.DetectedClient
+	Intent                domain.InstallIntent
 }
 
 // BackendSibling returns the entry of the other client sharing this client's

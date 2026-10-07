@@ -1,0 +1,85 @@
+name: Darwin terminal cancellation
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/darwin-terminal-cancel.yml'
+      - 'cli/internal/terminalreader/**'
+      - 'cli/internal/terminalprompts/**'
+      - 'cli/internal/promptio/cancel_unix.go'
+      - 'cli/installerui/terminal_session.go'
+      - 'cli/installerui/terminal_stdin_darwin_test.go'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cancellation:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    env:
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Reproduce failure on the public pre-fix library
+        shell: bash
+        run: |
+          baseline="$RUNNER_TEMP/TEST-terminal-baseline"
+          mkdir -p "$baseline" "$RUNNER_TEMP/TEST-terminal-evidence"
+          git archive f05fe750bb7a8eaed9ed16cab9bbbc5f5101f283 | tar -x -C "$baseline"
+          cp cli/installerui/terminal_stdin_darwin_test.go "$baseline/cli/installerui/"
+          cd "$baseline/cli"
+          if go test -json -timeout=25s -run '^TestDarwinInheritedTTYCancel$' ./installerui > "$RUNNER_TEMP/TEST-terminal-evidence/baseline.jsonl"; then
+            echo 'Regression did not reproduce on the public baseline'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          rows = [json.loads(s) for s in (Path(os.environ['RUNNER_TEMP']) / 'TEST-terminal-evidence/baseline.jsonl').read_text().splitlines()]
+          assert any(r.get('Test') == 'TestDarwinInheritedTTYCancel' and r.get('Action') == 'fail' for r in rows)
+          assert 'sent=1, deadline=context deadline exceeded' in ''.join(r.get('Output', '') for r in rows)
+          PY
+      # Strict before/after proof runs on macOS 26. The old macOS 15 code can
+      # also deadlock in child reaping; the current suite still covers both OSes.
+      - name: Reproduce queued cancellation consuming another owner's line
+        if: ${{ !cancelled() && matrix.os == 'macos-26' }}
+        shell: bash
+        run: |
+          baseline="$RUNNER_TEMP/TEST-consent-baseline"
+          mkdir -p "$baseline"
+          git archive f4b11718830d98d9f75adbf8ed6b87eab25ce820 | tar -x -C "$baseline"
+          cp cli/internal/terminalprompts/consent_pty_test.go cli/internal/terminalprompts/consent_virtual_darwin_test.go "$baseline/cli/internal/terminalprompts/"
+          cd "$baseline/cli"
+          if go test -json -timeout=25s -run '^TestDarwinVirtualTTYConsent/queued-escape-enter-next-owner$' ./internal/terminalprompts > "$RUNNER_TEMP/TEST-terminal-evidence/consent-baseline.jsonl"; then
+            echo 'Queued input regression did not reproduce'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          rows = [json.loads(s) for s in (Path(os.environ['RUNNER_TEMP']) / 'TEST-terminal-evidence/consent-baseline.jsonl').read_text().splitlines()]
+          assert any(r.get('Test') == 'TestDarwinVirtualTTYConsent/queued-escape-enter-next-owner' and r.get('Action') == 'fail' for r in rows)
+          assert 'next owner: "" context deadline exceeded' in ''.join(r.get('Output', '') for r in rows)
+          PY
+      - name: Verify cancellation, restoration and next-owner reuse
+        if: ${{ !cancelled() }}
+        shell: bash
+        working-directory: cli
+        run: go test -json -race -count=1 -timeout=5m ./installerui ./internal/promptio ./internal/terminalreader ./internal/terminalprompts > "$RUNNER_TEMP/TEST-terminal-evidence/current.jsonl"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: darwin-terminal-cancel-${{ matrix.os }}
+          path: ${{ runner.temp }}/TEST-terminal-evidence
+          if-no-files-found: error

@@ -35,12 +35,13 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 }
 
 func (session *groupSession) activateOneGroupTarget(plannedIndex int, target plannedGroupTarget) error {
+	previousObservation := target.plan.LocalEntryObservation.Clone()
 	outcome, nativeComplete, activationErr := session.activateGroupDelivery(target)
 	previousNativeObjects := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previousNativeObjects = target.managed.NativeObjects
 	}
-	lifecycleChanged, persistErr := session.service.updateActivationResult(session.installationID, target.clientBindingID, outcome, activationErr, previousNativeObjects)
+	lifecycleChanged, persistErr := session.service.updateActivationResultWithObservation(session.installationID, target.clientBindingID, outcome, activationErr, previousNativeObjects, previousObservation)
 	if lifecycleChanged {
 		session.result.Mutated = true
 	}
@@ -48,7 +49,9 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 		target.noChange = false
 	}
 	session.assignActivationOutcome(target, outcome, activationErr, persistErr, lifecycleChanged)
-	session.reportGroupProgress(target, GroupProgressActivated)
+	if err := session.reportGroupProgress(target, GroupProgressActivated); err != nil {
+		return err
+	}
 	logicalTotal := len(session.result.Targets)
 	if persistErr != nil {
 		session.externalFailed += len(target.resultIndexes)

@@ -14,6 +14,9 @@ import { clients } from '../data/clients.ts';
 import * as registryDomain from '../utils/registry.ts';
 import * as filters from '../utils/filter.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { discoveryPlugin } from '../utils/discovery.ts';
+import { signedDiscoveryFixture } from './fixtures/signed-discovery.ts';
+import { createMemoryHistory, createRouter, type RouteLocationRaw } from 'vue-router';
 
 const fixture = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
@@ -22,6 +25,11 @@ const messages = JSON.parse(
   readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
 );
 const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({ legacy: false, locale: 'en', messages: { en: messages } }).global;
+const discoveryStatus = ref({ state: 'current', count: 0 });
+const discoveryHelpers = runInNewContext(
+  stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '') + '\n({ useDiscoveryIsStale });',
+  { computed, useState: () => discoveryStatus },
+);
 const common = {
   computed,
   ref,
@@ -30,6 +38,8 @@ const common = {
   ...registryDomain,
   ...filters,
   pluginCommands,
+  onScopeDispose: Vue.onScopeDispose,
+  ...discoveryHelpers,
   useI18n: () => i18n,
   useLocalePath: () => (path: string) => path,
   useInstallPreferencesStore,
@@ -67,6 +77,31 @@ function card(props = packageProps()) {
     'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authLabel, toggleInstall',
   );
 }
+
+test('expired community card and detail produce pinned commands with compatible targets while unavailable packages stay blocked', () => {
+  setActivePinia(createPinia());
+  const data = signedDiscoveryFixture({ generated: '2000-01-01T00:00:00Z', expires: '2000-01-02T00:00:00Z' });
+  const plugin = discoveryPlugin(data.snapshot.records[0]!, data.snapshot);
+  const expected = `npx universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
+  const instance = card(packageProps(plugin));
+  assert.equal(instance.state.command.value, expected);
+  instance.state.updateTargets(['codex']);
+  instance.state.updateAutoDetect(false);
+  assert.equal(instance.state.command.value, `${expected} --target codex`);
+  instance.stop();
+  const panel = setup('InstallPanel', {
+    defineProps: () => ({ plugin }),
+    defineModel: (name: string) => name === 'targets' ? ref(['codex']) : ref(false),
+    useDirectoryStatus: () => ({ current: ref(false), published: ref(false), expired: ref(true) }),
+  }, 'commands, unavailableDiscoveryReason');
+  assert.equal(panel.state.commands.value.add, `${expected} --target codex`);
+  assert.equal(panel.state.unavailableDiscoveryReason.value, '');
+  panel.stop();
+  const unavailable = discoveryPlugin({ ...data.snapshot.records[0]!, availability: 'unavailable' }, data.snapshot);
+  const blocked = card(packageProps(unavailable));
+  assert.equal(blocked.state.command.value, '');
+  blocked.stop();
+});
 
 test('catalog SSR defaults do not populate install preferences; valid manual selection survives locale remount', async () => {
   setActivePinia(createPinia());
@@ -231,6 +266,71 @@ test('catalog Show more survives language remount and filter changes replace its
   await nextTick();
   assert.equal(changedInitial.state.displayLimit.value, 48);
   changedInitial.stop();
+});
+
+test('clearing search during URL navigation persists the latest input and external navigation still restores filters', async () => {
+  setActivePinia(createPinia());
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: {} }] });
+  await router.push('/');
+  const route = reactive({
+    get path() { return router.currentRoute.value.path; },
+    get query() { return router.currentRoute.value.query; },
+    get hash() { return router.currentRoute.value.hash; },
+  });
+  function barrier() {
+    let release!: () => void;
+    let enter!: () => void;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    return { release, enter, wait, entered };
+  }
+  let gate = barrier();
+  router.beforeEach(async to => {
+    if (to.query.q !== 'gitlab') return;
+    const blocked = gate;
+    blocked.enter();
+    await blocked.wait;
+  });
+  const writes: Promise<unknown>[] = [];
+  const instance = setup('PluginCatalog', {
+    defineProps: () => ({ plugins: [fixture] }),
+    withDefaults: (value: unknown) => value,
+    useRoute: () => route,
+    useRouter: () => ({ replace: (target: RouteLocationRaw) => {
+      const write = router.replace(target);
+      writes.push(write);
+      return write;
+    } }),
+    useDiscoveryStatus: () => ref({ state: 'idle' }),
+    canonicalPath: (path: string) => path,
+  }, 'query, client');
+  try {
+    instance.state.query.value = 'gitlab';
+    await gate.entered;
+    instance.state.query.value = '';
+    await nextTick();
+    gate.release();
+    await writes[0];
+    await nextTick();
+    await writes.at(-1);
+    await nextTick();
+    assert.equal(instance.state.query.value, '');
+    assert.equal(router.currentRoute.value.query.q, undefined);
+
+    gate = barrier();
+    instance.state.query.value = 'gitlab';
+    await gate.entered;
+    await router.replace({ query: { q: 'external', client: 'cursor' } });
+    gate.release();
+    await writes.at(-1);
+    await nextTick();
+    assert.equal(instance.state.query.value, 'external');
+    assert.equal(instance.state.client.value, 'cursor');
+    assert.equal(router.currentRoute.value.query.q, 'external');
+  } finally {
+    gate.release();
+    instance.stop();
+  }
 });
 
 

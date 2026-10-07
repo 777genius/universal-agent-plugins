@@ -3,6 +3,15 @@
 Status: prepared reference only; not a public release. Source baseline:
 `070663efb27f69ecae8609e6b839f86f843efbb0`.
 
+PR #368's audited compatible input update advances only the `domain/clients.go`
+pin to the exact blob in `2896b1855d3b1464765bb2c38356d7aee742d4cd` (SHA-256
+`b24f2ecd462b72c0a1e8fee2f0ac4330a34cb9f512fd12e32a8ec489586f3a9f`).
+Its sole semantic change from the previously pinned blob is Gemini's
+`BindsNativeProfileRoot: true` installer trait. The loaded help/flag/Markdown
+projection still matches the existing reviewed golden. The factory baseline
+above remains the audited historical reference; all other pins and integrity
+checks remain in force. This update preserves prepared/not-released status.
+
 The separate executable lives at `cli/tools/authoring-docs` in
 module `github.com/777genius/plugin-kit-ai/cli`, allowing existing internal
 imports. It adds no runtime registration and changes no production factory.

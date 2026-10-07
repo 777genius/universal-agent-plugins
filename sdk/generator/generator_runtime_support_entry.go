@@ -54,6 +54,10 @@ func supportBucketFuncName(platform string) string {
 		return "claudeSupportEntries"
 	case "gemini":
 		return "geminiSupportEntries"
+	case "cursor":
+		return "cursorSupportEntries"
+	case "vscode-local":
+		return "vscodeLocalSupportEntries"
 	case "codex":
 		return "codexSupportEntries"
 	default:

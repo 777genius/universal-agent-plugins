@@ -8,7 +8,14 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-var _ clients.PlanRefiner = (*Adapter)(nil)
+var (
+	_ clients.PlanRefiner      = (*Adapter)(nil)
+	_ clients.PlanPrecondition = (*Adapter)(nil)
+)
+
+func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	return validateProfile(in.Client.ConfigRoot, plan.NativeRegistryRoot)
+}
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))

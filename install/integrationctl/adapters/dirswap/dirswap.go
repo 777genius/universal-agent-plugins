@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 )
 
@@ -37,28 +38,43 @@ const (
 	FaultRollbackRemoved   = "rollback_active_removed"
 )
 
+type ProfileOwner struct {
+	Namespace       string                       `json:"namespace"`
+	InstallationID  string                       `json:"installation_id"`
+	ClientID        string                       `json:"client_id"`
+	ClientBindingID string                       `json:"client_binding_id"`
+	Authority       *directoryidentity.Authority `json:"authority"`
+}
 type Receipt struct {
-	SchemaVersion         int    `json:"schema_version"`
-	Operation             string `json:"operation"`
-	OperationID           string `json:"operation_id"`
-	ClientBindingID       string `json:"client_binding_id"`
-	Sequence              int    `json:"sequence"`
-	OwnedBaseIdentity     string `json:"owned_base_identity"`
-	StagingParentIdentity string `json:"staging_parent_identity,omitempty"`
-	OwnedBase             string `json:"owned_base"`
-	ActivePath            string `json:"active_path"`
-	StagingPath           string `json:"staging_path,omitempty"`
-	BackupPath            string `json:"backup_path"`
-	HadActive             bool   `json:"had_active"`
-	Phase                 string `json:"phase"`
-	BackupIdentity        string `json:"backup_identity,omitempty"`
-	BackupDigest          string `json:"backup_digest,omitempty"`
-	QuarantinePath        string `json:"quarantine_path"`
-	PublishedIdentity     string `json:"published_identity,omitempty"`
-	PublishedDigest       string `json:"published_digest,omitempty"`
+	ProfileOwners          []ProfileOwner               `json:"profile_owners,omitempty"`
+	DataReceiptID          string                       `json:"data_receipt_id,omitempty"`
+	OwnedBaseAuthority     *directoryidentity.Authority `json:"owned_base_authority,omitempty"`
+	StagingParentAuthority *directoryidentity.Authority `json:"staging_parent_authority,omitempty"`
+	OldObject              *directoryidentity.Entry     `json:"old_object,omitempty"`
+	PublishedObject        *directoryidentity.Entry     `json:"published_object,omitempty"`
+	SchemaVersion          int                          `json:"schema_version"`
+	Operation              string                       `json:"operation"`
+	OperationID            string                       `json:"operation_id"`
+	ClientBindingID        string                       `json:"client_binding_id"`
+	Sequence               int                          `json:"sequence"`
+	OwnedBaseIdentity      string                       `json:"owned_base_identity"`
+	StagingParentIdentity  string                       `json:"staging_parent_identity,omitempty"`
+	OwnedBase              string                       `json:"owned_base"`
+	ActivePath             string                       `json:"active_path"`
+	StagingPath            string                       `json:"staging_path,omitempty"`
+	BackupPath             string                       `json:"backup_path"`
+	HadActive              bool                         `json:"had_active"`
+	Phase                  string                       `json:"phase"`
+	BackupIdentity         string                       `json:"backup_identity,omitempty"`
+	BackupDigest           string                       `json:"backup_digest,omitempty"`
+	QuarantinePath         string                       `json:"quarantine_path"`
+	PublishedIdentity      string                       `json:"published_identity,omitempty"`
+	PublishedDigest        string                       `json:"published_digest,omitempty"`
 }
 
 type Input struct {
+	ProfileOwners   []ProfileOwner
+	DataReceiptID   string
 	OperationID     string
 	ClientBindingID string
 	Sequence        int
@@ -81,7 +97,10 @@ type Input struct {
 }
 
 type Manager struct {
-	JournalDir string
+	RequiredOwners []ProfileOwner
+	CheckOpen      bool
+	Namespace      string
+	JournalDir     string
 	// Fault is a test seam around durable phases and otherwise unreachable
 	// crash windows. Production callers leave it nil.
 	Fault func(phase string) error
@@ -90,6 +109,9 @@ type Manager struct {
 func (manager Manager) Apply(ctx context.Context, input Input) (result Receipt, resultErr error) {
 	defer func() { resultErr = manager.recoveryError(result, resultErr) }()
 	if err := ctx.Err(); err != nil {
+		return Receipt{}, err
+	}
+	if err := manager.validateOwners(ctx, input.ProfileOwners); err != nil {
 		return Receipt{}, err
 	}
 	receipt, err := manager.newReceipt(ctx, input)
@@ -152,6 +174,9 @@ func (manager Manager) Apply(ctx context.Context, input Input) (result Receipt, 
 		if err := matchesBackup(receipt, receipt.BackupPath); err != nil {
 			return receipt, err
 		}
+	}
+	if err := manager.validateReceipt(receipt); err != nil {
+		return receipt, err
 	}
 	if receipt.Operation == OperationSwap {
 		if err := matchesPublication(receipt, receipt.StagingPath); err != nil {
@@ -254,6 +279,9 @@ func (manager Manager) Rollback(ctx context.Context, receipt Receipt) (resultErr
 func (manager Manager) Recover(ctx context.Context, operationID string, stateCommitted bool) error {
 	receipt, err := manager.Load(operationID)
 	if err != nil {
+		return err
+	}
+	if err := manager.validateReceipt(receipt); err != nil && receipt.SchemaVersion != 3 {
 		return err
 	}
 	if receipt.SchemaVersion == 3 {
@@ -391,7 +419,7 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 	if err := pathpolicy.ValidateLeafID(input.OperationID); err != nil {
 		return Receipt{}, fmt.Errorf("unsafe directory swap operation id: %w", err)
 	}
-	if err := pathpolicy.ValidateLeafID(input.ClientBindingID); err != nil {
+	if err := pathpolicy.ValidateLeafID(input.ClientBindingID); err != nil && (len(input.ProfileOwners) == 0 || input.DataReceiptID == "" || input.ClientBindingID != "") {
 		return Receipt{}, fmt.Errorf("unsafe directory swap client binding id: %w", err)
 	}
 	if input.Sequence < 1 {
@@ -459,6 +487,22 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 	if !input.RequireAbsent && !hadActive {
 		return Receipt{}, fmt.Errorf("expected owned active directory is missing")
 	}
+	physical := Receipt{}
+	if len(input.ProfileOwners) > 0 {
+		physical.OwnedBaseAuthority, err = captureAuthority(ctx, ownedBase)
+		if err == nil && operation == OperationSwap {
+			physical.StagingParentAuthority, err = captureAuthority(ctx, filepath.Dir(stagingPath))
+		}
+		if err == nil && hadActive {
+			physical.OldObject, err = captureObject(ctx, activePath)
+		}
+		if err == nil && operation == OperationSwap {
+			physical.PublishedObject, err = captureObject(ctx, stagingPath)
+		}
+		if err != nil {
+			return Receipt{}, err
+		}
+	}
 	backupIdentity, backupDigest := "", ""
 	if hadActive {
 		backupIdentity, backupDigest, err = publicationProof(activePath)
@@ -509,7 +553,7 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 			return Receipt{}, err
 		}
 	}
-	return Receipt{
+	receipt := Receipt{
 		OwnedBaseIdentity: ownedBaseIdentity, StagingParentIdentity: stagingParentIdentity,
 		PublishedIdentity: publishedIdentity, PublishedDigest: publishedDigest,
 		BackupIdentity: backupIdentity, BackupDigest: backupDigest, QuarantinePath: quarantinePath,
@@ -524,17 +568,37 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 		BackupPath:      backupPath,
 		HadActive:       hadActive,
 		Phase:           PhaseIntent,
-	}, nil
+	}
+	if len(input.ProfileOwners) > 0 {
+		receipt.SchemaVersion = 5
+		receipt.DataReceiptID = input.DataReceiptID
+		for _, owner := range input.ProfileOwners {
+			token := *owner.Authority
+			owner.Authority = &token
+			receipt.ProfileOwners = append(receipt.ProfileOwners, owner)
+		}
+		receipt.OwnedBaseAuthority = physical.OwnedBaseAuthority
+		receipt.StagingParentAuthority = physical.StagingParentAuthority
+		receipt.OldObject = physical.OldObject
+		receipt.PublishedObject = physical.PublishedObject
+	}
+	if err := manager.validateReceipt(receipt); err != nil {
+		return Receipt{}, err
+	}
+	return receipt, nil
 }
 
 func (manager Manager) validateReceipt(receipt Receipt) error {
-	if receipt.SchemaVersion != receiptSchemaVersion {
+	if err := manager.validatePhysical(receipt); err != nil {
+		return err
+	}
+	if receipt.SchemaVersion != receiptSchemaVersion && receipt.SchemaVersion != 5 {
 		return fmt.Errorf("unsupported directory swap receipt schema_version %d", receipt.SchemaVersion)
 	}
 	if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 		return fmt.Errorf("unsafe directory swap receipt operation id: %w", err)
 	}
-	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil {
+	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil && (receipt.SchemaVersion != 5 || receipt.DataReceiptID == "" || receipt.ClientBindingID != "") {
 		return fmt.Errorf("unsafe directory swap receipt client binding id: %w", err)
 	}
 	if receipt.Sequence < 1 {
@@ -631,6 +695,9 @@ func syncReceiptParents(receipt Receipt, includeStaging bool) error {
 }
 
 func (manager Manager) save(receipt Receipt) error {
+	if err := manager.validatePhysical(receipt); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(manager.JournalDir, 0o700); err != nil {
 		return err
 	}
@@ -684,3 +751,178 @@ func removeOwnedDirectory(base, path string) error {
 	}
 	return nil
 }
+
+func captureAuthority(ctx context.Context, path string) (*directoryidentity.Authority, error) {
+	token, err := directoryidentity.Capture(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return &token, nil
+}
+func captureObject(ctx context.Context, path string) (*directoryidentity.Entry, error) {
+	token, err := directoryidentity.Capture(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	facts := token.Facts()
+	e := facts.Ancestry[len(facts.Ancestry)-1]
+	return &e, nil
+}
+func (manager Manager) validateOwners(ctx context.Context, owners []ProfileOwner) error {
+	if len(owners) > 256 {
+		return fmt.Errorf("profile owner scope limit")
+	}
+	seen := map[[4]string]bool{}
+	for _, o := range owners {
+		key := [4]string{o.Namespace, o.InstallationID, o.ClientID, o.ClientBindingID}
+		if manager.Namespace == "" || o.Namespace != manager.Namespace || o.InstallationID == "" || o.ClientID == "" || o.ClientBindingID == "" || o.Authority == nil || o.Authority.IsZero() || seen[key] {
+			return fmt.Errorf("invalid exact profile owner scope")
+		}
+		seen[key] = true
+		if err := directoryidentity.Revalidate(ctx, *o.Authority); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (manager Manager) validatePhysical(r Receipt) error {
+	if manager.CheckOpen {
+		scan := manager
+		scan.CheckOpen = false
+		if _, err := scan.ListOpen(); err != nil {
+			return err
+		}
+	}
+	if err := manager.validateOwners(context.Background(), manager.RequiredOwners); err != nil {
+		return err
+	}
+	if r.SchemaVersion != 5 {
+		if len(r.ProfileOwners) != 0 || r.OwnedBaseAuthority != nil || r.StagingParentAuthority != nil || r.OldObject != nil || r.PublishedObject != nil {
+			return fmt.Errorf("physical proofs require schema 5")
+		}
+		return nil
+	}
+	if r.DataReceiptID != "" {
+		if err := pathpolicy.ValidateLeafID(r.DataReceiptID); err != nil {
+			return err
+		}
+		if r.ClientBindingID != "" {
+			return fmt.Errorf("data operation cannot invent a binding")
+		}
+	}
+	if len(r.ProfileOwners) == 0 {
+		return fmt.Errorf("schema 5 requires exact profile owners")
+	}
+	if err := manager.validateOwners(context.Background(), r.ProfileOwners); err != nil {
+		return err
+	}
+	for _, role := range []struct {
+		path  string
+		token *directoryidentity.Authority
+	}{{r.OwnedBase, r.OwnedBaseAuthority}, {filepath.Dir(r.StagingPath), r.StagingParentAuthority}} {
+		if role.token == nil && r.Operation == OperationRemove && role.path == "." {
+			continue
+		}
+		if role.token == nil || role.token.IsZero() || role.token.Facts().CanonicalRoot != role.path {
+			return fmt.Errorf("physical parent proof missing or misplaced")
+		}
+		if err := directoryidentity.Revalidate(context.Background(), *role.token); err != nil {
+			return err
+		}
+	}
+	if r.HadActive != (r.OldObject != nil) || (r.Operation == OperationSwap) != (r.PublishedObject != nil) {
+		return fmt.Errorf("physical object role proof missing")
+	}
+	if r.OldObject != nil && r.OldObject.CanonicalPath != r.ActivePath || r.PublishedObject != nil && r.PublishedObject.CanonicalPath != r.StagingPath {
+		return fmt.Errorf("physical object proof has wrong original role")
+	}
+	return validatePhysicalRoles(r)
+}
+
+func validatePhysicalRoles(r Receipt) error {
+	quarantineOld := r.Phase == PhaseCommitPending || r.Phase == PhaseCommitted
+	for _, role := range []struct {
+		path string
+		old  bool
+	}{{r.BackupPath, true}, {r.StagingPath, false}, {r.QuarantinePath, quarantineOld}} {
+		if role.path == "" {
+			continue
+		}
+		if exists, err := realDirectoryExists(role.path); err != nil {
+			return err
+		} else if exists {
+			check := matchesPublication
+			if role.old {
+				check = matchesBackup
+			}
+			if err := check(r, role.path); err != nil {
+				return err
+			}
+		}
+	}
+	if exists, err := realDirectoryExists(r.ActivePath); err != nil {
+		return err
+	} else if exists {
+		old := r.Phase == PhaseIntent || r.Phase == PhaseBackupPending || r.Phase == PhaseRolledBack
+		if r.Phase == PhaseRollbackPending && matchesObject(r.ActivePath, r.OldObject) == nil {
+			old = true
+		}
+		check := matchesPublication
+		if old {
+			check = matchesBackup
+		}
+		if err := check(r, r.ActivePath); err != nil {
+			return err
+		}
+	}
+	return validateRequiredPhysicalRoles(r)
+}
+
+// A pending decision also needs its remaining recovery object. Checking only
+// present roles would let a missing late backup evade whole-journal preflight.
+func validateRequiredPhysicalRoles(r Receipt) error {
+	switch r.Phase {
+	case PhaseActivated, PhaseCommitPending, PhaseCommitted:
+		if r.Operation == OperationSwap {
+			if err := matchesPublication(r, r.ActivePath); err != nil {
+				return err
+			}
+		} else if err := requireMissing(r.ActivePath); err != nil {
+			return err
+		}
+		if r.Phase != PhaseActivated {
+			// Finalization can already have deleted the proven original backup.
+			return nil
+		}
+	case PhaseRolledBack:
+		return requireRollbackResult(r)
+	}
+	if r.HadActive {
+		backup, err := realDirectoryExists(r.BackupPath)
+		if err != nil {
+			return err
+		}
+		if backup {
+			return matchesBackup(r, r.BackupPath)
+		}
+		// Before backup rename or after rollback, the original can be active.
+		return matchesBackup(r, r.ActivePath)
+	}
+	return nil
+}
+func matchesObject(path string, expected *directoryidentity.Entry) error {
+	if expected == nil {
+		return fmt.Errorf("physical object proof missing for %s", path)
+	}
+	actual, err := captureObject(context.Background(), path)
+	if err != nil {
+		return err
+	}
+	if actual.Scheme != expected.Scheme || actual.VolumeID != expected.VolumeID || actual.ObjectID != expected.ObjectID {
+		return fmt.Errorf("physical object changed at %s", path)
+	}
+	return nil
+}
+
+// VerifyRecorded revalidates immutable role proofs without replay or journal writes.
+func (manager Manager) VerifyRecorded(r Receipt) error { return manager.validateReceipt(r) }

@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 const (
 	LegacyStateSchemaVersion   = 2
 	PreviousStateSchemaVersion = 3
@@ -119,30 +121,46 @@ type PackageBinding struct {
 	Inventory      ComponentInventory `json:"inventory"`
 }
 
+// CursorHookReceipt carries the primitive facts of the pure hook planner.
+// Zero is no ownership proof; omitzero preserves Local and legacy wire bytes.
+type CursorHookReceipt struct {
+	Version         int    `json:"version"`
+	Event           string `json:"event"`
+	Executable      string `json:"executable"`
+	Selector        string `json:"selector"`
+	Shell           string `json:"shell"`
+	EntryDigest     string `json:"entry_digest"`
+	RemainderDigest string `json:"remainder_digest"`
+}
+
 type NativeObjectOwnership struct {
-	ObjectID        string `json:"object_id"`
-	Kind            string `json:"kind"`
-	LogicalName     string `json:"logical_name,omitempty"`
-	Path            string `json:"path,omitempty"`
-	SourceRelative  string `json:"source_relative,omitempty"`
-	BeforeDigest    string `json:"before_digest,omitempty"`
-	ManagedDigest   string `json:"managed_digest,omitempty"`
-	ProtectionClass string `json:"protection_class"`
-	UserModified    bool   `json:"user_modified,omitempty"`
+	CursorReceipt   CursorHookReceipt `json:"cursor_receipt,omitzero"`
+	ObjectID        string            `json:"object_id"`
+	Kind            string            `json:"kind"`
+	LogicalName     string            `json:"logical_name,omitempty"`
+	Path            string            `json:"path,omitempty"`
+	SourceRelative  string            `json:"source_relative,omitempty"`
+	BeforeDigest    string            `json:"before_digest,omitempty"`
+	ManagedDigest   string            `json:"managed_digest,omitempty"`
+	ProtectionClass string            `json:"protection_class"`
+	UserModified    bool              `json:"user_modified,omitempty"`
 }
 
 type MutationReceipt struct {
-	OperationID      string `json:"operation_id"`
-	OperationGroupID string `json:"operation_group_id,omitempty"`
-	Sequence         int    `json:"sequence"`
-	MutationType     string `json:"mutation_type"`
-	ClientBindingID  string `json:"client_binding_id"`
-	ActivePath       string `json:"active_path,omitempty"`
-	StagingPath      string `json:"staging_path,omitempty"`
-	BackupPath       string `json:"backup_path,omitempty"`
-	BeforeDigest     string `json:"before_digest,omitempty"`
-	AfterDigest      string `json:"after_digest,omitempty"`
-	Phase            string `json:"phase"`
+	DirectoryProof   json.RawMessage        `json:"physical_directory_proof,omitempty"`
+	ProfileOwners    []PhysicalProfileOwner `json:"profile_owners,omitempty"`
+	DataReceiptID    string                 `json:"data_receipt_id,omitempty"`
+	OperationID      string                 `json:"operation_id"`
+	OperationGroupID string                 `json:"operation_group_id,omitempty"`
+	Sequence         int                    `json:"sequence"`
+	MutationType     string                 `json:"mutation_type"`
+	ClientBindingID  string                 `json:"client_binding_id"`
+	ActivePath       string                 `json:"active_path,omitempty"`
+	StagingPath      string                 `json:"staging_path,omitempty"`
+	BackupPath       string                 `json:"backup_path,omitempty"`
+	BeforeDigest     string                 `json:"before_digest,omitempty"`
+	AfterDigest      string                 `json:"after_digest,omitempty"`
+	Phase            string                 `json:"phase"`
 }
 
 // ClientPackageRevision records the exact portable package revision that was
@@ -159,20 +177,25 @@ type ClientPackageRevision struct {
 }
 
 type ClientBinding struct {
-	InstallIntent    InstallIntent          `json:"install_intent,omitempty"`
-	ClientBindingID  string                 `json:"client_binding_id"`
-	ClientID         string                 `json:"client_id"`
-	Scope            string                 `json:"scope"`
-	TargetLocator    string                 `json:"target_locator"`
-	PhysicalArtifact string                 `json:"physical_artifact_id"`
-	Materialization  MaterializationState   `json:"materialization"`
-	Activation       ActivationState        `json:"activation"`
-	Authentication   AuthenticationState    `json:"authentication"`
-	Policy           PolicyState            `json:"policy"`
-	Verification     VerificationState      `json:"verification"`
-	PackageRevision  *ClientPackageRevision `json:"package_revision,omitempty"`
-	DataReceiptID    string                 `json:"data_receipt_id,omitempty"`
-	AffectedSurfaces []string               `json:"affected_surfaces,omitempty"`
+	ProfileAuthority      *ProfileAuthority      `json:"profile_authority,omitempty"`
+	ProfileNamespace      string                 `json:"profile_namespace,omitempty"`
+	LocalEntryObservation *LocalEntryObservation `json:"local_entry_observation,omitempty"`
+	SelectedDelivery      SelectedDelivery       `json:"selected_delivery,omitzero"`
+	PendingNativeIntent   *PendingNativeIntent   `json:"pending_native_intent,omitempty"`
+	InstallIntent         InstallIntent          `json:"install_intent,omitempty"`
+	ClientBindingID       string                 `json:"client_binding_id"`
+	ClientID              string                 `json:"client_id"`
+	Scope                 string                 `json:"scope"`
+	TargetLocator         string                 `json:"target_locator"`
+	PhysicalArtifact      string                 `json:"physical_artifact_id"`
+	Materialization       MaterializationState   `json:"materialization"`
+	Activation            ActivationState        `json:"activation"`
+	Authentication        AuthenticationState    `json:"authentication"`
+	Policy                PolicyState            `json:"policy"`
+	Verification          VerificationState      `json:"verification"`
+	PackageRevision       *ClientPackageRevision `json:"package_revision,omitempty"`
+	DataReceiptID         string                 `json:"data_receipt_id,omitempty"`
+	AffectedSurfaces      []string               `json:"affected_surfaces,omitempty"`
 	// NativeProfileRoot binds a registration to its selected native profile.
 	NativeProfileRoot string `json:"native_profile_root,omitempty"`
 	// NativeActivationAttempt marks a potentially unacknowledged native effect.
@@ -234,4 +257,24 @@ type StateFileV2 struct {
 	SchemaVersion       int               `json:"schema_version"`
 	Installations       []Installation    `json:"installations"`
 	TransactionReceipts []MutationReceipt `json:"transaction_receipts,omitempty"`
+}
+
+// PhysicalProfileOwner freezes durable scope independently of a surviving binding.
+type PhysicalProfileOwner struct {
+	Namespace       string            `json:"namespace"`
+	InstallationID  string            `json:"installation_id"`
+	ClientID        string            `json:"client_id"`
+	ClientBindingID string            `json:"client_binding_id"`
+	Authority       *ProfileAuthority `json:"authority"`
+}
+
+func CloneProfileAuthority(a *ProfileAuthority) *ProfileAuthority {
+	if a == nil {
+		return nil
+	}
+	copied := *a
+	return &copied
+}
+func SameProfileAuthority(a, b *ProfileAuthority) bool {
+	return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
 }

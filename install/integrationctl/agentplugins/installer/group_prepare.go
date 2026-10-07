@@ -15,6 +15,7 @@ func (e *Engine) prepareMutatingGroup(ctx context.Context, req Request) (*Prepar
 	if err != nil {
 		return nil, err
 	}
+	detected = physicalDetected(req, detected)
 	roots, err := e.groupPackageRoots(req)
 	if err != nil {
 		return nil, err
@@ -23,6 +24,9 @@ func (e *Engine) prepareMutatingGroup(ctx context.Context, req Request) (*Prepar
 		return nil, err
 	}
 	e.report(ProgressPrepare)
+	if err := e.checkRequestProfiles(ctx, req); err != nil {
+		return nil, err
+	}
 	handle := &PreparedOperation{engine: e, req: req, detected: detected}
 	envelopes, err := e.loadGroupPackages(ctx, handle, roots)
 	if err != nil {
@@ -33,12 +37,25 @@ func (e *Engine) prepareMutatingGroup(ctx context.Context, req Request) (*Prepar
 		_ = handle.closeLocked()
 		return nil, err
 	}
+	for i := range clients {
+		clients[i] = physicalClient(req, clients[i])
+		inputs[i].Client = clients[i]
+	}
 	if err := e.requireGroupBindings(req, clients); err != nil {
 		_ = handle.closeLocked()
 		return nil, err
 	}
+	handle.recorded, err = e.store.Load()
+	if err != nil {
+		_ = handle.closeLocked()
+		return nil, err
+	}
 	helper, _ := e.helper()
-	svc := e.lifecycle(helper, BindingFacts{}, handle.detected)
+	previewFacts := BindingFacts{}
+	if installation, ok := findInstall(handle.recorded, req.InstallationID); ok {
+		previewFacts.InstallationID = installation.InstallationID
+	}
+	svc := confirmationLifecycle(handle, e.lifecycle(helper, previewFacts, handle.detected), true)
 	preview, err := e.previewGroup(ctx, svc, req, inputs)
 	if err != nil {
 		_ = handle.closeLocked()
@@ -129,7 +146,7 @@ func (e *Engine) planMutatingGroup(handle *PreparedOperation, roots []string, en
 	helperVersion, helperDigest := e.helperIdentity()
 	handle.clients = clients
 	handle.client = clients[0]
-	handle.plan = Plan{
+	handle.plan = Plan{ProfileAuthority: domain.CloneProfileAuthority(clients[0].ProfileAuthority),
 		Operation: req.Operation, SourceRoot: roots[0], TreeDigest: envelopes[0].TreeDigest,
 		DigestAlgorithm: handle.snapshot.DigestAlgorithm, ClientID: string(clients[0].ClientID),
 		ConfigRoot: clients[0].ConfigRoot, InstallationID: firstNonEmpty(req.InstallationID, preview.InstallationID),
@@ -137,21 +154,25 @@ func (e *Engine) planMutatingGroup(handle *PreparedOperation, roots []string, en
 		NoChange: groupPreviewUnchanged(preview),
 	}
 	if len(preview.Targets) > 0 {
+		handle.plan.SelectedDelivery = preview.Targets[0].Plan.SelectedDelivery
+		handle.plan.Delivery = deliveryPlan(preview.Targets[0].Plan)
 		handle.plan.TargetPath = preview.Targets[0].Plan.ActivePath
 		handle.plan.BindingID = domain.ComputeClientBindingID(handle.plan.InstallationID, string(preview.Targets[0].Plan.ClientID), string(preview.Targets[0].Plan.Scope), preview.Targets[0].Plan.ActivePath)
 		handle.artifact = preview.Targets[0].Plan.PhysicalArtifactID
 	}
 	for i, target := range preview.Targets {
 		client := clients[i]
-		handle.plan.Targets = append(handle.plan.Targets, PlanTarget{
+		handle.plan.Targets = append(handle.plan.Targets, PlanTarget{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority),
 			ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,
 			TargetPath: target.Plan.ActivePath, TreeDigest: envelopes[i].TreeDigest,
 			BindingID: domain.ComputeClientBindingID(handle.plan.InstallationID, string(target.Plan.ClientID), string(target.Plan.Scope), target.Plan.ActivePath),
-			NoChange:  target.NoChange,
+			NoChange:  target.NoChange, SelectedDelivery: target.Plan.SelectedDelivery,
 		})
 	}
-	handle.facts = BindingFacts{
-		InstallationID: handle.plan.InstallationID, ClientID: handle.plan.ClientID,
+	handle.req.InstallationID = handle.plan.InstallationID
+	handle.facts = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(handle.client.ProfileAuthority),
+		SelectedDelivery: handle.plan.SelectedDelivery,
+		InstallationID:   handle.plan.InstallationID, ClientID: handle.plan.ClientID,
 		BindingID: handle.plan.BindingID, TargetPath: handle.plan.TargetPath,
 		OperationID: req.OperationID, TreeDigest: envelopes[0].TreeDigest,
 	}

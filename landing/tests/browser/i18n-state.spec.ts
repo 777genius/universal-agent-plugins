@@ -214,7 +214,8 @@ for (const outcome of ['success', 'error', 'security'] as const) {
           await expect(page.locator('.download-section__install-tab[aria-pressed="true"]')).toContainText('npx');
           await navigate(page, '/plugins/', 'en', '?q=gitlab&client=cursor');
         }
-        await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', outcome === 'error' ? 'unavailable' : 'current', { timeout: 15_000 });
+        // Remounts may reuse the reverified fresh snapshot at the same sequence.
+        await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', outcome === 'error' ? 'unavailable' : /^(current|cached)$/, { timeout: 15_000 });
         await expect(page.getByRole('searchbox', { name: t('registryUi.catalog.searchPlugins') })).toHaveValue('gitlab');
         await expect(page.locator('.catalog-active-filters')).toContainText(`${t('registryUi.catalog.agent')}: Cursor`);
         await expect(page.locator('.plugin-card[data-install-source="gitlab"]').getByRole('heading', { name: 'GitLab', exact: true })).toBeVisible();

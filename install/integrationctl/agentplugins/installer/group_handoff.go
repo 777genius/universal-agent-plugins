@@ -8,6 +8,9 @@ import (
 )
 
 func (e *Engine) reconcileGroupHostHandoff(ctx context.Context, prepared *PreparedOperation, result *Result) (bool, error) {
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return false, err
+	}
 	state, err := e.store.Load()
 	if err != nil {
 		return false, fmt.Errorf("read installation state: %w", err)
@@ -29,16 +32,20 @@ func (e *Engine) reconcileGroupHostHandoff(ctx context.Context, prepared *Prepar
 		if e.cfg.OnCommittedBinding == nil {
 			continue
 		}
-		facts := BindingFacts{
-			InstallationID: firstNonEmpty(installation.InstallationID, installationID),
-			ClientID:       binding.ClientID,
-			BindingID:      binding.ClientBindingID,
-			Scope:          binding.Scope,
-			TargetPath:     binding.TargetLocator,
-			DataRoot:       receipt.Locator,
-			DataReceiptID:  binding.DataReceiptID,
-			OperationID:    prepared.req.OperationID,
-			TreeDigest:     recordedBindingDigest(binding, planClientDigest(prepared.plan, binding.ClientID)),
+		facts := BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
+			InstallationID:   firstNonEmpty(installation.InstallationID, installationID),
+			ClientID:         binding.ClientID,
+			BindingID:        binding.ClientBindingID,
+			Scope:            binding.Scope,
+			TargetPath:       binding.TargetLocator,
+			DataRoot:         receipt.Locator,
+			DataReceiptID:    binding.DataReceiptID,
+			OperationID:      prepared.req.OperationID,
+			SelectedDelivery: binding.SelectedDelivery,
+			TreeDigest:       recordedBindingDigest(binding, planClientDigest(prepared.plan, binding.ClientID)),
+		}
+		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+			return true, err
 		}
 		if err := e.cfg.OnCommittedBinding(ctx, facts); err != nil {
 			e.attachLiveGroupResult(result, prepared, installation)
@@ -46,6 +53,9 @@ func (e *Engine) reconcileGroupHostHandoff(ctx context.Context, prepared *Prepar
 				result.Client = liveClientResult(binding, prepared.req.RequiredComponents, facts.TreeDigest)
 				result.Binding = facts
 			}
+			return true, err
+		}
+		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
 			return true, err
 		}
 	}
@@ -82,9 +92,10 @@ func (e *Engine) attachLiveGroupResult(result *Result, prepared *PreparedOperati
 		result.Targets = append(result.Targets, item)
 		if result.Client.ClientID == "" {
 			result.Client = item
-			result.Binding = BindingFacts{
+			result.Binding = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 				InstallationID: result.InstallationID, ClientID: binding.ClientID,
-				BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
+				SelectedDelivery: binding.SelectedDelivery,
+				BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 				DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,
 				OperationID: prepared.req.OperationID, TreeDigest: item.TreeDigest,
 			}

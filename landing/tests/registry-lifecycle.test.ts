@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { test } from 'node:test';
 import { runInNewContext } from 'node:vm';
+import { ref, watch } from 'vue';
 import { withAppBase } from '../utils/localizedRoutes.ts';
 import { loadFirstAvailable, resolveSignedFeedOrigins } from '../utils/signedFeeds.ts';
 
@@ -24,13 +25,19 @@ const script = stripTypeScriptTypes(source) + '\n({ useRegistryPage });';
 
 function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean } = {}) {
   const states = new Map<string, { value: any }>();
-  const status = { value: { state: 'idle', count: 0 } };
+  const status = ref<{ state: string; count: number; expiresAt?: string }>({
+    state: 'idle',
+    count: 0,
+  });
   const discovery = deferred<any>();
   const security = deferred<any>();
   const loads: { resolve: (value: any) => void; promise: Promise<any> }[] = [];
   const endpoints: string[] = [];
   const cacheKeys: string[] = [];
-  let scope: { mount?: () => void; dispose?: () => void };
+  let scope: { mount?: () => void; disposes: (() => void)[] };
+  let now = Date.parse('2026-10-04T07:00:00Z');
+  let nextTimer = 0;
+  const timers = new Map<number, { callback: () => void; due: number }>();
   let discoveryCalls = 0;
   let securityCalls = 0;
   let decorated = 0;
@@ -54,6 +61,16 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
     URL,
     Error,
     structuredClone,
+    Date: { now: () => now, parse: Date.parse },
+    setTimeout: (callback: () => void, delay: number) => {
+      const id = ++nextTimer;
+      timers.set(id, { callback, due: now + delay });
+      return id;
+    },
+    clearTimeout: (id: number) => timers.delete(id),
+    watch: (read: () => unknown, callback: () => void) => {
+      scope.disposes.push(watch(read, callback));
+    },
     queueMicrotask,
     Element: FocusElement,
     document,
@@ -78,7 +95,7 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
       scope.mount = callback;
     },
     onScopeDispose: (callback: () => void) => {
-      scope.dispose = callback;
+      scope.disposes.push(callback);
     },
     useAsyncData: async (key: string, load: () => Promise<any>) => {
       cacheKeys.push(key);
@@ -94,7 +111,7 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
     BrowserDiscoveryCache: class {},
     resolveSignedFeedOrigins,
     loadFirstAvailable,
-    loadDiscovery: (request: { origin: URL }) => {
+    loadDiscoveryForDisplay: (request: { origin: URL }) => {
       discoveryCalls++;
       if (
         options.staleBaked &&
@@ -108,14 +125,17 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
       securityCalls++;
       return security.promise;
     },
-    discoveryPlugin: (record: object) => record,
+    discoveryPlugin: (record: object, snapshot: { expires_at: string }) => ({
+      ...record,
+      discovery: { expires_at: snapshot.expires_at },
+    }),
     applySecurityAssessment: (plugin: object) => {
       decorated++;
-      return { ...plugin, checked: true };
+      return { ...plugin, checked: true, security: { outcome: 'no_blocking_findings' } };
     },
   });
   function start(kind = 'catalog', value?: string) {
-    const ownScope = {};
+    const ownScope = { disposes: [] as (() => void)[] };
     scope = ownScope;
     const ready = api.useRegistryPage({ projection: { kind, value }, discovery: true });
     const request = loads.at(-1)!;
@@ -131,7 +151,7 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
         await settle();
       },
       dispose() {
-        (ownScope as typeof scope).dispose?.();
+        for (const dispose of ownScope.disposes) dispose();
       },
       ready,
     };
@@ -144,6 +164,18 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
     security,
     endpoints,
     cacheKeys,
+    async advance(milliseconds: number) {
+      now += milliseconds;
+      for (const [id, timer] of [...timers]) {
+        if (timer.due > now) continue;
+        timers.delete(id);
+        timer.callback();
+      }
+      await settle();
+    },
+    get timerCount() {
+      return timers.size;
+    },
     focus() {
       document.activeElement = new FocusElement();
     },
@@ -162,7 +194,11 @@ function harness(options: { registryPagesOrigin?: string; staleBaked?: boolean }
 const bundle = {
   source: 'remote',
   search: { records: [{ name: 'community' }] },
-  snapshot: { sequence: 2, generated_at: '2026-09-08' },
+  snapshot: {
+    sequence: 2,
+    generated_at: '2026-10-04T06:00:00Z',
+    expires_at: '2026-10-05T06:00:00Z',
+  },
 };
 
 test('same-endpoint remount and home to catalog retain shared loads while old generations cannot apply', async () => {
@@ -272,4 +308,58 @@ test('a remount after the focus await only decorates the new seed', async () => 
     ['new', 'community'],
   );
   assert.equal(h.counts.decorated, 2);
+});
+
+test('expiry retains listings and reviewed security while removing community freshness claims', async () => {
+  const h = harness();
+  const page = h.start();
+  await page.mount('reviewed');
+  h.discovery.resolve({
+    ...bundle,
+    snapshot: { ...bundle.snapshot, expires_at: '2026-10-04T07:00:01Z' },
+  });
+  h.security.resolve({ snapshot: {} });
+  await settle();
+  assert.equal(h.status.value.state, 'current');
+  assert.ok(h.plugins[1].security);
+  await h.advance(1_000);
+  assert.equal(h.status.value.state, 'stale');
+  assert.equal(h.plugins.length, 2);
+  assert.ok(h.plugins[0].security);
+  assert.equal(h.plugins[1].security, undefined);
+  page.dispose();
+  assert.equal(h.timerCount, 0);
+});
+
+test('disposed page expiry timer cannot change subsequent route state', async () => {
+  const h = harness();
+  const page = h.start();
+  await page.mount('catalog');
+  h.discovery.resolve(bundle);
+  h.security.resolve({ snapshot: {} });
+  await settle();
+  assert.equal(h.timerCount, 1);
+  page.dispose();
+  assert.equal(h.timerCount, 0);
+  const prior = JSON.stringify({ plugins: h.plugins, status: h.status.value });
+  await h.advance(86_400_000);
+  assert.equal(JSON.stringify({ plugins: h.plugins, status: h.status.value }), prior);
+});
+
+test('initial expired display applies security only to reviewed seed', async () => {
+  const h = harness();
+  const page = h.start();
+  await page.mount('reviewed');
+  h.discovery.resolve({
+    ...bundle,
+    snapshot: { ...bundle.snapshot, expires_at: '2026-10-04T06:49:08Z' },
+  });
+  h.security.resolve({ snapshot: {} });
+  await settle();
+  assert.equal(h.status.value.state, 'stale');
+  assert.equal(h.plugins.length, 2);
+  assert.ok(h.plugins[0].security);
+  assert.equal(h.plugins[1].security, undefined);
+  assert.equal(h.counts.decorated, 1);
+  page.dispose();
 });
