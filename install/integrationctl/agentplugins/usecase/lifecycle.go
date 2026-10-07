@@ -48,7 +48,7 @@ func (service Service) resume(
 		return result, err
 	}
 	if client.NativeActivationAttempt != "" || client.PendingNativeIntent != nil {
-		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", client.NativeActivationAttempt)
+		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", unresolvedNativeAttemptID(client))
 	}
 	if complete && !result.Plan.SelectedDelivery.IsZero() {
 		result.Plan, err = service.readOnlyObservationPlan(client, result.Plan)
@@ -85,6 +85,16 @@ func (service Service) resume(
 	}
 	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
 	return result, nil
+}
+
+func unresolvedNativeAttemptID(client domain.ClientBinding) string {
+	if client.NativeActivationAttempt != "" {
+		return client.NativeActivationAttempt
+	}
+	if client.PendingNativeIntent != nil {
+		return client.PendingNativeIntent.AttemptID
+	}
+	return ""
 }
 
 func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, error) {
