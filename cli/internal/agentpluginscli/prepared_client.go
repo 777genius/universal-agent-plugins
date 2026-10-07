@@ -18,15 +18,16 @@ func retainPlannedClient(input *usecase.AddInput, plan domain.DeliveryPlan) {
 func retainPreparedClients(inputs []usecase.AddInput, clients []domain.DetectedClient) {
 	for i := range inputs {
 		for _, client := range clients {
-			if client.ClientID == inputs[i].Client.ClientID && client.ExecutablePath == inputs[i].Client.ExecutablePath {
-				// Keep the selected root spelling so apply must verify its
-				// relationship to the frozen canonical profile, including symlinks.
-				inputs[i].Client.OpenCodeHost = client.OpenCodeHost
-				inputs[i].Client.ProfileAuthority = domain.CloneProfileAuthority(client.ProfileAuthority)
-				inputs[i].Client.ProfileNamespace = client.ProfileNamespace
-				inputs[i].OnlinePreview = false
-				break
+			if client.ClientID != inputs[i].Client.ClientID || client.ExecutablePath != inputs[i].Client.ExecutablePath {
+				continue
 			}
+			// Keep the selected root spelling so apply must verify its
+			// relationship to the frozen canonical profile, including symlinks.
+			inputs[i].Client.OpenCodeHost = client.OpenCodeHost
+			inputs[i].Client.ProfileAuthority = domain.CloneProfileAuthority(client.ProfileAuthority)
+			inputs[i].Client.ProfileNamespace = client.ProfileNamespace
+			inputs[i].OnlinePreview = false
+			break
 		}
 	}
 }

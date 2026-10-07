@@ -42,10 +42,30 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 	if !ok || !consumer.UsesOpenCodeHostProfile() {
 		return client.OpenCodeHost, nil
 	}
+	skills, transports := desiredOpenCodeNativeRequirements(envelope, client.ClientID)
+	oldSkills, _ := consumer.OwnedOpenCodeNativeRequirements(previous)
+	// Even a manifest-only install emits a versioned native projection. Its
+	// codec selection is a desired effect and needs qualified host authority.
+	if processInert {
+		return offlineOpenCodeHost(client.OpenCodeHost, skills, transports)
+	}
+	if frozen, ok := client.OpenCodeHost.(*preparedOpenCodeClient); ok {
+		return p.reuseOpenCodeHost(ctx, client, frozen, executable, skills || oldSkills, transports)
+	}
+	host, err := p.prepareOpenCodeTarget(ctx, client, executable, skills || oldSkills, transports)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePreviousOpenCodeCodec(host, previous); err != nil {
+		return nil, err
+	}
+	return host, nil
+}
+
+func desiredOpenCodeNativeRequirements(envelope domain.PackageEnvelope, id domain.ClientID) (bool, []string) {
 	// Only supported desired effects enter qualification. Historical unsupported
 	// entries remain available to the existing selection and removal policy.
-	definition, _ := domain.ClientDefinitionFor(client.ClientID)
-	skills := len(envelope.Skills) > 0
+	definition, _ := domain.ClientDefinitionFor(id)
 	var transports []string
 	for _, server := range envelope.MCP.Servers {
 		if support := definition.Capabilities.MCPTransports[server.Type]; support != "" && support != domain.SupportUnsupported {
@@ -53,31 +73,34 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 		}
 	}
 	slices.Sort(transports)
-	oldSkills, _ := consumer.OwnedOpenCodeNativeRequirements(previous)
-	// Even a manifest-only install emits a versioned native projection. Its
-	// codec selection is a desired effect and needs qualified host authority.
-	if processInert {
-		if client.OpenCodeHost == nil {
-			return nil, fmt.Errorf("OpenCode prepared profile is required for offline planning; prepare an explicit qualified host first")
-		}
-		if err := client.OpenCodeHost.ValidateNative(skills, transports); err != nil {
-			return nil, err
-		}
-		return client.OpenCodeHost, nil
+	return len(envelope.Skills) > 0, transports
+}
+
+func offlineOpenCodeHost(host domain.OpenCodeHostAuthority, skills bool, transports []string) (domain.OpenCodeHostAuthority, error) {
+	if host == nil {
+		return nil, fmt.Errorf("OpenCode prepared profile is required for offline planning; prepare an explicit qualified host first")
 	}
-	if frozen, ok := client.OpenCodeHost.(*preparedOpenCodeClient); ok {
-		if executable != "" && executable != client.ExecutablePath {
-			return nil, clientdetect.ErrProbeTargetChanged
-		}
-		if err := frozen.ValidateNative(skills || oldSkills, transports); err != nil {
-			return nil, err
-		}
-		plan := (domain.DeliveryPlan{OpenCodeHost: frozen}).WithProfileAuthority(client.ProfileAuthority, client.ProfileNamespace)
-		if err := p.RevalidateClient(ctx, client, plan); err != nil {
-			return nil, err
-		}
-		return frozen, nil
+	if err := host.ValidateNative(skills, transports); err != nil {
+		return nil, err
 	}
+	return host, nil
+}
+
+func (p *OpenCodeClientPreparation) reuseOpenCodeHost(ctx context.Context, client domain.DetectedClient, frozen *preparedOpenCodeClient, executable string, skills bool, transports []string) (domain.OpenCodeHostAuthority, error) {
+	if executable != "" && executable != client.ExecutablePath {
+		return nil, clientdetect.ErrProbeTargetChanged
+	}
+	if err := frozen.ValidateNative(skills, transports); err != nil {
+		return nil, err
+	}
+	plan := (domain.DeliveryPlan{OpenCodeHost: frozen}).WithProfileAuthority(client.ProfileAuthority, client.ProfileNamespace)
+	if err := p.RevalidateClient(ctx, client, plan); err != nil {
+		return nil, err
+	}
+	return frozen, nil
+}
+
+func (p *OpenCodeClientPreparation) prepareOpenCodeTarget(ctx context.Context, client domain.DetectedClient, executable string, skills bool, transports []string) (*preparedOpenCodeClient, error) {
 	if executable == "" {
 		executable = client.ExecutablePath
 	}
@@ -97,7 +120,7 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 		return nil, clientdetect.ErrUnverifiedProbeTarget
 	}
 	profile := opencodehost.Resolve(evidence.VersionEvidence)
-	selections, err := opencodehost.SelectNative(profile, skills || oldSkills, transports)
+	selections, err := opencodehost.SelectNative(profile, skills, transports)
 	if err != nil {
 		return nil, err
 	}
@@ -105,21 +128,24 @@ func (p *OpenCodeClientPreparation) PrepareClient(ctx context.Context, envelope 
 	if root == "" {
 		return nil, fmt.Errorf("OpenCode user config root is unavailable")
 	}
-	host := &preparedOpenCodeClient{NativePrepared: opencodehost.NewNativePrepared(executable, root, environment, evidence.VersionEvidence, profile, selections), namespace: client.ProfileNamespace, authority: domain.CloneProfileAuthority(client.ProfileAuthority), skills: skills || oldSkills, transports: slices.Clone(transports)}
+	return &preparedOpenCodeClient{NativePrepared: opencodehost.NewNativePrepared(executable, root, environment, evidence.VersionEvidence, profile, selections), namespace: client.ProfileNamespace, authority: domain.CloneProfileAuthority(client.ProfileAuthority), skills: skills, transports: slices.Clone(transports)}, nil
+}
+
+func validatePreviousOpenCodeCodec(host domain.OpenCodeHostAuthority, previous []domain.NativeObjectOwnership) error {
 	codec, err := clients.DesiredOpenCodeCodec(host)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for _, object := range previous {
 		stored, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if mcp && stored != codec {
-			return nil, nativeconfig.ErrNativeMigrationRequired
+			return nativeconfig.ErrNativeMigrationRequired
 		}
 	}
-	return host, nil
+	return nil
 }
 
 func (p *OpenCodeClientPreparation) RevalidateClient(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan) error {
