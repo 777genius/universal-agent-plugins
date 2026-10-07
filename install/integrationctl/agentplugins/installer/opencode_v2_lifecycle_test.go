@@ -5,18 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/tailscale/hujson"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/tailscale/hujson"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 // The old ConfigV2 exclusion makes Prepare red. Once admitted, the old provider
@@ -46,7 +47,7 @@ func TestOpenCodeV2PublicLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer first.Close()
+			defer closeOpenCodeTestHandle(t, first)
 			result, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
 			if err != nil || result.Outcome != OutcomeCompleted {
 				t.Fatalf("install: %+v %v", result, err)
@@ -67,7 +68,7 @@ func TestOpenCodeV2PublicLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer update.Close()
+			defer closeOpenCodeTestHandle(t, update)
 			if result, err = engine.Apply(testCtx(t), update, Decision{Confirmed: true}); err != nil || result.Outcome != OutcomeCompleted {
 				t.Fatalf("update: %+v %v", result, err)
 			}
@@ -100,7 +101,7 @@ func TestOpenCodeV2PublicLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer remove.Close()
+			defer closeOpenCodeTestHandle(t, remove)
 			if result, err = engine.Apply(testCtx(t), remove, Decision{Confirmed: true}); err != nil || result.Outcome != OutcomeCompleted {
 				t.Fatalf("remove: %+v %v", result, err)
 			}
@@ -251,7 +252,7 @@ func TestOpenCodeV2FacadeRefusesForeignAndEditedOwnership(t *testing.T) {
 					t.Fatal(err)
 				}
 				result, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
-				first.Close()
+				closeOpenCodeTestHandle(t, first)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -272,7 +273,7 @@ func TestOpenCodeV2FacadeRefusesForeignAndEditedOwnership(t *testing.T) {
 			before := v2EffectSnapshot(t, engine)
 			handle, err := engine.Prepare(testCtx(t), req)
 			if handle != nil {
-				handle.Close()
+				closeOpenCodeTestHandle(t, handle)
 			}
 			if err == nil {
 				t.Fatal("unsafe proposal accepted")
@@ -305,7 +306,7 @@ func TestOpenCodeFacadeCrossDialectRequiresMigration(t *testing.T) {
 					t.Fatal(err)
 				}
 				result, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
-				first.Close()
+				closeOpenCodeTestHandle(t, first)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -322,7 +323,7 @@ func TestOpenCodeFacadeCrossDialectRequiresMigration(t *testing.T) {
 				before := v2EffectSnapshot(t, engine)
 				handle, err := engine.Prepare(testCtx(t), req)
 				if handle != nil {
-					handle.Close()
+					closeOpenCodeTestHandle(t, handle)
 				}
 				if !errors.Is(err, nativeconfig.ErrNativeMigrationRequired) {
 					t.Fatalf("crosscodec proposal: %v", err)
@@ -391,7 +392,7 @@ func TestOpenCodeProjectionClosedDialectDecoder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handle.Close()
+	defer closeOpenCodeTestHandle(t, handle)
 	if _, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true}); err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +442,10 @@ func TestOpenCodeProjectionClosedDialectDecoder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			objects, err := opencode.BuildOpenCodeNativeObjects(fixture, domain.PackageEnvelope{}, domain.DeliveryPlan{})
+			// Select the installed MCP component; an empty package/plan requests
+			// the metadata-only no-effect contract instead of legacy ownership.
+			plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "sample-notify", Support: domain.SupportPrepared}}}
+			objects, err := opencode.BuildOpenCodeNativeObjects(fixture, handle.envelope, plan)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -449,6 +453,9 @@ func TestOpenCodeProjectionClosedDialectDecoder(t *testing.T) {
 				t.Fatal("legacy MCP ownership missing")
 			}
 			object := objects[0]
+			if object.ObjectID != "opencode-mcp:sample-notify" || object.LogicalName != "sample-notify" {
+				t.Fatalf("legacy MCP ownership identity changed: %+v", object)
+			}
 			codec, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
 			if err != nil || !mcp {
 				t.Fatal(err)
@@ -476,7 +483,7 @@ func TestOpenCodeV2ApplyRepeatsForeignPreflight(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer handle.Close()
+			defer closeOpenCodeTestHandle(t, handle)
 			body := `{"mcp":{"servers":{"sample-notify":{"type":"remote","url":"https://foreign.invalid","disabled":true}}}}`
 			if scenario == "v1-root" {
 				body = `{"mcp":{"foreign":{"type":"remote","url":"https://foreign.invalid"}}}`
@@ -509,7 +516,7 @@ func TestOpenCodeV2FacadeRejectsSSE(t *testing.T) {
 	before := v2EffectSnapshot(t, engine)
 	handle, err := engine.Prepare(testCtx(t), req)
 	if handle != nil {
-		handle.Close()
+		closeOpenCodeTestHandle(t, handle)
 	}
 	if !errors.Is(err, errOpenCodeTransportUnsupported) {
 		t.Fatalf("SSE: %v", err)
@@ -532,7 +539,7 @@ func TestOpenCodeV2UnknownStoredKindFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
-	first.Close()
+	closeOpenCodeTestHandle(t, first)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +578,7 @@ func TestOpenCodeV2UnknownStoredKindFailsClosed(t *testing.T) {
 	req.Operation, req.InstallationID = OpUpdate, result.InstallationID
 	next, err := engine.Prepare(testCtx(t), req)
 	if next != nil {
-		next.Close()
+		closeOpenCodeTestHandle(t, next)
 	}
 	if err == nil {
 		t.Fatal("prepare ignored unknown kind")
@@ -593,7 +600,7 @@ func TestOpenCodeDesiredProjectionRequiresPreparedProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer handle.Close()
+	defer closeOpenCodeTestHandle(t, handle)
 	if _, err := engine.Apply(testCtx(t), handle, Decision{Confirmed: true}); err != nil {
 		t.Fatal(err)
 	}
