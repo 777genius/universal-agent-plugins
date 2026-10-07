@@ -76,6 +76,9 @@ func (p *cliPreparationFixture) RevalidateClient(_ context.Context, client domai
 func openCodePreparationCLI(t *testing.T, grouped bool) (cliFixture, *cliPreparationFixture, string, string) {
 	t.Helper()
 	openCode := fixtureClient(t, domain.ClientOpenCode)
+	// This consumer starts without prepared authority, even when the shared
+	// client fixture supplies a qualified profile for unrelated SDK tests.
+	openCode.OpenCodeHost = nil
 	openCode.ExecutablePath = filepath.Join(t.TempDir(), "inert-native-token")
 	if err := os.WriteFile(openCode.ExecutablePath, []byte("qualified-V1-before-consent"), 0o600); err != nil {
 		t.Fatal(err)

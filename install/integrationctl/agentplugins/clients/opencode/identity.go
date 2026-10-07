@@ -31,33 +31,9 @@ func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 	if root == "" {
 		return clients.RegistryIndeterminate, nil
 	}
-	// A managed observation uses stored receipts even if the host disappeared
-	// or changed dialect. Only a fresh desired registry uses prepared authority.
-	codec := nativeconfig.CodecOpenCode
-	if managed == nil {
-		var err error
-		codec, err = DesiredOpenCodeCodec(plan.OpenCodeHost)
-		if err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-	} else {
-		var stored nativeconfig.Codec
-		for _, object := range OpenCodeObjects(managed.NativeObjects) {
-			candidate, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
-			if err != nil {
-				return clients.RegistryIndeterminate, err
-			}
-			if !mcp {
-				continue
-			}
-			if stored != "" && stored != candidate {
-				return clients.RegistryIndeterminate, nativeconfig.ErrNativeMigrationRequired
-			}
-			stored = candidate
-		}
-		if stored != "" {
-			codec = stored
-		}
+	codec, err := observedOpenCodeCodec(plan, managed)
+	if err != nil {
+		return clients.RegistryIndeterminate, err
 	}
 	finding := clients.RegistryClear
 	for _, component := range plan.Components {
@@ -76,6 +52,32 @@ func InspectOpenCodeRegistry(plan domain.DeliveryPlan, managed *domain.ClientBin
 		}
 	}
 	return finding, nil
+}
+
+// A managed observation uses stored receipts even if the host disappeared
+// or changed dialect. Only a fresh desired registry uses prepared authority.
+func observedOpenCodeCodec(plan domain.DeliveryPlan, managed *domain.ClientBinding) (nativeconfig.Codec, error) {
+	if managed == nil {
+		return DesiredOpenCodeCodec(plan.OpenCodeHost)
+	}
+	var stored nativeconfig.Codec
+	for _, object := range OpenCodeObjects(managed.NativeObjects) {
+		candidate, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
+		if err != nil {
+			return "", err
+		}
+		if !mcp {
+			continue
+		}
+		if stored != "" && stored != candidate {
+			return "", nativeconfig.ErrNativeMigrationRequired
+		}
+		stored = candidate
+	}
+	if stored != "" {
+		return stored, nil
+	}
+	return nativeconfig.CodecOpenCode, nil
 }
 
 func inspectOpenCodeComponent(root string, managed *domain.ClientBinding, component domain.ComponentDecision, kernel nativeconfig.Kernel, codec nativeconfig.Codec) (bool, bool, error) {
