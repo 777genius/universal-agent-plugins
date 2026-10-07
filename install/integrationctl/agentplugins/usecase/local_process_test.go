@@ -451,6 +451,24 @@ func TestCursorSelectedProcessRecovery(t *testing.T) {
 	if len(view.Recovery.NativeIntents) != 1 {
 		t.Fatal("public inspection lost Cursor pending intent")
 	}
+	// A genuine unresolved intent cannot be consumed by read-only Update.
+	pendingBytes, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pendingRequest := cursorIntentRequest(root)
+	pendingRequest.Operation, pendingRequest.InstallationID = installer.OpUpdate, state.Installations[0].InstallationID
+	pendingHandle, pendingErr := e.Prepare(t.Context(), pendingRequest)
+	if pendingErr == nil {
+		_, pendingErr = e.Apply(t.Context(), pendingHandle, confirmedDecision())
+		if err := pendingHandle.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stillPending, err := os.ReadFile(store.Path)
+	if pendingErr == nil || err != nil || string(stillPending) != string(pendingBytes) || a.effects != 0 || a.readbacks != 0 {
+		t.Fatal("pending read-only Update saved or dispatched activation")
+	}
 	result, err := e.Recover(t.Context(), view)
 	if err != nil {
 		t.Fatal(err)
@@ -513,6 +531,183 @@ func TestCursorSelectedProcessRecovery(t *testing.T) {
 
 }
 
+// Regression: manual lifecycle resume used a fresh remainder packet against
+// independently acknowledged ownership. This vendor fixture is unqualified;
+// the physical positive and its full-state/namespace assertions remain required.
+func TestCursorSelectedReadOnlySealing(t *testing.T) {
+	for _, manual := range []bool{true, false} {
+		t.Run(fmt.Sprintf("manual=%t", manual), func(t *testing.T) {
+			root := localProcessRoot(t)
+			a := &testCursorIntentAdapter{Adapter: cursor.New(), root: root, kernel: nativeconfig.New(), manual: manual}
+			registry, err := clients.NewRegistry(a)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Coordination lock metadata is transient; keep its real lock outside
+			// the TEST namespace whose complete bytes must remain unchanged.
+			e, err := installer.New(installer.Config{StateRoot: filepath.Join(root, "state"), LockFile: filepath.Join(t.TempDir(), "TEST-mutation.lock"), Registry: registry, TrustedLocalPackages: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := cursorIntentRequest(root)
+			h, err := e.Prepare(t.Context(), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			installed, err := e.Apply(t.Context(), h, confirmedDecision())
+			closeErr := h.Close()
+			if err != nil || closeErr != nil || a.effects != 1 {
+				t.Fatalf("real install: %+v %v %v", installed, err, closeErr)
+			}
+			store := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
+			before, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding := localOnlyBinding(t, before)
+			if binding.PendingNativeIntent != nil || binding.NativeActivationAttempt != "" || binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects) != nil {
+				t.Fatal("no independent acknowledgement")
+			}
+			f, _ := binding.SelectedDelivery.CursorFacts()
+			body, err := os.ReadFile(f.HooksPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc map[string]any
+			if err := json.Unmarshal(body, &doc); err != nil {
+				t.Fatal(err)
+			}
+			doc["TEST-foreign-after"] = true
+			writeLocalDocument(t, f.HooksPath, doc)
+			snapshot := func() map[string]string {
+				t.Helper()
+				files := map[string]string{}
+				if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if !entry.IsDir() {
+						body, err := os.ReadFile(path)
+						if err != nil {
+							return err
+						}
+						files[path] = cursorRawDigest(body)
+					}
+					return nil
+				}); err != nil {
+					t.Fatal(err)
+				}
+				return files
+			}
+			files := snapshot()
+			req.Operation, req.InstallationID = installer.OpUpdate, installed.InstallationID
+			update, err := e.Prepare(t.Context(), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reflect.DeepEqual(update.Plan().Client.SelectedDelivery, binding.SelectedDelivery) {
+				t.Fatal("late remainder did not change planned attempt basis")
+			}
+			result, err := e.Apply(t.Context(), update, confirmedDecision())
+			closeErr = update.Close()
+			after, loadErr := store.Load()
+			if err != nil || closeErr != nil || loadErr != nil || result.Mutated {
+				t.Fatalf("read-only update: %+v %v %v %v", result, err, closeErr, loadErr)
+			}
+			if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(files, snapshot()) {
+				t.Fatal("read-only update changed full state/authority/receipt/namespace/hooks/package")
+			}
+			if a.effects != 1 || a.readbacks != 1 {
+				t.Fatal("read-only update resent or skipped actual hook verification")
+			}
+			if result.Delivery == nil || !reflect.DeepEqual(result.Delivery.SelectedDelivery, binding.SelectedDelivery) || !reflect.DeepEqual(result.Binding.SelectedDelivery, binding.SelectedDelivery) || !reflect.DeepEqual(result.Client.SelectedDelivery, binding.SelectedDelivery) {
+				t.Fatal("result exposed fresh attempt instead of acknowledged packet")
+			}
+			// Corrupt TEST bytes after genuine acknowledgement; no positive Store.Save.
+			if !manual {
+				return
+			}
+			stateBytes, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"selection", "profile", "projection", "package-receipt", "owned-entry", "receipt", "attempt", "package-bytes", "hook-bytes"} {
+				t.Run(name, func(t *testing.T) {
+					var corrupted domain.StateFileV2
+					if err := json.Unmarshal(stateBytes, &corrupted); err != nil {
+						t.Fatal(err)
+					}
+					b := localOnlyBinding(t, corrupted)
+					facts, _ := b.SelectedDelivery.CursorFacts()
+					switch name {
+					case "selection":
+						facts.QualificationID = "TEST-other-selection"
+					case "profile":
+						b.NativeProfileRoot = filepath.Join(root, "TEST-other-profile")
+					case "projection":
+						facts.ProjectionDigest = cursorRawDigest([]byte("TEST-other-projection"))
+					case "package-receipt":
+						b.NativeObjects[0].ManagedDigest = cursorRawDigest([]byte("TEST-other-package"))
+					case "owned-entry":
+						b.NativeObjects = b.NativeObjects[:1]
+					case "receipt":
+						b.NativeObjects[1].CursorReceipt.RemainderDigest = cursorRawDigest([]byte("TEST-other-receipt"))
+					case "attempt":
+						b.NativeActivationAttempt = "TEST-unresolved"
+					}
+					b.SelectedDelivery, err = domain.NewCursorDelivery(facts)
+					if err != nil {
+						t.Fatal(err)
+					}
+					corrupted.Installations[0].Clients[b.ClientBindingID] = b
+					body, err := json.Marshal(corrupted)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(store.Path, body, 0600); err != nil {
+						t.Fatal(err)
+					}
+					t.Cleanup(func() {
+						if err := os.WriteFile(store.Path, stateBytes, 0600); err != nil {
+							t.Error(err)
+						}
+					})
+					if name == "package-bytes" || name == "hook-bytes" {
+						path := filepath.Join(b.TargetLocator, "plugin.json")
+						if name == "hook-bytes" {
+							path = facts.HooksPath
+						}
+						original, err := os.ReadFile(path)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(path, []byte(`{"TEST-unowned":true}`), 0600); err != nil {
+							t.Fatal(err)
+						}
+						t.Cleanup(func() {
+							if err := os.WriteFile(path, original, 0600); err != nil {
+								t.Error(err)
+							}
+						})
+					}
+					beforeRefusal := snapshot()
+					handle, refusal := e.Prepare(t.Context(), req)
+					if refusal == nil {
+						_, refusal = e.Apply(t.Context(), handle, confirmedDecision())
+						if err := handle.Close(); err != nil {
+							t.Fatal(err)
+						}
+					}
+					if refusal == nil || a.effects != 1 || a.readbacks != 1 || !reflect.DeepEqual(beforeRefusal, snapshot()) {
+						t.Fatalf("%s did not refuse before save/effect: %v", name, refusal)
+					}
+				})
+			}
+
+		})
+	}
+}
+
 func TestCursorSelectedProcessChild(t *testing.T) {
 	root := os.Getenv("CURSOR_INTENT_TEST_ROOT")
 	if root == "" {
@@ -536,7 +731,7 @@ type testCursorIntentAdapter struct {
 	*cursor.Adapter
 	root               string
 	kernel             nativeconfig.Kernel
-	crash              bool
+	crash, manual      bool
 	effects, readbacks int
 }
 
@@ -650,12 +845,21 @@ func (a *testCursorIntentAdapter) Activate(ctx context.Context, env clients.Env,
 		return domain.ActivationOutcome{}, err
 	}
 	if req.VerifyOnly {
+		a.readbacks++
 		f, _ := req.Plan.SelectedDelivery.CursorFacts()
 		body, err := os.ReadFile(f.HooksPath)
 		if err == nil {
 			err = cursorhooks.VerifyOwned(body, cursorPureReceipt(f.PlannedReceipt))
 		}
-		return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged, NativeObjects: req.Plan.PreviousNativeObjects}, err
+		outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+		if a.manual {
+			outcome, _ = a.Adapter.Activate(ctx, env, req)
+		}
+		outcome.NativeEffect, outcome.NativeObjects = domain.NativeEffectUnchanged, []domain.NativeObjectOwnership{req.Plan.SelectedDelivery.CursorOwnership(f.PlannedReceipt)}
+		if a.manual {
+			outcome.NativeObjects = nil
+		}
+		return outcome, err
 	}
 	state, err := (statev2.Store{Path: filepath.Join(a.root, "state", "state-v2.json")}).Load()
 	if err != nil {
@@ -681,7 +885,12 @@ func (a *testCursorIntentAdapter) Activate(ctx context.Context, env clients.Env,
 		os.Exit(91)
 	}
 	f, _ := req.Plan.SelectedDelivery.CursorFacts()
-	return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectCommitted, NativeObjects: []domain.NativeObjectOwnership{req.Plan.SelectedDelivery.CursorOwnership(f.PlannedReceipt)}}, nil
+	outcome := domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+	if a.manual {
+		outcome, _ = a.Adapter.Activate(ctx, env, req)
+	}
+	outcome.NativeEffect, outcome.NativeObjects = domain.NativeEffectCommitted, []domain.NativeObjectOwnership{req.Plan.SelectedDelivery.CursorOwnership(f.PlannedReceipt)}
+	return outcome, nil
 }
 func (a *testCursorIntentAdapter) ReconcileNativeIntent(ctx context.Context, intent domain.PendingNativeIntent) (domain.ActivationOutcome, error) {
 	if err := ctx.Err(); err != nil {
@@ -697,10 +906,4 @@ func (a *testCursorIntentAdapter) ReconcileNativeIntent(ctx context.Context, int
 	}
 	a.readbacks++
 	return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: domain.AuthenticationNotRequired, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged, NativeObjects: []domain.NativeObjectOwnership{intent.Delivery.CursorOwnership(f.PlannedReceipt)}}, nil
-}
-
-func (a *testCursorIntentAdapter) ProjectActiveNative(ctx context.Context, _ string, _ domain.PackageEnvelope, _ domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
-	// No external object is inferred from package files. The usecase must retain
-	// the separately acknowledged receipt across this native-only projection.
-	return nil, ctx.Err()
 }

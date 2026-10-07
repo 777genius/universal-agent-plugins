@@ -3,6 +3,7 @@ package cursor
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -145,6 +146,38 @@ func TestPlanAndActivationRemainPreparation(t *testing.T) {
 		if err != nil || outcome.Activation != domain.ActivationManual || outcome.Verification != domain.VerificationPackageValid || outcome.ActivationAttested {
 			t.Fatalf("unproven native activation: %+v %v", outcome, err)
 		}
+	}
+}
+
+// Active projection is a package capability, never an ambient profile grant.
+func TestActiveProjectionRejectsAnotherClientOrRoot(t *testing.T) {
+	root := testBase(t)
+	adapter := New()
+	plan := domain.DeliveryPlan{ClientID: domain.ClientCursor, ActivePath: root}
+	for _, name := range []string{"root", "empty-root", "client", "unknown-mode", "canceled"} {
+		t.Run(name, func(t *testing.T) {
+			p, active, ctx := plan, root, t.Context()
+			switch name {
+			case "root":
+				active = filepath.Join(root, "TEST-other")
+			case "empty-root":
+				active, p.ActivePath = "", ""
+			case "client":
+				p.ClientID = domain.ClientCodex
+			case "unknown-mode":
+				if err := json.Unmarshal([]byte(`{"mode":"cursor-unknown"}`), &p.SelectedDelivery); err != nil {
+					t.Fatal(err)
+				}
+			case "canceled":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			objects, err := adapter.ProjectActiveNative(ctx, active, domain.PackageEnvelope{}, p, "")
+			if err == nil || len(objects) != 0 {
+				t.Fatalf("foreign projection accepted: %+v %v", objects, err)
+			}
+		})
 	}
 }
 

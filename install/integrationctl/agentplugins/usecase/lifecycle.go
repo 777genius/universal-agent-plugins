@@ -43,31 +43,33 @@ func (service Service) resume(
 		result.RequiresConfirmation = true
 		return result, nil
 	}
-	state, err := service.StateStore.Load()
+	delivery, complete, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
 	if err != nil {
 		return result, err
 	}
-	var installation domain.Installation
-	for _, item := range state.Installations {
-		if item.InstallationID == installationID {
-			installation = item
-			break
+	if client.NativeActivationAttempt != "" || client.PendingNativeIntent != nil {
+		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", unresolvedNativeAttemptID(client))
+	}
+	if complete && !result.Plan.SelectedDelivery.IsZero() {
+		result.Plan, err = service.readOnlyObservationPlan(client, result.Plan)
+		if err != nil {
+			return result, err
 		}
 	}
-	delivery, complete, err := service.activeNativeDelivery(ctx, input, result.Plan, installation, client)
-	if err != nil {
-		return result, err
-	}
-	if client.NativeActivationAttempt != "" {
-		return result, fmt.Errorf("native activation attempt %s is unresolved; inspect the owned client state before retry", client.NativeActivationAttempt)
-	}
-	outcome, activationErr := service.activateWithNativeAttempt(ctx, installationID, clientBindingID, domain.ActivationRequest{
+	request := domain.ActivationRequest{
 		Client: input.Client, Plan: result.Plan, Delivery: delivery,
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
 		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
-	})
+	}
+	var outcome domain.ActivationOutcome
+	var activationErr error
+	if complete && !result.Plan.SelectedDelivery.IsZero() {
+		outcome, activationErr = service.activateReadOnlyWithObservation(ctx, client, request)
+	} else {
+		outcome, activationErr = service.activateWithNativeAttempt(ctx, installationID, clientBindingID, request)
+	}
 	outcome = service.resumeActivationOutcome(input, result.Plan, client, outcome, activationErr)
 	result.Activation = outcome
 	changed, updateErr := service.updateActivationResultWithObservation(installationID, clientBindingID, outcome, activationErr, client.NativeObjects, previousObservation)
@@ -83,6 +85,31 @@ func (service Service) resume(
 	}
 	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
 	return result, nil
+}
+
+func unresolvedNativeAttemptID(client domain.ClientBinding) string {
+	if client.NativeActivationAttempt != "" {
+		return client.NativeActivationAttempt
+	}
+	if client.PendingNativeIntent != nil {
+		return client.PendingNativeIntent.AttemptID
+	}
+	return ""
+}
+
+func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, error) {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return domain.StagedDelivery{}, false, err
+	}
+	var installation domain.Installation
+	for _, item := range state.Installations {
+		if item.InstallationID == installationID {
+			installation = item
+			break
+		}
+	}
+	return service.activeNativeDelivery(ctx, input, plan, installation, client)
 }
 
 func (service Service) resumeActivationOutcome(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, outcome domain.ActivationOutcome, activationErr error) domain.ActivationOutcome {
