@@ -816,6 +816,9 @@ func TestPhysicalProfileSelectedCursorMCPProjection(t *testing.T) {
 			t.Skip("NOT_RUN selected Cursor projection: fixed Linux amd64 TEST tuple required")
 		}
 		e, req := physicalEngine(t)
+		// Keep transient coordination metadata outside the asserted TEST tree;
+		// the full state, profile, package and namespace byte checks below stay exact.
+		e.cfg.LockFile = filepath.Join(physicalTempDir(t), "TEST-mutation.lock")
 		token, err := profileauthority.Capture(t.Context(), req.ClientConfigRoot)
 		if errors.Is(err, directoryidentity.ErrUnsupported) {
 			t.Skipf("NOT_RUN selected Cursor Prepare/Apply/Store: full ancestry unsupported: %v", err)

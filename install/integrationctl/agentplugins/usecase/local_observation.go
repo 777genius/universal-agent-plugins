@@ -114,6 +114,10 @@ func validateCursorObservedOutcome(binding domain.ClientBinding, outcome domain.
 	if previous != nil || outcome.LocalEntryObservation != nil {
 		return fmt.Errorf("cursor outcome carries Local observation")
 	}
+	// Read-only verification retains independently acknowledged ownership.
+	if outcome.NativeEffect == domain.NativeEffectUnchanged && len(outcome.NativeObjects) == 0 && binding.PendingNativeIntent == nil && binding.NativeActivationAttempt == "" && binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
+		return binding.SelectedDelivery.ValidateCursorObjects(binding.NativeObjects)
+	}
 	receipt := f.PlannedReceipt
 	if binding.PendingNativeIntent != nil {
 		planned, _ := binding.PendingNativeIntent.Delivery.CursorFacts()
@@ -175,18 +179,11 @@ func (service Service) activateReadOnlyWithObservation(ctx context.Context, bind
 	if request.Plan.SelectedDelivery.IsZero() {
 		return service.Activator.Activate(ctx, request)
 	}
-	if err := service.revalidateReadOnlyBinding(binding); err != nil {
+	var err error
+	request.Plan, err = service.readOnlyObservationPlan(binding, request.Plan)
+	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if _, ok := binding.SelectedDelivery.CursorFacts(); ok {
-		if !binding.SelectedDelivery.SameSelection(request.Plan.SelectedDelivery) || binding.SelectedDelivery.CanonicalDigest() != request.Plan.SelectedDelivery.CanonicalDigest() || binding.SelectedDelivery.ProjectionDigest() != request.Plan.SelectedDelivery.ProjectionDigest() {
-			return domain.ActivationOutcome{}, fmt.Errorf("cursor read-only request changed binding authority")
-		}
-		// Verification reads acknowledged authority, not a fresh mutation basis.
-		request.Plan.SelectedDelivery = binding.SelectedDelivery
-	}
-	request.Plan.LocalEntryObservation = binding.LocalEntryObservation.Clone()
-	request.Plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
 	outcome, err := service.Activator.Activate(ctx, request)
 	outcome.LocalEntryObservation = outcome.LocalEntryObservation.Clone()
 	if afterErr := service.revalidateReadOnlyBinding(binding); afterErr != nil {
@@ -196,6 +193,37 @@ func (service Service) activateReadOnlyWithObservation(ctx context.Context, bind
 		return outcome, ctx.Err()
 	}
 	return outcome, err
+}
+
+// Freeze verification only after selection, revision, projection and ownership agree.
+func (service Service) readOnlyObservationPlan(binding domain.ClientBinding, plan domain.DeliveryPlan) (domain.DeliveryPlan, error) {
+	if err := service.revalidateReadOnlyBinding(binding); err != nil {
+		return plan, err
+	}
+	if f, ok := binding.SelectedDelivery.CursorFacts(); ok {
+		if binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
+			return plan, fmt.Errorf("unresolved Cursor intent forbids read-only acknowledgement")
+		}
+		if !binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects) {
+			return plan, fmt.Errorf("cursor read-only verification has no acknowledged receipt")
+		}
+		for _, object := range binding.NativeObjects {
+			if object.Kind == "cursor_user_stop" && object.CursorReceipt != f.PlannedReceipt {
+				return plan, fmt.Errorf("cursor read-only packet differs from acknowledged receipt")
+			}
+		}
+		if err := validateRetainedLocalAuthority(plan.SelectedDelivery, binding); err != nil {
+			return plan, err
+		}
+		if !binding.SelectedDelivery.SameSelection(plan.SelectedDelivery) || binding.SelectedDelivery.CanonicalDigest() != plan.SelectedDelivery.CanonicalDigest() || binding.SelectedDelivery.ProjectionDigest() != plan.SelectedDelivery.ProjectionDigest() {
+			return plan, fmt.Errorf("cursor read-only request changed binding authority")
+		}
+		// Verification reads acknowledged authority, not a fresh mutation basis.
+		plan.SelectedDelivery = binding.SelectedDelivery
+	}
+	plan.LocalEntryObservation = binding.LocalEntryObservation.Clone()
+	plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
+	return plan, nil
 }
 
 func (service Service) revalidateReadOnlyBinding(expected domain.ClientBinding) error {
