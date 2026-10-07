@@ -88,6 +88,30 @@
       ]
     }
   },
+  "grok": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will uninstall the managed Grok Build plugin automatically"
+      ]
+    }
+  },
+  "kimi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
   "kiro": {
     "Commands": [],
     "Error": "",
