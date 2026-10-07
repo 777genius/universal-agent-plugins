@@ -17,21 +17,29 @@ import (
 // one implementation shared by the detector and by contracttest.
 type HostProbes struct {
 	HomeDir               string
+	WorkingDir            string
 	GOOS                  string
 	Environment           map[string]string
 	SystemApplicationsDir string
 	WindowsProgramFiles   []string
 	LinuxApplicationDirs  []string
 
-	LookPath func(name string) (string, error)
-	Lstat    func(path string) (fs.FileInfo, error)
-	ReadDir  func(path string) ([]os.DirEntry, error)
+	EvalSymlinks func(string) (string, error)
+	LookPath     func(name string) (string, error)
+	Lstat        func(path string) (fs.FileInfo, error)
+	ReadDir      func(path string) ([]os.DirEntry, error)
 }
 
 // NewHost builds the probing environment handed to an adapter.
 func NewHost(probes HostProbes) Host { return host{probes: probes} }
 
 type host struct{ probes HostProbes }
+
+func (h host) WorkingDir() string { return h.probes.WorkingDir }
+
+func (h host) CanonicalDirectory(path string) (string, error) {
+	return CanonicalDirectory(path, h.Lstat, h.probes.EvalSymlinks)
+}
 
 func (h host) HomeDir() string                { return h.probes.HomeDir }
 func (h host) GOOS() string                   { return h.probes.GOOS }

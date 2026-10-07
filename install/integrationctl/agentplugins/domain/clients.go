@@ -88,6 +88,7 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:            LifecycleCLIRegistry,
 		HonorsOpenAIMCPAuthHints: true,
 		SupportsPreparedRecovery: true,
+		BindsNativeProfileRoot:   true,
 	}),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
@@ -109,8 +110,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}),
 	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
-		LifecycleKind:  LifecycleCLIRegistry,
+		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
+		LifecycleKind:       LifecycleCLIRegistry,
+		TracksNativeEffects: true,
 	}),
 	withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
@@ -118,8 +120,9 @@ var clientDefinitions = []ClientDefinition{
 		UsesManagedStdioLauncher: true,
 	}), ActivationAutomatic),
 	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleNativeConfig,
+		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:          LifecycleNativeConfig,
+		BindsNativeProfileRoot: true,
 	}),
 	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
@@ -277,16 +280,28 @@ type ClientSurface struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
+// OpenCodeHostAuthority is a read-only, immutable prepared-host port. It does
+// no probing. The client contract owns the closed parent profile snapshot.
+type OpenCodeHostAuthority interface {
+	ValidateNative(skills bool, transports []string) error
+}
+
 type DetectedClient struct {
-	ClientID    ClientID        `json:"client_id"`
-	DisplayName string          `json:"display_name"`
-	Status      DetectionStatus `json:"status"`
-	Version     string          `json:"version,omitempty"`
-	Surfaces    []ClientSurface `json:"surfaces,omitempty"`
+	ProfileAuthority *ProfileAuthority     `json:"-"`
+	ProfileNamespace string                `json:"-"`
+	OpenCodeHost     OpenCodeHostAuthority `json:"-"`
+	ClientID         ClientID              `json:"client_id"`
+	DisplayName      string                `json:"display_name"`
+	Status           DetectionStatus       `json:"status"`
+	Version          string                `json:"version,omitempty"`
+	Surfaces         []ClientSurface       `json:"surfaces,omitempty"`
 	// ExecutablePath and ConfigRoot are operational locators. They must never be
 	// emitted by the public JSON renderer because they can reveal the user home.
 	ExecutablePath string `json:"-"`
 	ConfigRoot     string `json:"-"`
+	// DetectionError is private diagnostic evidence. A failed client must not
+	// contribute paths or become a lifecycle target.
+	DetectionError error `json:"-"`
 }
 
 type ClientCapabilities struct {
@@ -308,7 +323,13 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
-	PersonalChatGPTPreparation bool `json:"-"`
+	profileAuthority           *ProfileAuthority       `json:"-"`
+	profileNamespace           string                  `json:"-"`
+	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
+	LocalEntryObservation      *LocalEntryObservation  `json:"-"`
+	SelectedDelivery           SelectedDelivery        `json:"-"`
+	OpenCodeHost               OpenCodeHostAuthority   `json:"-"`
+	PersonalChatGPTPreparation bool                    `json:"-"`
 
 	InstallIntent      InstallIntent       `json:"install_intent,omitempty"`
 	ClientID           ClientID            `json:"client_id"`
@@ -350,9 +371,11 @@ type DeliveryPlan struct {
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
 type DeliveryTarget struct {
-	TargetAnchor string `json:"-"`
-	TargetRoot   string `json:"-"`
-	ActivePath   string `json:"-"`
+	profileAuthority *ProfileAuthority `json:"-"`
+	profileNamespace string            `json:"-"`
+	TargetAnchor     string            `json:"-"`
+	TargetRoot       string            `json:"-"`
+	ActivePath       string            `json:"-"`
 }
 
 type OpenAIMCPAuthHint struct {
@@ -396,30 +419,37 @@ type ActivationRequest struct {
 }
 
 type ActivationOutcome struct {
-	Activation             ActivationState     `json:"activation"`
-	Authentication         AuthenticationState `json:"authentication"`
-	Policy                 PolicyState         `json:"policy"`
-	Verification           VerificationState   `json:"verification"`
-	UserActions            []string            `json:"user_actions,omitempty"`
-	LocalActions           []string            `json:"-"`
-	ActivationAttested     bool                `json:"activation_attested,omitempty"`
-	AuthenticationAttested bool                `json:"authentication_attested,omitempty"`
+	LocalEntryObservation  *LocalEntryObservation `json:"-"`
+	Activation             ActivationState        `json:"activation"`
+	Authentication         AuthenticationState    `json:"authentication"`
+	Policy                 PolicyState            `json:"policy"`
+	Verification           VerificationState      `json:"verification"`
+	UserActions            []string               `json:"user_actions,omitempty"`
+	LocalActions           []string               `json:"-"`
+	ActivationAttested     bool                   `json:"activation_attested,omitempty"`
+	AuthenticationAttested bool                   `json:"authentication_attested,omitempty"`
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`
+	// Native effect evidence is transient and distinct from client verification.
+	NativeEffect  NativeEffectState       `json:"-"`
+	NativeObjects []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationRequest struct {
-	Client              DetectedClient          `json:"client"`
-	DeclaredName        string                  `json:"declared_name"`
-	CurrentActivation   ActivationState         `json:"current_activation"`
-	Interactive         bool                    `json:"interactive"`
-	ExternalUninstalled bool                    `json:"external_uninstalled"`
-	Confirmed           bool                    `json:"confirmed"`
-	PhysicalArtifactID  string                  `json:"physical_artifact_id"`
-	BackendExecutable   string                  `json:"-"`
-	ManagedArtifactPath string                  `json:"-"`
-	NativeObjects       []NativeObjectOwnership `json:"-"`
+	LocalEntryObservation *LocalEntryObservation  `json:"-"`
+	RemoveOwnedEntry      bool                    `json:"-"`
+	SelectedDelivery      SelectedDelivery        `json:"-"`
+	Client                DetectedClient          `json:"client"`
+	DeclaredName          string                  `json:"declared_name"`
+	CurrentActivation     ActivationState         `json:"current_activation"`
+	Interactive           bool                    `json:"interactive"`
+	ExternalUninstalled   bool                    `json:"external_uninstalled"`
+	Confirmed             bool                    `json:"confirmed"`
+	PhysicalArtifactID    string                  `json:"physical_artifact_id"`
+	BackendExecutable     string                  `json:"-"`
+	ManagedArtifactPath   string                  `json:"-"`
+	NativeObjects         []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationOutcome struct {
@@ -429,3 +459,25 @@ type DeactivationOutcome struct {
 	UserActions             []string        `json:"user_actions,omitempty"`
 	LocalActions            []string        `json:"-"`
 }
+
+func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }
+
+func (p DeliveryPlan) WithProfileAuthority(token *ProfileAuthority, namespace string) DeliveryPlan {
+	p.profileAuthority = CloneProfileAuthority(token)
+	p.profileNamespace = namespace
+	return p
+}
+func (p DeliveryPlan) ProfileAuthority() *ProfileAuthority {
+	return CloneProfileAuthority(p.profileAuthority)
+}
+func (p DeliveryPlan) ProfileNamespace() string { return p.profileNamespace }
+
+func (p DeliveryTarget) WithProfileAuthority(token *ProfileAuthority, namespace string) DeliveryTarget {
+	p.profileAuthority = CloneProfileAuthority(token)
+	p.profileNamespace = namespace
+	return p
+}
+func (p DeliveryTarget) ProfileAuthority() *ProfileAuthority {
+	return CloneProfileAuthority(p.profileAuthority)
+}
+func (p DeliveryTarget) ProfileNamespace() string { return p.profileNamespace }

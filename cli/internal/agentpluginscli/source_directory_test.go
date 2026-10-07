@@ -977,7 +977,7 @@ func TestDirectoryMultiTargetRepairReacquiresEachRecordedRevisionOnce(t *testing
 	}
 }
 
-func TestDirectLocalAndFullSHASourcesBypassDirectory(t *testing.T) {
+func TestDirectLocalAndFullSHASourcesBypassDirectoryAndExpiredDiscovery(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
 		name, selector string
@@ -985,13 +985,16 @@ func TestDirectLocalAndFullSHASourcesBypassDirectory(t *testing.T) {
 	}{
 		{name: "local", selector: "local"},
 		{name: "full-sha", selector: "owner/repo@" + strings.Repeat("d", 40) + "//plugin", directGit: true},
+		{name: "catalog-github", selector: "github:owner/repo@" + strings.Repeat("d", 40) + "//plugin", directGit: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
 			plugin := writeCLIPlugin(t)
 			directory := &fixedDirectoryClient{err: fmt.Errorf("Directory must not be called")}
+			discovery := &fixedDiscoveryClient{err: discoveryv1.ErrExpired}
 			acquirer := &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
 			fixture.app.DirectoryClient = directory
+			fixture.app.DiscoveryClient = discovery
 			fixture.app.SourceAcquirer = acquirer
 			selector := test.selector
 			if !test.directGit {
@@ -1000,8 +1003,8 @@ func TestDirectLocalAndFullSHASourcesBypassDirectory(t *testing.T) {
 			if _, _, err := fixture.execute(false, "add", selector, "--target", "cursor"); err != nil {
 				t.Fatal(err)
 			}
-			if directory.calls != 0 || (test.directGit && acquirer.directGitCalls != 1) || (!test.directGit && acquirer.localCalls != 1) {
-				t.Fatalf("direct source consulted Directory or wrong acquirer: directory=%d local=%d git=%d", directory.calls, acquirer.localCalls, acquirer.directGitCalls)
+			if directory.calls != 0 || discovery.calls != 0 || (test.directGit && acquirer.directGitCalls != 1) || (!test.directGit && acquirer.localCalls != 1) {
+				t.Fatalf("direct source consulted a feed or wrong acquirer: directory=%d discovery=%d local=%d git=%d", directory.calls, discovery.calls, acquirer.localCalls, acquirer.directGitCalls)
 			}
 			state, err := fixture.store.Load()
 			if err != nil {
@@ -1160,8 +1163,8 @@ func TestProductionGitHubAcquirerOutputResolvesAsDirectExactSource(t *testing.T)
 		return strings.TrimSpace(string(output))
 	}
 	runGit("init", "--quiet", "--initial-branch=main", repositoryRoot)
-	runGit("-C", repositoryRoot, "config", "user.email", "fixture@example.invalid")
-	runGit("-C", repositoryRoot, "config", "user.name", "Fixture")
+	runGit("-C", repositoryRoot, "config", "user.email", "iliyazelenkog@gmail.com")
+	runGit("-C", repositoryRoot, "config", "user.name", "iliya")
 	runGit("-C", repositoryRoot, "add", ".")
 	runGit("-C", repositoryRoot, "commit", "--quiet", "-m", "fixture")
 	revision := runGit("-C", repositoryRoot, "rev-parse", "HEAD")
@@ -1469,8 +1472,8 @@ func commitCLIRepository(t *testing.T, repositoryRoot string) string {
 		return strings.TrimSpace(string(output))
 	}
 	runGit("init", "--quiet", "--initial-branch=main", repositoryRoot)
-	runGit("-C", repositoryRoot, "config", "user.email", "fixture@example.invalid")
-	runGit("-C", repositoryRoot, "config", "user.name", "Fixture")
+	runGit("-C", repositoryRoot, "config", "user.email", "iliyazelenkog@gmail.com")
+	runGit("-C", repositoryRoot, "config", "user.name", "iliya")
 	runGit("-C", repositoryRoot, "add", ".")
 	runGit("-C", repositoryRoot, "commit", "--quiet", "-m", "fixture")
 	return runGit("-C", repositoryRoot, "rev-parse", "HEAD")

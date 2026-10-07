@@ -25,11 +25,11 @@ func (f fakePrompter) Confirm(_ context.Context, r prompt.ConfirmationRequest) (
 	return f.confirmFn()
 }
 func TestNoTargetConsentBoundary(t *testing.T) {
-	for _, input := range []string{"\n", "\nn\n", "\ny", "\ny\n"} {
+	for _, input := range []string{"\n", "\n\n", "\nn\n", "\ny", "\ny\n"} {
 		t.Run(strings.ReplaceAll(input, "\n", "ENTER"), func(t *testing.T) {
 			f := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientCodex)})
 			out, _, err := f.executeInput(true, input, "add", writeCLIPlugin(t))
-			yes := input == "\ny\n"
+			yes := input == "\n\n" || input == "\ny\n"
 			state, _ := f.store.Load()
 			if (len(state.Installations) > 0) != yes {
 				t.Fatalf("mutation before consent: %v %v", state, err)

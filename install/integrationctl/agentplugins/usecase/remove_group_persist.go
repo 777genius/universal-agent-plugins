@@ -74,10 +74,10 @@ func (session *removeGroupSession) buildDirectoryRemovals() ([]transaction.Direc
 		operationID := fmt.Sprintf("%s-data-%03d", session.groupID, index+1)
 		removals = append(removals, transaction.DirectoryRemoval{
 			OperationID: operationID, OperationGroupID: session.groupID,
-			ClientBindingID: receipt.DataReceiptID, Sequence: 1, OwnedBase: filepath.Dir(receipt.Locator),
+			InstallationID: session.installation.InstallationID, DataReceiptID: receipt.DataReceiptID, ClientBindingID: receipt.DataReceiptID, Sequence: 1, OwnedBase: filepath.Dir(receipt.Locator),
 			ActivePath: receipt.Locator, BeforeDigest: receipt.OwnershipDigest, Standalone: true,
-			Verify: func(verifyContext context.Context, _ string) error {
-				return pluginData.ValidateData(verifyContext, receipt)
+			Verify: func(verifyContext context.Context, path string) error {
+				return pluginData.ValidateDataAt(verifyContext, receipt, path)
 			},
 		})
 	}

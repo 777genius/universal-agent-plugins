@@ -15,6 +15,7 @@ func TestOpenCodeRuntimeNoticeLifecycleOutputs(t *testing.T) {
 			for _, operation := range []string{"add", "update", "repair"} {
 				t.Run(operation+"/"+format+"/"+state, func(t *testing.T) {
 					result := usecase.AddResult{Plan: domain.DeliveryPlan{ClientID: domain.ClientOpenCode, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "api/server", Support: domain.SupportPrepared}}}, Mutated: state == "success", NoChange: state == "nochange"}
+					result.Plan.Diagnostics = []domain.Diagnostic{{Severity: domain.SeverityInfo, Code: openCodeNamespaceNotice, Message: "Initial global config server-name preflight passed; project and live tools were not checked."}}
 					result.Activation = domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotRequired}
 					var output bytes.Buffer
 					var err error
@@ -35,7 +36,7 @@ func TestOpenCodeRuntimeNoticeLifecycleOutputs(t *testing.T) {
 					if strings.Count(output.String(), openCodeNamespaceNotice) != 1 {
 						t.Fatalf("notice missing or duplicated: %s", output.String())
 					}
-					if !strings.Contains(output.String(), "callable tool-ID uniqueness is not evaluated") {
+					if !strings.Contains(output.String(), "project and live tools were not checked") {
 						t.Fatal(output.String())
 					}
 				})
@@ -44,38 +45,21 @@ func TestOpenCodeRuntimeNoticeLifecycleOutputs(t *testing.T) {
 	}
 }
 
-func TestOpenCodeRuntimeNoticeScopeAndPurity(t *testing.T) {
-	for _, tc := range []struct {
-		name       string
-		client     domain.ClientID
-		components []domain.ComponentDecision
-		want       bool
-	}{
-		{"other client", domain.ClientCodex, []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "x", Support: domain.SupportPrepared}}, false},
-		{"skills only", domain.ClientOpenCode, []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "x", Support: domain.SupportPrepared}}, false},
-		{"unsupported MCP", domain.ClientOpenCode, []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "x", Support: domain.SupportUnsupported}}, false},
-		{"singleton special key", domain.ClientOpenCode, []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "api/server", Support: domain.SupportPrepared}}, true},
-		{"equal prefixes accepted", domain.ClientOpenCode, []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "api/server", Support: domain.SupportPrepared}, {Kind: domain.ComponentMCPServer, Name: "api server", Support: domain.SupportPrepared}}, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			result := usecase.AddResult{Plan: domain.DeliveryPlan{ClientID: tc.client, Components: tc.components}}
-			got := withOpenCodeRuntimeNotice(withOpenCodeRuntimeNotice(result))
-			expected := 0
-			if tc.want {
-				expected = 1
-			}
-			if len(got.Plan.Diagnostics) != expected || len(result.Plan.Diagnostics) != 0 {
-				t.Fatalf("unexpected diagnostics: %+v", got.Plan.Diagnostics)
-			}
-			if len(domain.SelectedMCPNames(result.Plan)) != len(domain.SelectedMCPNames(got.Plan)) {
-				t.Fatal("notice changed selection")
-			}
-		})
+func TestOpenCodeRuntimeNoticeRequiresPreflightEvidence(t *testing.T) {
+	result := usecase.AddResult{Plan: domain.DeliveryPlan{ClientID: domain.ClientOpenCode, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "api/server", Support: domain.SupportPrepared}}}}
+	var output bytes.Buffer
+	if err := renderOpenCodeRuntimeNotice(&output, result); err != nil || output.Len() != 0 {
+		t.Fatalf("unproven notice: %q, %v", output.String(), err)
+	}
+	result.Plan.Diagnostics = []domain.Diagnostic{{Severity: domain.SeverityInfo, Code: openCodeNamespaceNotice, Message: "preflight passed"}}
+	if err := renderOpenCodeRuntimeNotice(&output, result); err != nil || !strings.Contains(output.String(), "Info: "+openCodeNamespaceNotice) {
+		t.Fatalf("missing proven notice: %q, %v", output.String(), err)
 	}
 }
 
 func TestOpenCodeRuntimeNoticeGroupedOutputs(t *testing.T) {
 	result := usecase.AddResult{Plan: domain.DeliveryPlan{ClientID: domain.ClientOpenCode, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "x", Support: domain.SupportPrepared}}}, NoChange: true}
+	result.Plan.Diagnostics = []domain.Diagnostic{{Severity: domain.SeverityInfo, Code: openCodeNamespaceNotice, Message: "preflight passed"}}
 	output := newAddResultData(domain.PackageEnvelope{}, result, false)
 	update := updateMultiResult{Targets: []updateTargetResult{{Target: "opencode", Output: output}}}
 	for _, format := range []string{"human", "json"} {

@@ -5,14 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/installerui"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -32,19 +35,8 @@ func selectClient(
 	}
 	target := normalizeTarget(opts.target)
 	if target != "" {
-		if strings.EqualFold(strings.TrimSpace(opts.target), "openai") {
-			return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", opts.target)
-		}
-		client, ok := detectedMap[target]
-		if !ok && plansWithoutHostPresence(target) {
-			client = syntheticUndetectedClient(target)
-			detectedMap[target] = client
-			ok = true
-		}
-		if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
-			return domain.DetectedClient{}, detectedMap, fmt.Errorf("target %q was not detected", opts.target)
-		}
-		return client, detectedMap, nil
+		client, err := selectExplicitClient(target, opts.target, detectedMap)
+		return client, detectedMap, err
 	}
 	if len(detected) == 0 {
 		return domain.DetectedClient{}, detectedMap, fmt.Errorf("no supported local AI client was detected; use --target chatgpt for ChatGPT, or install/detect another client")
@@ -70,6 +62,25 @@ func selectClient(
 		return domain.DetectedClient{}, detectedMap, fmt.Errorf("invalid client selection")
 	}
 	return detected[choice-1], detectedMap, nil
+}
+
+func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, error) {
+	if strings.EqualFold(strings.TrimSpace(rawTarget), "openai") {
+		return domain.DetectedClient{}, fmt.Errorf("target %q is ambiguous; use --target codex or --target chatgpt", rawTarget)
+	}
+	client, ok := detectedMap[target]
+	if err := selectedDetectionError(target, detectedMap); err != nil {
+		return domain.DetectedClient{}, err
+	}
+	if !ok && plansWithoutHostPresence(target) {
+		client = syntheticUndetectedClient(target)
+		detectedMap[target] = client
+		ok = true
+	}
+	if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
+		return domain.DetectedClient{}, fmt.Errorf("target %q was not detected", rawTarget)
+	}
+	return client, nil
 }
 
 func normalizeTarget(value string) domain.ClientID {
@@ -128,22 +139,61 @@ func detectedSharedClient(target domain.ClientID, clients map[domain.ClientID]do
 }
 
 func promptYesNo(ctx context.Context, reader io.Reader, writer, alternate io.Writer, question string) (bool, error) {
-	var err error
-	writer, err = promptio.VisibleOutput(writer, alternate)
+	return promptYesNoDefault(ctx, reader, writer, alternate, question, false)
+}
+
+func promptYesNoDefault(ctx context.Context, reader io.Reader, writer, alternate io.Writer, question string, defaultYes bool) (bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	} // Preserve the legacy direct caller seam.
+	writer, err := promptio.VisibleOutput(writer, alternate)
 	if err != nil {
-		return false, err
+		return false, prompt.NormalizeIOError(err)
 	}
-	if _, err := fmt.Fprint(&planWriter{writer: writer}, prompt.SafeText(question)+" "); err != nil {
-		return false, err
+	title := prompt.SafeText(question)
+	for _, hint := range []string{" [y/N]", " [Y/n]", " [y/n]"} {
+		title = strings.TrimSuffix(title, hint)
 	}
-	line, err := promptio.ReadLine(ctx, reader)
+	req := installerui.ConfirmRequest{Title: title, Default: defaultYes}
+	var result installerui.Confirmation
+	if input, ok := reader.(*os.File); ok {
+		output, ok := terminaltheme.Unwrap(writer).(*os.File)
+		if !ok {
+			return false, prompt.ErrPromptUnavailable
+		}
+		t, e := installerui.NewTerminal(installerui.TerminalConfig{Input: input, Output: output, Mode: installerui.ModePlain, NoColor: !terminaltheme.For(writer).Enabled})
+		if e != nil {
+			return false, normalizeTerminalConsentError(e)
+		}
+		result, err = t.Confirm(ctx, req)
+	} else {
+		// Existing injected nonterminal callers preserve the public line API seam.
+		u, e := installerui.New(installerui.Config{Input: reader, Output: writer, ReadLine: promptio.ReadLine})
+		if e != nil {
+			return false, normalizeTerminalConsentError(e)
+		}
+		result, err = u.Confirm(ctx, req)
+	}
 	if err != nil {
-		return false, err
+		return false, normalizeTerminalConsentError(err)
 	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	return answer == "y" || answer == "yes", nil
+	if result.Cancelled { //nolint:misspell // Preserve the existing public cancellation API.
+		return false, prompt.ErrPromptCanceled
+	}
+	return result.Accepted, nil
+}
+
+func normalizeTerminalConsentError(err error) error {
+	if errors.Is(err, installerui.ErrUnavailable) {
+		return prompt.NormalizeIOError(errors.Join(promptio.ErrUnavailable, err))
+	}
+	if errors.Is(err, installerui.ErrCancelled) {
+		return errors.Join(prompt.ErrPromptCanceled, err)
+	}
+	return prompt.NormalizeIOError(err)
 }
 
 func readInputLine(ctx context.Context, reader io.Reader) (string, error) {
-	return promptio.ReadLine(ctx, reader)
+	line, err := promptio.ReadLine(ctx, reader)
+	return line, prompt.NormalizeIOError(err)
 }

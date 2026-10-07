@@ -6,7 +6,10 @@ import (
 )
 
 func (session *groupSession) cleanupStaged() {
-	for _, target := range session.planned {
+	for index, target := range session.planned {
+		if session.service.directoryRecoveryPending(fmt.Sprintf("%s-%03d", session.groupID, index+1)) {
+			continue
+		}
 		if target.delivery.StagingPath != "" {
 			_ = session.service.Stager.Discard(context.Background(), target.delivery)
 		}
@@ -19,7 +22,17 @@ func (session *groupSession) cleanupStaged() {
 func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
+		if err := session.reportGroupProgress(*target, GroupProgressPreparing); err != nil {
+			return err
+		}
 		if target.noChange {
+			if target.managed != nil && session.existing {
+				installation := session.state.Installations[session.installationIndex]
+				if err := session.service.prepareExistingRuntime(session.ctx, target.input.Envelope, target.plan, installation, *target.managed); err != nil {
+					session.cleanupStaged()
+					return fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err)
+				}
+			}
 			continue
 		}
 		if err := session.stageOneGroupDelivery(targetIndex, target); err != nil {
@@ -42,7 +55,7 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 		}
 		target.dataReceipt, target.dataCreated = receipt, created
 	}
-	delivery, err := session.service.stagePackage(session.ctx, target.input.Envelope, target.plan, operationID, target.input.Hints, target.dataReceipt.Locator)
+	delivery, err := session.service.stagePackage(session.ctx, target.input.Envelope, cloneLocalObservationPlan(target.plan), operationID, target.input.Hints, target.dataReceipt.Locator)
 	if err != nil {
 		return err
 	}
@@ -51,12 +64,24 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return err
 	}
+	if err := sealStagedSelection(&target.plan, delivery); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return err
+	}
 	target.delivery = delivery
+	if target.dataReceipt.Locator != "" {
+		if err := session.service.PluginData.PrepareRuntime(session.ctx, target.input.Envelope, target.plan, target.dataReceipt.Locator); err != nil {
+			return fmt.Errorf("prepare locked MCP runtime for %s before group commit: %w", target.input.Client.ClientID, err)
+		}
+	}
 	return nil
 }
 
 func (session *groupSession) reobserveGroupIdentity() error {
 	for _, target := range session.planned {
+		if err := session.service.checkMCPNamespace(session.ctx, target.input.Client, &target.plan, target.managed); err != nil {
+			return fmt.Errorf("MCP namespace changed before group commit: %w", err)
+		}
 		if target.recovering {
 			if err := session.reobserveRecoveringTarget(target); err != nil {
 				return err

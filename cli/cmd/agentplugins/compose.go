@@ -112,8 +112,9 @@ func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths path
 		StateStore: v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
 		Activator: providers.Activator{Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		Lock:      mutationLock, Kernel: transaction.Kernel{StateStore: v2Store, Directory: directoryManager},
-		NativeObserver: providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
-		PluginData:     providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
+		NativeObserver:     providers.NativeIdentityObserver{Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
+		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},
+		PluginData:         providers.PluginDataManager{Base: filepath.Join(dataRoot, "plugin-data")},
 	}
 }
 

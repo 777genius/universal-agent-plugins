@@ -2,8 +2,6 @@
 package codex
 
 import (
-	"path/filepath"
-
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -25,7 +23,10 @@ func (*Adapter) ID() domain.ClientID { return domain.ClientCodex }
 // DetectSurfaces probes the Codex CLI, its configuration directory and the
 // desktop application.
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
-	configRoot := filepath.Join(host.HomeDir(), ".codex")
+	configRoot, err := detectedProfileRoot(host)
+	if err != nil {
+		return clients.Detection{Err: err}
+	}
 	surfaces := []domain.ClientSurface{
 		host.BinarySurface("codex_cli", "codex"),
 		host.DirectorySurface("codex_config", configRoot),

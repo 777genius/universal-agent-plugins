@@ -234,6 +234,11 @@
       "sourceDescription": "Pacotes revisados e descobertas da comunidade continuam claramente rotulados, com a fonte disponível antes da instalação.",
       "standardDescription": "Os pacotes são lidos do Agent Plugins 1.0 {manifest}, sem um segundo manifesto de instalação."
     },
+    "builtWith": {
+      "title": "Já criado com UAP",
+      "agentNotificationsDescription": "Notificações de desktop, sons e foco na janela com um clique para agentes de programação com IA.",
+      "viewRepository": "Ver no GitHub"
+    },
     "faq": {
       "eyebrow": "Perguntas frequentes",
       "title": "Perguntas comuns",
@@ -542,6 +547,9 @@
       "disclaimer": "Verificações automatizadas reduzem riscos; elas não provam que um plugin é seguro. Revise o código-fonte e as permissões antes de instalar software em que você não confia."
     },
     "catalog": {
+      "staleCommunityResults": "Exibindo {count} entradas da comunidade do último catálogo assinado, gerado em {generated}, expirado em {expired}. Os comandos de instalação estão pausados até a atualização do catálogo. As entradas revisadas continuam disponíveis.",
+      "staleCommunityListing": "Entrada histórica assinada; o catálogo expirou em {expired}.",
+      "staleCommunityCommands": "Os comandos de instalação da comunidade estão pausados porque o catálogo assinado expirou. Você ainda pode consultar as entradas e o código-fonte.",
       "explorePlugins": "Explorar plugins",
       "searchByCapabilityComponentOrSource": "Pesquise por recurso, componente ou fonte.",
       "allCategories": "Todas as categorias",
@@ -610,7 +618,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Indisponível na fonte indexada; nenhum comando de instalação foi gerado.",
       "unavailableAtItsIndexedSource": "Indisponível na fonte indexada",
       "checkedAgainBeforeInstallation": "Verificado novamente antes da instalação",
-      "reviewedListing": "listagem revisada",
+      "reviewedListing": "Revisado",
       "notAvailableForChatgpt": "Não disponível para ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
       "allInstalledAgents": "Todos os agentes instalados",
@@ -817,7 +825,7 @@
       "useThemEverywhere": "Use-os em qualquer lugar.",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Pesquise pacotes revisados e plugins da comunidade descobertos em repositórios públicos do GitHub.",
       "description": "Pesquise Agent Plugins 1.0 revisados e da comunidade para Codex, Claude Code, Cursor, Gemini CLI, OpenCode e muito mais.",
-      "title": "Diretório de Agent Plugins 1.0 {'|'} Pesquise mais de 2.500 plugins",
+      "title": "Diretório de Agent Plugins 1.0 {'|'} Pesquise plugins",
       "listName": "Pacotes de Agent Plugins 1.0 revisados"
     },
     "detail": {
@@ -832,7 +840,7 @@
       "components": "Componentes",
       "package": "Pacote",
       "pluginNotFound": "Plugin não encontrado",
-      "reviewedListing": "listagem revisada",
+      "reviewedListing": "Revisado",
       "licenseNotSpecified": "Licença não especificada",
       "managedByCli": "Gerenciado pela CLI",
       "requiresAFinalStepInTheApp": "Requer uma etapa final no app",

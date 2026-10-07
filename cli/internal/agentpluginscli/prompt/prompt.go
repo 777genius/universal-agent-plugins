@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"unicode"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/promptio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -36,6 +38,7 @@ type TargetSelectionResult struct{ IDs []domain.ClientID }
 type ConfirmationRequest struct {
 	Title   string
 	Summary []string
+	Default bool
 }
 type ConfirmationResult struct{ Accepted bool }
 
@@ -116,3 +119,20 @@ func SkippedClientsNotice(labels []string) string {
 	}
 	return b.String()
 }
+
+// NormalizeIOError preserves the CLI diagnostic sentinels at the host boundary.
+func NormalizeIOError(err error) error {
+	switch {
+	case errors.Is(err, io.EOF):
+		return normalizedIOError{sentinel: ErrPromptInputClosed, cause: err}
+	case errors.Is(err, promptio.ErrUnavailable):
+		return normalizedIOError{sentinel: ErrPromptUnavailable, cause: err}
+	default:
+		return err
+	}
+}
+
+type normalizedIOError struct{ sentinel, cause error }
+
+func (e normalizedIOError) Error() string   { return e.sentinel.Error() }
+func (e normalizedIOError) Unwrap() []error { return []error{e.sentinel, e.cause} }

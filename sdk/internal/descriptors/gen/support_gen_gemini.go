@@ -175,5 +175,24 @@ func geminiSupportEntries() []runtime.SupportEntry {
 			Summary:         "Gemini AfterTool hook",
 			LiveTestProfile: "gemini_extension",
 		},
+		{
+			Platform:       "gemini",
+			Event:          "Notification",
+			Status:         "runtime_supported",
+			Maturity:       "beta",
+			V1Target:       false,
+			InvocationKind: "argv_command_casefold",
+			Carrier:        runtime.CarrierStdinJSON,
+			TransportModes: []runtime.TransportMode{
+				"process",
+			},
+			ScaffoldSupport: true,
+			ValidateSupport: true,
+			Capabilities: []runtime.CapabilityID{
+				"gemini_notification",
+			},
+			Summary:         "Gemini Notification beta observer (neutral output subset; native qualification pending)",
+			LiveTestProfile: "gemini_extension",
+		},
 	}
 }

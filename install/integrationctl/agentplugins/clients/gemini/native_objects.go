@@ -15,9 +15,30 @@ import (
 )
 
 func BuildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, pluginDataPath string) ([]domain.NativeObjectOwnership, error) {
-	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
-	if configRoot == "" || !filepath.IsAbs(configRoot) {
-		return nil, fmt.Errorf("the Gemini config root is unavailable")
+	return buildGeminiNativeObjects(stagingRoot, envelope, plan, pluginDataPath, true)
+}
+
+// ReadGeminiNativeObjects derives the complete desired set from an installed
+// package without changing its digest-covered projection descriptor.
+func ReadGeminiNativeObjects(activeRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, pluginDataPath string) ([]domain.NativeObjectOwnership, error) {
+	if pluginDataPath == "" {
+		body, err := os.ReadFile(filepath.Join(activeRoot, GeminiDescriptorName))
+		if err != nil {
+			return nil, fmt.Errorf("read installed Gemini projection descriptor: %w", err)
+		}
+		var descriptor GeminiDescriptor
+		if err := json.Unmarshal(body, &descriptor); err != nil || !filepath.IsAbs(descriptor.DataRoot) {
+			return nil, fmt.Errorf("installed Gemini projection descriptor has no valid data root")
+		}
+		pluginDataPath = descriptor.DataRoot
+	}
+	return buildGeminiNativeObjects(activeRoot, envelope, plan, pluginDataPath, false)
+}
+
+func buildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, pluginDataPath string, writeDescriptor bool) ([]domain.NativeObjectOwnership, error) {
+	configRoot := plan.NativeRegistryRoot
+	if err := validateProfile(configRoot, ""); err != nil {
+		return nil, err
 	}
 	objects := make([]domain.NativeObjectOwnership, 0, len(plan.Components))
 	for _, component := range plan.Components {
@@ -34,8 +55,16 @@ func BuildGeminiNativeObjects(stagingRoot string, envelope domain.PackageEnvelop
 	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(stagingRoot, GeminiDescriptorName), append(descriptorBody, '\n'), 0o600); err != nil {
-		return nil, fmt.Errorf("write Gemini projection descriptor: %w", err)
+	descriptorPath := filepath.Join(stagingRoot, GeminiDescriptorName)
+	if writeDescriptor {
+		if err := os.WriteFile(descriptorPath, append(descriptorBody, '\n'), 0o600); err != nil {
+			return nil, fmt.Errorf("write Gemini projection descriptor: %w", err)
+		}
+	} else {
+		observed, err := os.ReadFile(descriptorPath)
+		if err != nil || string(observed) != string(append(descriptorBody, '\n')) {
+			return nil, fmt.Errorf("installed Gemini projection descriptor differs from the bound PLUGIN_DATA locator")
+		}
 	}
 	sort.Slice(objects, func(i, j int) bool { return objects[i].ObjectID < objects[j].ObjectID })
 	return objects, nil

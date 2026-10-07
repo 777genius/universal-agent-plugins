@@ -371,6 +371,11 @@
       "sourceDescription": "已审查的软件包和社区发现仍然有清晰的标签，并且在安装之前可以获取其来源。",
       "standardDescription": "包从代理插件 1.0 {manifest} 读取，无需第二个安装清单。"
     },
+    "builtWith": {
+      "title": "已使用 UAP 构建",
+      "agentNotificationsDescription": "为 AI 编程代理提供桌面通知、声音提醒和点击切换到对应窗口。",
+      "viewRepository": "在 GitHub 上查看"
+    },
     "faq": {
       "eyebrow": "常见问题解答",
       "title": "常见问题",
@@ -542,6 +547,9 @@
       "disclaimer": "自动化检查降低风险；他们并不能证明插件是安全的。在安装您不信任的软件之前，请检查来源和权限。"
     },
     "catalog": {
+      "staleCommunityResults": "显示最新签名目录中的 {count} 个社区条目，生成于 {generated}，已于 {expired} 过期。社区安装命令已暂停，等待新目录。已审核的条目仍可使用。",
+      "staleCommunityListing": "历史签名条目；目录已于 {expired} 过期。",
+      "staleCommunityCommands": "签名目录已过期，社区安装命令已暂停。仍可浏览条目和源代码。",
       "explorePlugins": "探索插件",
       "searchByCapabilityComponentOrSource": "按功能、组件或来源搜索。",
       "allCategories": "所有类别",
@@ -610,7 +618,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "在其索引源中不可用；没有生成安装命令。",
       "unavailableAtItsIndexedSource": "在其索引源中不可用",
       "checkedAgainBeforeInstallation": "安装前再次检查",
-      "reviewedListing": "审核清单",
+      "reviewedListing": "已审核",
       "notAvailableForChatgpt": "不适用于 ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
       "allInstalledAgents": "所有已安装的代理",
@@ -817,7 +825,7 @@
       "useThemEverywhere": "到处使用它们。",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "搜索从公共 GitHub 存储库中发现的已审阅的软件包和社区插件。",
       "description": "搜索 Codex、Claude Code、Cursor、Gemini CLI、OpenCode 等已审查和社区代理插件 1.0。",
-      "title": "代理插件 1.0 目录 {'|'} 搜索 2,500+ 插件",
+      "title": "代理插件 1.0 目录 {'|'} 搜索插件",
       "listName": "审查了代理插件 1.0 包"
     },
     "detail": {
@@ -832,7 +840,7 @@
       "components": "组件",
       "package": "套餐",
       "pluginNotFound": "找不到插件",
-      "reviewedListing": "审核清单",
+      "reviewedListing": "已审核",
       "licenseNotSpecified": "未指定许可证",
       "managedByCli": "由 CLI 管理",
       "requiresAFinalStepInTheApp": "需要在应用程序中执行最后一步",

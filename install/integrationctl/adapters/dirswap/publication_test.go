@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -54,9 +55,7 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			case "bytes":
 				writeBody(t, in.ActivePath, "foreign")
 			case "mode":
-				if err = os.Chmod(in.ActivePath, 0700); err != nil {
-					t.Fatal(err)
-				}
+				changeModeForDrift(t, in.ActivePath, 0700)
 			case "replacement":
 				if err = os.Rename(in.ActivePath, in.ActivePath+".saved"); err != nil {
 					t.Fatal(err)
@@ -65,6 +64,9 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			case "legacy":
 				r.PublishedIdentity = ""
 				r.PublishedDigest = ""
+				if err := m.save(r); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err = m.Rollback(context.Background(), r); err == nil {
 				t.Fatal("rollback accepted drift")
@@ -75,11 +77,41 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			if _, err = os.Stat(in.ActivePath); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = m.Load(in.OperationID); err != nil {
-				t.Fatal(err)
+			if _, err = m.Load(in.OperationID); (err != nil) != (variant == "legacy") {
+				t.Fatalf("legacy journals must fail closed: %v", err)
 			}
 		})
 	}
+}
+
+func changeModeForDrift(t *testing.T, path string, unixMode os.FileMode) {
+	t.Helper()
+	before, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := unixMode
+	if runtime.GOOS == "windows" {
+		mode = 0400 // Read-only attribute, not an ACL mutation.
+	} else if mode == before.Mode().Perm() {
+		mode ^= 0200
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(path, before.Mode().Perm()); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Mode().Perm() == after.Mode().Perm() {
+		t.Fatalf("mode drift fixture made no change at %q: %v", path, after.Mode())
+	}
+	t.Logf("Observed mode drift at %q: %v -> %v", path, before.Mode(), after.Mode())
 }
 
 func TestAbsentCrashRecoveryAfterPublicationAndQuarantine(t *testing.T) {
@@ -134,12 +166,12 @@ func TestAbsentRecoveryPreservesChangedQuarantine(t *testing.T) {
 	if err = m.Rollback(context.Background(), r); err == nil {
 		t.Fatal("missing crash")
 	}
-	writeBody(t, r.BackupPath, "foreign")
+	writeBody(t, r.QuarantinePath, "foreign")
 	m.Fault = nil
 	if err = m.Recover(context.Background(), in.OperationID, false); err == nil {
 		t.Fatal("recovery accepted changed quarantine")
 	}
-	assertBody(t, r.BackupPath, "foreign")
+	assertBody(t, r.QuarantinePath, "foreign")
 	if _, err = m.Load(in.OperationID); err != nil {
 		t.Fatal(err)
 	}
@@ -153,10 +185,10 @@ func TestAbsentRollbackPreservesReplacementDuringQuarantine(t *testing.T) {
 	}
 	m.Fault = func(at string) error {
 		if at == FaultRollbackQuarantined {
-			if err := os.Rename(r.BackupPath, r.BackupPath+".saved"); err != nil {
+			if err := os.Rename(r.QuarantinePath, r.QuarantinePath+".saved"); err != nil {
 				return err
 			}
-			writeBody(t, r.BackupPath, "foreign")
+			writeBody(t, r.QuarantinePath, "foreign")
 		}
 		return nil
 	}

@@ -79,13 +79,20 @@ func (session *repairSession) loadRepairTarget() error {
 	}
 	session.plan = plan
 	session.result.Plan = plan
-	return session.bindRepairClient(physicalID)
+	if err := session.bindRepairClient(physicalID); err != nil {
+		return err
+	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, &session.client); err != nil {
+		return err
+	}
+	session.result.Plan = session.plan
+	return nil
 }
 
 func (session *repairSession) bindRepairClient(physicalID string) error {
 	session.clientKey = domain.ComputeClientBindingID(session.installation.InstallationID, string(session.input.Client.ClientID), string(session.input.Scope), session.plan.ActivePath)
 	client, ok := session.installation.Clients[session.clientKey]
-	if !ok && sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !ok && sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		for key, binding := range session.installation.Clients {
 			if binding.Scope != string(session.input.Scope) || binding.Materialization == domain.MaterializationAbsent ||
 				binding.PhysicalArtifact != session.plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), session.input.Client.ClientID) {
@@ -104,6 +111,9 @@ func (session *repairSession) bindRepairClient(physicalID string) error {
 	if client.ClientBindingID != session.clientKey || !sameNativeBackend(domain.ClientID(client.ClientID), session.input.Client.ClientID) ||
 		client.Scope != string(session.input.Scope) || client.PhysicalArtifact != physicalID {
 		return fmt.Errorf("managed repair target identity does not match the selected binding")
+	}
+	if err := validateNativeBinding(client, session.input.Client); err != nil {
+		return err
 	}
 	session.client = client
 	session.result.Activation = lifecycleOutcome(client)
@@ -151,7 +161,7 @@ func (session *repairSession) persistRepair(client domain.ClientBinding) error {
 	session.installation.Clients[session.clientKey] = client
 	session.installation.UpdatedAt = client.UpdatedAt
 	session.state.Installations[session.index] = session.installation
-	return session.service.StateStore.Save(session.state)
+	return session.service.persistLifecycleState(session.state)
 }
 
 func repairMismatchKind(err error) (*ports.VerificationError, bool) {

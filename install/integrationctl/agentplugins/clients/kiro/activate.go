@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -76,12 +78,17 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 // Activate prepares, verifies or installs managed Kiro native objects, then
 // observes MCP through ACP when the package selected any.
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	if err := shared.ActivationIdentityMismatch(request); err != nil {
-		return domain.ActivationOutcome{}, err
-	}
 	outcome := shared.StartedActivation(request)
+	outcome.NativeEffect = domain.NativeEffectUnchanged
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
+	if request.VerifyOnly {
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	}
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return outcome, err
+	}
 	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
-		return activatePrepared(ctx, request, outcome)
+		return activatePrepared(ctx, env, request, outcome)
 	}
 	if !automaticallyActivates(request) {
 		return manualKiroInstall(request, outcome), nil
@@ -92,12 +99,12 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	return activateAutomatic(ctx, env, request, outcome)
 }
 
-func activatePrepared(ctx context.Context, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+func activatePrepared(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	var err error
 	if request.VerifyOnly {
 		err = VerifyNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false)
 	} else {
-		err = ActivateNative(ctx, request)
+		outcome, err = activateKiroNativeEffect(ctx, env, request, outcome)
 	}
 	if err != nil {
 		return shared.FailedActivation(outcome, "repair the managed Kiro native configuration", err)
@@ -128,9 +135,11 @@ func verifyKiroInstall(ctx context.Context, env clients.Env, request domain.Acti
 
 func activateAutomatic(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	if err := (*Adapter)(nil).PreflightActivation(env, request); err != nil {
-		return domain.ActivationOutcome{}, err
+		return outcome, err
 	}
-	if err := ActivateNative(ctx, request); err != nil {
+	var err error
+	outcome, err = activateKiroNativeEffect(ctx, env, request, outcome)
+	if err != nil {
 		return shared.FailedActivation(outcome, "retry the managed Kiro native installation", err)
 	}
 	if err := verifyKiroMCP(ctx, env, request); err != nil {
@@ -174,7 +183,7 @@ func manualKiroVerification(outcome domain.ActivationOutcome, request domain.Act
 
 // Deactivate removes managed Kiro native objects, or asks the operator to
 // finish a leftover custom Power first.
-func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	if len(NativeObjects(request.NativeObjects)) == 0 {
 		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"), nil
@@ -183,7 +192,10 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove its managed Kiro skills and MCP entries automatically")
 		return outcome, nil
 	}
-	if err := DeactivateNative(ctx, request); err != nil {
+	if err := ctx.Err(); err != nil {
+		return outcome, err
+	}
+	if _, err := applyKiroNativeMutationWithKernelAndOps(request.Client.ConfigRoot, "", request.NativeObjects, nil, kiroNativeKernel(env), shared.RenameDirectoryExclusive, os.RemoveAll); err != nil {
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
@@ -193,4 +205,38 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 func isKiroCLI(executable string) bool {
 	base := strings.ToLower(filepath.Base(strings.TrimSpace(executable)))
 	return base == "kiro-cli" || base == "kiro-cli.exe" || base == "kiro" || base == "kiro.exe"
+}
+
+// Preserve the public native helpers' default while honoring an injected file
+// boundary in adapter calls (including post-write failures and readback).
+func kiroNativeKernel(env clients.Env) nativeconfig.Kernel {
+	if env.NativeConfig.RequireFileIO() != nil {
+		return nativeconfig.New()
+	}
+	return env.NativeConfig
+}
+
+func activateKiroNativeEffect(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+	if err := ctx.Err(); err != nil {
+		return outcome, err
+	}
+	effect, err := applyKiroNativeMutationWithKernelAndOps(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kiroNativeKernel(env), shared.RenameDirectoryExclusive, os.RemoveAll)
+	outcome.NativeEffect = effect
+	switch effect {
+	case domain.NativeEffectCommitted:
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	case domain.NativeEffectUnchanged:
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
+	case domain.NativeEffectUncertain:
+		// A matching desired digest does not prove we wrote it. A rejected CAS
+		// can leave a foreign, desired-identical server in place. Only earlier
+		// confirmed ownership receipts may survive an uncertain mutation.
+		outcome.NativeObjects = nil
+		for _, object := range NativeObjects(request.PreviousNativeObjects) {
+			if VerifyNativeObjects(request.Client.ConfigRoot, []domain.NativeObjectOwnership{object}, false) == nil {
+				outcome.NativeObjects = append(outcome.NativeObjects, object)
+			}
+		}
+	}
+	return outcome, err
 }

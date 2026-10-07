@@ -144,6 +144,9 @@ func normalizeCurrentState(state *domain.StateFileV2) {
 }
 
 func decodeStrictJSON(body []byte, target any) error {
+	if err := rejectShadowedObservations(body); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -265,6 +268,9 @@ func Validate(state domain.StateFileV2) error {
 			}
 		}
 		for mapKey, client := range installation.Clients {
+			if err := validateObservationLinkage(client); err != nil {
+				return err
+			}
 			if mapKey == "" || mapKey != client.ClientBindingID {
 				return fmt.Errorf("%s client map key does not match client_binding_id", prefix)
 			}
@@ -313,6 +319,14 @@ func Validate(state domain.StateFileV2) error {
 					return fmt.Errorf("%s client binding %q references unknown data receipt", prefix, client.ClientBindingID)
 				}
 			}
+			if client.NativeProfileRoot != "" && (!filepath.IsAbs(client.NativeProfileRoot) || filepath.Clean(client.NativeProfileRoot) != client.NativeProfileRoot) {
+				return fmt.Errorf("%s client binding %q has an invalid native profile root", prefix, client.ClientBindingID)
+			}
+			if client.NativeActivationAttempt != "" {
+				if err := pathpolicy.ValidateLeafID(client.NativeActivationAttempt); err != nil {
+					return fmt.Errorf("%s client binding %q has an invalid native activation attempt: %w", prefix, client.ClientBindingID, err)
+				}
+			}
 			objectIDs := map[string]struct{}{}
 			for _, object := range client.NativeObjects {
 				if strings.TrimSpace(object.ObjectID) == "" || strings.TrimSpace(object.Kind) == "" {
@@ -350,8 +364,14 @@ func Validate(state domain.StateFileV2) error {
 		if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 			return fmt.Errorf("%s has invalid operation id: %w", prefix, err)
 		}
-		if strings.TrimSpace(receipt.ClientBindingID) == "" || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
+		sharedData := receipt.ClientBindingID == "" && receipt.DataReceiptID != "" && receipt.MutationType == "directory_remove" && len(receipt.ProfileOwners) > 0 && len(receipt.DirectoryProof) > 0
+		if (strings.TrimSpace(receipt.ClientBindingID) == "" && !sharedData) || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
 			return fmt.Errorf("%s is incomplete", prefix)
+		}
+		if receipt.DataReceiptID != "" {
+			if err := pathpolicy.ValidateLeafID(receipt.DataReceiptID); err != nil {
+				return fmt.Errorf("%s has invalid data receipt id: %w", prefix, err)
+			}
 		}
 		if !validReceiptPhase(receipt.Phase) {
 			return fmt.Errorf("%s has invalid phase %q", prefix, receipt.Phase)

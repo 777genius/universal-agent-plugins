@@ -26,13 +26,16 @@ func (session *repairSession) repairPackage() (AddResult, error) {
 		session.result.RequiresConfirmation = true
 		return session.result, nil
 	}
-	delivery, err := session.stageRepairDelivery()
+	delivery, err := session.stageRepairDelivery(false)
 	if err != nil {
 		return session.result, err
 	}
-	defer func() { _ = session.service.Stager.Discard(context.Background(), delivery) }()
+	defer func() { session.service.discardSettledDelivery(session.input.OperationID, delivery) }()
 	if err := session.service.verifyRepairPrecondition(session.ctx, session.target.ActivePath, session.expectedDigest, verification.Kind, beforeDigest); err != nil {
 		return session.result, err
+	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, &session.client); err != nil {
+		return session.result, fmt.Errorf("MCP namespace changed before repair commit: %w", err)
 	}
 	return session.commitRepairPackage(delivery, beforeDigest)
 }
@@ -47,7 +50,7 @@ func repairBeforeDigest(verification *ports.VerificationError) (string, error) {
 	return verification.ActualDigest, nil
 }
 
-func (session *repairSession) stageRepairDelivery() (domain.StagedDelivery, error) {
+func (session *repairSession) stageRepairDelivery(allowProjectionChange bool) (domain.StagedDelivery, error) {
 	operationID := strings.TrimSpace(session.input.OperationID)
 	if operationID == "" {
 		id, err := newOperationID()
@@ -60,11 +63,14 @@ func (session *repairSession) stageRepairDelivery() (domain.StagedDelivery, erro
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
-	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, session.plan, operationID, session.input.Hints, dataPath)
+	delivery, err := session.service.stagePackage(session.ctx, session.input.Envelope, cloneLocalObservationPlan(session.plan), operationID, session.input.Hints, dataPath)
 	if err != nil {
 		return domain.StagedDelivery{}, err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, session.plan, &session.client)
+	if err == nil {
+		delivery.NativeObjects, err = retainRecordedLocalSelector(session.plan.SelectedDelivery, session.client, delivery.NativeObjects)
+	}
 	if err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, err
@@ -73,10 +79,21 @@ func (session *repairSession) stageRepairDelivery() (domain.StagedDelivery, erro
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, fmt.Errorf("stager returned an unexpected repair target")
 	}
-	if delivery.ArtifactDigest != session.expectedDigest {
+	if !allowProjectionChange && delivery.ArtifactDigest != session.expectedDigest {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return domain.StagedDelivery{}, fmt.Errorf("resolved repair projection digest differs from the originally managed package")
 	}
+	if dataPath != "" {
+		if err := session.service.PluginData.PrepareRuntime(session.ctx, session.input.Envelope, session.plan, dataPath); err != nil {
+			_ = session.service.Stager.Discard(context.Background(), delivery)
+			return domain.StagedDelivery{}, fmt.Errorf("prepare locked MCP runtime before repair activation: %w", err)
+		}
+	}
+	if err := sealStagedSelection(&session.plan, delivery); err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return domain.StagedDelivery{}, err
+	}
+	session.result.Plan = session.plan
 	session.input.OperationID = operationID
 	return delivery, nil
 }
@@ -99,16 +116,28 @@ func (session *repairSession) repairDataPath() (string, error) {
 }
 
 func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery, beforeDigest string) (AddResult, error) {
+	verifiedState := lifecycleOutcome(session.client)
+	verifiedState.Verification = domain.VerificationPackageValid
+	result, err := session.commitRepairDirectory(delivery, beforeDigest, verifiedState)
+	if err != nil {
+		return result, err
+	}
+	return session.reactivateRepaired(delivery, verifiedState)
+}
+
+func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelivery, beforeDigest string, verifiedState domain.ActivationOutcome) (AddResult, error) {
 	// The user or client can change the native object while staging runs. Repair
 	// may replace the exact absent/digest-mismatched object reviewed above, but
 	// never a different object that appeared after preflight.
 	kernel := session.service.Kernel
 	kernel.StateStore = session.service.StateStore
-	verifiedState := lifecycleOutcome(session.client)
-	verifiedState.Verification = domain.VerificationPackageValid
 	desiredClient := session.client
+	desiredClient.SelectedDelivery = session.plan.SelectedDelivery
 	desiredClient.Materialization = domain.MaterializationMaterialized
-	desiredClient.Verification = domain.VerificationPackageValid
+	desiredClient.Activation = verifiedState.Activation
+	desiredClient.Authentication = verifiedState.Authentication
+	desiredClient.Policy = verifiedState.Policy
+	desiredClient.Verification = verifiedState.Verification
 	desiredClient.NativeObjects = append([]domain.NativeObjectOwnership(nil), delivery.NativeObjects...)
 	desiredClient.UpdatedAt = session.service.now().Format("2006-01-02T15:04:05.999999999Z07:00")
 	session.installation.Clients[session.clientKey] = desiredClient
@@ -118,6 +147,10 @@ func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery
 		OperationID: session.input.OperationID, InstallationID: session.installation.InstallationID, ClientBindingID: session.clientKey,
 		Sequence: nextSequence(session.client), OwnedBase: delivery.OwnedBase, ActivePath: session.target.ActivePath,
 		StagingPath: delivery.StagingPath, BeforeDigest: beforeDigest, AfterDigest: delivery.ArtifactDigest,
+		RequireAbsent: beforeDigest == "",
+		VerifyBefore: func(verifyContext context.Context, path string) error {
+			return session.service.Stager.Verify(verifyContext, path, beforeDigest)
+		},
 		NativeObjects: delivery.NativeObjects, Activation: verifiedState.Activation, Authentication: verifiedState.Authentication,
 		Policy: verifiedState.Policy, Verification: verifiedState.Verification, DesiredState: session.state,
 		Verify: func(verifyContext context.Context, activePath string) error {
@@ -130,14 +163,14 @@ func (session *repairSession) commitRepairPackage(delivery domain.StagedDelivery
 	}
 	session.result.Mutated = true
 	session.result.Activation = verifiedState
-	return session.reactivateRepaired(delivery, verifiedState)
+	return session.result, nil
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {
-	if nativeLifecycleClient(session.input.Client.ClientID) {
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		return session.reapplyRepairedNative(delivery)
 	}
-	if domain.ClientTraitsFor(session.input.Client.ClientID).UsesManagedStdioLauncher {
+	if session.plan.SelectedDelivery.EffectiveTraits(session.input.Client.ClientID).UsesManagedStdioLauncher {
 		return session.verifyRepairedLauncher(delivery)
 	}
 	_ = verifiedState
@@ -145,7 +178,8 @@ func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery,
 }
 
 func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelivery) (AddResult, error) {
-	outcome, activationErr := session.service.Activator.Activate(session.ctx, domain.ActivationRequest{
+	previousObservation := session.plan.LocalEntryObservation.Clone()
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.plan,
 		Delivery: domain.StagedDelivery{
 			ClientID: delivery.ClientID, OwnedBase: delivery.OwnedBase,
@@ -158,7 +192,7 @@ func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelive
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome
-	if _, updateErr := session.service.updateLifecycle(session.installation.InstallationID, session.clientKey, outcome); updateErr != nil {
+	if _, updateErr := session.service.updateActivationResultWithObservation(session.installation.InstallationID, session.clientKey, outcome, activationErr, session.client.NativeObjects, previousObservation); updateErr != nil {
 		if activationErr != nil {
 			return session.result, fmt.Errorf("reapply repaired native state: %w; persist verification state: %w", activationErr, updateErr)
 		}

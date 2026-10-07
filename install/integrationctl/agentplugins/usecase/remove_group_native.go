@@ -10,8 +10,17 @@ func (session *removeGroupSession) removeGroupNative() error {
 	externalCompleted := 0
 	for plannedIndex := range session.planned {
 		item := &session.planned[plannedIndex]
-		outcome, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-			Client: item.input.Client, DeclaredName: session.installation.DeclaredName,
+		nativeAttempt := nativeLifecycleClient(item.input.Client.ClientID, item.client.SelectedDelivery)
+		if nativeAttempt {
+			if err := session.service.beginNativeAttemptWithObservation(session.installation.InstallationID, item.clientKey, domain.NativeIntentRemove, item.client.SelectedDelivery, item.client.LocalEntryObservation.Clone()); err != nil {
+				return err
+			}
+		}
+		outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, item.clientKey, domain.DeactivationRequest{
+			LocalEntryObservation: item.client.LocalEntryObservation.Clone(),
+			RemoveOwnedEntry:      item.client.SelectedDelivery.OwnsProfileEntry(item.client.NativeObjects),
+			SelectedDelivery:      item.client.SelectedDelivery,
+			Client:                item.input.Client, DeclaredName: session.installation.DeclaredName,
 			CurrentActivation: item.client.Activation, Interactive: item.input.Interactive, ExternalUninstalled: item.input.ExternalUninstalled,
 			Confirmed: true, PhysicalArtifactID: item.client.PhysicalArtifact, BackendExecutable: item.input.BackendExecutable,
 			ManagedArtifactPath: item.client.TargetLocator,
@@ -23,6 +32,18 @@ func (session *removeGroupSession) removeGroupNative() error {
 		if err != nil {
 			session.markNativeDeactivationFailed(item, externalCompleted)
 			return fmt.Errorf("external deactivation failed; managed materialization was retained for repair: %w", err)
+		}
+		if nativeAttempt {
+			if err := session.service.completeNativeRemoval(session.installation.InstallationID, item.clientKey, outcome.ExternalRemovalComplete); err != nil {
+				session.markNativeDeactivationFailed(item, externalCompleted)
+				return fmt.Errorf("persist native deactivation: %w", err)
+			}
+			state, err := session.service.StateStore.Load()
+			if err != nil {
+				return err
+			}
+			session.state = state
+			session.installation = state.Installations[session.index]
 		}
 		if !outcome.ArtifactRemovalAllowed {
 			session.result.Phase = GroupPhaseManagedUnchanged

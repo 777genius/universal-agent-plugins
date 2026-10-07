@@ -45,7 +45,7 @@ jobs:
         id: build
         working-directory: cli
         run: |
-          go test ./internal/agentpluginscli/prompt ./internal/promptio ./internal/terminalprompts
+          go test ./installerui ./internal/agentpluginscli/prompt ./internal/promptio ./internal/terminalprompts
           go build -o "$RUNNER_TEMP/agentplugins.exe" ./cmd/agentplugins
       - name: Provision only pinned lintai
         run: python scripts/terminal-ui/provision_scanner.py --target '${{ matrix.target }}' --output "$RUNNER_TEMP/scanner"
@@ -58,6 +58,9 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts/terminal-ui -p 'test_*.py'
           python3 scripts/terminal-ui/harness.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
+      - name: Unix public renderer fault injection and terminal reuse
+        if: runner.os != 'Windows'
+        run: python3 scripts/terminal-ui/qualification_faults.py --artifacts "$RUNNER_TEMP/unix-fault-evidence" --timeout 15
       - name: Unix selection combinations (synthetic client and scanner protocols)
         if: runner.os != 'Windows'
         run: |
@@ -83,13 +86,13 @@ jobs:
         run: python scripts/terminal-ui/windows_conpty.py --binary "$RUNNER_TEMP/agentplugins.exe" --scanner-archive "$RUNNER_TEMP/scanner/${{ matrix.archive }}" --artifacts "$RUNNER_TEMP/terminal-evidence" --timeout 15
       - name: Windows native console cancellation entry and reuse
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
-        run: python scripts/terminal-ui/qualification_faults.py --case windows-console-cancel --artifacts "$RUNNER_TEMP/windows-fault-evidence" --timeout 15
-      - name: Windows PowerShell ConPTY default No and Ctrl+C
+        run: python scripts/terminal-ui/qualification_faults.py --case windows-console-cancel --case windows-consent-boundary --artifacts "$RUNNER_TEMP/windows-fault-evidence" --timeout 15
+      - name: Windows PowerShell ConPTY default Yes and Ctrl+C
         if: ${{ !cancelled() && runner.os == 'Windows' && steps.build.outcome == 'success' }}
         shell: pwsh
         run: |
           $shellPath = (Get-Command pwsh -CommandType Application).Source
-          python scripts/terminal-ui/windows_conpty.py --binary "$env:RUNNER_TEMP/agentplugins.exe" --scanner-archive "$env:RUNNER_TEMP/scanner/${{ matrix.archive }}" --powershell "$shellPath" --case default-no --case no --case yes-lifecycle --case ctrl-c --case confirm-ctrl-c --case eof --case resize --artifacts "$env:RUNNER_TEMP/powershell-terminal-evidence" --timeout 15
+          python scripts/terminal-ui/windows_conpty.py --binary "$env:RUNNER_TEMP/agentplugins.exe" --scanner-archive "$env:RUNNER_TEMP/scanner/${{ matrix.archive }}" --powershell "$shellPath" --case default-yes --case no --case yes-lifecycle --case ctrl-c --case confirm-ctrl-c --case eof --case resize --artifacts "$env:RUNNER_TEMP/powershell-terminal-evidence" --timeout 15
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # Keep the broad gate required, including when a console case fails.
       # Run it after console proof so legacy fixture failures cannot hide ConPTY.
@@ -109,6 +112,7 @@ jobs:
             ${{ runner.temp }}/terminal-evidence
             ${{ runner.temp }}/resilience-evidence
             ${{ runner.temp }}/npm-terminal-evidence
+            ${{ runner.temp }}/unix-fault-evidence
             ${{ runner.temp }}/windows-fault-evidence
             ${{ runner.temp }}/windows-resource-oracle-evidence
             ${{ runner.temp }}/powershell-terminal-evidence

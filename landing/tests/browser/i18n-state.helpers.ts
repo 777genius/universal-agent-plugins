@@ -127,8 +127,15 @@ export async function targets(page: Page, scope: Locator, names: string[]) {
   const trigger = scope.locator('.app-multiselect__trigger');
   await expect(trigger).toHaveAttribute('data-hydrated', 'true');
   await trigger.click();
-  for (const name of names) await page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) }).click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  for (const name of names) {
+    const checkbox = page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) });
+    const checked = await checkbox.isChecked();
+    await checkbox.click();
+    await expect(checkbox).toBeChecked({ checked: !checked });
+  }
   await page.keyboard.press('Escape');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
 }
 
 export async function automatic(page: Page, scope: Locator, locale: PublishedLocale) {
@@ -160,11 +167,43 @@ export async function delayedMirror(page: Page, kind: 'discovery' | 'security', 
     await gate.promise;
     if (fail) await route.fulfill({ status: 503, body: 'i18n-state delayed failure' });
     else {
-      const response = await route.fetch(); // local static artifact only
+      // This delayed full-body fixture intentionally delivers 200 on every
+      // remount, even when the production cache sends conditional headers.
+      const headers = route.request().headers();
+      delete headers['if-none-match'];
+      delete headers['if-modified-since'];
+      const response = await route.fetch({ headers }); // local static artifact only
       expect(response.status(), `${kind} mirror must exist in final artifact`).toBe(200);
       await route.fulfill({ response });
     }
     delivered.release();
   });
   return { ...gate, seen: seen.promise, delivered: delivered.promise };
+}
+
+// UI behavior tests use the exact signed mirror staged into the local Pages
+// artifact, but must not age out when that mirror's public TTL has elapsed.
+// The production verifier still checks its signatures and validity window.
+let signedMirrorTestTime: Promise<Date> | undefined;
+export async function setSignedMirrorTestTime(page: Page) {
+  signedMirrorTestTime ??= (async () => {
+    const windows = await Promise.all(['discovery', 'security'].map(async (kind) => {
+      const latest = await page.request.get(`./${kind}/latest.json`);
+      expect(latest.ok(), `${kind} pointer must exist in the assembled artifact`).toBe(true);
+      const pointer = await latest.json() as { snapshot_path?: string };
+      expect(pointer.snapshot_path).toMatch(/^snapshots\/\d{20}\.json$/);
+      const response = await page.request.get(`./${kind}/${pointer.snapshot_path}`);
+      expect(response.ok(), `${kind} signed snapshot must exist in the assembled artifact`).toBe(true);
+      const snapshot = await response.json() as { generated_at?: string; expires_at?: string };
+      const start = Date.parse(snapshot.generated_at ?? '');
+      const end = Date.parse(snapshot.expires_at ?? '');
+      expect(Number.isFinite(start) && Number.isFinite(end) && start < end, `${kind} validity window`).toBe(true);
+      return { start, end };
+    }));
+    const start = Math.max(...windows.map((window) => window.start));
+    const end = Math.min(...windows.map((window) => window.end));
+    expect(start, 'signed mirror validity windows must overlap').toBeLessThan(end);
+    return new Date(start + Math.floor((end - start) / 2));
+  })();
+  await page.clock.setFixedTime(await signedMirrorTestTime);
 }

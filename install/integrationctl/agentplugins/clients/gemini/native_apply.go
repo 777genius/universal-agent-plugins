@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -31,15 +32,16 @@ type geminiNativeApply struct {
 func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath string, previous, desired []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, rename geminiRenameFunc, capacity shared.CombinedCapacityFunc) (resultErr error) {
 	prepared, err := prepareGeminiNativeApply(configRoot, activePath, previous, desired, kernel, rename, capacity)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	txn, err := newGeminiSkillTxn(prepared)
 	if err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	if err := txn.stageDesired(); err != nil {
-		return err
+		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
+	mcpMayWrite := false
 	defer func() {
 		if txn.cleanup && txn.transactionRoot != "" {
 			_ = os.RemoveAll(txn.transactionRoot)
@@ -54,6 +56,8 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 		if rollbackErr := txn.rollback(); rollbackErr != nil {
 			txn.cleanup = false
 			resultErr = fmt.Errorf("%w; Gemini skill rollback failed: %w; recovery retained at %q", resultErr, rollbackErr, txn.transactionRoot)
+		} else if !mcpMayWrite || errors.Is(resultErr, nativeconfig.ErrCollision) || errors.Is(resultErr, nativeconfig.ErrNotOwned) {
+			resultErr = &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: resultErr}
 		}
 	}()
 	if err := txn.backupPrevious(); err != nil {
@@ -69,6 +73,7 @@ func ApplyGeminiNativeMutationWithKernelRenameAndCapacity(configRoot, activePath
 	if err := verifyGeminiMCPReceipts(prepared, requests); err != nil {
 		return err
 	}
+	mcpMayWrite = true
 	if _, err := prepared.kernel.ApplyBatch(requests); err != nil {
 		return err
 	}
@@ -86,11 +91,15 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 	if capacity == nil {
 		return nil, fmt.Errorf("the Gemini capacity checker is unavailable")
 	}
-	configRoot = strings.TrimSpace(configRoot)
-	if configRoot == "" || !filepath.IsAbs(configRoot) {
-		return nil, fmt.Errorf("the Gemini config root is unavailable")
+	if err := validateProfile(configRoot, ""); err != nil {
+		return nil, err
 	}
 	previous, desired = GeminiObjects(previous), GeminiObjects(desired)
+	// Validate desired paths even for replacements, before verifying digests or
+	// creating a transaction. Matching cleaned prior paths is not sufficient.
+	if err := validateGeminiObjectPaths(configRoot, desired); err != nil {
+		return nil, err
+	}
 	if err := VerifyGeminiNativeObjects(configRoot, previous, true, kernel); err != nil {
 		return nil, err
 	}
@@ -116,7 +125,7 @@ func prepareGeminiNativeApply(configRoot, activePath string, previous, desired [
 func validateGeminiDesiredIdentity(configRoot string, previousByID, desiredByID map[string]domain.NativeObjectOwnership, kernel nativeconfig.Kernel) error {
 	for id, object := range desiredByID {
 		if prior, replacing := previousByID[id]; replacing {
-			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || !shared.SameCleanPath(prior.Path, object.Path) {
+			if prior.Kind != object.Kind || prior.LogicalName != object.LogicalName || prior.Path != object.Path {
 				return fmt.Errorf("the Gemini native object identity changed unexpectedly for %s", id)
 			}
 			continue

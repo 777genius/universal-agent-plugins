@@ -398,6 +398,12 @@ export async function checkPagesArtifact({
     release && typeof release === 'object' && !Array.isArray(release),
     'Invalid release metadata',
   );
+  assert.equal(release.ok, true, 'Release metadata is unavailable; refusing publication');
+  assert(
+    typeof release.version === 'string' &&
+      /^(?:agentplugins-)?v?\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)?$/.test(release.version),
+    'Invalid release metadata version',
+  );
   assert(!fileSet.has('agents/index.html'));
   for (const locale of Object.keys(localeMetadata).filter((locale) => locale !== 'en')) {
     assert(!artifactFiles.some((file) => file.startsWith(`${locale}/api/`)), 'Localized API copy');

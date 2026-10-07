@@ -13,11 +13,11 @@ import sys
 import tempfile
 import time
 
-from harness import Fixture, Session, Screen, SELECT, CONFIRM, LIFECYCLE, check, clean, hashes
+from harness import Fixture, Session, Screen, SELECT, CONFIRM, LIFECYCLE, EMPTY_SELECTION, check, clean, hashes
 
 TARGETS = ('codex', 'cursor')
 SETS = {'codex': ('codex',), 'cursor': ('cursor',), 'both': TARGETS}
-CASES = tuple(f'{s}-{answer}' for s in SETS for answer in ('default-no', 'yes')) + (
+CASES = tuple(f'{s}-{answer}' for s in SETS for answer in ('no', 'yes')) + (
     'neither', 'selection-escape', 'selection-ctrl-c',
     'confirmation-escape', 'confirmation-ctrl-c', 'queued-enters', 'queued-yes', 'queued-space',
     'native-ownership', 'selection-eof', 'confirmation-eof', 'confirmation-partial-eof')
@@ -259,7 +259,7 @@ def run_case(name, binary, evidence, timeout):
                              b'\ry\r' if name == 'queued-yes' else
                              b'\r \r' if name == 'queued-space' else b'\r')
                 if name == 'neither':
-                    session.wait(r'(?i)(at least one|select one|cannot be empty|must select)',
+                    session.wait(EMPTY_SELECTION,
                                  'empty-validation')
                     selected_frame(session, available, ())
                     fixture.unchanged()
@@ -281,13 +281,13 @@ def run_case(name, binary, evidence, timeout):
                         session.send(b'\x1b' if name.endswith('escape') else b'\x03')
                         session.finish(1); fixture.unchanged()
                     elif name == 'native-ownership':
-                        session.send(b' \r')
+                        session.send(b'\r')
                         session.finish(1)
                         check('observe native identity for codex' in clean(session.raw),
                               'native ownership failure diagnostic missing')
                         fixture.unchanged()
                     elif name.endswith('-yes') and name != 'queued-yes':
-                        session.send(b' \r')
+                        session.send(b'\r')
                         for index, client in enumerate(selected if len(selected) == 1 else ()):
                             marker = r'Have you completed required authentication[^\r\n]*\[y/N\]' if client == 'codex' else LIFECYCLE
                             offset = session.wait(marker, f'lifecycle-{index}', after=offset)
@@ -299,7 +299,7 @@ def run_case(name, binary, evidence, timeout):
                               'unexpected authentication prompt')
                         outcome['installation'] = installed(fixture, selected)
                     else:
-                        if name not in ('queued-enters', 'queued-yes', 'queued-space'): session.send(b'\r')
+                        if name not in ('queued-enters', 'queued-yes', 'queued-space'): session.send(b' \r')
                         session.finish(0); fixture.unchanged()
             outcome['status'] = 'passed'
         except Exception as exc:

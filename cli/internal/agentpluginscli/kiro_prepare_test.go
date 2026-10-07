@@ -88,14 +88,18 @@ func TestDetectedKiroOffersExplicitPreparationWithoutChangingOtherTargets(t *tes
 		t.Fatal(err)
 	}
 	if loaded.cleanup != nil {
-		defer loaded.cleanup()
+		t.Cleanup(func() {
+			if err := loaded.cleanup(); err != nil {
+				t.Errorf("cleanup loaded package: %v", err)
+			}
+		})
 	}
 	intents := map[domain.ClientID]domain.InstallIntent{}
 	eligible, skipped := fixture.app.compatibleLoadedTargets(context.Background(), loaded, []domain.DetectedClient{kiro, cursor}, intents)
 	if len(eligible) != 2 || len(skipped) != 0 || intents[domain.ClientKiro] != domain.InstallIntentPrepare || intents[domain.ClientCursor] != "" {
 		t.Fatalf("selection: %+v %+v %+v", eligible, skipped, intents)
 	}
-	if !strings.Contains(eligible[0].DisplayName, "prepare configuration") {
+	if !strings.Contains(eligible[0].DisplayName, "prepare only; manual verification") {
 		t.Fatalf("unlabelled preparation: %+v", eligible)
 	}
 }

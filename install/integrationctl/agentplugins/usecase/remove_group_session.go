@@ -105,11 +105,17 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 	if err != nil {
 		return err
 	}
+	if err := validateDeliverySelection(client.SelectedDelivery, targetInput.SelectedDelivery); err != nil {
+		return err
+	}
+	if err := validateNativeBinding(client, targetInput.Client); err != nil {
+		return err
+	}
 	session.result.Targets[targetIndex] = RemoveResult{
 		InstallationID:   session.installation.InstallationID,
 		Plugin:           session.installation.DeclaredName,
 		ClientID:         targetInput.Client.ClientID,
-		AffectedSurfaces: preparedAffectedSurfaces(client, targetInput.Client.ClientID),
+		AffectedSurfaces: preparedAffectedSurfaces(client, targetInput.Client.ClientID, client.SelectedDelivery),
 	}
 	if prior, ok := session.byBinding[clientKey]; ok {
 		item := &session.planned[prior]
@@ -121,8 +127,11 @@ func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInpu
 	if err != nil {
 		return err
 	}
-	outcome, err := session.service.Activator.Deactivate(session.ctx, domain.DeactivationRequest{
-		Client: targetInput.Client, DeclaredName: session.installation.DeclaredName,
+	outcome, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, clientKey, domain.DeactivationRequest{
+		LocalEntryObservation: client.LocalEntryObservation.Clone(),
+		RemoveOwnedEntry:      client.SelectedDelivery.OwnsProfileEntry(client.NativeObjects),
+		SelectedDelivery:      client.SelectedDelivery,
+		Client:                targetInput.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: client.Activation, Interactive: targetInput.Interactive, ExternalUninstalled: targetInput.ExternalUninstalled,
 		Confirmed: false, PhysicalArtifactID: client.PhysicalArtifact, BackendExecutable: targetInput.BackendExecutable,
 		ManagedArtifactPath: client.TargetLocator,

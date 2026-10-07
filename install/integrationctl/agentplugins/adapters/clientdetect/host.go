@@ -16,6 +16,8 @@ func (detector Detector) host() clients.Host {
 	}
 	return clients.NewHost(clients.HostProbes{
 		HomeDir:               detector.HomeDir,
+		WorkingDir:            detector.WorkingDir,
+		EvalSymlinks:          detector.EvalSymlinks,
 		GOOS:                  detector.GOOS,
 		Environment:           detector.Environment,
 		SystemApplicationsDir: detector.SystemApplicationsDir,

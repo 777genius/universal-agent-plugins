@@ -59,41 +59,11 @@ func buildCodexProbe(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	src := filepath.Join(dir, "codex_probe.go")
-	body := `package main
-import (
-	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
-)
-func main() {
-	root := os.Getenv("CODEX_HOME")
-	marker := filepath.Join(root, ".uap-test-plugin")
-	args := os.Args[1:]
-	if len(args) >= 2 && args[0] == "plugin" && args[1] == "list" {
-		spec, err := os.ReadFile(marker)
-		if err != nil {
-			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"installed": []any{}})
-			return
-		}
-		name, marketplace, ok := strings.Cut(string(spec), "@")
-		if !ok {
-			os.Exit(2)
-		}
-		entry := map[string]any{"pluginId": string(spec), "name": name, "marketplaceName": marketplace, "installed": true, "enabled": true}
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"installed": []any{entry}})
-		return
+	body, err := os.ReadFile(filepath.Join("testdata", "codex_profile_probe.go"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(args) >= 3 && args[0] == "plugin" && args[1] == "add" {
-		_ = os.MkdirAll(root, 0700)
-		if err := os.WriteFile(marker, []byte(args[2]), 0600); err != nil { os.Exit(2) }
-	} else if len(args) >= 3 && args[0] == "plugin" && args[1] == "remove" {
-		_ = os.Remove(marker)
-	}
-	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true})
-}
-`
-	if err := os.WriteFile(src, []byte(body), 0600); err != nil {
+	if err := os.WriteFile(src, body, 0600); err != nil {
 		t.Fatal(err)
 	}
 	name := "codex-probe"
@@ -545,6 +515,135 @@ func skipWindowsLauncherExecuteBit(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("UAP managedstdio.NewSource requires Perm()&0111; Go Windows FileMode does not set execute bits on regular files")
+	}
+}
+
+func TestPreparedInstallIdentitySurvivesPublicHandoff(t *testing.T) {
+	ctx := testCtx(t)
+	probe := buildProbe(t)
+	for _, group := range []bool{false, true} {
+		for _, explicit := range []bool{false, true} {
+			name := "single/default"
+			if group {
+				name = "group/default"
+			}
+			if explicit {
+				name = strings.Replace(name, "default", "explicit", 1)
+			}
+			t.Run(name, func(t *testing.T) {
+				base, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				pkg, config := filepath.Join(base, "package"), filepath.Join(base, "codex-config")
+				writePackage(t, pkg, probe)
+				claudeConfig := filepath.Join(base, "claude-config")
+				for _, root := range []string{config, claudeConfig} {
+					if err := os.MkdirAll(root, 0700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var callbacks []BindingFacts
+				cfg := testConfig(t, Config{
+					StateRoot: filepath.Join(base, "state"), HelperExecutable: probe,
+					Runner: &recordingCodexRunner{}, EnableNativeObserver: !group,
+					OnCommittedBinding: func(_ context.Context, facts BindingFacts) error {
+						callbacks = append(callbacks, facts)
+						return nil
+					},
+				})
+				if group {
+					cfg.Runner = listingRunner{configRoot: claudeConfig}
+				}
+				eng, err := New(cfg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := Request{Operation: OpInstall, PackageRoot: pkg, ClientID: "codex",
+					ClientConfigRoot: config, ClientExecutable: probe, OperationID: "prepared-identity",
+					RequiredComponents: []string{"mcp", "skills"}}
+				if explicit {
+					req.InstallationID = "00000000-0000-4000-8000-000000000082"
+				}
+				if group {
+					req.Targets = []ClientTarget{
+						{ClientID: "codex", ClientConfigRoot: config, ClientExecutable: probe},
+						{ClientID: "claude", ClientConfigRoot: claudeConfig, ClientExecutable: probe},
+					}
+				}
+				prepared, err := eng.Prepare(ctx, req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer func() { _ = prepared.Close() }()
+				plan := prepared.Plan()
+				if plan.InstallationID == "" || plan.TreeDigest == "" || (explicit && plan.InstallationID != req.InstallationID) {
+					t.Fatalf("prepared identity: %+v", plan)
+				}
+				result, err := eng.Apply(ctx, prepared, Decision{Confirmed: true})
+				if err != nil || result.Outcome != OutcomeCompleted || (!group && !result.Mutated) {
+					t.Fatalf("apply: %+v %v", result, err)
+				}
+				view, err := eng.Inspect(ctx)
+				wantBindings := 1
+				if group {
+					wantBindings = 2
+				}
+				if err != nil || view.Recovery.Required || len(view.Installations) != 1 || len(view.Installations[0].Bindings) != wantBindings || len(callbacks) != wantBindings {
+					t.Fatalf("inspect/callback count: %+v %v callbacks=%+v", view, err, callbacks)
+				}
+				installation := view.Installations[0]
+				if result.InstallationID != plan.InstallationID || installation.InstallationID != plan.InstallationID || installation.TreeDigest != plan.TreeDigest {
+					t.Errorf("prepared identity changed: plan=%s result=%s inspect=%s", plan.InstallationID, result.InstallationID, installation.InstallationID)
+				}
+				if result.Binding.InstallationID != plan.InstallationID || result.Binding.BindingID != plan.BindingID || result.Binding.TargetPath != plan.TargetPath || result.Binding.TreeDigest != plan.TreeDigest {
+					t.Errorf("prepared binding changed: plan=%+v result=%+v", plan, result.Binding)
+				}
+				if !group && (result.Delivery == nil || result.Delivery.ActivePath != plan.Delivery.ActivePath || result.Delivery.ActivePath != plan.TargetPath) {
+					t.Errorf("prepared physical path changed: plan=%+v result=%+v", plan.Delivery, result.Delivery)
+				}
+				seen := map[string]bool{}
+				for _, facts := range callbacks {
+					if seen[facts.ClientID] || facts.InstallationID != installation.InstallationID || facts.DataRoot == "" || facts.DataReceiptID == "" || facts.OperationID != req.OperationID {
+						t.Errorf("committed callback identity/data: %+v", facts)
+					}
+					seen[facts.ClientID] = true
+					if facts.ClientID == plan.ClientID && facts != result.Binding {
+						t.Errorf("callback differs from result: callback=%+v result=%+v", facts, result.Binding)
+					}
+					matched := false
+					for _, binding := range installation.Bindings {
+						if binding.ClientID != facts.ClientID {
+							continue
+						}
+						matched = true
+						if facts.BindingID != binding.BindingID || facts.Scope != binding.Scope || facts.TargetPath != binding.TargetPath || facts.DataRoot != binding.DataRoot || facts.TreeDigest != binding.TreeDigest {
+							t.Errorf("callback differs from inspect: callback=%+v inspect=%+v", facts, binding)
+						}
+						wantActivation := domain.ActivationActive
+						if group && binding.ClientID == "codex" {
+							wantActivation = domain.ActivationManual
+						}
+						if binding.Materialization != string(domain.MaterializationMaterialized) || binding.Activation != string(wantActivation) {
+							t.Errorf("binding not materialized/activated: %+v", binding)
+						}
+					}
+					if !matched {
+						t.Errorf("callback has no inspected binding: %+v", facts)
+					}
+					for _, target := range plan.Targets {
+						if target.ClientID == facts.ClientID && (target.BindingID != facts.BindingID || target.TargetPath != facts.TargetPath || target.TreeDigest != facts.TreeDigest) {
+							t.Errorf("prepared group target changed: plan=%+v callback=%+v", target, facts)
+						}
+					}
+					for _, path := range []string{facts.TargetPath, facts.DataRoot} {
+						if info, err := os.Stat(path); err != nil || !info.IsDir() {
+							t.Errorf("committed physical directory %q: %v", path, err)
+						}
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -5179,7 +5278,8 @@ func TestExampleFlaggedPathRunsAgainstLocalModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replaced := string(mod) + "\nreplace github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins => " + repo + "\n"
+	replaced := string(mod) + "\nreplace github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins => " + repo + "\n" +
+		"replace github.com/777genius/plugin-kit-ai/install/integrationctl => " + filepath.Dir(repo) + "\n"
 	if err := os.WriteFile(filepath.Join(work, "go.mod"), []byte(replaced), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -5190,7 +5290,7 @@ func TestExampleFlaggedPathRunsAgainstLocalModule(t *testing.T) {
 		t.Fatalf("tidy sample: %s %v", body, err)
 	}
 	bin := filepath.Join(work, "sample")
-	build := exec.CommandContext(ctx, "go", "build", "-o", bin, ".")
+	build := exec.CommandContext(ctx, "go", "build", "-buildvcs=false", "-o", bin, ".")
 	build.Dir = work
 	build.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off")
 	if body, err := build.CombinedOutput(); err != nil {

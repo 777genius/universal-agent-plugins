@@ -39,6 +39,9 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 	}
 	selected := make([]domain.DetectedClient, 0, len(targets))
 	for _, target := range targets {
+		if err := selectedDetectionError(target, detected); err != nil {
+			return nil, nil, err
+		}
 		client, ok := detectedSharedClient(target, detected)
 		if plansWithoutHostPresence(target) && !ok {
 			client = syntheticUndetectedClient(target)
@@ -63,6 +66,9 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 	selected := make([]domain.DetectedClient, 0, len(bindingTargets))
 	seen := make(map[domain.ClientID]struct{}, len(bindingTargets))
 	for _, target := range bindingTargets {
+		if err := selectedDetectionError(target, detected); err != nil {
+			return nil, err
+		}
 		client, ok := clientplanner.DetectedPhysicalClient(target, detected)
 		if plansWithoutHostPresence(target) && !ok {
 			client = syntheticUndetectedClient(target)
@@ -78,6 +84,13 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 		selected = append(selected, client)
 	}
 	return selected, nil
+}
+
+func selectedDetectionError(target domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
+	if client, ok := detected[target]; ok && client.DetectionError != nil {
+		return fmt.Errorf("target %q detection failed; no target was changed: %w", target, client.DetectionError)
+	}
+	return nil
 }
 
 func resolveInstalledBindingTargets(ctx context.Context, app App, bindingTargets []domain.ClientID, probeVersion bool) ([]domain.ClientID, error) {

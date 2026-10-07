@@ -51,6 +51,16 @@ func rendered(t *testing.T) (map[string][]byte, manifest) {
 	return files, m
 }
 
+func TestReviewedProjectionMatchesCurrentConstruction(t *testing.T) {
+	roots, err := trees()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProjection(roots); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDeterministicSurfacesAndNoActions(t *testing.T) {
 	sandbox := t.TempDir()
 	t.Setenv("HOME", sandbox)

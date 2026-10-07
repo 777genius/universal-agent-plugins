@@ -19,6 +19,7 @@ const (
 	minimumInstallReviewWidth = 40
 
 	catalogNotTestedWarning        = "catalog_not_tested"
+	catalogSchemaOnlyWarning       = "catalog_schema_only"
 	catalogRuntimeNotTestedWarning = "catalog_runtime_not_tested"
 	verifySelectedClientAction     = "verify the plugin in the selected client before relying on it"
 )
@@ -35,8 +36,7 @@ type installReviewRenderer struct {
 }
 
 type sharedInstallReview struct {
-	catalogNotTested, runtimeNotTested, verifySelected bool
-	warnings, actions                                  []string
+	warnings, actions []string
 }
 
 func renderInstallReview(writer io.Writer, envelope domain.PackageEnvelope, results []usecase.AddResult) error {
@@ -109,7 +109,7 @@ func (r installReviewRenderer) render(envelope domain.PackageEnvelope, results [
 		b.WriteString("\n\n")
 		b.WriteString(r.card(result))
 	}
-	if note := r.sharedNote(shared, len(results)); note != "" {
+	if note := r.sharedNote(shared); note != "" {
 		b.WriteString("\n\n")
 		b.WriteString(note)
 	}
@@ -250,30 +250,18 @@ func (r installReviewRenderer) diagnosticLabel(severity domain.Severity) string 
 	if severity == domain.SeverityError {
 		return "Error"
 	}
+	if severity == domain.SeverityInfo {
+		return "Info"
+	}
 	return "Warning"
 }
 
-func (r installReviewRenderer) sharedNote(shared sharedInstallReview, clients int) string {
-	if !shared.catalogNotTested && !shared.runtimeNotTested && !shared.verifySelected && len(shared.warnings) == 0 && len(shared.actions) == 0 {
+func (r installReviewRenderer) sharedNote(shared sharedInstallReview) string {
+	if len(shared.warnings) == 0 && len(shared.actions) == 0 {
 		return ""
 	}
 	var lines []string
-	lines = append(lines, r.styles.warning.Render("! VERIFICATION"))
-	switch {
-	case shared.catalogNotTested && shared.runtimeNotTested:
-		lines = append(lines, r.wrap("Catalog and runtime testing evidence is not published for this release.", 2))
-	case shared.catalogNotTested:
-		lines = append(lines, r.wrap("Catalog testing evidence is not published for this release.", 2))
-	case shared.runtimeNotTested:
-		lines = append(lines, r.wrap("Runtime testing evidence is not published for this release.", 2))
-	}
-	if shared.verifySelected {
-		message := "Verify the plugin in the selected client before relying on it."
-		if clients != 1 {
-			message = "Verify the plugin once in each selected client before relying on it."
-		}
-		lines = append(lines, r.wrap(message, 2))
-	}
+	lines = append(lines, r.styles.title.Render("For all selected clients"))
 	for _, warning := range shared.warnings {
 		lines = append(lines, r.wrap("Warning: "+reviewWarningText(warning), 2))
 	}
@@ -290,7 +278,6 @@ func (r installReviewRenderer) wrap(value string, indent int) string {
 func prepareInstallReview(results []usecase.AddResult) ([]usecase.AddResult, sharedInstallReview) {
 	prepared := make([]usecase.AddResult, len(results))
 	for index, result := range results {
-		result = withOpenCodeRuntimeNotice(result)
 		result.Plan.Components = append([]domain.ComponentDecision(nil), result.Plan.Components...)
 		result.Plan.Diagnostics = append([]domain.Diagnostic(nil), result.Plan.Diagnostics...)
 		result.Plan.Warnings = uniqueReviewStrings(result.Plan.Warnings)
@@ -304,10 +291,9 @@ func prepareInstallReview(results []usecase.AddResult) ([]usecase.AddResult, sha
 		var warnings []string
 		for _, warning := range prepared[index].Plan.Warnings {
 			switch warning {
-			case catalogNotTestedWarning:
-				shared.catalogNotTested = true
-			case catalogRuntimeNotTestedWarning:
-				shared.runtimeNotTested = true
+			case catalogNotTestedWarning, catalogSchemaOnlyWarning, catalogRuntimeNotTestedWarning:
+				// Catalog evidence remains in the structured plan; absence of
+				// runtime proof is not an actionable install-plan warning.
 			default:
 				warnings = append(warnings, warning)
 			}
@@ -317,7 +303,6 @@ func prepareInstallReview(results []usecase.AddResult) ([]usecase.AddResult, sha
 		var actions []string
 		for _, action := range prepared[index].Plan.UserActions {
 			if action == verifySelectedClientAction {
-				shared.verifySelected = true
 				continue
 			}
 			actions = append(actions, action)
@@ -404,7 +389,10 @@ func reviewPlanStatus(plan domain.DeliveryPlan, styles installReviewStyles) (str
 	if plan.Status == domain.PlanManualActivationRequired || plan.Status == domain.PlanPrepared || plan.Activation == domain.ActivationManual || plan.InstallIntent == domain.InstallIntentPrepare {
 		return "! MANUAL STEP", styles.warning
 	}
-	needsReview := plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationPending || plan.Verification == domain.VerificationNotRun || len(plan.Diagnostics) > 0 || len(plan.Warnings) > 0
+	needsReview := plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationPending || plan.Verification == domain.VerificationNotRun || len(plan.Warnings) > 0
+	for _, diagnostic := range plan.Diagnostics {
+		needsReview = needsReview || diagnostic.Severity != domain.SeverityInfo
+	}
 	for _, component := range plan.Components {
 		needsReview = needsReview || component.Support == domain.SupportUnsupported
 	}

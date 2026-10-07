@@ -17,7 +17,10 @@ import (
 )
 
 type Service struct {
-	StateStore transaction.StateStore
+	PhysicalAuthority ports.PhysicalProfileAuthority
+	PhysicalProfiles  []domain.DetectedClient
+	profileCheck      func() error
+	StateStore        transaction.StateStore
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
@@ -26,16 +29,17 @@ type Service struct {
 	Targets ports.DeliveryTargetResolver
 	// Detected is the surface map for this operation. The planner is stateless
 	// about detection; the use case copies this onto every PlanRequest.
-	Detected       map[domain.ClientID]domain.DetectedClient
-	Stager         ports.PackageStager
-	Activator      ports.ClientActivator
-	Legacy         ports.LegacyLifecycle
-	LegacyLock     legacyports.LockManager
-	Lock           ports.MutationLock
-	Kernel         transaction.Kernel
-	NativeObserver NativeIdentityObserver
-	PluginData     PluginDataManager
-	Now            func() time.Time
+	Detected           map[domain.ClientID]domain.DetectedClient
+	Stager             ports.PackageStager
+	Activator          ports.ClientActivator
+	Legacy             ports.LegacyLifecycle
+	LegacyLock         legacyports.LockManager
+	Lock               ports.MutationLock
+	Kernel             transaction.Kernel
+	NativeObserver     NativeIdentityObserver
+	NamespacePreflight MCPNamespacePreflight
+	PluginData         PluginDataManager
+	Now                func() time.Time
 }
 
 type NativeIdentityState = domain.NativeIdentityState
@@ -62,26 +66,35 @@ type PreparedIdentityObserver interface {
 	ObservePreparedIdentity(context.Context, domain.DetectedClient, domain.DeliveryPlan, *domain.ClientBinding) (domain.NativeIdentityObservation, error)
 }
 
+// MCPNamespacePreflight is process-inert and checks the final selected MCP
+// server names against a client's observable user-level configuration.
+type MCPNamespacePreflight interface {
+	CheckMCPNamespace(context.Context, domain.DetectedClient, domain.DeliveryPlan, *domain.ClientBinding) error
+}
+
 type PluginDataManager interface {
 	EnsureData(context.Context, string, string, string) (domain.DataReceipt, bool, error)
 	ValidateData(context.Context, domain.DataReceipt) error
+	ValidateDataAt(context.Context, domain.DataReceipt, string) error
+	PrepareRuntime(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string) error
 	PurgeData(context.Context, domain.DataReceipt) error
 }
 
 type AddInput struct {
-	InstallIntent      domain.InstallIntent
-	Envelope           domain.PackageEnvelope
-	Client             domain.DetectedClient
-	Scope              domain.InstallScope
-	DryRun             bool
-	Confirmed          bool
-	Interactive        bool
-	Hints              domain.CompatibilityHints
-	InstallationID     string
-	OperationID        string
-	BackendExecutable  string
-	ActivationComplete bool
-	AuthComplete       bool
+	refreshSelectedDelivery bool
+	InstallIntent           domain.InstallIntent
+	Envelope                domain.PackageEnvelope
+	Client                  domain.DetectedClient
+	Scope                   domain.InstallScope
+	DryRun                  bool
+	Confirmed               bool
+	Interactive             bool
+	Hints                   domain.CompatibilityHints
+	InstallationID          string
+	OperationID             string
+	BackendExecutable       string
+	ActivationComplete      bool
+	AuthComplete            bool
 	// OriginMode and DirectoryResolution are supplied by the resolver. Omitting
 	// OriginMode is treated as an explicit direct source for compatibility with
 	// exact/local callers; Directory authority is never inferred from a name.
@@ -120,6 +133,16 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := session.validateApplyInput(); err != nil {
 		return AddResult{}, err
 	}
+	if err := session.resolveInstallation(); err != nil {
+		return AddResult{}, err
+	}
+	var err error
+	service, frozen, err := service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.service, session.input.Client = service, frozen[0]
+	session.input.InstallationID = session.installationID
 	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
 	if err != nil {
 		return AddResult{}, err
@@ -161,6 +184,15 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 }
 
 func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool) (ports.UnlockFunc, error) {
+	if err := service.checkProfiles(ctx); err != nil {
+		return nil, err
+	}
+	kernel := service.Kernel
+	kernel.StateStore = service.StateStore
+	kernel.PhysicalAuthority = service.authorityPort()
+	if err := kernel.PrevalidateRecovery(ctx); err != nil {
+		return nil, err
+	}
 	if dryRun || !confirmed {
 		return nil, nil
 	}
@@ -177,8 +209,17 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 			return nil, err
 		}
 	}
-	kernel := service.Kernel
+	if err := service.validateRecordedDeliveries(); err != nil {
+		_ = release()
+		return nil, err
+	}
+	if err := service.checkProfiles(ctx); err != nil {
+		_ = release()
+		return nil, err
+	}
+	kernel = service.Kernel
 	kernel.StateStore = service.StateStore
+	kernel.PhysicalAuthority = service.authorityPort()
 	if err := kernel.Recover(ctx); err != nil {
 		_ = release()
 		return nil, fmt.Errorf("recover interrupted mutation: %w", err)

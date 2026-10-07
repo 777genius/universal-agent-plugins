@@ -3,7 +3,9 @@ package gen
 import (
 	internal_claude "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/claude"
 	internal_codex "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/codex"
+	internal_cursor "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/cursor"
 	internal_gemini "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/gemini"
+	internal_vscode_local "github.com/777genius/plugin-kit-ai/sdk/internal/platforms/vscodelocal"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 )
 
@@ -202,6 +204,13 @@ var registry = map[key]runtime.Descriptor{
 		Decode:   internal_gemini.DecodeAfterTool,
 		Encode:   internal_gemini.EncodeAfterTool,
 	},
+	{platform: "gemini", event: "Notification"}: {
+		Platform: "gemini",
+		Event:    "Notification",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_gemini.DecodeNotification,
+		Encode:   internal_gemini.EncodeNotification,
+	},
 	{platform: "codex", event: "Notify"}: {
 		Platform: "codex",
 		Event:    "Notify",
@@ -236,6 +245,27 @@ var registry = map[key]runtime.Descriptor{
 		Carrier:  runtime.CarrierStdinJSON,
 		Decode:   internal_codex.DecodePermissionRequest,
 		Encode:   internal_codex.EncodePermissionRequest,
+	},
+	{platform: "cursor", event: "stop"}: {
+		Platform: "cursor",
+		Event:    "stop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_cursor.DecodeStop,
+		Encode:   internal_cursor.EncodeStop,
+	},
+	{platform: "vscode-local", event: "Stop"}: {
+		Platform: "vscode-local",
+		Event:    "Stop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_vscode_local.DecodeStop,
+		Encode:   internal_vscode_local.EncodeObserver,
+	},
+	{platform: "vscode-local", event: "SubagentStop"}: {
+		Platform: "vscode-local",
+		Event:    "SubagentStop",
+		Carrier:  runtime.CarrierStdinJSON,
+		Decode:   internal_vscode_local.DecodeSubagentStop,
+		Encode:   internal_vscode_local.EncodeObserver,
 	},
 }
 

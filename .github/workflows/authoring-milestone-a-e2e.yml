@@ -94,6 +94,17 @@ jobs:
         with:
           node-version: '22.23.2'
           check-latest: false
+      - name: Initialize run evidence before platform prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          outer="$RUNNER_TEMP/milestone-a-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          test ! -e "$outer"
+          root="$outer/run"
+          native_root="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$root")"
+          evidence="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1]))' "$native_root")"
+          printf 'MILESTONE_A_EVIDENCE=%s\n' "$evidence" >> "$GITHUB_ENV"
+          node -e 'require("fs").writeFileSync(require("path").join(process.argv[1],"workflow-context.json"),JSON.stringify({expected_head:process.env.EXPECTED_HEAD,platform:process.argv[2],arch:process.argv[3],publication:false},null,2)+"\n",{flag:"wx",mode:0o600})' "$evidence" '${{ matrix.platform }}' '${{ matrix.arch }}'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         if: runner.os == 'macOS'
         with:
@@ -107,7 +118,13 @@ jobs:
           CGO_ENABLED: '0'
           GOTOOLCHAIN: local
           GOMAXPROCS: '2'
-        run: go test -count=1 ./adapters/packageview
+        run: |
+          set -euo pipefail
+          status=0
+          go test -count=1 ./adapters/packageview > "$MILESTONE_A_EVIDENCE/darwin-packageview-prerequisite.log" 2>&1 || status=$?
+          cat "$MILESTONE_A_EVIDENCE/darwin-packageview-prerequisite.log"
+          printf '%s\n' "$status" > "$MILESTONE_A_EVIDENCE/darwin-packageview-prerequisite.status"
+          exit "$status"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
@@ -126,9 +143,25 @@ jobs:
           test ! -e "$image"
           test ! -e "$mount"
           mkdir -m 700 "$mount"
-          hdiutil create -quiet -srcfolder "$RUNNER_TEMP/milestone-a-input/candidate" -fs APFS -format UDRO "$image"
-          hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount" "$image"
+          # Register our new paths before create/attach, including ambiguous failure.
+          export MILESTONE_A_CANDIDATE_IMAGE="$image" MILESTONE_A_CANDIDATE="$mount"
+          printf 'MILESTONE_A_CANDIDATE_IMAGE=%s\n' "$image" >> "$GITHUB_ENV"
           printf 'MILESTONE_A_CANDIDATE=%s\n' "$mount" >> "$GITHUB_ENV"
+          node <<'NODE'
+          const fs=require("fs"),path=require("path"),cp=require("child_process");
+          function run(name,args){
+            const r=cp.spawnSync("/usr/bin/hdiutil",args,{encoding:"utf8",timeout:120000,maxBuffer:10*1024*1024});
+            const receipt={command:["/usr/bin/hdiutil",...args],status:r.status,signal:r.signal,error:r.error?.message||null};
+            fs.writeFileSync(path.join(process.env.MILESTONE_A_EVIDENCE,`darwin-candidate-${name}.stdout.log`),r.stdout||"");
+            fs.writeFileSync(path.join(process.env.MILESTONE_A_EVIDENCE,`darwin-candidate-${name}.stderr.log`),r.stderr||"");
+            fs.writeFileSync(path.join(process.env.MILESTONE_A_EVIDENCE,`darwin-candidate-${name}.status.json`),JSON.stringify(receipt,null,2)+"\n");
+            process.stdout.write(r.stdout||"");process.stderr.write(r.stderr||"");
+            console.log(JSON.stringify(receipt));
+            if(r.error||r.status!==0)throw new Error(`Darwin candidate ${name} failed; see command evidence`);
+          }
+          run("create",["create","-srcfolder",path.join(process.env.RUNNER_TEMP,"milestone-a-input","candidate"),"-fs","APFS","-format","UDRO",process.env.MILESTONE_A_CANDIDATE_IMAGE]);
+          run("attach",["attach","-readonly","-nobrowse","-noautoopen","-mountpoint",process.env.MILESTONE_A_CANDIDATE,process.env.MILESTONE_A_CANDIDATE_IMAGE]);
+          NODE
       # Darwin authoring reads the ordinary writable project in each fresh journey.
       # The read-only candidate above is launcher integrity, not source acceptance.
       - name: Run both packaged public entrypoints in fresh roots
@@ -136,15 +169,12 @@ jobs:
         run: |
           set -euo pipefail
           outer="$RUNNER_TEMP/milestone-a-outer-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          test ! -e "$outer"
           root="$outer/run"
           native_root="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$root")"
           native_outer="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$outer")"
           native_input="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$RUNNER_TEMP/milestone-a-input")"
           native_candidate="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "${MILESTONE_A_CANDIDATE:-$RUNNER_TEMP/milestone-a-input/candidate}")"
           npm_cli="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").resolveNpmCLI())')"
-          printf 'MILESTONE_A_EVIDENCE=%s\n' "$(node -e 'process.stdout.write(require("path").join(process.argv[1],"evidence"))' "$native_root")" >> "$GITHUB_ENV"
-          node -e 'require("./npm/agentplugins/scripts/milestone-a-e2e").precreate(process.argv[1])' "$native_root"
           config="$RUNNER_TEMP/milestone-a-run.json"
           native_config="$(node -e 'process.stdout.write(require("./npm/agentplugins/scripts/milestone-a-e2e").nativeAbsolute(process.argv[1]))' "$config")"
           node -e 'require("fs").writeFileSync(process.argv[1], JSON.stringify({root:process.argv[2],precreatedRoot:true,outerRoot:process.argv[3],input:process.argv[4],candidateRoot:process.argv[5],npm:process.argv[6],platform:process.argv[7],arch:process.argv[8],expectedHead:process.env.EXPECTED_HEAD}))' \
@@ -155,8 +185,49 @@ jobs:
         if: always() && runner.os == 'macOS'
         shell: bash
         run: |
-          if [[ -n "${MILESTONE_A_CANDIDATE:-}" ]]; then
-            hdiutil detach -quiet "$MILESTONE_A_CANDIDATE"
+          set -euo pipefail
+          if [[ -n "${MILESTONE_A_CANDIDATE_IMAGE:-}" && -n "${MILESTONE_A_CANDIDATE:-}" ]]; then
+            node <<'NODE'
+          const fs=require("fs"),path=require("path"),cp=require("child_process");
+          const evidence=process.env.MILESTONE_A_EVIDENCE;
+          const canonical=p=>{try{return fs.realpathSync(p)}catch{return path.resolve(p)}};
+          const image=canonical(process.env.MILESTONE_A_CANDIDATE_IMAGE),mount=canonical(process.env.MILESTONE_A_CANDIDATE);
+          const commands=[];let cleanup="unproven",failure=null;
+          function run(tool,args,input,verifyFailure=false){
+            const r=cp.spawnSync(tool,args,{input,encoding:"utf8",timeout:30000,maxBuffer:10*1024*1024});
+            commands.push({command:[tool,...args],status:r.status,signal:r.signal,error:r.error?.message||null,stdout:r.stdout||"",stderr:r.stderr||""});
+            process.stdout.write(r.stdout||"");process.stderr.write(r.stderr||"");
+            if((r.error||r.status!==0)&&!verifyFailure)throw new Error(`${tool} failed during candidate cleanup`);
+            return r.stdout;
+          }
+          function owned(){
+            const plist=run("/usr/bin/hdiutil",["info","-plist"]);
+            const info=JSON.parse(run("/usr/bin/plutil",["-convert","json","-o","-","-"],plist));
+            if(!Array.isArray(info.images))throw new Error("UNPROVEN image inventory");
+            for(const i of info.images)for(const e of i["system-entities"]||[]){
+              if(e["mount-point"]&&canonical(e["mount-point"])===mount&&canonical(i["image-path"])!==image)throw new Error("Refusing detach of another image at candidate mount");
+            }
+            const own=info.images.filter(i=>canonical(i["image-path"])===image);
+            if(own.length>1)throw new Error("UNPROVEN duplicate candidate image");
+            if(!own.length&&fs.statSync(mount).dev!==fs.statSync(path.dirname(mount)).dev)throw new Error("UNPROVEN filesystem remains at candidate mount");
+            if(own.length&&(own[0]["system-entities"]||[]).some(e=>e["mount-point"]&&canonical(e["mount-point"])!==mount))throw new Error("Refusing detach with unexpected candidate mount");
+            return own[0];
+          }
+          try{
+            const own=owned();
+            if(own){
+              const entities=own["system-entities"]||[];
+              const mounted=entities.some(e=>e["mount-point"]&&canonical(e["mount-point"])===mount);
+              // An ambiguous attach may own a device without having mounted it.
+              const disk=entities.find(e=>e["content-hint"]==="GUID_partition_scheme"&&/^\/dev\/disk\d+$/.test(e["dev-entry"]||""));
+              if(!mounted&&!disk)throw new Error("UNPROVEN candidate device ownership");
+              run("/usr/bin/hdiutil",["detach",mounted?mount:disk["dev-entry"]],undefined,true);
+              if(owned())throw new Error("UNPROVEN candidate image still attached");
+            }
+            cleanup="complete";
+          }catch(e){failure=e.message;console.error(failure);process.exitCode=1}
+          finally{fs.writeFileSync(path.join(evidence,"darwin-candidate-cleanup.json"),JSON.stringify({image,mount,cleanup,failure,commands},null,2)+"\n")}
+          NODE
           fi
       - name: Upload run evidence, including failures
         if: always()

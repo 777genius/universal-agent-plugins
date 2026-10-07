@@ -220,7 +220,6 @@ type repairResultData struct {
 }
 
 func newRepairResultData(installation domain.Installation, result usecase.AddResult, dryRun bool) repairResultData {
-	result = withOpenCodeRuntimeNotice(result)
 	return repairResultData{
 		OperationID: result.Receipt.OperationID, Plugin: installation.DeclaredName,
 		Version: installation.Package.Version, Source: publicSource(installation.Source),
@@ -331,6 +330,14 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
+			}
+			// JSON calls must reject missing selectors before
+			// loading state, presenting choices, or touching an open input stream.
+			// Purging retained data is installation-wide and needs no target.
+			if opts.format == "json" && !opts.purgeData {
+				if err := requireNonInteractiveMutation(app, opts, "removal"); err != nil {
+					return err
+				}
 			}
 			if strings.TrimSpace(opts.target) == "" && app.Terminal && !opts.purgeData {
 				selection, err := promptBoundTargets(cmd, app, args[0], opts.scope)
@@ -718,6 +725,9 @@ func selectBoundClient(
 	choose := func(clientID domain.ClientID) (domain.DetectedClient, error) {
 		if _, ok := bound[clientID]; !ok {
 			return domain.DetectedClient{}, fmt.Errorf("plugin is not installed for target %q in %s scope", clientID, opts.scope)
+		}
+		if err := selectedDetectionError(clientID, detectedMap); err != nil {
+			return domain.DetectedClient{}, err
 		}
 		client, ok := detectedMap[clientID]
 		if !ok {

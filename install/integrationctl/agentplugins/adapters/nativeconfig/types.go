@@ -19,6 +19,7 @@ const (
 	CodecMCPServers Codec = "mcpServers"
 	CodecGemini     Codec = "gemini-mcpServers"
 	CodecOpenCode   Codec = "opencode-mcp"
+	CodecOpenCodeV2 Codec = "opencode-v2-mcp"
 	CodecWindsurf   Codec = "windsurf-mcpServers"
 	CodecCline      Codec = "cline-mcpServers"
 )
@@ -37,6 +38,9 @@ var (
 	ErrNotOwned         = errors.New("native MCP entry is not exactly owned")
 	ErrMalformed        = errors.New("native config is malformed")
 	ErrConcurrentChange = errors.New("native config changed during patch")
+	// ErrNativeMigrationRequired rejects unqualified mixed-generation roots.
+	// A managed-leaf writer cannot convert unrelated V1 configuration to V2.
+	ErrNativeMigrationRequired = errors.New("native_migration_required")
 )
 
 // CommittedCleanupError reports that the requested native config bytes and
@@ -73,9 +77,28 @@ type Server struct {
 	CWD                 string            `json:"cwd,omitempty"`
 	URL                 string            `json:"url,omitempty"`
 	Headers             map[string]string `json:"headers,omitempty"`
-	// RemoteTransport distinguishes Gemini's streamable HTTP and legacy SSE
-	// native keys. It is ignored by codecs whose native shape uses one URL key.
+	// RemoteTransport selects codec-specific native keys where supported.
+	// OpenCode V2 accepts empty (native default) or streamable-http; V1 keeps
+	// rejecting an explicit transport. Unsupported transports are never dropped.
 	RemoteTransport string `json:"remote_transport,omitempty"`
+	// OpenCodeV2 carries only the pinned V2 disabled/timeout contract. Other
+	// codecs reject it rather than silently discard dialect-specific intent.
+	OpenCodeV2 *OpenCodeV2Options `json:"opencode_v2,omitempty"`
+}
+
+// OpenCodeV2Options is a closed subset of the pinned native MCP entry schema.
+// Nil options render disabled:false and omit timeout.
+type OpenCodeV2Options struct {
+	Disabled bool               `json:"disabled"`
+	Timeout  *OpenCodeV2Timeout `json:"timeout,omitempty"`
+}
+
+// OpenCodeV2Timeout uses milliseconds. Zero omits a field; configured values
+// must be positive, as in @opencode/schema 2.0.21 Mcp.TimeoutConfig.
+type OpenCodeV2Timeout struct {
+	Startup   int `json:"startup,omitempty"`
+	Catalog   int `json:"catalog,omitempty"`
+	Execution int `json:"execution,omitempty"`
 }
 
 // Paths names the mutually exclusive client config variants. If neither
@@ -185,11 +208,11 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecGemini || codec == CodecOpenCode || codec == CodecWindsurf || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecGemini || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecCline
 }
 
 func codecCollectionKey(codec Codec) string {
-	if codec == CodecOpenCode {
+	if codec == CodecOpenCode || codec == CodecOpenCodeV2 {
 		return "mcp"
 	}
 	return "mcpServers"

@@ -14,6 +14,28 @@ The generated support matrix and `plugin-kit-ai.Supported()` describe runtime-ev
 ## Public-Beta
 Current SDK beta surface added after the first promotion:
 
+- VS Code Local `CommonEvent`, `StopEvent`, `SubagentStopEvent`, empty
+  `StopResponse`/`SubagentStopResponse`, registrar `OnStop`/`OnSubagentStop`
+  and `App.VSCodeLocal`. Fixed invocations `VSCodeLocalStop` and
+  `VSCodeLocalSubagentStop` use runtime identity `vscode-local`. This optional
+  typed observer does not qualify installer `vscode`, Agent Notifications
+  `copilot-vscode`, native availability or executable release. Stop is about
+  to stop, not a completion/success/idle/root-session signal. See the
+  [generated Local guide](../docs/generated/vscode_local.md).
+
+- Cursor `StopEvent`, `StopStatus` and its constants, `ModelParam`, empty
+  `StopResponse`, registrar `OnStop`/`OnStopContext`, `App.Cursor`,
+  `App.RunCursorObserver`, `CursorObserverIO` and `NewCursorObserverPipeIO`.
+  Invocation `CursorStop` is reserved, beta and stop-only. The
+  [generated guide](../docs/generated/cursor_stop.md) states IO ownership and
+  cancellation limits. Native client/Windows pipe qualification is pending;
+  neither all-Cursor stability nor installed integration is claimed.
+
+- Gemini `NotificationEvent`, `NotificationType`,
+  `NotificationTypeToolPermission`, `NotificationResponse`, and
+  `(*gemini.Registrar).OnNotification` (invocation `GeminiNotification`). This
+  advisory observer emits `{}` and exposes no decision or context fields.
+  Native CLI qualification is pending; the existing nine Gemini hooks remain stable.
 - approved-export-shaped Claude event and response types for:
   - `SessionStart`
   - `SessionEnd`
@@ -35,7 +57,7 @@ Current SDK beta surface added after the first promotion:
   - `PreToolUse` (invocation name `CodexPreToolUse`)
   - `PermissionRequest` (invocation name `CodexPermissionRequest`)
 
-These hooks are runtime-supported and scaffolded, but remain outside the stable compatibility promise until they are promoted through the audit ledger. The same beta status applies to:
+The listed Claude and Codex hooks are runtime-supported and scaffolded. Gemini Notification requires explicit handler registration and native hook configuration; the existing Gemini scaffold and extension renderer retain their nine stable hooks. Generated Scaffold, Validate and Live Test values describe platform capabilities, not Notification-specific coverage. These beta hooks remain outside the stable compatibility promise until they are promoted through the audit ledger. The same beta status applies to:
 
 - the `hostdetect` package (`Platform`, `Env`, `Signal`, `Registry`, `DefaultRegistry`, `Detect`)
 - the root `plugin-kit-ai.MaxPayloadBytes` constant

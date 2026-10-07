@@ -1,6 +1,7 @@
 package shared
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+var errPluginRootDangling = errors.New("plugin root symlink target does not exist")
 
 // InspectUnqualifiedPluginRoot is the default prepared-registry inspection: it
 // walks a directory of plugin-shaped entries and reports whether the declared
@@ -20,7 +23,7 @@ func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (cl
 	if strings.TrimSpace(root) == "" {
 		return clients.RegistryIndeterminate, nil
 	}
-	entries, err := os.ReadDir(root)
+	entries, err := readPluginRootEntries(root)
 	if os.IsNotExist(err) {
 		return clients.RegistryClear, nil
 	}
@@ -29,37 +32,82 @@ func InspectUnqualifiedPluginRoot(root, name, activePath string, owned bool) (cl
 	}
 	finding := clients.RegistryClear
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".agentplugins-staging-") {
+		next, skip, classErr := classifyUnqualifiedPluginEntry(root, entry, name, activePath, owned)
+		if classErr != nil {
+			return clients.RegistryIndeterminate, classErr
+		}
+		if skip {
 			continue
 		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return clients.RegistryIndeterminate, nil
+		if next == clients.RegistryCollision || next == clients.RegistryIndeterminate {
+			return next, nil
 		}
-		if !entry.IsDir() {
-			// A plain file cannot contain the manifest this scheme requires, so
-			// it can never claim a competing plugin identity. OS-generated
-			// artifacts such as .DS_Store are common here and must not block
-			// every other plugin's repair/update.
-			continue
-		}
-		path := filepath.Join(root, entry.Name())
-		manifestName, qualified, namespace, err := NativeManifestIdentity(path)
-		if err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		if manifestName != name {
-			continue
-		}
-		if qualified && namespace != "" && namespace != ManagedMarketplaceName(filepath.Base(activePath)) {
-			continue
-		}
-		if activePath != "" && SameCleanPath(path, activePath) && owned {
+		if next == clients.RegistryExpected {
 			finding = clients.RegistryExpected
-			continue
 		}
-		return clients.RegistryCollision, nil
 	}
 	return finding, nil
+}
+
+func readPluginRootEntries(root string) ([]os.DirEntry, error) {
+	meta, err := os.Lstat(root)
+	if err != nil {
+		return nil, err
+	}
+	if meta.Mode()&os.ModeSymlink != 0 {
+		info, statErr := os.Stat(root)
+		if os.IsNotExist(statErr) {
+			return nil, fmt.Errorf("%w: %s", errPluginRootDangling, root)
+		}
+		if statErr != nil {
+			return nil, statErr
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("plugin root is not a directory: %s", root)
+		}
+	} else if !meta.IsDir() {
+		return nil, fmt.Errorf("plugin root is not a directory: %s", root)
+	}
+	return os.ReadDir(root)
+}
+
+func classifyUnqualifiedPluginEntry(root string, entry os.DirEntry, name, activePath string, owned bool) (clients.RegistryFinding, bool, error) {
+	if strings.HasPrefix(entry.Name(), ".agentplugins-staging-") {
+		return clients.RegistryClear, true, nil
+	}
+	path := filepath.Join(root, entry.Name())
+	meta, err := os.Lstat(path)
+	if err != nil {
+		return clients.RegistryIndeterminate, false, err
+	}
+	if meta.Mode()&os.ModeSymlink != 0 {
+		return clients.RegistryIndeterminate, false, nil
+	}
+	if !meta.IsDir() {
+		// A plain file cannot contain the manifest this scheme requires, so it
+		// can never claim a competing plugin identity. OS-generated artifacts
+		// such as .DS_Store are common here and must not block every other
+		// plugin's repair/update. The planned active path is the managed
+		// package, so a file or FIFO there is integrity failure.
+		if activePath != "" && SameCleanPath(path, activePath) {
+			return clients.RegistryIndeterminate, false, fmt.Errorf("managed path is not a directory: %s", path)
+		}
+		return clients.RegistryClear, true, nil
+	}
+	manifestName, qualified, namespace, err := NativeManifestIdentity(path)
+	if err != nil {
+		return clients.RegistryIndeterminate, false, err
+	}
+	if manifestName != name {
+		return clients.RegistryClear, true, nil
+	}
+	if qualified && namespace != "" && namespace != ManagedMarketplaceName(filepath.Base(activePath)) {
+		return clients.RegistryClear, true, nil
+	}
+	if activePath != "" && SameCleanPath(path, activePath) && owned {
+		return clients.RegistryExpected, false, nil
+	}
+	return clients.RegistryCollision, false, nil
 }
 
 // NativeManifestIdentity reads the authoritative identity of a delivered native

@@ -2,8 +2,12 @@
   {
     "ClientID": "chatgpt",
     "ConfigRoot": "",
+    "DetectionError": null,
     "DisplayName": "ChatGPT",
     "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -17,8 +21,12 @@
   {
     "ClientID": "claude",
     "ConfigRoot": "\u003chome\u003e/.claude",
+    "DetectionError": null,
     "DisplayName": "Claude Code",
     "ExecutablePath": "\u003chome\u003e/bin/claude",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -37,8 +45,12 @@
   {
     "ClientID": "cline",
     "ConfigRoot": "\u003chome\u003e/.cline",
+    "DetectionError": null,
     "DisplayName": "Cline",
     "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -67,8 +79,12 @@
   {
     "ClientID": "codex",
     "ConfigRoot": "\u003chome\u003e/.codex",
+    "DetectionError": null,
     "DisplayName": "OpenAI Codex",
     "ExecutablePath": "\u003chome\u003e/bin/codex",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -92,8 +108,12 @@
   {
     "ClientID": "copilot",
     "ConfigRoot": "\u003chome\u003e/.copilot",
+    "DetectionError": null,
     "DisplayName": "GitHub Copilot CLI",
     "ExecutablePath": "\u003chome\u003e/bin/copilot",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -112,14 +132,23 @@
   {
     "ClientID": "cursor",
     "ConfigRoot": "\u003chome\u003e/.cursor",
+    "DetectionError": null,
     "DisplayName": "Cursor",
     "ExecutablePath": "\u003chome\u003e/bin/cursor",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
         "Detected": true,
         "Evidence": "executable_on_path",
-        "ID": "cursor_cli"
+        "ID": "cursor_editor"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "cursor_agent"
       },
       {
         "Detected": true,
@@ -137,8 +166,12 @@
   {
     "ClientID": "gemini",
     "ConfigRoot": "\u003chome\u003e/.gemini",
+    "DetectionError": null,
     "DisplayName": "Gemini CLI",
     "ExecutablePath": "\u003chome\u003e/bin/gemini",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -197,8 +230,12 @@
   {
     "ClientID": "kiro",
     "ConfigRoot": "\u003chome\u003e/.kiro",
+    "DetectionError": null,
     "DisplayName": "Kiro",
     "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -227,14 +264,23 @@
   {
     "ClientID": "opencode",
     "ConfigRoot": "\u003chome\u003e/.config/opencode",
+    "DetectionError": null,
     "DisplayName": "OpenCode",
     "ExecutablePath": "\u003chome\u003e/bin/opencode",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
         "Detected": true,
         "Evidence": "executable_on_path",
         "ID": "opencode_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "opencode2_cli"
       },
       {
         "Detected": true,
@@ -252,8 +298,12 @@
   {
     "ClientID": "vscode",
     "ConfigRoot": "\u003chome\u003e/.config/Code/User",
+    "DetectionError": null,
     "DisplayName": "Visual Studio Code",
     "ExecutablePath": "\u003chome\u003e/bin/code",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -277,8 +327,12 @@
   {
     "ClientID": "windsurf",
     "ConfigRoot": "\u003chome\u003e/.codeium/windsurf",
+    "DetectionError": null,
     "DisplayName": "Windsurf / Devin",
     "ExecutablePath": "\u003chome\u003e/bin/windsurf",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {

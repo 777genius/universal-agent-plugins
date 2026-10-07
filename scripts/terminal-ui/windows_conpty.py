@@ -340,7 +340,7 @@ def finish_console(terminal, status_path, evidence, fixture=None):
         raise AssertionError(detail)
 
 
-CASES = ('default-no', 'no', 'yes-lifecycle', 'ctrl-c', 'confirm-ctrl-c', 'eof', 'resize')
+CASES = ('default-yes', 'no', 'yes-lifecycle', 'ctrl-c', 'confirm-ctrl-c', 'eof', 'resize')
 
 
 def prepare_powershell_fixture(fixture):
@@ -414,7 +414,7 @@ def run_case(name, args):
                 terminal.wait('POWERSHELL_LAUNCH_' + nonce)
             terminal.wait(r'Choose one or more by number or id, comma-separated \[Enter keeps defaults\]:')
             check('codex' in clean(terminal.raw).lower() and 'cursor' in clean(terminal.raw).lower(),
-                  'expected both config-only clients')
+                  'expected Codex config and synthetic Cursor editor discovery')
             fixture.unchanged()
             if name == 'resize':
                 check(terminal.k.ResizePseudoConsole(terminal.hpc, COORD(60, 15)) == 0, 'resize failed')
@@ -423,7 +423,7 @@ def run_case(name, args):
             else:
                 offset = len(terminal.raw)
                 terminal.send(b'2\r' if name == 'yes-lifecycle' else b'\r')
-                terminal.wait(r'Apply this plan\? \[y/N\]', after=offset)
+                terminal.wait(r'Apply this plan\? \[Y/n\]', after=offset)
                 check('pty-synthetic' in clean(terminal.raw) and '1.0.0' in clean(terminal.raw), 'missing plan identity')
                 fixture.unchanged()
                 if name == 'yes-lifecycle':
@@ -435,7 +435,7 @@ def run_case(name, args):
                     terminal.wait('Activation remains unconfirmed', after=offset)
                     check('Have you completed required authentication' not in clean(terminal.raw[offset:]), 'No advanced to auth')
                 else:
-                    terminal.send(b'\x03' if name == 'confirm-ctrl-c' else (b'n\r' if name == 'no' else b'\r'))
+                    terminal.send(b'\x03' if name == 'confirm-ctrl-c' else (b'\r' if name == 'default-yes' else b'n\r'))
             terminal.wait('RESTORE_READY_' + nonce)
             status = json.loads(status_path.read_text(encoding='utf-8'))
             check(status['exit'] == (1 if name in ('ctrl-c', 'confirm-ctrl-c', 'eof') else 0), 'unexpected CLI exit: ' + str(status))
@@ -453,6 +453,7 @@ def run_case(name, args):
             check(status['owner_probe'] == status['owner_before'], 'console handles/modes/cursor changed on reuse')
             check('line_' + nonce in clean(terminal.raw[offset:]), 'kernel echo missing')
             if name == 'yes-lifecycle': fixture.installed(['cursor'])
+            elif name == 'default-yes': fixture.installed(['codex', 'cursor'])
             else: fixture.unchanged()
         finally:
             finish_console(terminal, status_path, evidence, fixture)
@@ -473,7 +474,7 @@ def main():
     args.binary = args.binary.resolve(strict=True)
     if args.powershell:
         args.powershell = args.powershell.resolve(strict=True)
-        if not args.case: args.case = ['default-no', 'ctrl-c']
+        if not args.case: args.case = ['default-yes', 'ctrl-c']
     args.artifacts = args.artifacts.resolve()
     args.artifacts.mkdir(parents=True, exist_ok=False)
     scanner = prepare_scanner(args)

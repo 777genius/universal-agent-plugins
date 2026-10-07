@@ -29,7 +29,7 @@ KINDS = ('empty', 'skill', 'stdio-missing', 'http-auth', 'mixed', 'malformed',
          'unsupported', 'collision')
 CASES = tuple(f'{kind}:{action}' for kind in KINDS for action in
               (('reject',) if kind == 'malformed' else
-               ('cancel',) if kind in ('stdio-missing', 'collision') else ('cancel', 'default-no'))
+               ('cancel',) if kind in ('stdio-missing', 'collision') else ('cancel', 'no'))
               ) + ('skill:install', 'stdio-missing:reject', 'mixed:partial-plan',
                    'collision:reject', 'http-auth:auth-unknown', 'empty:all-ten')
 
@@ -212,6 +212,11 @@ def json_plan(fixture, binary, evidence, targets, timeout):
 def check_auth_unknown(plan):
     check(plan['authentication'] == 'not_checked', 'plan overstated authentication')
     check(plan['verification'] == 'package_validated', 'plan overstated runtime/installation verification')
+    if plan.get('client_id') == 'cursor':
+        check(plan['activation'] == 'prepared' and plan['status'] == 'manual_activation_required',
+              'Cursor package preparation overstated activation')
+        check('Cursor editor package discovery is unverified; agent CLI plugins and native Stop are not qualified'
+              in plan['warnings'], 'Cursor discovery uncertainty missing')
 
 
 def run_case(case, binary, evidence, timeout=8):
@@ -264,7 +269,7 @@ def run_case(case, binary, evidence, timeout=8):
                 planned = re.findall(r'Target: ([a-z]+)', text)
                 check('pty-synthetic' in text and '1.0.0' in text, 'ten-target plan identity missing')
                 fixture.unchanged()
-                send(session, b'\r')
+                send(session, b' \r')
                 session.finish()
                 fixture.unchanged()
                 check(set(planned) == expected and len(planned) == len(expected),
@@ -302,10 +307,10 @@ def run_case(case, binary, evidence, timeout=8):
                 if re.search(CONFIRM, clean(session.raw[offset:])):
                     session.wait(r'(?s)Yes.*?No.*?enter submit', 'unexpected-consent', after=offset)
                     fixture.unchanged()
-                    send(session, b'\r')
+                    send(session, b' \r')
                     session.finish()
                     fixture.unchanged()
-                    raise AssertionError(f'{kind}: reached consent instead of fail-closed rejection; default No preserved zero changes')
+                    raise AssertionError(f'{kind}: reached consent instead of fail-closed rejection; explicit No preserved zero changes')
                 session.finish(1)
                 fixture.unchanged()
                 text = clean(session.raw[offset:]).lower()
@@ -323,9 +328,12 @@ def run_case(case, binary, evidence, timeout=8):
                                                   'Target: cursor', 'Authentication:', 'Verification:')),
                   'full client-specific plan missing before consent')
             check('Target: codex' not in text, 'unselected target entered plan')
+            check(re.search(r'Cursor\s+! MANUAL STEP', text) and
+                  'Cursor editor package discovery is unverified' in text,
+                  'Cursor manual preparation/discovery uncertainty missing')
             fixture.unchanged()
             if kind in ('skill', 'mixed'):
-                check(re.search(r'Skill:\s+guide\s+·\s+native', text),
+                check(re.search(r'Skill:\s+guide\s+·\s+prepared', text),
                       'skill support decision missing')
             if kind == 'mixed':
                 check(re.search(r'MCP server:\s+fixture\s+·\s+unsupported', text) and
@@ -338,15 +346,15 @@ def run_case(case, binary, evidence, timeout=8):
                 check('Verification: package validated' in text, 'verification overstated')
                 check('Installed and verified' not in text and 'Ready' not in text, 'plan falsely claimed usability')
             if kind == 'http-auth':
-                check(re.search(r'MCP server:\s+fixture\s+·\s+native', text),
+                check(re.search(r'MCP server:\s+fixture\s+·\s+prepared', text),
                       'HTTP support decision missing')
                 check('Authentication: not checked' in text, 'HTTP auth status overstated')
                 check(re.search(r'(?i)verify.*authentication', text), 'missing actionable auth guidance')
             if kind in ('empty', 'unsupported'):
                 check(not re.search(r'\b(?:Skill|MCP server|Hook|Command):', text),
                       'loader invented portable components')
-            if action in ('default-no', 'partial-plan', 'auth-unknown'):
-                send(session, b'\r')
+            if action in ('no', 'partial-plan', 'auth-unknown'):
+                send(session, b' \r')
                 session.finish()
                 fixture.unchanged()
                 if action in ('partial-plan', 'auth-unknown'):
@@ -355,16 +363,20 @@ def run_case(case, binary, evidence, timeout=8):
                     plan = records[0]['output']['result']['plan']
                     check_auth_unknown(plan)
                     components = {(c['kind'], c['name']): c for c in plan['components']}
+                    check(len(components) == len(plan['components']) == (2 if action == 'partial-plan' else 1),
+                          'selected component count changed')
                     mcp = components[('mcp_server', 'fixture')]
                     if action == 'partial-plan':
-                        check(components[('skill', 'guide')]['support'] == 'native', 'healthy skill lost')
+                        check(components[('skill', 'guide')] ==
+                              {'kind': 'skill', 'name': 'guide', 'support': 'prepared'}, 'healthy skill lost')
                         check(mcp['support'] == 'unsupported' and mcp['reason'] == 'stdio_runtime_unavailable',
                               'missing runtime skip differs from contract')
                     else:
-                        check(mcp['support'] == 'native', 'HTTP component lost')
+                        check(mcp == {'kind': 'mcp_server', 'name': 'fixture', 'support': 'prepared'},
+                              'HTTP component lost')
                         check(requests == [], 'installation unexpectedly contacted HTTP endpoint')
                 return
-            send(session, b' \r')
+            send(session, b'\r')
             session.wait(LIFECYCLE, 'activation')
             target = exact_skill(fixture)
             (evidence / 'installed-files.json').write_text(json.dumps(hashes(target), indent=2))

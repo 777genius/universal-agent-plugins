@@ -2,9 +2,13 @@ package dirswap
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -226,7 +230,7 @@ func TestCrossParentStagingAtomicallyCommits(t *testing.T) {
 	manager := Manager{JournalDir: filepath.Join(root, "journal")}
 	receipt, err := manager.Apply(context.Background(), Input{
 		OperationID: "cross-parent", ClientBindingID: "binding-1", Sequence: 1,
-		OwnedBase: owned, ActivePath: active, StagingPath: staging,
+		OwnedBase: owned, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +257,7 @@ func TestCrossParentStagingRecoversRollbackAfterActivationCrash(t *testing.T) {
 	}}
 	if _, err := manager.Apply(context.Background(), Input{
 		OperationID: "cross-parent-crash", ClientBindingID: "binding-1", Sequence: 1,
-		OwnedBase: owned, ActivePath: active, StagingPath: staging,
+		OwnedBase: owned, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 	}); err == nil {
 		t.Fatal("fault was not injected")
 	}
@@ -279,7 +283,7 @@ func TestCrossParentStagingRejectsUnreservedOrForeignSibling(t *testing.T) {
 			writeBody(t, staging, "new")
 			if _, err := manager.Apply(context.Background(), Input{
 				OperationID: "reject-" + name, ClientBindingID: "binding-1", Sequence: 1,
-				OwnedBase: owned, ActivePath: active, StagingPath: staging,
+				OwnedBase: owned, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 			}); err == nil {
 				t.Fatal("unsafe cross-parent staging path was accepted")
 			}
@@ -368,6 +372,48 @@ func TestListOpenFailsClosedOnCorruptJournal(t *testing.T) {
 	}
 }
 
+func TestLegacyJournalIsVisibleButNeverReplayedWithoutOwnershipProof(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	base := filepath.Join(root, "managed")
+	active := filepath.Join(base, "plugin")
+	staging := filepath.Join(base, ".agentplugins-staging-legacy")
+	writeBody(t, active, "old")
+	writeBody(t, staging, "new")
+	operationID := "legacy-operation"
+	sum := sha256.Sum256([]byte(operationID))
+	manager := Manager{JournalDir: filepath.Join(root, "journal")}
+	receipt := Receipt{
+		SchemaVersion: 3, Operation: OperationSwap, OperationID: operationID,
+		ClientBindingID: "binding-1", Sequence: 1, OwnedBase: base,
+		ActivePath: active, StagingPath: staging,
+		BackupPath: filepath.Join(base, ".agentplugins-backup-"+hex.EncodeToString(sum[:8])),
+		HadActive:  true, Phase: PhaseIntent,
+	}
+	if err := os.MkdirAll(manager.JournalDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manager.journalPath(operationID), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	open, err := manager.ListOpen()
+	if err != nil || len(open) != 1 || open[0].OperationID != operationID {
+		t.Fatalf("legacy journal inventory = %+v, %v", open, err)
+	}
+	if err := manager.Recover(context.Background(), operationID, false); err == nil || !strings.Contains(err.Error(), "lacks physical ownership proof") {
+		t.Fatalf("legacy recovery did not fail closed: %v", err)
+	}
+	assertBody(t, active, "old")
+	assertBody(t, staging, "new")
+	if _, err := os.Stat(manager.journalPath(operationID)); err != nil {
+		t.Fatalf("legacy journal was removed: %v", err)
+	}
+}
+
 func fixture(t *testing.T) (Manager, Input) {
 	t.Helper()
 	root := t.TempDir()
@@ -378,7 +424,7 @@ func fixture(t *testing.T) (Manager, Input) {
 	writeBody(t, staging, "new")
 	return Manager{JournalDir: filepath.Join(root, "journal")}, Input{
 		OperationID: "operation-1", ClientBindingID: "binding-1", Sequence: 1,
-		OwnedBase: base, ActivePath: active, StagingPath: staging,
+		OwnedBase: base, ActivePath: active, StagingPath: staging, VerifyActive: verifyFixture(t, active),
 	}
 }
 
@@ -401,4 +447,13 @@ func assertBody(t *testing.T, root, want string) {
 	if string(body) != want {
 		t.Fatalf("body = %q, want %q", body, want)
 	}
+}
+
+func verifyFixture(t *testing.T, path string) func(context.Context, string) error {
+	t.Helper()
+	identity, digest, err := publicationProof(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return func(_ context.Context, candidate string) error { return matchesProof(candidate, identity, digest) }
 }

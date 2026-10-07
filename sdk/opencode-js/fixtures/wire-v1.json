@@ -1,0 +1,7 @@
+[
+  {"version":1,"kind":"turn_idle_verified","sessionID":"s1","turnID":"u1","messageID":"a1","rootSession":true},
+  {"version":1,"kind":"question_asked","sessionID":"s1","turnID":"u1","requestID":"q1","rootSession":true},
+  {"version":1,"kind":"permission_asked","sessionID":"s1","turnID":"u1","requestID":"p1","rootSession":true},
+  {"version":1,"kind":"terminal_error","sessionID":"s1","turnID":"u2","rootSession":true},
+  {"version":1,"kind":"unknown","nativeType":"future.event","sessionID":"s1"}
+]

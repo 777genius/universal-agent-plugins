@@ -2,11 +2,22 @@ package shared
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+// NativeEffectError carries independently observed effect evidence across
+// lower-level native transactions without changing their public error API.
+type NativeEffectError struct {
+	Effect domain.NativeEffectState
+	Err    error
+}
+
+func (err *NativeEffectError) Error() string { return err.Err.Error() }
+func (err *NativeEffectError) Unwrap() error { return err.Err }
 
 // NativeConfigActivation is the shared lifecycle of clients that install
 // through the native config kernel. They differ only in messages and in which
@@ -27,6 +38,8 @@ type NativeConfigActivation struct {
 // this helper never names the kernel type.
 func CompleteNativeConfigActivation(ctx context.Context, request domain.ActivationRequest, client NativeConfigActivation) (domain.ActivationOutcome, error) {
 	outcome := StartedActivation(request)
+	outcome.NativeEffect = domain.NativeEffectUnchanged
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 	if !client.Automatic {
 		outcome.Activation = domain.ActivationManual
 		outcome.UserActions = append(outcome.UserActions, client.UnavailableAction)
@@ -38,8 +51,18 @@ func CompleteNativeConfigActivation(ctx context.Context, request domain.Activati
 		}
 	} else if err := client.Activate(ctx, request); err != nil {
 		if !CommittedNativeCleanup(&outcome, err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+			var observed *NativeEffectError
+			if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUnchanged {
+				outcome.NativeEffect = domain.NativeEffectUnchanged
+			}
 			return FailedActivation(outcome, client.RetryAction, err)
 		}
+		outcome.NativeEffect = domain.NativeEffectCommitted
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	} else {
+		outcome.NativeEffect = domain.NativeEffectCommitted
+		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	}
 	outcome.Activation = domain.ActivationActive
 	outcome.Verification = domain.VerificationInstalled

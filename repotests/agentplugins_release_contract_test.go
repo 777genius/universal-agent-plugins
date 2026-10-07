@@ -41,7 +41,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		mustContain(t, makefile, want)
 	}
 
-	for _, retired := range []string{"producer_mode", "paired-preparation", "paired-promotion", "plugin_kit_version"} {
+	for _, retired := range []string{"paired-preparation", "paired-promotion", "plugin_kit_version"} {
 		mustNotContain(t, releaseWorkflow, retired)
 		mustNotContain(t, npmWorkflow, retired)
 	}
@@ -83,10 +83,18 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseProofJob, "require_draft: true")
 	mustContain(t, releaseProofJob, "expected_asset_set_digest: ${{ needs.stage-draft.outputs.asset_set_digest }}")
 	mustContain(t, releaseProofJob, "release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}")
-	mustContain(t, releasePromoteJob, "needs: [validate, stage-draft, platform-proof, verified-draft]")
+	mustContain(t, releasePromoteJob, "needs: [validate, reuse-verified-draft]")
 	mustContain(t, releasePromoteJob, "if: ${{ inputs.publish_release == true }}")
+	mustContain(t, releaseProofJob, "if: ${{ inputs.publish_release != true }}")
+	reuseJob := yamlJob(t, releaseWorkflow, "reuse-verified-draft")
+	mustContain(t, reuseJob, "if: ${{ inputs.publish_release == true }}")
+	mustContain(t, reuseJob, "needs: validate")
+	mustContain(t, reuseJob, "scripts/reuse-agentplugins-verified-draft.py")
+	mustContain(t, releasePromoteJob, "scripts/reuse-agentplugins-verified-draft.py")
+	mustAppearBefore(t, releasePromoteJob, "scripts/reuse-agentplugins-verified-draft.py", "gh api -X PATCH")
 	mustContain(t, releaseWorkflow, "publish_release:\n        description: Explicitly promote after all verification succeeds\n        required: false\n        type: boolean\n        default: false")
 	draftReceiptJob := yamlJob(t, releaseWorkflow, "verified-draft")
+	mustContain(t, draftReceiptJob, "if: ${{ inputs.publish_release != true }}")
 	for _, want := range []string{
 		"needs: [validate, stage-draft, platform-proof]",
 		"contents: write", "attestations: read",
@@ -104,12 +112,12 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseDraftJob, "databaseId")
 	// No status override: Actions' implicit success() keeps failed/skipped needs closed,
 	// including when the caller explicitly requests publication.
-	for _, job := range []string{releasePromoteJob, draftReceiptJob} {
+	for _, job := range []string{releasePromoteJob, draftReceiptJob, reuseJob} {
 		for _, forbidden := range []string{"always()", "!cancelled()", "failure()", "continue-on-error:"} {
 			mustNotContain(t, job, forbidden)
 		}
 	}
-	for _, forbidden := range []string{"id-token: write", "attestations: write", "gh release", "npm ", "npx ", "install.sh", "install.ps1", "platform-proof.js", "if:", "\n    env:", "persist-credentials: true"} {
+	for _, forbidden := range []string{"id-token: write", "attestations: write", "gh release", "npm ", "npx ", "install.sh", "install.ps1", "platform-proof.js", "\n    env:", "persist-credentials: true"} {
 		mustNotContain(t, draftReceiptJob, forbidden)
 	}
 	// Draft API visibility needs write capability only on the trusted producer reader.
@@ -119,15 +127,14 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	}
 	mustNotContain(t, platformWorkflow, ": write")
 	mustAppearBefore(t, draftReceiptJob, "python3 scripts/verify-agentplugins-draft.py", "actions/upload-artifact@")
-	mustContain(t, releasePromoteJob, "EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}")
-	mustContain(t, releasePromoteJob, "gh release edit \"${TAG}\"")
-	mustContain(t, releasePromoteJob, "--draft=false")
-	mustContain(t, releasePromoteJob, `git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"`)
-	mustContain(t, releasePromoteJob, `git rev-list -n 1 "refs/tags/${TAG}"`)
-	mustContain(t, releasePromoteJob, "gh api graphql")
+	mustContain(t, releasePromoteJob, "gh api -X PATCH \"repos/${GITHUB_REPOSITORY}/releases/${release_id}\"")
+	mustContain(t, releasePromoteJob, "-F draft=false")
+	mustContain(t, releasePromoteJob, "--argjson id \"${release_id}\"")
+	mustContain(t, reuseJob, "QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}")
+	mustContain(t, releasePromoteJob, "QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}")
 	mustNotContain(t, releasePromoteJob, "target_commitish")
-	mustAppearBefore(t, releaseWorkflow, "gh release create", "gh release edit")
-	mustAppearBefore(t, releaseWorkflow, "uses: ./.github/workflows/agentplugins-platform-proof.yml", "gh release edit")
+	mustAppearBefore(t, releaseWorkflow, "gh release create", "gh api -X PATCH")
+	mustAppearBefore(t, releaseWorkflow, "uses: ./.github/workflows/agentplugins-platform-proof.yml", "gh api -X PATCH")
 	mustContain(t, releaseWorkflow, "uses: ./.github/workflows/agentplugins-platform-proof.yml")
 	mustContain(t, releaseWorkflow, "expected_commit: ${{ needs.validate.outputs.commit }}")
 	mustContain(t, releaseWorkflow, `test "${WORKFLOW_REF}" = "refs/heads/main"`)
@@ -317,8 +324,8 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"`verified-draft.json`. With `publish_release=false`, promotion is skipped",
 		"Only with separate explicit owner authorization for that exact version",
 		"dispatch the existing producer with `publish_release=true`",
-		"After all six native platform proofs and `verified-draft` succeed",
-		"Every resume still requires the exact current `main`/tag/workflow-source gate",
+		"all six native platform proofs, its verified",
+		"Every dispatch still requires the exact current `main`/tag/workflow-source gate",
 		"This runbook does not establish that any new draft has already qualified",
 		"requires a merged pull request into",
 		"Repository settings are not treated as the release proof",

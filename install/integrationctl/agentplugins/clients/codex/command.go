@@ -15,16 +15,15 @@ import (
 // Do not normalize ambiguous caller input: ownership checks and subprocesses
 // must use the very same explicit profile spelling.
 func validateProfile(root, planned string) error {
-	if !cleanAbsolute(root) || root == filepath.VolumeName(root)+string(filepath.Separator) {
-		return fmt.Errorf("codex config root must be an explicit clean absolute directory")
+	canonical, err := New().ResolveProfileRoot(root)
+	if err != nil {
+		return err
+	}
+	if canonical != root {
+		return fmt.Errorf("codex config root must be canonical before native operations")
 	}
 	if planned != "" && planned != root {
 		return fmt.Errorf("codex planned registry root differs from client config root")
-	}
-	if info, err := os.Stat(root); err == nil && !info.IsDir() {
-		return fmt.Errorf("codex config root is not a directory")
-	} else if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("inspect Codex config root: %w", err)
 	}
 	return nil
 }

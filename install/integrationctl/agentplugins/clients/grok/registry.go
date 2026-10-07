@@ -8,11 +8,17 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+)
+
+const (
+	grokListTimeout          = 15 * time.Second
+	grokListStdoutLimitBytes = 1 << 20
 )
 
 var errUnknownList = errors.New("grok plugin list JSON contract is not recognized")
@@ -28,23 +34,56 @@ type pluginEntry struct {
 // native contract must never become evidence that a name is available.
 func parseList(body []byte) ([]pluginEntry, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
-	var entries []pluginEntry
-	if err := decoder.Decode(&entries); err != nil || entries == nil {
+	decoder.UseNumber()
+	parsed, err := shared.DecodeUniqueJSONValue(decoder)
+	if err != nil {
 		return nil, errUnknownList
 	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
 		return nil, errUnknownList
 	}
-	seen := make(map[string]bool, len(entries))
-	for _, entry := range entries {
-		if strings.TrimSpace(entry.Name) == "" ||
-			(entry.Status != "installed" && entry.Status != "disabled") || seen[entry.Name] {
+	values, ok := parsed.([]any)
+	if !ok {
+		return nil, errUnknownList
+	}
+	entries := make([]pluginEntry, 0, len(values))
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		entry, err := parseEntry(value)
+		if err != nil || seen[entry.Name] {
 			return nil, errUnknownList
 		}
 		seen[entry.Name] = true
+		entries = append(entries, entry)
 	}
 	return entries, nil
+}
+
+// Keep exact native field spelling and types. Optional identity fields may be
+// absent in older listings, but null or differently cased values are not proof.
+func parseEntry(value any) (pluginEntry, error) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return pluginEntry{}, errUnknownList
+	}
+	fields := map[string]string{}
+	for key, value := range object {
+		for _, field := range []string{"name", "status", "source", "version"} {
+			if shared.FoldJSONKey(key) != shared.FoldJSONKey(field) {
+				continue
+			}
+			text, valid := value.(string)
+			if key != field || !valid {
+				return pluginEntry{}, errUnknownList
+			}
+			fields[field] = text
+		}
+	}
+	entry := pluginEntry{Name: fields["name"], Status: fields["status"], Source: fields["source"], Version: fields["version"]}
+	if strings.TrimSpace(entry.Name) == "" || (entry.Status != "installed" && entry.Status != "disabled") {
+		return pluginEntry{}, errUnknownList
+	}
+	return entry, nil
 }
 
 func findEntry(entries []pluginEntry, name string) (pluginEntry, bool) {
@@ -64,7 +103,12 @@ func listPlugins(ctx context.Context, env clients.Env, executable string) ([]plu
 	if !shared.HasClientCLI(env, executable) {
 		return nil, errUnknownList
 	}
-	result, err := shared.RunNativeRegistry(ctx, env.Runner, legacyports.Command{Argv: []string{executable, "plugin", "list", "--json"}})
+	bounded, cancel := context.WithTimeout(ctx, grokListTimeout)
+	defer cancel()
+	result, err := shared.RunNativeRegistry(bounded, env.Runner, legacyports.Command{
+		Argv:             []string{executable, "plugin", "list", "--json"},
+		StdoutLimitBytes: grokListStdoutLimitBytes,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("run Grok plugin list: %w", err)
 	}

@@ -15,7 +15,9 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ doma
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
-	// TargetRoot is Cursor's authoritative plugins/local registry and was
-	// inspected as the prepared/native boundary above.
+	// This manual preparation contract has no managed executable registration.
+	// Clear leaves the existing prepared-directory collision walk in charge;
+	// UsesNativeRegistryExecutable=false means no native discovery was attempted.
+	// It does not prove discovery of plugins/local or absence of other sources.
 	return clients.RegistryClear, nil
 }

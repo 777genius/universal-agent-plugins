@@ -182,17 +182,27 @@ func (session *applySession) resolveBinding() error {
 	session.registrationMigration = session.existing && session.input.Envelope.LocalChatGPTMapping != nil && session.state.Installations[session.installationIndex].LocalChatGPTMapping != nil && session.state.Installations[session.installationIndex].LocalChatGPTMapping.IsLegacyContext7Registration() && *session.state.Installations[session.installationIndex].LocalChatGPTMapping != *session.input.Envelope.LocalChatGPTMapping
 	if session.isMaterialized {
 		binding := session.state.Installations[session.installationIndex].Clients[session.clientBindingID]
+		if err := validateNativeBinding(binding, session.input.Client); err != nil {
+			return err
+		}
 		session.managedBinding = &binding
 	}
 	if session.replace {
 		describeMCPRemovals(&session.plan, session.managedBinding)
 		session.result.Plan = session.plan
 	}
-	return session.rejectBlockedTarget()
+	if err := session.rejectBlockedTarget(); err != nil {
+		return err
+	}
+	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, session.managedBinding); err != nil {
+		return err
+	}
+	session.result.Plan = session.plan
+	return nil
 }
 
 func (session *applySession) adoptSharedBinding() {
-	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		return
 	}
 	for key, binding := range session.state.Installations[session.installationIndex].Clients {
@@ -273,6 +283,12 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 	if verifyLabel == "no-change check" && !packageRevisionMatches(current.PackageRevision, session.input.Envelope) {
 		return true, session.result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", session.input.Client.ClientID)
 	}
+	if session.input.Confirmed {
+		installation := session.state.Installations[session.installationIndex]
+		if err := session.service.prepareExistingRuntime(session.ctx, session.input.Envelope, session.plan, installation, current); err != nil {
+			return true, session.result, fmt.Errorf("prepare installed MCP runtime: %w", err)
+		}
+	}
 	if !lifecycleConverged(current) {
 		result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
 		return true, result, err
@@ -282,10 +298,27 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, err
 		}
 	}
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
+		_, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
+		if err != nil {
+			return true, session.result, err
+		}
+		if !complete || current.NativeActivationAttempt != "" || current.PendingNativeIntent != nil {
+			result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
+			return true, result, err
+		}
+	}
 	return session.persistReadOnlyObservation(current)
 }
 
 func (session *applySession) persistReadOnlyObservation(current domain.ClientBinding) (bool, AddResult, error) {
+	if !session.result.Plan.SelectedDelivery.IsZero() {
+		plan, err := session.service.readOnlyObservationPlan(current, session.result.Plan)
+		if err != nil {
+			return true, session.result, err
+		}
+		session.result.Plan = plan
+	}
 	verified, verifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, current)
 	if verifyErr != nil {
 		if verified.Activation != "" && !session.input.DryRun && (session.input.Confirmed || session.input.PersistAuthoritativeObservations && verified.AuthoritativeObservation) {

@@ -147,6 +147,23 @@ test('owned docs routes preserve extensions and current fragments; UK is explici
   }
 });
 
+test('custom domain docs preserve locale, query, fragment and English fallback', () => {
+  const root = 'https://universal-agent-plugins.com/docs/';
+  for (const locale of ['en', 'ru', 'uk', 'es', 'fr', 'zh']) {
+    const language = locale === 'uk' ? 'en' : locale;
+    const result = resolveDocsLink(
+      'quickstart',
+      locale,
+      `${root}en/guide/quickstart.html?source=x#build-plugins`,
+    );
+    assert.deepEqual(result, {
+      url: `${root}${language}/guide/quickstart.html?source=x#build-plugins`,
+      language,
+      englishFallback: locale === 'uk',
+    });
+  }
+});
+
 test('channel adapter retains manual IDs across locale remount and reconciles removed choices', async () => {
   // Execute the actual adapter with Nuxt auto-imports and lifecycle supplied by the harness.
   const source = read('composables/useInstallChannelSelection.ts')

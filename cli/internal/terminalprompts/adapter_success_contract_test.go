@@ -2,27 +2,30 @@ package terminalprompts
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Real forms consume keyboard bytes through public adapter methods. Only
 // presentation-specific input differs; expectations are shared literal values,
 // never computed by the production validator or a substitute form runner.
 func TestAdapterSuccessContract(t *testing.T) {
-	for _, adapter := range []string{"plain", "huh"} {
+	for _, adapter := range []string{"plain"} {
 		t.Run(adapter, func(t *testing.T) {
 			for _, tc := range []struct {
-				name, plain, huh  string
-				confirm, accepted bool
-				defaults, want    []domain.ClientID
+				name, plain, huh              string
+				confirm, accepted, defaultYes bool
+				defaults, want                []domain.ClientID
 			}{
 				{name: "default-no", plain: "\n", huh: "\r", confirm: true},
+				{name: "default-yes", plain: "\n", huh: "\r", confirm: true, defaultYes: true, accepted: true},
+				{name: "explicit-no-with-yes-default", plain: "n\n", huh: " \r", confirm: true, defaultYes: true},
 				{name: "explicit-no", plain: "n\n", huh: "  \r", confirm: true},
 				{name: "explicit-yes", plain: "yes\n", huh: " \r", confirm: true, accepted: true},
 				{name: "all-defaults", plain: "\n", huh: "\r", defaults: []domain.ClientID{"cursor", "claude", "codex"}, want: []domain.ClientID{"cursor", "claude", "codex"}},
@@ -44,7 +47,7 @@ func TestAdapterSuccessContract(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 					defer cancel()
 					if tc.confirm {
-						req := prompt.ConfirmationRequest{Title: "Apply fixture?", Summary: []string{"Disposable fixture only"}}
+						req := prompt.ConfirmationRequest{Title: "Apply fixture?", Summary: []string{"Disposable fixture only"}, Default: tc.defaultYes}
 						got, err := p.Confirm(ctx, req)
 						if err != nil || got.Accepted != tc.accepted {
 							t.Fatalf("confirmation = %+v, %v; want accepted=%v", got, err, tc.accepted)

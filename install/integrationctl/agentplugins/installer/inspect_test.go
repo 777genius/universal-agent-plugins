@@ -2,8 +2,6 @@ package installer
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -134,6 +132,38 @@ func TestInspectReportsPendingJournalWithoutMutating(t *testing.T) {
 	open, err := dirswap.Manager{JournalDir: eng.cfg.OperationsDir}.ListOpen()
 	if err != nil || len(open) != 1 {
 		t.Fatalf("inspect recovered journal: %+v %v", open, err)
+	}
+}
+
+func TestInspectShowsLegacyJournalButRecoveryPreservesItsFiles(t *testing.T) {
+	eng, current := plantPendingJournal(t)
+	legacy := dirswap.Receipt{
+		SchemaVersion: 3, Operation: current.Operation, OperationID: current.OperationID,
+		ClientBindingID: current.ClientBindingID, Sequence: current.Sequence,
+		OwnedBase: current.OwnedBase, ActivePath: current.ActivePath,
+		StagingPath: current.StagingPath, BackupPath: current.BackupPath,
+		HadActive: current.HadActive, Phase: current.Phase,
+	}
+	body, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(eng.cfg.OperationsDir, current.OperationID+".json"), body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	view, err := eng.Inspect(testCtx(t))
+	if err != nil || len(view.Recovery.Journals) != 1 || view.Recovery.Journals[0].OperationID != current.OperationID {
+		t.Fatalf("legacy journal not visible: %+v %v", view.Recovery, err)
+	}
+	result, err := eng.Recover(testCtx(t), view)
+	if !errors.Is(err, ErrRecoveryRequired) || result.Outcome != OutcomeRecovery {
+		t.Fatalf("legacy journal replayed or concealed: %+v %v", result, err)
+	}
+	if _, err := os.Stat(current.StagingPath); err != nil {
+		t.Fatalf("legacy staging was removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(eng.cfg.OperationsDir, current.OperationID+".json")); err != nil {
+		t.Fatalf("legacy journal was removed: %v", err)
 	}
 }
 
@@ -408,19 +438,25 @@ func plantPendingJournal(t *testing.T) (*Engine, dirswap.Receipt) {
 func plantOpenJournal(t *testing.T, eng *Engine, opID string) dirswap.Receipt {
 	t.Helper()
 	owned := eng.cfg.ManagedRoot
-	active := filepath.Join(owned, "plugin")
-	staging := filepath.Join(owned, ".agentplugins-staging-pending")
+	active := filepath.Join(owned, "pending-"+opID)
+	staging := filepath.Join(owned, ".agentplugins-staging-"+opID)
 	if err := os.MkdirAll(staging, 0700); err != nil {
 		t.Fatal(err)
 	}
-	sum := sha256.Sum256([]byte(opID))
-	receipt := dirswap.Receipt{
-		SchemaVersion: 3, Operation: dirswap.OperationSwap, OperationID: opID,
-		ClientBindingID: "client-binding-1", Sequence: 1, OwnedBase: owned,
-		ActivePath: active, StagingPath: staging,
-		BackupPath: filepath.Join(owned, ".agentplugins-backup-"+hex.EncodeToString(sum[:8])),
-		Phase:      dirswap.PhaseIntent,
+	manager := dirswap.Manager{JournalDir: eng.cfg.OperationsDir, Fault: func(phase string) error {
+		if phase == dirswap.PhaseBackupPending {
+			return errors.New("fixture: leave an open journal")
+		}
+		return nil
+	}}
+	receipt, applyErr := manager.Apply(context.Background(), dirswap.Input{
+		OperationID: opID, ClientBindingID: "client-binding-1", Sequence: 1,
+		OwnedBase: owned, ActivePath: active, StagingPath: staging, RequireAbsent: true,
+	})
+	if applyErr == nil || receipt.OperationID != opID {
+		t.Fatalf("create open journal: %+v %v", receipt, applyErr)
 	}
+	receipt.Phase = dirswap.PhaseIntent
 	body, err := json.MarshalIndent(receipt, "", "  ")
 	if err != nil {
 		t.Fatal(err)

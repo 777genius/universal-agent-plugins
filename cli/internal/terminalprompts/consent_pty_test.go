@@ -24,10 +24,14 @@ func TestConsentPTYBoundary(t *testing.T) {
 }
 
 func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File)) {
+	testConsentPTYCase(t, openPTY, "", "")
+}
+
+func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File), selectedCase, endMarker string) {
 	t.Setenv("TERM", "xterm-256color")
 	for _, tc := range []struct {
 		name, selection, confirmation, remaining string
-		accepted                                 bool
+		accepted, defaultYes                     bool
 		wantErr                                  error
 	}{
 		{name: "queued-space-enter", selection: "\r \r"},
@@ -39,6 +43,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 		{name: "queued-double-escape-enter", selection: "\r\x1b\x1b\r \r"},
 		{name: "queued-incomplete-csi-enter", selection: "\r\x1b[32;\r \r", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-enters", selection: "\r\r"},
+		{name: "queued-enters-yes-default", selection: "\r\r", defaultYes: true},
 		{name: "queued-yes", selection: "\ry\r"},
 		{name: "queued-left", selection: "\r\x1b[D\r"},
 		{name: "queued-right", selection: "\r\x1b[C\r"},
@@ -48,18 +53,24 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 		{name: "queued-paste-fresh-consent", selection: "\r\x1b[200~ \ry\n\x1b[201~", confirmation: " \r", accepted: true},
 		{name: "incomplete-paste", selection: "\r\x1b[200~ \r", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-escape", selection: "\r\x1b", wantErr: prompt.ErrPromptCanceled},
+		{name: "queued-escape-enter-next-owner", selection: "\r\x1b\nnext-owner\n", remaining: "next-owner", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-ctrl-c", selection: "\r\x03", wantErr: prompt.ErrPromptCanceled},
 		{name: "queued-ctrl-d", selection: "\r\x04", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-space-enter", selection: "\r", confirmation: " \r", accepted: true},
 		{name: "fresh-left-enter", selection: "\r", confirmation: "\x1b[D\r", accepted: true},
 		{name: "fresh-paste-default-no", selection: "\r", confirmation: "\x1b[200~ \ry\n\x1b[201~\r"},
 		{name: "fresh-default-no", selection: "\r", confirmation: "\r"},
+		{name: "fresh-default-yes", selection: "\r", confirmation: "\r", defaultYes: true, accepted: true},
+		{name: "fresh-explicit-no-yes-default", selection: "\r", confirmation: " ", defaultYes: true},
 		{name: "fresh-escape", selection: "\r", confirmation: "\x1b", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-ctrl-c", selection: "\r", confirmation: "\x03", wantErr: prompt.ErrPromptCanceled},
 		{name: "fresh-ctrl-d", selection: "\r", confirmation: "\x04", wantErr: prompt.ErrPromptCanceled},
 		{name: "stale-next-owner", selection: "\r \rnext-owner\n", remaining: "next-owner"},
 		{name: "fresh-next-owner", selection: "\r", confirmation: " \rnext-owner\n", accepted: true, remaining: "next-owner"},
 	} {
+		if selectedCase != "" && tc.name != selectedCase {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
 			master, slave := openPTY(t)
 			before, err := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
@@ -71,7 +82,7 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 			go func() {
 				var output bytes.Buffer
 				var buf [4096]byte
-				selectionSent, confirmationSent := false, false
+				selectionSent, confirmationSent, toggledSubmitted := false, false, false
 				for {
 					n, err := master.Read(buf[:])
 					output.Write(buf[:n])
@@ -86,6 +97,16 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 						if n, e := io.WriteString(master, tc.confirmation); e != nil || n != len(tc.confirmation) {
 							t.Errorf("confirmation write=%d %v", n, e)
 						}
+					}
+					if tc.name == "fresh-explicit-no-yes-default" && confirmationSent && !toggledSubmitted && bytes.Contains(output.Bytes(), []byte("✓ No")) {
+						toggledSubmitted = true
+						if n, e := io.WriteString(master, "\r"); e != nil || n != 1 {
+							t.Errorf("toggled confirmation write=%d %v", n, e)
+						}
+					}
+					if endMarker != "" && bytes.Contains(output.Bytes(), []byte(endMarker)) {
+						drained <- output.Bytes()
+						return
 					}
 					if err != nil {
 						drained <- output.Bytes()
@@ -116,7 +137,11 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 			if *selected != *before {
 				t.Errorf("selection changed terminal: got %+v want %+v", selected, before)
 			}
-			result, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?"})
+			result, err := p.Confirm(ctx, prompt.ConfirmationRequest{Title: "Apply fixture?", Default: tc.defaultYes})
+			t.Logf("confirmation accepted=%v error=%v", result.Accepted, err)
+			if !errors.Is(err, tc.wantErr) || result.Accepted != tc.accepted {
+				t.Fatalf("confirmation=%+v %v; want accepted=%v", result, err, tc.accepted)
+			}
 			after, restoreErr := unix.IoctlGetTermios(int(slave.Fd()), consentGetTermios)
 			if restoreErr != nil {
 				t.Fatal(restoreErr)
@@ -137,6 +162,14 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 					t.Errorf("plain handoff changed terminal: got %+v want %+v", afterLine, before)
 				}
 			}
+			// Virtual controlling TTYs can remain open until the session exits.
+			// A test-only output frame ends capture after all owner assertions,
+			// preserving the complete ordered render without requiring EOF.
+			if endMarker != "" {
+				if _, e := io.WriteString(slave, endMarker+"\n"); e != nil {
+					t.Fatal(e)
+				}
+			}
 			slave.Close()
 			var output []byte
 			select {
@@ -146,8 +179,19 @@ func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *o
 			}
 			drained <- output
 			t.Logf("selection batch=%x separate confirmation=%x accepted=%v error=%v\n%s", tc.selection, tc.confirmation, result.Accepted, err, output)
-			if !errors.Is(err, tc.wantErr) || result.Accepted != tc.accepted {
-				t.Fatalf("confirmation=%+v %v; want accepted=%v", result, err, tc.accepted)
+			switch tc.name {
+			case "fresh-default-yes":
+				if !bytes.Contains(output, []byte("✓ Yes")) {
+					t.Error("default Yes has no visible selection mark")
+				}
+			case "fresh-explicit-no-yes-default":
+				if !bytes.Contains(output, []byte("✓ Yes")) || !bytes.Contains(output, []byte("✓ No")) {
+					t.Error("selection mark did not move from Yes to No")
+				}
+			case "fresh-default-no":
+				if !bytes.Contains(output, []byte("✓ No")) {
+					t.Error("default No has no visible selection mark")
+				}
 			}
 			if bytes.LastIndex(output, []byte("\x1b[?25h")) <= bytes.LastIndex(output, []byte("\x1b[?25l")) {
 				t.Error("cursor not restored")

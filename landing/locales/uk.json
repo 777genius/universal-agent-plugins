@@ -371,6 +371,11 @@
       "sourceDescription": "Перевірені пакети й результати пошуку спільноти мають чіткі позначки; їхнє джерело доступне до встановлення.",
       "standardDescription": "Пакети читаються з Agent Plugins 1.0 {manifest}, без другого маніфесту встановлення."
     },
+    "builtWith": {
+      "title": "Уже створено з UAP",
+      "agentNotificationsDescription": "Сповіщення на робочому столі, звуки та перехід до потрібного вікна за кліком для ШІ-агентів розробки.",
+      "viewRepository": "Відкрити на GitHub"
+    },
     "faq": {
       "eyebrow": "Поширені запитання",
       "title": "Типові запитання",
@@ -542,6 +547,9 @@
       "disclaimer": "Автоматизовані перевірки зменшують ризик, але не доводять безпечність плагіна. Перегляньте джерело та дозволи перед встановленням програмного забезпечення, якому не довіряєте."
     },
     "catalog": {
+      "staleCommunityResults": "Показано {count} записів спільноти з останнього підписаного каталогу, створеного {generated}; строк дії завершився {expired}. Команди встановлення призупинено до оновлення каталогу. Перевірені записи залишаються доступними.",
+      "staleCommunityListing": "Історичний підписаний запис; строк дії каталогу завершився {expired}.",
+      "staleCommunityCommands": "Команди встановлення плагінів спільноти призупинено: строк дії підписаного каталогу завершився. Записи та вихідний код залишаються доступними.",
       "explorePlugins": "Переглянути плагіни",
       "searchByCapabilityComponentOrSource": "Шукайте за можливістю, компонентом або джерелом.",
       "allCategories": "Усі категорії",
@@ -610,7 +618,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Недоступно в індексованому джерелі; команду встановлення не створено.",
       "unavailableAtItsIndexedSource": "Недоступно в індексованому джерелі",
       "checkedAgainBeforeInstallation": "Перевіряється повторно перед встановленням",
-      "reviewedListing": "перевірений запис",
+      "reviewedListing": "Перевірено",
       "notAvailableForChatgpt": "Недоступно для ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Перевірене підключення; завершіть налаштування в ChatGPT",
       "allInstalledAgents": "Усі встановлені агенти",
@@ -817,7 +825,7 @@
       "useThemEverywhere": "Використовуйте їх усюди.",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Шукайте перевірені пакети та плагіни спільноти, знайдені в публічних репозиторіях GitHub.",
       "description": "Шукайте перевірені Agent Plugins 1.0 та плагіни спільноти для Codex, Claude Code, Cursor, Gemini CLI, OpenCode тощо.",
-      "title": "Каталог Agent Plugins 1.0 {'|'} Пошук серед 2 500+ плагінів",
+      "title": "Каталог Agent Plugins 1.0 {'|'} Пошук плагінів",
       "listName": "Перевірені пакети Agent Plugins 1.0"
     },
     "detail": {
@@ -832,7 +840,7 @@
       "components": "Компоненти",
       "package": "Пакет",
       "pluginNotFound": "Плагін не знайдено",
-      "reviewedListing": "перевірений запис",
+      "reviewedListing": "Перевірено",
       "licenseNotSpecified": "Ліцензію не вказано",
       "managedByCli": "Керується CLI",
       "requiresAFinalStepInTheApp": "Потребує завершального кроку в застосунку",

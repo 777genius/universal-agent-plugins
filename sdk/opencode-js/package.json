@@ -1,0 +1,60 @@
+{
+  "name": "universal-agent-plugins-opencode-events",
+  "version": "0.3.0",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/777genius/universal-agent-plugins.git",
+    "directory": "sdk/opencode-js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "v1.js",
+    "v1.d.ts",
+    "v2.js",
+    "v2.d.ts",
+    "common.d.ts",
+    "observer-core.js",
+    "checkpoint.js",
+    "README.md",
+    "v2-reducer.js"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./v1": {
+      "types": "./v1.d.ts",
+      "default": "./v1.js"
+    },
+    "./v2": {
+      "types": "./v2.d.ts",
+      "default": "./v2.js"
+    }
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check index.js && node --check v1.js && node --check v2.js && node --check v2-reducer.js && node --check observer-core.js && node --check checkpoint.js && node --test && tsc --noEmit -p tsconfig.json",
+    "check:packed": "node scripts/check-packed.mjs"
+  },
+  "peerDependencies": {
+    "@opencode-ai/sdk": ">=1.18.33 <1.19.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.34",
+    "@opencode-ai/sdk": "1.18.34",
+    "typescript": "7.0.2",
+    "@opencode/plugin": "2.0.21",
+    "@opencode/schema": "2.0.21",
+    "@opencode/client": "2.0.21",
+    "@opencode/protocol": "2.0.21"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/sdk": {
+      "optional": true
+    }
+  }
+}

@@ -133,7 +133,7 @@ func (session *loadedTargetSession) applyPrepareIntent(plan *domain.DeliveryPlan
 		client.DisplayName += " (prepare personal marketplace; install and verify tools in ChatGPT)"
 		return nil
 	}
-	client.DisplayName += " (prepare configuration; authenticate and verify tools in " + domain.ClientDisplayName(client.ClientID) + ")"
+	client.DisplayName += " (prepare only; manual verification)"
 	return nil
 }
 
@@ -172,6 +172,6 @@ func (session *loadedTargetSession) tryHostedPrepare(client domain.DetectedClien
 		return client, false
 	}
 	session.intents[0][client.ClientID] = domain.InstallIntentPrepare
-	client.DisplayName += " (prepare configuration; automatic MCP verification unavailable; authenticate and verify tools in " + domain.ClientDisplayName(client.ClientID) + ")"
+	client.DisplayName += " (prepare only; manual verification)"
 	return client, true
 }

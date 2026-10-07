@@ -388,6 +388,11 @@
       "sourceDescription": "Reviewed packages and community discovery remain clearly labeled, with their source available before install.",
       "standardDescription": "Packages are read from Agent Plugins 1.0 {manifest}, without a second install manifest."
     },
+    "builtWith": {
+      "title": "Already built with UAP",
+      "agentNotificationsDescription": "Desktop notifications, sounds, and click-to-focus for AI coding agents.",
+      "viewRepository": "View on GitHub"
+    },
     "faq": {
       "eyebrow": "FAQ",
       "title": "Common questions",
@@ -559,6 +564,9 @@
       "disclaimer": "Automated checks reduce risk; they do not prove that a plugin is safe. Review the source and permissions before installing software you do not trust."
     },
     "catalog": {
+      "staleCommunityResults": "Showing {count} community listings from the last signed catalog, generated {generated}, expired {expired}. Community installation commands are paused until a fresh catalog is available. Reviewed listings remain available.",
+      "staleCommunityListing": "Historical signed listing; catalog expired {expired}.",
+      "staleCommunityCommands": "Community installation commands are paused because the signed catalog has expired. You can still browse its listings and source.",
       "explorePlugins": "Explore plugins",
       "searchByCapabilityComponentOrSource": "Search by capability, component, or source.",
       "allCategories": "All categories",
@@ -627,7 +635,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Unavailable at its indexed source; no install command is generated.",
       "unavailableAtItsIndexedSource": "Unavailable at its indexed source",
       "checkedAgainBeforeInstallation": "Checked again before installation",
-      "reviewedListing": "reviewed listing",
+      "reviewedListing": "Reviewed",
       "notAvailableForChatgpt": "Not available for ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Verified connection; finish setup in ChatGPT",
       "allInstalledAgents": "All installed agents",
@@ -834,7 +842,7 @@
       "useThemEverywhere": "Use them everywhere.",
       "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Search reviewed packages and community plugins discovered from public GitHub repositories.",
       "description": "Search reviewed and community Agent Plugins 1.0 for Codex, Claude Code, Cursor, Gemini CLI, OpenCode, and more.",
-      "title": "Agent Plugins 1.0 Directory {'|'} Search 2,500+ Plugins",
+      "title": "Agent Plugins 1.0 Directory {'|'} Find Plugins",
       "listName": "Reviewed Agent Plugins 1.0 packages"
     },
     "detail": {
@@ -849,7 +857,7 @@
       "components": "Components",
       "package": "Package",
       "pluginNotFound": "Plugin not found",
-      "reviewedListing": "reviewed listing",
+      "reviewedListing": "Reviewed",
       "licenseNotSpecified": "License not specified",
       "managedByCli": "Managed by CLI",
       "requiresAFinalStepInTheApp": "Requires a final step in the app",

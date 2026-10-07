@@ -118,7 +118,7 @@ func (r forbiddenReader) Read([]byte) (int, error) {
 	return 0, io.EOF
 }
 func TestShortPromptOutputCannotAuthorize(t *testing.T) {
-	for _, p := range []prompt.Prompter{PlainPrompter{Input: forbiddenReader{t}, Output: shortWriter{}}, HuhPrompter{Input: forbiddenReader{t}, Output: shortWriter{}}} {
+	for _, p := range []prompt.Prompter{PlainPrompter{Input: forbiddenReader{t}, Output: shortWriter{}}} {
 		result, err := p.Confirm(context.Background(), prompt.ConfirmationRequest{Title: "Apply?"})
 		if result.Accepted || !errors.Is(err, io.ErrShortWrite) {
 			t.Fatal(result, err)

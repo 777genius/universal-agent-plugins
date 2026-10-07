@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 )
 
 func ReadLine(ctx context.Context, reader io.Reader) (string, error) {
@@ -45,7 +43,7 @@ func readLineBuffer(ctx context.Context, reader io.Reader, b []byte) (string, er
 			line.WriteByte(c)
 		}
 		if err == io.EOF {
-			return "", prompt.ErrPromptInputClosed
+			return "", io.EOF
 		}
 		if n == 0 {
 			return "", io.ErrNoProgress

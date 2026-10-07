@@ -55,6 +55,12 @@ class FixtureTests(unittest.TestCase):
         with self.assertRaises(AssertionError): self.fixture.validate_stubs()
 
 
+class SelectionIdentityTests(unittest.TestCase):
+    def test_unoffered_selection_is_rejected_before_sending_keys(self):
+        with self.assertRaisesRegex(AssertionError, 'not offered'):
+            h.selection_keys(b'[x] Codex (codex)\n[x] Cursor (cursor)\n', {'cursor', 'opencode'})
+
+
 class EmptySelectionTests(unittest.TestCase):
     def run_empty(self, early=b'', late=b''):
         from unittest.mock import Mock

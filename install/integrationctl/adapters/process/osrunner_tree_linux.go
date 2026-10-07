@@ -199,16 +199,12 @@ func wrapLinuxOrdinaryCommand(cmd *exec.Cmd, grace time.Duration) (*os.File, *os
 		_ = requestWriter.Close()
 		return nil, nil, err
 	}
-	executable, err := os.Executable()
-	if err != nil {
-		_ = requestReader.Close()
-		_ = requestWriter.Close()
-		_ = statusReader.Close()
-		_ = statusWriter.Close()
-		return nil, nil, fmt.Errorf("locate Linux ordinary-command supervisor: %w", err)
-	}
-	cmd.Path = executable
-	cmd.Args = []string{executable}
+	// A managed plugin may replace and unlink its own pathname during a repair.
+	// The procfs self link still names the running inode in the forked child, so
+	// the supervisor remains launchable throughout the replacement.
+	const selfExecutable = "/proc/self/exe"
+	cmd.Path = selfExecutable
+	cmd.Args = []string{selfExecutable}
 	cmd.Env = append(os.Environ(), linuxOrdinarySupervisorEnvironment)
 	cmd.Dir = ""
 	cmd.ExtraFiles = append(cmd.ExtraFiles, specFile, requestReader, statusWriter)

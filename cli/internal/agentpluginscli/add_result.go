@@ -13,7 +13,6 @@ import (
 )
 
 func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result usecase.AddResult) error {
-	result = withOpenCodeRuntimeNotice(result)
 	checked := &planWriter{writer: writer}
 	writer = checked
 	_, _ = fmt.Fprintf(writer, "%s: %s %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Plugin"), prompt.SafeText(envelope.Manifest.Name), prompt.SafeText(envelope.Manifest.Version))
@@ -26,7 +25,11 @@ func renderHumanPlan(writer io.Writer, envelope domain.PackageEnvelope, result u
 		_, _ = fmt.Fprintf(writer, "  - %s %s: %s\n", prompt.SafeText(string(component.Kind)), prompt.SafeText(component.Name), prompt.SafeText(string(component.Support)))
 	}
 	for _, diagnostic := range result.Plan.Diagnostics {
-		_, _ = fmt.Fprintf(writer, "  %s: %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(diagnostic.Code), prompt.SafeText(diagnostic.Message))
+		label := "Warning"
+		if diagnostic.Severity == domain.SeverityInfo {
+			label = "Info"
+		}
+		_, _ = fmt.Fprintf(writer, "  %s: %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, label), prompt.SafeText(diagnostic.Code), prompt.SafeText(diagnostic.Message))
 	}
 	for _, warning := range result.Plan.Warnings {
 		_, _ = fmt.Fprintf(writer, "  %s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Warning, "Warning"), prompt.SafeText(warning))
@@ -193,7 +196,6 @@ func addFailureStatus(result usecase.AddResult, commandErr error) string {
 }
 
 func newAddResultData(envelope domain.PackageEnvelope, result usecase.AddResult, dryRun bool) addResultData {
-	result = withOpenCodeRuntimeNotice(result)
 	return addResultData{
 		OperationID: result.Receipt.OperationID, Plugin: envelope.Manifest.Name,
 		Version: envelope.Manifest.Version, Source: publicPackageSource(envelope.Source),

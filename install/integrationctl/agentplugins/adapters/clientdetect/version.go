@@ -3,51 +3,78 @@ package clientdetect
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
 const maximumVersionOutput = 4096
 
-type cappedBuffer struct {
-	bytes.Buffer
-	remaining int
+var errVersionOutputLimit = errors.New("probe_output_limit")
+
+// Separate streams share one budget. exec can copy them concurrently.
+type versionOutput struct {
+	mu             sync.Mutex
+	stdout, stderr bytes.Buffer
+	remaining      int
+	exceeded       bool
+}
+type versionWriter struct {
+	output *versionOutput
+	stderr bool
 }
 
-func (buffer *cappedBuffer) Write(value []byte) (int, error) {
-	if len(value) > buffer.remaining {
-		return 0, fmt.Errorf("version output exceeds %d bytes", maximumVersionOutput)
+func (w versionWriter) Write(value []byte) (int, error) {
+	w.output.mu.Lock()
+	defer w.output.mu.Unlock()
+	if len(value) > w.output.remaining {
+		w.output.exceeded = true
+		return 0, errVersionOutputLimit
 	}
-	buffer.remaining -= len(value)
-	return buffer.Buffer.Write(value)
+	w.output.remaining -= len(value)
+	if w.stderr {
+		return w.output.stderr.Write(value)
+	}
+	return w.output.stdout.Write(value)
 }
 
 func probeExecutableVersion(ctx context.Context, executable string) (string, error) {
+	return probeExecutableVersionWithEnvironment(ctx, executable, nil)
+}
+
+func probeExecutableVersionWithEnvironment(ctx context.Context, executable string, environment []string) (string, error) {
+	env := append([]string{}, environment...)
+	if path := os.Getenv("PATH"); strings.TrimSpace(path) != "" {
+		env = append(env, "PATH="+path)
+	}
+	stdout, stderr, err := runVersionProcess(ctx, executable, env)
+	return stdout + stderr, err
+}
+
+// runVersionProcess is the single process primitive. Explicit authority callers
+// supply the complete environment; it never appends ambient variables.
+func runVersionProcess(ctx context.Context, executable string, environment []string) (string, string, error) {
 	isolatedDir, err := os.MkdirTemp("", "agentplugins-version-probe-")
 	if err != nil {
-		return "", fmt.Errorf("create isolated version probe directory: %w", err)
+		return "", "", err
 	}
 	defer func() { _ = os.RemoveAll(isolatedDir) }()
-
-	output := &cappedBuffer{remaining: maximumVersionOutput}
+	output := &versionOutput{remaining: maximumVersionOutput}
 	command := exec.CommandContext(ctx, executable, "--version")
 	command.Dir = isolatedDir
-	command.Env = []string{}
-	if path := os.Getenv("PATH"); strings.TrimSpace(path) != "" {
-		// PATH is the sole inherited variable so /usr/bin/env shebangs can
-		// resolve their runtime without exposing HOME, tokens, or credentials.
-		command.Env = append(command.Env, "PATH="+path)
-	}
+	command.Env = append([]string{}, environment...)
 	command.Stdin = strings.NewReader("")
-	command.Stdout, command.Stderr = output, output
+	command.Stdout = versionWriter{output: output}
+	command.Stderr = versionWriter{output: output, stderr: true}
 	command.WaitDelay = 100 * time.Millisecond
-	if err := command.Run(); err != nil {
-		return "", err
+	err = command.Run()
+	if output.exceeded {
+		err = errVersionOutputLimit
 	}
-	return output.String(), nil
+	return output.stdout.String(), output.stderr.String(), err
 }
 
 func normalizeVersion(value string) string {

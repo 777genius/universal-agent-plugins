@@ -12,6 +12,13 @@ import (
 // does not implement one. Declaring them here keeps the contract readable in a
 // single place instead of hiding it in unexported use case declarations.
 
+// PhysicalProfileAuthority is explicitly implemented only by opted-in adapters.
+// Capture is for a new owner; revalidation never discovers or recaptures a root.
+type PhysicalProfileAuthority interface {
+	CaptureProfileAuthority(context.Context, domain.DetectedClient) (domain.ProfileAuthority, error)
+	RevalidateProfileAuthority(context.Context, domain.ClientID, domain.ProfileAuthority) error
+}
+
 // ActivationPreflighter lets an activator reject a request before any client or
 // managed file is touched.
 type ActivationPreflighter interface {
@@ -47,4 +54,10 @@ type DataPathPreflighter interface {
 // directory, so staging and data provisioning commit as one unit.
 type PluginDataAwareStager interface {
 	StageWithPluginData(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string, domain.CompatibilityHints, string) (domain.StagedDelivery, error)
+}
+
+// ActiveNativeProjector computes native delivery from a digest-verified active
+// package. It must not write to the package or inspect external client state.
+type ActiveNativeProjector interface {
+	ProjectActiveNative(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string, string) ([]domain.NativeObjectOwnership, error)
 }

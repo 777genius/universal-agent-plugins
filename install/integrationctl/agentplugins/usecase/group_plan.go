@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -26,6 +28,15 @@ func (session *groupSession) planOneGroupTarget(targetIndex int, target AddInput
 	if err != nil {
 		return err
 	}
+	clientID, managed, err := session.resolveGroupManagedBinding(target, &plan)
+	if err != nil {
+		return err
+	}
+	if managed != nil {
+		if err := validateNativeBinding(*managed, target.Client); err != nil {
+			return err
+		}
+	}
 	collided, err := session.collideGroupTarget(targetIndex, target, plan)
 	if err != nil {
 		return err
@@ -33,7 +44,7 @@ func (session *groupSession) planOneGroupTarget(targetIndex int, target AddInput
 	if collided {
 		return nil
 	}
-	return session.recordGroupTarget(targetIndex, target, plan)
+	return session.recordGroupTarget(targetIndex, target, plan, clientID, managed)
 }
 
 func (session *groupSession) validateGroupTarget(targetIndex int, target *AddInput) error {
@@ -88,7 +99,7 @@ func (session *groupSession) planAndPreflightGroupTarget(targetIndex int, target
 
 func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan) (bool, error) {
 	key := plan.ActivePath
-	if sharesPhysicalBackend(target.Client.ClientID) {
+	if sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery) {
 		definition, _ := domain.ClientDefinitionFor(target.Client.ClientID)
 		key = "shared-backend:" + definition.BackendFamily + ":" + plan.PhysicalArtifactID
 	} else if session.existing {
@@ -108,6 +119,14 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	if !sameNativeBackend(prior.input.Client.ClientID, target.Client.ClientID) {
 		return false, fmt.Errorf("targets collide on physical backend %s", key)
 	}
+	if (prior.plan.SelectedDelivery.EffectiveTraits(prior.input.Client.ClientID).BindsNativeProfileRoot || plan.SelectedDelivery.EffectiveTraits(target.Client.ClientID).BindsNativeProfileRoot) && prior.input.Client.ConfigRoot != target.Client.ConfigRoot {
+		return false, fmt.Errorf("targets select different native profile roots for physical backend %s", key)
+	}
+	// Coalescing discards one plan, so all frozen authority, including revision
+	// digests, must agree. SameSelection deliberately excludes those digests.
+	if !reflect.DeepEqual(prior.plan.SelectedDelivery, plan.SelectedDelivery) || !prior.plan.LocalEntryObservation.Equal(plan.LocalEntryObservation) || !reflect.DeepEqual(prior.plan.PreviousNativeObjects, plan.PreviousNativeObjects) {
+		return false, fmt.Errorf("targets select different delivery facts for physical backend %s", key)
+	}
 	if prior.noChange {
 		session.result.Targets[targetIndex].NoChange = true
 		session.result.Targets[targetIndex].Activation = session.result.Targets[prior.resultIndexes[0]].Activation
@@ -117,8 +136,7 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 	return true, nil
 }
 
-func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan) error {
-	clientID, managed := session.resolveGroupManagedBinding(target, &plan)
+func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan, clientID string, managed *domain.ClientBinding) error {
 	if session.replace {
 		describeMCPRemovals(&plan, managed)
 	}
@@ -126,11 +144,22 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 		return fmt.Errorf("update target %s is not installed", target.Client.ClientID)
 	}
 	session.result.Targets[targetIndex].Plan = plan
+	requireAbsent, err := session.reviewGroupDirectoryAbsence(plan, managed)
+	if err != nil {
+		return err
+	}
 	recovering, err := session.observePlannedGroupTarget(target, plan, managed)
 	if err != nil {
 		return fmt.Errorf("target %s identity preflight: %w", target.Client.ClientID, err)
 	}
+	if err := session.service.checkMCPNamespace(session.ctx, target.Client, &plan, managed); err != nil {
+		return fmt.Errorf("target %s namespace preflight: %w", target.Client.ClientID, err)
+	}
+	session.result.Targets[targetIndex].Plan = plan
 	noChange := !requiresComponentRemoval(plan) && managed != nil && !session.input.Repair && !session.input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))
+	if domain.ClientTraitsFor(target.Client.ClientID).ReportsMCPToolNamespaceCollision && managed != nil && (managed.Activation == domain.ActivationFailed || managed.Verification == domain.VerificationFailed) {
+		noChange = false
+	}
 	if noChange {
 		session.result.Targets[targetIndex].NoChange = true
 		session.result.Targets[targetIndex].Activation = domain.ActivationOutcome{
@@ -139,32 +168,33 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	}
 	session.physical[session.collisionKey] = len(session.planned)
 	session.planned = append(session.planned, plannedGroupTarget{
-		input: target, plan: plan, resultIndexes: []int{targetIndex}, clientBindingID: clientID, managed: managed, noChange: noChange, recovering: recovering,
+		input: target, plan: plan, resultIndexes: []int{targetIndex}, clientBindingID: clientID, managed: managed, noChange: noChange, recovering: recovering, requireAbsent: requireAbsent || recovering,
 	})
 	return nil
 }
 
-func (session *groupSession) resolveGroupManagedBinding(target AddInput, plan *domain.DeliveryPlan) (string, *domain.ClientBinding) {
+func (session *groupSession) resolveGroupManagedBinding(target AddInput, plan *domain.DeliveryPlan) (string, *domain.ClientBinding, error) {
 	clientID := domain.ComputeClientBindingID(session.installationID, string(target.Client.ClientID), string(target.Scope), plan.ActivePath)
 	if !session.existing {
-		return clientID, nil
+		return clientID, nil, nil
 	}
-	if binding, ok := session.state.Installations[session.installationIndex].Clients[clientID]; ok {
-		owned := binding
-		return clientID, &owned
-	}
-	if !sharesPhysicalBackend(target.Client.ClientID) {
-		return clientID, nil
-	}
-	for _, binding := range session.state.Installations[session.installationIndex].Clients {
-		if binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), target.Client.ClientID) && binding.Materialization != domain.MaterializationAbsent {
+	if !sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery) {
+		if binding, ok := session.state.Installations[session.installationIndex].Clients[clientID]; ok {
 			owned := binding
-			plan.ActivePath = binding.TargetLocator
-			plan.TargetRoot = filepath.Dir(binding.TargetLocator)
-			return binding.ClientBindingID, &owned
+			return clientID, &owned, nil
 		}
+		return clientID, nil, nil
 	}
-	return clientID, nil
+	binding, err := frozenPlanningBinding(target, &session.state.Installations[session.installationIndex])
+	if err != nil || binding == nil {
+		return clientID, nil, err
+	}
+	if binding.PhysicalArtifact != plan.PhysicalArtifactID || !binding.SelectedDelivery.IsZero() {
+		return clientID, nil, fmt.Errorf("shared planning binding differs from the planned physical delivery")
+	}
+	plan.ActivePath = binding.TargetLocator
+	plan.TargetRoot = filepath.Dir(binding.TargetLocator)
+	return binding.ClientBindingID, binding, nil
 }
 
 func (session *groupSession) observePlannedGroupTarget(target AddInput, plan domain.DeliveryPlan, managed *domain.ClientBinding) (bool, error) {
@@ -241,4 +271,18 @@ func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compa
 		}
 	}
 	return nil
+}
+
+func (session *groupSession) reviewGroupDirectoryAbsence(plan domain.DeliveryPlan, managed *domain.ClientBinding) (bool, error) {
+	if managed == nil {
+		return true, nil
+	}
+	if !session.input.Repair {
+		return false, nil
+	}
+	_, err := os.Lstat(plan.ActivePath)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	return false, err
 }

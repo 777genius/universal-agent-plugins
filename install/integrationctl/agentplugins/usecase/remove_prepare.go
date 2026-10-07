@@ -244,11 +244,16 @@ func dataReceiptRemovals(service Service, operationID string, receipts []domain.
 	removals := make([]transaction.DirectoryRemoval, 0, len(receipts))
 	for index, dataReceipt := range receipts {
 		receipt := dataReceipt
+		owners := service.dataProfileOwners(receipt.DataReceiptID)
+		installationID := ""
+		if len(owners) > 0 {
+			installationID = owners[0].InstallationID
+		}
 		removals = append(removals, transaction.DirectoryRemoval{OperationID: fmt.Sprintf("%s-data-%03d", operationID, index+1),
-			OperationGroupID: operationID, ClientBindingID: receipt.DataReceiptID, Sequence: 1,
+			OperationGroupID: operationID, InstallationID: installationID, DataReceiptID: receipt.DataReceiptID, ProfileOwners: owners, ClientBindingID: receipt.DataReceiptID, Sequence: 1,
 			OwnedBase: filepath.Dir(receipt.Locator), ActivePath: receipt.Locator, BeforeDigest: receipt.OwnershipDigest, Standalone: true,
-			Verify: func(verifyContext context.Context, _ string) error {
-				return service.PluginData.ValidateData(verifyContext, receipt)
+			Verify: func(verifyContext context.Context, path string) error {
+				return service.PluginData.ValidateDataAt(verifyContext, receipt, path)
 			}})
 	}
 	return removals

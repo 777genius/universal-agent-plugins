@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -34,6 +35,13 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	profileRoot := request.Client.ConfigRoot
+	if profileRoot == "" {
+		profileRoot = request.Plan.NativeRegistryRoot
+	}
+	if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
 	outcome := shared.StartedActivation(request)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		outcome.Activation = domain.ActivationManual
@@ -41,12 +49,14 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("in Codex, install %s from %s, then verify it appears in Plugins > Personal", request.DeclaredName, request.Delivery.ActivePath))
 		return outcome, nil
 	}
-	profileRoot := request.Client.ConfigRoot
-	if profileRoot == "" {
-		profileRoot = request.Plan.NativeRegistryRoot
-	}
-	if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
-		return domain.ActivationOutcome{}, err
+
+	if !request.VerifyOnly {
+		if err := os.MkdirAll(profileRoot, 0700); err != nil && !os.IsExist(err) {
+			return domain.ActivationOutcome{}, fmt.Errorf("create Codex profile: %w", err)
+		}
+		if err := validateProfile(profileRoot, request.Plan.NativeRegistryRoot); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
 	}
 	request.Client.ConfigRoot = profileRoot
 	return completeCodexActivation(ctx, env, request, outcome)

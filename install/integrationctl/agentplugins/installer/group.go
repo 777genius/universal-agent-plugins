@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func (e *Engine) prepareGroup(ctx context.Context, req Request) (*PreparedOperation, error) {
-	if err := validateGroupTargets(req.Targets); err != nil {
+	if err := e.validateGroupTargets(req); err != nil {
 		return nil, err
 	}
 	switch req.Operation {
@@ -22,14 +23,22 @@ func (e *Engine) prepareGroup(ctx context.Context, req Request) (*PreparedOperat
 	}
 }
 
-func validateGroupTargets(targets []ClientTarget) error {
+func (e *Engine) validateGroupTargets(req Request) error {
+	targets := req.Targets
 	if len(targets) != 2 {
-		return fmt.Errorf("%w: group operations accept exactly two Claude/Codex targets", ErrInvalidRequest)
+		return fmt.Errorf("%w: group operations accept exactly two targets", ErrInvalidRequest)
 	}
 	seen := map[string]struct{}{}
 	for _, target := range targets {
-		if target.ClientID != "claude" && target.ClientID != "codex" {
+		if !e.SupportsClient(target.ClientID) {
 			return fmt.Errorf("%w: client %q is not in this beta", ErrUnsupported, target.ClientID)
+		}
+		if req.Operation == OpInstall || req.Operation == OpUpdate || req.Operation == OpRepair {
+			consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](e.cfg.Registry, domain.ClientID(target.ClientID))
+			if ok && consumer.UsesOpenCodeHostProfile() {
+				// Group handles do not yet retain per-target native host snapshots.
+				return fmt.Errorf("%w: grouped native host authority is unavailable for %s", ErrUnsupported, target.ClientID)
+			}
 		}
 		if _, ok := seen[target.ClientID]; ok {
 			return fmt.Errorf("%w: duplicate client %s", ErrInvalidRequest, target.ClientID)

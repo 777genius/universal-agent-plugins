@@ -566,28 +566,17 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		claudeAssertWindowsStdio(t, f.Root, installPath, "local")
 	}
-	// Known, pre-existing, non-Codex-specific audit-trail gap (not
-	// introduced or fixed by this checkpoint): repair's recorded
-	// BeforeDigest describes what was last recorded as owned, not the
-	// physically-absent state this mutation actually observed, because the
-	// Codex-only C3 recovering gate (usecase/group.go's
-	// observeGroupRecoveryEligibility) is the only path that corrects this.
-	// BeforeDigest is not read by any production decision logic (confirmed
-	// separately in this session's C3 review), so this is tracked here as a
-	// documented limitation rather than silently missed or fixed out of
-	// scope. The receipt is located by the repair command's own reported
-	// operation_id (not "whichever client binding's last receipt happens to
-	// be"), so a no-op repair that appended no new receipt would fail this
-	// lookup loudly instead of silently reading a stale receipt from an
-	// earlier operation.
+	// The repair receipt must describe the physically absent directory, not
+	// the last recorded owned digest. Locate it by this repair's operation ID
+	// so an unrelated earlier receipt cannot make the check pass.
 	repairOperationID, _ := repairResult["data"].(map[string]any)["operation_id"].(string)
 	if repairOperationID == "" {
 		t.Fatalf("repair result did not report an operation_id: %+v", repairResult)
 	}
-	if before, after := claudeStateReceiptForOperation(t, f, installationID, repairOperationID); before == "" || before != after {
-		t.Fatalf("expected the known phantom BeforeDigest gap (before_digest == after_digest, both nonempty, since repair reconstructs byte-identical content despite physical absence at mutation time); got before=%q after=%q -- this either means the gap was fixed (update this test) or the receipt lookup is wrong", before, after)
+	if before, after := claudeStateReceiptForOperation(t, f, installationID, repairOperationID); before != "" || after == "" {
+		t.Fatalf("absent-directory repair receipt must have an empty before_digest and a nonempty after_digest; got before=%q after=%q", before, after)
 	}
-	stages["owned_repair"] = claudeNativeStage{Status: "passed", Reason: "managed directory re-staged from the still-present, exact-revision-matching local source after the directory was deleted; restored content bytes, .mcp.json, and claude plugin details all verified; recorded BeforeDigest confirmed to carry the known pre-existing phantom-before-state gap shared by every non-Codex client, not fixed by this checkpoint"}
+	stages["owned_repair"] = claudeNativeStage{Status: "passed", Reason: "managed directory re-staged from the still-present, exact-revision-matching local source after deletion; restored content bytes, .mcp.json, and Claude plugin details verified; receipt records the physically absent before-state"}
 
 	// Foreign content INSIDE the managed directory must block removal
 	// (fail-closed ownership verification), not be silently deleted or

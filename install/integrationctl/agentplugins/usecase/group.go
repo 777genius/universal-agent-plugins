@@ -14,10 +14,28 @@ type GroupInput struct {
 	Targets             []AddInput
 	CompatibilityChecks []AddInput
 	OperationGroupID    string
+	Progress            func(GroupProgressEvent)
 	DryRun              bool
 	Confirmed           bool
 	Switch              bool
 	Repair              bool
+}
+
+type GroupProgressPhase string
+
+const (
+	GroupProgressPreparing   GroupProgressPhase = "preparing"
+	GroupProgressConfiguring GroupProgressPhase = "configuring"
+	GroupProgressConfigured  GroupProgressPhase = "configured"
+	GroupProgressActivated   GroupProgressPhase = "activated"
+)
+
+// GroupProgressEvent reports observed checkpoints; it never grants consent or
+// changes the outcome of an installation.
+type GroupProgressEvent struct {
+	ClientID domain.ClientID
+	Phase    GroupProgressPhase
+	Result   AddResult
 }
 
 type GroupResult struct {
@@ -34,6 +52,7 @@ type GroupPhase string
 
 const (
 	GroupPhasePlanned                 GroupPhase = "planned"
+	GroupPhasePreparationFailed       GroupPhase = "preparation_failed"
 	GroupPhaseManagedUnchanged        GroupPhase = "managed_unchanged"
 	GroupPhaseManagedRolledBack       GroupPhase = "managed_rolled_back"
 	GroupPhaseManagedCommitUnknown    GroupPhase = "managed_commit_unknown"
@@ -130,6 +149,29 @@ type plannedGroupTarget struct {
 	// client discovery. Its full native identity is deferred until the group's
 	// directories are restored and is verified once, together, before commit.
 	recovering bool
+	// requireAbsent records the filesystem precondition independently of native recovery.
+	requireAbsent bool
+}
+
+func (session *groupSession) reportGroupProgress(target plannedGroupTarget, phase GroupProgressPhase) error {
+	if session.input.Progress == nil {
+		return nil
+	}
+	for _, index := range target.resultIndexes {
+		if session.service.profileCheck != nil {
+			if err := session.service.checkProfiles(session.ctx); err != nil {
+				return err
+			}
+		}
+		result := session.result.Targets[index]
+		session.input.Progress(GroupProgressEvent{ClientID: result.Plan.ClientID, Phase: phase, Result: result})
+		if session.service.profileCheck != nil {
+			if err := session.service.checkProfiles(session.ctx); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (service Service) applyGroup(ctx context.Context, input GroupInput, replace bool) (GroupResult, error) {
@@ -140,6 +182,13 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.ensureGroupID(); err != nil {
 		return GroupResult{}, err
 	}
+	if err := session.resolveGroupInstallation(); err != nil {
+		return GroupResult{}, err
+	}
+	if err := session.freezeGroupProfiles(); err != nil {
+		return GroupResult{}, err
+	}
+	service = session.service
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
 	if err != nil {
 		return GroupResult{}, err
@@ -160,6 +209,10 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, nil
 	}
 	if err := session.stageGroupDeliveries(); err != nil {
+		// Staging can prepare a locked runtime after the read-only preflight.
+		// No managed package or client was committed, but this is an apply-time
+		// preparation failure, not a failed preflight check.
+		session.result.Phase = GroupPhasePreparationFailed
 		return session.result, err
 	}
 	defer session.cleanupStaged()
@@ -167,6 +220,11 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	session.buildDesiredGroupState()
+	for _, target := range session.planned {
+		if err := session.reportGroupProgress(target, GroupProgressConfiguring); err != nil {
+			return session.result, err
+		}
+	}
 	if err := session.applyGroupKernel(); err != nil {
 		return session.result, err
 	}
@@ -297,7 +355,7 @@ func (service Service) observeGroupNativeIdentity(ctx context.Context, client do
 	if !repair || service.NativeObserver == nil {
 		return service.observeNativeIdentity(ctx, client, plan, managed)
 	}
-	observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, client, plan, managed)
+	observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, client, cloneLocalObservationPlan(plan), cloneLocalObservationBinding(managed))
 	if err != nil {
 		return fmt.Errorf("observe native identity for %s: %w", client.ClientID, err)
 	}
@@ -359,7 +417,7 @@ func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObs
 // that failure mode, so they keep going through the ordinary, immediate
 // CLI-inclusive check.
 func (service Service) observeGroupRecoveryEligibility(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) bool {
-	if !domain.ClientTraitsFor(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
+	if !plan.SelectedDelivery.EffectiveTraits(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
 		return false
 	}
 	observation, err := service.preparedIdentityObservation(ctx, client, plan, managed)
@@ -413,7 +471,7 @@ func (service Service) groupRecoveryPostApplyVerify(planned []plannedGroupTarget
 		for _, target := range recovering {
 			// Eligibility already required a non-nil NativeObserver; recovering
 			// can only be true when that held at preflight time.
-			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, target.plan, target.managed)
+			observation, err := service.NativeObserver.ObserveNativeIdentity(ctx, target.input.Client, cloneLocalObservationPlan(target.plan), cloneLocalObservationBinding(target.managed))
 			if err != nil {
 				return fmt.Errorf("verify restored native identity for %s: %w", target.input.Client.ClientID, err)
 			}
@@ -456,6 +514,24 @@ func validateGroupRecoveryVerification(observation domain.NativeIdentityObservat
 	expected := managedDigest(*managed)
 	if expected == "" || observation.Digest == "" || expected != observation.Digest {
 		return fmt.Errorf("restored digest does not match the recorded receipt")
+	}
+	return nil
+}
+
+func (session *groupSession) freezeGroupProfiles() error {
+	selected := make([]domain.DetectedClient, len(session.input.Targets))
+	for i, t := range session.input.Targets {
+		selected[i] = t.Client
+	}
+	service, frozen, err := session.service.freezeProfiles(session.ctx, session.installationID, selected, true)
+	if err != nil {
+		return err
+	}
+	session.service = service
+	session.input.Targets = append([]AddInput(nil), session.input.Targets...)
+	for i := range session.input.Targets {
+		session.input.Targets[i].Client = frozen[i]
+		session.input.Targets[i].InstallationID = session.installationID
 	}
 	return nil
 }
