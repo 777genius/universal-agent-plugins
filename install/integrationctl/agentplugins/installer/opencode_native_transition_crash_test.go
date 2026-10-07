@@ -26,6 +26,8 @@ type nativeRecoveryDriftStore struct {
 	drifted bool
 }
 
+const foreignRecoveryUpdatedAt = "2000-01-01T00:00:00Z"
+
 func (s *nativeRecoveryDriftStore) Load() (domain.StateFileV2, error) {
 	state, err := s.StateStore.Load()
 	if err != nil || s.drifted {
@@ -38,7 +40,8 @@ func (s *nativeRecoveryDriftStore) Load() (domain.StateFileV2, error) {
 	for _, item := range pending {
 		if item.Phase == "native_committed" {
 			s.drifted = true
-			state.Installations[0].DataRetained = true
+			// Change valid installation metadata outside native binding authority.
+			state.Installations[0].UpdatedAt = foreignRecoveryUpdatedAt
 			if err := s.StateStore.Save(state); err != nil {
 				return state, err
 			}
@@ -149,7 +152,7 @@ func TestOpenCodeNativeFacadeCrashRecovery(t *testing.T) {
 					t.Fatalf("recovery accepted foreign state: %v", err)
 				}
 				state, err := drift.StateStore.Load()
-				if err != nil || !drift.drifted || !state.Installations[0].DataRetained {
+				if err != nil || !drift.drifted || state.Installations[0].UpdatedAt != foreignRecoveryUpdatedAt {
 					t.Fatalf("foreign state was overwritten: %+v %v", state, err)
 				}
 				for _, binding := range state.Installations[0].Clients {

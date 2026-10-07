@@ -464,7 +464,10 @@ func TestOpenCodeProjectionClosedDialectDecoder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			objects, err := opencode.BuildOpenCodeNativeObjects(fixture, domain.PackageEnvelope{}, domain.DeliveryPlan{})
+			// The decoder fixture intentionally owns this MCP component. An empty
+			// package/plan instead requests the metadata-only no-effect contract.
+			plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "sample-notify", Support: domain.SupportPrepared}}}
+			objects, err := opencode.BuildOpenCodeNativeObjects(fixture, domain.PackageEnvelope{}, plan)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -472,6 +475,9 @@ func TestOpenCodeProjectionClosedDialectDecoder(t *testing.T) {
 				t.Fatal("legacy MCP ownership missing")
 			}
 			object := objects[0]
+			if object.ObjectID != "opencode-mcp:sample-notify" || object.LogicalName != "sample-notify" {
+				t.Fatalf("legacy MCP ownership identity changed: %+v", object)
+			}
 			codec, mcp, err := nativeconfig.OpenCodeCodecForKind(object.Kind)
 			if err != nil || !mcp {
 				t.Fatal(err)
