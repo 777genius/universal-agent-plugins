@@ -234,6 +234,11 @@
       "sourceDescription": "تبقى الحزم المراجعة والاكتشافات المجتمعية موسومة بوضوح، مع إتاحة مصدرها قبل التثبيت.",
       "standardDescription": "تُقرأ الحزم من Agent Plugins 1.0 {manifest}، من دون بيان تثبيت ثانٍ."
     },
+    "builtWith": {
+      "title": "مشاريع بُنيت بالفعل باستخدام UAP",
+      "agentNotificationsDescription": "إشعارات سطح المكتب والأصوات والانتقال إلى النافذة بنقرة لوكلاء البرمجة بالذكاء الاصطناعي.",
+      "viewRepository": "عرض على GitHub"
+    },
     "faq": {
       "eyebrow": "الأسئلة الشائعة",
       "title": "أسئلة شائعة",
@@ -542,6 +547,9 @@
       "disclaimer": "تقلل الفحوصات الآلية المخاطر؛ لكنها لا تثبت أن الإضافة آمنة. راجع المصدر والأذونات قبل تثبيت برنامج لا تثق به."
     },
     "catalog": {
+      "staleCommunityResults": "تُعرض {count} إدخالات مجتمعية من آخر كتالوج موقّع، أُنشئ في {generated} وانتهت صلاحيته في {expired}. أوامر التثبيت متوقفة حتى يتوفر كتالوج حديث. الإدخالات التي تمت مراجعتها ما زالت متاحة.",
+      "staleCommunityListing": "إدخال تاريخي موقّع؛ انتهت صلاحية الكتالوج في {expired}.",
+      "staleCommunityCommands": "أوامر تثبيت إضافات المجتمع متوقفة لانتهاء صلاحية الكتالوج الموقّع. لا يزال بإمكانك تصفح الإدخالات والمصدر.",
       "explorePlugins": "استكشف الإضافات",
       "searchByCapabilityComponentOrSource": "ابحث حسب القدرة أو المكون أو المصدر.",
       "allCategories": "كل الفئات",
@@ -610,7 +618,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "غير متاح في مصدره المفهرس؛ لن يتم إنشاء أمر تثبيت.",
       "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
       "checkedAgainBeforeInstallation": "تم التحقق مرة أخرى قبل التثبيت",
-      "reviewedListing": "إدراج تمت مراجعته",
+      "reviewedListing": "مراجَع",
       "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "اتصال موثق؛ أكمل الإعداد في ChatGPT",
       "allInstalledAgents": "كل الوكلاء المثبتين",
@@ -818,7 +826,7 @@
       "components": "المكوّنات",
       "package": "الحزمة",
       "pluginNotFound": "لم يتم العثور على الإضافة",
-      "reviewedListing": "قائمة مراجَعة",
+      "reviewedListing": "مراجَع",
       "licenseNotSpecified": "لم يتم تحديد الترخيص",
       "managedByCli": "تُدار عبر CLI",
       "requiresAFinalStepInTheApp": "تتطلب خطوة نهائية في التطبيق",

@@ -33,12 +33,17 @@ Package pluginkitai exposes the public root SDK for building plugin\-kit\-ai run
   - func New\(cfg Config\) \*App
   - func \(a \*App\) Claude\(\) \*claude.Registrar
   - func \(a \*App\) Codex\(\) \*codex.Registrar
+  - func \(a \*App\) Cursor\(\) \*cursor.Registrar
   - func \(a \*App\) Gemini\(\) \*gemini.Registrar
   - func \(a \*App\) Run\(\) int
   - func \(a \*App\) RunContext\(ctx context.Context\) int
+  - func \(a \*App\) RunCursorObserver\(ctx context.Context\) \(code int\)
   - func \(a \*App\) Use\(mw Middleware\)
+  - func \(a \*App\) VSCodeLocal\(\) \*vscodelocal.Registrar
 - type CapabilityID
 - type Config
+- type CursorObserverIO
+  - func NewCursorObserverPipeIO\(stdin, stdout \*os.File\) CursorObserverIO
 - type Env
 - type Handled
 - type IO
@@ -139,6 +144,14 @@ func main() {
 ```
 
 
+### func \(\*App\) Cursor
+
+```go
+func (a *App) Cursor() *cursor.Registrar
+```
+
+Cursor returns a registrar for the beta native stop observer.
+
 ### func \(\*App\) Gemini
 
 ```go
@@ -184,6 +197,18 @@ func (a *App) RunContext(ctx context.Context) int
 
 RunContext dispatches the current process invocation using the supplied context.
 
+### func \(\*App\) RunCursorObserver
+
+```go
+func (a *App) RunCursorObserver(ctx context.Context) (code int)
+```
+
+RunCursorObserver dispatches ONLY the beta CursorStop through the existing engine, discards its result/diagnostics and attempts exactly one \{\} plus LF. Decode/size/handler/middleware panic/error and cooperative cancellation stay neutral \(exit 0\) when the fixed response is written; output failure returns 1. It uses the earlier of ctx's deadline or four seconds, reserving 100 ms for output/cleanup. An already expired context receives at most 100 ms output grace. Cancellation stops dispatch but does not cancel the neutral response.
+
+Default process IO transfers stdin/stdout IPC ownership to this call; the handles are closed before return. On Linux/macOS they are made pollable and deadline\-capable: pipes or connected anonymous UNIX stream sockets with empty local/peer names only, including Node/libuv socketpair stdio. Named/network sockets and other files are unsupported. Other hosts require pollable pipes or injected CursorObserverIO; unsupported/broken/full output is a no\-response limitation. Config.IO is honored: arbitrary caller IO remains caller\-owned and runs synchronously. Its read must honor ctx; its ordinary WriteStdout must return promptly. Non\-closeable IO cannot be forcibly interrupted by this API.
+
+Callbacks/middleware must cooperate with the supplied context and never write process stdout. A non\-cooperating callback can block this call and requires an external process watchdog. Forced kill cannot guarantee a response. This API proves a protocol observation, never task success or notification delivery.
+
 ### func \(\*App\) Use
 
 ```go
@@ -191,6 +216,14 @@ func (a *App) Use(mw Middleware)
 ```
 
 Use appends middleware that wraps all subsequent handler dispatch.
+
+### func \(\*App\) VSCodeLocal
+
+```go
+func (a *App) VSCodeLocal() *vscodelocal.Registrar
+```
+
+VSCodeLocal returns a registrar for beta Local Stop/SubagentStop observers. This optional runtime API does not qualify native installation or availability.
 
 ## type CapabilityID
 
@@ -218,6 +251,25 @@ type Config struct {
     Logger Logger
 }
 ```
+
+## type CursorObserverIO
+
+CursorObserverIO is an optional extension of Config.IO for a context\-bounded fixed observer response. WriteStdoutContext must honor ctx and return only after all its IO work has stopped. ReadStdin has the same obligation. Neither method may abandon a blocked goroutine. RunCursorObserver uses this extension when present; ordinary RunContext continues using IO.WriteStdout.
+
+```go
+type CursorObserverIO interface {
+    IO
+    WriteStdoutContext(context.Context, []byte) error
+}
+```
+
+### func NewCursorObserverPipeIO
+
+```go
+func NewCursorObserverPipeIO(stdin, stdout *os.File) CursorObserverIO
+```
+
+NewCursorObserverPipeIO transfers exclusive ownership of two distinct IPC files to a Cursor observer. Neither may be used concurrently or after this call. On Linux/macOS originals close during preparation; prepared handles are closed when RunCursorObserver returns. This is for Config.IO injection; it does not replace injected IO silently. Setup failures surface on read/write. Linux/macOS accept pipes and connected anonymous UNIX SOCK\_STREAM sockets with empty local and peer names, adapting blocking inherited handles. Named UNIX sockets, network sockets and other files are unsupported. Other systems require already pollable pipes. Prepared files must support deadlines. Never pass the same descriptor for both arguments.
 
 ## type Env
 

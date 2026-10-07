@@ -202,7 +202,7 @@ func (session *applySession) resolveBinding() error {
 }
 
 func (session *applySession) adoptSharedBinding() {
-	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !session.existing || !sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		return
 	}
 	for key, binding := range session.state.Installations[session.installationIndex].Clients {
@@ -298,12 +298,12 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, err
 		}
 	}
-	if nativeLifecycleClient(session.input.Client.ClientID) {
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		_, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
 		if err != nil {
 			return true, session.result, err
 		}
-		if !complete || current.NativeActivationAttempt != "" {
+		if !complete || current.NativeActivationAttempt != "" || current.PendingNativeIntent != nil {
 			result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
 			return true, result, err
 		}
@@ -312,6 +312,13 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 }
 
 func (session *applySession) persistReadOnlyObservation(current domain.ClientBinding) (bool, AddResult, error) {
+	if !session.result.Plan.SelectedDelivery.IsZero() {
+		plan, err := session.service.readOnlyObservationPlan(current, session.result.Plan)
+		if err != nil {
+			return true, session.result, err
+		}
+		session.result.Plan = plan
+	}
 	verified, verifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, current)
 	if verifyErr != nil {
 		if verified.Activation != "" && !session.input.DryRun && (session.input.Confirmed || session.input.PersistAuthoritativeObservations && verified.AuthoritativeObservation) {

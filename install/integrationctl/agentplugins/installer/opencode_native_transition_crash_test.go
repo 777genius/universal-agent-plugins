@@ -19,6 +19,35 @@ type nativeCrashSave struct {
 	after bool
 }
 
+// Model a foreign state edit after the recorder advances its native journal,
+// before its state publication. Recovery must retain that edit and uncertainty.
+type nativeRecoveryDriftStore struct {
+	transaction.StateStore
+	drifted bool
+}
+
+func (s *nativeRecoveryDriftStore) Load() (domain.StateFileV2, error) {
+	state, err := s.StateStore.Load()
+	if err != nil || s.drifted {
+		return state, err
+	}
+	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: s.StateStore}}).Pending()
+	if err != nil {
+		return state, err
+	}
+	for _, item := range pending {
+		if item.Phase == "native_committed" {
+			s.drifted = true
+			state.Installations[0].DataRetained = true
+			if err := s.StateStore.Save(state); err != nil {
+				return state, err
+			}
+			break
+		}
+	}
+	return state, nil
+}
+
 func (s nativeCrashSave) Save(state domain.StateFileV2) error {
 	target := false
 	for _, in := range state.Installations {
@@ -47,8 +76,12 @@ func (s nativeCrashSave) Save(state domain.StateFileV2) error {
 // Generic directory recovery alone cannot pass this fresh-facade crash test.
 // No caller supplies projection bytes or a host during stored recovery.
 func TestOpenCodeNativeFacadeCrashRecovery(t *testing.T) {
-	for _, after := range []bool{false, true} {
-		t.Run(map[bool]string{false: "native", true: "state"}[after], func(t *testing.T) {
+	for _, scenario := range []struct {
+		name         string
+		after, drift bool
+	}{{name: "native"}, {name: "state", after: true}, {name: "foreign_state_during_recovery", drift: true}} {
+		t.Run(scenario.name, func(t *testing.T) {
+			after := scenario.after
 			root := openCodeTestRoot(t)
 			v1 := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.34", "ok")
 			v2 := buildOpenCodeTarget(t, filepath.Join(root, "v2"), "2.0.21", "ok")
@@ -106,6 +139,27 @@ func TestOpenCodeNativeFacadeCrashRecovery(t *testing.T) {
 				present, _, err := nativeconfig.New().Inspect(nativeconfig.Paths{JSON: filepath.Join(req.ClientConfigRoot, "opencode.json"), JSONC: filepath.Join(req.ClientConfigRoot, "opencode.jsonc")}, nativeconfig.CodecOpenCodeV2, "sample-notify", nil)
 				if err != nil || present {
 					t.Fatal("normal mutation did not remove recovered target", err)
+				}
+				return
+			}
+			if scenario.drift {
+				drift := &nativeRecoveryDriftStore{StateStore: reopened.store}
+				reopened.store = drift
+				if _, err := reopened.Recover(testCtx(t), view); !errors.Is(err, ErrPlanChanged) {
+					t.Fatalf("recovery accepted foreign state: %v", err)
+				}
+				state, err := drift.StateStore.Load()
+				if err != nil || !drift.drifted || !state.Installations[0].DataRetained {
+					t.Fatalf("foreign state was overwritten: %+v %v", state, err)
+				}
+				for _, binding := range state.Installations[0].Clients {
+					if binding.NativeActivationAttempt == "" {
+						t.Fatal("foreign state edit cleared unresolved attempt")
+					}
+				}
+				remaining, err := reopened.Inspect(testCtx(t))
+				if err != nil || !remaining.Recovery.Required || len(remaining.Recovery.Journals) == 0 {
+					t.Fatalf("lost durable uncertainty: %+v %v", remaining.Recovery, err)
 				}
 				return
 			}

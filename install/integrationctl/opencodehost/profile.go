@@ -65,6 +65,9 @@ type Profile struct {
 	EvidenceID    string
 	Capabilities  map[Capability]Support
 	Reason        string
+	// Process-local authority; serialization and public support flags cannot grant it.
+	nativeObserver NativeObserverTuple
+	nativeIdentity string
 }
 
 // Clone returns a separately owned snapshot, including the capability map.

@@ -11,6 +11,7 @@ import (
 )
 
 type RemoveInput struct {
+	SelectedDelivery    domain.SelectedDelivery
 	Selector            string
 	Client              domain.DetectedClient
 	Scope               domain.InstallScope
@@ -39,6 +40,19 @@ func (service Service) Remove(ctx context.Context, input RemoveInput) (RemoveRes
 	if service.StateStore == nil || service.Paths == nil || service.Targets == nil || service.Stager == nil || service.Activator == nil {
 		return RemoveResult{}, fmt.Errorf("agentplugins service dependencies are incomplete")
 	}
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	_, installation, err := findInstallation(state, input.Selector)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	service, frozen, err := service.freezeProfiles(ctx, installation.InstallationID, []domain.DetectedClient{input.Client}, false)
+	if err != nil {
+		return RemoveResult{}, err
+	}
+	input.Client = frozen[0]
 	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
 	if err != nil {
 		return RemoveResult{}, err

@@ -32,7 +32,7 @@ func (session *groupSession) upsertGroupTargetState(target plannedGroupTarget) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.AffectedSurfaces...)
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.ClientID)
 	}
-	if sharesPhysicalBackend(target.input.Client.ClientID) {
+	if sharesPhysicalBackend(target.input.Client.ClientID, target.plan.SelectedDelivery) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, string(target.input.Client.ClientID))
 		for _, sibling := range domain.BackendSiblings(target.input.Client.ClientID) {
 			client.AffectedSurfaces = append(client.AffectedSurfaces, string(sibling))
@@ -111,7 +111,9 @@ func (session *groupSession) applyGroupKernel() error {
 	if len(mutations) == 0 {
 		session.clearCreatedPluginData()
 		for _, target := range session.planned {
-			session.reportGroupProgress(target, GroupProgressConfigured)
+			if err := session.reportGroupProgress(target, GroupProgressConfigured); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -132,7 +134,9 @@ func (session *groupSession) applyGroupKernel() error {
 	}
 	session.clearCreatedPluginData()
 	for _, target := range session.planned {
-		session.reportGroupProgress(target, GroupProgressConfigured)
+		if err := session.reportGroupProgress(target, GroupProgressConfigured); err != nil {
+			return err
+		}
 	}
 	return nil
 }

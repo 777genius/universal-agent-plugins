@@ -72,6 +72,8 @@ func (planner Planner) Plan(ctx context.Context, request domain.PlanRequest) (do
 // through the registry, and the stages are ordered so that the warnings and
 // user actions a plan carries keep the order they are rendered in.
 func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	request.LocalEntryObservation = request.LocalEntryObservation.Clone()
+	request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
 	definition, plan, err := planner.startPlan(ctx, request)
 	if err != nil {
 		return domain.DeliveryPlan{}, err
@@ -79,6 +81,8 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	input := clients.PlanInput{
 		Envelope: request.Envelope, Client: request.Client,
 		Detected: request.Detected, Intent: request.InstallIntent,
+		LocalEntryObservation: request.LocalEntryObservation.Clone(),
+		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
 	}
 	planner.setNativeRegistry(&plan, input)
 	if !admissible(definition, request, &plan) {
@@ -130,11 +134,13 @@ func (planner Planner) startPlan(ctx context.Context, request domain.PlanRequest
 	}
 	capabilities := definition.Capabilities
 	return definition, domain.DeliveryPlan{
-		ClientID:    request.Client.ClientID,
-		Scope:       request.Scope,
-		Status:      statusFor(capabilities.ActivationMode),
-		PackageMode: capabilities.PackageMode,
-		Activation:  activationFor(capabilities.ActivationMode),
+		LocalEntryObservation: request.LocalEntryObservation.Clone(),
+		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
+		ClientID:              request.Client.ClientID,
+		Scope:                 request.Scope,
+		Status:                statusFor(capabilities.ActivationMode),
+		PackageMode:           capabilities.PackageMode,
+		Activation:            activationFor(capabilities.ActivationMode),
 		// A package loaded without catalog evidence has unknown authentication
 		// requirements. Only affirmative per-client evidence may mark it as not
 		// required.

@@ -9,14 +9,16 @@ import { localizedPath } from '../utils/localizedRoutes.ts';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '../utils/seo.ts';
 
 const fixture = JSON.parse(readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'));
+const discoverySource = stripTypeScriptTypes(readFileSync(new URL('../composables/useDiscoveryStatus.ts', import.meta.url), 'utf8')).replace(/^export /gm, '');
 async function page(filename: string, parameters = { slug: 'gitlab', client: 'codex' }) {
   const locale = ref('en');
+  const discoveryStatus = ref({ state: 'current' });
   let seo: any;
   const route = { params: parameters, query: { source: fixture.plugins[0].install_source } };
   const source = readFileSync(new URL(`../pages/${filename}`, import.meta.url), 'utf8')
     .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
-  await runInNewContext(`(async () => { ${stripTypeScriptTypes(source)} })()`, {
+  await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)} })()`, {
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl,
     // Synthetic key markers test reactivity without creating translations.
     useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}`, n: (value: number) => String(value) }),
@@ -24,7 +26,7 @@ async function page(filename: string, parameters = { slug: 'gitlab', client: 'co
     useRoute: () => route,
     useRuntimeConfig: () => ({ app: { baseURL: '/universal-agent-plugins/' }, public: { siteUrl: 'https://example.test/universal-agent-plugins/' } }),
     useSite: () => ({ asset: (path: string) => path, pluginIcon: () => '', sourceUrl: () => 'https://github.com/original/source' }),
-    useDiscoveryStatus: () => ref({ state: 'current' }),
+    useState: () => discoveryStatus,
     useRegistryPage: async () => structuredClone(fixture),
     usePageSeo: (title: unknown, description: unknown, options: unknown) => { seo = { title, description, options }; },
     createError: (options: object) => Object.assign(new Error(), options),

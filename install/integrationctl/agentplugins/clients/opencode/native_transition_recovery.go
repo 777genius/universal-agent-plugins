@@ -16,7 +16,11 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-type PendingNativeTransition struct{ OperationID, InstallationID, BindingID, TargetPath, Phase, Digest, Root string }
+type PendingNativeTransition struct {
+	OperationID, InstallationID, BindingID, TargetPath, Phase, Digest, Root string
+	// AuthorityDigest remains stable through the recorder's phase advances.
+	AuthorityDigest string
+}
 
 func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {
 	state, err := t.State.Load()
@@ -75,7 +79,7 @@ func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {
 			if err != nil {
 				return nil, err
 			}
-			pending = append(pending, PendingNativeTransition{OperationID: r.Identity.OperationID, InstallationID: r.Identity.InstallationID, BindingID: r.Identity.BindingID, TargetPath: b.TargetLocator, Phase: r.Phase, Digest: r.Hash, Root: dir})
+			pending = append(pending, PendingNativeTransition{OperationID: r.Identity.OperationID, InstallationID: r.Identity.InstallationID, BindingID: r.Identity.BindingID, TargetPath: b.TargetLocator, Phase: r.Phase, Digest: r.Hash, Root: dir, AuthorityDigest: transitionAuthorityHash(r)})
 			delete(attempts, r.Identity.OperationID)
 			if len(pending) > nativeconfig.MaxTransitionEntries {
 				return nil, fmt.Errorf("too many native transition records")

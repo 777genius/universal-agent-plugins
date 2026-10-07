@@ -11,9 +11,29 @@ import (
 )
 
 var _ clients.Projector = (*Adapter)(nil)
+var _ clients.ActiveNativeProjector = (*Adapter)(nil)
+
+// ProjectActiveNative validates the verified package's requested projection.
+// Cursor's package layout owns no profile entries. The lifecycle retains any
+// separately acknowledged Stop receipt; a planned receipt is not ownership.
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if plan.ClientID != domain.ClientCursor || root == "" || root != plan.ActivePath {
+		return nil, fmt.Errorf("cursor active projection client or root differs")
+	}
+	if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
 
 // Project writes Cursor's compatibility manifest and MCP document.
-func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := projectCursor(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath); err != nil {
 		return nil, err
 	}

@@ -1,9 +1,12 @@
 package installer
 
-import "github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
+import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
+)
 
 // Operation is the process-local lifecycle verb. Install, update, repair, and
-// remove are published. Two Claude+Codex targets use the same verb via Request.Targets.
+// remove are published. Two registered mutation targets use Request.Targets.
 type Operation string
 
 const (
@@ -30,6 +33,7 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
+	physical    map[domain.ClientID]domain.DetectedClient
 	Operation   Operation
 	PackageRoot string
 	// SourceRoot is the stable absolute local source identity when PackageRoot
@@ -65,7 +69,8 @@ type Request struct {
 	KnownTargets []TargetFacts
 }
 
-// ClientTarget is an explicit selection; groups remain limited to Claude/Codex.
+// ClientTarget is one registered selection in a mutating group request.
+// Group removal retains the published Claude/Codex boundary.
 type ClientTarget struct {
 	ClientID, ClientConfigRoot, ClientExecutable string
 	PackageRoot                                  string
@@ -88,6 +93,9 @@ type Decision struct {
 
 // BindingFacts is the typed committed-binding view for host seams.
 type BindingFacts struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                           domain.SelectedDelivery `json:"-"`
 	InstallationID, ClientID, BindingID, Scope string
 	TargetPath, DataRoot, DataReceiptID        string
 	OperationID, TreeDigest                    string
@@ -96,8 +104,11 @@ type BindingFacts struct {
 // Plan is an immutable copy for presentation. Operational paths are included
 // because the embedding host already chose explicit roots.
 type Plan struct {
-	OpenCodeProfile      *opencodehost.Profile    `json:",omitempty"`
-	OpenCodeSelections   []opencodehost.Selection `json:",omitempty"`
+	ProfileAuthority   *domain.ProfileAuthority `json:"-"`
+	OpenCodeProfile    *opencodehost.Profile    `json:",omitempty"`
+	OpenCodeSelections []opencodehost.Selection `json:",omitempty"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery     domain.SelectedDelivery `json:"-"`
 	Operation            Operation
 	SourceRoot           string
 	TreeDigest           string
@@ -120,6 +131,9 @@ type Plan struct {
 // DeliveryPlan is the provider's presentation snapshot, without mutation APIs.
 // LocalActions may contain host paths and are for private human output only.
 type DeliveryPlan struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                                       domain.SelectedDelivery `json:"-"`
 	ActivePath                                             string
 	Status, PackageMode, InstallIntent, PhysicalArtifactID string
 	Activation, Authentication, Policy, Verification       string
@@ -133,6 +147,9 @@ type PlanDiagnostic struct{ Severity, Boundary, Code, Path, Item, Message string
 
 // PlanTarget is one client's prepared identity in a group handle.
 type PlanTarget struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                                        domain.SelectedDelivery `json:"-"`
 	ClientID, ConfigRoot, TargetPath, BindingID, TreeDigest string
 	NoChange                                                bool
 }
@@ -174,6 +191,9 @@ type NextAction struct {
 
 // ClientResult is the public per-client lifecycle view. Mapping is not a bool.
 type ClientResult struct {
+	ProfileAuthority *domain.ProfileAuthority `json:"-"`
+	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
+	SelectedDelivery                                                  domain.SelectedDelivery `json:"-"`
 	ClientID, BindingID, TreeDigest                                   string
 	Materialization, Activation, Authentication, Policy, Verification string
 	RequiredComponents                                                []string
@@ -223,10 +243,13 @@ type Inspection struct {
 
 // RecoveryObservation is the §5.8 read-only pending-transaction view.
 type RecoveryObservation struct {
-	Required bool
-	Journals []PendingJournal
-	Receipts []PendingReceipt
-	Reason   string
+	// StateDigest binds all persisted bindings, receipts and installation facts.
+	StateDigest   string
+	Required      bool
+	Journals      []PendingJournal
+	NativeIntents []PendingNativeIntent
+	Receipts      []PendingReceipt
+	Reason        string
 }
 
 // PendingJournal is one open directory-swap journal.

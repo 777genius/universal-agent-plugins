@@ -167,7 +167,12 @@ export async function delayedMirror(page: Page, kind: 'discovery' | 'security', 
     await gate.promise;
     if (fail) await route.fulfill({ status: 503, body: 'i18n-state delayed failure' });
     else {
-      const response = await route.fetch(); // local static artifact only
+      // This delayed full-body fixture intentionally delivers 200 on every
+      // remount, even when the production cache sends conditional headers.
+      const headers = route.request().headers();
+      delete headers['if-none-match'];
+      delete headers['if-modified-since'];
+      const response = await route.fetch({ headers }); // local static artifact only
       expect(response.status(), `${kind} mirror must exist in final artifact`).toBe(200);
       await route.fulfill({ response });
     }

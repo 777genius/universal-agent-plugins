@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
@@ -651,5 +652,69 @@ func TestOpenCodeV2SkillsIndependentOfMCPCodecAndObservers(t *testing.T) {
 	after, err := os.ReadFile(configPath)
 	if err != nil || string(after) != string(foreign) {
 		t.Fatalf("foreign config changed: %s %v", after, err)
+	}
+}
+
+// A grouped request must not bypass the single-target host snapshot by using
+// the main registry's broader group support. Neither an unknown nor an explicit
+// V2 target may reach package assessment, host probing, snapshots, or effects.
+func TestOpenCodeMutatingGroupRefusesBeforePreparation(t *testing.T) {
+	root := openCodeTestRoot(t)
+	v2 := buildOpenCodeTarget(t, filepath.Join(root, "v2"), "2.0.21", "ok")
+	packageRoot := filepath.Join(root, "package")
+	writePackage(t, packageRoot, v2)
+	registry, err := clients.NewRegistry(claude.New(), opencode.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, operation := range []Operation{OpInstall, OpUpdate, OpRepair} {
+		for _, executable := range []string{"", v2} {
+			for _, reverse := range []bool{false, true} {
+				name := string(operation) + "/unknown"
+				if executable != "" {
+					name = string(operation) + "/v2"
+				}
+				if reverse {
+					name += "/reversed"
+				}
+				t.Run(name, func(t *testing.T) {
+					sandbox := filepath.Join(root, filepath.FromSlash(name))
+					assessments, probes, progress, handoffs := 0, 0, 0, 0
+					engine, err := New(Config{StateRoot: filepath.Join(sandbox, "state"), Registry: registry, HelperExecutable: v2,
+						Assess: func(_ context.Context, _ string, digest string) (Assessment, error) {
+							assessments++
+							return Assessment{TreeDigest: digest, Outcome: AssessmentAllow}, nil
+						}, OpenCodeProbe: func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+							probes++
+							return clientdetect.ProbeEvidence{}, errors.New("unexpected group host probe")
+						}, Progress: func(ProgressEvent) { progress++ },
+						OnCommittedBinding: func(context.Context, BindingFacts) error { handoffs++; return nil }})
+					if err != nil {
+						t.Fatal(err)
+					}
+					targets := []ClientTarget{
+						{ClientID: "claude", ClientConfigRoot: filepath.Join(sandbox, "claude")},
+						{ClientID: "opencode", ClientConfigRoot: filepath.Join(sandbox, "opencode"), ClientExecutable: executable},
+					}
+					if reverse {
+						targets[0], targets[1] = targets[1], targets[0]
+					}
+					handle, err := engine.Prepare(testCtx(t), Request{Operation: operation, PackageRoot: packageRoot,
+						InstallationID: "00000000-0000-4000-8000-000000000081", RequiredComponents: []string{"mcp", "skills"}, Targets: targets})
+					if handle != nil {
+						defer func() { _ = handle.Close() }()
+					}
+					if !errors.Is(err, ErrUnsupported) || handle != nil || assessments != 0 || probes != 0 || progress != 0 || handoffs != 0 {
+						t.Fatalf("group reached preparation: handle=%v assess=%d probe=%d progress=%d handoff=%d err=%v", handle, assessments, probes, progress, handoffs, err)
+					}
+					for _, path := range []string{engine.cfg.StateRoot, engine.cfg.TempRoot, engine.cfg.ManagedRoot, engine.cfg.LockFile,
+						filepath.Join(sandbox, "claude"), filepath.Join(sandbox, "opencode")} {
+						if _, err := os.Lstat(path); !os.IsNotExist(err) {
+							t.Fatalf("group created owned/native path %s: %v", path, err)
+						}
+					}
+				})
+			}
+		}
 	}
 }

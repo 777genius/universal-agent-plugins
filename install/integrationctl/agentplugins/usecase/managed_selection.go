@@ -40,10 +40,15 @@ func (service Service) preflightTargetComponents(ctx context.Context, input AddI
 	for _, name := range names {
 		selected[name] = true
 	}
-	if err := describeUnsupportedManagedSelection(plan, names, repair, updating); err != nil {
+	// A reviewed Local refresh may change selection for the same profile and
+	// revision. Keep prior-artifact verification and readiness checks intact;
+	// ordinary Repair and historical delivery still use recorded selections.
+	_, local := plan.SelectedDelivery.LocalFacts()
+	reviewedRefresh := input.refreshSelectedDelivery && local
+	if err := describeUnsupportedManagedSelection(plan, names, repair && !reviewedRefresh, updating || reviewedRefresh); err != nil {
 		return err
 	}
-	restrictRepairMCPSelection(plan, selected, repair)
+	restrictRepairMCPSelection(plan, selected, repair && !reviewedRefresh)
 	return service.preflightComponents(input.Envelope, plan, true, selected)
 }
 

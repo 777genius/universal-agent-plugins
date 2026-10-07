@@ -92,7 +92,7 @@ func (session *repairSession) loadRepairTarget() error {
 func (session *repairSession) bindRepairClient(physicalID string) error {
 	session.clientKey = domain.ComputeClientBindingID(session.installation.InstallationID, string(session.input.Client.ClientID), string(session.input.Scope), session.plan.ActivePath)
 	client, ok := session.installation.Clients[session.clientKey]
-	if !ok && sharesPhysicalBackend(session.input.Client.ClientID) {
+	if !ok && sharesPhysicalBackend(session.input.Client.ClientID, session.plan.SelectedDelivery) {
 		for key, binding := range session.installation.Clients {
 			if binding.Scope != string(session.input.Scope) || binding.Materialization == domain.MaterializationAbsent ||
 				binding.PhysicalArtifact != session.plan.PhysicalArtifactID || !sameNativeBackend(domain.ClientID(binding.ClientID), session.input.Client.ClientID) {
@@ -161,7 +161,7 @@ func (session *repairSession) persistRepair(client domain.ClientBinding) error {
 	session.installation.Clients[session.clientKey] = client
 	session.installation.UpdatedAt = client.UpdatedAt
 	session.state.Installations[session.index] = session.installation
-	return session.service.StateStore.Save(session.state)
+	return session.service.persistLifecycleState(session.state)
 }
 
 func repairMismatchKind(err error) (*ports.VerificationError, bool) {

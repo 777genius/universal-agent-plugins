@@ -53,6 +53,12 @@ func transitionHash(body []byte) string {
 	sum := sha256.Sum256(body)
 	return fmt.Sprintf("sha256:%x", sum)
 }
+
+func transitionAuthorityHash(record transitionRecord) string {
+	record.Phase, record.Hash = "", ""
+	body, _ := json.Marshal(record)
+	return transitionHash(body)
+}
 func comparableTransitionState(state domain.StateFileV2) []byte {
 	state.Installations = append([]domain.Installation(nil), state.Installations...)
 	sort.Slice(state.Installations, func(i, j int) bool {

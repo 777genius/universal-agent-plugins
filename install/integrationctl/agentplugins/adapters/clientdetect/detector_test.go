@@ -79,7 +79,11 @@ func TestDetectorKeepsOtherClientsWhenCodexProfileIsInvalid(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(home, ".cursor"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	detector := testDetector(home, nil)
+	editor := filepath.Join(home, "TEST-cursor-editor")
+	if err := os.WriteFile(editor, []byte("inert TEST editor marker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	detector := testDetector(home, map[string]string{"cursor": editor})
 	detector.Environment["CODEX_HOME"] = badProfile
 	detected, err := detector.Detect(context.Background())
 	if err != nil {
@@ -334,13 +338,27 @@ func TestDetectorFindsOneAndMultipleClientsFromInjectedHomeAndPath(t *testing.T)
 	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	detector := testDetector(home, map[string]string{"copilot": filepath.Join(home, "bin", "copilot")})
+	binaries := map[string]string{"copilot": filepath.Join(home, "bin", "copilot")}
+	detector := testDetector(home, binaries)
+	configOnly, err := detector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cursor := clientOf(configOnly, domain.ClientCursor)
+	if cursor.Status != domain.DetectionNotDetected || !surfaceDetected(cursor.Surfaces, "cursor_config") || statusOf(configOnly, domain.ClientCopilot) != domain.DetectionDetected {
+		t.Fatalf("config-only Cursor changed independent client selection: %+v", configOnly)
+	}
+	editor := filepath.Join(home, "TEST-cursor-editor")
+	if err := os.WriteFile(editor, []byte("inert TEST editor marker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binaries["cursor"] = editor
 	clients, err := detector.Detect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if statusOf(clients, domain.ClientCursor) != domain.DetectionDetected {
-		t.Fatal("Cursor config was not detected")
+		t.Fatal("Cursor editor was not detected")
 	}
 	if statusOf(clients, domain.ClientCopilot) != domain.DetectionDetected {
 		t.Fatal("Copilot executable was not detected")

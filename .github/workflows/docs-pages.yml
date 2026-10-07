@@ -88,7 +88,7 @@ jobs:
         env:
           REGISTRY_REPOSITORY: 777genius/universal-agent-plugins-registry
           PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
-          PRODUCT_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins/
+          PRODUCT_PAGES_ORIGIN: https://universal-agent-plugins.com/
         run: |
           previous="${RUNNER_TEMP}/uap-previous-mirror.json"
           if ! curl --fail --silent --show-error --location --max-time 30 \
@@ -106,20 +106,20 @@ jobs:
       - name: Build landing
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          NUXT_APP_BASE_URL: /universal-agent-plugins/
-          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          NUXT_APP_BASE_URL: /
+          NUXT_PUBLIC_SITE_URL: https://universal-agent-plugins.com
           NUXT_PUBLIC_GITHUB_REPO: 777genius/universal-agent-plugins
-          NUXT_PUBLIC_DOCS_URL: https://777genius.github.io/universal-agent-plugins/docs/en/
-          NUXT_PUBLIC_QUICKSTART_URL: https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html
-          NUXT_PUBLIC_DOCS_SITEMAP_URL: https://777genius.github.io/universal-agent-plugins/docs/sitemap.xml
+          NUXT_PUBLIC_DOCS_URL: https://universal-agent-plugins.com/docs/en/
+          NUXT_PUBLIC_QUICKSTART_URL: https://universal-agent-plugins.com/docs/en/guide/quickstart.html
+          NUXT_PUBLIC_DOCS_SITEMAP_URL: https://universal-agent-plugins.com/docs/sitemap.xml
           NUXT_PUBLIC_REGISTRY_PAGES_ORIGIN: https://777genius.github.io/universal-agent-plugins-registry/
         working-directory: landing
         run: pnpm generate
 
       - name: Build public docs under /docs
         env:
-          DOCS_BASE_PATH: /universal-agent-plugins/docs/
-          DOCS_HOSTNAME: https://777genius.github.io
+          DOCS_BASE_PATH: /docs/
+          DOCS_HOSTNAME: https://universal-agent-plugins.com
           GOCACHE: ${{ runner.temp }}/docs-consumer-gocache
           GOMODCACHE: ${{ runner.temp }}/docs-consumer-gomodcache
           DOCS_TOOLS_ROOT: ${{ runner.temp }}/docs-tools-root
@@ -139,8 +139,8 @@ jobs:
       - name: Assemble GitHub Pages artifact
         env:
           UAP_VERIFIED_MIRROR: ${{ runner.temp }}/uap-registry-mirror
-          NUXT_APP_BASE_URL: /universal-agent-plugins/
-          NUXT_PUBLIC_SITE_URL: https://777genius.github.io/universal-agent-plugins
+          NUXT_APP_BASE_URL: /
+          NUXT_PUBLIC_SITE_URL: https://universal-agent-plugins.com
         working-directory: landing
         run: pnpm run build:pages
 

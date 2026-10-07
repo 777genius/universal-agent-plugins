@@ -371,6 +371,11 @@
       "sourceDescription": "समीक्षा किए गए पैकेज और सामुदायिक खोज को स्पष्ट रूप से लेबल किया गया है, और उनका स्रोत इंस्टॉल से पहले उपलब्ध है।",
       "standardDescription": "पैकेज एजेंट प्लगइन्स 1.0 {manifest} से पढ़े जाते हैं, बिना किसी दूसरे इंस्टॉल मेनिफेस्ट के।"
     },
+    "builtWith": {
+      "title": "UAP से पहले ही बनाए गए प्रोजेक्ट",
+      "agentNotificationsDescription": "AI कोडिंग एजेंटों के लिए डेस्कटॉप सूचनाएँ, ध्वनियाँ और एक क्लिक से संबंधित विंडो पर जाने की सुविधा।",
+      "viewRepository": "GitHub पर देखें"
+    },
     "faq": {
       "eyebrow": "अक्सर पूछे जाने वाले प्रश्न",
       "title": "सामान्य प्रश्न",
@@ -542,6 +547,9 @@
       "disclaimer": "स्वचालित जाँच जोखिम को कम करती है; वे यह साबित नहीं करते कि कोई प्लगइन सुरक्षित है। जिस सॉफ़्टवेयर पर आपको भरोसा नहीं है उसे इंस्टॉल करने से पहले स्रोत और अनुमतियों की समीक्षा करें।"
     },
     "catalog": {
+      "staleCommunityResults": "अंतिम हस्ताक्षरित कैटलॉग की {count} सामुदायिक प्रविष्टियाँ दिखाई जा रही हैं। यह {generated} को बना था और {expired} को समाप्त हुआ। नया कैटलॉग आने तक इंस्टॉल कमांड रुके हैं। समीक्षा की गई प्रविष्टियाँ उपलब्ध हैं।",
+      "staleCommunityListing": "ऐतिहासिक हस्ताक्षरित प्रविष्टि; कैटलॉग {expired} को समाप्त हुआ।",
+      "staleCommunityCommands": "हस्ताक्षरित कैटलॉग की अवधि समाप्त होने के कारण सामुदायिक इंस्टॉल कमांड रुके हैं। प्रविष्टियाँ और स्रोत कोड अभी भी देख सकते हैं।",
       "explorePlugins": "प्लगइन्स का अन्वेषण करें",
       "searchByCapabilityComponentOrSource": "क्षमता, घटक या स्रोत के आधार पर खोजें।",
       "allCategories": "सभी श्रेणियां",
@@ -610,7 +618,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "इसके अनुक्रमित स्रोत पर अनुपलब्ध; कोई इंस्टॉल कमांड उत्पन्न नहीं होता है.",
       "unavailableAtItsIndexedSource": "इसके अनुक्रमित स्रोत पर अनुपलब्ध है",
       "checkedAgainBeforeInstallation": "इंस्टालेशन से पहले दोबारा जांच की गई",
-      "reviewedListing": "समीक्षा सूची",
+      "reviewedListing": "समीक्षित",
       "notAvailableForChatgpt": "चैटजीपीटी के लिए उपलब्ध नहीं है",
       "verifiedConnectionFinishSetupInChatgpt": "सत्यापित कनेक्शन; चैटजीपीटी में सेटअप समाप्त करें",
       "allInstalledAgents": "सभी स्थापित एजेंट",
@@ -818,7 +826,7 @@
       "components": "अवयव",
       "package": "पैकेज",
       "pluginNotFound": "प्लगइन नहीं मिला",
-      "reviewedListing": "समीक्षा सूची",
+      "reviewedListing": "समीक्षित",
       "licenseNotSpecified": "लाइसेंस निर्दिष्ट नहीं है",
       "managedByCli": "सीएलआई द्वारा प्रबंधित",
       "requiresAFinalStepInTheApp": "ऐप में अंतिम चरण की आवश्यकता है",

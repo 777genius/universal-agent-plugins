@@ -47,6 +47,9 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 		attachNextActions(&result)
 		return result, ErrPlanChanged
 	}
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return Result{Operation: op, Outcome: OutcomeConflict, Reason: "profile_changed"}, err
+	}
 	view, inspectErr := e.Inspect(ctx)
 	if inspectErr != nil || view.Recovery.Required {
 		reason := view.Recovery.Reason
@@ -77,11 +80,14 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 	}
 	if !prepared.plan.NoChange {
 		if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
-			if _, err = e.helper(); err != nil {
+			if _, err = e.preparedHelper(prepared); err != nil {
 				result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
 				attachNextActions(&result)
 				return result, err
 			}
+		}
+		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+			return result, err
 		}
 		if err = e.ensureDirs(); err != nil {
 			result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
@@ -96,6 +102,11 @@ func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedO
 	var result Result
 	var err error
 	e.report(ProgressPreflight)
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
+		attachNextActions(&result)
+		return result, err
+	}
 	if len(prepared.req.Targets) > 1 {
 		result, err = e.applyGroup(ctx, prepared)
 	} else {
@@ -147,6 +158,10 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	// A projection refresh invokes the host handoff from its dedicated
 	// post-commit activation path, including an identical-output retry.
 	if committed, binding, ok := e.liveBinding(prepared); ok && prepared.req.Operation != OpRefreshProjection && hostHandoffPending(binding) && e.cfg.OnCommittedBinding != nil {
+		if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+			return committed, err
+		}
+		committed.Binding.ProfileAuthority = domain.CloneProfileAuthority(committed.Binding.ProfileAuthority)
 		if err := e.cfg.OnCommittedBinding(ctx, committed.Binding); err != nil {
 			committed.Outcome = OutcomeIncomplete
 			committed.Reason = err.Error()
@@ -154,12 +169,18 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 			return committed, err
 		}
 	}
-	helper, err := e.helper()
+	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
+		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete}, err
+	}
+	helper, err := e.preparedHelper(prepared)
 	if err != nil {
 		return Result{Operation: prepared.req.Operation, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
-	svc := e.lifecycle(helper, prepared.facts, prepared.detected)
+	svc := confirmationLifecycle(prepared, e.lifecycle(helper, prepared.facts, prepared.detected), false)
 	e.report(ProgressStage)
+	if err := e.confirmDeliveries(ctx, prepared); err != nil {
+		return Result{Operation: prepared.req.Operation, Outcome: OutcomeConflict, Reason: "plan_changed"}, err
+	}
 	added, err := call(svc, usecase.AddInput{
 		Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, Confirmed: true,
 		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
@@ -170,6 +191,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		Mutated: added.Mutated, RequiresConfirmation: added.RequiresConfirmation}
 	if added.Plan.ClientID != "" {
 		delivery := deliveryPlan(added.Plan)
+		delivery.ProfileAuthority = added.Plan.ProfileAuthority()
 		result.Delivery = &delivery
 	}
 	if added.Activation.UserActions != nil {
@@ -190,9 +212,10 @@ func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase
 			if binding, receipt, ok := findBinding(installation, prepared.client.ClientID); ok {
 				committed = true
 				result.InstallationID = firstNonEmpty(installation.InstallationID, installationID)
-				result.Binding = BindingFacts{
+				result.Binding = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 					InstallationID: result.InstallationID, ClientID: string(prepared.client.ClientID),
-					BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
+					SelectedDelivery: binding.SelectedDelivery,
+					BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 					DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,
 					OperationID: prepared.req.OperationID, TreeDigest: recordedBindingDigest(binding, prepared.plan.TreeDigest),
 				}
@@ -211,6 +234,11 @@ func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase
 }
 
 func (e *Engine) finishMutatingPackage(result Result, added usecase.AddResult, committed bool, err error) (Result, error) {
+	if errors.Is(err, ErrPlanChanged) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "plan_changed"
+		return result, err
+	}
 	if errors.Is(err, ErrUpdateRequired) {
 		result.Outcome = OutcomeConflict
 		result.Reason = "update_required"
@@ -264,14 +292,17 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 		return Result{Operation: OpRemove, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	helper, _ := e.helper()
-	svc := e.lifecycle(helper, prepared.facts, prepared.detected)
+	svc := e.removalLifecycle(ctx, prepared, e.lifecycle(helper, prepared.facts, prepared.detected))
 	e.report(ProgressStage)
+	if err := e.confirmRemoveBindings(ctx, prepared); err != nil {
+		return removalConflict(Result{Operation: OpRemove, Binding: prepared.facts}, err)
+	}
 	removed, err := svc.Remove(ctx, usecase.RemoveInput{
 		Selector: prepared.plan.InstallationID, Client: prepared.client, Scope: domain.ScopeUser,
 		Confirmed: true, OperationID: prepared.req.OperationID, BackendExecutable: prepared.req.ClientExecutable,
-		ExternalUninstalled: prepared.req.ExternalUninstalled,
+		ExternalUninstalled: prepared.req.ExternalUninstalled, SelectedDelivery: prepared.plan.SelectedDelivery,
 	})
-	result := Result{Operation: OpRemove, InstallationID: removed.InstallationID, Binding: prepared.facts}
+	result := Result{Operation: OpRemove, InstallationID: removed.InstallationID, Binding: prepared.facts, Mutated: removed.Mutated, Client: removalClientResult(prepared.facts)}
 	if err == nil {
 		result.Outcome = OutcomeCompleted
 		if !removed.Mutated {
@@ -313,9 +344,10 @@ func (e *Engine) liveBinding(prepared *PreparedOperation) (Result, domain.Client
 		return result, domain.ClientBinding{}, false
 	}
 	result.InstallationID = firstNonEmpty(installation.InstallationID, installationID)
-	result.Binding = BindingFacts{
+	result.Binding = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
 		InstallationID: result.InstallationID, ClientID: string(prepared.client.ClientID),
-		BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
+		SelectedDelivery: binding.SelectedDelivery,
+		BindingID:        binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator,
 		DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID,
 		OperationID: prepared.req.OperationID, TreeDigest: recordedBindingDigest(binding, prepared.plan.TreeDigest),
 	}
@@ -403,24 +435,36 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 			configRoot = facts.ConfigRoot
 			executable = facts.Executable
 		}
-		client, err := e.detectedClient(Request{
-			Operation: OpUpdate, ClientID: binding.ClientID, ClientConfigRoot: configRoot,
-			ClientExecutable: executable,
-		})
+		check, err := e.compatibilityBindingCheck(binding, configRoot, executable, target)
 		if err != nil {
-			return nil, fmt.Errorf("%w: binding %s (%s): %w", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
+			return nil, err
 		}
-		check := target
-		check.Client = client
-		if client.ClientID == target.Client.ClientID {
-			// The selected client's prepared authority must survive update's
-			// compatibility preview; sibling checks remain observational.
-			check.Client = target.Client
-		}
-		check.BackendExecutable = client.ExecutablePath
 		checks = append(checks, check)
 	}
 	return checks, nil
+}
+
+func (e *Engine) compatibilityBindingCheck(binding domain.ClientBinding, configRoot, executable string, target usecase.AddInput) (usecase.AddInput, error) {
+	client, err := e.detectedClient(Request{
+		Operation: OpUpdate, ClientID: binding.ClientID, ClientConfigRoot: configRoot,
+		ClientExecutable: executable,
+	})
+	if err != nil {
+		return usecase.AddInput{}, fmt.Errorf("%w: binding %s (%s): %w", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
+	}
+	check := target
+	check.Client = client
+	// Compatibility planning and activation preflight observe the same
+	// recorded sibling owner that the shared-profile guard revalidates.
+	check.Client.ProfileAuthority = domain.CloneProfileAuthority(binding.ProfileAuthority)
+	check.Client.ProfileNamespace = binding.ProfileNamespace
+	if client.ClientID == target.Client.ClientID {
+		// The selected client's prepared authority must survive update's
+		// compatibility preview; sibling checks remain observational.
+		check.Client = target.Client
+	}
+	check.BackendExecutable = client.ExecutablePath
+	return check, nil
 }
 
 func attachNextActions(result *Result) {

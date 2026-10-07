@@ -52,6 +52,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 // commit a new projected digest even when the installed package is intact.
 // A repeated refresh with identical projection output is a no-op.
 func (service Service) RefreshProjection(ctx context.Context, input AddInput) (AddResult, error) {
+	input.refreshSelectedDelivery = true
 	session := &repairSession{service: service, ctx: ctx, input: input}
 	if err := session.validateRepairInput(); err != nil {
 		return AddResult{}, err
@@ -102,5 +103,5 @@ func (service Service) verifyRepairPrecondition(ctx context.Context, activePath,
 
 func sameLifecycleOutcome(left, right domain.ActivationOutcome) bool {
 	return left.Activation == right.Activation && left.Authentication == right.Authentication &&
-		left.Policy == right.Policy && left.Verification == right.Verification
+		left.Policy == right.Policy && left.Verification == right.Verification && left.LocalEntryObservation.Equal(right.LocalEntryObservation)
 }
