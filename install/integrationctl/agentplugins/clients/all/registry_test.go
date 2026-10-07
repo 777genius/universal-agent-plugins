@@ -48,7 +48,11 @@ func TestDefaultRegistryAdaptersSatisfyTheContract(t *testing.T) {
 			// a staging tree. An adapter that stops implementing PlanRefiner or
 			// Projector - a renamed method, a changed signature - is a defect,
 			// not a client with nothing to add.
-			contracttest.RunPlanRefiner(t, adapter)
+			var host domain.OpenCodeHostAuthority
+			if consumer, ok := adapter.(clients.OpenCodeHostProfileConsumer); ok && consumer.UsesOpenCodeHostProfile() {
+				host = contracttest.OpenCodeV1Host{}
+			}
+			contracttest.RunPlanRefinerWithHost(t, adapter, host)
 			contracttest.RunProjector(t, adapter)
 			contracttest.RunLifecycle(t, adapter)
 			contracttest.RunRegistryInspector(t, adapter)

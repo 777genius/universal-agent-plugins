@@ -34,28 +34,28 @@ PINS = {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz", "sha256:33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-x86_64-unknown-linux-musl.tar.gz", "sha256:f479424eca092484dc40d87ae28c44f4cc40234a60045d6131e493800d814a30", "codex-x86_64-unknown-linux-musl"),
         "claude": ("npm", "@anthropic-ai/claude-code-linux-x64", "2.1.263", "claude-code-linux-x64-2.1.263.tgz", "sha512-0IrvpLd/0FP0acQw59T4Cvx/r4nwAXKBrW0WyhIXymzYWurPCLztB+Icu9MkeewAUI+p3PTXsSfmilv/n6XlAQ==", "claude"),
-        "opencode": ("npm", "opencode-linux-x64", "1.18.29", "opencode-linux-x64-1.18.29.tgz", "sha512-X8/wS/8mzL7Ko0zYYF6RzKax39KkxXDRoimhmzXuo0gPrZX4DQjqBNpPAByBwUjFapk73ZGSVsjDGvoNapBa1Q==", "opencode"),
+        "opencode": ("npm", "opencode-linux-x64", "1.18.34", "opencode-linux-x64-1.18.34.tgz", "sha512-RTAMjCve4euxP2QKLuvRmdoW5J5DQK1DiZqt+7slfixyjAEi79QC2Df2oYKogibaAI4IEU8uzenoJeEl3k+UEw==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz", "sha256:2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "lintai"),
     },
     "linux-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz", "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-unknown-linux-musl.tar.gz", "sha256:5cda6182bd94c3a30f2eb63a495489ebf7f691fddb14d70f48c6c1a5071b6cde", "codex-aarch64-unknown-linux-musl"),
         "claude": ("npm", "@anthropic-ai/claude-code-linux-arm64", "2.1.263", "claude-code-linux-arm64-2.1.263.tgz", "sha512-RlJtLbl8xqFMf2zUdOKD4o5FkNhcgGjlS3Un8PNfSbv1fLQg3SqBQgEJhNEtSeKlEsOs26RnCG/jVk4yah8Udw==", "claude"),
-        "opencode": ("npm", "opencode-linux-arm64", "1.18.29", "opencode-linux-arm64-1.18.29.tgz", "sha512-Lr7XXik5wPJZBV5RW+aR6Uogf1n5GogpB565m+D/jiO/vRXr9LhvCpixgAr1tiwuH1ZfMsqOOlbFQz5jgH3Tqg==", "opencode"),
+        "opencode": ("npm", "opencode-linux-arm64", "1.18.34", "opencode-linux-arm64-1.18.34.tgz", "sha512-ZSjqcH0MEbAzLEmkRC9Aop1PbWZxe2NuKONAE/x8MRQdjKdOepX7M50UpjbsNoiLMkP584Z98Mg4a42fJhouvA==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-aarch64-unknown-linux-gnu.tar.gz", "sha256:132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a", "lintai"),
     },
     "darwin-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz", "sha256:3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4", "rg"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-aarch64-apple-darwin.tar.gz", "sha256:8cf911ea676523bfb2121ec561848d2aba564890ad536db4d8a3353f2b9850b1", "codex-aarch64-apple-darwin"),
         "claude": ("npm", "@anthropic-ai/claude-code-darwin-arm64", "2.1.263", "claude-code-darwin-arm64-2.1.263.tgz", "sha512-yLv8MtgulGMGCWTwDUSmlEL0+94sxKP3vJm0SAXZX+0qVQ09PrjVSRC0ibtVeW7xymyhvP1JaUimOyp+t2wO5g==", "claude"),
-        "opencode": ("npm", "opencode-darwin-arm64", "1.18.29", "opencode-darwin-arm64-1.18.29.tgz", "sha512-EU0qma5GPJXcDp5rENvedSfqJjqxatQW/Qzjs71pR2YdbrSh7YmBwtvnIb2/KIvfQr0DErX4ST14sbBQI2mQdg==", "opencode"),
+        "opencode": ("npm", "opencode-darwin-arm64", "1.18.34", "opencode-darwin-arm64-1.18.34.tgz", "sha512-ioBEvc3nUA64waDIVsphh92LgJgyTbq+uRd0OurdqqT9WEI9rp4J7NrA24NfL6epCa1Xr06TnRx5+th9W3T/sA==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-aarch64-apple-darwin.tar.gz", "sha256:be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff", "lintai"),
     },
     "windows-amd64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip", "sha256:71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5", "rg.exe"),
         "codex": ("github", "openai/codex", "rust-v0.153.4", "codex-x86_64-pc-windows-msvc.exe.zip", "sha256:c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16", "codex-x86_64-pc-windows-msvc.exe"),
         "claude": ("npm", "@anthropic-ai/claude-code-win32-x64", "2.1.263", "claude-code-win32-x64-2.1.263.tgz", "sha512-P1LnudAWj2ptyE0IZzCZKAe7nU7LxqlkcLdBfp8FsHlH5dp75Og4JJ6TClvfjanHn3shYW4CYN6oI1vSqZlkHw==", "claude.exe"),
-        "opencode": ("npm", "opencode-windows-x64", "1.18.29", "opencode-windows-x64-1.18.29.tgz", "sha512-xtWiZNMiwFtBl7q9yMG+XK/BTYGfgFoHLDx4ruWVYCoxjV0NYwjJi6rB9B3xIVbTclzu81YLKNFcT3kNBEG9Yw==", "opencode.exe"),
+        "opencode": ("npm", "opencode-windows-x64", "1.18.34", "opencode-windows-x64-1.18.34.tgz", "sha512-Nbw1JUHcMd+6Zab97tvhiR/wzMBrtFbHMog3w+HssBqt0068BLdpPadLmo72+vPtBu+ZxXIZzqNB9R3qtca7qg==", "opencode.exe"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }
@@ -429,7 +429,7 @@ def main():
         env[prefix + "_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
-        env[prefix + "_VERSION"] = {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.29"}[args.client]
+        env[prefix + "_VERSION"] = {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
         command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + PATTERNS[args.client]]
         identity["test_command"] = command
         with (output / "native-tests.log").open("w", encoding="utf-8") as transcript:
