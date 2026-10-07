@@ -193,6 +193,12 @@ jobs:
           printf '%s\n' '{"name":"npm-public-proof-project","version":"1.0.0","private":true}' > "${root}/project/package.json"
           export HOME="${root}/home" USERPROFILE="${root}/home" XDG_CONFIG_HOME="${root}/config" XDG_CACHE_HOME="${root}/cache" AGENTPLUGINS_HOME="${root}/state" AGENTPLUGINS_CACHE_DIR="${root}/binary-cache" NPM_CONFIG_CACHE="${root}/npm-cache" NPM_CONFIG_USERCONFIG="${root}/home/.npmrc" TMPDIR="${root}/tmp" GIT_CONFIG_GLOBAL="${root}/home/.gitconfig" GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
           printf '%s\n' 'registry=https://registry.npmjs.org/' > "${NPM_CONFIG_USERCONFIG}"
+          # Synthetic editor presence is required; .cursor alone is not selectable.
+          # The stub cannot perform native plugin actions.
+          mkdir -p "${root}/fixture-bin"
+          printf '%s\n' '#!/bin/sh' 'if [ "$1" = "--version" ]; then echo 0.0.0-public-proof; else exit 1; fi' > "${root}/fixture-bin/cursor"
+          chmod 755 "${root}/fixture-bin/cursor"
+          export PATH="${root}/fixture-bin:${PATH}"
           cd "${root}/project"
           # npm may acknowledge trusted publication before the version is
           # readable from every registry replica. Bound propagation at 5m30s.

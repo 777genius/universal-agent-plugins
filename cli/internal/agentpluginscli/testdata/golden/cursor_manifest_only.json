@@ -35,17 +35,18 @@
               "scope": "user",
               "status": "manual_activation_required",
               "package_mode": "native",
-              "activation": "manual_activation_required",
+              "activation": "prepared",
               "authentication": "not_checked",
               "policy": "allowed",
               "verification": "package_validated",
               "physical_artifact_id": "demo-<artifact>",
               "user_actions": [
                 "verify the plugin's authentication requirements before using it",
-                "reload Cursor, then verify the plugin appears before using its components"
+                "reload Cursor, then verify the prepared plugin and selected components are visible and enabled"
               ],
               "warnings": [
-                "authentication_not_catalog_verified"
+                "authentication_not_catalog_verified",
+                "Cursor editor package discovery is unverified; agent CLI plugins and native Stop are not qualified"
               ]
             },
             "activation": {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -95,7 +96,7 @@ func TestReplacementRollbackPreservesForeignPublicationChanges(t *testing.T) {
 			case "bytes":
 				writeBody(t, in.ActivePath, "foreign")
 			case "mode":
-				err = os.Chmod(filepath.Join(in.ActivePath, "body"), 0600)
+				changeModeForDrift(t, filepath.Join(in.ActivePath, "body"), 0600)
 			case "empty-dir":
 				err = os.Mkdir(filepath.Join(in.ActivePath, "foreign-empty"), 0700)
 			case "symlink":
@@ -117,9 +118,7 @@ func TestReplacementRollbackPreservesForeignPublicationChanges(t *testing.T) {
 				func() error { return m.Rollback(context.Background(), r) },
 				func() error { return m.Recover(context.Background(), in.OperationID, false) },
 			} {
-				if err := action(); err == nil || !strings.Contains(err.Error(), r.BackupPath) {
-					t.Fatalf("missing recovery paths: %v", err)
-				}
+				assertRecoveryPaths(t, m, r, action())
 				if err := matchesProof(in.ActivePath, identity, digest); err != nil {
 					t.Fatal(err)
 				}
@@ -201,13 +200,28 @@ func TestReplacementRollbackRechecksQuarantinedPublication(t *testing.T) {
 		return nil
 	}
 	err = m.Rollback(context.Background(), r)
-	if err == nil || !strings.Contains(err.Error(), r.QuarantinePath) || !strings.Contains(err.Error(), r.BackupPath) {
-		t.Fatalf("missing paths: %v", err)
-	}
+	assertRecoveryPaths(t, m, r, err)
 	assertBody(t, in.ActivePath, "late foreign active")
 	assertBody(t, r.QuarantinePath, "foreign quarantine")
 	assertBody(t, r.QuarantinePath+".saved", "new")
 	assertBody(t, r.BackupPath, "old")
+}
+
+func assertRecoveryPaths(t *testing.T, m Manager, r Receipt, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("missing recovery error")
+	}
+	for label, path := range map[string]string{
+		"active": r.ActivePath, "backup": r.BackupPath,
+		"quarantine": r.QuarantinePath, "staging": r.StagingPath,
+		"journal": m.journalPath(r.OperationID),
+	} {
+		want := label + "=" + strconv.Quote(path)
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing recovery field %s: %v", want, err)
+		}
+	}
 }
 
 func TestOldOrIncompleteJournalFailsClosed(t *testing.T) {
@@ -238,6 +252,25 @@ func TestOldOrIncompleteJournalFailsClosed(t *testing.T) {
 			assertBody(t, r.BackupPath, "old")
 			assertBody(t, r.ActivePath, "new")
 		})
+	}
+}
+
+func TestExclusiveRenameLongPathRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	short := filepath.Join(root, "short")
+	long := filepath.Join(root, strings.Repeat("long-directory-", 12), strings.Repeat("long-directory-", 12), "publication")
+	writeBody(t, short, "owned long-path bytes")
+	if err := os.MkdirAll(filepath.Dir(long), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, paths := range [][2]string{{short, long}, {long, short}} {
+		if err := renameDirectoryExclusive(paths[0], paths[1]); err != nil {
+			t.Fatal(err)
+		}
+		assertBody(t, paths[1], "owned long-path bytes")
+		if _, err := os.Lstat(paths[0]); !os.IsNotExist(err) {
+			t.Fatalf("rename left source at %q: %v", paths[0], err)
+		}
 	}
 }
 

@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"reflect"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 type seamStager struct {
+	profileCheck func(context.Context) error
 	providers.Stager
 	serverName  string
 	projectArgs func(BindingFacts) ([]string, error)
@@ -17,33 +21,68 @@ type seamStager struct {
 }
 
 func (s seamStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
-	if s.serverName != "" && s.projectArgs != nil {
+	_, cursorSelected := plan.SelectedDelivery.CursorFacts()
+	if s.serverName != "" && s.projectArgs != nil && (cursorSelected && len(domain.SelectedMCPNames(plan)) > 0 || !selectedNativeOnly(plan.SelectedDelivery)) {
 		return domain.StagedDelivery{}, fmt.Errorf("host projection requires owned plugin data")
 	}
 	return s.Stager.Stage(ctx, envelope, plan, operationID, hints)
 }
 
 func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints, data string) (domain.StagedDelivery, error) {
+	callback := s.projectArgs
+	if _, selected := plan.SelectedDelivery.CursorFacts(); selected && s.serverName != "" && callback != nil {
+		names := domain.SelectedMCPNames(plan)
+		if len(names) == 0 {
+			callback = nil // Retain the selected Stop-only path.
+		} else if !slices.Contains(names, s.serverName) {
+			return domain.StagedDelivery{}, fmt.Errorf("cursor projection requires selected declared MCP server %s", s.serverName)
+		}
+	}
+	if s.profileCheck != nil {
+		if err := s.profileCheck(ctx); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
 	facts := s.facts
+	facts.ProfileAuthority = plan.ProfileAuthority()
 	facts.TargetPath = plan.ActivePath
 	facts.DataRoot = data
 	facts.ClientID = string(plan.ClientID)
 	facts.Scope = string(plan.Scope)
+	facts.SelectedDelivery = plan.SelectedDelivery
 	if envelope.TreeDigest != "" {
 		facts.TreeDigest = envelope.TreeDigest
 	}
 	if facts.InstallationID != "" {
 		facts.BindingID = domain.ComputeClientBindingID(facts.InstallationID, facts.ClientID, facts.Scope, plan.ActivePath)
 	}
-	projected, err := projectArgs(envelope, s.serverName, s.projectArgs, facts)
+	projected, err := projectArgs(envelope, s.serverName, callback, facts)
 	if err != nil {
 		return domain.StagedDelivery{}, err
+	}
+	if s.profileCheck != nil {
+		if err := s.profileCheck(ctx); err != nil {
+			return domain.StagedDelivery{}, err
+		}
 	}
 	return s.Stager.StageWithPluginData(ctx, projected, plan, operationID, hints, data)
 }
 
 func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(BindingFacts) ([]string, error), facts BindingFacts) (domain.PackageEnvelope, error) {
 	if serverName == "" || args == nil {
+		return envelope, nil
+	}
+	if err := facts.SelectedDelivery.Validate(); err != nil {
+		return domain.PackageEnvelope{}, err
+	}
+	if _, selected := facts.SelectedDelivery.CursorFacts(); selected {
+		if err := facts.SelectedDelivery.ValidateClient(domain.ClientID(facts.ClientID)); err != nil {
+			return domain.PackageEnvelope{}, err
+		}
+		if !filepath.IsAbs(facts.DataRoot) || filepath.Clean(facts.DataRoot) != facts.DataRoot || facts.DataRoot == string(filepath.Separator) {
+			return domain.PackageEnvelope{}, fmt.Errorf("cursor MCP projection requires owned plugin data")
+		}
+	} else if selectedNativeOnly(facts.SelectedDelivery) {
 		return envelope, nil
 	}
 	raw, err := json.Marshal(envelope.MCP.Servers)
@@ -58,9 +97,13 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 	if !ok {
 		return domain.PackageEnvelope{}, fmt.Errorf("package is missing declared MCP server %s", serverName)
 	}
+	if _, selected := facts.SelectedDelivery.CursorFacts(); selected && (server.Type != "stdio" || server.Decoded == nil) {
+		return domain.PackageEnvelope{}, fmt.Errorf("cursor args projection requires declared stdio MCP server %s", serverName)
+	}
 	if server.Decoded == nil {
 		server.Decoded = map[string]any{}
 	}
+	facts.ProfileAuthority = domain.CloneProfileAuthority(facts.ProfileAuthority)
 	replacement, err := args(facts)
 	if err != nil {
 		return domain.PackageEnvelope{}, err
@@ -80,18 +123,25 @@ func projectArgs(envelope domain.PackageEnvelope, serverName string, args func(B
 }
 
 type seamActivator struct {
-	inner       providers.Activator
-	onCommitted func(context.Context, BindingFacts) error
-	store       interface {
+	profileCheck func(context.Context) error
+	inner        providers.Activator
+	onCommitted  func(context.Context, BindingFacts) error
+	store        interface {
 		Load() (domain.StateFileV2, error)
 	}
 	facts BindingFacts
 }
 
 func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	// UAP resume marks VerifyOnly even when activation never finished. Convert
-	// that path to a mutating resume; already-activated VerifyOnly stays read-only.
-	resume := request.VerifyOnly && a.hostHandoffPending(request)
+	if !request.Plan.SelectedDelivery.IsZero() {
+		if _, err := a.committedFacts(request); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+	}
+	// Legacy resume marks VerifyOnly even when activation never finished.
+	// Selected deliveries keep verification read-only; confirmed repair owns effects.
+	// Preview carries only installation identity and must remain read-only.
+	resume := request.VerifyOnly && request.Plan.SelectedDelivery.IsZero() && a.facts.BindingID != "" && a.hostHandoffPending(request)
 	if resume {
 		request.VerifyOnly = false
 	} else if a.onCommitted != nil && !request.VerifyOnly {
@@ -100,6 +150,11 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 			return domain.ActivationOutcome{}, err
 		}
 		if err := a.onCommitted(ctx, facts); err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+	}
+	if a.profileCheck != nil {
+		if err := a.profileCheck(ctx); err != nil {
 			return domain.ActivationOutcome{}, err
 		}
 	}
@@ -163,7 +218,7 @@ func (a seamActivator) Deactivate(ctx context.Context, request domain.Deactivati
 func (a seamActivator) committedFacts(request domain.ActivationRequest) (BindingFacts, error) {
 	facts := a.facts
 	if a.store == nil {
-		return facts, nil
+		return uncommittedFacts(facts, request.Plan.SelectedDelivery)
 	}
 	state, err := a.store.Load()
 	if err != nil {
@@ -171,12 +226,17 @@ func (a seamActivator) committedFacts(request domain.ActivationRequest) (Binding
 	}
 	installation, ok := findInstall(state, facts.InstallationID)
 	if !ok {
-		return facts, nil
+		return uncommittedFacts(facts, request.Plan.SelectedDelivery)
 	}
 	for _, binding := range installation.Clients {
 		if binding.TargetLocator != request.Plan.ActivePath || binding.ClientID != string(request.Plan.ClientID) {
 			continue
 		}
+		if !reflect.DeepEqual(binding.SelectedDelivery, request.Plan.SelectedDelivery) {
+			return BindingFacts{}, fmt.Errorf("%w: committed delivery differs from activation plan", ErrPlanChanged)
+		}
+		facts.ProfileAuthority = domain.CloneProfileAuthority(binding.ProfileAuthority)
+		facts.SelectedDelivery = binding.SelectedDelivery
 		receipt := installation.DataReceipts[binding.DataReceiptID]
 		facts.BindingID = binding.ClientBindingID
 		facts.Scope = binding.Scope
@@ -186,6 +246,13 @@ func (a seamActivator) committedFacts(request domain.ActivationRequest) (Binding
 		facts.ClientID = binding.ClientID
 		facts.TreeDigest = recordedBindingDigest(binding, facts.TreeDigest)
 		return facts, nil
+	}
+	return uncommittedFacts(facts, request.Plan.SelectedDelivery)
+}
+
+func uncommittedFacts(facts BindingFacts, selected domain.SelectedDelivery) (BindingFacts, error) {
+	if !selected.IsZero() {
+		return BindingFacts{}, fmt.Errorf("%w: selected delivery has no committed binding", ErrPlanChanged)
 	}
 	return facts, nil
 }

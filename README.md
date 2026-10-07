@@ -9,11 +9,14 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is to complete every ownership-safe client step automatically and ask the user only for genuine external approvals, authentication, or reloads.
+
 [Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/) ·
 [Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
 <img width="423" height="234" alt="image" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
 <img width="1079" height="584" alt="image" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
+<img width="669" height="125" alt="image" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
 
 ## Use plugins
 
@@ -198,6 +201,22 @@ delivery without invalidating the package. See [transport evidence and lifecycle
 behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 
 </details>
+
+## Already built with UAP SDK
+
+One SDK, many agents (reusable intaller, typed hooks and more)
+
+<table>
+  <tr>
+    <td width="104" align="center">
+      <a href="https://github.com/777genius/agent-notifications"><img src="landing/public/showcase/agent-notifications.png" width="80" height="80" alt="Agent Notifications logo" /></a>
+    </td>
+    <td>
+      <strong><a href="https://github.com/777genius/agent-notifications">Agent Notifications</a></strong><br />
+      Desktop notifications, sounds, and click-to-focus for AI coding agents.
+    </td>
+  </tr>
+</table>
 
 ## Find and verify plugins
 

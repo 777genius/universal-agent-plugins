@@ -22,7 +22,9 @@ func (session *groupSession) cleanupStaged() {
 func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
-		session.reportGroupProgress(*target, GroupProgressPreparing)
+		if err := session.reportGroupProgress(*target, GroupProgressPreparing); err != nil {
+			return err
+		}
 		if target.noChange {
 			if target.managed != nil && session.existing {
 				installation := session.state.Installations[session.installationIndex]
@@ -53,12 +55,16 @@ func (session *groupSession) stageOneGroupDelivery(targetIndex int, target *plan
 		}
 		target.dataReceipt, target.dataCreated = receipt, created
 	}
-	delivery, err := session.service.stagePackage(session.ctx, target.input.Envelope, target.plan, operationID, target.input.Hints, target.dataReceipt.Locator)
+	delivery, err := session.service.stagePackage(session.ctx, target.input.Envelope, cloneLocalObservationPlan(target.plan), operationID, target.input.Hints, target.dataReceipt.Locator)
 	if err != nil {
 		return err
 	}
 	delivery, err = bindStagedDeliveryToPhysicalOwner(delivery, target.plan, target.managed)
 	if err != nil {
+		_ = session.service.Stager.Discard(context.Background(), delivery)
+		return err
+	}
+	if err := sealStagedSelection(&target.plan, delivery); err != nil {
 		_ = session.service.Stager.Discard(context.Background(), delivery)
 		return err
 	}

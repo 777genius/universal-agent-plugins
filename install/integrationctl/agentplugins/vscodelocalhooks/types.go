@@ -20,13 +20,15 @@ type Shell string
 const (
 	// LinuxSH targets Node shell:true on Linux: /bin/sh -c, irrespective of SHELL.
 	LinuxSH Shell = "linux-/bin/sh"
+	// MacOSSH targets Node shell:true on macOS: /bin/sh -c, irrespective of SHELL.
+	MacOSSH Shell = "macos-/bin/sh"
 	// WindowsPowerShell51 prepares the source-pinned ComSpec=system cmd.exe
 	// branch. Native Windows execution remains a separate qualification gate.
 	WindowsPowerShell51 Shell = "windows-system-powershell-5.1"
 )
 
 // Target is a trusted snapshot supplied by the host, never read from ambient
-// environment here. ComSpec and SystemRoot must be empty for LinuxSH. Windows
+// environment here. ComSpec and SystemRoot must be empty for LinuxSH/MacOSSH. Windows
 // requires an absolute SystemRoot and its exact System32\cmd.exe ComSpec.
 // No pwsh, cmd script, alternate ComSpec or default-shell fallback is supported.
 type Target struct {

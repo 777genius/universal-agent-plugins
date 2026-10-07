@@ -9,8 +9,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -239,16 +241,30 @@ func TestContinuousDevMalformedEditJoinsLongRunningCycleBeforeReport(t *testing.
 	cycleStarted := make(chan struct{})
 	cycleJoined := make(chan struct{})
 	writeDone := make(chan error, 1)
+	// Windows packageview reads briefly deny write sharing. A fixture edit
+	// racing a polling read must retry that concrete error, rather than fail
+	// before exercising malformed-input cancellation and report ordering.
+	writeEdit := func(body []byte) error {
+		deadline := time.Now().Add(time.Second)
+		for {
+			err := os.WriteFile(plugin, body, 0600)
+			// ERROR_SHARING_VIOLATION is 32; other write failures stay fatal.
+			if runtime.GOOS != "windows" || !errors.Is(err, syscall.Errno(32)) || !time.Now().Before(deadline) {
+				return err
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
 	go func() {
 		<-cycleStarted
-		if err := os.WriteFile(plugin, nil, 0600); err != nil {
+		if err := writeEdit(nil); err != nil {
 			writeDone <- err
 			return
 		}
 		// Model an editor's non-atomic truncate/write sequence long enough for
 		// the watcher to observe the transient empty file.
 		time.Sleep(2 * devPollInterval)
-		writeDone <- os.WriteFile(plugin, []byte(`{"broken":`), 0600)
+		writeDone <- writeEdit([]byte(`{"broken":`))
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

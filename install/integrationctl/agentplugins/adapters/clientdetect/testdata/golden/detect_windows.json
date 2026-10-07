@@ -6,6 +6,8 @@
     "DisplayName": "ChatGPT",
     "ExecutablePath": "",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -23,6 +25,8 @@
     "DisplayName": "Claude Code",
     "ExecutablePath": "\u003chome\u003e/bin/claude",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -45,6 +49,8 @@
     "DisplayName": "Cline",
     "ExecutablePath": "",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -77,6 +83,8 @@
     "DisplayName": "OpenAI Codex",
     "ExecutablePath": "\u003chome\u003e/bin/codex",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -99,6 +107,8 @@
     "DisplayName": "GitHub Copilot CLI",
     "ExecutablePath": "\u003chome\u003e/bin/copilot",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -121,12 +131,19 @@
     "DisplayName": "Cursor",
     "ExecutablePath": "\u003chome\u003e/bin/cursor",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
         "Detected": true,
         "Evidence": "executable_on_path",
-        "ID": "cursor_cli"
+        "ID": "cursor_editor"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "cursor_agent"
       },
       {
         "Detected": true,
@@ -148,6 +165,8 @@
     "DisplayName": "Gemini CLI",
     "ExecutablePath": "\u003chome\u003e/bin/gemini",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -170,6 +189,8 @@
     "DisplayName": "Kiro",
     "ExecutablePath": "\u003chome\u003e/bin/kiro-cli",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -202,6 +223,8 @@
     "DisplayName": "OpenCode",
     "ExecutablePath": "\u003chome\u003e/bin/opencode",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -234,6 +257,8 @@
     "DisplayName": "Visual Studio Code",
     "ExecutablePath": "\u003chome\u003e/bin/code",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {
@@ -261,6 +286,8 @@
     "DisplayName": "Windsurf / Devin",
     "ExecutablePath": "\u003chome\u003e/bin/windsurf",
     "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
     "Status": "detected",
     "Surfaces": [
       {

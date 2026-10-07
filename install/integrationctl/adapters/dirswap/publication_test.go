@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -54,9 +55,7 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			case "bytes":
 				writeBody(t, in.ActivePath, "foreign")
 			case "mode":
-				if err = os.Chmod(in.ActivePath, 0700); err != nil {
-					t.Fatal(err)
-				}
+				changeModeForDrift(t, in.ActivePath, 0700)
 			case "replacement":
 				if err = os.Rename(in.ActivePath, in.ActivePath+".saved"); err != nil {
 					t.Fatal(err)
@@ -83,6 +82,36 @@ func TestAbsentRollbackAndRecoveryPreserveDrift(t *testing.T) {
 			}
 		})
 	}
+}
+
+func changeModeForDrift(t *testing.T, path string, unixMode os.FileMode) {
+	t.Helper()
+	before, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mode := unixMode
+	if runtime.GOOS == "windows" {
+		mode = 0400 // Read-only attribute, not an ACL mutation.
+	} else if mode == before.Mode().Perm() {
+		mode ^= 0200
+	}
+	t.Cleanup(func() {
+		if err := os.Chmod(path, before.Mode().Perm()); err != nil {
+			t.Error(err)
+		}
+	})
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Mode().Perm() == after.Mode().Perm() {
+		t.Fatalf("mode drift fixture made no change at %q: %v", path, after.Mode())
+	}
+	t.Logf("Observed mode drift at %q: %v -> %v", path, before.Mode(), after.Mode())
 }
 
 func TestAbsentCrashRecoveryAfterPublicationAndQuarantine(t *testing.T) {

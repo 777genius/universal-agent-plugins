@@ -27,7 +27,11 @@ if (import.meta.client) {
   watch(
     () => discovery.value.state,
     (state) => {
-      if (state !== 'current' && state !== 'cached') return;
+      if (
+        !['current', 'cached', 'stale'].includes(state) ||
+        (state === 'stale' && !discovery.value.count)
+      )
+        return;
 
       const target = groupCatalogPlugins(catalogVisiblePlugins(props.registry.plugins)).length;
       if (
@@ -203,7 +207,7 @@ function updateTargets(values: string[]) {
     <div class="hero container">
       <div class="hero__copy">
         <h1>
-          {{ t('shell.hero.title') }}<br ><em>{{ t('shell.hero.subtitle') }}</em>
+          {{ t('shell.hero.title') }}<br /><em>{{ t('shell.hero.subtitle') }}</em>
         </h1>
         <p class="hero__lead">
           {{ t('shell.hero.intro') }}

@@ -34,7 +34,7 @@ func nativeOpenCodeFixture(t *testing.T, version, mode string) string {
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	command := exec.Command("go", "build", "-ldflags", "-X main.version="+version+" -X main.mode="+mode, "-o", binary, "testdata/opencode_probe.go")
+	command := exec.CommandContext(t.Context(), "go", "build", "-ldflags", "-X main.version="+version+" -X main.mode="+mode, "-o", binary, "testdata/opencode_probe.go")
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build native fixture: %s %v", output, err)
 	}
@@ -79,7 +79,7 @@ func TestOpenCodeTargetExplicitAuthorityAndIsolation(t *testing.T) {
 	}
 }
 
-// Regression: failed/malformed/limited/cancelled output cannot normalize into a
+// Regression: failed/malformed/limited/canceled output cannot normalize into a
 // usable version. stdout alone is authoritative, with a combined stream limit.
 func TestOpenCodeTargetFailureStatuses(t *testing.T) {
 	for _, tc := range []struct{ mode, status string }{{"failed", "failed"}, {"malformed", "malformed"}, {"loose", "malformed"}, {"stderr", "malformed"}, {"limit", "output_limit"}, {"slow", "timed_out"}} {
@@ -167,7 +167,7 @@ func TestOpenCodeTargetIdentityAndWrapperRestriction(t *testing.T) {
 	if err := os.WriteFile(wrapper, []byte("#!/bin/sh\nexec \""+link+"\" --version\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		evidence, err := ProbeOpenCodeTarget(context.Background(), ProbeTarget{Executable: wrapper, Environment: []string{"PATH="}})
 		if !errors.Is(err, ErrUnverifiedProbeTarget) || evidence.Reason != "host_target_unverified" {
 			t.Fatalf("wrapper: %+v %v", evidence, err)

@@ -12,6 +12,15 @@
   "Objects": [
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "managed_package_directory",
       "LogicalName": "demo",
       "ManagedDigest": "${ARTIFACT}",
@@ -23,6 +32,15 @@
     },
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "cline_global_mcp_server",
       "LogicalName": "notion",
       "ManagedDigest": "sha256:2806c4428a0753eace8f2b860c8153b6612c9111b77ac6f48a2541384bc42809",
@@ -34,6 +52,15 @@
     },
     {
       "BeforeDigest": "",
+      "CursorReceipt": {
+        "EntryDigest": "",
+        "Event": "",
+        "Executable": "",
+        "RemainderDigest": "",
+        "Selector": "",
+        "Shell": "",
+        "Version": 0
+      },
       "Kind": "cline_global_skill_directory",
       "LogicalName": "good",
       "ManagedDigest": "sha256:0ff5f701bc7b96b22b654f61883ffa11bc7582422b293c495159b78d4607ba07",

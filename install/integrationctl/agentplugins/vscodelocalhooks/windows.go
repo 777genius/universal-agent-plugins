@@ -7,7 +7,7 @@ import (
 
 func validateTarget(target Target) error {
 	switch target.Shell {
-	case LinuxSH:
+	case LinuxSH, MacOSSH:
 		if target.ComSpec == "" && target.SystemRoot == "" {
 			return nil
 		}
@@ -64,9 +64,10 @@ func reservedWindowsName(name string) bool {
 
 func validateWindowsArgument(value string) error {
 	// Legacy Windows PowerShell native argument binding drops empty strings and
-	// reinterprets embedded double quotes/trailing backslashes. Refuse these
+	// reinterprets embedded double quotes/trailing backslashes. Smart single quotes
+	// are PowerShell delimiters even inside ASCII-quoted strings. Refuse these
 	// forms until actual Windows CI proves a wider byte-preserving representation.
-	if value == "" || strings.ContainsRune(value, '"') || strings.HasSuffix(value, `\`) {
+	if value == "" || strings.ContainsAny(value, "\"\u2018\u2019\u201a\u201b") || strings.HasSuffix(value, `\`) {
 		return fmt.Errorf("%w: Windows native argument binding", ErrUnsupported)
 	}
 	for _, r := range value {

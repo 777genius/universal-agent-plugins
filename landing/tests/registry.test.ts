@@ -220,23 +220,41 @@ describe('unified registry landing', () => {
     assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target codex,cursor$/);
   });
 
-  it('uses only real local plugin or publisher logos without a generic fallback', () => {
+  it('gives every reviewed plugin its own local plugin or publisher logo', () => {
+    const publisherAliases: Record<string, string> = {
+      'chrome-devtools': 'googlechrome',
+      'docker-hub': 'docker',
+    };
     for (const plugin of registry.plugins) {
       const iconPath = mirroredIconPath(plugin);
-      if (!iconPath) continue;
+      assert.ok(iconPath, `${plugin.name} must have a local logo`);
+      const publisher = plugin.name.startsWith('cloudflare-')
+        ? 'cloudflare'
+        : plugin.name.startsWith('hubspot-')
+          ? 'hubspot'
+          : (publisherAliases[plugin.name] ?? plugin.name);
+      assert.equal(iconPath, `plugin-icons/${publisher}.svg`, `${plugin.name} logo identity`);
       assert.doesNotThrow(
         () => readFileSync(resolve(root, 'public', iconPath)),
         `${plugin.name} logo must exist`,
+      );
+      const svg = readFileSync(resolve(root, 'public', iconPath), 'utf8');
+      assert.match(svg, /<svg\b[^>]*\bviewBox="[^"]+"/, `${plugin.name} scalable logo`);
+      assert.match(svg, /<(?:path|polygon|circle|rect)\b/, `${plugin.name} visible artwork`);
+      assert.doesNotMatch(
+        svg,
+        /<(?:script|foreignObject|image)\b|\bon\w+\s*=|(?:href|xlink:href)\s*=|url\(['"]?https?:/i,
+        `${plugin.name} logo has no executable or external content`,
       );
     }
 
     assert.equal(
       mirroredIconPath(registry.plugins.find((plugin) => plugin.name === 'agent-code-navigator')!),
-      undefined,
+      'plugin-icons/agent-code-navigator.svg',
     );
     assert.equal(
       mirroredIconPath(registry.plugins.find((plugin) => plugin.name === 'statsig')!),
-      undefined,
+      'plugin-icons/statsig.svg',
     );
     assert.equal(
       mirroredIconPath(registry.plugins.find((plugin) => plugin.name === 'cloudflare-docs')!),
@@ -245,6 +263,23 @@ describe('unified registry landing', () => {
     assert.equal(
       mirroredIconPath(registry.plugins.find((plugin) => plugin.name === 'heroku')!),
       'plugin-icons/heroku.svg',
+    );
+  });
+
+  it('does not let external or unknown packages select a local logo', () => {
+    const reviewed = registry.plugins.find((plugin) => plugin.name === 'github')!;
+    const external = discoveryPlugin({ ...discoveryRecord, name: 'github' }, discoverySnapshot);
+    assert.equal(mirroredIconPath({ ...external, icon: reviewed.icon }), undefined);
+    assert.equal(
+      mirroredIconPath({ ...reviewed, name: 'unknown', icon: reviewed.icon }),
+      undefined,
+    );
+    assert.equal(
+      mirroredIconPath({
+        ...reviewed,
+        icon: { ...reviewed.icon!, path: 'assets/plugin-icons/stripe.svg' },
+      }),
+      'plugin-icons/github.svg',
     );
   });
 

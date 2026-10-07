@@ -22,6 +22,7 @@ const props = withDefaults(
 const { asset, pluginIcon, sourceUrl } = useSite();
 const { current, expired, published } = useDirectoryStatus();
 const isDiscovered = computed(() => props.plugin.trust_state === 'conformant_unreviewed');
+const discoveryStale = useDiscoveryIsStale(() => props.plugin);
 const availableClients = computed(() =>
   clients.filter((client) => props.plugin.client_support.clients.includes(client.id)),
 );
@@ -105,7 +106,9 @@ const selectedDistribution = computed(() =>
 );
 const canInstall = computed(() =>
   isDiscovered.value
-    ? props.plugin.installable && (autoDetect.value || Boolean(selectedDistribution.value))
+    ? props.plugin.installable &&
+      props.plugin.discovery?.availability !== 'unavailable' &&
+      (autoDetect.value || Boolean(selectedDistribution.value))
     : current.value &&
       (autoDetect.value ? props.plugin.installable : Boolean(selectedDistribution.value)),
 );
@@ -282,7 +285,7 @@ function updateAutoDetect(value: boolean) {
       <span aria-hidden="true"> · </span>{{ t('registryUi.card.agentPlugins10') }}
     </p>
     <SecurityAssessmentBadge
-      v-if="plugin.security"
+      v-if="plugin.security && !discoveryStale"
       :plugin="plugin"
       :details-to="securityDetailURL"
     />

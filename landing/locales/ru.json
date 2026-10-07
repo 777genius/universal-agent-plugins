@@ -371,6 +371,11 @@
       "sourceDescription": "Проверенные пакеты и найденные сообществом пакеты имеют чёткие метки; их исходник доступен до установки.",
       "standardDescription": "Пакеты считываются из {manifest} Agent Plugins 1.0 без второго манифеста установки."
     },
+    "builtWith": {
+      "title": "Уже создано с UAP",
+      "agentNotificationsDescription": "Уведомления на рабочем столе, звуки и переход к нужному окну по клику для ИИ-агентов разработки.",
+      "viewRepository": "Открыть на GitHub"
+    },
     "faq": {
       "eyebrow": "Частые вопросы",
       "title": "Частые вопросы",
@@ -542,6 +547,9 @@
       "disclaimer": "Автоматические проверки снижают риск, но не доказывают безопасность плагина. Перед установкой недоверенного ПО проверьте исходник и разрешения."
     },
     "catalog": {
+      "staleCommunityResults": "Показаны {count} записей сообщества из последнего подписанного каталога, созданного {generated}; срок действия истёк {expired}. Команды установки приостановлены до обновления каталога. Проверенные записи остаются доступны.",
+      "staleCommunityListing": "Историческая подписанная запись; срок действия каталога истёк {expired}.",
+      "staleCommunityCommands": "Команды установки плагинов сообщества приостановлены: срок действия подписанного каталога истёк. Записи и исходники остаются доступны.",
       "explorePlugins": "Обзор плагинов",
       "searchByCapabilityComponentOrSource": "Искать по возможности, компоненту или источнику.",
       "allCategories": "Все категории",
@@ -610,7 +618,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Недоступен в проиндексированном источнике; команда установки не создаётся.",
       "unavailableAtItsIndexedSource": "Недоступно в проиндексированном источнике",
       "checkedAgainBeforeInstallation": "Проверяется снова перед установкой",
-      "reviewedListing": "проверенная карточка",
+      "reviewedListing": "Проверено",
       "notAvailableForChatgpt": "Недоступно для ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Проверенное подключение; завершите настройку в ChatGPT",
       "allInstalledAgents": "Все установленные агенты",
@@ -818,7 +826,7 @@
       "components": "Компоненты",
       "package": "Пакет",
       "pluginNotFound": "Плагин не найден",
-      "reviewedListing": "проверенная карточка",
+      "reviewedListing": "Проверено",
       "licenseNotSpecified": "Лицензия не указана",
       "managedByCli": "Управляется CLI",
       "requiresAFinalStepInTheApp": "Требуется завершающий шаг в приложении",

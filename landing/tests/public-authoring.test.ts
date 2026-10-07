@@ -143,7 +143,10 @@ test('README retains the available installer and canonical client limitations', 
     ),
   );
   assert.ok(text.includes('Native Agent Plugins releases'));
-  assert.ok(text.includes('Install the latest npm release'));
+  assert.match(
+    text,
+    /(?:^|\n)[^\n]*\b[Ii]nstall\b[^\n]*\blatest\b[^\n]*Node\.js 22\+[^\n]*:\n\n```bash\nnpm install (?:--global|-g) universal-agent-plugins\n```/,
+  );
   assert.doesNotMatch(text, /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/);
   assert.doesNotMatch(
     text,
