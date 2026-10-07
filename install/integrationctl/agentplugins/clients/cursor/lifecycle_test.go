@@ -154,7 +154,7 @@ func TestActiveProjectionRejectsAnotherClientOrRoot(t *testing.T) {
 	root := testBase(t)
 	adapter := New()
 	plan := domain.DeliveryPlan{ClientID: domain.ClientCursor, ActivePath: root}
-	for _, name := range []string{"root", "empty-root", "client", "unknown-mode", "cancelled"} {
+	for _, name := range []string{"root", "empty-root", "client", "unknown-mode", "canceled"} {
 		t.Run(name, func(t *testing.T) {
 			p, active, ctx := plan, root, t.Context()
 			switch name {
@@ -168,7 +168,7 @@ func TestActiveProjectionRejectsAnotherClientOrRoot(t *testing.T) {
 				if err := json.Unmarshal([]byte(`{"mode":"cursor-unknown"}`), &p.SelectedDelivery); err != nil {
 					t.Fatal(err)
 				}
-			case "cancelled":
+			case "canceled":
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()

@@ -107,7 +107,7 @@ func TestStagerSelectedCursorActiveProjection(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if _, err := stager.ProjectActiveNative(ctx, envelope, plan, delivery.ArtifactDigest, ""); err == nil {
-		t.Fatal("cancelled projection accepted")
+		t.Fatal("canceled projection accepted")
 	}
 	afterEnvelope, err := json.Marshal(envelope)
 	if err != nil {

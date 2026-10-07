@@ -21,7 +21,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return nil, err
 	}
 	if plan.ClientID != domain.ClientCursor || root == "" || root != plan.ActivePath {
-		return nil, fmt.Errorf("Cursor active projection client or root differs")
+		return nil, fmt.Errorf("cursor active projection client or root differs")
 	}
 	if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
 		return nil, err
