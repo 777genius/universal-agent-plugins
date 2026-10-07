@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
@@ -37,7 +39,7 @@ func TestSharedOpenCodeSnapshotIsolationAndRootFence(t *testing.T) {
 		target.Environment[0] = "PATH=changed-by-probe"
 		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "2.0.21", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "TEST-pinned"}}, nil
 	}
-	preparer, err := New(probe, environment)
+	preparer, err := New(hostTestRegistry(t, opencode.New()), probe, environment)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestSharedOpenCodeNoEffectAndUnverifiedTarget(t *testing.T) {
 	root := t.TempDir()
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: root, ExecutablePath: filepath.Join(root, "synthetic99-script"), Version: "99.0.0"}
 	calls := 0
-	preparer, err := New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+	preparer, err := New(hostTestRegistry(t, opencode.New()), func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
 		return clientdetect.ProbeEvidence{}, nil
 	}, []string{"PATH="})
@@ -103,5 +105,41 @@ func TestSharedOpenCodeNoEffectAndUnverifiedTarget(t *testing.T) {
 	before := calls
 	if _, err := preparer.PrepareOpenCodeHost(context.Background(), client, desired); !errors.Is(err, ErrHostTargetRequired) || calls != before {
 		t.Fatalf("missing target: %v", err)
+	}
+}
+
+func hostTestRegistry(t *testing.T, adapters ...clients.Adapter) *clients.Registry {
+	t.Helper()
+	registry, err := clients.NewRegistry(adapters...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
+type inertHostAdapter struct{ *opencode.Adapter }
+
+func (*inertHostAdapter) UsesOpenCodeHostProfile() bool { return false }
+
+// RED if a client ID bypasses the explicitly registered host capability:
+// absent and opted-out consumers must preserve client fields without probing.
+func TestSharedOpenCodeHostDispatchRequiresRegisteredCapability(t *testing.T) {
+	if _, err := New(nil, nil, []string{"PATH="}); !errors.Is(err, clients.ErrRegistryRequired) {
+		t.Fatalf("missing registry selected implicit capability: %v", err)
+	}
+	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: t.TempDir(), Version: "stored-version"}
+	envelope := domain.PackageEnvelope{Skills: map[string]domain.Skill{"docs": {Name: "docs"}}}
+	for _, registry := range []*clients.Registry{hostTestRegistry(t), hostTestRegistry(t, &inertHostAdapter{opencode.New()})} {
+		preparer, err := New(registry, func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+			t.Fatal("unregistered host capability probed executable")
+			return clientdetect.ProbeEvidence{}, errors.New("forbidden")
+		}, []string{"PATH="})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := preparer.PrepareOpenCodeHost(t.Context(), client, envelope)
+		if err != nil || out.OpenCodeHost != nil || out.Version != client.Version || out.ConfigRoot != client.ConfigRoot {
+			t.Fatalf("unregistered capability changed client: %+v %v", out, err)
+		}
 	}
 }

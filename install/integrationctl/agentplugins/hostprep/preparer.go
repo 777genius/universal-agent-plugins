@@ -21,14 +21,19 @@ var ErrHostTargetRequired = errors.New("host_target_required")
 var ErrPlanChanged = errors.New("host_plan_changed")
 
 type Preparer struct {
+	registry    *clients.Registry
 	probe       Probe
 	environment []string
 }
 
 var _ ports.OpenCodeHostPreparer = (*Preparer)(nil)
 
-// New pins a private launch environment once, at trusted composition.
-func New(probe Probe, environment []string) (*Preparer, error) {
+// New requires the explicit client registry and pins a private launch
+// environment once, at trusted composition.
+func New(registry *clients.Registry, probe Probe, environment []string) (*Preparer, error) {
+	if registry == nil {
+		return nil, clients.ErrRegistryRequired
+	}
 	if probe == nil {
 		probe = clientdetect.ProbeOpenCodeTarget
 	}
@@ -39,7 +44,7 @@ func New(probe Probe, environment []string) (*Preparer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Preparer{probe: probe, environment: env}, nil
+	return &Preparer{registry: registry, probe: probe, environment: env}, nil
 }
 
 func (p *Preparer) Prepare(ctx context.Context, executable, root string, skills bool, transports []string) (*Snapshot, error) {
@@ -70,13 +75,17 @@ func (p *Preparer) Prepare(ctx context.Context, executable, root string, skills 
 }
 
 func (p *Preparer) PrepareOpenCodeHost(ctx context.Context, client domain.DetectedClient, envelope domain.PackageEnvelope) (domain.DetectedClient, error) {
-	if client.ClientID != domain.ClientOpenCode {
+	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](p.registry, client.ClientID)
+	if !ok || !consumer.UsesOpenCodeHostProfile() {
 		return client, nil
 	}
 	// Use the canonical client capability declaration for desired effects;
 	// historical unsupported components cannot require a host or grant authority.
 	definition, _ := domain.ClientDefinitionFor(client.ClientID)
 	selected := envelope
+	if support := definition.Capabilities.SkillSupport; support == "" || support == domain.SupportUnsupported {
+		selected.Skills = nil
+	}
 	selected.MCP.Servers = make(map[string]domain.MCPServer)
 	for name, server := range envelope.MCP.Servers {
 		support, ok := definition.Capabilities.MCPTransports[server.Type]

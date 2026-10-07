@@ -3490,7 +3490,7 @@ func TestOpenCodeCLIOnlinePreviewUsesPreparedServiceAuthority(t *testing.T) {
 			cursor := fixtureClient(t, domain.ClientGemini)
 			fixture := newCLIFixture(t, []domain.DetectedClient{cursor, openCode})
 			calls := 0
-			preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+			preparer, err := hostprep.New(fixture.app.ClientRegistry, func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 				calls++
 				if !native {
 					t.Fatal("metadata-only acquired host authority")

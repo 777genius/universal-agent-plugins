@@ -31,7 +31,7 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 	if !skills && len(transports) == 0 && !previousEffects {
 		return nil
 	}
-	preparer, err := hostprep.New(e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
+	preparer, err := hostprep.New(e.cfg.Registry, e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (e *Engine) revalidateOpenCodeHost(ctx context.Context, handle *PreparedOpe
 	if handle.openCodeHost == nil {
 		return nil
 	}
-	preparer, err := hostprep.New(e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
+	preparer, err := hostprep.New(e.cfg.Registry, e.cfg.OpenCodeProbe, e.cfg.OpenCodeProbeEnvironment)
 	if err != nil {
 		return err
 	}

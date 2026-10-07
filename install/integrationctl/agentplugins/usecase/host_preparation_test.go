@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -103,7 +104,7 @@ func hostBridgeInput(t *testing.T, client domain.DetectedClient) AddInput {
 }
 func attachHostBridge(t *testing.T, service *Service, probe hostprep.Probe) *hostBoundaryTrace {
 	t.Helper()
-	preparer, err := hostprep.New(probe, []string{"PATH="})
+	preparer, err := hostprep.New(clientregistry.Default(), probe, []string{"PATH="})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestOpenCodeHostBridgeOfflineAndStoredCleanup(t *testing.T) {
 	service, store, _ := serviceFixture(t)
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode"), ExecutablePath: filepath.Join(t.TempDir(), "unlaunched")}
 	calls := 0
-	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+	preparer, err := hostprep.New(clientregistry.Default(), func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
 		return bridgeEvidence("TEST-injected"), nil
 	}, []string{"PATH="})
@@ -334,7 +335,7 @@ func TestOpenCodeHostBridgeStoredRemoveNoLookup(t *testing.T) {
 	service, _, _ := serviceFixture(t)
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode"), ExecutablePath: filepath.Join(t.TempDir(), "selected")}
 	calls := 0
-	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+	preparer, err := hostprep.New(clientregistry.Default(), func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
 		return bridgeEvidence("TEST-stored"), nil
 	}, []string{"PATH="})
@@ -375,7 +376,7 @@ func TestOpenCodeHostBridgeGroupStoredCleanup(t *testing.T) {
 	service, _, _ := serviceFixture(t)
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode"), ExecutablePath: filepath.Join(t.TempDir(), "selected")}
 	calls := 0
-	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+	preparer, err := hostprep.New(clientregistry.Default(), func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
 		return bridgeEvidence("TEST-group-stored"), nil
 	}, []string{"PATH="})
@@ -419,7 +420,7 @@ func TestOpenCodeHostBridgeSingleRepair(t *testing.T) {
 	service, _, _ := serviceFixture(t)
 	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode"), ExecutablePath: filepath.Join(t.TempDir(), "selected")}
 	calls := 0
-	preparer, err := hostprep.New(func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+	preparer, err := hostprep.New(clientregistry.Default(), func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		calls++
 		return bridgeEvidence("TEST-repair"), nil
 	}, []string{"PATH="})
