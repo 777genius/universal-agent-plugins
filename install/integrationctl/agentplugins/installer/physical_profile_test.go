@@ -722,12 +722,20 @@ func (a physicalSelectedCursor) RefinePlan(ctx context.Context, in clients.PlanI
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("TEST executable is not a regular file")
 	}
-	p.SelectedDelivery, err = physicalCursorSelection(in.Client.ConfigRoot, in.Client.ExecutablePath, a.selector, in.Envelope.TreeDigest, original.Body, original.Exists)
+	p.SelectedDelivery, err = physicalCursorSelection(in.Client.ConfigRoot, in.Client.ExecutablePath, a.selector, in.Envelope.TreeDigest, original.Body, original.Exists, in.PreviousNativeObjects...)
 	return err
 }
 
-func physicalCursorSelection(root, executable, selector, digest string, raw []byte, exists bool) (domain.SelectedDelivery, error) {
-	planned, err := cursorhooks.Plan(cursorhooks.Request{Operation: cursorhooks.Install, Document: raw, Shell: cursorhooks.LinuxUserShell32212, ExecutableVerified: true, Specs: []cursorhooks.HookSpec{{Executable: executable, Selector: selector}}})
+func physicalCursorSelection(root, executable, selector, digest string, raw []byte, exists bool, previous ...domain.NativeObjectOwnership) (domain.SelectedDelivery, error) {
+	request := cursorhooks.Request{Operation: cursorhooks.Install, Document: raw, Shell: cursorhooks.LinuxUserShell32212, ExecutableVerified: true, Specs: []cursorhooks.HookSpec{{Executable: executable, Selector: selector}}}
+	for _, object := range previous {
+		if object.Kind == "cursor_user_stop" {
+			r := object.CursorReceipt
+			request.Operation = cursorhooks.Update
+			request.Previous = &cursorhooks.Receipt{Version: r.Version, Event: r.Event, Spec: cursorhooks.HookSpec{Executable: r.Executable, Selector: r.Selector}, Shell: cursorhooks.ShellContract(r.Shell), EntryDigest: r.EntryDigest, RemainderDigest: r.RemainderDigest}
+		}
+	}
+	planned, err := cursorhooks.Plan(request)
 	if err != nil {
 		return domain.SelectedDelivery{}, err
 	}
@@ -743,6 +751,27 @@ func (a physicalSelectedCursor) Activate(ctx context.Context, _ clients.Env, r d
 	}
 	if err := profileauthority.Revalidate(ctx, *r.Client.ProfileAuthority); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if r.VerifyOnly {
+		current, err := nativeconfig.New().ReadExactFile(f.HooksPath)
+		if err != nil {
+			return domain.ActivationOutcome{}, err
+		}
+		if !r.Plan.SelectedDelivery.OwnsProfileEntry(r.PreviousNativeObjects) || r.Plan.SelectedDelivery.ValidateCursorObjects(r.PreviousNativeObjects) != nil {
+			return domain.ActivationOutcome{}, fmt.Errorf("read-only TEST verification lacks acknowledged Stop ownership")
+		}
+		for _, object := range r.PreviousNativeObjects {
+			if object.Kind != "cursor_user_stop" {
+				continue
+			}
+			p := object.CursorReceipt
+			if err := cursorhooks.VerifyOwned(current.Body, &cursorhooks.Receipt{Version: p.Version, Event: p.Event, Spec: cursorhooks.HookSpec{Executable: p.Executable, Selector: p.Selector}, Shell: cursorhooks.ShellContract(p.Shell), EntryDigest: p.EntryDigest, RemainderDigest: p.RemainderDigest}); err != nil {
+				return domain.ActivationOutcome{}, err
+			}
+		}
+		outcome := shared.StartedActivation(r)
+		outcome.Activation, outcome.NativeEffect = domain.ActivationManual, domain.NativeEffectUnchanged
+		return outcome, nil
 	}
 	file, err := nativeconfig.New().BeginExactFile(f.HooksPath)
 	if err != nil {
@@ -908,6 +937,43 @@ func TestPhysicalProfileSelectedCursorMCPProjection(t *testing.T) {
 		}
 		if err := e.VerifyProfileAuthority(t.Context(), req.InstallationID, b.ClientBindingID); err != nil {
 			t.Fatal(err)
+		}
+		// Same-revision update used to fail at the real Stager capability lookup.
+		// A late foreign entry changes the newly planned remainder; it must not
+		// replace the separately acknowledged receipt or authorize another effect.
+		hookBody, err := os.ReadFile(sealed.HooksPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var hooks map[string]any
+		if err := json.Unmarshal(hookBody, &hooks); err != nil {
+			t.Fatal(err)
+		}
+		hooks["TEST-foreign-after"] = true
+		hookBody, err = json.Marshal(hooks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(sealed.HooksPath, hookBody, 0600); err != nil {
+			t.Fatal(err)
+		}
+		beforeUpdate := physicalByteDigest(t, filepath.Dir(req.ClientConfigRoot))
+		req.Operation, req.OperationID = OpUpdate, "TEST-same-revision-update"
+		update, err := e.Prepare(t.Context(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		updateResult, updateErr := e.Apply(t.Context(), update, Decision{Confirmed: true})
+		closeErr := update.Close()
+		if updateErr != nil || closeErr != nil || updateResult.Mutated {
+			t.Fatalf("read-only selected update: %+v %v %v", updateResult, updateErr, closeErr)
+		}
+		afterState, err := e.store.Load()
+		if err != nil || !reflect.DeepEqual(state, afterState) {
+			t.Fatalf("update changed original binding/receipt/intent authority: %v", err)
+		}
+		if physicalByteDigest(t, filepath.Dir(req.ClientConfigRoot)) != beforeUpdate {
+			t.Fatal("read-only update changed TEST namespace/profile/package bytes")
 		}
 	})
 	t.Run("refusals", func(t *testing.T) {
