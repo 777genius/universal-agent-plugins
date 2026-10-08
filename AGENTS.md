@@ -20,3 +20,13 @@ Preserve PR190 availability labels and historical links. Never use
 DOCS_PREPARATION_PREVIEW in production or equate installer release proof with
 standard authoring release qualification. Use gpt-6-astra / medium / default
 for current hosted tasks; no fast.
+
+## Owner release authorization (2026-10-08)
+
+An explicit owner request to make or publish a release authorizes choosing and
+publishing the next suitable unused version within the same product and channels.
+Respect explicit constraints and report the chosen version; do not ask again
+solely for version selection or skipping a cancelled, never-public candidate.
+Preparation, review, and draft-only requests do not authorize public publication.
+All CI, independent review, environment, artifact, draft/promotion, and immutable
+tag requirements remain mandatory.
