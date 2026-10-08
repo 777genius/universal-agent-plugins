@@ -61,7 +61,7 @@ func (txn *openCodeSkillTxn) createRoot(configRoot string) error {
 	if err := os.MkdirAll(skillsRoot, 0o700); err != nil {
 		return err
 	}
-	root, err := os.MkdirTemp(skillsRoot, ".agentplugins-native-")
+	root, err := createPrivateTransitionRoot(skillsRoot)
 	if err != nil {
 		return err
 	}

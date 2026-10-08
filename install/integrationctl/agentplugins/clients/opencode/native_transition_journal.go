@@ -280,7 +280,7 @@ func writeTransitionRecord(r transitionRecord) error {
 	if err := pathpolicy.RequireContainedChild(r.Root, path); err != nil {
 		return err
 	}
-	if err := atomicfile.Write(path, body, 0600); err != nil {
+	if err := writePrivateTransitionJournal(path, body); err != nil {
 		return err
 	}
 	// Persist discoverability of the provider transaction directory too.
@@ -294,13 +294,20 @@ func readTransitionFile(root, path string, limit int64) ([]byte, error) {
 }
 func readTransitionRecord(root string) (transitionRecord, error) {
 	var r transitionRecord
-	body, err := readTransitionFile(root, filepath.Join(root, transitionRecordFile), maxTransitionRecordBytes)
-	if err != nil {
+	if err := validateTransitionRoot(filepath.Dir(filepath.Dir(root)), root); err != nil {
 		return r, err
 	}
-	info, err := os.Lstat(filepath.Join(root, transitionRecordFile))
-	if err != nil || info.Mode().Perm() != 0600 {
+	path := filepath.Join(root, transitionRecordFile)
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
 		return r, fmt.Errorf("transition record must be private")
+	}
+	if err := validateTransitionPrivacy(path, info, false); err != nil {
+		return r, err
+	}
+	body, err := readTransitionFile(root, path, maxTransitionRecordBytes)
+	if err != nil {
+		return r, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()

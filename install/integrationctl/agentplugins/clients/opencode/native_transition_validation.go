@@ -67,10 +67,10 @@ func validateTransitionRoot(nativeRoot, root string) error {
 		return err
 	}
 	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+	if err != nil || !info.IsDir() {
 		return fmt.Errorf("transition root must be private")
 	}
-	return nil
+	return validateTransitionPrivacy(root, info, true)
 }
 
 func validateTransitionBindings(record transitionRecord) (domain.ClientBinding, domain.ClientBinding, error) {
