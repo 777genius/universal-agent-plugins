@@ -1,10 +1,15 @@
 # Agentplugins stable release
 
-This runbook is for maintainers. Do not create a release without explicit owner
-approval for that exact version. This repository owns both the binary release
-and the separate npm facade publication workflow, which updates `latest`.
-Draft qualification defaults to non-public; public version publication requires
-separate explicit owner authorization and `publish_release=true`.
+This runbook is for maintainers. An explicit owner request to make or publish a
+release authorizes choosing and publishing the next suitable unused version
+within the same product and channels, subject to the owner's explicit constraints.
+Report the chosen version; do not ask again solely for version selection or
+skipping a cancelled, never-public candidate. Preparation, review, and draft-only
+requests do not authorize public publication. All release gates below still apply.
+This repository owns both the binary release and the separate npm facade
+publication workflow, which updates `latest`. Draft qualification defaults to
+non-public; public publication requires the owner release authorization above
+and `publish_release=true`.
 `777genius/plugin-kit-ai` is the historical GitHub rename alias for
 `777genius/universal-agent-plugins`, not an independently owned producer.
 Existing immutable producer identity checks retain that historical slug.
@@ -57,7 +62,7 @@ the publishable version from the approved tag; do not manually bump it.
    draft identity, manifest, all nine assets, and attestations, and uploads
    `verified-draft.json`. With `publish_release=false`, promotion is skipped
    and the verified draft remains non-public.
-7. Only with separate explicit owner authorization for that exact version,
+7. When the owner request authorizes publication,
    dispatch the existing producer with `publish_release=true`, plus
    `qualified_run_id` and `qualified_run_attempt` from the successful
    `publish_release=false` run. The exact `main`/tag/source-ref and required

@@ -2,8 +2,13 @@
 
 `agentplugins` is the sole public CLI. Its executable release contract is the
 [Agentplugins stable release runbook](./agentplugins-release.md). This document
-does not authorize a version, create a release, or replace the exact-version
-owner approval required by that runbook.
+does not itself authorize publication or create a release. An explicit owner
+request to make or publish a release authorizes choosing and publishing the next
+suitable unused version within the same product and channels, subject to explicit
+constraints and the runbook's gates. Report the chosen version; no repeated
+approval is needed solely for version selection or skipping a cancelled,
+never-public candidate. Preparation, review, and draft-only requests do not
+authorize public publication.
 
 ## Current release workflows
 
@@ -46,7 +51,7 @@ Local maintainer shortcuts remain:
 
 ## Agentplugins release evidence
 
-For an owner-approved exact version:
+For an owner-authorized release, after choosing and reporting the exact version:
 
 1. Fix one candidate commit on `main` and record the required CI, dependency
    review, CodeQL, vulnerability, generated-file, and applicable platform proof.
