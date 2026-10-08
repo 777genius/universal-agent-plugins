@@ -32,6 +32,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  opencode-transition-windows:
+    name: opencode-transition-windows
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.25.13"
+          cache: false
+      - name: Qualify native Windows transition privacy and durable recovery
+        working-directory: install/integrationctl/agentplugins
+        run: go test -count=1 -timeout=3m -v ./clients/opencode -run '^(TestNativeTransitionPrivacyReopensDurableJournal|TestWindowsNativeTransitionRejectsUnsafePrivacy)$'
+
   managed-stdio-windows:
     name: managed-stdio-windows
     runs-on: windows-2025
