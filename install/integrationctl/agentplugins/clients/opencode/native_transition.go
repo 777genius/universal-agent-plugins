@@ -270,7 +270,13 @@ func syncTransitionEntry(anchor *os.Root, path string, entry fs.DirEntry) error 
 	if entry.IsDir() && runtime.GOOS == "windows" {
 		return nil
 	}
-	file, err := anchor.Open(path)
+	flag := os.O_RDONLY
+	if runtime.GOOS == "windows" {
+		// File.Sync calls FlushFileBuffers, which requires GENERIC_WRITE.
+		// Open without creation or truncation; readonly data must fail closed.
+		flag = os.O_WRONLY
+	}
+	file, err := anchor.OpenFile(path, flag, 0)
 	if err != nil {
 		return err
 	}

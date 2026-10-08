@@ -1,12 +1,53 @@
 package opencode
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"golang.org/x/sys/windows"
 )
+
+// Real FlushFileBuffers must succeed without altering writable skill content,
+// and readonly data must keep its bytes/attributes when durability is denied.
+func TestWindowsNativeTransitionSyncPreservesBytes(t *testing.T) {
+	for _, readonly := range []bool{false, true} {
+		name, mode := "writable", os.FileMode(0600)
+		if readonly {
+			name, mode = "readonly", 0400
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "SKILL.md")
+			body := []byte("TEST skill preimage must stay intact\n")
+			if err := os.WriteFile(path, body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(path, mode); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(path, 0600) })
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = syncTransitionTree(root)
+			if readonly && !errors.Is(err, windows.ERROR_ACCESS_DENIED) || !readonly && err != nil {
+				t.Fatalf("readonly=%v: unexpected synchronization result: %v", readonly, err)
+			}
+			after, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(got, body) || after.Mode() != before.Mode() {
+				t.Fatalf("synchronization changed skill bytes or mode: %q, %v", got, err)
+			}
+		})
+	}
+}
 
 // Each case mutates an actual NTFS descriptor on a valid, persisted transition,
 // so an ACL-blind Windows fix would accept it and make this regression red.

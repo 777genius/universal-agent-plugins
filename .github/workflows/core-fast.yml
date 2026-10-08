@@ -50,7 +50,7 @@ jobs:
           cache: false
       - name: Qualify native Windows transition privacy and durable recovery
         working-directory: install/integrationctl/agentplugins
-        run: go test -count=1 -timeout=3m -v ./clients/opencode -run '^(TestNativeTransitionPrivacyReopensDurableJournal|TestWindowsNativeTransitionRejectsUnsafePrivacy)$'
+        run: go test -count=1 -timeout=3m -v ./clients/opencode -run '^(TestNativeTransitionPrivacyReopensDurableJournal|TestWindowsNativeTransitionRejectsUnsafePrivacy|TestWindowsNativeTransitionSyncPreservesBytes)$'
 
   managed-stdio-windows:
     name: managed-stdio-windows
