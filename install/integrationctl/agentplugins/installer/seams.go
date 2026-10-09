@@ -138,12 +138,15 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 			return domain.ActivationOutcome{}, err
 		}
 	}
-	// Legacy resume marks VerifyOnly even when activation never finished.
-	// Selected deliveries keep verification read-only; confirmed repair owns effects.
-	// Preview carries only installation identity and must remain read-only.
-	resume := request.VerifyOnly && request.Plan.SelectedDelivery.IsZero() && a.facts.BindingID != "" && a.hostHandoffPending(request)
+	// The engine reconciles a pending host handoff before resuming an existing
+	// package. CLI activation may still need effects, independently of that
+	// completed callback. A staged replacement must run its own post-commit hook.
+	// Selected deliveries retain their separate confirmation contract.
+	resume := request.PackageUnchanged && request.Plan.SelectedDelivery.IsZero() && a.facts.BindingID != ""
 	if resume {
-		request.VerifyOnly = false
+		if a.hostHandoffPending(request) {
+			request.VerifyOnly = false
+		}
 	} else if a.onCommitted != nil && !request.VerifyOnly {
 		facts, err := a.committedFacts(request)
 		if err != nil {

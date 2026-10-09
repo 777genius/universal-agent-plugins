@@ -389,6 +389,10 @@ type StagedDelivery struct {
 }
 
 type ActivationRequest struct {
+	// PackageUnchanged means activation reuses the committed, verified managed
+	// package without a new package transaction. External CLI effects may still
+	// be required; VerifyOnly describes those effects independently.
+	PackageUnchanged  bool           `json:"-"`
 	Client            DetectedClient `json:"client"`
 	Plan              DeliveryPlan   `json:"plan"`
 	Delivery          StagedDelivery `json:"delivery"`

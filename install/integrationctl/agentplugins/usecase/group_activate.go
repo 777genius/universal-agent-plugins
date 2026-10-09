@@ -94,7 +94,8 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 		previous = append([]domain.NativeObjectOwnership(nil), target.managed.NativeObjects...)
 	}
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, target.clientBindingID, domain.ActivationRequest{
-		Client: target.input.Client, Plan: target.plan, Delivery: delivery,
+		PackageUnchanged: target.noChange,
+		Client:           target.input.Client, Plan: target.plan, Delivery: delivery,
 		DeclaredName: target.input.Envelope.Manifest.Name, Replacing: session.replace, Interactive: target.input.Interactive,
 		BackendExecutable: target.input.BackendExecutable, PreviousNativeObjects: previous,
 		VerifyOnly: target.noChange && nativeComplete, ActivationComplete: target.input.ActivationComplete,
