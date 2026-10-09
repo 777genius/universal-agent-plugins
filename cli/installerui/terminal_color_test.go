@@ -12,7 +12,7 @@ func TestRichNoColor(t *testing.T) {
 	var out strings.Builder
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	result, err := (testRich{Input: strings.NewReader("\r"), Output: &out, NoColor: true}).Confirm(ctx, ConfirmRequest{Title: "Apply fixture?"})
+	result, err := (testRich{Input: strings.NewReader("\r"), Output: &out, NoColor: true}).Confirm(ctx, ConfirmRequest{Title: "Apply fixture?", Summary: []string{"Fixture summary", "", "Selected units", "  unit=alpha"}})
 	if err != nil || result.Accepted {
 		t.Fatal(result, err)
 	}
