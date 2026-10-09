@@ -43,6 +43,7 @@ func TestConfirmationSummaryPreservesAuthorityText(t *testing.T) {
 // Adding a frame or changing size must not place controls outside the screen,
 // hide the final authority suffix, or make the review hint overflow its width.
 func TestConfirmationSummaryResizeAndScrollKeepsControlsVisible(t *testing.T) {
+	t.Setenv("TERM", "xterm-256color")
 	accepted := false
 	field := huh.NewConfirm().Title("Apply?").Affirmative("Yes").Negative("No").Inline(true).Value(&accepted)
 	layout := &confirmationLayout{
