@@ -89,7 +89,7 @@ func formatConfirmationSummary(summary string, width int, noColor bool) string {
 	rows := strings.Split(summary, "\n")
 	blockStart := true
 	for i, row := range rows {
-		wrapped := ansi.Hardwrap(row, width, true)
+		wrapped := wrapConfirmationSummaryRow(row, width)
 		if blockStart && row != "" && row == strings.TrimLeft(row, " ") {
 			wrapped = heading.Render(wrapped)
 		}
@@ -97,6 +97,28 @@ func formatConfirmationSummary(summary string, width int, noColor bool) string {
 		blockStart = row == ""
 	}
 	return strings.Join(rows, "\n")
+}
+
+// Keep ordinary words together without discarding whitespace at line breaks.
+// Oversized authority tokens still wrap fully, including their final suffix.
+func wrapConfirmationSummaryRow(row string, width int) string {
+	var result strings.Builder
+	lineWidth := 0
+	for _, token := range strings.SplitAfter(row, " ") {
+		tokenWidth := ansi.StringWidth(token)
+		if lineWidth > 0 && lineWidth+tokenWidth > width {
+			result.WriteByte('\n')
+			lineWidth = 0
+		}
+		wrapped := ansi.Hardwrap(token, width, true)
+		result.WriteString(wrapped)
+		if i := strings.LastIndexByte(wrapped, '\n'); i >= 0 {
+			lineWidth = ansi.StringWidth(wrapped[i+1:])
+		} else {
+			lineWidth += tokenWidth
+		}
+	}
+	return result.String()
 }
 
 func (l *confirmationLayout) key(msg tea.KeyPressMsg) {

@@ -25,6 +25,13 @@ func TestConfirmationSummaryPreservesAuthorityText(t *testing.T) {
 			}
 		}
 	}
+	sentence := strings.Repeat("Review ", 10) + "Esc to cancel."
+	wrappedSentence := formatConfirmationSummary(sentence, 80, true)
+	for _, word := range strings.Fields(sentence) {
+		if !strings.Contains(wrappedSentence, word) {
+			t.Fatalf("ordinary word split during summary wrapping: %q in %q", word, wrappedSentence)
+		}
+	}
 	summary := "Fixture summary\n  action=install\n\nSelected units\n  unit=alpha"
 	styled := formatConfirmationSummary(summary, 80, false)
 	plain := formatConfirmationSummary(summary, 80, true)
