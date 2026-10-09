@@ -7,6 +7,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -52,14 +53,23 @@ func TestConfirmationSummaryPreservesAuthorityText(t *testing.T) {
 func TestConfirmationSummaryResizeAndScrollKeepsControlsVisible(t *testing.T) {
 	t.Setenv("TERM", "xterm-256color")
 	accepted := false
-	field := huh.NewConfirm().Title("Apply?").Affirmative("Yes").Negative("No").Inline(true).Value(&accepted)
+	field := huh.NewConfirm().Title("Apply?").Affirmative("Yes").Negative("No").Inline(false).WithButtonAlignment(lipgloss.Left).Value(&accepted)
 	layout := &confirmationLayout{
 		title: "Apply?", summary: "Fixture summary\n\nSelected units\n  " + strings.Repeat("scope/", 150) + "/chosen-final-suffix",
 		noColor: true, viewport: viewport.New(),
 	}
 	form := huh.NewForm(huh.NewGroup(field)).WithLayout(layout)
-	for _, size := range [][2]int{{80, 24}, {16, 16}, {32, 12}, {80, 24}} {
-		w, h := size[0], size[1]
+	for _, size := range []struct {
+		width, height int
+		title         string
+	}{
+		{80, 24, "Apply?"}, {16, 16, "Apply?"}, {32, 12, "Apply?"},
+		{180, 30, "Apply this installation plan to all selected project scopes and home client configurations?"},
+		{80, 24, "Apply?"},
+	} {
+		w, h := size.width, size.height
+		field.Title(size.title)
+		layout.title = size.title
 		if err := layout.resize(w, h); err != nil {
 			t.Fatal(err)
 		}
@@ -81,10 +91,25 @@ func TestConfirmationSummaryResizeAndScrollKeepsControlsVisible(t *testing.T) {
 		if !strings.Contains(reviewText.String(), "chosen-final-suffix") {
 			t.Fatalf("end scroll clipped authority suffix:\n%s", view)
 		}
-		for _, control := range []string{"Apply?", "Yes", "No"} {
+		for _, control := range []string{size.title, "Yes", "No"} {
 			if !strings.Contains(view, control) {
 				t.Fatalf("control %q disappeared after resize to %dx%d:\n%s", control, w, h, view)
 			}
+		}
+		titleLine, buttonLine := -1, -1
+		for i, line := range strings.Split(view, "\n") {
+			if strings.Contains(line, size.title) {
+				titleLine = i
+			}
+			if strings.HasPrefix(strings.TrimSpace(line), "Yes") && strings.Contains(line, "No") {
+				buttonLine = i
+				if strings.Index(line, "Yes") > 4 {
+					t.Fatalf("buttons are not aligned left: %q", line)
+				}
+			}
+		}
+		if titleLine < 0 || buttonLine <= titleLine {
+			t.Fatalf("Yes/No must share a row below the question:\n%s", view)
 		}
 		if !strings.Contains(view, "╭") || !strings.Contains(view, "╰") {
 			t.Fatalf("summary lacks visible frame:\n%s", view)

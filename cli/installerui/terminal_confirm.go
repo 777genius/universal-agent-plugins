@@ -22,6 +22,9 @@ func (p terminalRenderer) confirm(ctx context.Context, req ConfirmRequest, queue
 	accepted := req.Default && len(queued) == 0
 	field := huh.NewConfirm().Title(req.Title).Affirmative("Yes").Negative("No").Inline(true).Value(&accepted)
 	layout := &confirmationLayout{summary: strings.Join(req.Summary, "\n"), title: req.Title, noColor: p.NoColor, viewport: viewport.New(viewport.WithWidth(76), viewport.WithHeight(10))}
+	if layout.summary != "" {
+		field.Inline(false).WithButtonAlignment(lipgloss.Left)
+	}
 	_ = layout.resize(80, 24) // Private injected qualification has no terminal geometry.
 	form := huh.NewForm(huh.NewGroup(field)).WithLayout(layout)
 	if err := p.initialSize(layout.resize); err != nil {
@@ -65,9 +68,9 @@ func (l *confirmationLayout) resize(w, h int) error {
 	titleHeight := lenLines(ansi.Wrap(l.title, max(1, w-4), ""))
 	reserved := titleHeight + 5
 	if l.summary != "" {
-		// The frame adds two rows. Wrap the hint as well, so narrow terminals
-		// keep the confirmation buttons and help below the summary visible.
-		reserved += 2 + lenLines(ansi.Wrap(confirmationSummaryHelp, max(1, w), ""))
+		// The frame and separate button row each add two rows. Wrap the hint
+		// as well, so narrow terminals keep buttons and help visible.
+		reserved += 4 + lenLines(ansi.Wrap(confirmationSummaryHelp, max(1, w), ""))
 	}
 	if w < 16 || h < reserved+1 {
 		return fmt.Errorf("terminal too small for confirmation controls")
