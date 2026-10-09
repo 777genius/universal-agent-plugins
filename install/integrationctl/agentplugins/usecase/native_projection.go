@@ -22,7 +22,9 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		// CLI registration is a separate effect from materializing its package.
 		// A canceled group may leave this binding committed but unattempted;
 		// verify-only is safe only after a prior successful client verification.
-		if plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && service.clientVerifierAvailable(input, plan) {
+		classifier, ok := service.Activator.(ports.AutomaticActivationClassifier)
+		cliBacked := ok && classifier.AutomaticallyActivates(domain.ActivationRequest{Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable})
+		if plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && cliBacked {
 			complete := client.Activation == domain.ActivationActive && (client.Verification == domain.VerificationInstalled || client.Verification == domain.VerificationRuntime)
 			return delivery, complete, nil
 		}
