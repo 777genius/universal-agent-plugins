@@ -162,11 +162,12 @@ func (session *groupSession) buildGroupMutations() []transaction.DirectoryMutati
 		if session.input.Repair && target.managed != nil {
 			authentication = preservedGroupAuthentication(authentication, target.managed.Authentication)
 		}
+		activation, verification := initialLifecycle(target.plan)
 		mutations = append(mutations, transaction.DirectoryMutation{
 			OperationID: operationID, InstallationID: session.installationID, ClientBindingID: target.clientBindingID,
 			Sequence: nextSequence(client), OwnedBase: delivery.OwnedBase, ActivePath: delivery.ActivePath, StagingPath: delivery.StagingPath,
-			BeforeDigest: before, AfterDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects, Activation: target.plan.Activation,
-			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: target.plan.Verification, RequireAbsent: target.requireAbsent,
+			BeforeDigest: before, AfterDigest: delivery.ArtifactDigest, NativeObjects: delivery.NativeObjects, Activation: activation,
+			Authentication: authentication, Policy: domain.PolicyAllowed, Verification: verification, RequireAbsent: target.requireAbsent,
 			VerifyBefore: func(verifyContext context.Context, path string) error {
 				return stager.Verify(verifyContext, path, before)
 			},

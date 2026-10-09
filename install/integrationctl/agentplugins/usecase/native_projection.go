@@ -19,6 +19,13 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	}
 	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
+		// CLI registration is a separate effect from materializing its package.
+		// A canceled group may leave this binding committed but unattempted;
+		// verify-only is safe only after a prior successful client verification.
+		if plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && service.clientVerifierAvailable(input, plan) {
+			complete := client.Activation == domain.ActivationActive && (client.Verification == domain.VerificationInstalled || client.Verification == domain.VerificationRuntime)
+			return delivery, complete, nil
+		}
 		return delivery, true, nil
 	}
 	if !packageRevisionMatches(client.PackageRevision, input.Envelope) {
