@@ -102,6 +102,7 @@ func (kernel Kernel) beginExactFile(path string, plain bool) (*ExactFile, error)
 
 func (kernel Kernel) capturePlainExactFile(path string) (plainExactGuard, FileSnapshot, error) {
 	refusal := fmt.Errorf("plain exact mutation requires the default Darwin arm64 local APFS backend")
+	//nolint:staticcheck // SA4023: the Linux stub always refuses; the Darwin arm64 implementation can succeed.
 	if _, ok := kernel.files.(conditionalOSFiles); ok {
 		guard, snapshot, err := capturePlainOS(path)
 		if err == nil {
