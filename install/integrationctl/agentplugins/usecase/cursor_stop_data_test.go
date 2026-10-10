@@ -1,12 +1,13 @@
 package usecase
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/cursorhooks"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/cursorhooks"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 // A selected Stop needs its owned locator without inheriting unselected MCP requirements.

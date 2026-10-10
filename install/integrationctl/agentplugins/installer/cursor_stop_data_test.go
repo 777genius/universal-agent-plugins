@@ -99,7 +99,7 @@ func (a cursorStopDataAdapter) Activate(ctx context.Context, env clients.Env, r 
 // Stop-only used to commit no data receipt when stdio MCP was unsupported,
 // causing the real post-commit host callback to receive an empty DataRoot.
 func TestCursorStopOnlyCommittedOwnedData(t *testing.T) {
-	if !(runtime.GOOS == "linux" && runtime.GOARCH == "amd64" || runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") {
+	if (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") && (runtime.GOOS != "darwin" || runtime.GOARCH != "arm64") {
 		t.Skip("NOT_RUN Cursor Stop data: fixed Linux amd64 or Darwin arm64 TEST tuple required")
 	}
 	e, req := physicalEngine(t)
