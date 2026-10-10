@@ -26,7 +26,7 @@ function fixture(scope = "linux-amd64-pair", identity = ID) {
   const source = path.join(ancestor, "candidate"); mkdir(source);
   const cache = path.join(root, "cache with spaces"); mkdir(cache);
   const manifest = { schema: c.SCHEMA, status: "CANDIDATE", identity: structuredClone(identity), asset_scope: scope,
-    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13", go_sha256: "b".repeat(64),
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.26.9", go_sha256: "b".repeat(64),
       source_archive_sha256: "c".repeat(64), authoring_mode: "vertical-slice-v1" }, products: {}, release_eligible: false };
   const packages = {}, descriptors = {}, bodies = {};
   for (const product of c.PRODUCTS) {

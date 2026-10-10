@@ -22,7 +22,7 @@ function fixture() {
   const root = path.join(sandbox, "frozen"), scratch = path.join(sandbox, "provider");
   fs.mkdirSync(root); fs.mkdirSync(scratch); fs.mkdirSync(path.join(root, "candidate"));
   const manifest = { schema: c.SCHEMA, status: "CANDIDATE", identity: structuredClone(ID), asset_scope: "six-platform-pair",
-    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13", go_sha256: hash("go fixture"),
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.26.9", go_sha256: hash("go fixture"),
       source_archive_sha256: hash("source fixture"), authoring_mode: "release-cli-contract-v1" }, products: {}, release_eligible: false };
   for (const product of c.PRODUCTS) {
     const assets = {};

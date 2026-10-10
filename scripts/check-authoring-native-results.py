@@ -98,7 +98,7 @@ def check(root):
         require(native_arch == env["GOHOSTARCH"] == env["GOARCH"] == os.environ["EXPECTED_ARCH"], "native architecture mismatch")
         require(native_arch in ("amd64", "arm64"), "unsupported native architecture")
         require(os.environ.get("RUNNER_ARCH", "").lower() == {"amd64": "x64", "arm64": "arm64"}.get(native_arch), "runner architecture mismatch")
-        require(env["GOVERSION"] == "go1.25.13", "Go pin mismatch")
+        require(env["GOVERSION"] == "go1.26.9", "Go pin mismatch")
         suffix = ".exe" if native_os == "windows" else ""
         summary["go_sha256"] = digest(Path(env["GOROOT"]) / "bin" / ("go" + suffix))
         binaries = {name: digest(root / "bin" / (name + suffix)) for name in ("agentplugins", "plugin-kit-ai")}
