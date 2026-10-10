@@ -100,13 +100,13 @@ unproven absence separately.
 
 ## Shell evidence and host obligations
 
-`RenderArgv` supports only `LinuxUserShell32212`: the explicitly selected local
-Linux user-hook single-quote grammar, with apostrophes encoded by adjacent
+`RenderArgv` supports `LinuxUserShell32212` and `DarwinUserShell20260918`: the
+explicitly selected user-hook single-quote grammars, with apostrophes encoded by adjacent
 single/double quoted segments. It emits a literal command without `exec`, shell
 option changes or failure/output guards. Tokens are at most 4,096 bytes, argv
 at most 32 tokens/16,384 bytes. Empty ordinary args are supported; NUL, CR/LF,
 invalid UTF-8, dollar and backtick tokens are unsupported. Executable and
-selector paths must be canonical absolute Linux paths, not `/` or `//` aliases.
+selector paths must be canonical absolute POSIX paths, not `/` or `//` aliases.
 
 The supplied Cursor IDE 3.22.12 Linux spike observed `workspaceOpen`, config
 discovery, ordinary adversarial argv and cwd `TEST HOME/.cursor`. It did not
@@ -119,6 +119,16 @@ retrieving the pinned bundle was denied by the network allowlist. Dollar-like
 forms therefore remain refused even though the narrow native spike recorded
 one dollar literal. Do not broaden placeholders or literal forms by assuming
 quoting disables native preprocessing.
+
+A separate Darwin arm64 Cursor CLI `2026.09.18-9a7762b` TEST run on
+2026-10-10 captured a genuine `stop` after a loopback provider request, exact
+conversation/generation correlation, and unchanged space/apostrophe argv.
+The CLI returned its neutral Stop response and exited normally. Its `index.js`
+SHA-256 was `19af19274b07dcb8ad9bd86915320b7b49a62de763af10c6857ab45257c8a14b`.
+The run used fresh TEST HOME/workspace, a synthetic token, file credential store
+and `CI=1`. This qualifies this narrow native shell grammar, not an installed
+notifications route, cloud-provider access or other architectures/versions.
+Dollar/backtick and other existing lexical refusals remain unchanged.
 
 The regression recorder executes the JSON-decoded command under actual
 `/bin/sh` in fresh TEST scratch with a minimal environment. Its broader token
@@ -159,5 +169,5 @@ Run from the agentplugins module with the explicitly provided toolchain and
 offline isolated Go caches: `go test -p 2 -count=1 -timeout 90s ./cursorhooks`.
 Set `CURSORHOOKS_TEST_ROOT` to an existing absolute own `.research/tmp/` TEST
 directory, and `TMPDIR`, `GOTMPDIR`, `HOME` and `USERPROFILE` to fresh TEST paths.
-The shell recorder fails if the TEST scratch boundary is missing. Non-Linux
-runs skip only the Linux recorder and retain explicit Windows refusal checks.
+The shell recorder fails if the TEST scratch boundary is missing. Unqualified platforms
+skip only the shell recorder and retain explicit Windows refusal checks.

@@ -185,3 +185,38 @@ func TestSelectedCursorPacketSealingAndAuthority(t *testing.T) {
 		t.Fatal("legacy wire gained zero receipt")
 	}
 }
+
+// A Darwin receipt must round-trip while mixed OS/version/shell packets refuse.
+func TestCursorDarwinTupleDoesNotAdmitMixedFacts(t *testing.T) {
+	root := t.TempDir()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	receipt := CursorHookReceipt{Version: 1, Event: "stop", Executable: filepath.Join(root, "observer"), Selector: filepath.Join(root, "binding"), Shell: "cursor-darwin-arm64-user-2026.09.18-single-quote", EntryDigest: digest, RemainderDigest: digest}
+	facts := CursorDeliveryFacts{ProfileRoot: root, HooksPath: filepath.Join(root, "hooks.json"), ProfileIdentity: "TEST-profile", CursorVersion: "2026.09.18-9a7762b", TargetOS: "darwin", TargetArch: "arm64", QualificationID: "TEST-native-shell", Executable: receipt.Executable, Selector: receipt.Selector, Shell: receipt.Shell, ObjectID: "TEST-stop", EntryDigest: digest, CanonicalDigest: digest, PlannedReceipt: receipt, OriginalRawDigest: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+	selected, err := NewCursorDelivery(facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded SelectedDelivery
+	if err := json.Unmarshal(raw, &decoded); err != nil || !reflect.DeepEqual(selected, decoded) {
+		t.Fatalf("Darwin packet roundtrip: %v", err)
+	}
+	for _, change := range []func(*CursorDeliveryFacts){
+		func(f *CursorDeliveryFacts) { f.TargetOS = "linux" },
+		func(f *CursorDeliveryFacts) { f.TargetArch = "amd64" },
+		func(f *CursorDeliveryFacts) { f.CursorVersion = "2026.09.28-64d2043" },
+		func(f *CursorDeliveryFacts) {
+			f.Shell = "cursor-linux-user-3.22.12-single-quote"
+			f.PlannedReceipt.Shell = f.Shell
+		},
+	} {
+		invalid := facts
+		change(&invalid)
+		if _, err := NewCursorDelivery(invalid); err == nil {
+			t.Fatal("mixed Cursor tuple admitted")
+		}
+	}
+}
