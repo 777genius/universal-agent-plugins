@@ -67,6 +67,11 @@ func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan doma
 }
 
 func initialLifecycle(plan domain.DeliveryPlan) (domain.ActivationState, domain.VerificationState) {
+	// The plan describes the intended external result. A package transaction
+	// cannot establish CLI registration before the activator verifies it.
+	if plan.SelectedDelivery.EffectiveTraits(plan.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && plan.Activation == domain.ActivationActive {
+		return domain.ActivationPrepared, domain.VerificationPackageValid
+	}
 	return plan.Activation, plan.Verification
 }
 

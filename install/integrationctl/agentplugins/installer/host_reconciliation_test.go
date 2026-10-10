@@ -167,6 +167,17 @@ func TestHostReconciliationRepeat(t *testing.T) {
 			if bad.Client.Authentication != string(domain.AuthenticationNotChecked) || callbacks != wantCallbacks || effects != 1 {
 				t.Fatalf("negative observation escalated auth or repeated callback: %+v callbacks=%d effects=%d", bad, callbacks, effects)
 			}
+			if failFirst {
+				// Unknown CLI output leaves manual verification pending, but the
+				// host handoff already completed. Native retry must not replay it.
+				runner.observation = ""
+				if recovered, err := apply(); err != nil || recovered.Client.Verification != string(domain.VerificationInstalled) {
+					t.Fatalf("retry unknown listing: %+v %v", recovered, err)
+				}
+				if callbacks != wantCallbacks || effects != 1 {
+					t.Fatalf("manual retry repeated host callback: callbacks=%d effects=%d", callbacks, effects)
+				}
+			}
 		})
 	}
 }

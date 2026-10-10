@@ -57,7 +57,7 @@ func (service Service) resume(
 		}
 	}
 	request := domain.ActivationRequest{
-		Client: input.Client, Plan: result.Plan, Delivery: delivery,
+		Client: input.Client, Plan: result.Plan, Delivery: delivery, PackageUnchanged: true,
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),

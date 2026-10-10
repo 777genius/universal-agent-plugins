@@ -19,7 +19,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	}
 	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
-		return delivery, true, nil
+		return delivery, service.nonNativeRegistrationComplete(input, plan, client), nil
 	}
 	if !packageRevisionMatches(client.PackageRevision, input.Envelope) {
 		return delivery, false, fmt.Errorf("active package revision differs from the requested native projection")
@@ -64,6 +64,18 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		return delivery, false, err
 	}
 	return delivery, confirmedNativeProjection(client.NativeObjects, delivery.NativeObjects), nil
+}
+
+// nonNativeRegistrationComplete separates CLI effects from package reuse.
+// Explicit attestation still runs the adapter's verifier; recognized negative
+// evidence cannot be overridden. Unattempted registration still needs effects.
+func (service Service) nonNativeRegistrationComplete(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding) bool {
+	classifier, ok := service.Activator.(ports.AutomaticActivationClassifier)
+	cliBacked := ok && classifier.AutomaticallyActivates(domain.ActivationRequest{Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable})
+	if plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && cliBacked {
+		return input.ActivationComplete || client.Activation == domain.ActivationActive && (client.Verification == domain.VerificationInstalled || client.Verification == domain.VerificationRuntime)
+	}
+	return true
 }
 
 func confirmedNativeProjection(confirmed, desired []domain.NativeObjectOwnership) bool {

@@ -1284,7 +1284,7 @@ func TestInstallGroupRetryAfterSecondHostSeamFailureReconcilesWithoutDuplicating
 	}
 	var calls []string
 	failClaude := true
-	runner := &capturingRunner{inner: listingRunner{configRoot: claudeConfig}}
+	runner := &groupHostReconciliationRunner{claude: listingRunner{configRoot: claudeConfig}}
 	eng, err := newTestEngine(t, Config{
 		StateRoot: filepath.Join(base, "uap"), HelperExecutable: probe, Runner: runner,
 		OnCommittedBinding: func(_ context.Context, facts BindingFacts) error {
@@ -1327,6 +1327,9 @@ func TestInstallGroupRetryAfterSecondHostSeamFailureReconcilesWithoutDuplicating
 	codexBefore := inspectedBinding(t, view, "codex")
 	if codexBefore.BindingID == "" || codexBefore.DataRoot == "" {
 		t.Fatalf("first client missing after partial group: %+v", view.Installations[0].Bindings)
+	}
+	if codexBefore.Activation != string(domain.ActivationActive) || codexBefore.Verification != string(domain.VerificationInstalled) {
+		t.Fatalf("first client was not verified before retry: %+v", codexBefore)
 	}
 	claudeBefore := inspectedBinding(t, view, "claude")
 	if claudeBefore.BindingID == "" || claudeBefore.DataRoot == "" {
@@ -1385,6 +1388,24 @@ func TestInstallGroupRetryAfterSecondHostSeamFailureReconcilesWithoutDuplicating
 	if len(calls) != claudeCalls+codexCalls {
 		t.Fatalf("inspect after retry executed host callback: %q", calls)
 	}
+}
+
+// Each client must return its real listing contract. A Claude-shaped listing
+// cannot establish that the first Codex target completed before group retry.
+type groupHostReconciliationRunner struct {
+	calls  [][]string
+	codex  recordingCodexRunner
+	claude listingRunner
+}
+
+func (r *groupHostReconciliationRunner) Run(ctx context.Context, cmd ports.Command) (ports.CommandResult, error) {
+	r.calls = append(r.calls, append([]string(nil), cmd.Argv...))
+	for _, entry := range cmd.Env {
+		if strings.HasPrefix(entry, "CODEX_HOME=") {
+			return r.codex.Run(ctx, cmd)
+		}
+	}
+	return r.claude.Run(ctx, cmd)
 }
 
 func inspectedBinding(t *testing.T, view Inspection, clientID string) InspectedBinding {
