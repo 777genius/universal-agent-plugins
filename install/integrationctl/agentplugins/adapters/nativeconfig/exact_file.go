@@ -37,6 +37,14 @@ type ExactFile struct {
 	conflicted bool
 	effect     FileEffect
 	release    func() error
+	plain      plainExactGuard
+}
+
+// plainExactGuard is private to this opt-in transaction, never FileIO authority.
+type plainExactGuard interface {
+	apply([]byte) (FileEffect, error)
+	rollback() (FileEffect, error)
+	close() error
 }
 
 func (kernel Kernel) ReadExactFile(path string) (FileSnapshot, error) {
@@ -51,6 +59,17 @@ func (kernel Kernel) ReadExactFile(path string) (FileSnapshot, error) {
 }
 
 func (kernel Kernel) BeginExactFile(path string) (*ExactFile, error) {
+	return kernel.beginExactFile(path, false)
+}
+
+// BeginPlainExactFile retains the existing writer lock and ExactFile lifecycle.
+// Only the default Darwin arm64 OS backend can authorize changed mutation.
+// Unsupported metadata/platforms and custom IO still allow locked planning.
+func (kernel Kernel) BeginPlainExactFile(path string) (*ExactFile, error) {
+	return kernel.beginExactFile(path, true)
+}
+
+func (kernel Kernel) beginExactFile(path string, plain bool) (*ExactFile, error) {
 	if err := kernel.RequireFileIO(); err != nil {
 		return nil, err
 	}
@@ -68,12 +87,59 @@ func (kernel Kernel) BeginExactFile(path string) (*ExactFile, error) {
 	if release == nil {
 		return nil, fmt.Errorf("native config lock acquirer returned no release operation")
 	}
-	snapshot, err := kernel.ReadExactFile(path)
+	var guard plainExactGuard
+	var snapshot FileSnapshot
+	if plain {
+		guard, snapshot, err = kernel.capturePlainExactFile(path)
+	} else {
+		snapshot, err = kernel.ReadExactFile(path)
+	}
 	if err != nil {
 		return nil, errors.Join(err, release())
 	}
-	return &ExactFile{kernel: kernel, path: path, original: snapshot, effect: FileUnchanged, release: release}, nil
+	return &ExactFile{kernel: kernel, path: path, original: snapshot, effect: FileUnchanged, release: release, plain: guard}, nil
 }
+
+func (kernel Kernel) capturePlainExactFile(path string) (plainExactGuard, FileSnapshot, error) {
+	refusal := fmt.Errorf("plain exact mutation requires the default Darwin arm64 local APFS backend")
+	if _, ok := kernel.files.(conditionalOSFiles); ok {
+		guard, snapshot, err := capturePlainOS(path)
+		if err == nil {
+			return guard, snapshot, nil
+		}
+		refusal = err
+	}
+	snapshot, err := kernel.ReadExactFile(path)
+	return &plainExactRefusal{kernel: kernel, path: path, original: snapshot, reason: refusal}, snapshot, err
+}
+
+type plainExactRefusal struct {
+	kernel   Kernel
+	path     string
+	original FileSnapshot
+	reason   error
+	denied   bool
+}
+
+func (guard *plainExactRefusal) apply(body []byte) (FileEffect, error) {
+	if !guard.original.Exists || !bytes.Equal(body, guard.original.Body) {
+		guard.denied = true
+		return FileUncertain, guard.reason
+	}
+	current, err := guard.kernel.ReadExactFile(guard.path)
+	if err != nil || !current.Exists || !bytes.Equal(current.Body, guard.original.Body) {
+		guard.denied = true
+		return FileUncertain, errors.Join(err, ErrConcurrentChange)
+	}
+	return FileUnchanged, nil
+}
+func (guard *plainExactRefusal) rollback() (FileEffect, error) {
+	if guard.denied {
+		return FileUncertain, guard.reason
+	}
+	return guard.apply(guard.original.Body)
+}
+func (*plainExactRefusal) close() error { return nil }
 
 func (file *ExactFile) Original() FileSnapshot {
 	snapshot := file.original
@@ -90,6 +156,11 @@ func (file *ExactFile) Apply(body []byte) error {
 		return fmt.Errorf("native config transaction is closed or already applied")
 	}
 	file.attempted, file.output = true, bytes.Clone(body)
+	if file.plain != nil {
+		var err error
+		file.effect, err = file.plain.apply(file.output)
+		return err
+	}
 	mode := file.original.Mode
 	if !file.original.Exists {
 		mode = 0600
@@ -134,6 +205,14 @@ func (file *ExactFile) Rollback() error {
 	if !file.attempted {
 		return nil
 	}
+	if file.plain != nil {
+		var err error
+		file.effect, err = file.plain.rollback()
+		if err != nil {
+			return fmt.Errorf("retain native config at %q; plain rollback: %w", file.path, err)
+		}
+		return nil
+	}
 	if _, err := file.observe(); err != nil {
 		return fmt.Errorf("retain native config at %q; rollback readback: %w", file.path, err)
 	}
@@ -168,5 +247,8 @@ func (file *ExactFile) Close() error {
 	}
 	release := file.release
 	file.release = nil
-	return release()
+	if file.plain == nil {
+		return release()
+	}
+	return errors.Join(file.plain.close(), release())
 }
