@@ -103,6 +103,10 @@ func newOperationID() (string, error) {
 }
 
 func packageNeedsPluginData(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) bool {
+	// The native Cursor Stop selector also belongs to the owned data receipt.
+	if _, ok := plan.SelectedDelivery.CursorFacts(); ok {
+		return true
+	}
 	if facts, ok := plan.SelectedDelivery.LocalFacts(); ok && facts.NativeStop {
 		return true
 	}
