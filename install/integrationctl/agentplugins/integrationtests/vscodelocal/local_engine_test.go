@@ -5,13 +5,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/vscodelocalhooks"
 )
 
 // Red: actual NewLocal silently uses CLI registration, changes another profile,
@@ -282,4 +285,59 @@ func TestLocalCanonicalHookAdmissionFailsClosed(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Regression: source-only Darwin, a neighboring qualification/version/shell,
+// or a Darwin amd64 runtime silently inherits the B17 grant.
+func TestLocalExactPlatformTupleAdmission(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	must(t, err)
+	settings := filepath.Join(root, "settings.json")
+	writeLocal(t, settings, []byte("{}"), 0600)
+	for _, targetOS := range []string{"linux", "windows", "darwin", "freebsd"} {
+		tuple := vscode.SourceQualifiedTESTTuple(targetOS)
+		if targetOS == "darwin" {
+			tuple = retainedB17Tuple()
+		}
+		config := vscode.LocalConfig{ProfileSettingsPath: settings, QualifiedTuple: tuple, TargetShell: vscodelocalhooks.Target{Shell: vscodelocalhooks.Shell(tuple.TargetShell)}}
+		_, err := vscode.NewLocal(config)
+		want := targetOS == runtime.GOOS && (targetOS == "linux" || targetOS == "windows" || targetOS == "darwin" && runtime.GOARCH == "arm64")
+		if (err == nil) != want {
+			t.Fatalf("%s/%s admitted=%v want=%v: %v", targetOS, runtime.GOARCH, err == nil, want, err)
+		}
+		for _, field := range []string{"code", "copilot", "qualification", "shell"} {
+			drift := config
+			switch field {
+			case "code":
+				drift.QualifiedTuple.VSCodeVersion = "1.140.1"
+			case "copilot":
+				drift.QualifiedTuple.CopilotVersion += "-other"
+			case "qualification":
+				drift.QualifiedTuple.QualificationID += "-other"
+			case "shell":
+				drift.QualifiedTuple.TargetShell = "other-shell"
+				drift.TargetShell.Shell = "other-shell"
+			}
+			if _, err := vscode.NewLocal(drift); err == nil {
+				t.Fatalf("%s %s mismatch admitted", targetOS, field)
+			}
+		}
+	}
+	tuple := vscode.SourceQualifiedTESTTuple("darwin")
+	if _, err := vscode.NewLocal(vscode.LocalConfig{ProfileSettingsPath: settings, QualifiedTuple: tuple, TargetShell: vscodelocalhooks.Target{Shell: vscodelocalhooks.Shell(tuple.TargetShell)}}); err == nil {
+		t.Fatal("source-only tuple granted Darwin admission")
+	}
+	if vscode.QualifiedDarwinTESTTuple() != retainedB17Tuple() {
+		t.Fatal("Darwin tuple no longer matches the retained B17 receipt")
+	}
+	// The compatibility source helper must not become a native qualification.
+	if vscode.SourceQualifiedTESTTuple("darwin") == vscode.QualifiedDarwinTESTTuple() {
+		t.Fatal("source-only and B17 qualifications collapsed")
+	}
+}
+
+// Independent frozen qualification input, taken from the retained B17 receipt
+// and task's native tuple, rather than from the adapter's candidate constants.
+func retainedB17Tuple() domain.LocalQualifiedTuple {
+	return domain.LocalQualifiedTuple{VSCodeVersion: "1.140.0", CopilotVersion: "0.68.0", TargetOS: "darwin", TargetShell: "macos-/bin/sh", QualificationID: "TEST-B17-macos-15.6.1-arm64-APFS-fa254ee10963e8cee50a2f2dab5cf9758a2937596c3169fae9396d3f7b98a349"}
 }

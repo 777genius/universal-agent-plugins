@@ -1,6 +1,7 @@
 package vscode
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -113,7 +115,7 @@ func recordedLocalFacts(selected domain.SelectedDelivery) (domain.LocalDeliveryF
 	if !ok {
 		return facts, fmt.Errorf("local selected delivery required; historical CLI receipt is not Local authority")
 	}
-	if !sourceTupleMatches(facts.Tuple, facts.NativeStop) || facts.Tuple.TargetOS != runtime.GOOS {
+	if !localTupleMatches(facts.Tuple, facts.NativeStop) || facts.Tuple.TargetOS != runtime.GOOS {
 		return facts, fmt.Errorf("local recorded tuple unqualified")
 	}
 	if facts.ProfileIdentity != facts.ProfileRoot || facts.SettingsIdentity != facts.SettingsPath || facts.Registration.ObjectID != localObjectID(facts.SettingsPath, facts.Registration.Selector) {
@@ -139,4 +141,29 @@ func ownedLocalObjects(facts domain.LocalDeliveryFacts, objects []domain.NativeO
 		owned = true
 	}
 	return owned, nil
+}
+
+func (a *LocalAdapter) captureLocalProfileAuthority(ctx context.Context, client domain.DetectedClient) (domain.ProfileAuthority, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.ProfileAuthority{}, err
+	}
+	if client.ClientID != domain.ClientVSCode {
+		return domain.ProfileAuthority{}, fmt.Errorf("local physical authority requires VS Code")
+	}
+	root, err := a.ResolveProfileRoot(client.ConfigRoot)
+	if err != nil {
+		return domain.ProfileAuthority{}, err
+	}
+	return profileauthority.Capture(ctx, root)
+}
+
+// Revalidation consumes only persisted authority, never current constructor inputs.
+func revalidateLocalProfileAuthority(ctx context.Context, id domain.ClientID, token domain.ProfileAuthority) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if id != domain.ClientVSCode || token.IsZero() {
+		return fmt.Errorf("local recorded physical authority required")
+	}
+	return profileauthority.Revalidate(ctx, token)
 }

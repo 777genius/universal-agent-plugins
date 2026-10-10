@@ -151,7 +151,7 @@ func mutateProfile(ctx context.Context, kernel nativeconfig.Kernel, selected dom
 	if err != nil {
 		return result, effect, err
 	}
-	file, err := kernel.BeginExactFile(facts.SettingsPath)
+	file, err := beginLocalProfile(kernel, facts.SettingsPath)
 	if err != nil {
 		return result, effect, err
 	}
@@ -169,7 +169,7 @@ func mutateProfile(ctx context.Context, kernel nativeconfig.Kernel, selected dom
 	if !result.Changed {
 		return result, effect, nil
 	}
-	if err := localWritableMetadata(facts.SettingsPath); err != nil {
+	if err := checkLocalProfileMetadata(file, facts.SettingsPath); err != nil {
 		return vscodeprofile.Result{}, effect, err
 	}
 	if err := ctx.Err(); err != nil {

@@ -6,13 +6,22 @@ Copilot semantics, availability labels and public-beta metadata are unchanged.
 This implementation uses the existing loader, selected-delivery record, stager,
 native file lock/CAS kernel, `vscodeprofile` and `vscodelocalhooks`; it adds no engine.
 
-The constructor freezes the explicit physical `settings.json`, source-qualified
+The constructor freezes the explicit physical `settings.json`, exact qualified
 TEST tuple, target shell, native Stop selection, typed fixed specs, declared hook
 file digest, and sorted MCP/skill selections. Parent aliases normalize once;
 final file symlinks and ambiguous/invalid JSONC fail closed. No ambient HOME,
-default profile or Copilot CLI supplies Local authority. The sole TEST source
-pin is VS Code 1.140.0 / built-in Copilot source
-`07f806f999227108933c2e30515b26eecc1fda74`; it is not native release admission.
+default profile or Copilot CLI supplies Local authority. Linux/Windows retain the TEST source pin VS Code 1.140.0 / built-in Copilot
+source `07f806f999227108933c2e30515b26eecc1fda74`. Darwin uses only the separate
+`QualifiedDarwinTESTTuple()`: VS Code 1.140.0 / Copilot 0.68.0, macOS 15.6.1
+arm64/APFS and the existing `MacOSSH` contract. Its qualification ID binds the
+retained original B17 public-command/SDK/normal-quit PASS receipt SHA-256
+`fa254ee10963e8cee50a2f2dab5cf9758a2937596c3169fae9396d3f7b98a349`, independently
+accepted by review SHA-256
+`cf3a9ee8dba140630360fd70388ad5b523afab6902db12a00ffe402f65bf38aa`.
+The host supplies the exact qualified tuple; the adapter rejects every other
+qualification and runtime OS/architecture. `SourceQualifiedTESTTuple("darwin")`
+grants no Darwin admission. B17 qualifies this TEST native tuple, with prior
+failures retained; installed AN delivery and executable release are separate gates.
 
 Before construction the host verifies its ledger-recorded primary runtime
 artifact and supplies that fixed absolute executable in the Stop spec. Supply
@@ -36,8 +45,21 @@ Public pure Plan/VerifyRecordedEntry preserve foreign JSONC, comments and native
 Identical unowned booleans and nonboolean drift conflict. Exact-file native
 writes use the existing writer lock, CAS, readback and rollback. Linux attributed
 profiles refuse changed writes because this kernel cannot preserve ACL/xattrs.
-Other OS writes refuse until metadata preservation and actual native CI qualify
-that path; a Windows build would not constitute native proof. Inspection creates
+Darwin arm64 selects the accepted `BeginPlainExactFile` transaction, retaining
+its held descriptors, metadata admission, Apply/readback, rollback and cleanup.
+Changed writes require that backend's writable local APFS/security/metadata
+checks; unsupported attributes and custom IO retain its refusal. No separate
+pathname metadata grant or reader is introduced. Planning and unchanged removal
+retain their no-op behavior. Other OS writes retain their metadata refusal; a
+Windows build would not constitute native proof.
+
+Only the newly qualified Darwin arm64 Local adapter opts into
+`clients.PhysicalProfileAuthority`. Existing C machinery captures the selected
+physical root only for a new owner and carries its token through confirmation,
+binding and recovery. Revalidation consumes that bound token, independently of
+the current constructor, and never discovers or recaptures a profile. Missing,
+unsupported or changed authority refuses effects. Linux/Windows Local historical
+binding behavior and the historical CLI adapter retain their current contracts. Inspection creates
 no locks and reports owned active/disabled/missing/conflict without CLI listing.
 Registration is `prepared` / package-valid; live activation remains unknown.
 
@@ -91,6 +113,17 @@ Selected VerifyOnly requests stay read-only instead of entering legacy mutating
 resume. The focused consumer lifecycle and race checks pass, including recorded
 true/false Repair/restoration and owned-empty maintenance. Their strict assertions
 remain in place; no nil observation is substituted. Independent source review and
-final public composition CI are separate gates. Native SDK/VS Code/agent execution, physical P2, non-Linux metadata,
-default registration, installed AN notifications and executable release remain
-unqualified. No platform availability or production grant follows.
+final public composition CI are separate gates.
+
+The retained B17 native TEST qualification and accepted backend are inputs to
+this thin source seam. Hosted Linux checks and Darwin arm64 compilation do not
+prove Darwin execution of this adapter. Independent HIGH source review, ROOT's
+Mac adapter qualification and installed AN composition/delivery remain separate
+gates. Default registration, installed AN notifications and executable release
+remain unqualified. No public availability grant follows.
+
+Focused transaction controls live with the existing `integrationtests/vscodelocal`
+owner. Darwin metadata and physical-root qualification controls require the
+existing `nativequalification` build tag on a ROOT-qualified Mac; compilation
+with that tag is not execution. Linux controls retain real xattr refusal,
+portable write/readback/rollback and committed cleanup behavior.
