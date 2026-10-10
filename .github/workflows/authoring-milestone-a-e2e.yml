@@ -16,6 +16,8 @@ jobs:
     name: Exact candidate package
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     env:
       EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
       NODE_OPTIONS: --max-old-space-size=384
@@ -58,6 +60,7 @@ jobs:
             "$config" "$root" "$(command -v go)" "$modcache" "$(command -v npm)"
           node npm/agentplugins/scripts/milestone-a-e2e.js prepare "$config"
       - name: Upload exact candidate bundle and failure evidence
+        id: upload
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -127,7 +130,7 @@ jobs:
           exit "$status"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: milestone-a-exact-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact-ids: ${{ needs.prepare.outputs.artifact-id }}
           path: ${{ runner.temp }}/milestone-a-input
       - name: Restore sealed candidate modes
         if: runner.os != 'Windows'

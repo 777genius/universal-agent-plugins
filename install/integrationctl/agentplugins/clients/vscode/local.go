@@ -27,6 +27,17 @@ func SourceQualifiedTESTTuple(goos string) domain.LocalQualifiedTuple {
 	return domain.LocalQualifiedTuple{VSCodeVersion: "1.140.0", CopilotVersion: "source-07f806f999227108933c2e30515b26eecc1fda74", TargetOS: goos, TargetShell: shell, QualificationID: TESTQualification}
 }
 
+// DarwinTESTQualification binds only the retained B17 public-SDK Stop receipt
+// on macOS 15.6.1 arm64/APFS. It is not installed-product or release proof.
+const DarwinTESTQualification = "TEST-B17-macos-15.6.1-arm64-APFS-fa254ee10963e8cee50a2f2dab5cf9758a2937596c3169fae9396d3f7b98a349"
+
+// QualifiedDarwinTESTTuple is separate from the source-only Linux/Windows tuple.
+// The host supplies this exact qualification; the runtime must also be arm64,
+// and changed writes must pass the held APFS backend's own admission.
+func QualifiedDarwinTESTTuple() domain.LocalQualifiedTuple {
+	return domain.LocalQualifiedTuple{VSCodeVersion: "1.140.0", CopilotVersion: "0.68.0", TargetOS: "darwin", TargetShell: string(vscodelocalhooks.MacOSSH), QualificationID: DarwinTESTQualification}
+}
+
 // LocalConfig supplies explicit, checked host inputs. Hook executable identity
 // is verified by the host BEFORE construction; this adapter neither selects nor
 // downloads a runtime. Args are fixed literals with optional PLUGIN_ROOT/DATA
@@ -70,10 +81,9 @@ func cloneSpecs(specs []vscodelocalhooks.Spec) []vscodelocalhooks.Spec {
 }
 
 func validateLocalConfig(c LocalConfig) error {
-	if !sourceTupleMatches(c.QualifiedTuple, c.NativeStop) ||
-		(c.QualifiedTuple.TargetOS != "linux" && c.QualifiedTuple.TargetOS != "windows") ||
+	if !localTupleMatches(c.QualifiedTuple, c.NativeStop) ||
 		c.QualifiedTuple.TargetOS != runtime.GOOS || c.QualifiedTuple.TargetShell != string(c.TargetShell.Shell) {
-		return fmt.Errorf("local capability_unverified: source-qualified TEST tuple and executor required")
+		return fmt.Errorf("local capability_unverified: exact qualified TEST tuple and executor required")
 	}
 	if !selectedNames(c.MCPServers) || !selectedNames(c.Skills) {
 		return fmt.Errorf("local selections require unique sorted component names")
@@ -97,11 +107,19 @@ func validateLocalConfig(c LocalConfig) error {
 	return nil
 }
 
-func sourceTupleMatches(tuple domain.LocalQualifiedTuple, native bool) bool {
-	if tuple.TargetOS != "linux" && tuple.TargetOS != "windows" {
+func localTupleMatches(tuple domain.LocalQualifiedTuple, native bool) bool {
+	var expected domain.LocalQualifiedTuple
+	switch tuple.TargetOS {
+	case "linux", "windows":
+		expected = SourceQualifiedTESTTuple(tuple.TargetOS)
+	case "darwin":
+		if runtime.GOARCH != "arm64" {
+			return false
+		}
+		expected = QualifiedDarwinTESTTuple()
+	default:
 		return false
 	}
-	expected := SourceQualifiedTESTTuple(tuple.TargetOS)
 	if !native && tuple.TargetShell == "" {
 		expected.TargetShell = ""
 	}

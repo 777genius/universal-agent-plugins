@@ -113,7 +113,7 @@ func recordedLocalFacts(selected domain.SelectedDelivery) (domain.LocalDeliveryF
 	if !ok {
 		return facts, fmt.Errorf("local selected delivery required; historical CLI receipt is not Local authority")
 	}
-	if !sourceTupleMatches(facts.Tuple, facts.NativeStop) || facts.Tuple.TargetOS != runtime.GOOS {
+	if !localTupleMatches(facts.Tuple, facts.NativeStop) || facts.Tuple.TargetOS != runtime.GOOS {
 		return facts, fmt.Errorf("local recorded tuple unqualified")
 	}
 	if facts.ProfileIdentity != facts.ProfileRoot || facts.SettingsIdentity != facts.SettingsPath || facts.Registration.ObjectID != localObjectID(facts.SettingsPath, facts.Registration.Selector) {
