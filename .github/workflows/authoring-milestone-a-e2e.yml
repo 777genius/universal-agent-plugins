@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.9'
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -108,7 +108,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         if: runner.os == 'macOS'
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.9'
           cache: false
       - name: Check Darwin writable acquisition and separate read-only regressions
         if: runner.os == 'macOS'

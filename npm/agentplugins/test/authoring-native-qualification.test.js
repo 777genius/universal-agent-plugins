@@ -196,14 +196,14 @@ function output(value, status=0) {
 }
 function main() {
   if (selected === cfg.go) {
-    if (argv[0]==='env') return output({GOVERSION:'go1.25.13',GOHOSTOS:'linux',GOHOSTARCH:'amd64'});
+    if (argv[0]==='env') return output({GOVERSION:'go1.26.9',GOHOSTOS:'linux',GOHOSTARCH:'amd64'});
     const p = path.basename(argv[3]);
     const settings = {GOOS:'linux',GOARCH:'amd64',CGO_ENABLED:'0','-buildmode':'exe','-compiler':'gc',
       '-ldflags':cfg.linker[p]};
     if(scenario==='wrong-build-target') settings.GOARCH='arm64';
     if(scenario==='wrong-build-mode') settings['-buildmode']='pie';
     if(scenario==='wrong-build-source') settings['-ldflags']=settings['-ldflags'].replace(cfg.identity.commit,'b'.repeat(40));
-    return output({GoVersion:'go1.25.13',Path:'github.com/777genius/plugin-kit-ai/cli/cmd/'+(scenario==='wrong-binary'?'peer':p),
+    return output({GoVersion:'go1.26.9',Path:'github.com/777genius/plugin-kit-ai/cli/cmd/'+(scenario==='wrong-binary'?'peer':p),
       Settings:Object.entries(settings).map(([Key,Value])=>({Key,Value}))});
   }
   let args=argv.filter(x=>x!=='--format=json');
@@ -431,7 +431,7 @@ function subprocessFixtures(t, f, scenario = "ok") {
 }
 function expectations(f) {
   return { producer: f.options.producer, preparation: f.options.preparation,
-    tools: { go: { sha256: f.options.go_sha256, version: "go1.25.13" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } } };
+    tools: { go: { sha256: f.options.go_sha256, version: "go1.26.9" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } } };
 }
 
 test("shared verifier consumes uploaded projections, not missing flat candidate assets", () => {

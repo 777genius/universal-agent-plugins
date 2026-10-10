@@ -9,7 +9,7 @@ Codex and Cursor must be the only compatible choices. Unknown ambient choices
 must be investigated, not accepted by updating expected targets.
 
 ```sh
-# From repository root; Go 1.25.13 or the integration's required toolchain.
+# From repository root; Go 1.26.9 or the integration's required toolchain.
 (cd cli && GOTOOLCHAIN=local \
   GOMODCACHE=/tmp/uap-go-modcache GOCACHE=/tmp/uap-go-buildcache \
   /tmp/uap-go-toolchain/go/bin/go build -o /tmp/agentplugins-ui ./cmd/agentplugins)
