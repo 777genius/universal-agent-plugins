@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"testing"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"golang.org/x/sys/unix"
 )
 
 // Regression: the Darwin wiring removes the existing Linux metadata gate or

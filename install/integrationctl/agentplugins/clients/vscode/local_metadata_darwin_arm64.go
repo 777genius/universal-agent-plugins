@@ -4,8 +4,10 @@ package vscode
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -20,9 +22,26 @@ func checkLocalProfileMetadata(_ *nativeconfig.ExactFile, _ string) error { retu
 var _ clients.PhysicalProfileAuthority = (*LocalAdapter)(nil)
 
 func (a *LocalAdapter) CaptureProfileAuthority(ctx context.Context, client domain.DetectedClient) (domain.ProfileAuthority, error) {
-	return a.captureLocalProfileAuthority(ctx, client)
+	if err := ctx.Err(); err != nil {
+		return domain.ProfileAuthority{}, err
+	}
+	if client.ClientID != domain.ClientVSCode {
+		return domain.ProfileAuthority{}, fmt.Errorf("local physical authority requires VS Code")
+	}
+	root, err := a.ResolveProfileRoot(client.ConfigRoot)
+	if err != nil {
+		return domain.ProfileAuthority{}, err
+	}
+	return profileauthority.Capture(ctx, root)
 }
 
+// Revalidation consumes only persisted authority, never current constructor inputs.
 func (*LocalAdapter) RevalidateProfileAuthority(ctx context.Context, id domain.ClientID, token domain.ProfileAuthority) error {
-	return revalidateLocalProfileAuthority(ctx, id, token)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if id != domain.ClientVSCode || token.IsZero() {
+		return fmt.Errorf("local recorded physical authority required")
+	}
+	return profileauthority.Revalidate(ctx, token)
 }
