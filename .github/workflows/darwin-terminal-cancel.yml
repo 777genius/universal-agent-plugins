@@ -58,6 +58,7 @@ jobs:
         run: |
           baseline="$RUNNER_TEMP/TEST-consent-baseline"
           mkdir -p "$baseline"
+          git fetch --no-tags --depth=1 origin f4b11718830d98d9f75adbf8ed6b87eab25ce820
           git archive f4b11718830d98d9f75adbf8ed6b87eab25ce820 | tar -x -C "$baseline"
           cp cli/internal/terminalprompts/consent_pty_test.go cli/internal/terminalprompts/consent_virtual_darwin_test.go "$baseline/cli/internal/terminalprompts/"
           cd "$baseline/cli"
