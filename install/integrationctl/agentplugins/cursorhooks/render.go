@@ -14,7 +14,7 @@ import (
 // unavailable here. Dollar/backtick tokens remain unsupported, including the
 // dollar literal seen in the supplied narrow workspaceOpen spike.
 func RenderArgv(shell ShellContract, argv []string) (string, error) {
-	if shell != LinuxUserShell32212 {
+	if shell != LinuxUserShell32212 && shell != DarwinUserShell20260918 {
 		return "", fmt.Errorf("%w: native shell qualification required", ErrUnsupported)
 	}
 	if len(argv) == 0 || len(argv) > MaxArgs {

@@ -151,7 +151,9 @@ func (d SelectedDelivery) ValidateClient(id ClientID) error {
 
 func (d SelectedDelivery) validateCursor() error {
 	f := d.cursor
-	if d.local != nil || f.CursorVersion != "2026.09.28-64d2043" || f.TargetOS != "linux" || f.TargetArch != "amd64" || f.Shell != "cursor-linux-user-3.22.12-single-quote" {
+	linux := f.CursorVersion == "2026.09.28-64d2043" && f.TargetOS == "linux" && f.TargetArch == "amd64" && f.Shell == "cursor-linux-user-3.22.12-single-quote"
+	darwin := f.CursorVersion == "2026.09.18-9a7762b" && f.TargetOS == "darwin" && f.TargetArch == "arm64" && f.Shell == "cursor-darwin-arm64-user-2026.09.18-single-quote"
+	if d.local != nil || (!linux && !darwin) {
 		return fmt.Errorf("unknown Cursor selection or qualification tuple")
 	}
 	if err := validateCursorProfile(f); err != nil {
