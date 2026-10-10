@@ -17,10 +17,17 @@ import (
 )
 
 type Service struct {
-	PhysicalAuthority ports.PhysicalProfileAuthority
-	PhysicalProfiles  []domain.DetectedClient
-	profileCheck      func() error
-	StateStore        transaction.StateStore
+	ClientPreparation ClientPreparation
+	// OpenCodeHosts retains the explicit legacy preparation seam for callers
+	// without ClientPreparation; production composition uses ClientPreparation.
+	OpenCodeHosts ports.OpenCodeHostPreparer
+	// PrepareHostsForPreview authorizes online host preparation for a mutation's
+	// plan-first pass. Offline callers leave this false, including CLI --dry-run.
+	PrepareHostsForPreview bool
+	PhysicalAuthority      ports.PhysicalProfileAuthority
+	PhysicalProfiles       []domain.DetectedClient
+	profileCheck           func() error
+	StateStore             transaction.StateStore
 	// Paths is required. There is deliberately no default: a silently supplied
 	// one would let a caller that forgot to wire it keep running with whatever
 	// containment rules that default happened to carry.
@@ -40,6 +47,13 @@ type Service struct {
 	NamespacePreflight MCPNamespacePreflight
 	PluginData         PluginDataManager
 	Now                func() time.Time
+}
+
+// ClientPreparation freezes explicit host authority before a desired native
+// plan. Process-inert planning must never launch a host executable.
+type ClientPreparation interface {
+	PrepareClient(context.Context, domain.PackageEnvelope, domain.DetectedClient, []domain.NativeObjectOwnership, string, bool) (domain.OpenCodeHostAuthority, error)
+	RevalidateClient(context.Context, domain.DetectedClient, domain.DeliveryPlan) error
 }
 
 type NativeIdentityState = domain.NativeIdentityState
@@ -86,15 +100,18 @@ type AddInput struct {
 	Envelope                domain.PackageEnvelope
 	Client                  domain.DetectedClient
 	Scope                   domain.InstallScope
-	DryRun                  bool
-	Confirmed               bool
-	Interactive             bool
-	Hints                   domain.CompatibilityHints
-	InstallationID          string
-	OperationID             string
-	BackendExecutable       string
-	ActivationComplete      bool
-	AuthComplete            bool
+	// OnlinePreview permits host probing during a read-only normal-operation preview.
+	// It grants no mutation or confirmation permission.
+	OnlinePreview      bool
+	DryRun             bool
+	Confirmed          bool
+	Interactive        bool
+	Hints              domain.CompatibilityHints
+	InstallationID     string
+	OperationID        string
+	BackendExecutable  string
+	ActivationComplete bool
+	AuthComplete       bool
 	// OriginMode and DirectoryResolution are supplied by the resolver. Omitting
 	// OriginMode is treated as an explicit direct source for compatibility with
 	// exact/local callers; Directory authority is never inferred from a name.
@@ -133,11 +150,15 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := session.validateApplyInput(); err != nil {
 		return AddResult{}, err
 	}
+	prepared, err := session.service.prepareHostInputs(ctx, []AddInput{session.input}, session.input.DryRun)
+	if err != nil {
+		return AddResult{}, err
+	}
+	session.input = prepared[0]
 	if err := session.resolveInstallation(); err != nil {
 		return AddResult{}, err
 	}
-	var err error
-	service, frozen, err := service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
+	service, frozen, err := session.service.freezeProfiles(ctx, session.installationID, []domain.DetectedClient{session.input.Client}, true)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -164,6 +185,9 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	if session.input.DryRun {
 		return session.dryRunPath()
+	}
+	if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
+		return session.result, err
 	}
 	done, result, err := session.noChangeOrResume()
 	if done {

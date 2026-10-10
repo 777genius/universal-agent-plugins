@@ -163,6 +163,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	combined.Targets = combined.Targets[:0]
 	service := lifecycleService(app, detected)
+	service.PrepareHostsForPreview = !opts.dryRun
 	inputs := make([]usecase.AddInput, len(selected))
 	for index, client := range selected {
 		clientPackage := cloneLoadedPackage(loaded)
@@ -186,7 +187,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return err
 	}
 	combined.OperationID = operationID
-	groupInput := usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true}
+	groupInput := usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true, OnlinePreview: !opts.dryRun}
 	planned, err := service.AddGroup(ctx, groupInput)
 	combined.Targets = combined.Targets[:0]
 	for index, result := range planned.Targets {
@@ -236,6 +237,8 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 	}
 	writeProgress(app, opts.format, fmt.Sprintf("Installing %s for %d selected clients...", prompt.SafeText(loaded.envelope.Manifest.Name), len(selected)))
+	retainPreparedClients(groupInput.Targets, planned.PreparedClients)
+	groupInput.OnlinePreview = false
 	groupInput.DryRun, groupInput.Confirmed = false, true
 	board := startGroupProgressBoard(app, opts, selected)
 	if board != nil {

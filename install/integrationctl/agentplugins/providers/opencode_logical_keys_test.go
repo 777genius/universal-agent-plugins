@@ -140,7 +140,7 @@ func TestOpenCodeLogicalKeysStageKeepsHealthySibling(t *testing.T) {
 			}
 			anchor := filepath.Join(root, "managed")
 			target := filepath.Join(anchor, "clients", "opencode")
-			plan := domain.DeliveryPlan{ClientID: domain.ClientOpenCode, Scope: domain.ScopeUser, Status: domain.PlanReady, PackageMode: domain.PackagePrepared, PhysicalArtifactID: "probe", TargetAnchor: anchor, TargetRoot: target, ActivePath: filepath.Join(target, "probe"), NativeRegistryRoot: filepath.Join(root, "native"), Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "healthy", Support: domain.SupportPrepared}, {Kind: domain.ComponentMCPServer, Name: name, Support: domain.SupportPrepared}}}
+			plan := domain.DeliveryPlan{OpenCodeHost: openCodeV1FixtureProfile{}, ClientID: domain.ClientOpenCode, Scope: domain.ScopeUser, Status: domain.PlanReady, PackageMode: domain.PackagePrepared, PhysicalArtifactID: "probe", TargetAnchor: anchor, TargetRoot: target, ActivePath: filepath.Join(target, "probe"), NativeRegistryRoot: filepath.Join(root, "native"), Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "healthy", Support: domain.SupportPrepared}, {Kind: domain.ComponentMCPServer, Name: name, Support: domain.SupportPrepared}}}
 			delivery, err := testStager(Stager{}).Stage(context.Background(), envelope, plan, "logical-key", domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)

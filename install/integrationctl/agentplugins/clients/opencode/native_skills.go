@@ -16,6 +16,7 @@ import (
 type openCodeBackup struct{ backup, target string }
 type openCodeRenameFunc func(string, string) error
 type openCodeSkillTxn struct {
+	durable   bool
 	root      string
 	backups   map[string]openCodeBackup
 	installed map[string]domain.NativeObjectOwnership
@@ -54,14 +55,23 @@ func installOpenCodeSkillsWithOps(configRoot, activePath string, previous, desir
 
 func (txn *openCodeSkillTxn) createRoot(configRoot string) error {
 	skillsRoot := filepath.Join(configRoot, "skills")
+	if err := pathpolicy.RequireContainedChild(configRoot, skillsRoot); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(skillsRoot, 0o700); err != nil {
 		return err
 	}
-	root, err := os.MkdirTemp(skillsRoot, ".agentplugins-native-")
+	root, err := createPrivateTransitionRoot(skillsRoot)
 	if err != nil {
 		return err
 	}
 	txn.root = root
+	if txn.durable {
+		if err := atomicfile.SyncDirectory(configRoot); err != nil {
+			return err
+		}
+		return atomicfile.SyncDirectory(skillsRoot)
+	}
 	return nil
 }
 
@@ -122,8 +132,16 @@ func (txn *openCodeSkillTxn) backupPrevious(previousByID map[string]domain.Nativ
 			return fmt.Errorf("managed OpenCode skill %q changed outside agentplugins", object.LogicalName)
 		}
 		backup := filepath.Join(txn.root, "old-"+object.LogicalName)
-		if err := os.Rename(object.Path, backup); err != nil {
+		if err := renameOpenCodeDirectoryNoReplace(object.Path, backup, txn.rename); err != nil {
 			return err
+		}
+		if txn.durable {
+			if err := atomicfile.SyncDirectory(filepath.Dir(object.Path)); err != nil {
+				return err
+			}
+			if err := atomicfile.SyncDirectory(txn.root); err != nil {
+				return err
+			}
 		}
 		txn.backups[id] = openCodeBackup{backup: backup, target: object.Path}
 	}
@@ -139,6 +157,14 @@ func (txn *openCodeSkillTxn) installStaged(staged map[string]string, desiredByID
 			return err
 		}
 		txn.installed[id] = object
+		if txn.durable {
+			if err := atomicfile.SyncDirectory(filepath.Dir(object.Path)); err != nil {
+				return err
+			}
+			if err := atomicfile.SyncDirectory(txn.root); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

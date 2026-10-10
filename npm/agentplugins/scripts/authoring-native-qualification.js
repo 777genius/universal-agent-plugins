@@ -436,10 +436,10 @@ function checkProject(value, lane) {
   }
   if (lane.endsWith("stdio")) {
     const version = value.package.dependencies["@modelcontextprotocol/sdk"];
-    exact(version, "1.30.0");
+    exact(version, "1.32.1");
     exact(value.lock.packages["node_modules/@modelcontextprotocol/sdk"].version, version);
     exact(value.lock.packages["node_modules/@modelcontextprotocol/sdk"].integrity,
-      "sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==");
+      "sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw==");
   } else { exact(value.lock, null); exact(value.package, null); }
 }
 function installationCommands() {
@@ -908,7 +908,7 @@ function readTerminals(root, inputRoot, pins, expected) {
   exact(host, { platform: contract.platform, architecture: contract.architecture, machine: contract.machine, target,
     observation: "whole-descendant-authoring-no-process-network/1" });
   c.keys(expected.tools, ["go", "node"], "host tools");
-  for (const [name, version] of [["go", "go1.25.13"], ["node", "v22.21.1"]]) {
+  for (const [name, version] of [["go", "go1.26.9"], ["node", "v22.21.1"]]) {
     c.keys(expected.tools[name], ["sha256", "version"], "tool pin"); sha(expected.tools[name].sha256); exact(expected.tools[name].version, version);
   }
   const result = [];
@@ -944,7 +944,7 @@ async function produce(options, signal) {
     const tool = context(path.join(options.work, "host-tool"));
     const go = await subprocess(options.go, ["env", "-json", "GOVERSION", "GOHOSTOS", "GOHOSTARCH"], tool, signal);
     exact(go.status, 0); exact(go.stderr, "");
-    exact(JSON.parse(go.stdout), { GOVERSION: "go1.25.13", GOHOSTOS: contract.goos, GOHOSTARCH: contract.goarch });
+    exact(JSON.parse(go.stdout), { GOVERSION: "go1.26.9", GOHOSTOS: contract.goos, GOHOSTARCH: contract.goarch });
     for (const p of c.PRODUCTS) {
       contexts[p] = context(path.join(options.work, p));
       const a = frozen.manifest.products[p].assets[target], bytes = c.readFile(path.join(root, p, a.file));
@@ -1033,7 +1033,7 @@ async function produce(options, signal) {
     e["host.json"] = { platform: process.platform, architecture: process.arch, machine: os.machine(), target,
       observation: "whole-descendant-authoring-no-process-network/1" };
     verifyJourney(e, pins, target);
-    const tools = { go: { sha256: options.go_sha256, version: "go1.25.13" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } };
+    const tools = { go: { sha256: options.go_sha256, version: "go1.26.9" }, node: { sha256: c.digest(c.readFile(process.execPath)), version: process.version } };
     for (const file of FILES) fs.writeFileSync(path.join(options.output, file), c.encode(e[file]), { flag: "wx", mode: 0o400 });
     if (signal?.aborted) fail("cancelled before terminal");
     for (const p of c.PRODUCTS) {

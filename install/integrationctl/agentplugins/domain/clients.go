@@ -23,6 +23,8 @@ const (
 	ClientOpenCode ClientID = "opencode"
 	ClientCline    ClientID = "cline"
 	ClientWindsurf ClientID = "windsurf"
+	ClientGrok     ClientID = "grok"
+	ClientKimi     ClientID = "kimi"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -136,6 +138,14 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:            LifecycleNativeConfig,
 		UsesManagedStdioLauncher: true,
 	}),
+	clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleCLIRegistry,
+	}),
+	clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleNativeConfig,
+	}),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
@@ -212,6 +222,8 @@ var clientAliases = map[string]ClientID{
 	"gemini-cli":     ClientGemini,
 	"open-code":      ClientOpenCode,
 	"devin":          ClientWindsurf,
+	"grok-build":     ClientGrok,
+	"kimi-code":      ClientKimi,
 }
 
 // ParseClientID folds case and whitespace, maps known aliases onto canonical
@@ -392,14 +404,15 @@ type ActivationRequest struct {
 	// PackageUnchanged means activation reuses the committed, verified managed
 	// package without a new package transaction. External CLI effects may still
 	// be required; VerifyOnly describes those effects independently.
-	PackageUnchanged  bool           `json:"-"`
-	Client            DetectedClient `json:"client"`
-	Plan              DeliveryPlan   `json:"plan"`
-	Delivery          StagedDelivery `json:"delivery"`
-	DeclaredName      string         `json:"declared_name"`
-	Replacing         bool           `json:"replacing"`
-	Interactive       bool           `json:"interactive"`
-	BackendExecutable string         `json:"-"`
+	PackageUnchanged  bool                  `json:"-"`
+	NativeAttempt     NativeAttemptIdentity `json:"-"`
+	Client            DetectedClient        `json:"client"`
+	Plan              DeliveryPlan          `json:"plan"`
+	Delivery          StagedDelivery        `json:"delivery"`
+	DeclaredName      string                `json:"declared_name"`
+	Replacing         bool                  `json:"replacing"`
+	Interactive       bool                  `json:"interactive"`
+	BackendExecutable string                `json:"-"`
 	// PreviousNativeObjects binds replacement preflight to the exact native
 	// objects recorded by the currently installed package revision.
 	PreviousNativeObjects []NativeObjectOwnership `json:"-"`

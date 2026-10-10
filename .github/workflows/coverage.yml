@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -24,10 +25,11 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin 0506dd888029ad69d07dd5263669fb53766dbdf9
           git fetch --no-tags --depth=1 origin c77c9975eb41d81bcca178b2974ecc6cd1eb1d22
+          git fetch --no-tags --depth=1 origin 66710680c22cc0cf7cc926e1438bb9d647eff1a2
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.25.13"
+          go-version: "1.26.9"
           cache: false
 
       - name: Collect Go coverage

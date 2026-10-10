@@ -322,7 +322,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"This initial technical review is required even for\n   draft-only runs; it does not authorize public version publication",
 		"all nine assets, and attestations",
 		"`verified-draft.json`. With `publish_release=false`, promotion is skipped",
-		"Only with separate explicit owner authorization for that exact version",
+		"When the owner request authorizes publication",
 		"dispatch the existing producer with `publish_release=true`",
 		"all six native platform proofs, its verified",
 		"Every dispatch still requires the exact current `main`/tag/workflow-source gate",

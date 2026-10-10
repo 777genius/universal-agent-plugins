@@ -112,7 +112,7 @@ trailing commas are rejected because native settings use
 Tests cover comment-bearing fixtures and trailing-comma rejection; they do not
 claim exhaustive grammar parity with strip-json-comments.
 
-Run from the module with Go 1.26.8, `go test -p 2 ./geminihooks
+Run from the module with Go 1.26.9, `go test -p 2 ./geminihooks
 ./adapters/nativeconfig`. Tests require Node >=22.18 to execute the unchanged
 official 0.62.0 environment resolver fixture. Its supplied source provenance is
 Gemini v0.62.0 commit `b460678f3db508407554afd604cc9d6635becb2a`,

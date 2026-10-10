@@ -39,7 +39,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return domain.ActivationOutcome{}, err
 	}
 	automatic := automaticallyActivatesOpenCode(request)
-	return shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
 		Automatic:         automatic,
 		UnavailableAction: "rerun with a detected OpenCode config root",
 		RepairAction:      "repair the managed OpenCode skills and MCP configuration",
@@ -49,9 +49,13 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 			return VerifyOpenCodeNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
+			if crossOpenCodeDialect(request.PreviousNativeObjects, request.Delivery.NativeObjects) {
+				return applyOpenCodeTransition(ctx, request, env.NativeConfig, env.OpenCodeTransitions)
+			}
 			return ActivateOpenCodeNativeWithKernel(ctx, request, env.NativeConfig)
 		},
 	})
+	return outcome, err
 }
 
 // Deactivate removes managed OpenCode native objects.

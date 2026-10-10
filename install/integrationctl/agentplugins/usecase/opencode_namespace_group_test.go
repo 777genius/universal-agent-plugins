@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -16,7 +17,7 @@ import (
 func TestOpenCodeNamespaceGroupEarlyConflictChangesNoTarget(t *testing.T) {
 	service, store, cursor := serviceFixture(t)
 	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
-	openCode := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
+	openCode := domain.DetectedClient{ClientID: domain.ClientOpenCode, OpenCodeHost: contracttest.OpenCodeV1Host{}, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
 	if err := os.MkdirAll(openCode.ConfigRoot, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func (a *injectOpenCodeConfigActivator) Deactivate(ctx context.Context, request 
 func TestOpenCodeNamespaceGroupLateConflictIsPartialAndRetryable(t *testing.T) {
 	service, store, cursor := serviceFixture(t)
 	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
-	openCode := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
+	openCode := domain.DetectedClient{ClientID: domain.ClientOpenCode, OpenCodeHost: contracttest.OpenCodeV1Host{}, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
 	if err := os.MkdirAll(openCode.ConfigRoot, 0o700); err != nil {
 		t.Fatal(err)
 	}

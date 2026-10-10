@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
@@ -21,7 +22,7 @@ import (
 
 func openCodeTestRoot(t *testing.T) string {
 	t.Helper()
-	root, err := os.MkdirTemp(".", "TEST-opencode-installer-")
+	root, err := os.MkdirTemp("", "TEST-opencode-installer-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +71,17 @@ func openCodeRequest(t *testing.T, root, executable string) Request {
 		ClientConfigRoot: filepath.Join(root, "config"), PackageRoot: packageRoot, RequiredComponents: []string{"skills", "mcp"}}
 }
 
+func closeOpenCodeTestHandle(t *testing.T, handle *PreparedOperation) {
+	t.Helper()
+	if err := handle.Close(); err != nil {
+		t.Errorf("close prepared OpenCode handle: %v", err)
+	}
+}
+
 // Regression: real Prepare must consume the exact selected V2 while PATH points
-// at V1. A pure config_v2 selection must stop before preview/staging/activation,
-// rather than silently writing config_v1. Single explicit target shape counts.
-func TestOpenCodePrepareExplicitV2BlocksUnavailableCodec(t *testing.T) {
+// at V1. The immutable explicit-target profile must admit the real V2 codec.
+// Single explicit target shape counts; prepare remains free of native effects.
+func TestOpenCodePrepareExplicitV2SelectsAvailableCodec(t *testing.T) {
 	root := openCodeTestRoot(t)
 	v1 := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.33", "ok")
 	v2 := buildOpenCodeTarget(t, filepath.Join(root, "v2"), "2.0.21", "ok")
@@ -90,14 +98,86 @@ func TestOpenCodePrepareExplicitV2BlocksUnavailableCodec(t *testing.T) {
 	req := openCodeRequest(t, root, v1)
 	req.Targets = []ClientTarget{{ClientID: "opencode", ClientConfigRoot: req.ClientConfigRoot, ClientExecutable: v2}}
 	handle, err := engine.Prepare(testCtx(t), req)
-	if !errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) || handle != nil || calls != 1 || observed.Version != "2.0.21" || handoffs != 0 {
+	if err != nil || handle == nil || calls != 1 || observed.Version != "2.0.21" || handoffs != 0 {
 		t.Fatalf("target: handle=%v calls=%d evidence=%+v err=%v", handle, calls, observed, err)
 	}
+	defer closeOpenCodeTestHandle(t, handle)
+	if handle.Plan().OpenCodeProfile.ConfigDialect != opencodehost.DialectV2 {
+		t.Fatal("explicit profile not V2")
+	}
 	if _, err := os.Stat(engine.cfg.ManagedRoot); !os.IsNotExist(err) {
-		t.Fatalf("staged before adapter availability: %v", err)
+		t.Fatalf("staged during prepare: %v", err)
 	}
 	if _, err := os.Stat(req.ClientConfigRoot); !os.IsNotExist(err) {
 		t.Fatalf("native effect: %v", err)
+	}
+}
+
+// The old facade probes even when only package metadata will be materialized.
+// Ambiguous foreign configs and an absent host must not affect inert planning.
+func TestOpenCodeMetadataOnlyPreparationNeverProbes(t *testing.T) {
+	root := openCodeTestRoot(t)
+	helper := buildOpenCodeTarget(t, filepath.Join(root, "helper"), "1.18.33", "ok")
+	packageRoot, configRoot := filepath.Join(root, "package"), filepath.Join(root, "config")
+	manifestPath := filepath.Join(packageRoot, "plugin.json")
+	mustWriteV2(t, manifestPath, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"metadata-only","version":"1.0.0"}`))
+	foreign := map[string][]byte{
+		"opencode.json":  []byte(`{"theme":"foreign"}`),
+		"opencode.jsonc": []byte("{ // foreign comment\n\"theme\":\"preserved\"}\n"),
+	}
+	for name, body := range foreign {
+		mustWriteV2(t, filepath.Join(configRoot, name), body)
+	}
+	probes := 0
+	engine := openCodeEngine(t, Config{StateRoot: filepath.Join(root, "state"), HelperExecutable: helper,
+		EnableNativeObserver: true, Runner: forbiddenV2Runner{t},
+		OpenCodeProbe: func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+			probes++
+			return clientdetect.ProbeEvidence{}, errors.New("metadata-only preparation invoked host probe")
+		}})
+	// Fresh installs retain the generic explicit-path request contract. This
+	// nonexistent path grants no executable evidence and cannot qualify a host.
+	req := Request{Operation: OpInstall, ClientID: "opencode", PackageRoot: packageRoot,
+		ClientConfigRoot: configRoot, ClientExecutable: filepath.Join(root, "absent-host")}
+	first, err := engine.Prepare(testCtx(t), req)
+	if err != nil || first == nil || probes != 0 {
+		t.Fatalf("metadata install preparation: handle=%v probes=%d err=%v", first, probes, err)
+	}
+	defer closeOpenCodeTestHandle(t, first)
+	if plan := first.Plan(); plan.OpenCodeProfile != nil || len(plan.OpenCodeSelections) != 0 {
+		t.Fatalf("inert install acquired native qualification: %+v", plan)
+	}
+	for _, path := range []string{engine.cfg.ManagedRoot, engine.cfg.StateFile} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("preparation created managed path %s: %v", path, err)
+		}
+	}
+	installed, err := engine.Apply(testCtx(t), first, Decision{Confirmed: true})
+	if err != nil || !installed.Mutated {
+		t.Fatalf("metadata fixture install: %+v %v", installed, err)
+	}
+	mustWriteV2(t, manifestPath, []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"metadata-only","version":"1.0.1"}`))
+	req.Operation, req.InstallationID, req.ClientExecutable = OpUpdate, installed.InstallationID, ""
+	before := v2EffectSnapshot(t, engine)
+	update, err := engine.Prepare(testCtx(t), req)
+	if err != nil || update == nil || probes != 0 {
+		t.Fatalf("metadata update preparation: handle=%v probes=%d err=%v", update, probes, err)
+	}
+	defer closeOpenCodeTestHandle(t, update)
+	if plan := update.Plan(); plan.OpenCodeProfile != nil || len(plan.OpenCodeSelections) != 0 || plan.NoChange {
+		t.Fatalf("inert changed update acquired qualification or lost revision: %+v", plan)
+	}
+	// Successful preparation owns a temporary sealed package snapshot until
+	// Close. Release it before comparing durable package/config/state effects.
+	closeOpenCodeTestHandle(t, update)
+	if before != v2EffectSnapshot(t, engine) {
+		t.Fatal("metadata update preparation changed managed/config/state bytes")
+	}
+	for name, want := range foreign {
+		body, err := os.ReadFile(filepath.Join(configRoot, name))
+		if err != nil || string(body) != string(want) {
+			t.Fatalf("inert lifecycle changed foreign config %s: %s %v", name, body, err)
+		}
 	}
 }
 
@@ -497,7 +577,7 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 			}
 			if change == "v2" {
 				req.ClientExecutable = replacement
-				if handle, err := engine.Prepare(testCtx(t), req); !errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) || handle != nil {
+				if handle, err := engine.Prepare(testCtx(t), req); !errors.Is(err, nativeconfig.ErrNativeMigrationRequired) || handle != nil {
 					t.Fatalf("config_v1 cleanup sent to V2: handle=%v %v", handle, err)
 				}
 				return
@@ -610,7 +690,7 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 	}
 }
 
-// Regression: withholding the V2 MCP codec cannot disable qualified directory
+// Regression: MCP qualification cannot disable qualified directory
 // skills, nor may a skills-only install rewrite a foreign V2 JSONC config.
 func TestOpenCodeV2SkillsIndependentOfMCPCodecAndObservers(t *testing.T) {
 	root := openCodeTestRoot(t)

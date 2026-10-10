@@ -171,7 +171,7 @@ class NativeEvidenceTests(unittest.TestCase):
         (evidence / "head.txt").write_text(head)
         self.system, self.arch, self.root = system, arch, root
         self.env = dict(GOOS=system, GOHOSTOS=system, GOARCH=arch, GOHOSTARCH=arch,
-                        GOVERSION="go1.25.13", GOROOT=str(root / "go"))
+                        GOVERSION="go1.26.9", GOROOT=str(root / "go"))
         self.expected = dict(EXPECTED_OS=system, EXPECTED_ARCH=arch, EXPECTED_HEAD=head,
                              RUNNER_ARCH="X64" if arch == "amd64" else "ARM64")
         self.suffix = ".exe" if system == "windows" else ""
@@ -180,7 +180,7 @@ class NativeEvidenceTests(unittest.TestCase):
         for name in ("agentplugins", "plugin-kit-ai"):
             (root / "bin" / (name + self.suffix)).write_bytes(executable(system, arch))
             settings = dict(GOOS=system, GOARCH=arch, **{"vcs.revision": head, "vcs.modified": "false"})
-            self.builds[name] = dict(GoVersion="go1.25.13",
+            self.builds[name] = dict(GoVersion="go1.26.9",
                 Path="github.com/777genius/plugin-kit-ai/cli/cmd/" + name,
                 Settings=[dict(Key=k, Value=v) for k, v in settings.items()])
         prefix = "github.com/777genius/plugin-kit-ai/"

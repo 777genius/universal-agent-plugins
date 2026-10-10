@@ -24,19 +24,26 @@ import (
 // What each client adds is frozen by the planner's golden files instead.
 func RunPlanRefiner(t *testing.T, adapter clients.Adapter) {
 	t.Helper()
+	RunPlanRefinerWithHost(t, adapter, nil)
+}
+
+// RunPlanRefinerWithHost supplies caller-qualified fixture authority without
+// deriving a native host or physical-root identity from synthetic locators.
+func RunPlanRefinerWithHost(t *testing.T, adapter clients.Adapter, host domain.OpenCodeHostAuthority) {
+	t.Helper()
 	RunAdapter(t, adapter)
-	for _, violation := range planRefinerViolations(adapter) {
+	for _, violation := range planRefinerViolations(adapter, host) {
 		t.Error(violation)
 	}
 }
 
-func planRefinerViolations(adapter clients.Adapter) []string {
+func planRefinerViolations(adapter clients.Adapter, host domain.OpenCodeHostAuthority) []string {
 	refiner, ok := adapter.(clients.PlanRefiner)
 	if !ok {
 		return []string{"adapter does not implement clients.PlanRefiner"}
 	}
 	violations := []string{}
-	for _, fixture := range refinerFixtures(adapter.ID()) {
+	for _, fixture := range refinerFixtures(adapter.ID(), host) {
 		violations = append(violations, fixtureViolations(refiner, fixture)...)
 	}
 	return violations
@@ -50,12 +57,13 @@ type refinerPlan struct {
 	plan  domain.DeliveryPlan
 }
 
-func refinerFixtures(id domain.ClientID) []refinerPlan {
+func refinerFixtures(id domain.ClientID, host domain.OpenCodeHostAuthority) []refinerPlan {
 	input := clients.PlanInput{
 		Envelope: refinerEnvelope(),
 		Client:   refinerClient(id),
 		Detected: refinerDetection(),
 	}
+	input.Client.OpenCodeHost = host
 	viable := domain.DeliveryPlan{
 		ClientID: id, Scope: domain.ScopeUser,
 		Status: domain.PlanManualActivationRequired, Activation: domain.ActivationManual,

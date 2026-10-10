@@ -9,6 +9,8 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is to complete every ownership-safe client step automatically and ask the user only for genuine external approvals, authentication, or reloads.
+
 [Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/) ·
 [Browse plugins](https://777genius.github.io/universal-agent-plugins/plugins/)
 
@@ -155,6 +157,10 @@ The CLI has adapters for:
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> OpenCode | skills and MCP configuration |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> Cline | skills and MCP configuration |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> Windsurf | MCP configured; skills prepared for manual use |
+| <img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"> Grok Build | native skills/MCP plugin; Grok CLI install and verification when available |
+| <img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
+
+Grok Build and Kimi Code accept automatic user-scope installation of portable skills and stdio/HTTP MCP servers through `agentplugins add ./my-plugin --target grok,kimi`. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and remote MCP authentication/connectivity is verified in that client. Agent, hook, command, and LSP components are outside these two adapters' current supported scope.
 
 Compatibility depends on the package and client. The CLI tells you what is
 installed, prepared, or still needs activation or sign-in.

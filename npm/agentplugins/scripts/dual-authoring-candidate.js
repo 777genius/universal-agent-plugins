@@ -192,7 +192,7 @@ function manifestShape(manifest, expected, expectedScope, expectedMode) {
       manifest.identity.commit !== expected.commit || manifest.identity.repository !== expected.repository ||
       PRODUCTS.some((p) => manifest.identity.versions[p] !== expected.versions[p])) throw new Error("candidate identity/schema mismatch");
   keys(manifest.build, ["method", "go_version", "go_sha256", "source_archive_sha256", "authoring_mode"], "build");
-  if (manifest.build.method !== "controlled-git-archive-go-build/v1" || manifest.build.go_version !== "go1.25.13" ||
+  if (manifest.build.method !== "controlled-git-archive-go-build/v1" || manifest.build.go_version !== "go1.26.9" ||
       manifest.build.authoring_mode !== mode ||
       typeof manifest.build.go_sha256 !== "string" || typeof manifest.build.source_archive_sha256 !== "string" ||
       !/^[0-9a-f]{64}$/.test(manifest.build.go_sha256) || !/^[0-9a-f]{64}$/.test(manifest.build.source_archive_sha256)) {

@@ -24,7 +24,7 @@ func TestConsentPTYBoundary(t *testing.T) {
 }
 
 func testConsentPTYBoundary(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File)) {
-	testConsentPTYCase(t, openPTY, "", "")
+	testConsentPTYCase(t, openPTY, "", "UAP_CONSENT_OUTPUT_DONE")
 }
 
 func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.File), selectedCase, endMarker string) {
@@ -162,21 +162,21 @@ func testConsentPTYCase(t *testing.T, openPTY func(*testing.T) (*os.File, *os.Fi
 					t.Errorf("plain handoff changed terminal: got %+v want %+v", afterLine, before)
 				}
 			}
-			// Virtual controlling TTYs can remain open until the session exits.
-			// A test-only output frame ends capture after all owner assertions,
-			// preserving the complete ordered render without requiring EOF.
+			// Closing a Linux PTY slave can discard unread output on its master.
+			// Keep the slave open until the controller observes this ordered frame.
+			// Controlling TTYs also need the frame because they may never reach EOF.
 			if endMarker != "" {
 				if _, e := io.WriteString(slave, endMarker+"\n"); e != nil {
 					t.Fatal(e)
 				}
 			}
-			slave.Close()
 			var output []byte
 			select {
 			case output = <-drained:
 			case <-ctx.Done():
 				t.Fatal("output did not drain")
 			}
+			slave.Close()
 			drained <- output
 			t.Logf("selection batch=%x separate confirmation=%x accepted=%v error=%v\n%s", tc.selection, tc.confirmation, result.Accepted, err, output)
 			switch tc.name {

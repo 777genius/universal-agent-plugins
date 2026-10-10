@@ -148,7 +148,7 @@ def verify_fixtures(bodies, record, client, target):
         identity = data.get('source_identity', data)
         require(identity.get('installer_base_commit') == release['commit'] and identity.get('installer_tree') == release['tree'] and identity.get('installer_patch_sha256') in ([], ''), 'fixture source mismatch')
         require(data.get('installer_sha256', data.get('installer_binary_sha256')) == record['installer_sha256'] and data.get('client_sha256', data.get('client_binary_sha256')) == record['client_asset']['binary_sha256'], 'fixture binary mismatch')
-        versions = {'codex': '0.153.4', 'claude': '2.1.263 (Claude Code)', 'opencode': '1.18.29'}
+        versions = {'codex': '0.153.4', 'claude': '2.1.263 (Claude Code)', 'opencode': '1.18.34'}
         version_field = 'client_version_measured' if kind in ('claude-lifecycle', 'opencode-lifecycle') else 'client_version'
         if kind != 'opencode-extended': require(data.get(version_field) == versions[client], 'missing fixture client version')
         if 'installer_source_state' in identity: require(identity['installer_source_state'] == 'committed', 'uncommitted fixture source')

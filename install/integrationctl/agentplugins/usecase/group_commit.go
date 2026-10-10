@@ -104,6 +104,14 @@ func (session *groupSession) restoreGroupOrigin() {
 }
 
 func (session *groupSession) applyGroupKernel() error {
+	// Progress callbacks run after precommit observation and may change a host.
+	for _, target := range session.planned {
+		if session.service.ClientPreparation != nil {
+			if err := session.service.ClientPreparation.RevalidateClient(session.ctx, target.input.Client, target.plan); err != nil {
+				return fmt.Errorf("prepared host changed before group commit: %w", err)
+			}
+		}
+	}
 	mutations := session.buildGroupMutations()
 	kernel := session.service.Kernel
 	kernel.StateStore = session.service.StateStore

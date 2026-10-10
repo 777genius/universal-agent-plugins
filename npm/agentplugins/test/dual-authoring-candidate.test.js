@@ -25,7 +25,7 @@ function structuralFixture() {
   const root = temp();
   const manifest = {
     schema: c.SCHEMA, status: "CANDIDATE", asset_scope: SCOPE, identity: structuredClone(ID),
-    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13",
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.26.9",
       go_sha256: "b".repeat(64), source_archive_sha256: "c".repeat(64), authoring_mode: "vertical-slice-v1" },
     products: {}, release_eligible: false
   };
@@ -233,7 +233,7 @@ test("canonical archive rejects path traversal, links, headers, extra records an
 
 test("Go build-info parser binds actual main path, flags, product version, engine, target and compiler", () => {
   const valid = {
-    GoVersion: "go1.25.13", Path: "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins",
+    GoVersion: "go1.26.9", Path: "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins",
     Settings: Object.entries({ GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
       "-ldflags": c.linkerFlags("agentplugins", ID) }).map(([Key, Value]) => ({ Key, Value }))
   };
@@ -292,7 +292,7 @@ test("private mode is explicit, closed and bound to embedded bytes", () => {
   assert.equal(c.authoringMode(), "vertical-slice-v1");
   assert.throws(() => c.authoringMode("enabled"), /unknown private/);
   assert.notEqual(c.linkerFlags("agentplugins", ID), c.linkerFlags("agentplugins", ID, mode));
-  const info = { GoVersion: "go1.25.13", Path: "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins",
+  const info = { GoVersion: "go1.26.9", Path: "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins",
     Settings: Object.entries({ GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
       "-ldflags": c.linkerFlags("agentplugins", ID, mode) }).map(([Key, Value]) => ({ Key, Value })) };
   producer.buildInfo(info, "agentplugins", "linux-amd64", ID, mode);

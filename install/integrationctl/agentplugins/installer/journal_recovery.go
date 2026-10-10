@@ -47,6 +47,10 @@ func (s *nativeRecoveryScope) advanceJournals() error {
 	removed := map[string]bool{}
 	kept := false
 	for _, journal := range s.expected.Journals {
+		if !s.journals.open[journal.OperationID] {
+			want.Journals = append(want.Journals, journal)
+			continue
+		}
 		if containsJournal(view.Recovery.Journals, journal) {
 			want.Journals = append(want.Journals, journal)
 			kept = true
@@ -100,7 +104,7 @@ func (c journalRecoveryContext) Err() error {
 	}
 	if err == nil {
 		for _, journal := range c.scope.expected.Journals {
-			if journal.Phase != dirswap.PhaseRolledBack {
+			if c.scope.journals.open[journal.OperationID] && journal.Phase != dirswap.PhaseRolledBack {
 				c.scope.journals.active = journal.OperationID
 				break
 			}

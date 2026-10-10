@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
@@ -381,6 +382,9 @@ func kiroPowerInput(t *testing.T, client domain.DetectedClient, version, treeDig
 
 func openCodePluginInput(t *testing.T, client domain.DetectedClient, version, treeDigest, manifestDigest, command string) AddInput {
 	t.Helper()
+	if client.ClientID == domain.ClientOpenCode {
+		client.OpenCodeHost = contracttest.OpenCodeV1Host{}
+	}
 	input := addInput(t, client, "https://example.com/opencode")
 	setEnvelopeVersion(t, &input.Envelope, version, treeDigest, manifestDigest)
 	skillBody := []byte("---\nname: docs\ndescription: docs " + version + "\n---\n")

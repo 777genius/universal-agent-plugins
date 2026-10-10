@@ -21,6 +21,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/locks"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
@@ -29,7 +30,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -38,6 +41,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecasetest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -3352,10 +3356,14 @@ func fixtureClient(t *testing.T, client domain.ClientID) domain.DetectedClient {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return domain.DetectedClient{
+	detected := domain.DetectedClient{
 		ClientID: client, DisplayName: string(client), Status: domain.DetectionDetected,
 		ConfigRoot: filepath.Join(root, "home", "."+string(client)),
 	}
+	if client == domain.ClientOpenCode {
+		detected.OpenCodeHost = contracttest.OpenCodeV1Host{}
+	}
+	return detected
 }
 
 func writeCLIPlugin(t *testing.T) string {
@@ -3468,4 +3476,72 @@ func onlyCLIClient(installation domain.Installation) domain.ClientBinding {
 		return binding
 	}
 	return domain.ClientBinding{}
+}
+
+// RED at the production CLI's plan-first seam: registering an online preparer
+// on Service alone leaves grouped add/update's internal dry-run unqualified.
+// The injected probe drives real library projection/config writes in TEST only.
+func TestOpenCodeCLIOnlinePreviewUsesPreparedServiceAuthority(t *testing.T) {
+	for _, native := range []bool{false, true} {
+		t.Run(map[bool]string{false: "metadata", true: "native"}[native], func(t *testing.T) {
+			openCode := fixtureClient(t, domain.ClientOpenCode)
+			openCode.OpenCodeHost = nil
+			openCode.ExecutablePath = filepath.Join(t.TempDir(), "unlaunched-selected-target")
+			cursor := fixtureClient(t, domain.ClientGemini)
+			fixture := newCLIFixture(t, []domain.DetectedClient{cursor, openCode})
+			calls := 0
+			preparer, err := hostprep.New(fixture.app.ClientRegistry, func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+				calls++
+				if !native {
+					t.Fatal("metadata-only acquired host authority")
+				}
+				return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "1.18.34", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "TEST-CLI-injected"}}, nil
+			}, []string{"PATH="})
+			if err != nil {
+				t.Fatal(err)
+			}
+			fixture.app.Lifecycle.OpenCodeHosts = preparer
+			fixture.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: fixture.app.Lifecycle.Stager})
+			plugin := writeCLIPlugin(t)
+			if native {
+				writeCLIMCP(t, plugin)
+			}
+			_, stderr, err := fixture.execute(false, "add", plugin, "--target", "gemini,opencode", "--format", "json")
+			if err != nil {
+				t.Fatalf("online add: %v %s", err, stderr)
+			}
+			before := calls
+			stdout, stderr, err := fixture.execute(false, "update", "demo", "--target", "gemini,opencode", "--format", "json")
+			if err != nil || !strings.Contains(stdout, `"no_change":true`) {
+				t.Fatalf("online update: %v %s %s", err, stderr, stdout)
+			}
+			if native {
+				if before == 0 || calls <= before {
+					t.Fatal("online update preparation missing")
+				}
+				body, err := os.ReadFile(filepath.Join(openCode.ConfigRoot, "opencode.json"))
+				if err != nil || !strings.Contains(string(body), `"demo"`) {
+					t.Fatalf("native config missing: %s %v", body, err)
+				}
+			} else {
+				if calls != 0 {
+					t.Fatal("metadata probed")
+				}
+				if _, err := os.Stat(openCode.ConfigRoot); !os.IsNotExist(err) {
+					t.Fatalf("metadata changed native root: %v", err)
+				}
+			}
+			callsBeforeDry := calls
+			_, _, err = fixture.execute(false, "add", plugin, "--target", "opencode", "--dry-run", "--format", "json")
+			if native && err == nil {
+				t.Fatal("offline native dry-run claimed qualification without supplied authority")
+			}
+			if !native && err != nil {
+				t.Fatal(err)
+			}
+			if calls != callsBeforeDry {
+				t.Fatal("CLI --dry-run probed")
+			}
+		})
+	}
 }

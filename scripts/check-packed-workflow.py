@@ -54,7 +54,7 @@ def check(text, runner):
                 '          persist-credentials: false\n' in body, 'exact clean checkout')
         require(not re.search(r'\|\|\s*(?:true|:)|exit 0|set \+e', body), 'masked failure')
         require(all(line.strip() == 'if: always()' for line in body.splitlines() if re.match(r'\s*if:', line)), 'skipped step')
-    require('          go-version: \'1.25.13\'' in packed and "          node-version: '22.23.2'" in packed, 'tool pins')
+    require('          go-version: \'1.26.9\'' in packed and "          node-version: '22.23.2'" in packed, 'tool pins')
     require('        run: python3 -B scripts/run-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"\n' in packed and
         '        run: python3 -B scripts/check-packed-ci.py "$PACKED_ROOT" "$EXPECTED_HEAD"\n' in packed, 'runner/checker required')
     require('          python3 -B scripts/check-packed-workflow.py\n' in aggregate and

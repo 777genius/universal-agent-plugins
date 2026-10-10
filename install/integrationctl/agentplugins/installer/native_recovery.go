@@ -31,31 +31,16 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
 			if binding.PendingNativeIntent == nil {
-				if binding.NativeActivationAttempt != "" {
+				if binding.NativeActivationAttempt != "" && (binding.ClientID != "opencode" || !binding.SelectedDelivery.IsZero()) {
 					return out, fmt.Errorf("native attempt has no persisted intent; retain uncertainty")
 				}
 				continue
 			}
-			if err := validateSelectedBindingIdentity(binding); err != nil {
-				return out, err
-			}
-			intent := *binding.PendingNativeIntent
-			if err := intent.Validate(binding); err != nil {
-				return out, err
-			}
-			if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
-				return out, fmt.Errorf("native intent differs from complete binding selection")
-			}
-			body, err := json.Marshal(binding)
+			pending, err := inspectNativeIntent(installation, binding)
 			if err != nil {
 				return out, err
 			}
-			sum := sha256.Sum256(body)
-			receipt := installation.DataReceipts[binding.DataReceiptID]
-			out = append(out, PendingNativeIntent{
-				Binding: BindingFacts{InstallationID: installation.InstallationID, ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator, DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest), SelectedDelivery: binding.SelectedDelivery},
-				Intent:  intent, NativeProfileRoot: binding.NativeProfileRoot, Digest: fmt.Sprintf("sha256:%x", sum),
-			})
+			out = append(out, pending)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -65,6 +50,29 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 		return out[i].Binding.BindingID < out[j].Binding.BindingID
 	})
 	return out, nil
+}
+
+func inspectNativeIntent(installation domain.Installation, binding domain.ClientBinding) (PendingNativeIntent, error) {
+	if err := validateSelectedBindingIdentity(binding); err != nil {
+		return PendingNativeIntent{}, err
+	}
+	intent := *binding.PendingNativeIntent
+	if err := intent.Validate(binding); err != nil {
+		return PendingNativeIntent{}, err
+	}
+	if !reflect.DeepEqual(intent.Delivery, binding.SelectedDelivery) {
+		return PendingNativeIntent{}, fmt.Errorf("native intent differs from complete binding selection")
+	}
+	body, err := json.Marshal(binding)
+	if err != nil {
+		return PendingNativeIntent{}, err
+	}
+	sum := sha256.Sum256(body)
+	receipt := installation.DataReceipts[binding.DataReceiptID]
+	return PendingNativeIntent{
+		Binding: BindingFacts{InstallationID: installation.InstallationID, ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope, TargetPath: binding.TargetLocator, DataRoot: receipt.Locator, DataReceiptID: binding.DataReceiptID, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest), SelectedDelivery: binding.SelectedDelivery},
+		Intent:  intent, NativeProfileRoot: binding.NativeProfileRoot, Digest: fmt.Sprintf("sha256:%x", sum),
+	}, nil
 }
 
 func nativeObservationIdentity(pending PendingNativeIntent) string {
@@ -98,6 +106,9 @@ func (e *Engine) recoverNativeIntents(ctx context.Context, svc usecase.Service, 
 		reconcilers[i] = r
 	}
 	scope := &nativeRecoveryScope{engine: e, expected: observed}
+	// OpenCode's durable recorder publishes its binding itself. Directory and
+	// selected-intent recovery must retain those journals until its own phase.
+	svc.Kernel.NativeRecovery = nil
 	if err := scope.RequireMutationReady(); err != nil {
 		return err
 	}
@@ -126,7 +137,7 @@ func (e *Engine) recoverNativeIntents(ctx context.Context, svc usecase.Service, 
 			return ErrPlanChanged
 		}
 	}
-	return nil
+	return e.recoverObservedOpenCode(ctx, svc, scope.expected)
 }
 
 // Only existing state_committed receipts can advance during successful kernel
@@ -140,7 +151,20 @@ func (e *Engine) recoverObservedJournals(ctx context.Context, svc usecase.Servic
 	if err := scope.confirm(); err != nil {
 		return err
 	}
-	scope.journals = newJournalRecoveryFence(state, scope.expected)
+	directoryObservation := scope.expected
+	directoryObservation.Journals = nil
+	open, err := svc.Kernel.Directory.ListOpen()
+	if err != nil {
+		return err
+	}
+	for _, receipt := range open {
+		for _, journal := range scope.expected.Journals {
+			if receipt.OperationID == journal.OperationID {
+				directoryObservation.Journals = append(directoryObservation.Journals, journal)
+			}
+		}
+	}
+	scope.journals = newJournalRecoveryFence(state, directoryObservation)
 	if err := svc.Kernel.Recover(journalRecoveryContext{Context: ctx, scope: scope}); err != nil {
 		return errors.Join(err, scope.confirm())
 	}
@@ -148,6 +172,28 @@ func (e *Engine) recoverObservedJournals(ctx context.Context, svc usecase.Servic
 		return err
 	}
 	scope.journals = nil
+	recoverStateReceipts(&state)
+	digest, err := recoveryStateDigest(state)
+	if err != nil {
+		return err
+	}
+	after, err := e.observe()
+	if err != nil {
+		return err
+	}
+	if after.Recovery.StateDigest != digest || !reflect.DeepEqual(after.Recovery.Journals, scope.expected.Journals) {
+		return ErrPlanChanged
+	}
+	for _, receipt := range after.Recovery.Receipts {
+		if receipt.Phase != "native_attempt" || !containsReceipt(scope.expected.Receipts, receipt) {
+			return ErrRecoveryRequired
+		}
+	}
+	scope.expected = after.Recovery
+	return nil
+}
+
+func recoverStateReceipts(state *domain.StateFileV2) {
 	for i := range state.TransactionReceipts {
 		recoveredReceipt(&state.TransactionReceipts[i])
 	}
@@ -159,22 +205,6 @@ func (e *Engine) recoverObservedJournals(ctx context.Context, svc usecase.Servic
 			installation.Clients[key] = binding
 		}
 	}
-	digest, err := recoveryStateDigest(state)
-	if err != nil {
-		return err
-	}
-	after, err := e.observe()
-	if err != nil {
-		return err
-	}
-	if after.Recovery.StateDigest != digest || len(after.Recovery.Journals) != 0 {
-		return ErrPlanChanged
-	}
-	if len(after.Recovery.Receipts) != 0 {
-		return ErrRecoveryRequired
-	}
-	scope.expected = after.Recovery
-	return nil
 }
 
 func recoveredReceipt(receipt *domain.MutationReceipt) {

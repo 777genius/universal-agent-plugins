@@ -53,13 +53,13 @@ function sourceFixture(root, env) {
 function candidate(root, commit, versions = { agentplugins: "0.1.23", "plugin-kit-ai": "2.0.0" }, behavior = "normal") {
   const source = mkdir(path.join(root, "candidate inputs with spaces", "candidate"));
   const go = path.join(mkdir(path.join(root, "tools")), "mock-go");
-  write(go, `#!${node}\nconst fs=require('node:fs');const a=process.argv.slice(2);\nif(a[0]==='env') console.log(JSON.stringify({GOVERSION:'go1.25.13',GOHOSTOS:'linux',GOHOSTARCH:'amd64'}));\nelse if(a[1]==='-m')console.log(fs.readFileSync(a[3],'utf8').split('\\n')[1].slice(2));\nelse console.log('go version go1.25.13 linux/amd64 (STRUCTURAL MOCK)');\n`, 0o755);
+  write(go, `#!${node}\nconst fs=require('node:fs');const a=process.argv.slice(2);\nif(a[0]==='env') console.log(JSON.stringify({GOVERSION:'go1.26.9',GOHOSTOS:'linux',GOHOSTARCH:'amd64'}));\nelse if(a[1]==='-m')console.log(fs.readFileSync(a[3],'utf8').split('\\n')[1].slice(2));\nelse console.log('go version go1.26.9 linux/amd64 (STRUCTURAL MOCK)');\n`, 0o755);
   const identity = { repository: c.REPOSITORY, commit, engine_revision: commit, versions };
   const manifest = { schema: c.SCHEMA, status: "CANDIDATE", identity, asset_scope: "linux-amd64-pair",
-    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13", go_sha256: c.digest(fs.readFileSync(go)),
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.26.9", go_sha256: c.digest(fs.readFileSync(go)),
       source_archive_sha256: "c".repeat(64), authoring_mode: s.MODE }, products: {}, release_eligible: false };
   for (const product of c.PRODUCTS) {
-    const info = { GoVersion: "go1.25.13", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
+    const info = { GoVersion: "go1.26.9", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
       Settings: Object.entries({ GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
         "-ldflags": c.linkerFlags(product, identity, s.MODE) }).map(([Key, Value]) => ({ Key, Value })) };
     const body = Buffer.from(`#!${behavior === "spawn-error" ? "/absent-structural-interpreter" : node}\n//${JSON.stringify(info)}\n` +

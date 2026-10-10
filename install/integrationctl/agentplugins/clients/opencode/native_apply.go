@@ -110,13 +110,35 @@ func prepareOpenCodeNativeApply(configRoot, activePath string, previous, desired
 			return nil, err
 		}
 	}
-	if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
+	if err := preflightOpenCodeNativeApply(configRoot, activePath, projection, previous, desired); err != nil {
 		return nil, err
 	}
 	if err := confirmOpenCodeConfigSelection(configRoot, projection, previous, desired); err != nil {
 		return nil, err
 	}
 	return &openCodeNativeApply{rename: rename, removeAll: removeAll, kernel: kernel, projection: projection, previous: previous, desired: desired}, nil
+}
+
+func preflightOpenCodeNativeApply(configRoot, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
+	if crossOpenCodeDialect(previous, desired) {
+		candidate := &openCodeNativeApply{projection: projection, previous: previous, desired: desired}
+		if _, err := openCodeTransitionRequest(candidate); err != nil {
+			return err
+		}
+		for _, objects := range [][]domain.NativeObjectOwnership{previous, desired} {
+			for _, object := range objects {
+				if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+					return err
+				}
+			}
+		}
+		if err := preflightDesiredOpenCodeObjects(configRoot, projection, shared.ObjectMap(previous), shared.ObjectMap(desired)); err != nil {
+			return err
+		}
+	} else if err := preflightOpenCodeObjects(configRoot, activePath, projection, previous, desired); err != nil {
+		return err
+	}
+	return nil
 }
 
 func confirmOpenCodeConfigSelection(configRoot string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
@@ -147,7 +169,7 @@ func expectedOpenCodeConfig(projection OpenCodeProjection, previous []domain.Nat
 		return projection.ConfigPath
 	}
 	for _, object := range previous {
-		if object.Kind == OpenCodeMCPObjectKind {
+		if _, mcp, _ := nativeconfig.OpenCodeCodecForKind(object.Kind); mcp {
 			return object.Path
 		}
 	}
@@ -193,7 +215,7 @@ func matchOpenCodeMCPReceipts(requests []nativeconfig.Request, receipts []native
 			continue
 		}
 		expected := desiredByID["opencode-mcp:"+request.Name]
-		if receipts[index].Digest != expected.ManagedDigest || receipts[index].Path != expected.Path {
+		if receipts[index].Digest != expected.ManagedDigest || receipts[index].Path != expected.Path || receipts[index].Codec != request.Codec || receipts[index].Name != request.Name || receipts[index].Version != "1" {
 			return fmt.Errorf("OpenCode native receipt differs from staged ownership")
 		}
 	}

@@ -75,7 +75,7 @@ namespace contract, not protection against a hostile concurrent same-UID writer.
    every symlink; the containing npm fixture permits only contained symlinks
    such as installed `.bin` links. All ordinary files must have one hard link.
 
-4. Run only the packed bridge test, using installed Go **1.25.13**, offline cache,
+4. Run only the packed bridge test, using installed Go **1.26.9**, offline cache,
    private HOME/TMP/config/GOCACHE and `GOMAXPROCS=2`. Keep result in a different
    external directory from config and all observed inputs. Example from checkout:
 
@@ -141,7 +141,7 @@ Use the same offline/private environment above, without any packed opt-in vars.
 exact-SHA checkout and 45-minute ceiling. It runs `scripts/run-packed-ci.py
 "$PACKED_ROOT" "$EXPECTED_HEAD"` after setup. `PACKED_ROOT` must be absent,
 absolute and outside checkout. The runner resolves installed Go, Node and npm's
-JavaScript CLI; no root-host tool or cache paths are embedded. Go is 1.25.13,
+JavaScript CLI; no root-host tool or cache paths are embedded. Go is 1.26.9,
 Node is **22.23.2**, and npm is its bundled **10.9.8**, with no npm upgrade.
 ROOT selected this pair from the fresh official Node release index (2026-07-28
 security release). Versions and tool SHA256 hashes, including stager Node, are
