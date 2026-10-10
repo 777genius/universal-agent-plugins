@@ -13,7 +13,7 @@ for (const [key, value] of Object.entries({ GOPROXY: "off", GOSUMDB: "off", GOEN
 for (const key of ["HOME", "TMPDIR", "GOCACHE", "GOMODCACHE", "DOCS_TOOLS_ROOT"])
   if (!path.isAbsolute(process.env[key] || "")) throw new Error(`Required integration needs private absolute ${key} (GOMODCACHE may be an existing read-only cache)`);
 if (process.env.GOFLAGS) throw new Error("Required integration needs empty GOFLAGS");
-assert.match(await run("go", ["version"]), / go1\.25\.\d+ /);
+assert.match(await run("go", ["version"]), / go1\.26\.9 /);
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), "docs-consumer-integration-"));
 console.log(`Integration evidence: ${directory}`);
 const source = path.join(directory, "source");

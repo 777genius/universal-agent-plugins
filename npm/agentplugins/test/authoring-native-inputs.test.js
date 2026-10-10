@@ -350,7 +350,7 @@ function c1Fixture(t) {
     fs.writeFileSync(file, bytes); return c.metadata(bytes);
   };
   const manifest = { schema: c.SCHEMA, status: "CANDIDATE", identity: input.identity, asset_scope: input.asset_scope,
-    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13", go_sha256: sha(80),
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.26.9", go_sha256: sha(80),
       source_archive_sha256: sha(81), authoring_mode: input.authoring_mode }, products: {}, release_eligible: false };
   for (const product of products) {
     for (const target of targets) {

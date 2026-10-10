@@ -9,7 +9,7 @@ import re
 import stat
 import sys
 
-VERSIONS = dict(go='go1.25.13', node='v22.23.2', npm='10.9.8')
+VERSIONS = dict(go='go1.26.9', node='v22.23.2', npm='10.9.8')
 MODE = 'release-cli-contract-v1'
 PRODUCTS = ('agentplugins', 'plugin-kit-ai')
 LANES = ('skill', 'mcp-remote', 'mcp-stdio', 'hybrid-remote', 'hybrid-stdio')
@@ -212,7 +212,7 @@ def check(root, sha):
     for name in ('node', 'npm', 'go', 'stager_node'):
         tool = pack['tools'][name]; key = 'node' if name == 'stager_node' else name
         require(tool['path'] == run['tools'][key]['path'] and tool['sha256'] == run['tools'][key]['sha256'], 'stager tool hash')
-        require(tool['version'] == ('go version go1.25.13 linux/amd64' if key == 'go' else VERSIONS[key]), 'stager tool version')
+        require(tool['version'] == ('go version go1.26.9 linux/amd64' if key == 'go' else VERSIONS[key]), 'stager tool version')
     require(candidate['build']['go_version'] == VERSIONS['go'] and candidate['build']['authoring_mode'] == MODE and
         candidate['build']['go_sha256'] == run['tools']['go']['sha256'], 'candidate build identity')
     invocations = read(root / 'native/invocations.json')

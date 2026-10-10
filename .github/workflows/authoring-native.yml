@@ -51,7 +51,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ci.yml
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.9'
           architecture: ${{ matrix.arch == 'amd64' && 'x64' || matrix.arch }}
           cache: false
       - name: Prepare disposable second NTFS filesystem on Windows ARM64
@@ -94,7 +94,7 @@ jobs:
           go env -json GOOS GOARCH GOHOSTOS GOHOSTARCH GOVERSION GOROOT > "$NATIVE_ROOT/evidence/go-env.json"
           test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
           test "$(go env GOOS)/$(go env GOARCH)" = "$EXPECTED_OS/$EXPECTED_ARCH"
-          test "$(go env GOVERSION)" = go1.25.13
+          test "$(go env GOVERSION)" = go1.26.9
           # Node is used only for generated JavaScript syntax checks (--check).
           unset NODE_OPTIONS NODE_PATH
           node --version > "$NATIVE_ROOT/evidence/node-version.txt"
@@ -201,7 +201,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
-          go-version: '1.25.13'
+          go-version: '1.26.9'
           architecture: x64
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020

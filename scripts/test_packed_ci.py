@@ -162,7 +162,7 @@ class TerminalControls(unittest.TestCase):
             body = (root / 'npm-pair' / file).read_bytes()
             packs[product] = dict(file=file, size=len(body), sha256=p.digest(root / 'npm-pair' / file),
                 integrity='sha512-' + p.base64.b64encode(p.hashlib.sha512(body).digest()).decode())
-        pack_tools = {key: dict(value, version='go version go1.25.13 linux/amd64' if key == 'go' else p.VERSIONS[key]) for key, value in tools.items()}
+        pack_tools = {key: dict(value, version='go version go1.26.9 linux/amd64' if key == 'go' else p.VERSIONS[key]) for key, value in tools.items()}
         pack_tools['stager_node'] = pack_tools['node']
         put('npm-pair/completion.json', dict(schema='dual-authoring-npm-completion/v1', identity=identity, status='CANDIDATE', authoring_mode=p.MODE,
             asset_scope='linux-amd64-pair', candidate_sha256=candidate_pin, packs=packs, tools=pack_tools, **claims))

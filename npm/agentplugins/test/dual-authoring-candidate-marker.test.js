@@ -44,7 +44,7 @@ function fixture(t, mode) {
   const exec = cp.execFileSync;
   t.mock.method(cp, "execFileSync", function (command, args, opts) {
     if (command !== options.go) return exec.apply(this, arguments);
-    if (args[0] === "env") return JSON.stringify({ GOVERSION: "go1.25.13", GOHOSTOS: "linux", GOHOSTARCH: "amd64" });
+    if (args[0] === "env") return JSON.stringify({ GOVERSION: "go1.26.9", GOHOSTOS: "linux", GOHOSTARCH: "amd64" });
     if (args[0] === "build") {
       const product = args.at(-1).split("/").at(-1);
       assert.equal(args[args.indexOf("-ldflags") + 1], c.linkerFlags(product, identity, mode));
@@ -54,7 +54,7 @@ function fixture(t, mode) {
     assert.equal(args[0], "version");
     const product = fs.readFileSync(args.at(-1), "utf8").replace("STRUCTURAL ONLY: ", "");
     assert.ok(c.PRODUCTS.includes(product));
-    return JSON.stringify({ GoVersion: "go1.25.13", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
+    return JSON.stringify({ GoVersion: "go1.26.9", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
       Settings: Object.entries({ GOOS: "linux", GOARCH: "amd64", CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
         "-ldflags": c.linkerFlags(product, identity, mode) }).map(([Key, Value]) => ({ Key, Value })) });
   });
