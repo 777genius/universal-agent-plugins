@@ -10,7 +10,7 @@ const cp = require("node:child_process");
 const c = require("./dual-authoring-candidate");
 
 const SOURCE_PATHS = ["go.mod", "go.work", "go.work.sum", "cli", "install", "plugininstall", "sdk"];
-const GO_VERSION = "go1.25.13";
+const GO_VERSION = "go1.26.9";
 
 function run(command, args, options = {}) {
   return cp.execFileSync(command, args, { timeout: 10 * 60 * 1000, maxBuffer: 64 * 1024 * 1024, ...options });
@@ -52,7 +52,7 @@ function toolchain(go, context) {
   const hash = c.digest(c.readFile(go));
   const info = JSON.parse(run(go, ["env", "-json", "GOVERSION", "GOHOSTOS", "GOHOSTARCH"], { env: context.env }));
   if (info.GOVERSION !== GO_VERSION || info.GOHOSTOS !== "linux" || info.GOHOSTARCH !== "amd64") {
-    throw new Error("this bounded candidate producer/verifier requires trusted Go 1.25.13 on Linux amd64");
+    throw new Error("this bounded candidate producer/verifier requires trusted Go 1.26.9 on Linux amd64");
   }
   return hash;
 }

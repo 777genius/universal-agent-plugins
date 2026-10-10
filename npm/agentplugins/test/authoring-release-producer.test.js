@@ -31,7 +31,7 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(path.join(sandbox, "calls.jsonl"))}, JSON.stringify(args) + '\\n');
 if (JSON.stringify(args) === JSON.stringify(['env', '-json', 'GOVERSION', 'GOHOSTOS', 'GOHOSTARCH'])) {
-  console.log(JSON.stringify({ GOVERSION: 'go1.25.13', GOHOSTOS: 'linux', GOHOSTARCH: 'amd64' }));
+  console.log(JSON.stringify({ GOVERSION: 'go1.26.9', GOHOSTOS: 'linux', GOHOSTARCH: 'amd64' }));
 } else if (args.length === 4 && args.slice(0, 3).join(' ') === 'version -m -json') {
   const stat = fs.statSync(args[3]);
   if (stat.mode & 0o111) throw Error('subject executable permission');
@@ -39,14 +39,14 @@ if (JSON.stringify(args) === JSON.stringify(['env', '-json', 'GOVERSION', 'GOHOS
 } else throw Error('compile or unexpected tool invocation forbidden');
 `, { mode: 0o755 });
   const manifest = { schema: c.SCHEMA, status: "CANDIDATE", identity: structuredClone(ID), asset_scope: SCOPE,
-    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.25.13", go_sha256: c.digest(c.readFile(go)),
+    build: { method: "controlled-git-archive-go-build/v1", go_version: "go1.26.9", go_sha256: c.digest(c.readFile(go)),
       source_archive_sha256: "c".repeat(64), authoring_mode: MODE }, products: {}, release_eligible: false };
   for (const product of c.PRODUCTS) {
     const assets = {};
     manifest.products[product] = { version: ID.versions[product], assets };
     for (const target of c.TARGETS) {
       const [GOOS, GOARCH] = target.split("-");
-      const binary = c.encode({ GoVersion: "go1.25.13", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
+      const binary = c.encode({ GoVersion: "go1.26.9", Path: `github.com/777genius/plugin-kit-ai/cli/cmd/${product}`,
         Settings: Object.entries({ GOOS, GOARCH, CGO_ENABLED: "0", "-buildmode": "exe", "-compiler": "gc",
           "-ldflags": c.linkerFlags(product, ID, MODE) }).map(([Key, Value]) => ({ Key, Value })) });
       const file = c.assetName(product, ID.versions[product], target);
