@@ -176,12 +176,25 @@ func TestWindowsAncestorEpochMetadataGuards(t *testing.T) {
 		func(b *winSnapshot) { b.Attributes |= windows.FILE_ATTRIBUTE_REPARSE_POINT },
 		func(b *winSnapshot) { b.Attributes |= windows.FILE_ATTRIBUTE_OFFLINE },
 		func(b *winSnapshot) { b.Attributes |= windows.FILE_ATTRIBUTE_RECALL_ON_OPEN },
-		func(b *winSnapshot) { b.Size++ }, func(b *winSnapshot) { b.Creation++ },
+		func(b *winSnapshot) { b.Creation++ },
 	} {
 		b := a
 		mutate(&b)
 		if winUnchanged(a, b, true) {
 			t.Fatalf("ancestor metadata guard weakened: %+v", b)
+		}
+	}
+	// An ancestor's directory index can grow without changing its held identity.
+	sized := a
+	sized.Size = 8192
+	if !winUnchanged(a, sized, true) || winUnchanged(a, sized, false) {
+		t.Fatal("directory index size lost traversal/source boundary")
+	}
+	for _, attributes := range []uint32{0, windows.FILE_ATTRIBUTE_DIRECTORY | windows.FILE_ATTRIBUTE_REPARSE_POINT} {
+		original, changed := a, sized
+		original.Attributes, changed.Attributes = attributes, attributes
+		if winUnchanged(original, changed, true) {
+			t.Fatal("file or reparse gained directory index size exception")
 		}
 	}
 	b := a
