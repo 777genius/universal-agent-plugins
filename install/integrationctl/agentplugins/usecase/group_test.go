@@ -967,25 +967,25 @@ func TestGroupedAddContinuesActivationAcrossClientFailures(t *testing.T) {
 
 func TestGroupTargetFailureStageClassification(t *testing.T) {
 	t.Parallel()
-	activationAndVerification := groupTargetFailureFromActivation(errors.New("boom"), domain.ActivationOutcome{
+	activationAndVerification := groupTargetFailureFromActivation(context.Background(), errors.New("boom"), domain.ActivationOutcome{
 		Activation: domain.ActivationFailed, Verification: domain.VerificationFailed,
 	})
 	if activationAndVerification.Stage != "activation" {
 		t.Fatalf("combined failure stage = %q", activationAndVerification.Stage)
 	}
-	verificationOnly := groupTargetFailureFromActivation(errors.New("verify boom"), domain.ActivationOutcome{
+	verificationOnly := groupTargetFailureFromActivation(context.Background(), errors.New("verify boom"), domain.ActivationOutcome{
 		Activation: domain.ActivationActive, Verification: domain.VerificationFailed,
 	})
 	if verificationOnly.Stage != "verification" {
 		t.Fatalf("verification-only stage = %q", verificationOnly.Stage)
 	}
-	canceled := groupTargetFailureFromActivation(context.Canceled, domain.ActivationOutcome{
+	canceled := groupTargetFailureFromActivation(context.Background(), context.Canceled, domain.ActivationOutcome{
 		Activation: domain.ActivationFailed, Verification: domain.VerificationFailed,
 	})
 	if canceled.Stage != "canceled" {
 		t.Fatalf("canceled stage = %q", canceled.Stage)
 	}
-	authOnly := groupTargetFailureFromActivation(errors.New("auth boom"), domain.ActivationOutcome{
+	authOnly := groupTargetFailureFromActivation(context.Background(), errors.New("auth boom"), domain.ActivationOutcome{
 		Activation: domain.ActivationActive, Authentication: domain.AuthenticationFailed, Verification: domain.VerificationInstalled,
 	})
 	if authOnly.Stage != "authentication" {
