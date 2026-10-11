@@ -88,17 +88,15 @@ func (stager Stager) Verify(ctx context.Context, root, expectedDigest string) er
 		}
 		return &ports.VerificationError{Kind: kind, Err: err}
 	}
-	artifact, err := stager.SnapshotBuilder.Build(ctx, root)
+	// Installed verification reads fresh bytes and does not depend on temporary
+	// snapshot creation, sealing, or cleanup.
+	digest, err := stager.SnapshotBuilder.Digest(ctx, root)
 	if err != nil {
 		kind := ports.VerificationIndeterminate
 		if errors.Is(err, os.ErrNotExist) {
 			kind = ports.VerificationAbsent
 		}
 		return &ports.VerificationError{Kind: kind, Err: err}
-	}
-	digest := artifact.Digest
-	if closeErr := artifact.Close(); closeErr != nil {
-		return &ports.VerificationError{Kind: ports.VerificationIndeterminate, Err: closeErr}
 	}
 	if digest != expectedDigest {
 		return &ports.VerificationError{Kind: ports.VerificationDigestMismatch, ActualDigest: digest, Err: fmt.Errorf("artifact digest mismatch")}
