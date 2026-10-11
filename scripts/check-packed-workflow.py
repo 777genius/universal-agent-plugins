@@ -64,8 +64,20 @@ def check(text, runner):
         pattern = rf"run\('{phase}', \[go, 'test', '-p=2', '-tags=packedci', '-json'.*?'{flag}', proof.REGEX, proof.PACKAGE_PATH\]"
         require(re.search(pattern, runner), 'explicit tagged exact ' + phase)
     require('proof.check(root, sha)' in runner, 'terminal checker invocation')
-    require('go test -p 2 -json -count=1 -timeout=12m "${selected[@]}"' in native and not re.search(r'\s-run(?:[ =]|$)', native), 'ordinary native selection must remain unfiltered')
-    require('-tags=packedci' not in native and 'GOFLAGS' not in packed, 'tag must remain opt-in')
+    supplemental = """          if [[ "$EXPECTED_OS" == windows ]]; then
+            go test -p 2 -json -count=1 -run '^TestDigest(KnownFormatParityAndNoOutput|FreshBytesAndExecutableIntent)$' ./install/integrationctl/packagesnapshot > "$NATIVE_ROOT/evidence/digest-windows.json" 2> "$NATIVE_ROOT/evidence/digest-windows.stderr"
+            digest_result=$?
+            if [[ "$digest_result" != 0 ]]; then result=$digest_result; fi
+          fi
+"""
+    terminal = """          printf '%s\\n' "$result" > "$NATIVE_ROOT/evidence/test-exit.txt"
+          exit "$result"
+"""
+    require(native.count(supplemental) == 1 and supplemental + terminal in native,
+            'exact Windows digest supplement and exit propagation required')
+    ordinary_native = native.replace(supplemental, '', 1)
+    require('go test -p 2 -json -count=1 -timeout=12m "${selected[@]}"' in ordinary_native and not re.search(r'\s-run(?:[ =]|$)', ordinary_native), 'ordinary native selection must remain unfiltered')
+    require('-tags=packedci' not in ordinary_native and 'GOFLAGS' not in packed, 'tag must remain opt-in')
 
 
 if __name__ == '__main__':

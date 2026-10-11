@@ -372,6 +372,11 @@ class WorkflowControls(unittest.TestCase):
             ('    timeout-minutes: 45', '    continue-on-error: true\n    timeout-minutes: 45'),
             ('scripts/check-packed-ci.py "$PACKED_ROOT"', 'scripts/missing.py "$PACKED_ROOT"'),
             ('scripts/check-packed-workflow.py --results', 'scripts/omitted.py --results'),
+            ('go test -p 2 -json -count=1 -timeout=12m "${selected[@]}"',
+             'go test -p 2 -json -count=1 -timeout=12m "${selected[@]}" -run "^TestOther$"'),
+            ('^TestDigest(KnownFormatParityAndNoOutput|FreshBytesAndExecutableIntent)$', '^TestOther$'),
+            ('if [[ "$digest_result" != 0 ]]; then result=$digest_result; fi',
+             'if [[ "$digest_result" != 0 ]]; then result=0; fi'),
             ('        run: python3 -B scripts/run-packed-ci.py', '        if: false\n        run: python3 -B scripts/run-packed-ci.py')]
         for before, after in mutations:
             with self.subTest(before=before), self.assertRaises(ValueError): w.check(text.replace(before, after), runner)
