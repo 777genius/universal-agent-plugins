@@ -16,8 +16,9 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 	for plannedIndex, target := range session.planned {
 		if err := session.ctx.Err(); err != nil {
 			session.classifyActivationFailure()
-			session.markRemainingNotAttempted(plannedIndex, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
-			return session.result, fmt.Errorf("%d of %d client activations failed: %w", session.externalFailed+countNotAttempted(session.result.Targets), logicalTotal, err)
+			stage, message := groupActivationStopReason(session.ctx, err)
+			session.markRemainingNotAttempted(plannedIndex, stage, message)
+			return session.result, session.activationFailureError(err)
 		}
 		if err := session.activateOneGroupTarget(plannedIndex, target); err != nil {
 			return session.result, err
@@ -52,12 +53,11 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	if err := session.reportGroupProgress(target, GroupProgressActivated); err != nil {
 		return err
 	}
-	logicalTotal := len(session.result.Targets)
 	if persistErr != nil {
 		session.externalFailed += len(target.resultIndexes)
 		session.classifyActivationFailure()
 		session.markRemainingNotAttempted(plannedIndex+1, "persist", "processing stopped because installation state could not be saved safely")
-		return fmt.Errorf("%d of %d client activations failed: %w", session.externalFailed+countNotAttempted(session.result.Targets), logicalTotal, persistErr)
+		return session.activationFailureError(persistErr)
 	}
 	if activationErr == nil {
 		session.externalCompleted += len(target.resultIndexes)
@@ -69,12 +69,13 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	}
 	if errors.Is(activationErr, context.Canceled) || errors.Is(activationErr, context.DeadlineExceeded) || session.ctx.Err() != nil {
 		session.classifyActivationFailure()
-		session.markRemainingNotAttempted(plannedIndex+1, "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely")
+		stage, message := groupActivationStopReason(session.ctx, activationErr)
+		session.markRemainingNotAttempted(plannedIndex+1, stage, message)
 		cause := activationErr
-		if ctxErr := session.ctx.Err(); ctxErr != nil && !errors.Is(activationErr, context.Canceled) && !errors.Is(activationErr, context.DeadlineExceeded) {
-			cause = ctxErr
+		if ctxErr := session.ctx.Err(); ctxErr != nil && !errors.Is(activationErr, ctxErr) {
+			cause = errors.Join(activationErr, ctxErr)
 		}
-		return fmt.Errorf("%d of %d client activations failed: %w", session.externalFailed+countNotAttempted(session.result.Targets), logicalTotal, cause)
+		return session.activationFailureError(cause)
 	}
 	return nil
 }
@@ -161,10 +162,28 @@ func (session *groupSession) assignActivationOutcome(target plannedGroupTarget, 
 			session.result.Targets[resultIndex].Failure = &GroupTargetFailure{Stage: "persist", Message: persistErr.Error()}
 		case activationErr != nil:
 			session.result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed
-			session.result.Targets[resultIndex].Failure = groupTargetFailureFromActivation(activationErr, outcome)
+			session.result.Targets[resultIndex].Failure = groupTargetFailureFromActivation(session.ctx, activationErr, outcome)
 		default:
 			session.result.Targets[resultIndex].GroupPhase = GroupTargetExternalCompleted
 		}
+	}
+}
+
+func (session *groupSession) activationFailureError(cause error) error {
+	if skipped := countNotAttempted(session.result.Targets); skipped > 0 {
+		return fmt.Errorf("%d of %d client activations failed; %d not attempted: %w", session.externalFailed, len(session.result.Targets), skipped, cause)
+	}
+	return fmt.Errorf("%d of %d client activations failed: %w", session.externalFailed, len(session.result.Targets), cause)
+}
+
+func groupActivationStopReason(ctx context.Context, cause error) (string, string) {
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return "deadline", "processing stopped because the operation deadline was exceeded before remaining clients could be activated safely"
+	case errors.Is(ctx.Err(), context.Canceled), errors.Is(cause, context.Canceled):
+		return "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely"
+	default:
+		return "timeout", "processing stopped because a client activation timed out before remaining clients could be activated safely"
 	}
 }
 

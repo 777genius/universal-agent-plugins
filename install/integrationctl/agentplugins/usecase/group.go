@@ -254,11 +254,11 @@ func (session *groupSession) prepareGroupInputs() error {
 	return session.freezeGroupProfiles()
 }
 
-func groupTargetFailureFromActivation(err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
+func groupTargetFailureFromActivation(ctx context.Context, err error, outcome domain.ActivationOutcome) *GroupTargetFailure {
 	stage := "activation"
 	switch {
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		stage = "canceled"
+	case ctx.Err() != nil, errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		stage, _ = groupActivationStopReason(ctx, err)
 	case outcome.Authentication == domain.AuthenticationFailed &&
 		outcome.Activation != domain.ActivationFailed &&
 		outcome.Verification != domain.VerificationFailed:

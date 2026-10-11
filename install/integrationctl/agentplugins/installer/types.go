@@ -197,6 +197,18 @@ type ClientResult struct {
 	ClientID, BindingID, TreeDigest                                   string
 	Materialization, Activation, Authentication, Policy, Verification string
 	RequiredComponents                                                []string
+	// GroupPhase and Failure describe this operation's attempt, independently of
+	// the saved lifecycle. Empty GroupPhase means no group attempt was observed.
+	GroupPhase string         `json:",omitempty"`
+	Failure    *ClientFailure `json:",omitempty"`
+}
+
+// ClientFailure projects the group usecase's failure or safe-stop reason.
+// Stage is activation, verification, authentication, persist, timeout,
+// canceled, or deadline. Message is diagnostic text, not a machine classifier.
+type ClientFailure struct {
+	Stage   string
+	Message string
 }
 
 // Assessment is a digest-bound content verdict. It is not a filesystem plan.

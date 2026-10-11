@@ -204,6 +204,12 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		result.ManualActions = append([]string(nil), added.Activation.UserActions...)
 	}
 	result, committed, loadErr := e.readCommittedPackage(prepared, added, result, err)
+	if added.GroupPhase != "" {
+		if result.Client.ClientID == "" {
+			result.Client.ClientID = string(added.Plan.ClientID)
+		}
+		attachClientAttemptResult(&result.Client, added)
+	}
 	if loadErr != nil {
 		return result, loadErr
 	}
@@ -255,7 +261,7 @@ func (e *Engine) finishMutatingPackage(result Result, added usecase.AddResult, c
 		result.Reason = "target_facts_unavailable"
 		return result, err
 	}
-	if added.NoChange {
+	if added.NoChange && err == nil {
 		result.Outcome = OutcomeUnchanged
 		result.NoChange = true
 	} else if err == nil {
@@ -376,18 +382,15 @@ func (e *Engine) updateWithCompatibility(ctx context.Context, svc usecase.Servic
 		DryRun:              in.DryRun,
 		Confirmed:           in.Confirmed,
 	})
-	if err != nil {
-		return usecase.AddResult{InstallationID: got.InstallationID}, err
-	}
 	for _, target := range got.Targets {
 		if target.Plan.ClientID == in.Client.ClientID || target.Plan.ClientID == domain.ClientID(req.ClientID) {
-			return target, nil
+			return target, err
 		}
 	}
 	if len(got.Targets) > 0 {
-		return got.Targets[0], nil
+		return got.Targets[0], err
 	}
-	return usecase.AddResult{InstallationID: got.InstallationID, Mutated: got.Mutated}, nil
+	return usecase.AddResult{InstallationID: got.InstallationID, Mutated: got.Mutated}, err
 }
 
 func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]usecase.AddInput, error) {

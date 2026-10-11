@@ -62,6 +62,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 			e.attachLiveGroupResult(&result, prepared, installation)
 		}
 	}
+	attachGroupAttemptResult(&result, got)
 	if err != nil {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = err.Error()
@@ -91,6 +92,40 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	e.report(ProgressVerify)
 	e.report(ProgressComplete)
 	return result, nil
+}
+
+func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {
+	for _, target := range got.Targets {
+		if target.Plan.ClientID == "" || target.GroupPhase == "" {
+			continue
+		}
+		index := -1
+		for i := range result.Targets {
+			if result.Targets[i].ClientID == string(target.Plan.ClientID) {
+				index = i
+				break
+			}
+		}
+		if index < 0 {
+			// A failed state reload must not erase observed attempt facts. Saved
+			// lifecycle dimensions remain unknown until a successful inspection.
+			result.Targets = append(result.Targets, ClientResult{ClientID: string(target.Plan.ClientID)})
+			index = len(result.Targets) - 1
+		}
+		item := &result.Targets[index]
+		attachClientAttemptResult(item, target)
+		if result.Client.ClientID == "" || result.Client.ClientID == item.ClientID {
+			result.Client = *item
+		}
+	}
+}
+
+func attachClientAttemptResult(item *ClientResult, target usecase.AddResult) {
+	item.GroupPhase = string(target.GroupPhase)
+	item.Failure = nil
+	if target.Failure != nil {
+		item.Failure = &ClientFailure{Stage: target.Failure.Stage, Message: target.Failure.Message}
+	}
 }
 
 func (e *Engine) mutateGroup(ctx context.Context, prepared *PreparedOperation) (*usecase.GroupResult, error) {
