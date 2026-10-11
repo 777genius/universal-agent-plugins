@@ -20,7 +20,11 @@ func TestDigestKnownFormatParityAndNoOutput(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(source, "empty"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	const want = "sha256:1b3b199aac618cf73b63f83b6faac401f72100f859a0caca75a0903aa5c61156"
+	want := "sha256:1b3b199aac618cf73b63f83b6faac401f72100f859a0caca75a0903aa5c61156"
+	if runtime.GOOS == "windows" {
+		// Go reports regular Windows files without executable bits.
+		want = "sha256:49a284b86cfbae3cc04367adaacd1fd4e03b280694aea345a8c2c3f64508eefb"
+	}
 	output := t.TempDir()
 	builder := Builder{TempRoot: output}
 	for range 2 {
@@ -73,7 +77,8 @@ func TestDigestFreshBytesAndExecutableIntent(t *testing.T) {
 	if err := os.Chmod(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if digest() == second {
+	// Windows Chmod changes only the read-only attribute, not executable intent.
+	if runtime.GOOS != "windows" && digest() == second {
 		t.Fatal("executable intent change ignored")
 	}
 }

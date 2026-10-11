@@ -151,6 +151,11 @@ jobs:
             printf '%s\n' "$privileged_result" > "$NATIVE_ROOT/evidence/packageview-exit.txt"
             if [[ "$privileged_result" != 0 ]]; then result=$privileged_result; fi
           fi
+          if [[ "$EXPECTED_OS" == windows ]]; then
+            go test -p 2 -json -count=1 -run '^TestDigest(KnownFormatParityAndNoOutput|FreshBytesAndExecutableIntent)$' ./install/integrationctl/packagesnapshot > "$NATIVE_ROOT/evidence/digest-windows.json" 2> "$NATIVE_ROOT/evidence/digest-windows.stderr"
+            digest_result=$?
+            if [[ "$digest_result" != 0 ]]; then result=$digest_result; fi
+          fi
           printf '%s\n' "$result" > "$NATIVE_ROOT/evidence/test-exit.txt"
           exit "$result"
       - name: Detach and remove only the owned Windows ARM64 VHDX
