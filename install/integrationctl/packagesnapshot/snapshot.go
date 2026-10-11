@@ -107,14 +107,10 @@ func (builder Builder) Build(ctx context.Context, sourceRoot string) (Snapshot, 
 				return Snapshot{}, err
 			}
 		}
-		written, err := copyRegularFile(sourceRoot, item, destination, executable, hash)
+		_, err := copyRegularFile(ctx, sourceRoot, item, destination, executable, hash)
 		if err != nil {
 			_ = cleanup()
 			return Snapshot{}, err
-		}
-		if written != item.size {
-			_ = cleanup()
-			return Snapshot{}, fmt.Errorf("source file %q changed size while snapshotting", item.rel)
 		}
 	}
 	if err := makeReadOnly(snapshotRoot, entries); err != nil {
@@ -129,6 +125,47 @@ func (builder Builder) Build(ctx context.Context, sourceRoot string) (Snapshot, 
 		ExecutableFiles: executableFiles,
 		cleanup:         cleanup,
 	}, nil
+}
+
+// Digest hashes a fresh, validated source tree using the same digest format as
+// Build, without creating or sealing a snapshot. TempRoot is not used.
+func (builder Builder) Digest(ctx context.Context, sourceRoot string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	entries, _, _, err := inspectTree(ctx, sourceRoot, builder.limits())
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.New()
+	for _, item := range entries {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if item.isDir {
+			writeDigestHeader(hash, "dir", item.rel, false, 0)
+			continue
+		}
+		if builder.beforeCopy != nil {
+			if err := builder.beforeCopy(item.rel); err != nil {
+				return "", err
+			}
+		}
+		source, err := openValidatedRegular(sourceRoot, item)
+		if err != nil {
+			return "", err
+		}
+		writeDigestHeader(hash, "file", item.rel, item.mode&0o111 != 0, item.size)
+		_, err = readRegularFile(ctx, source, item, hash)
+		_ = source.Close()
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func (builder Builder) limits() Limits {
@@ -251,22 +288,33 @@ func validateRelativePath(rel string, maxDepth int, seen map[string]string) erro
 	return nil
 }
 
-func copyRegularFile(sourceRoot string, item entry, destination string, executable bool, hash io.Writer) (int64, error) {
+func openValidatedRegular(sourceRoot string, item entry) (*os.File, error) {
 	source, err := openSnapshotRegular(sourceRoot, item.rel)
 	if err != nil {
-		return 0, fmt.Errorf("open snapshot source file %q: %w", item.rel, err)
+		return nil, fmt.Errorf("open snapshot source file %q: %w", item.rel, err)
 	}
-	defer source.Close()
 	openedInfo, err := source.Stat()
 	if err != nil {
-		return 0, fmt.Errorf("inspect opened snapshot source file %q: %w", item.rel, err)
+		_ = source.Close()
+		return nil, fmt.Errorf("inspect opened snapshot source file %q: %w", item.rel, err)
 	}
 	if !openedInfo.Mode().IsRegular() || item.info == nil || !item.info.Mode().IsRegular() || !os.SameFile(openedInfo, item.info) {
-		return 0, fmt.Errorf("snapshot source file %q changed identity while opening", item.rel)
+		_ = source.Close()
+		return nil, fmt.Errorf("snapshot source file %q changed identity while opening", item.rel)
 	}
 	if err := requireSingleLink(source); err != nil {
-		return 0, fmt.Errorf("snapshot source file %q: %w", item.rel, err)
+		_ = source.Close()
+		return nil, fmt.Errorf("snapshot source file %q: %w", item.rel, err)
 	}
+	return source, nil
+}
+
+func copyRegularFile(ctx context.Context, sourceRoot string, item entry, destination string, executable bool, hash io.Writer) (int64, error) {
+	source, err := openValidatedRegular(sourceRoot, item)
+	if err != nil {
+		return 0, err
+	}
+	defer source.Close()
 	mode := os.FileMode(0o600)
 	if executable {
 		mode = 0o700
@@ -276,18 +324,44 @@ func copyRegularFile(sourceRoot string, item entry, destination string, executab
 		return 0, fmt.Errorf("create snapshot file %q: %w", item.rel, err)
 	}
 	writeDigestHeader(hash, "file", item.rel, executable, item.size)
-	written, copyErr := io.Copy(io.MultiWriter(destinationFile, hash), io.LimitReader(source, item.size+1))
+	written, copyErr := readRegularFile(ctx, source, item, io.MultiWriter(destinationFile, hash))
 	closeErr := destinationFile.Close()
 	if copyErr != nil {
-		return written, fmt.Errorf("copy snapshot file %q: %w", item.rel, copyErr)
+		return written, copyErr
 	}
 	if closeErr != nil {
 		return written, fmt.Errorf("close snapshot file %q: %w", item.rel, closeErr)
 	}
+	return written, nil
+}
+
+func readRegularFile(ctx context.Context, source *os.File, item entry, destination io.Writer) (int64, error) {
+	written, err := io.Copy(destination, io.LimitReader(contextReader{ctx: ctx, reader: source}, item.size+1))
+	if err != nil {
+		return written, fmt.Errorf("copy snapshot file %q: %w", item.rel, err)
+	}
+	if err := ctx.Err(); err != nil {
+		return written, err
+	}
 	if written > item.size {
 		return written, fmt.Errorf("source file %q grew while snapshotting", item.rel)
 	}
+	if written != item.size {
+		return written, fmt.Errorf("source file %q changed size while snapshotting", item.rel)
+	}
 	return written, nil
+}
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func (reader contextReader) Read(buffer []byte) (int, error) {
+	if err := reader.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return reader.reader.Read(buffer)
 }
 
 func writeDigestHeader(writer io.Writer, kind, rel string, executable bool, size int64) {
