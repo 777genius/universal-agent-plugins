@@ -78,7 +78,9 @@ func TestWindowsAncestorEpochBoundary(t *testing.T) {
 				if boundary == "outside" {
 					bootstrapCheck(t, "outside-root sibling must not invalidate acquisition", err)
 					// All retained records still participate in global verification.
+					recordIndex := 0
 					for _, o := range s.records {
+						recordIndex++
 						if os.SameFile(identity, o.info) {
 							data, e := (&pinned{file: o.file, info: o.info}).reopen(true)
 							if data != nil {
@@ -89,7 +91,9 @@ func TestWindowsAncestorEpochBoundary(t *testing.T) {
 							}
 						}
 						if !same(o.info, o.info) {
-							t.Fatal("retained record failed verification")
+							current, metadataErr := winMeta(o.file)
+							t.Fatalf("retained record failed verification: index=%d name=%q traversalOnly=%t recorded=%+v current=%+v metadataErr=%v",
+								recordIndex, o.info.Name(), o.traversalOnly, o.meta, current, metadataErr)
 						}
 					}
 					p, err := s.pin("sub/original", false)
