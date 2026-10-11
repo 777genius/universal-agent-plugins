@@ -21,7 +21,11 @@ func TestStagerVerifyDigestWithoutSnapshotOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer snapshot.Close()
+	t.Cleanup(func() {
+		if err := snapshot.Close(); err != nil {
+			t.Errorf("close snapshot: %v", err)
+		}
+	})
 	output := t.TempDir()
 	stager := Stager{SnapshotBuilder: packagesnapshot.Builder{TempRoot: output}}
 	for range 2 {
@@ -53,8 +57,8 @@ func TestStagerVerifyDigestErrorClasses(t *testing.T) {
 	root := t.TempDir()
 	writeTestFile(t, filepath.Join(root, "file"), "data")
 	stager := Stager{SnapshotBuilder: packagesnapshot.Builder{Limits: packagesnapshot.Limits{MaxFileBytes: 1}}}
-	requireVerificationKind(t, stager.Verify(context.Background(), root, "sha256:expected"), ports.VerificationIndeterminate)
-	requireVerificationKind(t, stager.Verify(context.Background(), filepath.Join(root, "absent"), "sha256:expected"), ports.VerificationAbsent)
+	_ = requireVerificationKind(t, stager.Verify(context.Background(), root, "sha256:expected"), ports.VerificationIndeterminate)
+	_ = requireVerificationKind(t, stager.Verify(context.Background(), filepath.Join(root, "absent"), "sha256:expected"), ports.VerificationAbsent)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	verifyErr := requireVerificationKind(t, stager.Verify(ctx, root, "sha256:expected"), ports.VerificationIndeterminate)
@@ -64,7 +68,7 @@ func TestStagerVerifyDigestErrorClasses(t *testing.T) {
 	for _, marker := range []string{".git", ".plugin-kit-ai.lock"} {
 		marked := t.TempDir()
 		writeTestFile(t, filepath.Join(marked, "nested", marker), "marker")
-		requireVerificationKind(t, stager.Verify(context.Background(), marked, "sha256:expected"), ports.VerificationExcludedMarker)
+		_ = requireVerificationKind(t, stager.Verify(context.Background(), marked, "sha256:expected"), ports.VerificationExcludedMarker)
 	}
 }
 

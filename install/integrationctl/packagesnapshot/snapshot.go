@@ -314,7 +314,7 @@ func copyRegularFile(ctx context.Context, sourceRoot string, item entry, destina
 	if err != nil {
 		return 0, err
 	}
-	defer source.Close()
+	defer func() { _ = source.Close() }()
 	mode := os.FileMode(0o600)
 	if executable {
 		mode = 0o700

@@ -37,7 +37,11 @@ func TestDigestKnownFormatParityAndNoOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer snapshot.Close()
+	t.Cleanup(func() {
+		if err := snapshot.Close(); err != nil {
+			t.Errorf("close snapshot: %v", err)
+		}
+	})
 	if snapshot.Digest != want {
 		t.Fatalf("Build digest = %q, want %q", snapshot.Digest, want)
 	}
@@ -116,7 +120,13 @@ func TestBuildAndDigestRejectSourceChanges(t *testing.T) {
 				if operation == "Build" {
 					var snapshot Snapshot
 					snapshot, err = builder.Build(context.Background(), source)
-					defer snapshot.Close()
+					if err == nil {
+						t.Cleanup(func() {
+							if closeErr := snapshot.Close(); closeErr != nil {
+								t.Errorf("close snapshot: %v", closeErr)
+							}
+						})
+					}
 				} else {
 					_, err = builder.Digest(context.Background(), source)
 				}
@@ -170,7 +180,11 @@ func TestSharedReadCancellationDuringRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	t.Cleanup(func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close source file: %v", err)
+		}
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	written, err := readRegularFile(ctx, file, entries[0], cancelOnWrite{cancel: cancel})
