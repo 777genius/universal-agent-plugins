@@ -413,7 +413,7 @@ img {
   box-shadow: var(--shadow);
 }
 .hero__window-body {
-  padding: 24px 26px 22px;
+  padding: 24px 26px 10px;
 }
 .hero-quick-start__header {
   padding: 0 0 18px;
@@ -445,6 +445,9 @@ img {
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   align-items: stretch;
+}
+.hero-quick-start__step:last-child {
+  padding-bottom: 0;
 }
 .hero-quick-start__caption {
   min-width: 0;
@@ -2918,7 +2921,7 @@ img {
     display: grid;
   }
   .hero__window-body {
-    padding: 18px 14px;
+    padding: 18px 14px 10px;
   }
   .hero-quick-start__header {
     align-items: flex-start;
