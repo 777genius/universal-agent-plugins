@@ -25,8 +25,15 @@ test('demo loads its player only after keyboard activation and keeps installatio
     const requestsBefore = playerRequests.length;
     const installBefore = (await page.locator('.hero__window').boundingBox())!;
     const demoBefore = (await demo.boundingBox())!;
-    expect(demoBefore.width).toBeLessThanOrEqual(320);
-    expect(demoBefore.y + demoBefore.height).toBeLessThanOrEqual(installBefore.y);
+    expect(demoBefore.width).toBeLessThanOrEqual(480);
+    expect(installBefore.y - (demoBefore.y + demoBefore.height)).toBeGreaterThanOrEqual(27);
+    if (width === 1440) {
+      const header = (await page.getByRole('banner').boundingBox())!;
+      const topGap = demoBefore.y - (header.y + header.height);
+      expect(demoBefore.width).toBe(480);
+      expect(topGap).toBeGreaterThanOrEqual(16);
+      expect(topGap).toBeLessThanOrEqual(32);
+    }
     await button.focus();
     await page.keyboard.press('Enter');
     const frame = demo.locator('iframe');

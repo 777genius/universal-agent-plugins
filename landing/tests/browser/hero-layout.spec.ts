@@ -169,8 +169,8 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   await expect(page.locator('.hero-demo-video button')).toHaveAccessibleName('Watch demo');
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;
   const install = (await page.locator('.hero__window').boundingBox())!;
-  expect(preview.width).toBeLessThanOrEqual(320);
-  expect(preview.y + preview.height).toBeLessThanOrEqual(install.y);
+  expect(preview.width).toBe(480);
+  expect(install.y - (preview.y + preview.height)).toBeGreaterThanOrEqual(27);
   await expect(page.locator('iframe[src*="player.mux.com"]')).toHaveCount(0);
   await expect(page.locator('.hero-quick-start__footer')).toHaveCount(0);
   await capture(page, 'hero-early-reveal');
