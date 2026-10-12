@@ -105,6 +105,10 @@ func nativeAbsolutePath(shell ShellContract, s string) error {
 	if err := literalToken(s); err != nil {
 		return err
 	}
+	// PowerShell treats typographic single quotes as string delimiters too.
+	if strings.ContainsAny(s, "‘’") {
+		return fmt.Errorf("%w: unqualified PowerShell quote delimiter", ErrUnsupported)
+	}
 	if len(s) <= 3 {
 		return fmt.Errorf("%w: canonical local Windows file path required", ErrUnsupported)
 	}

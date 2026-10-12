@@ -66,3 +66,15 @@ func TestWindowsRejectsAmbiguousPathsAndOtherArgv(t *testing.T) {
 		t.Fatal("selector ADS accepted")
 	}
 }
+
+func TestWindowsRejectsSmartQuoteCommandDelimiters(t *testing.T) {
+	for _, quote := range []string{"‘", "’"} {
+		for _, index := range []int{0, 4} {
+			args := []string{`C:\TEST.exe`, "cursor-event", "stop", "--binding", `C:\TEST\binding.json`}
+			args[index] = `C:\TEST\binding` + quote + ` ; Write-Output TEST; #.exe`
+			if _, err := ch.RenderArgv(ch.WindowsUserPowerShell20261001, args); !errors.Is(err, ch.ErrUnsupported) {
+				t.Fatalf("PowerShell smart delimiter accepted at argv %d: %q", index, args[index])
+			}
+		}
+	}
+}
