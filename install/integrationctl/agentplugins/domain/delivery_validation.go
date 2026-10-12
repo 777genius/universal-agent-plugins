@@ -153,7 +153,8 @@ func (d SelectedDelivery) validateCursor() error {
 	f := d.cursor
 	linux := f.CursorVersion == "2026.09.28-64d2043" && f.TargetOS == "linux" && f.TargetArch == "amd64" && f.Shell == "cursor-linux-user-3.22.12-single-quote"
 	darwin := f.CursorVersion == "2026.09.18-9a7762b" && f.TargetOS == "darwin" && f.TargetArch == "arm64" && f.Shell == "cursor-darwin-arm64-user-2026.09.18-single-quote"
-	if d.local != nil || (!linux && !darwin) {
+	windows := f.CursorVersion == "2026.10.01-e373342" && f.TargetOS == "windows" && f.TargetArch == "amd64" && f.Shell == "cursor-windows-amd64-user-2026.10.01-powershell-single-quote"
+	if d.local != nil || (!linux && !darwin && !windows) {
 		return fmt.Errorf("unknown Cursor selection or qualification tuple")
 	}
 	if err := validateCursorProfile(f); err != nil {
