@@ -135,8 +135,23 @@ The regression recorder executes the JSON-decoded command under actual
 matrix is target-shell proof only. It does not establish the exact native
 backend shell identity or broaden the supplied native qualification. The caller
 must qualify the selected backend before activation. `WindowsUnqualified` and
-all other contracts explicitly return `ErrUnsupported`; Linux roundtrips and
-cross-builds cannot qualify Windows. Real Windows native CI remains required.
+other unknown contracts return `ErrUnsupported`; Linux roundtrips and
+cross-builds cannot qualify Windows.
+
+A separate Windows amd64 CLI `2026.10.01-e373342` native Actions run
+[38220319890](https://github.com/777genius/agent-notifications/actions/runs/38220319890)
+on 2026-10-12 captured genuine Stop with exact conversation/generation and
+space/apostrophe argv, Stop acknowledgement, exec close and natural exit 0.
+The owned Job Object had no remaining processes; no forced cleanup occurred.
+The unmodified official archive SHA-256 is
+`31896ce9a43f63c8ae7ff3c4bee868213d6d02d60fb49908bef6dc91d582f6ee`;
+its `index.js` SHA-256 is
+`0e7e28c34e050c6b83fe574e1fefa8d95d7c80bea6c4a4d3ae2726e5191243ef`.
+This qualifies only the fixed five-argument Stop PowerShell grammar for a
+verified local `.exe` and selector. Generic PowerShell argv, CMD, WSL, other
+versions/architectures, installed Notifications delivery and visible toast
+are not established by that shell run. Filesystem authority, consent and
+installed consumer verification remain separate host responsibilities.
 
 The host must verify a fixed regular owned executable, execute permissions,
 bounded confined selector and no-follow canonical parents before setting

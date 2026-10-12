@@ -25,13 +25,15 @@ const (
 
 // ShellContract selects a caller-qualified command grammar, not a detected
 // shell or a statement of stop/model readiness. Linux and Darwin arm64 user hooks
-// have supplied native command evidence. No Windows shell is invented here.
+// have supplied native command evidence. Windows uses the separately qualified
+// fixed Stop PowerShell grammar.
 type ShellContract string
 
 const (
-	LinuxUserShell32212     ShellContract = "cursor-linux-user-3.22.12-single-quote"
-	DarwinUserShell20260918 ShellContract = "cursor-darwin-arm64-user-2026.09.18-single-quote"
-	WindowsUnqualified      ShellContract = "cursor-windows-unqualified"
+	LinuxUserShell32212           ShellContract = "cursor-linux-user-3.22.12-single-quote"
+	DarwinUserShell20260918       ShellContract = "cursor-darwin-arm64-user-2026.09.18-single-quote"
+	WindowsUserPowerShell20261001 ShellContract = "cursor-windows-amd64-user-2026.10.01-powershell-single-quote"
+	WindowsUnqualified            ShellContract = "cursor-windows-unqualified"
 )
 
 var (
@@ -42,7 +44,8 @@ var (
 
 // HookSpec fixes the entire invocation:
 // <Executable> cursor-event stop --binding <Selector>.
-// Both paths are explicit bounded absolute POSIX paths. No caller-supplied
+// Both paths are explicit bounded absolute paths for the selected grammar.
+// No caller-supplied
 // native event, timeout, env, model, matcher or additional argv is accepted.
 type HookSpec struct {
 	Executable string `json:"executable"`

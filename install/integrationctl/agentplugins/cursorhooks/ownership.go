@@ -13,7 +13,7 @@ type location struct {
 }
 
 func desiredEntry(shell ShellContract, spec HookSpec) (hujson.Value, error) {
-	if err := absolutePath(spec.Selector); err != nil {
+	if err := nativeAbsolutePath(shell, spec.Selector); err != nil {
 		return hujson.Value{}, err
 	}
 	command, err := RenderArgv(shell, specArgv(spec))
