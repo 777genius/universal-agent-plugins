@@ -254,8 +254,7 @@ function updateTargets(values: string[]) {
                   <div class="hero-quick-start__caption">
                     <span class="hero-quick-start__number">1</span>
                     <span class="hero-quick-start__label"
-                      ><strong>{{ t('shell.hero.choose') }}</strong
-                      ><small>{{ t('shell.hero.chooseHint') }}</small></span
+                      ><strong>{{ t('shell.hero.choose') }}</strong></span
                     >
                   </div>
                   <AppMultiSelect
@@ -272,8 +271,7 @@ function updateTargets(values: string[]) {
                   <div class="hero-quick-start__caption">
                     <span class="hero-quick-start__number hero-quick-start__number--run">2</span>
                     <span class="hero-quick-start__label"
-                      ><strong>{{ t('shell.hero.run') }}</strong
-                      ><small>{{ t('shell.hero.terminal') }}</small></span
+                      ><strong>{{ t('shell.hero.run') }}</strong></span
                     >
                   </div>
                   <div class="hero-quick-start__command">

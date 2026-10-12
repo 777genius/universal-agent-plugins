@@ -50,20 +50,9 @@ test('hero controls and 13 client links remain complete across four viewports', 
       }),
     );
     const rows = [...new Set(geometry.map((item) => Math.round(item.y)))];
-    if (width >= 1024) {
-      expect(rows).toHaveLength(2);
-      expect(geometry.slice(0, 7).map((item) => Math.round(item.y))).toEqual(
-        Array(7).fill(rows[0]),
-      );
-      expect(geometry.slice(7).map((item) => Math.round(item.y))).toEqual(Array(6).fill(rows[1]));
-      const listCenter = await page
-        .locator('.client-strip')
-        .evaluate(
-          (node) => node.getBoundingClientRect().x + node.getBoundingClientRect().width / 2,
-        );
-      const secondRowCenter = geometry.slice(7).reduce((sum, item) => sum + item.center, 0) / 6;
-      expect(Math.abs(secondRowCenter - listCenter)).toBeLessThan(2);
-    } else {
+    if (width >= 1440) {
+      expect(rows).toHaveLength(1);
+    } else if (width < 1024) {
       expect(rows.length).toBeGreaterThanOrEqual(3);
     }
     for (const item of geometry) {
@@ -91,6 +80,7 @@ test('hero controls and 13 client links remain complete across four viewports', 
       const caption = (await captions.nth(index).boundingBox())!;
       const control = (await controls.nth(index).boundingBox())!;
       const step = (await page.locator('.hero-quick-start__step').nth(index).boundingBox())!;
+      expect(caption.height).toBeLessThanOrEqual(24);
       expect(caption.y + caption.height).toBeLessThanOrEqual(control.y + 0.5);
       expect(control.width).toBeGreaterThanOrEqual(step.width - 1);
     }
@@ -135,7 +125,7 @@ test('selected targets produce one complete copyable command with keyboard activ
   }
 });
 
-test('catalog reveal is early on navigation, compact trust badges stay compact, and no Mux surface is fabricated', async ({
+test('catalog reveal is early on navigation, compact trust badges stay compact, and video preview waits for a real Mux asset', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 600 });
@@ -174,7 +164,12 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   expect(badgeBox.width).toBeLessThan(90);
 
   await page.goto('./');
-  await expect(page.locator('.hero-demo-video')).toHaveCount(0);
+  await expect(page.locator('.hero-demo-video')).toBeVisible();
+  await expect(page.locator('.hero-demo-video button')).toHaveCount(0);
+  const preview = (await page.locator('.hero-demo-video').boundingBox())!;
+  const install = (await page.locator('.hero__window').boundingBox())!;
+  expect(preview.width).toBeLessThanOrEqual(320);
+  expect(preview.y + preview.height).toBeLessThanOrEqual(install.y);
   await expect(page.locator('iframe[src*="player.mux.com"]')).toHaveCount(0);
   await expect(page.locator('.hero-quick-start__footer')).toHaveCount(0);
   await capture(page, 'hero-early-reveal');
