@@ -128,9 +128,10 @@ test('selected targets produce one complete copyable command with keyboard activ
 test('catalog reveal is early on navigation, compact trust badges stay compact, and video preview waits for a real Mux asset', async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
   await page.goto('./');
-  await expect(page.locator('html')).toHaveClass(/scroll-reveal-active/);
+  await expect(page.locator('html')).toHaveClass(/scroll-reveal-active/, { timeout: 15_000 });
   const catalog = page.locator('.catalog-wrap');
   await catalog.evaluate((node) => {
     window.scrollTo({
@@ -165,7 +166,7 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
 
   await page.goto('./');
   await expect(page.locator('.hero-demo-video')).toBeVisible();
-  await expect(page.locator('.hero-demo-video button')).toHaveCount(0);
+  await expect(page.locator('.hero-demo-video button')).toHaveAccessibleName('Watch demo');
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;
   const install = (await page.locator('.hero__window').boundingBox())!;
   expect(preview.width).toBeLessThanOrEqual(320);

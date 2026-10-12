@@ -4,7 +4,7 @@ const config = useRuntimeConfig();
 const playbackId = computed(() => config.public.muxPlaybackId.trim());
 const playing = ref(false);
 const thumbnailUrl = computed(
-  () => `https://image.mux.com/${playbackId.value}/thumbnail.webp?time=0&width=640`,
+  () => `https://image.mux.com/${playbackId.value}/thumbnail.webp?time=1&width=640`,
 );
 const playerUrl = computed(() => `https://player.mux.com/${playbackId.value}?autoplay=true`);
 </script>
@@ -15,7 +15,7 @@ const playerUrl = computed(() => `https://player.mux.com/${playbackId.value}?aut
       v-if="playing"
       :src="playerUrl"
       :title="t('shell.hero.demoVideoTitle')"
-      allow="autoplay; fullscreen; picture-in-picture"
+      allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
       allowfullscreen
     />
     <template v-else-if="playbackId">
