@@ -32,7 +32,7 @@ export default defineNuxtPlugin((nuxtApp) => {
             observer?.unobserve(section);
           }
         },
-        { rootMargin: '0px 0px -8% 0px', threshold: 0.06 },
+        { rootMargin: '0px 0px 160px 0px', threshold: 0 },
       );
       for (const section of revealable) {
         if (section.isConnected) observer.observe(section);
@@ -40,5 +40,7 @@ export default defineNuxtPlugin((nuxtApp) => {
     });
   };
 
-  nuxtApp.hook('page:finish', () => { requestAnimationFrame(revealSections); });
+  nuxtApp.hook('page:finish', () => {
+    requestAnimationFrame(revealSections);
+  });
 });

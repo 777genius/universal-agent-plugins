@@ -35,6 +35,7 @@ const registryPagesOrigin =
 const discoveryKeyID = process.env.NUXT_PUBLIC_DISCOVERY_KEY_ID || 'uap-discovery-2026-01';
 const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
+const muxPlaybackId = process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID || '';
 
 function resolveRegistrySnapshot(): string {
   const explicit = process.env.UAP_SIGNED_SNAPSHOT_PATH;
@@ -187,6 +188,7 @@ export default defineNuxtConfig({
       registryPagesOrigin,
       discoveryKeyID,
       discoveryPublicKey,
+      muxPlaybackId,
     },
   },
 });
