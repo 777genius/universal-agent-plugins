@@ -388,17 +388,18 @@ img {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   border: 0;
-  color: #fff;
+  color: var(--primary);
   background: rgba(4, 7, 15, 0.34);
   cursor: pointer;
+  font-size: 1.125rem;
   font-weight: 750;
 }
 .hero-demo-video button svg {
-  width: 30px;
-  height: 30px;
-  padding: 6px;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
   border-radius: 50%;
   background: rgba(4, 7, 15, 0.82);
 }
