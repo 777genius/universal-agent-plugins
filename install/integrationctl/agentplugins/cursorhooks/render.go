@@ -105,17 +105,28 @@ func nativeAbsolutePath(shell ShellContract, s string) error {
 	if err := literalToken(s); err != nil {
 		return err
 	}
-	if len(s) <= 3 || !((s[0] >= 'A' && s[0] <= 'Z') || (s[0] >= 'a' && s[0] <= 'z')) || s[1:3] != ":\\" || strings.ContainsAny(s[3:], ":/<>\"|?*") || strings.IndexFunc(s, unicode.IsControl) >= 0 {
+	if len(s) <= 3 {
+		return fmt.Errorf("%w: canonical local Windows file path required", ErrUnsupported)
+	}
+	drive := s[0] | 0x20
+	if drive < 'a' || drive > 'z' || s[1:3] != ":\\" || strings.ContainsAny(s[3:], ":/<>\"|?*") || strings.IndexFunc(s, unicode.IsControl) >= 0 {
 		return fmt.Errorf("%w: canonical local Windows file path required", ErrUnsupported)
 	}
 	for _, segment := range strings.Split(s[3:], "\\") {
 		if segment == "" || segment == "." || segment == ".." || strings.TrimRight(segment, ". ") != segment {
 			return fmt.Errorf("%w: ambiguous Windows path segment", ErrUnsupported)
 		}
-		base := strings.ToUpper(strings.SplitN(segment, ".", 2)[0])
-		if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9' {
+		if windowsDeviceSegment(segment) {
 			return fmt.Errorf("%w: Windows device path", ErrUnsupported)
 		}
 	}
 	return nil
+}
+
+func windowsDeviceSegment(segment string) bool {
+	base := strings.ToUpper(strings.SplitN(segment, ".", 2)[0])
+	if base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" {
+		return true
+	}
+	return len(base) == 4 && (strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT")) && base[3] >= '1' && base[3] <= '9'
 }
