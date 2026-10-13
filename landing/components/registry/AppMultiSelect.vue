@@ -76,7 +76,10 @@ function toggle(value: string) {
     return;
   }
   if (props.modelValue.includes(value)) {
-    if (props.modelValue.length === 1) return;
+    if (props.modelValue.length === 1) {
+      selectAuto();
+      return;
+    }
     emit(
       'update:modelValue',
       props.modelValue.filter((item) => item !== value),
@@ -103,7 +106,8 @@ function toggle(value: string) {
       <span class="app-multiselect__value">
         <span v-if="!autoSelected" class="app-multiselect__icons" aria-hidden="true">
           <span v-for="option in selected.slice(0, 3)" :key="option.value"
-            ><img v-if="option.icon" :src="option.icon" alt="" width="19" height="19"></span>
+            ><img v-if="option.icon" :src="option.icon" alt="" width="19" height="19"
+          ></span>
         </span>
         <span v-else class="app-multiselect__auto-icon" aria-hidden="true"
           ><svg viewBox="0 0 24 24" fill="none">
@@ -176,13 +180,16 @@ function toggle(value: string) {
             :aria-checked="!autoSelected && modelValue.includes(option.value)"
             :disabled="
               option.disabled ||
-              (!autoSelected && modelValue.length === 1 && modelValue.includes(option.value))
+              (!autoOption &&
+                !autoSelected &&
+                modelValue.length === 1 &&
+                modelValue.includes(option.value))
             "
             @click="toggle(option.value)"
           >
             <span class="app-multiselect__item-icon"
               ><img v-if="option.icon" :src="option.icon" alt="" width="20" height="20"
-            /></span>
+            ></span>
             <span
               ><span>{{ option.label }}</span
               ><small v-if="option.description">{{ option.description }}</small></span

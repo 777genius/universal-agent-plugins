@@ -77,8 +77,48 @@ const demoPlugin = computed(() => {
   return plugin;
 });
 
+// Context7 has a CLI-guided personal app setup path without a publisher binding.
+// Keep this separate from verified Directory compatibility and generic discovery.
+function context7Preparation(peers: ClientID[] = []) {
+  const plugin = demoPlugin.value;
+  if (
+    plugin.name !== 'context7' ||
+    plugin.install_source !== 'context7' ||
+    plugin.client_support.resolution !== 'directory'
+  )
+    return false;
+  const upstream = plugin.distributions.find(
+    (item) => item.id === 'upstash/context7' && item.kind === 'upstream',
+  );
+  if (!upstream) return false;
+  const candidate = { ...plugin, distributions: [upstream], default_distribution: upstream.id, declared_default_distribution: upstream.id };
+  const promoted = upstream.compatible_clients
+    .map((client) => expectedDistribution(candidate, [client]))
+    .filter(
+      (release) =>
+        release?.source.repository === 'upstash/context7' &&
+        release.source.path === 'plugins/agent-plugins/context7',
+    )
+    .sort((a, b) => (b!.release_sequence ?? 0) - (a!.release_sequence ?? 0))[0];
+  if (!promoted) return false;
+  if (!peers.length) return true;
+  candidate.distributions = [
+    {
+      ...upstream,
+      releases: upstream.releases.filter(
+        (release) => release.release_sequence === promoted.release_sequence,
+      ),
+    },
+  ];
+  return Boolean(expectedDistribution(candidate, peers));
+}
+const guidedChatgptSetup = computed(() => context7Preparation());
 const compatibleClients = computed(() =>
-  clients.filter((client) => demoPlugin.value.client_support.clients.includes(client.id)),
+  clients.filter(
+    (client) =>
+      demoPlugin.value.client_support.clients.includes(client.id) ||
+      (client.id === 'chatgpt' && guidedChatgptSetup.value),
+  ),
 );
 const preferences = useInstallPreferencesStore();
 const availableTargets = computed(() => compatibleClients.value.map((client) => client.id));
@@ -114,7 +154,7 @@ const targetOptions = computed(() =>
     value: client.id,
     label: client.id === 'copilot' ? 'Copilot' : client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !demoPlugin.value.client_support.clients.includes(client.id),
+    disabled: !availableTargets.value.includes(client.id),
     description: (() => {
       if (!published.value) return t('shell.hero.unavailable');
       if (expired.value) return t('shell.hero.refreshing');
@@ -122,7 +162,9 @@ const targetOptions = computed(() =>
         (item) => item.client === client.id,
       );
       if (client.id === 'chatgpt')
-        return target?.app_binding ? t('shell.hero.chatgptSetup') : t('shell.hero.notAvailable');
+        return target?.app_binding || guidedChatgptSetup.value
+          ? t('shell.hero.chatgptSetup')
+          : t('shell.hero.notAvailableForPlugin');
       return target
         ? t(`shell.hero.delivery.${target.delivery}`)
         : t('shell.hero.notAvailableForPlugin');
@@ -184,7 +226,11 @@ const fallbackReason = computed(() => {
 });
 defineExpose({ fallbackReason });
 const command = computed(() => {
-  if (!current.value || (!autoDetect.value && !resolution.value.distribution)) return '';
+  const guidedSelection =
+    selectedTargets.value.includes('chatgpt') &&
+    context7Preparation(selectedTargets.value.filter((client) => client !== 'chatgpt'));
+  if (!current.value || (!autoDetect.value && !resolution.value.distribution && !guidedSelection))
+    return '';
   return pluginCommands(
     demoPlugin.value,
     autoDetect.value ? undefined : selectedClients.value.map((client) => client.id),
@@ -208,7 +254,7 @@ function updateTargets(values: string[]) {
     <div class="hero container">
       <div class="hero__copy">
         <h1>
-          {{ t('shell.hero.title') }}<br /><em>{{ t('shell.hero.subtitle') }}</em>
+          {{ t('shell.hero.title') }}<br ><em>{{ t('shell.hero.subtitle') }}</em>
         </h1>
         <p class="hero__lead">
           {{ t('shell.hero.intro') }}

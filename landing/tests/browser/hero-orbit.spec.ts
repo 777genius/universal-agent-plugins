@@ -283,7 +283,17 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   // Only decorative logos are deduplicated, never the actual install targets.
   await page.getByRole('button', { name: /Choose target agents:/ }).click();
   await expect(page.getByRole('checkbox', { name: /^Codex / })).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: /^ChatGPT / })).toBeVisible();
+  const cursor = page.getByRole('checkbox', { name: /^Cursor / });
+  await cursor.click();
+  await expect(cursor).not.toBeChecked();
+  await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.hero__demo .command-snippet')).not.toContainText('--target');
+  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
+  await expect(chatgpt).toBeEnabled();
+  await expect(chatgpt).toContainText('Finish setup in ChatGPT');
+  await chatgpt.click();
+  await expect(chatgpt).toBeChecked();
+  await expect(page.locator('.hero__demo .command-snippet')).toContainText('add context7 --target chatgpt');
   await page.keyboard.press('Escape');
   expect(errors).toEqual([]);
 });
