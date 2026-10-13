@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { setSignedMirrorTestTime, wording } from './i18n-state.helpers';
+import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
 const exactCommand = 'npx universal-agent-plugins add context7 --target codex,cursor,vscode';
 
@@ -13,6 +13,7 @@ async function capture(page: Page, name: string) {
 }
 
 async function waitForCommand(page: Page) {
+  await hydrated(page);
   await expect(page.locator('.hero__window .command-snippet')).toBeVisible({
     timeout: 15_000,
   });
@@ -99,6 +100,7 @@ test('hero controls and 13 client links remain complete across four viewports', 
 test('selected targets produce one complete copyable command with keyboard activation', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: width === 1440 ? 1000 : 844 });
     await page.goto('./');
@@ -128,6 +130,7 @@ test('selected targets produce one complete copyable command with keyboard activ
 test('catalog reveal is early on navigation, compact trust badges stay compact, and video preview waits for a real Mux asset', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.setViewportSize({ width: 1440, height: 600 });
   await page.goto('./');

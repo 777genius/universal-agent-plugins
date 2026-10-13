@@ -5,6 +5,25 @@ import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
 test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
 
+async function waitForFullDirectory(page: import('@playwright/test').Page) {
+  await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
+    timeout: 15_000,
+  });
+  // The live catalog changes size. Prove pagination beyond the rendered cards,
+  // rather than requiring a historical number of community packages.
+  await expect
+    .poll(
+      async () => {
+        const summary = await page.locator('.catalog-count').innerText();
+        const total = Number(summary.match(/([\d,]+) plugins/)?.[1]?.replaceAll(',', '') ?? 0);
+        const shown = await page.locator('.plugin-card').count();
+        return shown > 0 && total > shown;
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+}
+
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
   const values = await page.locator('script[type="application/ld+json"]').allTextContents();
   return values.flatMap((value) => {
@@ -69,9 +88,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(securityTooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
   await expect(securityTooltip).toContainText(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3} plugins/, {
-    timeout: 15_000,
-  });
+  await waitForFullDirectory(page);
   const catalogSummary = await page.locator('.catalog-count').innerText();
   const totalPlugins = Number(catalogSummary.match(/([\d,]+) plugins/)![1].replaceAll(',', ''));
   await expect(explorePlugins).toHaveAccessibleName(
@@ -136,7 +153,7 @@ test('community catalog uses the live registry when the baked snapshot is unavai
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 45_000,
   });
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3} plugins/);
+  await waitForFullDirectory(page);
   await expect(page.locator('.discovery-status--stale')).toHaveCount(0);
   await expect(page.locator('.discovery-status--unavailable')).toHaveCount(0);
 });
@@ -456,9 +473,7 @@ test('directory filters and reviewed detail keep automatic detection as the defa
   page,
 }) => {
   await page.goto('./plugins');
-  await expect(page.locator('.catalog-count')).toContainText(/[2-9],?\d{3}/, {
-    timeout: 15_000,
-  });
+  await waitForFullDirectory(page);
   await page.getByPlaceholder(/Search by name/).fill('gitlab');
   const gitlabCard = page
     .locator('.plugin-card')
