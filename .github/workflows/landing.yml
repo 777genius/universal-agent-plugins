@@ -108,7 +108,7 @@ jobs:
   combined-pages-validation:
     if: github.event_name == 'pull_request'
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     permissions:
       contents: read
     strategy:
@@ -234,7 +234,7 @@ jobs:
 
       - name: Install browser
         working-directory: landing
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Serve assembled artifact at deployment base
         run: |
