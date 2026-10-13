@@ -499,7 +499,10 @@ img {
 .hero-quick-start__step .command-snippet--inline pre {
   overflow-x: visible;
   white-space: pre-wrap;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+.hero-quick-start__step .command-snippet--inline code {
+  min-width: 0;
 }
 .hero-quick-start__command {
   min-width: 0;
