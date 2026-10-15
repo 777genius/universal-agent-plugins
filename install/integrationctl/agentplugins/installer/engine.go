@@ -313,3 +313,11 @@ func (e *Engine) preparedClients(req Request) (domain.DetectedClient, map[domain
 	detected = physicalDetected(req, detected)
 	return client, detected, nil
 }
+
+// WithTemporaryRoot returns an engine sharing authoritative state but staging
+// read-only preparation in a caller-owned disposable directory.
+func (e *Engine) WithTemporaryRoot(root string) (*Engine, error) {
+	cfg := e.cfg
+	cfg.TempRoot = root
+	return New(cfg)
+}

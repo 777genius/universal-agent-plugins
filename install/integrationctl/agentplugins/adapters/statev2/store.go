@@ -49,13 +49,25 @@ func (store Store) RequireMutationReady() error {
 	if err != nil {
 		return err
 	}
-	if version == domain.LegacyStateSchemaVersion || version == domain.PreviousStateSchemaVersion {
+	if version >= domain.LegacyStateSchemaVersion && version < domain.StateSchemaVersion {
 		return fmt.Errorf("state schema %d requires explicit migration; run agentplugins migrate-state --dry-run, then agentplugins migrate-state", version)
 	}
 	if version != domain.StateSchemaVersion {
 		return fmt.Errorf("unsupported state schema_version %d", version)
 	}
 	return nil
+}
+
+func managedBindingDigest(binding domain.ClientBinding) string {
+	if binding.PackageRevision != nil && binding.PackageRevision.TreeDigest != "" {
+		return binding.PackageRevision.TreeDigest
+	}
+	for _, object := range binding.NativeObjects {
+		if object.ManagedDigest != "" {
+			return object.ManagedDigest
+		}
+	}
+	return ""
 }
 
 func (store Store) Load() (domain.StateFileV2, error) {
@@ -83,10 +95,17 @@ func (store Store) Load() (domain.StateFileV2, error) {
 	case domain.PreviousStateSchemaVersion:
 		state, err = decodeLegacyStateV3(body)
 		normalizeCurrentState(&state)
+	case domain.PreviousStateSchemaV4:
+		err = decodeStrictJSON(body, &state)
+		if len(state.EnvironmentReceipts) != 0 {
+			return domain.StateFileV2{}, fmt.Errorf("schema 4 cannot contain environment ownership")
+		}
+		state.SchemaVersion = domain.StateSchemaVersion
+		normalizeCurrentState(&state)
 	case domain.StateSchemaVersion:
 		err = decodeStrictJSON(body, &state)
 	default:
-		return domain.StateFileV2{}, fmt.Errorf("unsupported state schema_version %d; this build reads %d, %d, and %d and writes only %d", header.SchemaVersion, domain.LegacyStateSchemaVersion, domain.PreviousStateSchemaVersion, domain.StateSchemaVersion, domain.StateSchemaVersion)
+		return domain.StateFileV2{}, fmt.Errorf("unsupported state schema_version %d; this build reads %d-%d and writes only %d", header.SchemaVersion, domain.LegacyStateSchemaVersion, domain.PreviousStateSchemaV4, domain.StateSchemaVersion)
 	}
 	if err != nil {
 		return domain.StateFileV2{}, err
@@ -166,6 +185,52 @@ func Validate(state domain.StateFileV2) error {
 	sourceBindingIDs := map[string]struct{}{}
 	clientBindingIDs := map[string]struct{}{}
 	operationIDs := map[string]struct{}{}
+	environmentKeys := map[string]struct{}{}
+	environmentBindings := map[string]struct{}{}
+	installationsByID := make(map[string]domain.Installation, len(state.Installations))
+	clientBindingsByID := make(map[string]domain.ClientBinding, len(state.Installations)*2)
+	for _, installation := range state.Installations {
+		installationsByID[installation.InstallationID] = installation
+		for _, client := range installation.Clients {
+			clientBindingsByID[client.ClientBindingID] = client
+		}
+	}
+	for index, receipt := range state.EnvironmentReceipts {
+		prefix := fmt.Sprintf("environment_receipts[%d]", index)
+		if receipt.ReceiptID == "" || receipt.EnvironmentID == "" || receipt.Alias == "" || receipt.ClientID == "" ||
+			receipt.InstallationID == "" || receipt.ClientBindingID == "" || receipt.SourceKey == "" ||
+			receipt.PackageDigest == "" || receipt.DesiredAction == "" || receipt.Phase == "" {
+			return fmt.Errorf("%s is incomplete", prefix)
+		}
+		key := receipt.EnvironmentID + "\x00" + receipt.Alias + "\x00" + receipt.ClientID
+		if _, duplicate := environmentKeys[key]; duplicate {
+			return fmt.Errorf("duplicate environment receipt for %s/%s/%s", receipt.EnvironmentID, receipt.Alias, receipt.ClientID)
+		}
+		environmentKeys[key] = struct{}{}
+		if _, duplicate := environmentBindings[receipt.ClientBindingID]; duplicate {
+			return fmt.Errorf("%s binding has multiple environment owners", prefix)
+		}
+		environmentBindings[receipt.ClientBindingID] = struct{}{}
+
+		installation, ok := installationsByID[receipt.InstallationID]
+		if !ok {
+			return fmt.Errorf("%s references unknown installation", prefix)
+		}
+		binding, ok := clientBindingsByID[receipt.ClientBindingID]
+		if !ok || binding.ClientID != receipt.ClientID || installation.Clients[binding.ClientBindingID].ClientBindingID != binding.ClientBindingID {
+			return fmt.Errorf("%s references unknown client binding", prefix)
+		}
+		sourceKey := "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
+		if installation.Directory != nil {
+			sourceKey = "directory:" + strings.ToLower(installation.Directory.DistributionID)
+		}
+		if receipt.SourceKey != sourceKey {
+			return fmt.Errorf("%s source key does not match installed identity", prefix)
+		}
+		if receipt.PackageDigest != installation.Source.TreeDigest && receipt.PackageDigest != managedBindingDigest(binding) {
+			return fmt.Errorf("%s package digest does not match installed state", prefix)
+		}
+	}
 	for index, installation := range state.Installations {
 		if mapping := installation.LocalChatGPTMapping; mapping != nil {
 			if err := mapping.Validate(); err != nil && !mapping.IsLegacyContext7Registration() {

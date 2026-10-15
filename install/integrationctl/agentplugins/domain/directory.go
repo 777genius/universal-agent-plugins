@@ -291,6 +291,10 @@ type DirectoryResolveRequest struct {
 	RequiredComponents []string
 	Operation          DirectoryOperation
 	Recorded           *RecordedDirectoryRelease
+	// DesiredReleaseSequence selects one exact release as new-install intent.
+	// It is deliberately distinct from Recorded, which is proof of installed
+	// state and may receive exact-operation exceptions.
+	DesiredReleaseSequence uint64
 }
 
 type DirectoryDiagnostic struct {
@@ -334,6 +338,9 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 	}
 	if request.Scope == "" {
 		request.Scope = ScopeUser
+	}
+	if request.DesiredReleaseSequence != 0 && request.Recorded != nil {
+		return DirectorySelection{}, fmt.Errorf("desired Directory release and recorded installed release are mutually exclusive")
 	}
 	if request.Operation == "" {
 		request.Operation = DirectoryInstall
@@ -499,6 +506,9 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 	reasons := []eligibilityReason{}
 	for i := range releases {
 		release := &releases[i]
+		if request.DesiredReleaseSequence != 0 && release.Sequence != request.DesiredReleaseSequence {
+			continue
+		}
 		policy, ok := policies[release.Sequence]
 		if !ok {
 			continue

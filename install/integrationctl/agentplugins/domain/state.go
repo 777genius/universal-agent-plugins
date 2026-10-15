@@ -5,8 +5,40 @@ import "encoding/json"
 const (
 	LegacyStateSchemaVersion   = 2
 	PreviousStateSchemaVersion = 3
-	StateSchemaVersion         = 4
+	PreviousStateSchemaV4      = 4
+	StateSchemaVersion         = 5
 )
+
+// EnvironmentAuthority is narrow proof that a managed mutation belongs to one
+// dependency environment alias and target. It is copied into the transaction
+// receipt before the first managed effect and never permits nil-owner adoption.
+type EnvironmentAuthority struct {
+	EnvironmentID   string `json:"environment_id"`
+	Alias           string `json:"alias"`
+	ClientID        string `json:"client_id"`
+	ReceiptID       string `json:"receipt_id,omitempty"`
+	InstallationID  string `json:"installation_id,omitempty"`
+	ClientBindingID string `json:"client_binding_id,omitempty"`
+	ExpectedAction  string `json:"expected_action"`
+	SourceKey       string `json:"source_key,omitempty"`
+}
+
+// EnvironmentReceipt associates a portable dependency selection with an
+// existing installation and binding. It is local state, never lock or source
+// identity, and remains present until terminal removal commits.
+type EnvironmentReceipt struct {
+	ReceiptID        string            `json:"receipt_id"`
+	EnvironmentID    string            `json:"environment_id"`
+	Alias            string            `json:"alias"`
+	ClientID         string            `json:"client_id"`
+	InstallationID   string            `json:"installation_id"`
+	ClientBindingID  string            `json:"client_binding_id"`
+	SourceKey        string            `json:"source_key"`
+	PackageDigest    string            `json:"package_digest"`
+	ProfileAuthority *ProfileAuthority `json:"profile_authority,omitempty"`
+	DesiredAction    string            `json:"desired_action"`
+	Phase            string            `json:"phase"`
+}
 
 type MaterializationState string
 type ActivationState string
@@ -147,20 +179,21 @@ type NativeObjectOwnership struct {
 }
 
 type MutationReceipt struct {
-	DirectoryProof   json.RawMessage        `json:"physical_directory_proof,omitempty"`
-	ProfileOwners    []PhysicalProfileOwner `json:"profile_owners,omitempty"`
-	DataReceiptID    string                 `json:"data_receipt_id,omitempty"`
-	OperationID      string                 `json:"operation_id"`
-	OperationGroupID string                 `json:"operation_group_id,omitempty"`
-	Sequence         int                    `json:"sequence"`
-	MutationType     string                 `json:"mutation_type"`
-	ClientBindingID  string                 `json:"client_binding_id"`
-	ActivePath       string                 `json:"active_path,omitempty"`
-	StagingPath      string                 `json:"staging_path,omitempty"`
-	BackupPath       string                 `json:"backup_path,omitempty"`
-	BeforeDigest     string                 `json:"before_digest,omitempty"`
-	AfterDigest      string                 `json:"after_digest,omitempty"`
-	Phase            string                 `json:"phase"`
+	DirectoryProof       json.RawMessage        `json:"physical_directory_proof,omitempty"`
+	ProfileOwners        []PhysicalProfileOwner `json:"profile_owners,omitempty"`
+	DataReceiptID        string                 `json:"data_receipt_id,omitempty"`
+	OperationID          string                 `json:"operation_id"`
+	OperationGroupID     string                 `json:"operation_group_id,omitempty"`
+	Sequence             int                    `json:"sequence"`
+	MutationType         string                 `json:"mutation_type"`
+	ClientBindingID      string                 `json:"client_binding_id"`
+	ActivePath           string                 `json:"active_path,omitempty"`
+	StagingPath          string                 `json:"staging_path,omitempty"`
+	BackupPath           string                 `json:"backup_path,omitempty"`
+	BeforeDigest         string                 `json:"before_digest,omitempty"`
+	AfterDigest          string                 `json:"after_digest,omitempty"`
+	Phase                string                 `json:"phase"`
+	EnvironmentAuthority *EnvironmentAuthority  `json:"environment_authority,omitempty"`
 }
 
 // ClientPackageRevision records the exact portable package revision that was
@@ -254,9 +287,10 @@ type Installation struct {
 }
 
 type StateFileV2 struct {
-	SchemaVersion       int               `json:"schema_version"`
-	Installations       []Installation    `json:"installations"`
-	TransactionReceipts []MutationReceipt `json:"transaction_receipts,omitempty"`
+	SchemaVersion       int                  `json:"schema_version"`
+	Installations       []Installation       `json:"installations"`
+	TransactionReceipts []MutationReceipt    `json:"transaction_receipts,omitempty"`
+	EnvironmentReceipts []EnvironmentReceipt `json:"environment_receipts,omitempty"`
 }
 
 // PhysicalProfileOwner freezes durable scope independently of a surviving binding.

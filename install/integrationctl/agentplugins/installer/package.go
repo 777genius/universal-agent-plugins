@@ -62,6 +62,9 @@ func snapshotLocalPackage(ctx context.Context, tempRoot, packageRoot string) (do
 }
 
 func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (domain.PackageSnapshot, error) {
+	if req.AcquiredSnapshot != nil {
+		return snapshotAcquiredRequest(ctx, tempRoot, req)
+	}
 	if req.ExecutableFiles == nil {
 		return snapshotLocalPackage(ctx, tempRoot, req.PackageRoot)
 	}
@@ -76,6 +79,85 @@ func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (
 	}
 	source := domain.SourceIdentity{RequestedSource: req.PackageRoot, CanonicalSource: req.PackageRoot, SourceBindingHint: "direct-local"}
 	return (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, source, req.ExecutableFiles)
+}
+
+func snapshotAcquiredRequest(ctx context.Context, tempRoot string, req Request) (domain.PackageSnapshot, error) {
+	acquired := req.AcquiredSnapshot
+	source := acquired.Source
+	expected := "github:" + source.Repository + "@" + source.ResolvedRevision
+	if source.PackageSubpath != "" {
+		expected += "//" + source.PackageSubpath
+	}
+	if source.Repository == "" || len(source.ResolvedRevision) != 40 || (acquired.OriginMode == domain.OriginModeDirect && source.RequestedSource != expected) || source.CanonicalSource != expected {
+		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired source coordinates disagree", ErrInvalidRequest)
+	}
+	if req.EnvironmentAuthority != nil {
+		key := "github:" + strings.ToLower(acquired.Source.Repository) + ":" + acquired.Source.PackageSubpath
+		if acquired.OriginMode == domain.OriginModeDirectory {
+			if acquired.Directory == nil {
+				return domain.PackageSnapshot{}, fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)
+			}
+			key = "directory:" + strings.ToLower(acquired.Directory.DistributionID)
+		}
+		if req.EnvironmentAuthority.SourceKey != key {
+			return domain.PackageSnapshot{}, fmt.Errorf("%w: environment source key differs from acquisition", ErrInvalidRequest)
+		}
+	}
+	if acquired.OriginMode != domain.OriginModeDirect && acquired.OriginMode != domain.OriginModeDirectory {
+		return domain.PackageSnapshot{}, ErrInvalidRequest
+	}
+	if len(req.Targets) != 0 {
+		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshots support single-target requests only", ErrInvalidRequest)
+	}
+	if acquired.TreeDigest == "" || acquired.DigestAlgorithm != domain.TreeDigestAlgorithm {
+		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot digest identity is incomplete", ErrInvalidRequest)
+	}
+	if req.ExecutableFiles != nil && !equalStrings(req.ExecutableFiles, acquired.ExecutableFiles) {
+		return domain.PackageSnapshot{}, fmt.Errorf("%w: request executable inventory differs from acquired snapshot", ErrInvalidRequest)
+	}
+	files := append([]string{}, acquired.ExecutableFiles...)
+	for _, relative := range files {
+		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
+			return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot executable path is invalid", ErrInvalidRequest)
+		}
+		info, err := os.Lstat(filepath.Join(req.PackageRoot, filepath.FromSlash(relative)))
+		if err != nil || !info.Mode().IsRegular() {
+			return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot executable is not a regular package file", ErrInvalidRequest)
+		}
+	}
+	snapshot, err := (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, acquired.Source, files)
+	if err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	if snapshot.TreeDigest != acquired.TreeDigest || snapshot.DigestAlgorithm != acquired.DigestAlgorithm ||
+		!equalStrings(snapshot.ExecutableFiles, acquired.ExecutableFiles) || snapshot.Source != acquired.Source {
+		_ = packagedigest.Remove(snapshot)
+		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot identity changed while resealing bytes", ErrInvalidRequest)
+	}
+	snapshot.OriginMode = acquired.OriginMode
+	snapshot.Directory = cloneAcquiredDirectory(acquired.Directory)
+	snapshot.ExecutableFiles = append([]string{}, acquired.ExecutableFiles...)
+	return snapshot, nil
+}
+
+func cloneAcquiredDirectory(origin *domain.DirectoryOrigin) *domain.DirectoryOrigin {
+	if origin == nil {
+		return nil
+	}
+	copy := *origin
+	return &copy
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func declaredPackageExecutables(root string) ([]string, error) {

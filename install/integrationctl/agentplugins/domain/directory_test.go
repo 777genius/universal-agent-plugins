@@ -508,3 +508,23 @@ func TestResolveDirectoryMultiTargetOrderIsDeterministic(t *testing.T) {
 		t.Fatalf("target order changed selection: %+v != %+v", first, second)
 	}
 }
+
+func TestResolveDirectoryDesiredSequenceUsesExactNewInstallEligibility(t *testing.T) {
+	s := testDirectory()
+	exact := request("owner/tool", ClientCodex)
+	exact.DesiredReleaseSequence = 2
+	got, err := ResolveDirectory(s, exact)
+	if err != nil || got.DistributionID != "owner/tool" || got.ReleaseSequence != 2 || got.Fallback {
+		t.Fatalf("exact desired release selected fallback: %+v %v", got, err)
+	}
+	missing := request("owner/tool", ClientCodex)
+	missing.DesiredReleaseSequence = 99
+	if got, err := ResolveDirectory(s, missing); err == nil || got.ReleaseSequence != 0 {
+		t.Fatalf("missing desired release fell back: %+v %v", got, err)
+	}
+	invalid := exact
+	invalid.Recorded = &RecordedDirectoryRelease{ProductID: "tool", DistributionID: "owner/tool", ReleaseSequence: 2}
+	if _, err := ResolveDirectory(s, invalid); err == nil {
+		t.Fatal("desired and recorded release identities were combined")
+	}
+}

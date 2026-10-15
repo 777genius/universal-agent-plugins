@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type groupSession struct {
@@ -92,6 +93,30 @@ func (session *groupSession) resolveGroupInstallation() error {
 	} else if session.replace {
 		return fmt.Errorf("update requires an existing installation")
 	}
+	action := "install"
+	if session.replace {
+		action = "update"
+	}
+	if session.input.Repair {
+		action = "repair"
+	}
+	for _, target := range session.input.Targets {
+		bindingID := ""
+		bindings := map[string]domain.ClientBinding{}
+		if existing {
+			bindings = state.Installations[installationIndex].Clients
+		}
+		for _, binding := range bindings {
+			if binding.ClientID == string(target.Client.ClientID) {
+				bindingID = binding.ClientBindingID
+				break
+			}
+		}
+		if err := transaction.AuthorizeEnvironmentMutation(state, target.EnvironmentAuthority, action,
+			session.installationID, bindingID, session.sourceID, action == "install"); err != nil {
+			return err
+		}
+	}
 	if session.installationID == "" {
 		session.installationID, err = domain.NewInstallationID()
 		if err != nil {
@@ -129,7 +154,8 @@ func (session *groupSession) validateExistingGroupInstallation(sticky bool) erro
 			return err
 		}
 	}
-	if session.replace && !session.input.Switch && !session.input.Repair && installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) {
+	managedDirect := session.first.EnvironmentAuthority != nil && normalizedOriginMode(session.first.OriginMode) == domain.OriginModeDirect && installation.Source.Repository == session.first.Envelope.Source.Repository && installation.Source.PackageSubpath == session.first.Envelope.Source.PackageSubpath
+	if session.replace && !managedDirect && !session.input.Switch && !session.input.Repair && installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) {
 		return fmt.Errorf("direct full-SHA installations require explicit switch")
 	}
 	return session.validateAddedTargetPackage(installation)

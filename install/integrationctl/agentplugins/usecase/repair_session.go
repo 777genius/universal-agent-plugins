@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type repairSession struct {
@@ -80,6 +81,10 @@ func (session *repairSession) loadRepairTarget() error {
 	session.plan = plan
 	session.result.Plan = plan
 	if err := session.bindRepairClient(physicalID); err != nil {
+		return err
+	}
+	if err := transaction.AuthorizeEnvironmentMutation(session.state, session.input.EnvironmentAuthority, "repair",
+		session.installation.InstallationID, session.clientKey, domain.ComputeSourceBindingID(session.input.Envelope.Source), false); err != nil {
 		return err
 	}
 	if err := session.service.checkMCPNamespace(session.ctx, session.input.Client, &session.plan, &session.client); err != nil {

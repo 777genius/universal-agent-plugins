@@ -11,17 +11,18 @@ import (
 )
 
 type RemoveInput struct {
-	SelectedDelivery    domain.SelectedDelivery
-	Selector            string
-	Client              domain.DetectedClient
-	Scope               domain.InstallScope
-	DryRun              bool
-	Confirmed           bool
-	Interactive         bool
-	ExternalUninstalled bool
-	OperationID         string
-	BackendExecutable   string
-	PurgeData           bool
+	SelectedDelivery     domain.SelectedDelivery
+	Selector             string
+	Client               domain.DetectedClient
+	Scope                domain.InstallScope
+	DryRun               bool
+	Confirmed            bool
+	Interactive          bool
+	ExternalUninstalled  bool
+	OperationID          string
+	BackendExecutable    string
+	PurgeData            bool
+	EnvironmentAuthority *domain.EnvironmentAuthority
 }
 
 type RemoveResult struct {
@@ -53,7 +54,7 @@ func (service Service) Remove(ctx context.Context, input RemoveInput) (RemoveRes
 		return RemoveResult{}, err
 	}
 	input.Client = frozen[0]
-	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.EnvironmentAuthority, "remove")
 	if err != nil {
 		return RemoveResult{}, err
 	}

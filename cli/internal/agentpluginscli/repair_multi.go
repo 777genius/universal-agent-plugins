@@ -245,6 +245,24 @@ func (session *repairManySession) targetInput(target domain.ClientID) (usecase.A
 	if err := prepareLoadedPackageForClient(&clientPackage, target); err != nil {
 		return usecase.AddInput{}, fmt.Errorf("preflight target %s: %w; no target was changed", target, err)
 	}
+	state, err := session.app.StateStore.Load()
+	if err != nil {
+		return usecase.AddInput{}, err
+	}
+	authority, err := environmentAuthorityForBinding(state, session.installation.InstallationID, target, "repair")
+	if err != nil {
+		return usecase.AddInput{}, err
+	}
+	if authority != nil {
+		binding := session.recordedBindings[target]
+		if binding.PackageRevision == nil || clientPackage.envelope.TreeDigest != binding.PackageRevision.TreeDigest || clientPackage.envelope.Source.ResolvedRevision != binding.PackageRevision.ResolvedRevision {
+			return usecase.AddInput{}, fmt.Errorf("repair must restore the exact recorded dependency pin")
+		}
+		clientPackage.envelope.Source.SourceBindingHint = "uap-dependency-git"
+		if loaded.origin == domain.OriginModeDirectory {
+			clientPackage.envelope.Source.SourceBindingHint = "uap-dependency-registry"
+		}
+	}
 	client := session.detected[target]
 	return usecase.AddInput{
 		Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
@@ -253,6 +271,7 @@ func (session *repairManySession) targetInput(target domain.ClientID) (usecase.A
 		BackendExecutable: backendExecutable(client, session.detected),
 		OriginMode:        loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
 		DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked,
+		EnvironmentAuthority: authority,
 	}, nil
 }
 

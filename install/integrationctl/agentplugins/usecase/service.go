@@ -17,7 +17,8 @@ import (
 )
 
 type Service struct {
-	ClientPreparation ClientPreparation
+	environmentAuthority *domain.EnvironmentAuthority
+	ClientPreparation    ClientPreparation
 	// OpenCodeHosts retains the explicit legacy preparation seam for callers
 	// without ClientPreparation; production composition uses ClientPreparation.
 	OpenCodeHosts ports.OpenCodeHostPreparer
@@ -112,6 +113,9 @@ type AddInput struct {
 	BackendExecutable  string
 	ActivationComplete bool
 	AuthComplete       bool
+	// EnvironmentAuthority is mandatory for managed update/remove/repair and is
+	// copied into the durable receipt before the first managed effect.
+	EnvironmentAuthority *domain.EnvironmentAuthority
 	// OriginMode and DirectoryResolution are supplied by the resolver. Omitting
 	// OriginMode is treated as an explicit direct source for compatibility with
 	// exact/local callers; Directory authority is never inferred from a name.
@@ -164,7 +168,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	session.service, session.input.Client = service, frozen[0]
 	session.input.InstallationID = session.installationID
-	release, err := service.beginMutation(ctx, session.input.DryRun, session.input.Confirmed)
+	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority, mutationAction(session.replace))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -211,6 +215,9 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 	if err := service.checkProfiles(ctx); err != nil {
 		return nil, err
 	}
+	if err := service.guardEnvironmentRecovery(); err != nil {
+		return nil, err
+	}
 	kernel := service.Kernel
 	kernel.StateStore = service.StateStore
 	kernel.PhysicalAuthority = service.authorityPort()
@@ -244,11 +251,41 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 	kernel = service.Kernel
 	kernel.StateStore = service.StateStore
 	kernel.PhysicalAuthority = service.authorityPort()
+	if err := service.guardEnvironmentRecovery(); err != nil {
+		_ = release()
+		return nil, err
+	}
 	if err := kernel.Recover(ctx); err != nil {
 		_ = release()
 		return nil, fmt.Errorf("recover interrupted mutation: %w", err)
 	}
 	return release, nil
+}
+
+func mutationAction(replace bool) string {
+	if replace {
+		return "update"
+	}
+	return "install"
+}
+
+func firstEnvironmentSourceKey(authority *domain.EnvironmentAuthority, fallback string) string {
+	if authority != nil && authority.SourceKey != "" {
+		return authority.SourceKey
+	}
+	return fallback
+}
+
+func (service Service) beginEnvironmentMutation(ctx context.Context, dryRun, confirmed bool, authority *domain.EnvironmentAuthority, action string) (ports.UnlockFunc, error) {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return nil, err
+	}
+	if err := transaction.ValidateEnvironmentRecoveryScope(state, authority); err != nil {
+		return nil, err
+	}
+	service.environmentAuthority = authority
+	return service.beginMutation(ctx, dryRun, confirmed)
 }
 
 func (service Service) now() time.Time {
@@ -477,4 +514,41 @@ func versionCompare(left, right string) (int, bool) {
 		return 0, false
 	}
 	return semver.Compare(left, right), true
+}
+
+func (service Service) guardEnvironmentRecovery() error {
+	state, err := service.StateStore.Load()
+	if err != nil {
+		return err
+	}
+	// Managed environments recover explicitly; ordinary imperative recovery
+	// may continue only when the complete pending scope is unmanaged.
+	if err := transaction.ValidateEnvironmentRecoveryScope(state, nil); err != nil {
+		return err
+	}
+	journals, err := service.Kernel.Directory.ListOpen()
+	if err != nil {
+		return err
+	}
+	for _, j := range journals {
+		if j.EnvironmentID != "" {
+			return fmt.Errorf("recovery_required: run deps recover")
+		}
+		for _, r := range state.EnvironmentReceipts {
+			if r.ClientBindingID == j.ClientBindingID {
+				return fmt.Errorf("recovery_required: run deps recover")
+			}
+		}
+		if service.environmentAuthority != nil {
+			return fmt.Errorf("recovery_required: pending journal requires explicit recovery")
+		}
+	}
+	if service.environmentAuthority != nil {
+		for _, r := range state.TransactionReceipts {
+			if r.Phase != "" && r.Phase != "committed" {
+				return fmt.Errorf("recovery_required: run deps recover")
+			}
+		}
+	}
+	return nil
 }

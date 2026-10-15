@@ -118,6 +118,14 @@ func (session *removeManySession) buildInputs() error {
 		if err := selectedDetectionError(target, session.detected); err != nil {
 			return err
 		}
+		state, err := session.app.StateStore.Load()
+		if err != nil {
+			return err
+		}
+		authority, err := environmentAuthorityForBinding(state, session.installation.InstallationID, target, "remove")
+		if err != nil {
+			return err
+		}
 		client, ok := session.detected[target]
 		if !ok {
 			client = domain.DetectedClient{ClientID: target, DisplayName: string(target), Status: domain.DetectionNotDetected}
@@ -126,7 +134,8 @@ func (session *removeManySession) buildInputs() error {
 		inputs = append(inputs, usecase.RemoveInput{
 			Selector: session.installationSelector, Client: client, Scope: domain.ScopeUser,
 			DryRun: true, Interactive: false, ExternalUninstalled: session.opts.externalUninstalled,
-			BackendExecutable: backendExecutable(client, session.detected),
+			BackendExecutable:    backendExecutable(client, session.detected),
+			EnvironmentAuthority: authority,
 		})
 		selected = append(selected, client)
 	}

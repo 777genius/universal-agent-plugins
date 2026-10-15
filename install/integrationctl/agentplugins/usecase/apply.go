@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 // applySession carries the locals apply() used to thread through one add or
@@ -94,6 +95,28 @@ func (session *applySession) resolveInstallation() error {
 }
 
 func (session *applySession) validateApplyTransitions() error {
+	action, allowCreate := "install", true
+	if session.replace {
+		action, allowCreate = "update", false
+	}
+	bindingID := ""
+	if session.existing {
+		for _, binding := range session.state.Installations[session.installationIndex].Clients {
+			if binding.ClientID == string(session.input.Client.ClientID) {
+				bindingID = binding.ClientBindingID
+				allowCreate = false
+				break
+			}
+		}
+	}
+	guardInstallationID := session.installationID
+	if !session.existing {
+		guardInstallationID = ""
+	}
+	if err := transaction.AuthorizeEnvironmentMutation(session.state, session.input.EnvironmentAuthority, action,
+		guardInstallationID, bindingID, session.sourceBindingID, allowCreate); err != nil {
+		return err
+	}
 	if err := session.validateExistingPackage(); err != nil {
 		return err
 	}
@@ -108,14 +131,15 @@ func (session *applySession) validateExistingPackage() error {
 	// update" diagnostic. A same-release digest conflict is a supply-chain
 	// failure regardless of whether the caller happened to be adding a target.
 	installation := session.state.Installations[session.installationIndex]
-	if err := validatePackageTransition(installation, session.input.Envelope); err != nil {
+	managedDirect := session.input.EnvironmentAuthority != nil && session.input.OriginMode == domain.OriginModeDirect && installation.Source.Repository == session.input.Envelope.Source.Repository && installation.Source.PackageSubpath == session.input.Envelope.Source.PackageSubpath
+	if err := validatePackageTransition(installation, session.input.Envelope); err != nil && !managedDirect {
 		return err
 	}
 	if err := validateDirectoryTransition(installation, session.input); err != nil {
 		return err
 	}
 	if session.replace {
-		if installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) {
+		if installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) && !managedDirect {
 			return fmt.Errorf("direct full-SHA installations have no update channel; use switch --to with a new full SHA")
 		}
 		return nil

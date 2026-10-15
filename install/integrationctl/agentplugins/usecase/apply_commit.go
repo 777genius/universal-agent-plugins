@@ -112,6 +112,11 @@ func (session *applySession) stageOwnedDelivery(operationID string, dataReceipt 
 
 func (session *applySession) bindDataReceipt(dataReceipt *domain.DataReceipt) {
 	session.state, session.installationIndex = upsertPreparedInstallation(session.state, session.installationIndex, session.existing, session.input, session.plan, session.installationID, session.clientBindingID, session.sourceBindingID, session.service.now())
+	if session.input.EnvironmentAuthority != nil {
+		_ = transaction.UpsertEnvironmentReceipt(&session.state, session.input.EnvironmentAuthority, session.installationID,
+			session.clientBindingID, firstEnvironmentSourceKey(session.input.EnvironmentAuthority, session.sourceBindingID), session.input.Envelope.TreeDigest, session.plan.ProfileAuthority(),
+			"committed")
+	}
 	if dataReceipt.DataReceiptID == "" {
 		for _, retained := range session.state.Installations[session.installationIndex].DataReceipts {
 			if retained.PhysicalBackend == session.plan.PhysicalArtifactID && retained.Scope == string(session.input.Scope) {
@@ -133,6 +138,7 @@ func (session *applySession) bindDataReceipt(dataReceipt *domain.DataReceipt) {
 	installation.Clients[session.clientBindingID] = client
 	installation.DataRetained = false
 	session.state.Installations[session.installationIndex] = installation
+
 }
 
 func (session *applySession) commitDirectory(operationID string, delivery domain.StagedDelivery, previousClient domain.ClientBinding) error {
@@ -162,6 +168,7 @@ func (session *applySession) commitDirectory(operationID string, delivery domain
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 		},
+		EnvironmentAuthority: session.input.EnvironmentAuthority,
 	})
 	session.result.Receipt = receipt
 	if applyErr != nil {

@@ -209,7 +209,7 @@ func (manager Manager) rollbackPublication(r Receipt, active, quarantine bool) e
 }
 
 func (manager Manager) restoreRacedQuarantine(r Receipt, cause error) error {
-	if r.SchemaVersion == 5 {
+	if r.isPhysical() {
 		if err := manager.validatePhysical(r); err != nil {
 			return err
 		}

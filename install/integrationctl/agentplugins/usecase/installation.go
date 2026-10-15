@@ -69,7 +69,7 @@ func overlayExistingInstallation(installation domain.Installation, input AddInpu
 	installation.DeclaredName = input.Envelope.Manifest.Name
 	installation.Source.ResolvedRevision = input.Envelope.Source.ResolvedRevision
 	installation.Source.TreeDigest = input.Envelope.TreeDigest
-	if installation.OriginMode == domain.OriginModeDirectory {
+	if installation.OriginMode == domain.OriginModeDirectory || input.EnvironmentAuthority != nil {
 		installation.Source = domain.SourceBinding{SourceBindingID: sourceBindingID, RequestedSource: input.Envelope.Source.RequestedSource,
 			CanonicalSource: input.Envelope.Source.CanonicalSource, Repository: input.Envelope.Source.Repository, PackageSubpath: input.Envelope.Source.PackageSubpath,
 			ResolvedRevision: input.Envelope.Source.ResolvedRevision, TreeDigest: input.Envelope.TreeDigest}

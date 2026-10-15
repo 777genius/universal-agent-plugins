@@ -1,6 +1,7 @@
 package statemigration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -109,7 +110,7 @@ func TestMigrateCurrentV2PreservesHeterogeneousDirectoryRevisions(t *testing.T) 
 			if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, RecoverJournal: func(context.Context) error { return nil }}
+			migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, PendingCheck: func(context.Context) error { return nil }}
 			plan, err := migrator.PlanCurrentV2()
 			if err != nil {
 				t.Fatal(err)
@@ -148,7 +149,7 @@ func TestMigrateCurrentV2InvalidClientRevisionRetainsDirectProvenance(t *testing
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, RecoverJournal: func(context.Context) error { return nil }}
+	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, PendingCheck: func(context.Context) error { return nil }}
 	plan, err := migrator.PlanCurrentV2()
 	if err != nil {
 		t.Fatal(err)
@@ -249,8 +250,8 @@ func TestMigrateCurrentV2IsDigestCheckedBackedUpAndFixedForward(t *testing.T) {
 	}
 	lock := &migrationTestLock{}
 	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: lock,
-		RecoverJournal: func(context.Context) error { return nil },
-		Now:            func() time.Time { return time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC) }}
+		PendingCheck: func(context.Context) error { return nil },
+		Now:          func() time.Time { return time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC) }}
 	plan, err := migrator.PlanCurrentV2()
 	if err != nil {
 		t.Fatal(err)
@@ -292,7 +293,7 @@ func TestMigrateCurrentV2DirectoryShapedSourceWithoutExactRevisionNeedsRebind(t 
 		t.Fatal(err)
 	}
 	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{},
-		RecoverJournal: func(context.Context) error { return nil }}
+		PendingCheck: func(context.Context) error { return nil }}
 	plan, err := migrator.PlanCurrentV2()
 	if err != nil {
 		t.Fatal(err)
@@ -317,7 +318,7 @@ func TestMigrateCurrentV2DirectoryShapedSourceWithoutExactRevisionNeedsRebind(t 
 	}
 }
 
-func TestMigrateCurrentV2RefusesWithoutSuccessfulJournalRecovery(t *testing.T) {
+func TestMigrateCurrentV2ReadsPendingStateWithoutRecoveringIt(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "state-v2.json")
 	original := `{"schema_version":2,"installations":[]}`
@@ -325,20 +326,79 @@ func TestMigrateCurrentV2RefusesWithoutSuccessfulJournalRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}}
-	plan, err := migrator.PlanCurrentV2()
-	if err != nil {
-		t.Fatal(err)
+	migrator.PendingCheck = func(context.Context) error { return fmt.Errorf("degraded operation") }
+	if _, err := migrator.PlanCurrentV2(); err == nil || !strings.Contains(err.Error(), "degraded operation") {
+		t.Fatalf("unresolved recovery was accepted: %v", err)
 	}
-	if _, err := migrator.MigrateCurrentV2(context.Background(), plan.LegacyDigest); err == nil || !strings.Contains(err.Error(), "journal recovery check") {
-		t.Fatalf("missing recovery check was accepted: %v", err)
-	}
-	migrator.RecoverJournal = func(context.Context) error { return fmt.Errorf("degraded operation") }
-	if _, err := migrator.MigrateCurrentV2(context.Background(), plan.LegacyDigest); err == nil || !strings.Contains(err.Error(), "degraded operation") {
+	if _, err := migrator.MigrateCurrentV2(context.Background(), "sha256:unused"); err == nil || !strings.Contains(err.Error(), "degraded operation") {
 		t.Fatalf("unresolved recovery was accepted: %v", err)
 	}
 	body, err := os.ReadFile(path)
 	if err != nil || string(body) != original {
 		t.Fatalf("refused migration changed state: %v %q", err, body)
+	}
+}
+
+func TestMigrateCurrentV2PendingCheckIsReadOnlyAcrossOldSchemas(t *testing.T) {
+	for _, schema := range []int{2, 3, 4} {
+		for _, phase := range []string{"state_committed", "rolled_back"} {
+			t.Run(fmt.Sprintf("schema-%d-%s", schema, phase), func(t *testing.T) {
+				root := t.TempDir()
+				path := filepath.Join(root, "state-v2.json")
+				journal := filepath.Join(root, "operation.json")
+				original := []byte(fmt.Sprintf(`{"schema_version":%d,"installations":[],"transaction_receipts":[{"operation_id":"pending-op","sequence":1,"mutation_type":"directory_swap","client_binding_id":"client_pending","phase":%q}]}`, schema, phase))
+				if err := os.WriteFile(path, original, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(journal, []byte(phase), 0600); err != nil {
+					t.Fatal(err)
+				}
+				migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, PendingCheck: func(context.Context) error { return nil }}
+				if _, err := migrator.PlanCurrentV2(); err == nil {
+					t.Fatal("pending state planned migration")
+				}
+				if _, err := migrator.MigrateCurrentV2(context.Background(), digest(original)); err == nil {
+					t.Fatal("pending state migrated")
+				}
+				after, err := os.ReadFile(path)
+				if err != nil || !bytes.Equal(original, after) {
+					t.Fatalf("refusal changed state: %v", err)
+				}
+				j, err := os.ReadFile(journal)
+				if err != nil || string(j) != phase {
+					t.Fatal("refusal changed journal")
+				}
+				entries, _ := os.ReadDir(root)
+				if len(entries) != 2 {
+					t.Fatal("refusal created backup or durable files")
+				}
+				// Input fixture representing completion by the corresponding old writer:
+				// schema stays old; the new migrator never performs recovery itself.
+				recovered := []byte(fmt.Sprintf(`{"schema_version":%d,"installations":[]}`, schema))
+				if err := os.WriteFile(path, recovered, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Remove(journal); err != nil {
+					t.Fatal(err)
+				}
+				plan, err := migrator.PlanCurrentV2()
+				if err != nil {
+					t.Fatal(err)
+				}
+				report, err := migrator.MigrateCurrentV2(context.Background(), plan.LegacyDigest)
+				if err != nil {
+					t.Fatal(err)
+				}
+				backup, err := os.ReadFile(report.BackupPath)
+				if err != nil || !bytes.Equal(backup, recovered) {
+					t.Fatal("backup did not contain this apply's exact old bytes")
+				}
+				state, err := migrator.V2Store.Load()
+				if err != nil || state.SchemaVersion != domain.StateSchemaVersion || len(state.EnvironmentReceipts) != 0 {
+					t.Fatalf("migration roundtrip: %+v %v", state, err)
+				}
+			})
+		}
 	}
 }
 

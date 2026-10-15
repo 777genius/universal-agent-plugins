@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -84,6 +85,9 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			_ = stdin
+			if handled, err := repairOwnedDependencies(cmd, operationApp, opts, args[0], targets); handled || err != nil {
+				return err
+			}
 			return runRepairMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
@@ -136,9 +140,13 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	service := lifecycleService(app, detectedMap)
+	authority, err := environmentAuthorityForBinding(state, installation.InstallationID, selected.ClientID, "repair")
+	if err != nil {
+		return err
+	}
 	input := usecase.AddInput{Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope), DryRun: opts.dryRun,
 		InstallationID: installation.InstallationID, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable: backendExecutable(selected, detectedMap)}
+		BackendExecutable: backendExecutable(selected, detectedMap), EnvironmentAuthority: authority}
 	planned, err := service.Repair(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {
@@ -278,11 +286,16 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	service := lifecycleService(app, detectedMap)
+	authority, err := environmentAuthorityForBinding(state, installation.InstallationID, selected.ClientID, "update")
+	if err != nil {
+		return err
+	}
 	input := usecase.AddInput{
 		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal, Hints: loaded.hints,
 		BackendExecutable:                backendExecutable(selected, detectedMap),
 		PersistAuthoritativeObservations: true,
+		EnvironmentAuthority:             authority,
 	}
 	planned, err := service.Update(ctx, input)
 	if err != nil {
@@ -496,11 +509,16 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	service := lifecycleService(app, detectedMap)
+	authority, err := environmentAuthorityForBinding(state, installation.InstallationID, selected.ClientID, "remove")
+	if err != nil {
+		return err
+	}
 	input := usecase.RemoveInput{
 		Selector: installation.InstallationID, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal,
-		ExternalUninstalled: opts.externalUninstalled,
-		BackendExecutable:   backendExecutable(selected, detectedMap),
+		ExternalUninstalled:  opts.externalUninstalled,
+		BackendExecutable:    backendExecutable(selected, detectedMap),
+		EnvironmentAuthority: authority,
 	}
 	planned, err := service.Remove(ctx, input)
 	if err != nil {
@@ -632,6 +650,37 @@ func lifecycleService(app App, detected map[domain.ClientID]domain.DetectedClien
 	}
 	service.Detected = maps.Clone(detected)
 	return service
+}
+
+func environmentAuthorityForBinding(state domain.StateFileV2, installationID string, clientID domain.ClientID, action string) (*domain.EnvironmentAuthority, error) {
+	var binding domain.ClientBinding
+	found := false
+	for _, installation := range state.Installations {
+		if installation.InstallationID != installationID {
+			continue
+		}
+		for _, candidate := range installation.Clients {
+			if candidate.ClientID == string(clientID) {
+				binding, found = candidate, true
+				break
+			}
+		}
+	}
+	if !found {
+		return nil, nil
+	}
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.InstallationID == installationID && receipt.ClientBindingID == binding.ClientBindingID &&
+			receipt.ClientID == string(clientID) {
+			if action != "repair" {
+				return nil, fmt.Errorf("%w: use deps sync for owned bindings", transaction.ErrEnvironmentAuthority)
+			}
+			return &domain.EnvironmentAuthority{EnvironmentID: receipt.EnvironmentID, Alias: receipt.Alias,
+				ClientID: receipt.ClientID, ReceiptID: receipt.ReceiptID, InstallationID: receipt.InstallationID,
+				ClientBindingID: receipt.ClientBindingID, SourceKey: receipt.SourceKey, ExpectedAction: action}, nil
+		}
+	}
+	return nil, nil
 }
 
 func updateSource(installation domain.Installation) string {

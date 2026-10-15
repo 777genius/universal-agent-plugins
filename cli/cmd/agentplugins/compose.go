@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"golang.org/x/term"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
@@ -29,6 +32,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -36,6 +40,38 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
+
+func migrationPendingError(list func() ([]dirswap.Receipt, error), load func() (domain.StateFileV2, error)) error {
+	journals, err := list()
+	if err != nil {
+		return err
+	}
+	if len(journals) != 0 {
+		return fmt.Errorf("%d open transaction journals require the matching previous SDK or binary", len(journals))
+	}
+	state, err := load()
+	if err != nil {
+		return err
+	}
+	for _, receipt := range state.TransactionReceipts {
+		if receipt.Phase != "committed" {
+			return fmt.Errorf("receipt %s phase %s requires the matching previous SDK or binary", receipt.OperationID, receipt.Phase)
+		}
+	}
+	for _, installation := range state.Installations {
+		for _, binding := range installation.Clients {
+			if binding.PendingNativeIntent != nil {
+				return fmt.Errorf("native intent for binding %s requires the matching previous SDK or binary", binding.ClientBindingID)
+			}
+			for _, receipt := range binding.Receipts {
+				if receipt.Phase != "committed" {
+					return fmt.Errorf("receipt %s phase %s requires the matching previous SDK or binary", receipt.OperationID, receipt.Phase)
+				}
+			}
+		}
+	}
+	return nil
+}
 
 func composeAgentpluginsApp(home, dataRoot string) (agentpluginscli.App, error) {
 	directoryClient, discoveryClient, securityClient, err := newProductionFeedClients(dataRoot)
@@ -126,24 +162,41 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 	detector.Registry = clientRegistry
 	legacyStatePath := filepath.Join(home, ".plugin-kit-ai", "state.json")
 	migrator := statemigration.Migrator{
-		LegacyPath:     legacyStatePath,
-		V2Store:        v2Store,
-		Lock:           mutationLock,
-		RecoverJournal: lifecycle.Kernel.Recover,
+		LegacyPath: legacyStatePath,
+		V2Store:    v2Store,
+		Lock:       mutationLock,
+		PendingCheck: func(_ context.Context) error {
+			return migrationPendingError(lifecycle.Kernel.Directory.ListOpen, v2Store.Load)
+		},
 	}
 	return agentpluginscli.App{
-		Version:             version,
-		UserHome:            home,
-		ManagedRoot:         filepath.Join(dataRoot, "managed"),
-		StateStore:          v2Store,
-		StateMigrator:       &migrator,
-		LegacyLifecycle:     agentpluginscli.NewLegacyLifecycle(legacyStatePath),
-		LegacyStateLock:     locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
-		Detector:            detector,
-		ClientRegistry:      clientRegistry,
-		Planner:             planner,
-		Targets:             planner,
-		DirectoryClient:     directoryClient,
+		Version:              version,
+		UserHome:             home,
+		ManagedRoot:          filepath.Join(dataRoot, "managed"),
+		DependenciesRoot:     dataRoot,
+		EnvironmentStoreRoot: filepath.Join(dataRoot, "store"),
+		EnvironmentLockPath:  filepath.Join(dataRoot, "environment.lock"),
+		StateStore:           v2Store,
+		StateMigrator:        &migrator,
+		LegacyLifecycle:      agentpluginscli.NewLegacyLifecycle(legacyStatePath),
+		LegacyStateLock:      locks.FileLock{BaseDir: filepath.Join(home, ".plugin-kit-ai", "locks")},
+		Detector:             detector,
+		ClientRegistry:       clientRegistry,
+		Planner:              planner,
+		Targets:              planner,
+		DirectoryClient:      directoryClient,
+		DirectoryClientForDryRun: func(root string) (agentpluginscli.DirectoryClient, error) {
+			copied := *directoryClient
+			copied.Cache.Path = filepath.Join(root, "directory-cache.json")
+			if body, err := os.ReadFile(directoryClient.Cache.Path); err == nil {
+				if err := os.WriteFile(copied.Cache.Path, body, 0600); err != nil {
+					return nil, err
+				}
+			} else if !os.IsNotExist(err) && directoryClient.Cache.Path != "" {
+				return nil, err
+			}
+			return &copied, nil
+		},
 		DiscoveryClient:     discoveryClient,
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
 		PackageLoader:       packageLoader,
@@ -152,6 +205,13 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 		SecurityEvaluator: securityscan.Evaluator{
 			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(dataRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
 			Cache:   securityscan.FileCache{Root: filepath.Join(dataRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
+		},
+		SourceAcquirerForDryRun: func(root string) agentpluginscli.SourceAcquirer { return sourceacquisition.Acquirer{TempRoot: root} },
+		SecurityEvaluatorForDryRun: func(root string) ports.PackageSecurityEvaluator {
+			return securityscan.Evaluator{
+				Scanner: securityscan.ReleaseScanner{Root: filepath.Join(root, "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
+				Cache:   nil, Requirement: securityscan.DefaultRequirement(),
+			}
 		},
 		Lifecycle:     lifecycle,
 		Input:         os.Stdin,

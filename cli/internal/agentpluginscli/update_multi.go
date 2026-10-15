@@ -36,14 +36,16 @@ type updateMultiResult struct {
 }
 
 type preparedUpdateMany struct {
-	loaded        loadedPackage
-	service       usecase.Service
-	inputs        []usecase.AddInput
-	compatibility []usecase.AddInput
-	selected      []domain.ClientID
-	result        updateMultiResult
-	noChange      bool
-	dryRun        bool
+	loaded         loadedPackage
+	service        usecase.Service
+	inputs         []usecase.AddInput
+	compatibility  []usecase.AddInput
+	selected       []domain.ClientID
+	result         updateMultiResult
+	noChange       bool
+	dryRun         bool
+	state          domain.StateFileV2
+	installationID string
 }
 
 func runUpdateMany(ctx context.Context, cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) error {
@@ -87,7 +89,14 @@ func prepareUpdateMany(ctx context.Context, app App, opts *options, installation
 	if err != nil {
 		return nil, err
 	}
-	prepared := &preparedUpdateMany{loaded: loaded, dryRun: opts.dryRun}
+	state, stateErr := app.StateStore.Load()
+	if stateErr != nil {
+		if loaded.cleanup != nil {
+			_ = loaded.cleanup()
+		}
+		return nil, stateErr
+	}
+	prepared := &preparedUpdateMany{loaded: loaded, dryRun: opts.dryRun, state: state, installationID: installation.InstallationID}
 	if err := prepared.checkSourceIdentity(installation); err != nil {
 		prepared.cleanup()
 		return nil, err
@@ -205,11 +214,16 @@ func (prepared *preparedUpdateMany) clientInput(client domain.DetectedClient, de
 	if err := prepareLoadedPackageForClient(&clientPackage, target); err != nil {
 		return usecase.AddInput{}, fmt.Errorf("preflight target %s: %w; no target was changed", target, err)
 	}
+	authority, err := environmentAuthorityForBinding(prepared.state, prepared.installationID, target, "update")
+	if err != nil {
+		return usecase.AddInput{}, err
+	}
 	return usecase.AddInput{
 		Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
 		Interactive: false, Hints: clientPackage.hints, BackendExecutable: backendExecutable(client, detected),
 		OriginMode: prepared.loaded.origin, DirectoryResolution: cloneDirectoryOrigin(prepared.loaded.directory),
 		DistributionSuspended: prepared.loaded.distributionSuspended, ReleaseRevoked: prepared.loaded.releaseRevoked,
+		EnvironmentAuthority: authority,
 	}, nil
 }
 
