@@ -1,7 +1,9 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 func TestDependencyManifestRejectsUnknownConflictingAndMissingIntent(t *testing.T) {
@@ -214,16 +217,117 @@ func TestDependencyInitColdRootAndDryRun(t *testing.T) {
 func TestDependencyStatusColdRoot(t *testing.T) {
 	f := newCLIFixture(t, nil)
 	f.app.DependenciesRoot = filepath.Join(t.TempDir(), "cold")
+	var err error
+	f.app.Installer, err = installer.New(installer.Config{StateRoot: f.app.DependenciesRoot, Registry: f.app.ClientRegistry})
+	if err != nil {
+		t.Fatal(err)
+	}
 	out, _, err := f.execute(false, "deps", "status", "--format", "json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"scope", "manifest_path", "lock_path", "supported_targets"} {
+	for _, field := range []string{"scope", "manifest_path", "lock_path", "supported_targets", "manifest_missing"} {
 		if !strings.Contains(out, field) {
 			t.Fatal(out)
 		}
 	}
 	if _, err := os.Stat(f.app.DependenciesRoot); !os.IsNotExist(err) {
 		t.Fatal("status created cold root")
+	}
+}
+
+func TestDependencyStatusMissingManifestRetainsOwnedFactsAndRecovery(t *testing.T) {
+	client := fixtureClient(t, domain.ClientCodex)
+	client.ExecutablePath = filepath.Join(t.TempDir(), "codex")
+	f := newCLIFixture(t, []domain.DetectedClient{client})
+	root := filepath.Join(f.root, "data")
+	f.app.DependenciesRoot = root
+	helper, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.app.Installer, err = installer.New(installer.Config{StateRoot: root, StateFile: f.store.Path, Registry: f.app.ClientRegistry, HelperExecutable: helper, Runner: &dependencyClaudeListing{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := f.app.acquireLocal(context.Background(), writeCLIPlugin(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = loaded.cleanup() }()
+	prepared, err := f.app.Installer.Prepare(context.Background(), installer.Request{
+		Operation: installer.OpInstall, OperationID: "missing-intent-status", ClientID: "codex", ClientConfigRoot: client.ConfigRoot, ClientExecutable: client.ExecutablePath, PackageRoot: loaded.envelope.SnapshotRoot,
+		AcquiredSnapshot:     &domain.AcquiredSnapshot{OriginMode: domain.OriginModeDirect, Source: domain.SourceIdentity{RequestedSource: githubIdentity("acme/demo", strings.Repeat("1", 40), ""), CanonicalSource: githubIdentity("acme/demo", strings.Repeat("1", 40), ""), Repository: "acme/demo", ResolvedRevision: strings.Repeat("1", 40)}, TreeDigest: loaded.envelope.TreeDigest, DigestAlgorithm: domain.TreeDigestAlgorithm},
+		Assessment:           &installer.Assessment{TreeDigest: loaded.envelope.TreeDigest, Outcome: installer.AssessmentAllow},
+		EnvironmentAuthority: &domain.EnvironmentAuthority{EnvironmentID: environment.EnvironmentUserDefault, Alias: "demo", ClientID: "codex", SourceKey: "github:acme/demo:", ExpectedAction: "install"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = prepared.Close() }()
+	result, err := f.app.Installer.Apply(context.Background(), prepared, installer.Decision{Confirmed: true})
+	if err != nil || result.Outcome != installer.OutcomeCompleted {
+		t.Fatalf("install fixture: %+v %v", result, err)
+	}
+	state, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(state.EnvironmentReceipts) != 1 {
+		t.Fatal("fixture lacks owned receipt")
+	}
+	receipt := state.EnvironmentReceipts[0]
+	_, lockPath := f.app.dependencyPaths()
+	// An orphaned lock is not desired intent, even if it cannot be decoded.
+	if err := os.WriteFile(lockPath, []byte("orphaned lock is not intent"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, pending := range []bool{false, true} {
+		if pending {
+			for key, binding := range state.Installations[0].Clients {
+				if len(binding.Receipts) == 0 {
+					t.Fatal("fixture lacks transaction receipt")
+				}
+				binding.Receipts[len(binding.Receipts)-1].Phase = "state_committed"
+				state.Installations[0].Clients[key] = binding
+			}
+			if err := f.store.Save(state); err != nil {
+				t.Fatal(err)
+			}
+		}
+		before, err := os.ReadFile(f.store.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, _, err := f.execute(false, "deps", "status", "--format", "json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var status dependencyStatus
+		if err := json.Unmarshal([]byte(out), &status); err != nil {
+			t.Fatal(err)
+		}
+		if status.PendingRecovery != pending || status.ManifestDigest != "" || status.LockDigest != "" {
+			t.Fatalf("missing-intent status: %+v", status)
+		}
+		missing, owned, recoveryFact := false, false, false
+		for _, fact := range status.Facts {
+			for _, value := range fact.Facts {
+				missing = missing || value == "manifest_missing"
+				recoveryFact = recoveryFact || value == "pending_recovery"
+			}
+			owned = owned || fact.Alias == receipt.Alias && fact.ClientID == receipt.ClientID && fact.InstallationID == receipt.InstallationID && fact.BindingID == receipt.ClientBindingID && fact.Owner == receipt.EnvironmentID
+		}
+		if !missing || !owned || recoveryFact != pending {
+			t.Fatal("status hid missing intent, owner identity or recovery: " + out)
+		}
+		after, err := os.ReadFile(f.store.Path)
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatal("status mutated state")
+		}
+		manifestPath, _ := f.app.dependencyPaths()
+		if _, err := os.Stat(manifestPath); !os.IsNotExist(err) {
+			t.Fatal("status created missing manifest")
+		}
 	}
 }
