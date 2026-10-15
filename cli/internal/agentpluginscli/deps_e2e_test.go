@@ -142,7 +142,7 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationActive) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
 		t.Fatalf("same-pin retry did not resume lifecycle: %+v %v", resumedView, err)
 	}
-	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "partial") {
+	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "auth_unverified") || strings.Contains(status, "partial") {
 		t.Fatal("unchecked authentication must remain visible: " + status)
 	}
 	beforeDownloads, beforeLookups := source.downloads, source.lookups
@@ -389,11 +389,37 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if source.lookups != beforeLookups {
 		t.Fatal("target-only change moved pin")
 	}
+	// A newer pin and an extra target reach an old installation in one sync.
+	if err := os.WriteFile(filepath.Join(repo, "combined.txt"), []byte("new pin and target"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".")
+	git("commit", "-m", "test: combined pin and target revision")
+	run(f, "deps", "update", "demo", "--format", "json")
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	state, e = f.store.Load()
 	if e != nil || len(state.EnvironmentReceipts) != 2 {
 		t.Fatalf("multi-target receipts: %+v %v", state, e)
 	}
+	combinedRequirements, e := readDependencyManifest(mp)
+	if e != nil {
+		t.Fatal(e)
+	}
+	combinedLock, e := readDependencyLock(lp, combinedRequirements)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.InstallationID != id || receipt.PackageDigest != combinedLock.Packages[0].TreeDigest {
+			t.Fatalf("combined pin/target receipt: %+v", receipt)
+		}
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.PackageRevision == nil || binding.PackageRevision.TreeDigest != combinedLock.Packages[0].TreeDigest {
+			t.Fatalf("combined pin/target binding: %+v", binding)
+		}
+	}
+
 	if err := os.WriteFile(filepath.Join(repo, "retry.txt"), []byte("next revision"), 0600); err != nil {
 		t.Fatal(err)
 	}

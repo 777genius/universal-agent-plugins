@@ -247,3 +247,29 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestDependencyInitCreatesColdUserRoot(t *testing.T) {
+	originalArgs := os.Args
+	defer func() { os.Args = originalArgs }()
+	t.Setenv("HOME", t.TempDir())
+	root := filepath.Join(t.TempDir(), "cold")
+	t.Setenv("AGENTPLUGINS_HOME", root)
+	os.Args = []string{"agentplugins", "deps", "init", "--dry-run", "--format", "json"}
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatal("dry init created root")
+	}
+	os.Args = []string{"agentplugins", "deps", "init", "--format", "json"}
+	if err := run(); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(root, "uap.toml"))
+	if err != nil || !strings.Contains(string(body), "schema_version = 1") {
+		t.Fatalf("cold init: %s %v", body, err)
+	}
+	if err := run(); err == nil || !strings.Contains(err.Error(), filepath.Join(root, "uap.toml")) {
+		t.Fatalf("overwrite refusal: %v", err)
+	}
+}

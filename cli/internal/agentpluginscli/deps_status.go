@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -19,39 +20,56 @@ import (
 )
 
 type dependencyStatusFact struct {
-	Alias, ClientID, InstallationID, BindingID string   `json:",omitempty"`
-	Owner                                      string   `json:"owner,omitempty"`
-	Revision                                   string   `json:"revision,omitempty"`
-	PackageDigest                              string   `json:"package_digest,omitempty"`
-	ProjectionDigest                           string   `json:"projection_digest,omitempty"`
-	Facts                                      []string `json:"facts"`
+	Alias            string                    `json:"alias,omitempty"`
+	ClientID         string                    `json:"client_id,omitempty"`
+	InstallationID   string                    `json:"installation_id,omitempty"`
+	BindingID        string                    `json:"binding_id,omitempty"`
+	NextActions      []dependencyNextActionDTO `json:"next_actions,omitempty"`
+	Owner            string                    `json:"owner,omitempty"`
+	Revision         string                    `json:"revision,omitempty"`
+	PackageDigest    string                    `json:"package_digest,omitempty"`
+	ProjectionDigest string                    `json:"projection_digest,omitempty"`
+	Facts            []string                  `json:"facts"`
 }
 
 type dependencyStatus struct {
-	ManifestDigest  string                 `json:"manifest_digest,omitempty"`
-	LockDigest      string                 `json:"lock_digest,omitempty"`
-	PendingRecovery bool                   `json:"pending_recovery"`
-	Facts           []dependencyStatusFact `json:"facts"`
+	Scope            string                 `json:"scope"`
+	ManifestPath     string                 `json:"manifest_path"`
+	LockPath         string                 `json:"lock_path"`
+	SupportedTargets []string               `json:"supported_targets"`
+	ManifestDigest   string                 `json:"manifest_digest,omitempty"`
+	LockDigest       string                 `json:"lock_digest,omitempty"`
+	PendingRecovery  bool                   `json:"pending_recovery"`
+	Facts            []dependencyStatusFact `json:"facts"`
 }
 
 func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
+	manifestPath, lockPath := app.dependencyPaths()
+	status := dependencyStatus{Scope: "user", ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
+	requirements, err := readDependencyManifest(manifestPath)
+	missingManifest := os.IsNotExist(err)
+	if err != nil && !missingManifest {
+		return err
+	}
 	if app.Installer == nil {
 		return errors.New("typed SDK installer is unavailable")
 	}
-	manifestPath, lockPath := app.dependencyPaths()
-	requirements, err := readDependencyManifest(manifestPath)
-	if err != nil {
-		return err
-	}
-	status := dependencyStatus{}
-	status.ManifestDigest, _ = environment.ManifestDigest(requirements)
-	lock, lockErr := readDependencyLock(lockPath, requirements)
-	if lockErr != nil {
-		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
+	var lock environment.Lock
+	validLock := false
+	if missingManifest {
+		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"manifest_missing"}})
 	} else {
-		canonicalizeRequirementsFromLock(&requirements, lock)
 		status.ManifestDigest, _ = environment.ManifestDigest(requirements)
-		status.LockDigest = lock.ManifestDigest
+		var lockErr error
+		lock, lockErr = readDependencyLock(lockPath, requirements)
+		validLock = lockErr == nil
+		if lockErr != nil {
+			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
+		} else {
+			canonicalizeRequirementsFromLock(&requirements, lock)
+			status.ManifestDigest, _ = environment.ManifestDigest(requirements)
+			status.LockDigest = lock.ManifestDigest
+		}
 	}
 	state, err := app.Installer.Inspect(cmd.Context())
 	if err != nil {
@@ -59,7 +77,7 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	}
 	status.PendingRecovery = state.Recovery.Required
 
-	status.Facts = append(status.Facts, inspectDependencyFacts(cmd.Context(), app, state, lock, lockErr == nil)...)
+	status.Facts = append(status.Facts, inspectDependencyFacts(cmd.Context(), app, state, lock, validLock)...)
 	if status.PendingRecovery {
 		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"pending_recovery"}})
 	}
@@ -81,14 +99,10 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 	}
 }
 
-func bindingLifecycleIncomplete(binding installer.InspectedBinding) bool {
-	return !binding.LifecycleConverged
-}
-
 func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage) {
-	if bindingLifecycleIncomplete(binding) {
-		fact.Facts = append(fact.Facts, "partial")
-	}
+	_, lifecycle := environment.LifecycleFacts(binding)
+	fact.Facts = append(fact.Facts, lifecycle...)
+	fact.NextActions = dependencyNextActions(*fact)
 	fact.Revision, fact.ProjectionDigest = binding.Revision, binding.ProjectionDigest
 	if binding.TreeDigest != pkg.TreeDigest || binding.Revision != lockedCommit(pkg) {
 		fact.Facts = append(fact.Facts, "not_synced")
@@ -209,6 +223,9 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 	if opts.format == "json" {
 		return renderJSON(cmd.OutOrStdout(), status)
 	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Dependency environment (%s)\nManifest: %s\nLock: %s\nSupported targets: %s\n", status.Scope, status.ManifestPath, status.LockPath, strings.Join(status.SupportedTargets, ", ")); err != nil {
+		return err
+	}
 	for _, fact := range status.Facts {
 		name := fact.Alias
 		if fact.ClientID != "" {
@@ -219,6 +236,11 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 		}
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", name, joinUnique(fact.Facts)); err != nil {
 			return err
+		}
+		for _, next := range fact.NextActions {
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "  Next:", next.Kind, next.Reason); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -308,7 +330,20 @@ func appendReceiptStatus(fact *dependencyStatusFact, state installer.Inspection,
 	if binding.ProjectionStatus != "" {
 		fact.Facts = append(fact.Facts, binding.ProjectionStatus)
 	}
-	if bindingLifecycleIncomplete(binding) {
-		fact.Facts = append(fact.Facts, "partial")
+	_, lifecycle := environment.LifecycleFacts(binding)
+	fact.Facts = append(fact.Facts, lifecycle...)
+	fact.NextActions = dependencyNextActions(*fact)
+}
+
+func dependencyNextActions(fact dependencyStatusFact, sdk ...installer.NextAction) []dependencyNextActionDTO {
+	out := make([]dependencyNextActionDTO, 0, len(sdk)+1)
+	for _, next := range sdk {
+		out = append(out, dependencyNextActionDTO{Kind: next.Kind, Reason: next.Reason})
 	}
+	for _, item := range fact.Facts {
+		if item == "auth_pending" || item == "auth_failed" {
+			return append(out, dependencyNextActionDTO{Kind: "attest_authentication", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --auth-complete", fact.ClientID)})
+		}
+	}
+	return out
 }

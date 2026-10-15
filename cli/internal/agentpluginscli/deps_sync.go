@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -16,10 +14,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
-func materializeLockedPackage(ctx context.Context, app App, locked environment.LockedPackage, publish bool, recorded *domain.RecordedDirectoryRelease) (loadedPackage, error) {
+func materializeLockedPackage(ctx context.Context, app App, locked environment.LockedPackage, publish bool, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
 	store := app.dependencyStore()
 	if pkg, err := store.Get(ctx, locked.DigestAlgorithm, locked.TreeDigest); err == nil {
-		return loadStoredDependency(ctx, app, pkg, locked, recorded)
+		return loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
 	}
 	var repository, commit, packagePath string
 	if locked.Source.Git != nil {
@@ -43,7 +41,7 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 		directory = &domain.DirectoryOrigin{ProductID: source.ProductID, DistributionID: source.DistributionID,
 			DistributionKind: domain.DistributionCommunity, DesiredReleaseSequence: source.ReleaseSequence}
 	}
-	loaded, err := app.loadSnapshot(ctx, snapshot, origin, directory, nil)
+	loaded, err := app.loadStandardSnapshot(ctx, snapshot, origin, directory, nil)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -56,7 +54,7 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 			DigestAlgorithm: locked.DigestAlgorithm, ExecutableFiles: append([]string{}, locked.ExecutableFiles...), Source: loaded.envelope.Source}
 		_, err = store.Put(ctx, sealed)
 	} else {
-		checked, checkErr := verifyLockedDirectory(ctx, app, loaded, locked, recorded)
+		checked, checkErr := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
 		if checkErr != nil && loaded.cleanup != nil {
 			_ = loaded.cleanup()
 		}
@@ -73,7 +71,7 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	return loadStoredDependency(ctx, app, pkg, locked, recorded)
+	return loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
 }
 
 func dependencySourceHint(locked environment.LockedPackage) string {
@@ -83,16 +81,7 @@ func dependencySourceHint(locked environment.LockedPackage) string {
 	return "uap-dependency-git"
 }
 
-func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease) (loadedPackage, error) {
-	if app.PackageLoader == nil {
-		return loadedPackage{}, errors.New("standard package loader is unavailable")
-	}
-	if info, err := os.Lstat(filepath.Join(pkg.Root, "plugin.json")); err != nil || !info.Mode().IsRegular() {
-		if err == nil {
-			err = errors.New("plugin.json is not a regular file")
-		}
-		return loadedPackage{}, fmt.Errorf("dependency %s is not a standard plugin.json package: %w", locked.Alias, err)
-	}
+func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
 	var repository, commit, subpath string
 	if locked.Source.Git != nil {
 		repository, commit, subpath = locked.Source.Git.Repository, locked.Source.Git.Commit, locked.Source.Git.Path
@@ -103,7 +92,7 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 	pkg.Metadata.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository, PackageSubpath: subpath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}
 	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest,
 		ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: pkg.Metadata.Source}
-	envelope, err := app.PackageLoader.Load(ctx, input)
+	envelope, err := app.loadStandardEnvelope(ctx, input)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -129,22 +118,39 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 		directory = &domain.DirectoryOrigin{ProductID: source.ProductID, DistributionID: source.DistributionID,
 			DistributionKind: domain.DistributionCommunity, DesiredReleaseSequence: source.ReleaseSequence}
 	}
-	return verifyLockedDirectory(ctx, app, loadedPackage{envelope: envelope, security: assessment, origin: origin, directory: directory}, locked, recorded)
+	return verifyLockedDirectory(ctx, app, loadedPackage{envelope: envelope, security: assessment, origin: origin, directory: directory}, locked, recorded, operation...)
 }
 
-func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient) ([]dependencyAction, error) {
+func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient, consent ...map[string]bool) ([]dependencyAction, error) {
 	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd}
+	if len(consent) > 0 {
+		adapter.consent = consent[0]
+	}
 	claims := map[string]string{}
+	updates := map[string]*installer.PreparedOperation{}
+	defer func() {
+		for _, update := range updates {
+			_ = update.Close()
+		}
+	}()
 	for _, action := range actions {
 		if action.Action == environment.ActionUnchanged {
 			continue
+		}
+		adapter.previewUpdate = nil
+		if action.Action == environment.ActionInstall {
+			adapter.previewUpdate = updates[action.Alias]
 		}
 		prepared, err := adapter.Prepare(cmd.Context(), action)
 		if err != nil {
 			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
 		}
 		plan := prepared.Plan()
-		_ = prepared.Close()
+		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
+			updates[action.Alias] = prepared
+		} else {
+			_ = prepared.Close()
+		}
 		key := action.ClientID + "\x00" + plan.TargetPath
 		if previous := claims[key]; previous != "" && previous != action.Alias {
 			return nil, errors.New("conflicting dependency namespace claims")
@@ -155,11 +161,13 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 }
 
 type dependencyInstaller struct {
-	app         App
-	opts        *options
-	detected    map[domain.ClientID]domain.DetectedClient
-	cmd         *cobra.Command
-	beforeApply func() error
+	app           App
+	opts          *options
+	detected      map[domain.ClientID]domain.DetectedClient
+	cmd           *cobra.Command
+	beforeApply   func() error
+	consent       map[string]bool
+	previewUpdate *installer.PreparedOperation
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
@@ -194,7 +202,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	request := installer.Request{OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
 		ClientExecutable: backendExecutable(client, adapter.detected), InstallationID: action.InstallationID,
-		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: adapter.opts.externalUninstalled}
+		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}
@@ -219,7 +227,7 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 
 // The lock records coordinates, never signed publication eligibility. Recheck
 // the exact requested release without granting recorded-install exceptions.
-func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease) (loadedPackage, error) {
+func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
 	source := locked.Source.Registry
 	if source == nil {
 		return loaded, nil
@@ -245,6 +253,9 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 		request.DesiredReleaseSequence = 0
 		request.Recorded = recorded
 		request.Operation = domain.DirectoryRepair
+		if len(operation) > 0 {
+			request.Operation = operation[0]
+		}
 	}
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, request)
 	if err != nil {
@@ -348,7 +359,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 
 func (adapter *dependencyInstaller) recordedDependencyRelease(action environment.PreparedBinding) (*domain.RecordedDirectoryRelease, error) {
 	var recorded *domain.RecordedDirectoryRelease
-	if action.Action == "repair" && action.Package.Source.Registry != nil {
+	if action.Package.Source.Registry != nil && (action.Action == "repair" || action.Action == environment.ActionInstall && action.InstallationID != "") {
 		state, err := adapter.app.StateStore.Load()
 		if err != nil {
 			return nil, err
@@ -356,6 +367,15 @@ func (adapter *dependencyInstaller) recordedDependencyRelease(action environment
 		installation, found := locallyMatchedInstallation(state, action.InstallationID)
 		if !found || installation.Directory == nil {
 			return nil, installer.ErrPlanChanged
+		}
+		if action.Action == environment.ActionInstall {
+			// A live owned installation, rather than the copied lock, is the authority
+			// for the signed NewTarget exception. A changing pin still needs fresh
+			// install eligibility during preflight until the preceding update commits.
+			if installation.Source.TreeDigest != action.Package.TreeDigest || installation.Directory.DesiredReleaseSequence != action.Package.Source.Registry.ReleaseSequence {
+				return nil, nil
+			}
+			return recordedDirectoryRelease(installation, action.Package.Source.Registry.ReleaseSequence, action.Package.Source.Registry.Commit), nil
 		}
 		binding, found := installation.Clients[action.BindingID]
 		if !found || binding.PackageRevision == nil || binding.PackageRevision.TreeDigest != action.Package.TreeDigest {
@@ -368,7 +388,11 @@ func (adapter *dependencyInstaller) recordedDependencyRelease(action environment
 }
 
 func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context, action environment.PreparedBinding, request installer.Request, recorded *domain.RecordedDirectoryRelease) (*installer.PreparedOperation, error) {
-	loaded, err := materializeLockedPackage(ctx, adapter.app, *action.Package, false, recorded)
+	operation := domain.DirectoryRepair
+	if action.Action == environment.ActionInstall {
+		operation = domain.DirectoryNewTarget
+	}
+	loaded, err := materializeLockedPackage(ctx, adapter.app, *action.Package, false, recorded, operation)
 	if err != nil {
 		return nil, err
 	}
@@ -378,8 +402,14 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if loaded.security == nil {
 		return nil, errors.New("scanner unavailable: dependency sync requires a digest-bound assessment")
 	}
+	if adapter.consent[loaded.envelope.TreeDigest] {
+		loaded.securityAuthorized = true
+	}
 	if err := authorizeSecurityAssessment(adapter.cmd, adapter.app, adapter.opts, &loaded); err != nil {
 		return nil, err
+	}
+	if adapter.consent != nil {
+		adapter.consent[loaded.envelope.TreeDigest] = loaded.securityAuthorized
 	}
 	if action.Action == "repair" && action.Package.ExecutableFiles == nil {
 		action.Package.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
@@ -391,6 +421,9 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 		OriginMode: loaded.origin, Directory: loaded.directory, Compatibility: loaded.hints}
 	request.Assessment = &installer.Assessment{TreeDigest: action.Package.TreeDigest, Outcome: installer.AssessmentAllow, Reason: "authorized by CLI security policy for exact pinned bytes"}
 	request.RequiredComponents = requiredFacadeComponents(loaded.envelope)
+	if adapter.previewUpdate != nil {
+		return adapter.app.Installer.PreviewInstallAfterUpdate(ctx, request, adapter.previewUpdate)
+	}
 	return adapter.app.Installer.Prepare(ctx, request)
 }
 
@@ -427,7 +460,8 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 }
 
 func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient) error {
-	if _, err := preflightDependencyActions(cmd, app, opts, actions, detected); err != nil {
+	consent := map[string]bool{}
+	if _, err := preflightDependencyActions(cmd, app, opts, actions, detected, consent); err != nil {
 		return err
 	}
 	if opts.dryRun {
@@ -447,12 +481,10 @@ func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions 
 	if !confirmed {
 		return renderDependencySync(cmd, opts, actions, true)
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected}
+	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
 	results, err := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, Bindings: actions}, true)
-	if opts.format == "json" {
-		if renderErr := renderJSON(cmd.OutOrStdout(), results); err == nil {
-			err = renderErr
-		}
+	if renderErr := renderDependencyResults(cmd, opts, actions, results, err); err == nil {
+		err = renderErr
 	}
 	return err
 }

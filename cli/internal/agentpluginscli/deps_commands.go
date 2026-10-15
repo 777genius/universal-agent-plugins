@@ -96,6 +96,9 @@ type dependencyLockResult struct {
 }
 
 func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias string, allowWrite bool) (dependencyLockResult, error) {
+	if err := requireDependencyMutationReady(app); err != nil {
+		return dependencyLockResult{}, err
+	}
 	if allowWrite && !opts.dryRun {
 		release, lockErr := processlock.Lock{Path: app.EnvironmentLockPath}.Acquire(ctx)
 		if lockErr != nil {
@@ -258,33 +261,37 @@ type dependencyAction = environment.PreparedBinding
 func initializeDependencies(cmd *cobra.Command, app App, opts *options) error {
 	manifest, _ := app.dependencyPaths()
 	if _, err := os.Lstat(manifest); err == nil {
-		return fmt.Errorf("%s already exists; init never rewrites it", filepath.Base(manifest))
+		return fmt.Errorf("%s already exists; init never rewrites it", manifest)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 	if opts.dryRun {
 		return renderJSON(cmd.OutOrStdout(), map[string]any{"dry_run": true, "action": "create_manifest"})
 	}
-	return writeInitialDependencyManifest(manifest)
+	if err := os.MkdirAll(filepath.Dir(manifest), 0o700); err != nil {
+		return err
+	}
+	if err := writeInitialDependencyManifest(manifest); err != nil {
+		return err
+	}
+	if opts.format == "json" {
+		return renderJSON(cmd.OutOrStdout(), map[string]any{"created": true, "manifest_path": manifest})
+	}
+	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Created %s\nNext: edit dependencies and targets, then run deps lock.\n", manifest)
+	return err
 }
 
 func validateDependencyTargets(app App, requirements environment.Requirements) error {
 	for target := range requirements.Targets {
-		if app.ClientRegistry == nil {
-			return errors.New("client registry unavailable")
-		}
-		if _, ok := app.ClientRegistry.Lookup(domain.ClientID(target)); !ok {
-			return fmt.Errorf("unsupported target %q", target)
+		if app.Installer == nil || !app.Installer.SupportsClient(target) {
+			return fmt.Errorf("unsupported dependency target %q; supported targets: %v", target, supportedDependencyTargets(app))
 		}
 	}
 	return nil
 }
 
 func resolveDependencyLock(ctx context.Context, app App, opts *options, requirements environment.Requirements, lockPath, updateAlias string) (environment.Requirements, environment.Lock, environment.Lock, error) {
-	requirements, err := app.canonicalizeDependencyRequirements(ctx, requirements)
-	if err != nil {
-		return requirements, environment.Lock{}, environment.Lock{}, err
-	}
+	var err error
 	var previous environment.Lock
 	hadPrevious := false
 	if body, readErr := os.ReadFile(lockPath); readErr == nil {
@@ -295,6 +302,11 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 		hadPrevious = err == nil
 	} else if !os.IsNotExist(readErr) {
 		return requirements, environment.Lock{}, environment.Lock{}, readErr
+	}
+	canonicalizeRequirementsFromLock(&requirements, previous)
+	requirements, err = app.canonicalizeDependencyRequirements(ctx, requirements)
+	if err != nil {
+		return requirements, environment.Lock{}, environment.Lock{}, err
 	}
 	resolver := dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}
 	var previousPin *environment.Lock
@@ -324,4 +336,14 @@ func newDependencyRecoverCommand(app App, opts *options, yes *bool) *cobra.Comma
 	}
 	recovery.Flags().BoolVar(yes, "yes", false, "confirm the complete preflighted recovery without an interactive prompt")
 	return recovery
+}
+
+func supportedDependencyTargets(app App) []string {
+	out := []string{}
+	for _, target := range domain.SupportedClientIDs() {
+		if app.Installer != nil && app.Installer.SupportsClient(string(target)) {
+			out = append(out, string(target))
+		}
+	}
+	return out
 }

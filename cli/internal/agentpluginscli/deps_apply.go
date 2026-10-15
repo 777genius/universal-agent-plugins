@@ -23,39 +23,22 @@ type dependencySyncRequest struct {
 	manifestBytes, lockBytes []byte
 	prepared                 []dependencyAction
 	detected                 map[domain.ClientID]domain.DetectedClient
+	consent                  map[string]bool
 }
 
 func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock) ([]dependencyAction, error) {
-	if view.Recovery.Required {
-		return nil, installer.ErrRecoveryRequired
-	}
-	if err := rejectForeignDependencies(view, lock); err != nil {
+	observations, err := environment.Observe(view)
+	if err != nil {
 		return nil, err
-	}
-	var observations []environment.BindingObservation
-	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
-			continue
-		}
-		current := environment.BindingObservation{Alias: receipt.Alias, ClientID: receipt.ClientID, InstallationID: receipt.InstallationID, BindingID: receipt.ClientBindingID, SourceKey: receipt.SourceKey, PackageDigest: receipt.PackageDigest, Managed: true, Receipt: &receipt}
-		binding, found := findInspectedEnvironmentBinding(view, receipt)
-		if !found {
-			return nil, errors.New("partial: environment receipt has no live binding")
-		}
-		current.Incomplete = bindingLifecycleIncomplete(binding)
-		current.Revision = binding.Revision
-		current.Drift = binding.ProjectionStatus != ""
-		current.Pending = binding.Materialization != string(domain.MaterializationMaterialized)
-		if binding.TreeDigest != receipt.PackageDigest {
-			return nil, errors.New("receipt/live binding package mismatch")
-		}
-		observations = append(observations, current)
 	}
 	prepared, err := (environment.Coordinator{}).PrepareSync(requirements, lock, observations)
 	return prepared.Bindings, err
 }
 
 func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, yes bool) error {
+	if err := requireDependencyMutationReady(app); err != nil {
+		return err
+	}
 	if app.Installer == nil {
 		return errors.New("typed SDK installer is unavailable")
 	}
@@ -66,15 +49,7 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 	defer cleanup()
 	app = preview
 	manifestPath, lockPath := app.dependencyPaths()
-	requirements, err := readDependencyManifest(manifestPath)
-	if err != nil {
-		return err
-	}
-	requirements, err = app.canonicalizeDependencySyncRequirements(cmd.Context(), requirements, lockPath, lockedOnly)
-	if err != nil {
-		return err
-	}
-	lock, err := selectDependencySyncLock(cmd.Context(), app, opts, lockedOnly, lockPath, requirements)
+	requirements, lock, err := prepareDependencySyncLock(cmd.Context(), app, opts, lockedOnly, manifestPath, lockPath)
 	if err != nil {
 		return err
 	}
@@ -90,24 +65,28 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 	if err != nil {
 		return err
 	}
+	if err := validateDependencyRemovals(opts, actions); err != nil {
+		return err
+	}
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return err
 	}
-	prepared, err := preflightDependencyActions(cmd, app, opts, actions, detected)
+	consent := map[string]bool{}
+	prepared, err := preflightDependencyActions(cmd, app, opts, actions, detected, consent)
 	if err != nil {
 		return err
 	}
 	if opts.dryRun {
 		return renderDependencySync(cmd, opts, prepared, true)
 	}
-	request := dependencySyncRequest{requirements: requirements, lock: lock, manifestPath: manifestPath, lockPath: lockPath, manifestBytes: manifestBytes, lockBytes: lockBytes, prepared: prepared, detected: detected}
+	request := dependencySyncRequest{requirements: requirements, lock: lock, manifestPath: manifestPath, lockPath: lockPath, manifestBytes: manifestBytes, lockBytes: lockBytes, prepared: prepared, detected: detected, consent: consent}
 	return applyDependencySync(cmd, app, opts, request, yes)
 }
 
 func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependencyAction, dryRun bool) error {
 	if opts.format == "json" {
-		return renderJSON(cmd.OutOrStdout(), map[string]any{"actions": actions, "dry_run": dryRun})
+		return renderJSON(cmd.OutOrStdout(), map[string]any{"actions": dependencyActionOutput(actions), "dry_run": dryRun})
 	}
 	for _, action := range actions {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s\n", action.Action, action.Alias, action.ClientID); err != nil {
@@ -117,33 +96,21 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 	return nil
 }
 
-func rejectForeignDependencies(view installer.Inspection, lock environment.Lock) error {
-	for _, pkg := range lock.Packages {
-		for _, installed := range view.Installations {
-			if installed.SourceKey != pkg.SourceKey {
-				continue
-			}
-			for _, binding := range installed.Bindings {
-				for _, target := range pkg.Targets {
-					if binding.ClientID == target && (binding.Owner == nil || binding.Owner.EnvironmentID != environment.EnvironmentUserDefault || binding.Owner.Alias != pkg.Alias) {
-						return fmt.Errorf("foreign: %s/%s already has a live binding outside this environment alias", pkg.Alias, target)
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-
 func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, yes bool) error {
 	requirements, lock, prepared, detected := request.requirements, request.lock, request.prepared, request.detected
-	manifestPath, lockPath, manifestBytes, lockBytes := request.manifestPath, request.lockPath, request.manifestBytes, request.lockBytes
 	var actions []dependencyAction
+	if err := renderDependencyConfirmation(cmd, opts, prepared); err != nil {
+		return err
+	}
 	if !yes && app.Terminal && opts.format == "human" {
 		reader := bufio.NewReader(cmd.InOrStdin())
 		confirmed, promptErr := promptYesNo(cmd.Context(), reader, cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply the preflighted dependency sync? [y/N]")
 		if promptErr != nil {
 			return promptErr
+		}
+		if !confirmed {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
+			return err
 		}
 		yes = confirmed
 	}
@@ -164,7 +131,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		if err != nil {
 			return err
 		}
-		if _, err = preflightDependencyActions(cmd, app, opts, actions, detected); err != nil {
+		if _, err = preflightDependencyActions(cmd, app, opts, actions, detected, request.consent); err != nil {
 			return fmt.Errorf("dependency sync changed after preflight: %w", err)
 		}
 	}
@@ -174,28 +141,15 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	if err := ensureDependencyStore(cmd.Context(), app, lock); err != nil {
 		return err
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, beforeApply: func() error {
-		m, err := os.ReadFile(manifestPath)
-		if err != nil {
-			return err
-		}
-		l, err := os.ReadFile(lockPath)
-		if err != nil {
-			return err
-		}
-		if string(m) != string(manifestBytes) || string(l) != string(lockBytes) {
-			return installer.ErrPlanChanged
-		}
-		return nil
-	}}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, beforeApply: request.checkInputs}
 	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: lock.ManifestDigest, Bindings: actions}, true)
-	if applyErr != nil {
-		if opts.format == "json" {
-			_ = renderJSON(cmd.OutOrStdout(), map[string]any{"outcome": "partial", "results": results, "actions": actions})
-		}
-		return fmt.Errorf("dependency sync stopped; inspect results and recover pending work before retry: %w", applyErr)
+	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
+		return renderErr
 	}
-	return renderDependencySync(cmd, opts, prepared, false)
+	if applyErr != nil {
+		return fmt.Errorf("dependency sync stopped; inspect binding results and next actions: %w", applyErr)
+	}
+	return nil
 }
 
 func selectDependencySyncLock(ctx context.Context, app App, opts *options, lockedOnly bool, lockPath string, requirements environment.Requirements) (environment.Lock, error) {
@@ -255,4 +209,80 @@ func (app App) canonicalizeDependencySyncRequirements(ctx context.Context, requi
 		return environment.Requirements{}, fmt.Errorf("read dependency lock: %w", err)
 	}
 	return app.canonicalizeDependencyRequirements(ctx, requirements)
+}
+
+func requireDependencyMutationReady(app App) error {
+	if guard, ok := app.StateStore.(interface{ RequireMutationReady() error }); ok {
+		return guard.RequireMutationReady()
+	}
+	return nil
+}
+
+func validateDependencyRemovals(opts *options, actions []dependencyAction) error {
+	if !opts.externalUninstalled {
+		return nil
+	}
+	for _, action := range actions {
+		if action.Action == environment.ActionRemove {
+			return nil
+		}
+	}
+	return errors.New("--external-uninstalled requires at least one removal")
+}
+
+func renderDependencyConfirmation(cmd *cobra.Command, opts *options, prepared []dependencyAction) error {
+	if opts.format == "human" {
+		if err := renderDependencySync(cmd, opts, prepared, false); err != nil {
+			return err
+		}
+	}
+	if opts.externalUninstalled {
+		removals := 0
+		for _, action := range prepared {
+			if action.Action == environment.ActionRemove {
+				removals++
+				if opts.format == "human" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Attest external uninstall: %s/%s\n", action.Alias, action.ClientID)
+				}
+			}
+		}
+		if removals == 0 {
+			return errors.New("--external-uninstalled requires at least one removal")
+		}
+	}
+	return nil
+}
+
+func (request dependencySyncRequest) checkInputs() error {
+	m, err := os.ReadFile(request.manifestPath)
+	if err != nil {
+		return err
+	}
+	l, err := os.ReadFile(request.lockPath)
+	if err != nil {
+		return err
+	}
+	if string(m) != string(request.manifestBytes) || string(l) != string(request.lockBytes) {
+		return installer.ErrPlanChanged
+	}
+	return nil
+}
+
+func prepareDependencySyncLock(ctx context.Context, app App, opts *options, lockedOnly bool, manifestPath, lockPath string) (environment.Requirements, environment.Lock, error) {
+	requirements, err := readDependencyManifest(manifestPath)
+	if err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	if err := validateDependencyTargets(app, requirements); err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	requirements, err = app.canonicalizeDependencySyncRequirements(ctx, requirements, lockPath, lockedOnly)
+	if err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	lock, err := selectDependencySyncLock(ctx, app, opts, lockedOnly, lockPath, requirements)
+	if err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	return requirements, lock, nil
 }

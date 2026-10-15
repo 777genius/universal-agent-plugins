@@ -18,7 +18,7 @@ var ErrEnvironmentAuthority = errors.New("environment owner authority is invalid
 func AuthorizeEnvironmentMutation(state domain.StateFileV2, authority *domain.EnvironmentAuthority, action, installationID, bindingID, sourceKey string, allowCreate bool) error {
 	if authority == nil {
 		for _, receipt := range state.EnvironmentReceipts {
-			if receipt.InstallationID == installationID && receipt.ClientBindingID == bindingID {
+			if receipt.InstallationID == installationID {
 				return fmt.Errorf("%w: %s requires typed environment authority", ErrEnvironmentAuthority, action)
 			}
 		}
