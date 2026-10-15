@@ -13,11 +13,12 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/spf13/cobra"
 )
 
 type addTargetResult struct {
@@ -558,7 +559,10 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		if result.Failed > 0 || batchStatusIndicatesFailure(result.Status) {
 			overall = "failure"
 		}
-		return writeJSONResult(cmd.OutOrStdout(), "add", overall, result)
+		return writeJSONResult(cmd.OutOrStdout(), "add", overall, struct {
+			addMultiResult
+			Environment map[string]any `json:"environment"`
+		}{result, map[string]any{"saved": false, "reason": opts.environmentReason}})
 	}
 	if result.Status == "preflight_failed" {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: a selected client could not pass the checks before installation. See the error below; there is no new configuration to activate."); err != nil {

@@ -202,7 +202,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	request := installer.Request{OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
 		ClientExecutable: backendExecutable(client, adapter.detected), InstallationID: action.InstallationID,
-		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled}
+		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}

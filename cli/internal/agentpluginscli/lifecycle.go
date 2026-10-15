@@ -42,6 +42,9 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
 			}
+			if handled, err := runSavedLifecycle(cmd, operationApp, opts, args[0], "update"); handled || err != nil {
+				return err
+			}
 			if strings.TrimSpace(opts.target) == "" {
 				targets, err := defaultInstalledBindingTargets(cmd.Context(), app, args[0], opts.scope, false)
 				if err != nil {
@@ -71,6 +74,9 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 			}
 			operationApp := app
 			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
+			if handled, err := runSavedLifecycle(cmd, operationApp, opts, args[0], "repair"); handled || err != nil {
+				return err
+			}
 			if strings.TrimSpace(opts.target) == "" {
 				targets, err := defaultInstalledBindingTargets(cmd.Context(), app, args[0], opts.scope, true)
 				if err != nil {
@@ -349,6 +355,9 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
+				return err
+			}
+			if handled, err := runSavedLifecycle(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
 			}
 			// JSON calls must reject missing selectors before

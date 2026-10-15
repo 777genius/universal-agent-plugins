@@ -11,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 type updateAllInstallation struct {
@@ -44,6 +45,7 @@ type updateAllSession struct {
 	app             App
 	opts            *options
 	installations   []domain.Installation
+	ownedAliases    map[string][]string
 	result          updateAllResult
 	preparedItems   []preparedUpdateAllItem
 	preflightFailed bool
@@ -86,6 +88,28 @@ func (session *updateAllSession) load() (bool, error) {
 		return installations[i].InstallationID < installations[j].InstallationID
 	})
 	session.installations = installations
+	session.ownedAliases = map[string][]string{}
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
+			continue
+		}
+		aliases := session.ownedAliases[receipt.InstallationID]
+		found := false
+		for _, alias := range aliases {
+			if alias == receipt.Alias {
+				found = true
+			}
+		}
+		if !found {
+			session.ownedAliases[receipt.InstallationID] = append(aliases, receipt.Alias)
+		}
+	}
+	unmanaged := make([]domain.Installation, 0, len(installations))
+	for _, installation := range installations {
+		if len(session.ownedAliases[installation.InstallationID]) == 0 {
+			unmanaged = append(unmanaged, installation)
+		}
+	}
 	session.result = updateAllResult{
 		Batch: true, Status: "planned", DryRun: session.opts.dryRun,
 		Installations: make([]updateAllInstallation, 0, len(installations)),
@@ -94,7 +118,7 @@ func (session *updateAllSession) load() (bool, error) {
 		session.result.Status = "no_installations"
 		return true, nil
 	}
-	bundle, bundleOK, detected, detectionErr, err := updateAllDirectoryContext(session.ctx, session.app, state, installations)
+	bundle, bundleOK, detected, detectionErr, err := updateAllDirectoryContext(session.ctx, session.app, state, unmanaged)
 	if err != nil {
 		return false, err
 	}
@@ -123,6 +147,17 @@ func (session *updateAllSession) preflightAll() error {
 
 func (session *updateAllSession) classifyInstallation(installation domain.Installation) {
 	item := updateAllInstallation{InstallationID: installation.InstallationID, Name: installation.DeclaredName}
+	if aliases := session.ownedAliases[installation.InstallationID]; len(aliases) > 0 {
+		sort.Strings(aliases)
+		actions := make([]string, 0, len(aliases))
+		for _, alias := range aliases {
+			actions = append(actions, "agentplugins update "+alias)
+		}
+		item.Status, item.Reason = "skipped", "saved dependency; run "+strings.Join(actions, " or ")
+		session.result.Skipped++
+		session.result.Installations = append(session.result.Installations, item)
+		return
+	}
 	if session.skipDirectoryStatus(installation, &item) {
 		session.result.Installations = append(session.result.Installations, item)
 		return

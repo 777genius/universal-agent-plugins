@@ -536,7 +536,7 @@ func TestInteractiveSharedBackendDependencyFailureOnPeerFailsClosed(t *testing.T
 			acquirer := &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
 			fixture.app.DirectoryClient, fixture.app.SourceAcquirer = directory, acquirer
 
-			_, _, err = fixture.executeInput(true, test.input, "add", "demo")
+			_, _, err = fixture.executeInput(true, test.input, "add", "--no-save", "demo")
 			if err == nil || !strings.Contains(err.Error(), "failed compatibility recheck") || !strings.Contains(err.Error(), string(test.peer)) {
 				t.Fatalf("interactive %s accepted dependency-specific peer failure: %v", test.selected, err)
 			}
@@ -587,7 +587,7 @@ func TestDirectoryRepairFiltersRecordedRuntimeEvidenceForCurrentEnvironment(t *t
 	directory := &fixedDirectoryClient{bundle: directoryv1.VerifiedBundle{Snapshot: snapshot, Digest: "sha256:" + strings.Repeat("c", 64)}}
 	fixture.app.DirectoryClient = directory
 	fixture.app.SourceAcquirer = &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
-	if _, _, err := fixture.execute(false, "add", "demo", "--target", "cursor"); err != nil {
+	if _, _, err := fixture.execute(false, "add", "--no-save", "demo", "--target", "cursor"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := fixture.store.Load()
@@ -740,7 +740,7 @@ func TestSignedDirectorySelectionAcquiresOnceAndPersistsFullOrigin(t *testing.T)
 	acquirer := &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
 	fixture.app.DirectoryClient = directory
 	fixture.app.SourceAcquirer = acquirer
-	stdout, _, err := fixture.execute(false, "add", "demo-alias", "--target", "cursor", "--format", "json")
+	stdout, _, err := fixture.execute(false, "add", "--no-save", "demo-alias", "--target", "cursor", "--format", "json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -800,7 +800,7 @@ func TestSignedDirectorySelectionAcquiresOnceAndPersistsFullOrigin(t *testing.T)
 	directory.bundle.Snapshot.Products[0].ReservedAliases = append(directory.bundle.Snapshot.Products[0].ReservedAliases, "demo-alias")
 	directory.bundle.Snapshot.Sequence = 19
 	directory.bundle.Digest = "sha256:" + strings.Repeat("d", 64)
-	if _, _, err := fixture.execute(false, "add", "demo-alias", "--target", "cursor"); err != nil {
+	if _, _, err := fixture.execute(false, "add", "--no-save", "demo-alias", "--target", "cursor"); err != nil {
 		t.Fatal(err)
 	}
 	state, err = fixture.store.Load()
@@ -923,7 +923,7 @@ func TestDirectoryMultiTargetRepairReacquiresEachRecordedRevisionOnce(t *testing
 		revisionRoots: map[string]string{v1.revision: v1.root, v2.revision: v2.root}, revisionCalls: map[string]int{}}
 	fixture.app.DirectoryClient = directory
 	fixture.app.SourceAcquirer = acquirer
-	if _, _, err := fixture.execute(false, "add", "mixed-demo", "--target", "cursor,kiro"); err != nil {
+	if _, _, err := fixture.execute(false, "add", "--no-save", "mixed-demo", "--target", "cursor,kiro"); err != nil {
 		t.Fatal(err)
 	}
 	directory.bundle.Snapshot.Distributions[0].Releases = append(directory.bundle.Snapshot.Distributions[0].Releases, release(2, v2))
@@ -1000,7 +1000,11 @@ func TestDirectLocalAndFullSHASourcesBypassDirectoryAndExpiredDiscovery(t *testi
 			if !test.directGit {
 				selector = plugin
 			}
-			if _, _, err := fixture.execute(false, "add", selector, "--target", "cursor"); err != nil {
+			args := []string{"add", selector, "--target", "cursor"}
+			if test.directGit {
+				args = append(args, "--no-save")
+			}
+			if _, _, err := fixture.execute(false, args...); err != nil {
 				t.Fatal(err)
 			}
 			if directory.calls != 0 || discovery.calls != 0 || (test.directGit && acquirer.directGitCalls != 1) || (!test.directGit && acquirer.localCalls != 1) {
@@ -1243,7 +1247,7 @@ func TestExactGitHubSourceAutodiscoversUniqueValidPackageThroughLifecycle(t *tes
 	fixture.app.SourceAcquirer = acquirer
 	requested := "owner/repo@" + revision
 
-	if _, _, err := fixture.execute(false, "add", requested, "--target", "cursor", "--format", "json"); err != nil {
+	if _, _, err := fixture.execute(false, "add", "--no-save", requested, "--target", "cursor", "--format", "json"); err != nil {
 		t.Fatal(err)
 	}
 	state, err := fixture.store.Load()
@@ -1534,7 +1538,7 @@ func TestExistingRelativeDirectoryDoesNotOverrideShortNameForAddOrSwitch(t *test
 	counter := &countingSourceAcquirer{delegate: fixture.app.SourceAcquirer}
 	fixture.app.SourceAcquirer = counter
 
-	if _, _, err := fixture.execute(false, "add", shortName, "--target", "cursor"); err == nil || !strings.Contains(err.Error(), "signed Directory dependencies are unavailable") {
+	if _, _, err := fixture.execute(false, "add", "--no-save", shortName, "--target", "cursor"); err == nil || !strings.Contains(err.Error(), "signed Directory dependencies are unavailable") {
 		t.Fatalf("existing relative directory changed add selector meaning: %v", err)
 	}
 	if counter.calls != 0 {

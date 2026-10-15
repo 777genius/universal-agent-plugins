@@ -19,7 +19,7 @@ func TestContext7InteractivePreparationChoice(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
 	before, _ := json.Marshal(d.bundle)
-	out, _, err := f.executeInput(true, "\n", "add", "context7-alias", "--plain")
+	out, _, err := f.executeInput(true, "\n", "add", "--no-save", "context7-alias", "--plain")
 	if err != nil || !strings.Contains(out, "prepare personal marketplace") || !strings.Contains(out, "npx universal-agent-plugins") {
 		t.Fatalf("choice/guidance: %s %v", out, err)
 	}
@@ -71,7 +71,7 @@ func TestContext7DeferredChatGPTSurvivesPeerActivationFailure(t *testing.T) {
 	f, _, _ := context7GuidedFixture(t)
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientKiro), fixtureClient(t, domain.ClientChatGPT)}}
 	f.app.Lifecycle.Activator = &failAllCLIGroupActivator{}
-	out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt")
+	out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgpt")
 	if err == nil {
 		t.Fatal("expected kiro activation failure")
 	}
@@ -107,7 +107,7 @@ func emittedRegistrationCommand(t *testing.T, action string) string {
 func TestContext7ResumeEmittedMixedCommandAndPreparedGuidance(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
 	before, _ := json.Marshal(d.bundle)
-	out, _, err := f.execute(false, "add", "context7-alias", "--target", "kiro,chatgpt", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
+	out, _, err := f.execute(false, "add", "--no-save", "context7-alias", "--target", "kiro,chatgpt", "--format", "json", "--scope", "user", "--plain", "--security-details", "--no-color")
 	if err != nil {
 		t.Fatalf("peer installation: %s %v", out, err)
 	}
@@ -215,7 +215,7 @@ func TestContext7InteractiveSelectionOnlyAppliesSelectedIntent(t *testing.T) {
 				},
 				confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
 			}
-			out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
+			out, _, err := f.executeInput(true, "", "add", "--no-save", "context7", "--plain")
 			if chooseChatGPT {
 				if err != nil || !strings.Contains(out, "Setup required") || !strings.Contains(out, "ChatGPT") {
 					t.Fatalf("%s %v", out, err)
@@ -286,19 +286,27 @@ func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			out, _, err := f.execute(false, "add", "context7", "--target", targets, "--chatgpt-app-id", fixturePersonalAppID)
+			args := []string{"add", "context7", "--target", targets, "--chatgpt-app-id", fixturePersonalAppID}
+			if strings.Contains(targets, ",") {
+				args = append(args, "--no-save")
+			}
+			out, _, err := f.execute(false, args...)
 			if err != nil {
 				t.Fatalf("initial: %s %v", out, err)
 			}
 			check(out)
 			for _, op := range []string{"add", "update", "repair"} {
 				t.Run(op, func(t *testing.T) {
-					out, _, err := f.execute(false, op, "context7", "--target", targets)
+					args := []string{op, "context7", "--target", targets}
+					if op == "add" && strings.Contains(targets, ",") {
+						args = append(args, "--no-save")
+					}
+					out, _, err := f.execute(false, args...)
 					if err != nil {
 						t.Fatalf("%s: %s %v", op, out, err)
 					}
 					check(out)
-					out, _, err = f.execute(false, op, "context7", "--target", targets, "--format", "json")
+					out, _, err = f.execute(false, append(args, "--format", "json")...)
 					if err != nil {
 						t.Fatalf("json: %s %v", out, err)
 					}
@@ -329,7 +337,7 @@ func TestContext7HumanPathsAcrossSingleAndMixedLifecycle(t *testing.T) {
 			}
 			check(out)
 			f.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientChatGPT)}}
-			out, _, err = f.executeInput(true, "\n", "add", "context7-alias", "--plain")
+			out, _, err = f.executeInput(true, "\n", "add", "--no-save", "context7-alias", "--plain")
 			if err != nil {
 				t.Fatalf("retained interactive intent: %s %v", out, err)
 			}
@@ -372,7 +380,7 @@ func TestContext7GuidedSelectionKeepsEligibleCodex(t *testing.T) {
 		},
 		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
 	}
-	out, _, err := f.executeInput(true, "", "add", "context7", "--plain")
+	out, _, err := f.executeInput(true, "", "add", "--no-save", "context7", "--plain")
 	if err != nil || !strings.Contains(out, "Setup required") || !strings.Contains(out, "ChatGPT") {
 		t.Fatalf("registration: %s %v", out, err)
 	}

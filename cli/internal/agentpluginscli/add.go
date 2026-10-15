@@ -6,11 +6,12 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
-	"github.com/spf13/cobra"
 )
 
 func newAddCommand(app App, opts *options) *cobra.Command {
@@ -24,6 +25,8 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 			return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 		},
 	}
+	command.Flags().BoolVar(&opts.noSave, "no-save", false, "install without saving portable dependency intent")
+	command.Flags().StringVar(&opts.alias, "alias", "", "saved dependency alias")
 	command.Flags().StringVar(&opts.chatGPTAppID, "chatgpt-app-id", "", "personal Context7 registration ID copied from ChatGPT Developer Mode")
 	command.Flags().BoolVar(&activationComplete, "activation-complete", false, "attest that manual client activation is complete")
 	command.Flags().BoolVar(&authComplete, "auth-complete", false, "attest that required authentication is complete or none is required after review")
@@ -44,6 +47,14 @@ func addCommandArgs(opts *options) cobra.PositionalArgs {
 
 func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool) error {
 	if err := validateCommonOptions(opts); err != nil {
+		return err
+	}
+	if opts.chatGPTAppID != "" {
+		if err := domain.ValidateChatGPTAppID(opts.chatGPTAppID); err != nil {
+			return err
+		}
+	}
+	if handled, err := routeSavedAdd(cmd, app, opts, source, activationComplete, authComplete); handled {
 		return err
 	}
 	opts.installIntents = make(map[domain.ClientID]domain.InstallIntent)

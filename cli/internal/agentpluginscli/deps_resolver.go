@@ -35,6 +35,11 @@ func readValidatedDependencyLock(path string, requirements environment.Requireme
 	if err != nil {
 		return environment.Lock{}, err
 	}
+	return decodeDependencyLockBytes(body, requirements, compatible)
+}
+
+func decodeDependencyLockBytes(body []byte, requirements environment.Requirements, compatible bool) (environment.Lock, error) {
+	var err error
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.DisallowUnknownFields()
 	var lock environment.Lock

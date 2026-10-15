@@ -129,7 +129,13 @@ const (
 	ActionRemove    DesiredAction = "remove"
 )
 
+type Attestation struct {
+	Alias, ClientID                  string
+	ActivationComplete, AuthComplete bool
+}
+
 type PreparedBinding struct {
+	ActivationComplete, AuthComplete           bool
 	Alias, ClientID, InstallationID, BindingID string
 	Action                                     DesiredAction
 	Package                                    *LockedPackage

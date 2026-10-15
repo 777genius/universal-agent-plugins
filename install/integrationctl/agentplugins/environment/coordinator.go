@@ -100,6 +100,28 @@ func targetsFor(requirements Requirements, alias string) []string {
 // PrepareSync derives stable single-target actions. A changed canonical source
 // is refused instead of silently rebinding an installation to another source.
 func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock, observed []BindingObservation) (PreparedSync, error) {
+	return coordinator.prepareSync(requirements, lock, observed, nil, nil)
+}
+
+// PrepareSyncFor limits mutations to explicit aliases while retaining global identity checks.
+func (coordinator Coordinator) PrepareSyncFor(requirements Requirements, lock Lock, observed []BindingObservation, aliases []string, attestation *Attestation) (PreparedSync, error) {
+	if len(aliases) == 0 {
+		return PreparedSync{}, errors.New("selected aliases must not be empty")
+	}
+	selected := map[string]bool{}
+	for _, alias := range aliases {
+		if !aliasPattern.MatchString(alias) {
+			return PreparedSync{}, errors.New("invalid selected alias")
+		}
+		selected[alias] = true
+	}
+	if attestation != nil && (!selected[attestation.Alias] || len(selected) != 1 || attestation.ClientID == "" || (!attestation.ActivationComplete && !attestation.AuthComplete)) {
+		return PreparedSync{}, errors.New("attestation requires one selected alias and client")
+	}
+	return coordinator.prepareSync(requirements, lock, observed, selected, attestation)
+}
+
+func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock, observed []BindingObservation, selected map[string]bool, attestation *Attestation) (PreparedSync, error) {
 	if err := lock.Validate(requirements); err != nil {
 		return PreparedSync{}, err
 	}
@@ -108,23 +130,14 @@ func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock,
 	for _, item := range observed {
 		byAliasTarget[item.Alias+"\x00"+item.ClientID] = item
 	}
-	for _, pkg := range lock.Packages {
-		for _, target := range pkg.Targets {
-			current := byAliasTarget[pkg.Alias+"\x00"+target]
-			var err error
-			current, err = validateDesiredBinding(pkg, target, current, observed)
-			if err != nil {
-				return PreparedSync{}, err
-			}
-			action, reason := syncAction(pkg, current)
-			plan.Bindings = append(plan.Bindings, PreparedBinding{
-				Alias: pkg.Alias, ClientID: target, InstallationID: current.InstallationID,
-				BindingID: current.BindingID, Action: action, Package: &pkg, Reason: reason,
-				Authority: bindingAuthority(pkg.Alias, target, pkg.SourceKey, action, current),
-			})
-		}
+	if err := appendDesiredBindings(&plan, lock, observed, byAliasTarget, selected, attestation); err != nil {
+		return PreparedSync{}, err
 	}
+
 	for key, current := range byAliasTarget {
+		if selected != nil && !selected[current.Alias] {
+			continue
+		}
 		desired := false
 		for _, item := range plan.Bindings {
 			if item.Alias+"\x00"+item.ClientID == key {
@@ -141,6 +154,10 @@ func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock,
 			plan.Bindings = append(plan.Bindings, PreparedBinding{Alias: current.Alias, ClientID: current.ClientID, InstallationID: current.InstallationID, BindingID: current.BindingID, Action: ActionRemove, Authority: bindingAuthority(current.Alias, current.ClientID, current.SourceKey, ActionRemove, current)})
 		}
 	}
+	if err := validatePlannedAttestation(plan, attestation); err != nil {
+		return PreparedSync{}, err
+	}
+
 	sortSyncBindings(plan.Bindings)
 	return plan, nil
 }
@@ -238,4 +255,61 @@ func sortSyncBindings(bindings []PreparedBinding) {
 		}
 		return bindings[i].ClientID < bindings[j].ClientID
 	})
+}
+
+func lockedRevision(pkg LockedPackage) string {
+	if pkg.Source.Git != nil {
+		return pkg.Source.Git.Commit
+	}
+	if pkg.Source.Registry != nil {
+		return pkg.Source.Registry.Commit
+	}
+	return ""
+}
+
+func appendDesiredBindings(plan *PreparedSync, lock Lock, observed []BindingObservation, byAliasTarget map[string]BindingObservation, selected map[string]bool, attestation *Attestation) error {
+	for _, pkg := range lock.Packages {
+		if selected != nil && !selected[pkg.Alias] {
+			continue
+		}
+		for _, target := range pkg.Targets {
+			current := byAliasTarget[pkg.Alias+"\x00"+target]
+			var err error
+			current, err = validateDesiredBinding(pkg, target, current, observed)
+			if err != nil {
+				return err
+			}
+			action, reason := syncAction(pkg, current)
+			activation, auth := false, false
+			if attestation != nil && attestation.Alias == pkg.Alias && attestation.ClientID == target {
+				if !current.Managed || current.Pending || current.PackageDigest != pkg.TreeDigest || current.Revision != lockedRevision(pkg) {
+					return errors.New("completion attestation requires the materialized owned pin; update first then attest")
+				}
+				activation, auth = attestation.ActivationComplete, attestation.AuthComplete
+				action, reason = ActionUpdate, "explicit_lifecycle_attestation"
+			}
+			plan.Bindings = append(plan.Bindings, PreparedBinding{
+				ActivationComplete: activation, AuthComplete: auth,
+				Alias: pkg.Alias, ClientID: target, InstallationID: current.InstallationID,
+				BindingID: current.BindingID, Action: action, Package: &pkg, Reason: reason,
+				Authority: bindingAuthority(pkg.Alias, target, pkg.SourceKey, action, current),
+			})
+		}
+	}
+	return nil
+}
+
+func validatePlannedAttestation(plan PreparedSync, attestation *Attestation) error {
+	if attestation != nil {
+		found := false
+		for _, binding := range plan.Bindings {
+			if binding.Alias == attestation.Alias && binding.ClientID == attestation.ClientID && binding.Action != ActionRemove {
+				found = true
+			}
+		}
+		if !found {
+			return errors.New("attestation requires a desired binding")
+		}
+	}
+	return nil
 }

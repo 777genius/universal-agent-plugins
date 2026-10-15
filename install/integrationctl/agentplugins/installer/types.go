@@ -33,9 +33,11 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
-	physical    map[domain.ClientID]domain.DetectedClient
-	Operation   Operation
-	PackageRoot string
+	// Completion flags attest explicit host-observed lifecycle completion.
+	ActivationComplete, AuthComplete bool
+	physical                         map[domain.ClientID]domain.DetectedClient
+	Operation                        Operation
+	PackageRoot                      string
 	// SourceRoot is the stable absolute local source identity when PackageRoot
 	// points at a host-owned sealed snapshot. Empty means PackageRoot itself.
 	SourceRoot string

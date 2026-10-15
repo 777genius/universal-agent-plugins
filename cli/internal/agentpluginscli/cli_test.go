@@ -537,7 +537,7 @@ func TestCodexCursorKiroUseOneAcquisitionAndGroupedCommit(t *testing.T) {
 	revision := strings.Repeat("a", 40)
 	acquirer := &localBackedSourceAcquirer{delegate: fixture.app.SourceAcquirer, root: plugin}
 	fixture.app.SourceAcquirer = acquirer
-	stdout, _, err := fixture.execute(false, "add", "owner/repo@"+revision+"//plugins/demo", "--target", "kiro,codex,cursor", "--format", "json")
+	stdout, _, err := fixture.execute(false, "add", "--no-save", "owner/repo@"+revision+"//plugins/demo", "--target", "kiro,codex,cursor", "--format", "json")
 	if err != nil {
 		t.Fatal(err)
 	}
