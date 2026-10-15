@@ -31,7 +31,7 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	if err != nil {
 		return true, err
 	}
-	if len(targets) == 1 && targets[0] == domain.ClientChatGPT && reason == "" {
+	if len(targets) == 1 && containsPersonalMappingTarget(targets) && reason == "" {
 		reason = "chatgpt_preparation_not_saved"
 	}
 	if reason != "" {
