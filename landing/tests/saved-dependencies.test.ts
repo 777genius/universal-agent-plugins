@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { stripTypeScriptTypes } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { pluginCommands } from '../utils/commands.ts';
+import { applyCliInvocation } from '../utils/cliInvocation.ts';
 import {
   dependencyAddFlag,
   isPinnedGitSource,
@@ -84,7 +85,7 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
     .replace(/^export /gm, '');
   const api = runInNewContext(
     stripTypeScriptTypes(source) +
-      '\n({ getResolvedPluginInstallSpec, getPluginInstallSpec, buildInstallCommandForSelection });',
+      '\n({ getResolvedPluginInstallSpec, getPluginInstallSpec, buildInstallCommandForSelection, buildManageCommandsForSelection });',
     {
       contentByLocale: { en: { plugins: [{ slug: 'gitlab' }] } },
       SAVED_DEPENDENCIES_CLI_RELEASED,
@@ -96,13 +97,53 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
   );
   const spec = api.getResolvedPluginInstallSpec('gitlab');
   assert.equal(spec.manageCommands.update, 'universal-agent-plugins update gitlab');
+  // The alias may already own Claude and Codex while the UI selects only Codex.
+  // Copying Update must advance the whole Directory alias, without a subset filter.
+  assert.equal(
+    api.buildManageCommandsForSelection(spec, ['codex'], true).update,
+    'universal-agent-plugins update gitlab',
+  );
+  assert.equal(
+    api.buildManageCommandsForSelection(spec, ['codex'], false).update,
+    'universal-agent-plugins update gitlab --target codex',
+  );
+
   assert.equal(
     api.getResolvedPluginInstallSpec('gitlab', true).manageCommands.update,
     'universal-agent-plugins update gitlab',
   );
+  const component = readFileSync(
+    new URL('../components/plugins/PluginInstallSection.vue', import.meta.url),
+    'utf8',
+  );
+  const managementExpression = component.slice(
+    component.indexOf('const renderedManageCommands ='),
+    component.indexOf('const selectionScope ='),
+  );
+  const displayed = (released: boolean, installSpec = spec) =>
+    runInNewContext(managementExpression + '\nrenderedManageCommands', {
+      computed: (read: () => unknown) => read(),
+      props: { installSpec },
+      selectedTargetIds: { value: ['codex'] },
+      selectedCliInvocation: { value: 'npx universal-agent-plugins' },
+      applyCliInvocation,
+      buildManageCommandsForSelection: (current: unknown, targets: string[]) =>
+        api.buildManageCommandsForSelection(current, targets, released),
+    });
+  assert.equal(displayed(true).update, 'npx universal-agent-plugins update gitlab');
+  assert.equal(displayed(false).update, 'npx universal-agent-plugins update gitlab --target codex');
   const exactSource = `github:example/demo@${'c'.repeat(40)}//plugins/demo`;
   api.getPluginInstallSpec('gitlab').cliSource = exactSource;
   const gitSpec = api.getResolvedPluginInstallSpec('gitlab', true);
+  assert.equal(
+    displayed(true, gitSpec).update,
+    `npx universal-agent-plugins add ${exactSource} --target codex`,
+  );
+  assert.equal(
+    api.buildManageCommandsForSelection(gitSpec, ['codex'], true).update,
+    `universal-agent-plugins add ${exactSource} --target codex`,
+  );
+
   assert.equal(gitSpec.manageCommands.update, `universal-agent-plugins add ${exactSource}`);
   assert.equal(
     gitSpec.supportedTargets.find((lane: { targetId: string }) => lane.targetId === 'codex')

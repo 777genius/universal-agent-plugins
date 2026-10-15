@@ -256,3 +256,23 @@ export const buildInstallCommandForSelection = (
     savedDependenciesReleased,
   );
 };
+
+export const buildManageCommandsForSelection = (
+  spec: PluginResolvedInstallSpec,
+  selectedTargetIds: PluginInstallTargetId[],
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+): PluginManageCommands => {
+  const targetFlag = ` --target ${selectedTargetIds.join(',')}`;
+  const saved =
+    savedDependenciesReleased && dependencySaveMode(spec.cliSource, selectedTargetIds) === 'saved';
+  // Owned Directory updates advance the alias as a whole. Git pins advance only
+  // through add of the current exact source, retaining the selected target set.
+  const update = saved
+    ? buildManageCommands(spec.integrationName, spec.cliSource, selectedTargetIds, true).update
+    : `${spec.manageCommands.update}${targetFlag}`;
+  return {
+    update,
+    repair: `${spec.manageCommands.repair}${targetFlag}`,
+    remove: `${spec.manageCommands.remove}${targetFlag}`,
+  };
+};
