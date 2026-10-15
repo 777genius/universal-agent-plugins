@@ -47,23 +47,29 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	manifestPath, lockPath := app.dependencyPaths()
 	status := dependencyStatus{Scope: "user", ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
 	requirements, err := readDependencyManifest(manifestPath)
-	if os.IsNotExist(err) {
-		return renderDependencyStatus(cmd, opts, status)
-	}
-	if err != nil {
+	missingManifest := os.IsNotExist(err)
+	if err != nil && !missingManifest {
 		return err
 	}
 	if app.Installer == nil {
 		return errors.New("typed SDK installer is unavailable")
 	}
-	status.ManifestDigest, _ = environment.ManifestDigest(requirements)
-	lock, lockErr := readDependencyLock(lockPath, requirements)
-	if lockErr != nil {
-		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
+	var lock environment.Lock
+	validLock := false
+	if missingManifest {
+		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"manifest_missing"}})
 	} else {
-		canonicalizeRequirementsFromLock(&requirements, lock)
 		status.ManifestDigest, _ = environment.ManifestDigest(requirements)
-		status.LockDigest = lock.ManifestDigest
+		var lockErr error
+		lock, lockErr = readDependencyLock(lockPath, requirements)
+		validLock = lockErr == nil
+		if lockErr != nil {
+			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
+		} else {
+			canonicalizeRequirementsFromLock(&requirements, lock)
+			status.ManifestDigest, _ = environment.ManifestDigest(requirements)
+			status.LockDigest = lock.ManifestDigest
+		}
 	}
 	state, err := app.Installer.Inspect(cmd.Context())
 	if err != nil {
@@ -71,7 +77,7 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	}
 	status.PendingRecovery = state.Recovery.Required
 
-	status.Facts = append(status.Facts, inspectDependencyFacts(cmd.Context(), app, state, lock, lockErr == nil)...)
+	status.Facts = append(status.Facts, inspectDependencyFacts(cmd.Context(), app, state, lock, validLock)...)
 	if status.PendingRecovery {
 		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"pending_recovery"}})
 	}
