@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { expectedDistribution } from '../../utils/registry';
+import { projections, navigate } from './i18n-state.helpers';
+import type { RegistryIndex, RegistryPlugin } from '../../types/registry';
 import { expect, test } from '@playwright/test';
 import { clients } from '../../data/clients';
 
@@ -258,22 +262,52 @@ test('logo thickness follows the viewing angle without extra animation loops', a
   await expect(field.locator('.hero-agent-field__face')).toHaveCount(uniqueLogos.length);
 });
 
-test('installation works with WebGL forbidden and the orbit has no canvas or optional renderer', async ({ page }) => {
+test('installation works with WebGL forbidden and the orbit has no canvas or optional renderer', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...args: unknown[]) {
+    HTMLCanvasElement.prototype.getContext = function (
+      this: HTMLCanvasElement,
+      type: string,
+      ...args: unknown[]
+    ) {
       if (/webgl/i.test(type)) throw new Error('This CSS-only page must not create WebGL');
       return original.apply(this, [type, ...args] as Parameters<typeof original>);
     } as typeof original;
   });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  const response = await page.request.get('./api/registry/plugin/context7');
+  expect(response.ok()).toBe(true);
+  const context7 = (await response.json()).plugins[0] as RegistryPlugin;
+  const upstream = context7.distributions.find(
+    (distribution) => distribution.id === 'upstash/context7' && distribution.kind === 'upstream',
+  );
+  const guidedSetupEligible = Boolean(
+    upstream &&
+    upstream.compatible_clients.some((client) => {
+      const candidate = {
+        ...context7,
+        distributions: [upstream],
+        default_distribution: upstream.id,
+        declared_default_distribution: upstream.id,
+      };
+      const release = expectedDistribution(candidate, [client]);
+      return (
+        release?.source.repository === 'upstash/context7' &&
+        release.source.path === 'plugins/agent-plugins/context7'
+      );
+    }),
+  );
   await page.goto('./');
   const field = page.locator('.hero-agent-field');
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await expect(field.locator('canvas')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Choose target agents: All installed agents', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Choose target agents: All installed agents', exact: true })
+    .click();
   await page.getByRole('checkbox', { name: /^Cursor / }).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('.hero__demo .command-snippet')).toContainText('--target cursor');
@@ -289,11 +323,63 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.hero__demo .command-snippet')).not.toContainText('--target');
   const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
+  if (guidedSetupEligible) {
+    await expect(chatgpt).toBeEnabled();
+    await expect(chatgpt).toContainText('Finish setup in ChatGPT');
+    await chatgpt.click();
+    await expect(chatgpt).toBeChecked();
+    await expect(page.locator('.hero__demo .command-snippet')).toContainText(
+      'add context7 --target chatgpt',
+    );
+  } else {
+    await expect(chatgpt).toBeDisabled();
+    await expect(chatgpt).toContainText('Not available for this plugin');
+    await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
+      '--target chatgpt',
+    );
+  }
+  await page.keyboard.press('Escape');
+  expect(errors).toEqual([]);
+});
+
+test('guided ChatGPT preparation remains available for an eligible deterministic upstream fixture', async ({
+  page,
+}) => {
+  const index = JSON.parse(
+    readFileSync(new URL('../fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
+  ) as RegistryIndex;
+  index.expires_at = '2099-10-06T04:35:40Z';
+  const plugin = index.plugins[0];
+  plugin.name = 'context7';
+  plugin.install_source = 'context7';
+  const upstream = plugin.distributions[0];
+  upstream.id = 'upstash/context7';
+  upstream.kind = 'upstream';
+  upstream.compatible_clients = ['codex'];
+  const release = upstream.releases[0];
+  release.release_status = 'active';
+  release.meets_minimum_capabilities = true;
+  release.blocking_clients = [];
+  release.materialized_clients = ['codex'];
+  release.source = {
+    ...release.source,
+    repository: 'upstash/context7',
+    path: 'plugins/agent-plugins/context7',
+  };
+  plugin.distributions = [upstream];
+  plugin.default_distribution = upstream.id;
+  plugin.declared_default_distribution = upstream.id;
+  await projections(page, index);
+  await navigate(page, '/');
+  await page
+    .getByRole('button', { name: 'Choose target agents: All installed agents', exact: true })
+    .click();
+  const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
   await expect(chatgpt).toBeEnabled();
   await expect(chatgpt).toContainText('Finish setup in ChatGPT');
   await chatgpt.click();
   await expect(chatgpt).toBeChecked();
-  await expect(page.locator('.hero__demo .command-snippet')).toContainText('add context7 --target chatgpt');
-  await page.keyboard.press('Escape');
-  expect(errors).toEqual([]);
+  await expect(page.locator('.hero__demo .command-snippet')).toContainText(
+    'add context7 --target chatgpt',
+  );
 });
