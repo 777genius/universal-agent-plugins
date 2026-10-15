@@ -262,6 +262,9 @@ export const buildManageCommandsForSelection = (
   selectedTargetIds: PluginInstallTargetId[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): PluginManageCommands => {
+  // An empty selection means All; keep the base command unfiltered rather than
+  // emitting a --target flag without a value or inferring a saved subset.
+  if (selectedTargetIds.length === 0) return { ...spec.manageCommands };
   const targetFlag = ` --target ${selectedTargetIds.join(',')}`;
   const saved =
     savedDependenciesReleased && dependencySaveMode(spec.cliSource, selectedTargetIds) === 'saved';
