@@ -120,21 +120,33 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
     component.indexOf('const renderedManageCommands ='),
     component.indexOf('const selectionScope ='),
   );
-  const displayed = (released: boolean, installSpec = spec) =>
+  const displayed = (released: boolean, installSpec = spec, selectedTargetIds = ['codex']) =>
     runInNewContext(managementExpression + '\nrenderedManageCommands', {
       computed: (read: () => unknown) => read(),
       props: { installSpec },
-      selectedTargetIds: { value: ['codex'] },
+      selectedTargetIds: { value: selectedTargetIds },
       selectedCliInvocation: { value: 'npx universal-agent-plugins' },
       applyCliInvocation,
       buildManageCommandsForSelection: (current: unknown, targets: string[]) =>
         api.buildManageCommandsForSelection(current, targets, released),
     });
+  for (const released of [false, true]) {
+    const all = displayed(released, spec, []);
+    for (const action of ['update', 'repair', 'remove'] as const) {
+      assert.equal(all[action], `npx universal-agent-plugins ${action} gitlab`);
+      assert.doesNotMatch(all[action], /--target(?:\s*$|\s+--)/);
+    }
+  }
   assert.equal(displayed(true).update, 'npx universal-agent-plugins update gitlab');
   assert.equal(displayed(false).update, 'npx universal-agent-plugins update gitlab --target codex');
   const exactSource = `github:example/demo@${'c'.repeat(40)}//plugins/demo`;
   api.getPluginInstallSpec('gitlab').cliSource = exactSource;
   const gitSpec = api.getResolvedPluginInstallSpec('gitlab', true);
+  assert.equal(
+    displayed(true, gitSpec, []).update,
+    `npx universal-agent-plugins add ${exactSource}`,
+  );
+
   assert.equal(
     displayed(true, gitSpec).update,
     `npx universal-agent-plugins add ${exactSource} --target codex`,
