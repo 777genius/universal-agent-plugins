@@ -133,7 +133,10 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
   for (const released of [false, true]) {
     const all = displayed(released, spec, []);
     for (const action of ['update', 'repair', 'remove'] as const) {
-      assert.equal(all[action], `npx universal-agent-plugins ${action} gitlab`);
+      assert.equal(
+        all[action],
+        `npx universal-agent-plugins ${action} gitlab --target claude,codex,gemini,opencode,cursor`,
+      );
       assert.doesNotMatch(all[action], /--target(?:\s*$|\s+--)/);
     }
   }
@@ -144,7 +147,7 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
   const gitSpec = api.getResolvedPluginInstallSpec('gitlab', true);
   assert.equal(
     displayed(true, gitSpec, []).update,
-    `npx universal-agent-plugins add ${exactSource}`,
+    'npx universal-agent-plugins update gitlab --target claude,codex,gemini,opencode,cursor',
   );
 
   assert.equal(
@@ -156,6 +159,21 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
     `universal-agent-plugins add ${exactSource} --target codex`,
   );
 
+  // Resolved specs can outlive the gate/selection that produced their base commands.
+  // Derive future commands from the current selection rather than those stale bases.
+  assert.equal(
+    displayed(true, gitSpec, ['codex', 'cursor']).update,
+    'npx universal-agent-plugins update gitlab --target codex,cursor',
+  );
+  const legacyGitSpec = api.getResolvedPluginInstallSpec('gitlab', false);
+  assert.equal(
+    displayed(true, legacyGitSpec, ['codex']).update,
+    `npx universal-agent-plugins add ${exactSource} --target codex`,
+  );
+  assert.equal(
+    displayed(false, legacyGitSpec, []).update,
+    'npx universal-agent-plugins update gitlab --target claude,codex,gemini,opencode,cursor',
+  );
   assert.equal(gitSpec.manageCommands.update, `universal-agent-plugins add ${exactSource}`);
   assert.equal(
     gitSpec.supportedTargets.find((lane: { targetId: string }) => lane.targetId === 'codex')

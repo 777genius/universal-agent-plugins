@@ -262,20 +262,24 @@ export const buildManageCommandsForSelection = (
   selectedTargetIds: PluginInstallTargetId[],
   savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): PluginManageCommands => {
-  // An empty selection means All; keep the base command unfiltered rather than
-  // emitting a --target flag without a value or inferring a saved subset.
-  if (selectedTargetIds.length === 0) return { ...spec.manageCommands };
-  const targetFlag = ` --target ${selectedTargetIds.join(',')}`;
+  const targetIds =
+    selectedTargetIds.length > 0
+      ? selectedTargetIds
+      : spec.recommendedTargetOrder.filter((targetId) =>
+          spec.supportedTargets.some((lane) => lane.targetId === targetId),
+        );
+  const targetFlag = targetIds.length ? ` --target ${targetIds.join(',')}` : '';
   const saved =
-    savedDependenciesReleased && dependencySaveMode(spec.cliSource, selectedTargetIds) === 'saved';
+    savedDependenciesReleased && dependencySaveMode(spec.cliSource, targetIds) === 'saved';
+  const commands = savedDependenciesReleased
+    ? buildManageCommands(spec.integrationName, spec.cliSource, targetIds, true)
+    : spec.manageCommands;
   // Owned Directory updates advance the alias as a whole. Git pins advance only
   // through add of the current exact source, retaining the selected target set.
-  const update = saved
-    ? buildManageCommands(spec.integrationName, spec.cliSource, selectedTargetIds, true).update
-    : `${spec.manageCommands.update}${targetFlag}`;
+  const update = saved ? commands.update : `${commands.update}${targetFlag}`;
   return {
     update,
-    repair: `${spec.manageCommands.repair}${targetFlag}`,
-    remove: `${spec.manageCommands.remove}${targetFlag}`,
+    repair: `${commands.repair}${targetFlag}`,
+    remove: `${commands.remove}${targetFlag}`,
   };
 };
