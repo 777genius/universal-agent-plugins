@@ -110,7 +110,7 @@ type Acquirer struct {
 // fall back to a nested package when the root manifest is malformed.
 func (acquirer Acquirer) DiscoverGitHubPackages(ctx context.Context, repository, revision string) ([]string, error) {
 	if !repositoryPattern.MatchString(repository) {
-		return nil, fmt.Errorf("GitHub repository must be owner/repo")
+		return nil, fmt.Errorf("github repository must be owner/repo")
 	}
 	if !fullSHA.MatchString(revision) {
 		return nil, fmt.Errorf("immutable GitHub source requires a full 40-character lowercase commit SHA")
@@ -123,7 +123,7 @@ func (acquirer Acquirer) DiscoverGitHubPackages(ctx context.Context, repository,
 	if err != nil {
 		return nil, gitAcquisitionFailure(repository, revision, "create temporary discovery workspace")
 	}
-	defer os.RemoveAll(tempRoot)
+	defer func() { _ = os.RemoveAll(tempRoot) }()
 	repoRoot := filepath.Join(tempRoot, "repository")
 	run := func(args ...string) ([]byte, error) {
 		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args})
@@ -175,7 +175,7 @@ func (acquirer Acquirer) DiscoverGitHubPackages(ctx context.Context, repository,
 
 func (acquirer Acquirer) AcquireGitHub(ctx context.Context, repository, revision, pluginSubpath string) (domain.PackageSnapshot, error) {
 	if !repositoryPattern.MatchString(repository) {
-		return domain.PackageSnapshot{}, fmt.Errorf("GitHub repository must be owner/repo")
+		return domain.PackageSnapshot{}, fmt.Errorf("github repository must be owner/repo")
 	}
 	if !fullSHA.MatchString(revision) {
 		return domain.PackageSnapshot{}, fmt.Errorf("immutable GitHub source requires a full 40-character lowercase commit SHA")
@@ -224,7 +224,7 @@ func (acquirer Acquirer) acquireGit(ctx context.Context, url, repository, revisi
 	if err != nil {
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "create temporary workspace")
 	}
-	defer os.RemoveAll(tempRoot)
+	defer func() { _ = os.RemoveAll(tempRoot) }()
 	repoRoot := filepath.Join(tempRoot, "repository")
 	run := func(args ...string) ([]byte, error) {
 		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args})
@@ -333,7 +333,7 @@ func executablePathsFromTree(tree []byte, subpath string) ([]string, error) {
 		metadata, filename, ok := bytes.Cut(record, []byte{'\t'})
 		fields := bytes.Fields(metadata)
 		if !ok || len(fields) != 3 {
-			return nil, fmt.Errorf("Git tree returned a malformed entry")
+			return nil, fmt.Errorf("git tree returned a malformed entry")
 		}
 		mode, objectType := string(fields[0]), string(fields[1])
 		if mode == "160000" || objectType == "commit" {
@@ -345,7 +345,7 @@ func executablePathsFromTree(tree []byte, subpath string) ([]string, error) {
 			if subpath == "" {
 				continue
 			}
-			return nil, fmt.Errorf("Git submodule content is unsupported in plugin subpath")
+			return nil, fmt.Errorf("git submodule content is unsupported in plugin subpath")
 		}
 		if mode != "100755" {
 			continue
@@ -353,12 +353,12 @@ func executablePathsFromTree(tree []byte, subpath string) ([]string, error) {
 		relative := string(filename)
 		if prefix != "" {
 			if !strings.HasPrefix(relative, prefix) {
-				return nil, fmt.Errorf("Git tree entry %q is outside plugin subpath %q", relative, subpath)
+				return nil, fmt.Errorf("git tree entry %q is outside plugin subpath %q", relative, subpath)
 			}
 			relative = strings.TrimPrefix(relative, prefix)
 		}
 		if relative == "" {
-			return nil, fmt.Errorf("Git tree returned an empty executable path")
+			return nil, fmt.Errorf("git tree returned an empty executable path")
 		}
 		executable = append(executable, relative)
 	}
@@ -376,7 +376,7 @@ func packagePathsFromTree(tree []byte) ([]string, error) {
 		metadata, filename, ok := bytes.Cut(record, []byte{'\t'})
 		fields := bytes.Fields(metadata)
 		if !ok || len(fields) != 3 || len(filename) == 0 {
-			return nil, fmt.Errorf("Git tree returned a malformed entry")
+			return nil, fmt.Errorf("git tree returned a malformed entry")
 		}
 		mode, objectType := string(fields[0]), string(fields[1])
 		if objectType != "blob" || (mode != "100644" && mode != "100755") {

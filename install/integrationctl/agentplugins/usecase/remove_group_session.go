@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type removeGroupSession struct {
@@ -103,6 +104,9 @@ func (session *removeGroupSession) validatePurgeReceipts() error {
 func (session *removeGroupSession) resolveOneRemoval(targetIndex int, targetInput RemoveInput) error {
 	clientKey, client, err := session.lookupRemovalBinding(targetInput)
 	if err != nil {
+		return err
+	}
+	if err := transaction.AuthorizeEnvironmentMutation(session.state, targetInput.EnvironmentAuthority, "remove", session.installation.InstallationID, clientKey, session.installation.Source.SourceBindingID, false); err != nil {
 		return err
 	}
 	if err := validateDeliverySelection(client.SelectedDelivery, targetInput.SelectedDelivery); err != nil {

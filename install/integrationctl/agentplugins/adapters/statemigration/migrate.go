@@ -24,9 +24,9 @@ type Migrator struct {
 	Now        func() time.Time
 	NewID      func() (string, error)
 	Lock       ports.MutationLock
-	// RecoverJournal must either complete recovery without changing the state
-	// schema or refuse. Migration never hides a degraded operation.
-	RecoverJournal func(context.Context) error
+	// PendingCheck is strictly read-only. It refuses when any old-schema journal,
+	// receipt or native intent needs the matching previous SDK or binary.
+	PendingCheck func(context.Context) error
 }
 
 type Report struct {
@@ -43,7 +43,7 @@ type Plan struct {
 	SourceSchema  int    `json:"source_schema,omitempty"`
 }
 
-// PlanCurrentV2 inspects authoritative schema 2 without writing it. The digest
+// PlanCurrentV2 inspects authoritative schemas 2-4 without writing them. The digest
 // is the token the apply step must recheck under the global mutation lock.
 func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 	body, err := os.ReadFile(migrator.V2Store.Path)
@@ -56,7 +56,7 @@ func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 	if err := json.Unmarshal(body, &header); err != nil {
 		return Plan{}, fmt.Errorf("decode authoritative state header: %w", err)
 	}
-	if header.SchemaVersion != domain.LegacyStateSchemaVersion && header.SchemaVersion != domain.PreviousStateSchemaVersion {
+	if header.SchemaVersion < domain.LegacyStateSchemaVersion || header.SchemaVersion > domain.PreviousStateSchemaV4 {
 		if header.SchemaVersion == domain.StateSchemaVersion {
 			return Plan{}, fmt.Errorf("state already uses schema %d; fixed-forward migration refuses to rewrite it", domain.StateSchemaVersion)
 		}
@@ -66,10 +66,17 @@ func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	if err := refusePendingOldState(state); err != nil {
+		return Plan{}, err
+	}
 	plan := Plan{LegacyDigest: digest(body), SourceSchema: header.SchemaVersion, Installations: len(state.Installations)}
-	for index := range state.Installations {
-		installation := &state.Installations[index]
-		migrateV2Origin(installation)
+	if migrator.PendingCheck != nil {
+		if err := migrator.PendingCheck(context.Background()); err != nil {
+			return Plan{}, fmt.Errorf("old-schema pending recovery blocks migration: %w", err)
+		}
+	}
+	migrateLegacyOrigins(&state, header.SchemaVersion)
+	for _, installation := range state.Installations {
 		if installation.NeedsRebind {
 			plan.NeedsRebind++
 		}
@@ -77,23 +84,26 @@ func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 	return plan, nil
 }
 
-// MigrateCurrentV2 performs the explicit schema 2 -> current migration in
+// MigrateCurrentV2 performs the explicit schema 2-4 -> current migration in
 // place. It is intentionally separate from MigrateExpected, which migrates the
 // pre-v2 legacy store into a new authoritative file.
 func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest string) (Report, error) {
 	if migrator.Lock == nil {
 		return Report{}, fmt.Errorf("global mutation lock is required for state migration")
 	}
-	if migrator.RecoverJournal == nil {
-		return Report{}, fmt.Errorf("journal recovery check is required for state migration")
+	if migrator.PendingCheck == nil {
+		return Report{}, fmt.Errorf("read-only pending recovery check is required for state migration")
+	}
+	if err := migrator.PendingCheck(ctx); err != nil {
+		return Report{}, fmt.Errorf("old-schema pending recovery blocks migration: %w", err)
 	}
 	release, err := migrator.Lock.Acquire(ctx)
 	if err != nil {
 		return Report{}, err
 	}
 	defer func() { _ = release() }()
-	if err := migrator.RecoverJournal(ctx); err != nil {
-		return Report{}, fmt.Errorf("outstanding journal recovery blocks state migration: %w", err)
+	if err := migrator.PendingCheck(ctx); err != nil {
+		return Report{}, fmt.Errorf("old-schema pending recovery blocks migration: %w", err)
 	}
 	body, err := os.ReadFile(migrator.V2Store.Path)
 	if err != nil {
@@ -109,7 +119,7 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 	if err := json.Unmarshal(body, &header); err != nil {
 		return Report{}, err
 	}
-	if header.SchemaVersion != domain.LegacyStateSchemaVersion && header.SchemaVersion != domain.PreviousStateSchemaVersion {
+	if header.SchemaVersion < domain.LegacyStateSchemaVersion || header.SchemaVersion > domain.PreviousStateSchemaV4 {
 		if header.SchemaVersion == domain.StateSchemaVersion {
 			return Report{}, fmt.Errorf("state already uses schema %d; binary rollback is fixed-forward only", domain.StateSchemaVersion)
 		}
@@ -119,10 +129,11 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 	if err != nil {
 		return Report{}, err
 	}
-	for installationIndex := range state.Installations {
-		installation := &state.Installations[installationIndex]
-		migrateV2Origin(installation)
+	if err := refusePendingOldState(state); err != nil {
+		return Report{}, err
 	}
+	migrateLegacyOrigins(&state, header.SchemaVersion)
+	state.SchemaVersion = domain.StateSchemaVersion
 	if err := statev2.Validate(state); err != nil {
 		return Report{}, fmt.Errorf("validate migrated state before backup: %w", err)
 	}
@@ -150,6 +161,16 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 		}
 	}
 	return report, nil
+}
+
+// Schema 4 already carries explicit origins; only earlier schemas need inference.
+func migrateLegacyOrigins(state *domain.StateFileV2, sourceSchema int) {
+	if sourceSchema >= domain.PreviousStateSchemaV4 {
+		return
+	}
+	for index := range state.Installations {
+		migrateV2Origin(&state.Installations[index])
+	}
 }
 
 func migrateV2Origin(installation *domain.Installation) {
@@ -593,4 +614,26 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func refusePendingOldState(state domain.StateFileV2) error {
+	refusal := fmt.Errorf("old-schema pending recovery requires the corresponding previous SDK/binary; recover with it, then rerun migration dry-run and apply")
+	for _, r := range state.TransactionReceipts {
+		if r.Phase != "" && r.Phase != "committed" {
+			return refusal
+		}
+	}
+	for _, i := range state.Installations {
+		for _, b := range i.Clients {
+			if b.PendingNativeIntent != nil {
+				return refusal
+			}
+			for _, r := range b.Receipts {
+				if r.Phase != "" && r.Phase != "committed" {
+					return refusal
+				}
+			}
+		}
+	}
+	return nil
 }

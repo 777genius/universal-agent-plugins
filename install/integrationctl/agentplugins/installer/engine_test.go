@@ -2356,6 +2356,10 @@ func TestPrepareDoesNotPersistWhenObservationSeamEnabled(t *testing.T) {
 		t.Fatal(err)
 	}
 	eng.persistObservations = true
+	eng, err = eng.WithTemporaryRoot(t.TempDir())
+	if err != nil || !eng.persistObservations {
+		t.Fatalf("temporary engine lost observation policy: %v", err)
+	}
 	prepared, err := eng.Prepare(ctx, Request{
 		Operation: OpInstall, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: config,
 		ClientExecutable: probe, InstallationID: "00000000-0000-4000-8000-000000000061",

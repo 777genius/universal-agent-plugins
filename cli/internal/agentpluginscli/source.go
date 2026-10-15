@@ -41,14 +41,15 @@ type loadedPackage struct {
 }
 
 type packageResolutionRequest struct {
-	Targets           []domain.ClientID
-	Operation         domain.DirectoryOperation
-	Recorded          *domain.RecordedDirectoryRelease
-	Clients           map[domain.ClientID]domain.DetectedClient
-	RetainRecorded    bool
-	Selector          string
-	RequestedSelector string
-	DirectBinding     *domain.SourceBinding
+	Targets                []domain.ClientID
+	Operation              domain.DirectoryOperation
+	Recorded               *domain.RecordedDirectoryRelease
+	Clients                map[domain.ClientID]domain.DetectedClient
+	RetainRecorded         bool
+	Selector               string
+	RequestedSelector      string
+	DirectBinding          *domain.SourceBinding
+	DesiredReleaseSequence uint64
 }
 
 func (app App) addResolutionRequest(selector string, targets []domain.ClientID) packageResolutionRequest {
@@ -489,6 +490,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 		InstallerVersion: app.Version, ClientVersions: environment.ClientVersions, OS: environment.OS, Architecture: environment.Architecture,
 		DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion:      "1.0.0", Operation: operation, Recorded: request.Recorded,
+		DesiredReleaseSequence: request.DesiredReleaseSequence,
 	}
 	preparingChatGPT := false
 	var retainedMapping *domain.ChatGPTLocalMapping
@@ -545,6 +547,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	}
 	environment.DependencyIdentity = deterministicDependencyIdentity(loaded.envelope, affectedTargets)
 	exactRequest := resolveRequest
+	exactRequest.DesiredReleaseSequence = 0
 	exactRequest.Selector = selection.DistributionID
 	exactRequest.Operation = domain.DirectoryNewTarget
 	exactRequest.Recorded = &domain.RecordedDirectoryRelease{

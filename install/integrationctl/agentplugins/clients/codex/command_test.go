@@ -226,6 +226,29 @@ func TestEnvironmentFailsClosed(t *testing.T) {
 	}
 }
 
+func TestWindowsInstallationMetadataIsValidatedButNotInherited(t *testing.T) {
+	root := t.TempDir()
+	baseline, err := codexEnvironment(root, []string{"PATH=/bin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ambient := []string{"ProgramFiles(x86)=ignored", "CommonProgramFiles(x86)=ignored", "PATH=/bin"}
+	got, err := codexEnvironment(root, ambient)
+	if err != nil || !reflect.DeepEqual(got, baseline) {
+		t.Fatalf("Windows metadata affected child environment: %v %v", got, err)
+	}
+	for _, entries := range [][]string{
+		{"ProgramFiles(x86)=first", "PROGRAMFILES(X86)=second"},
+		{"CommonProgramFiles(x86)=first", "commonprogramfiles(x86)=second"},
+		{"ProgramFiles(x86)=bad\x00value"},
+		{"ProgramFiles(x86)=later", "BROKEN(NAME)=ignored"},
+	} {
+		if _, err := codexEnvironment(root, entries); err == nil {
+			t.Fatal("accepted malformed or duplicate ambient metadata")
+		}
+	}
+}
+
 func TestInvalidProfilesNeverRun(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, "file")

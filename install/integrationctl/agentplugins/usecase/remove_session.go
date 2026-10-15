@@ -39,6 +39,10 @@ func (session *removeSession) loadRemoveTarget() error {
 	if err != nil {
 		return err
 	}
+	if err := transaction.AuthorizeEnvironmentMutation(state, session.input.EnvironmentAuthority, "remove",
+		installation.InstallationID, clientKey, installation.Source.SourceBindingID, false); err != nil {
+		return err
+	}
 	if err := validateDeliverySelection(client.SelectedDelivery, session.input.SelectedDelivery); err != nil {
 		return err
 	}
@@ -159,6 +163,7 @@ func (session *removeSession) removeManagedDirectories() (RemoveResult, error) {
 	if err != nil {
 		return session.result, err
 	}
+	transaction.DropEnvironmentReceipt(&desired, session.input.EnvironmentAuthority)
 	removals := session.directoryRemovals(operationID, purgeReceipts)
 	receipts, err := kernel.RemoveDirectoryGroup(session.ctx, transaction.DirectoryRemovalGroup{OperationGroupID: operationID, Removals: removals, DesiredState: desired})
 	if len(receipts) > 0 {
@@ -179,7 +184,8 @@ func (session *removeSession) directoryRemovals(operationID string, purgeReceipt
 		OperationID: operationID, InstallationID: session.installation.InstallationID,
 		ClientBindingID: session.clientKey, Sequence: nextSequence(session.client),
 		OwnedBase: session.target.TargetRoot, ActivePath: session.client.TargetLocator,
-		BeforeDigest: session.expectedDigest,
+		BeforeDigest:         session.expectedDigest,
+		EnvironmentAuthority: session.input.EnvironmentAuthority,
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, session.expectedDigest)
 		},

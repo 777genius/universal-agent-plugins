@@ -25,7 +25,8 @@ import (
 // Authentic fixtures captured BEFORE consumer editing from compiling frozen
 // 18c26a0 Engine/NewLocal install (and owned-empty refresh), then fresh Store.Load.
 // The compressed snapshots contain original nil state/package/selector bytes.
-// Relocation changes only TEST paths and their dependent package/object digests;
+// Relocation changes TEST paths and their dependent package/object digests, and
+// normalizes the relocated consumer fixture to the current storage schema;
 // it never clears an observation or calls candidate install/maintenance.
 func historicalLocal(t *testing.T, empty bool) (*localFixture, string) {
 	t.Helper()
@@ -92,6 +93,10 @@ func historicalLocal(t *testing.T, empty bool) (*localFixture, string) {
 		binding.DataReceiptID = receipt.DataReceiptID
 		state.Installations[0].Clients[key] = binding
 	}
+	// This exercises historical ownership/observation semantics in current state,
+	// not old-schema mutation admission. Keep the captured bytes unchanged and
+	// normalize only the relocated fixture; no environment ownership is inferred.
+	state.SchemaVersion = domain.StateSchemaVersion
 	must(t, (statev2.Store{Path: path}).Save(state))
 	f.config.DeclaredHookDigest = testDigest(readLocal(t, filepath.Join(f.pkg, hookPath())))
 	f.adapter, err = vscode.NewLocal(f.config)

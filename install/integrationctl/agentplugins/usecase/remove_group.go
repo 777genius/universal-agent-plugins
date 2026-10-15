@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type RemoveGroupInput struct {
@@ -46,6 +47,19 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 	if err != nil {
 		return RemoveGroupResult{}, err
 	}
+	for _, target := range input.Targets {
+		bindingID := ""
+		for _, binding := range installation.Clients {
+			if binding.ClientID == string(target.Client.ClientID) {
+				bindingID = binding.ClientBindingID
+				break
+			}
+		}
+		if err := transaction.AuthorizeEnvironmentMutation(state, target.EnvironmentAuthority, "remove",
+			installation.InstallationID, bindingID, installation.Source.SourceBindingID, false); err != nil {
+			return RemoveGroupResult{}, err
+		}
+	}
 	selected := make([]domain.DetectedClient, len(input.Targets))
 	for i, t := range input.Targets {
 		selected[i] = t.Client
@@ -59,7 +73,7 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 	for i := range session.input.Targets {
 		session.input.Targets[i].Client = frozen[i]
 	}
-	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.Targets[0].EnvironmentAuthority)
 	if err != nil {
 		return RemoveGroupResult{}, err
 	}

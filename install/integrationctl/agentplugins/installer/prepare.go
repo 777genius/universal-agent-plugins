@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -238,10 +239,16 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		previewFacts.InstallationID = installation.InstallationID
 	}
 	svc := confirmationLifecycle(handle, e.lifecycle(helper, previewFacts, handle.detected), true)
+	var hints domain.CompatibilityHints
+	if req.AcquiredSnapshot != nil {
+		hints = req.AcquiredSnapshot.Compatibility
+	}
 	preview, err := dry(svc, usecase.AddInput{
 		Envelope: handle.envelope, Client: handle.client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
+		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: hints,
+		EnvironmentAuthority: req.EnvironmentAuthority,
 	})
 	if err != nil {
 		_ = handle.closeLocked()
@@ -392,7 +399,9 @@ func (e *Engine) loadMutatingPackage(ctx context.Context, handle *PreparedOperat
 			return err
 		}
 	}
-	e.reuseMatchingSourceIdentity(req.InstallationID, &snapshot, allowDigestRewrite)
+	if req.AcquiredSnapshot == nil {
+		e.reuseMatchingSourceIdentity(req.InstallationID, &snapshot, allowDigestRewrite)
+	}
 	handle.snapshot = snapshot
 	ldr, err := newLoader()
 	if err != nil {
@@ -455,6 +464,20 @@ func clonePrepareRequest(req Request) Request {
 	if req.Assessment != nil {
 		assessment := *req.Assessment
 		copied.Assessment = &assessment
+	}
+	if req.EnvironmentAuthority != nil {
+		authority := *req.EnvironmentAuthority
+		copied.EnvironmentAuthority = &authority
+	}
+	if req.AcquiredSnapshot != nil {
+		acquired := *req.AcquiredSnapshot
+		acquired.ExecutableFiles = append([]string{}, req.AcquiredSnapshot.ExecutableFiles...)
+		// Compatibility contains only JSON data; clone its nested evidence and maps.
+		hints, _ := json.Marshal(req.AcquiredSnapshot.Compatibility)
+		acquired.Compatibility = domain.CompatibilityHints{}
+		_ = json.Unmarshal(hints, &acquired.Compatibility)
+		acquired.Directory = cloneAcquiredDirectory(req.AcquiredSnapshot.Directory)
+		copied.AcquiredSnapshot = &acquired
 	}
 	return copied
 }

@@ -152,6 +152,9 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 	session.installation.Clients[session.clientKey] = desiredClient
 	session.installation.UpdatedAt = desiredClient.UpdatedAt
 	session.state.Installations[session.index] = session.installation
+	_ = transaction.UpsertEnvironmentReceipt(&session.state, session.input.EnvironmentAuthority, session.installation.InstallationID,
+		session.clientKey, firstEnvironmentSourceKey(session.input.EnvironmentAuthority, domain.ComputeSourceBindingID(session.input.Envelope.Source)), session.input.Envelope.TreeDigest,
+		session.plan.ProfileAuthority(), "committed")
 	receipt, err := kernel.ApplyDirectory(session.ctx, transaction.DirectoryMutation{
 		OperationID: session.input.OperationID, InstallationID: session.installation.InstallationID, ClientBindingID: session.clientKey,
 		Sequence: nextSequence(session.client), OwnedBase: delivery.OwnedBase, ActivePath: session.target.ActivePath,
@@ -165,6 +168,7 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 		Verify: func(verifyContext context.Context, activePath string) error {
 			return session.service.Stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 		},
+		EnvironmentAuthority: session.input.EnvironmentAuthority,
 	})
 	session.result.Receipt = receipt
 	if err != nil {

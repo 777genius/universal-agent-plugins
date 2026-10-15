@@ -45,24 +45,30 @@ type App struct {
 	PromptFactory      func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error)
 	reviewOutput       io.Writer
 
-	Version     string
-	UserHome    string
-	ManagedRoot string
-	StateStore  transaction.StateStore
-	Detector    ports.ClientDetector
+	Version              string
+	UserHome             string
+	ManagedRoot          string
+	DependenciesRoot     string
+	EnvironmentStoreRoot string
+	EnvironmentLockPath  string
+	StateStore           transaction.StateStore
+	Detector             ports.ClientDetector
 	// ClientRegistry is the set of client adapters this binary knows about. The
 	// composition root decides it; CLI commands receive the already-built planner
 	// and never reconstruct one.
-	ClientRegistry      *clients.Registry
-	Planner             ports.DeliveryPlanner
-	Targets             ports.DeliveryTargetResolver
-	DirectoryClient     DirectoryClient
-	DiscoveryClient     DiscoveryClient
-	SourceAcquirer      SourceAcquirer
-	PackageLoader       ports.PackageLoader
-	NativePackageLoader ports.PackageLoader
-	SecurityIndex       SecurityIndex
-	SecurityEvaluator   ports.PackageSecurityEvaluator
+	ClientRegistry             *clients.Registry
+	Planner                    ports.DeliveryPlanner
+	Targets                    ports.DeliveryTargetResolver
+	DirectoryClient            DirectoryClient
+	DirectoryClientForDryRun   func(string) (DirectoryClient, error)
+	DiscoveryClient            DiscoveryClient
+	SourceAcquirer             SourceAcquirer
+	PackageLoader              ports.PackageLoader
+	NativePackageLoader        ports.PackageLoader
+	SecurityIndex              SecurityIndex
+	SecurityEvaluator          ports.PackageSecurityEvaluator
+	SecurityEvaluatorForDryRun func(string) ports.PackageSecurityEvaluator
+	SourceAcquirerForDryRun    func(string) SourceAcquirer
 	// Installer is the public facade used by the qualified explicit local
 	// package path. Other CLI acquisition and lifecycle paths remain on the
 	// existing service until their contracts are qualified separately.

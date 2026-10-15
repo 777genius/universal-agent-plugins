@@ -83,7 +83,8 @@ type DirectoryMutation struct {
 	// field of the same name.
 	RequireAbsent bool
 	// VerifyBefore proves caller ownership at the active and moved backup paths.
-	VerifyBefore func(context.Context, string) error
+	VerifyBefore         func(context.Context, string) error
+	EnvironmentAuthority *domain.EnvironmentAuthority
 }
 
 type DirectoryRemoval struct {
@@ -99,8 +100,9 @@ type DirectoryRemoval struct {
 	BeforeDigest     string
 	// Standalone records a removal receipt at state-file level. This is used
 	// when the same commit decision removes the owning binding/installation.
-	Standalone bool
-	Verify     func(context.Context, string) error
+	Standalone           bool
+	Verify               func(context.Context, string) error
+	EnvironmentAuthority *domain.EnvironmentAuthority
 }
 
 // DirectoryGroup is one commit decision for a fully preflighted set of
@@ -195,7 +197,7 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err != nil {
 		return domain.MutationReceipt{}, err
 	}
-	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{ProfileOwners: neutralOwners(owners),
+	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 		OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
 		RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
@@ -223,17 +225,18 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 		return domain.MutationReceipt{}, rollback(err)
 	}
 	receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID,
-		OperationID:      mutation.OperationID,
-		OperationGroupID: mutation.OperationID,
-		Sequence:         mutation.Sequence,
-		MutationType:     "directory_swap",
-		ClientBindingID:  mutation.ClientBindingID,
-		ActivePath:       directoryReceipt.ActivePath,
-		StagingPath:      directoryReceipt.StagingPath,
-		BackupPath:       directoryReceipt.BackupPath,
-		BeforeDigest:     mutation.BeforeDigest,
-		AfterDigest:      mutation.AfterDigest,
-		Phase:            ReceiptPhaseStateCommitted,
+		OperationID:          mutation.OperationID,
+		OperationGroupID:     mutation.OperationID,
+		Sequence:             mutation.Sequence,
+		MutationType:         "directory_swap",
+		ClientBindingID:      mutation.ClientBindingID,
+		ActivePath:           directoryReceipt.ActivePath,
+		StagingPath:          directoryReceipt.StagingPath,
+		BackupPath:           directoryReceipt.BackupPath,
+		BeforeDigest:         mutation.BeforeDigest,
+		AfterDigest:          mutation.AfterDigest,
+		EnvironmentAuthority: mutation.EnvironmentAuthority,
+		Phase:                ReceiptPhaseStateCommitted,
 	}
 	client.Receipts = append(client.Receipts, receipt)
 	client.NativeObjects = committedDirectoryObjects(beforeState, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
@@ -340,7 +343,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		if err != nil {
 			return nil, err
 		}
-		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{ProfileOwners: neutralOwners(owners),
+		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 			OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 			OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
 			RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
@@ -370,6 +373,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 			Sequence: mutation.Sequence, MutationType: "directory_swap", ClientBindingID: mutation.ClientBindingID,
 			ActivePath: directoryReceipt.ActivePath, StagingPath: directoryReceipt.StagingPath, BackupPath: directoryReceipt.BackupPath,
 			BeforeDigest: mutation.BeforeDigest, AfterDigest: mutation.AfterDigest, Phase: ReceiptPhaseStateCommitted}
+		receipt.EnvironmentAuthority = mutation.EnvironmentAuthority
 		client.Receipts = append(client.Receipts, receipt)
 		client.NativeObjects = committedDirectoryObjects(before, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
 		client.Materialization, client.Activation, client.Authentication = domain.MaterializationMaterialized, mutation.Activation, mutation.Authentication
@@ -474,7 +478,7 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 			return domain.MutationReceipt{}, fmt.Errorf("verify directory before removal: %w", err)
 		}
 	}
-	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{ProfileOwners: neutralOwners(owners),
+	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(removal.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 		DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners), Sequence: removal.Sequence,
 		OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify,
 	})
@@ -493,15 +497,16 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 		return domain.MutationReceipt{}, err
 	}
 	receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID,
-		OperationID:      removal.OperationID,
-		OperationGroupID: firstNonEmpty(removal.OperationGroupID, removal.OperationID),
-		Sequence:         removal.Sequence,
-		MutationType:     "directory_remove",
-		ClientBindingID:  directoryReceipt.ClientBindingID,
-		ActivePath:       directoryReceipt.ActivePath,
-		BackupPath:       directoryReceipt.BackupPath,
-		BeforeDigest:     removal.BeforeDigest,
-		Phase:            ReceiptPhaseStateCommitted,
+		OperationID:          removal.OperationID,
+		OperationGroupID:     firstNonEmpty(removal.OperationGroupID, removal.OperationID),
+		Sequence:             removal.Sequence,
+		MutationType:         "directory_remove",
+		ClientBindingID:      directoryReceipt.ClientBindingID,
+		ActivePath:           directoryReceipt.ActivePath,
+		BackupPath:           directoryReceipt.BackupPath,
+		BeforeDigest:         removal.BeforeDigest,
+		Phase:                ReceiptPhaseStateCommitted,
+		EnvironmentAuthority: removal.EnvironmentAuthority,
 	}
 	client.Receipts = append(client.Receipts, receipt)
 	client.NativeObjects = nil
@@ -612,7 +617,7 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 				return nil, loadErr
 			}
 		}
-		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{ProfileOwners: neutralOwners(owners), DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners),
+		directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(removal.EnvironmentAuthority), ProfileOwners: neutralOwners(owners), DataReceiptID: removal.DataReceiptID, OperationID: removal.OperationID, ClientBindingID: dataBindingID(removal, owners),
 			Sequence: removal.Sequence, OwnedBase: removal.OwnedBase, ActivePath: removal.ActivePath, Remove: true, VerifyActive: removal.Verify})
 		if err != nil {
 			if directoryReceipt.OperationID != "" {
@@ -630,6 +635,7 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 			Sequence: removal.Sequence, MutationType: "directory_remove", ClientBindingID: directoryReceipt.ClientBindingID,
 			ActivePath: directoryReceipt.ActivePath, BackupPath: directoryReceipt.BackupPath, BeforeDigest: removal.BeforeDigest,
 			Phase: ReceiptPhaseStateCommitted}
+		receipt.EnvironmentAuthority = removal.EnvironmentAuthority
 		recordedInBinding := false
 		if installationIndex >= 0 {
 			// The final desired state may intentionally have removed this binding;
@@ -1201,7 +1207,7 @@ func (kernel Kernel) pendingOwners(ctx context.Context, state domain.StateFileV2
 		return nil
 	}
 	for _, j := range open {
-		if j.SchemaVersion == 5 {
+		if j.SchemaVersion == 5 || j.SchemaVersion == 7 {
 			_, _, _, matched := findReceipt(state, j)
 			switch j.Phase {
 			case dirswap.PhaseIntent, dirswap.PhaseBackupPending, dirswap.PhaseOldBackedUp, dirswap.PhaseActivationPending, dirswap.PhaseRollbackPending, dirswap.PhaseRolledBack:
@@ -1381,14 +1387,14 @@ func dataBindingID(r DirectoryRemoval, owners []domain.PhysicalProfileOwner) str
 }
 
 func directoryProof(r dirswap.Receipt) json.RawMessage {
-	if r.SchemaVersion != 5 {
+	if r.SchemaVersion != 5 && r.SchemaVersion != 7 {
 		return nil
 	}
 	raw, _ := json.Marshal(r)
 	return raw
 }
 func sameDirectoryProof(raw json.RawMessage, r dirswap.Receipt) bool {
-	if r.SchemaVersion != 5 {
+	if r.SchemaVersion != 5 && r.SchemaVersion != 7 {
 		return len(raw) == 0
 	}
 	var recorded dirswap.Receipt
@@ -1408,7 +1414,7 @@ func (kernel Kernel) verifyReceiptProof(r domain.MutationReceipt) error {
 		return nil
 	}
 	var proof dirswap.Receipt
-	if len(r.DirectoryProof) == 0 || json.Unmarshal(r.DirectoryProof, &proof) != nil || proof.SchemaVersion != 5 || proof.OperationID != r.OperationID || proof.Sequence != r.Sequence || proof.ClientBindingID != r.ClientBindingID || proof.DataReceiptID != r.DataReceiptID || proof.ActivePath != r.ActivePath || proof.StagingPath != r.StagingPath || proof.BackupPath != r.BackupPath || !sameReceiptOwners(r.ProfileOwners, proof.ProfileOwners) {
+	if len(r.DirectoryProof) == 0 || json.Unmarshal(r.DirectoryProof, &proof) != nil || (proof.SchemaVersion != 5 && proof.SchemaVersion != 7) || proof.OperationID != r.OperationID || proof.Sequence != r.Sequence || proof.ClientBindingID != r.ClientBindingID || proof.DataReceiptID != r.DataReceiptID || proof.ActivePath != r.ActivePath || proof.StagingPath != r.StagingPath || proof.BackupPath != r.BackupPath || !sameReceiptOwners(r.ProfileOwners, proof.ProfileOwners) {
 		return fmt.Errorf("pending receipt physical role proof is incomplete")
 	}
 	manager := kernel.Directory

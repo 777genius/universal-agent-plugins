@@ -43,14 +43,19 @@ type Request struct {
 	// Nil infers local package executables; a non-nil empty slice means none.
 	// Supported for single-target requests only. Assessment still has to match
 	// the resulting complete tree digest.
-	ExecutableFiles    []string
-	ClientID           string
-	ClientConfigRoot   string
-	ClientExecutable   string
-	InstallationID     string
-	OperationID        string
-	Selector           string
-	RequiredComponents []string
+	ExecutableFiles []string
+	// AcquiredSnapshot preserves verified acquisition provenance for one
+	// single-target request. Prepare reseals PackageRoot and refuses any digest,
+	// executable inventory or source-provenance rewrite.
+	AcquiredSnapshot     *domain.AcquiredSnapshot
+	EnvironmentAuthority *domain.EnvironmentAuthority
+	ClientID             string
+	ClientConfigRoot     string
+	ClientExecutable     string
+	InstallationID       string
+	OperationID          string
+	Selector             string
+	RequiredComponents   []string
 	// Assessment is a host decision for these exact local bytes. It is copied
 	// and digest-checked by Prepare. Confirmation of the filesystem plan does
 	// not create or alter this security decision.
@@ -67,6 +72,13 @@ type Request struct {
 	// against owned state before using ConfigRoot or Executable; it never reads a
 	// host sidecar or guesses a profile from HOME.
 	KnownTargets []TargetFacts
+}
+
+func (req Request) acquiredCompatibility() domain.CompatibilityHints {
+	if req.AcquiredSnapshot == nil {
+		return domain.CompatibilityHints{}
+	}
+	return req.AcquiredSnapshot.Compatibility
 }
 
 // ClientTarget is one registered selection in a mutating group request.
@@ -248,9 +260,10 @@ type ProgressEvent struct {
 // Inspection is a read-only view of owned UAP state. Recovery facts are
 // limited identities, not raw JSON and not an executable plan.
 type Inspection struct {
-	StateRoot     string
-	Installations []InspectedInstallation
-	Recovery      RecoveryObservation
+	StateRoot           string
+	Installations       []InspectedInstallation
+	Recovery            RecoveryObservation
+	EnvironmentReceipts []domain.EnvironmentReceipt
 }
 
 // RecoveryObservation is the §5.8 read-only pending-transaction view.
@@ -266,6 +279,7 @@ type RecoveryObservation struct {
 
 // PendingJournal is one open directory-swap journal.
 type PendingJournal struct {
+	EnvironmentID                                                     string
 	OperationID, Digest, BindingID, InstallationID, TargetPath, Phase string
 }
 
@@ -278,6 +292,7 @@ type PendingReceipt struct {
 
 // InspectedInstallation is a public subset of one UAP installation.
 type InspectedInstallation struct {
+	SourceKey      string
 	InstallationID string
 	TreeDigest     string
 	Bindings       []InspectedBinding
@@ -287,8 +302,12 @@ type InspectedInstallation struct {
 
 // InspectedBinding is a public subset of one client binding.
 type InspectedBinding struct {
+	LifecycleConverged                                           bool
 	ClientID, BindingID, Scope, TargetPath, DataRoot, TreeDigest string
 	Materialization, Activation, Authentication, Verification    string
+	Revision                                                     string
+	Owner                                                        *domain.EnvironmentReceipt
+	ProjectionDigest, ProjectionStatus                           string
 }
 
 // ClientMetadata is read-only provider surface. Discover does not execute files.

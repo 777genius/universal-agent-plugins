@@ -281,3 +281,17 @@ func lintaiReleaseHTTPClient() *http.Client {
 		},
 	}
 }
+
+func (acquirer lazySourceAcquirer) ResolveGitHubSelector(ctx context.Context, repository, selector string) (sourceacquisition.RefResolution, error) {
+	if err := acquirer.prepare(); err != nil {
+		return sourceacquisition.RefResolution{}, err
+	}
+	return acquirer.acquirer.ResolveGitHubSelector(ctx, repository, selector)
+}
+
+func (acquirer lazySourceAcquirer) ResolveGitHubRef(ctx context.Context, repository, ref string) (sourceacquisition.RefResolution, error) {
+	if err := acquirer.prepare(); err != nil {
+		return sourceacquisition.RefResolution{}, err
+	}
+	return acquirer.acquirer.ResolveGitHubRef(ctx, repository, ref)
+}

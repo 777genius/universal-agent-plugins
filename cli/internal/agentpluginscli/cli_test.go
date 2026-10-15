@@ -2939,8 +2939,8 @@ func TestMigrateStateIsExplicitPlanFirstAndPathRedacted(t *testing.T) {
 	}
 }
 
-func TestMigrateStateExplicitlyMigratesAuthoritativeSchemaTwoAndThree(t *testing.T) {
-	for _, schema := range []int{domain.LegacyStateSchemaVersion, domain.PreviousStateSchemaVersion} {
+func TestMigrateStateExplicitlyMigratesAuthoritativeSchemaTwoThroughFour(t *testing.T) {
+	for _, schema := range []int{domain.LegacyStateSchemaVersion, domain.PreviousStateSchemaVersion, domain.PreviousStateSchemaV4} {
 		t.Run(fmt.Sprintf("schema-%d", schema), func(t *testing.T) {
 			fixture := newCLIFixture(t, nil)
 			if err := os.MkdirAll(filepath.Dir(fixture.store.Path), 0o700); err != nil {
@@ -2952,7 +2952,7 @@ func TestMigrateStateExplicitlyMigratesAuthoritativeSchemaTwoAndThree(t *testing
 			}
 			migrator := statemigration.Migrator{
 				LegacyPath: filepath.Join(fixture.root, "missing-legacy-state.json"), V2Store: fixture.store,
-				Lock: fixture.app.Lifecycle.Lock, RecoverJournal: fixture.app.Lifecycle.Kernel.Recover,
+				Lock: fixture.app.Lifecycle.Lock, PendingCheck: func(context.Context) error { return nil },
 			}
 			fixture.app.StateMigrator = &migrator
 			stdout, _, err := fixture.execute(false, "migrate-state", "--dry-run", "--format", "json")

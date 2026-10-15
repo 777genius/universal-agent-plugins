@@ -104,7 +104,7 @@ func TestStoreReadsLegacyV2LosslesslyWithoutMutatingUntilSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(afterSave, []byte(`"schema_version": 4`)) {
+	if !bytes.Contains(afterSave, []byte(`"schema_version": 5`)) {
 		t.Fatalf("first explicit save did not persist current state: %s", afterSave)
 	}
 }
@@ -116,7 +116,7 @@ func TestStoreRejectsV3FieldsDisguisedAsLegacyV2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body = bytes.Replace(body, []byte(`"schema_version":4`), []byte(`"schema_version":2`), 1)
+	body = bytes.Replace(body, []byte(`"schema_version":5`), []byte(`"schema_version":2`), 1)
 	path := filepath.Join(t.TempDir(), "state-v2.json")
 	if err := os.WriteFile(path, body, 0o600); err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestStoreRejectsV3FieldsDisguisedAsLegacyV2(t *testing.T) {
 func TestStoreFailsClosedOnFutureOrUnknownState(t *testing.T) {
 	t.Parallel()
 	for name, body := range map[string]string{
-		"future":  `{"schema_version":5,"installations":[]}`,
+		"future":  `{"schema_version":6,"installations":[]}`,
 		"unknown": `{"schema_version":4,"installations":[],"future":true}`,
 	} {
 		name, body := name, body

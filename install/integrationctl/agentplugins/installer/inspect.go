@@ -17,11 +17,31 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // Inspect is read-only. It does not recover journals or invoke host seams.
-func (e *Engine) Inspect(_ context.Context) (Inspection, error) {
-	return e.observe()
+func (e *Engine) Inspect(ctx context.Context) (Inspection, error) {
+	out, err := e.observe()
+	if err != nil {
+		return out, err
+	}
+	stager := e.lifecycle(nil, BindingFacts{}, nil).Stager
+	for i := range out.Installations {
+		for j := range out.Installations[i].Bindings {
+			b := &out.Installations[i].Bindings[j]
+			if b.ProjectionDigest == "" {
+				b.ProjectionStatus = "projection_missing"
+				continue
+			}
+			if _, err := os.Stat(b.TargetPath); os.IsNotExist(err) {
+				b.ProjectionStatus = "projection_missing"
+			} else if err := stager.Verify(ctx, b.TargetPath, b.ProjectionDigest); err != nil {
+				b.ProjectionStatus = "projection_mismatch"
+			}
+		}
+	}
+	return out, nil
 }
 
 func (e *Engine) observe() (Inspection, error) {
@@ -38,6 +58,7 @@ func (e *Engine) observe() (Inspection, error) {
 	}
 	installations, bindingIndex := inspectInstallations(state)
 	out.Installations = installations
+	out.EnvironmentReceipts = append([]domain.EnvironmentReceipt(nil), state.EnvironmentReceipts...)
 	out.Recovery.NativeIntents, err = inspectNativeIntents(state)
 	if err != nil {
 		out.Recovery.Required = true
@@ -55,6 +76,7 @@ func (e *Engine) observe() (Inspection, error) {
 		openIDs[journal.OperationID] = journal
 		located := bindingIndex[journal.ClientBindingID]
 		out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{
+			EnvironmentID:  journal.EnvironmentID,
 			OperationID:    journal.OperationID,
 			Digest:         journalDigest(journal),
 			BindingID:      journal.ClientBindingID,
@@ -93,15 +115,21 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 			DataRetained:   installation.DataRetained,
 			TreeDigest:     installation.Source.TreeDigest,
 		}
+		item.SourceKey = "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
+		if installation.Directory != nil {
+			item.SourceKey = "directory:" + strings.ToLower(installation.Directory.DistributionID)
+		}
 		for _, binding := range installation.Clients {
 			receipt := installation.DataReceipts[binding.DataReceiptID]
 			digest := recordedBindingDigest(binding, installation.Source.TreeDigest)
 			item.Bindings = append(item.Bindings, InspectedBinding{
-				ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
+				LifecycleConverged: binding.LifecycleConverged(), ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
 				TargetPath: binding.TargetLocator, DataRoot: receipt.Locator,
 				TreeDigest: digest, Materialization: string(binding.Materialization), Activation: string(binding.Activation),
 				Authentication: string(binding.Authentication), Verification: string(binding.Verification),
 			})
+			inspected := &item.Bindings[len(item.Bindings)-1]
+			populateInspectedBinding(inspected, binding, state.EnvironmentReceipts, installation.InstallationID)
 			bindingIndex[binding.ClientBindingID] = observedBinding{
 				InstallationID: installation.InstallationID,
 				TargetPath:     binding.TargetLocator,
@@ -255,6 +283,18 @@ func containsReceipt(items []PendingReceipt, want PendingReceipt) bool {
 // It reconciles only persisted selected native intents, without rediscovery. A new pending
 // operation that was not in observed returns ErrPlanChanged without recovery.
 func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, error) {
+	return e.recover(ctx, observed, "")
+}
+
+// RecoverEnvironment admits only a complete pending scope owned by this environment.
+func (e *Engine) RecoverEnvironment(ctx context.Context, observed Inspection, environmentID string) (Result, error) {
+	if environmentID == "" {
+		return Result{}, ErrInvalidRequest
+	}
+	return e.recover(ctx, observed, environmentID)
+}
+
+func (e *Engine) recover(ctx context.Context, observed Inspection, environmentID string) (Result, error) {
 	if ctx == nil {
 		return Result{Outcome: OutcomeIncomplete, Reason: "context is required"}, fmt.Errorf("%w: context is required", ErrInvalidRequest)
 	}
@@ -267,6 +307,9 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 	}
 	if !liveWithinObserved(initial.Recovery, observed.Recovery) {
 		return Result{Outcome: OutcomeConflict, Reason: "plan_changed"}, ErrPlanChanged
+	}
+	if err := e.checkEnvironmentRecovery(initial, environmentID); err != nil {
+		return Result{Outcome: OutcomeRecovery, Reason: err.Error()}, err
 	}
 	if result, err := e.prepareRecovery(ctx); err != nil {
 		return result, err
@@ -294,24 +337,10 @@ func (e *Engine) Recover(ctx context.Context, observed Inspection) (Result, erro
 	if !liveWithinObserved(live.Recovery, observed.Recovery) {
 		return Result{Outcome: OutcomeConflict, Reason: "plan_changed", Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, ErrPlanChanged)}, ErrPlanChanged
 	}
-	if !live.Recovery.Required {
-		if observed.Recovery.Required && leftoverSwapArtifacts(observed.Recovery) {
-			return Result{
-				Outcome: OutcomeRecovery, Reason: "incomplete_recovery",
-				Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, ErrRecoveryRequired),
-			}, fmt.Errorf("%w: journal vanished with leftover swap artifacts", ErrRecoveryRequired)
-		}
-		return Result{Outcome: OutcomeUnchanged, Reason: "already_recovered", Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, nil)}, nil
+	if err := e.checkEnvironmentRecovery(live, environmentID); err != nil {
+		return Result{Outcome: OutcomeRecovery, Reason: err.Error()}, err
 	}
-	if err := e.recoverNativeIntents(ctx, svc, live.Recovery); err != nil {
-		after, afterErr := e.observe()
-		result := Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}
-		if errors.Is(err, ErrPlanChanged) {
-			result.Outcome, result.Reason = OutcomeConflict, "plan_changed"
-		}
-		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
-	}
-	return e.finishRecovery(observed)
+	return e.applyObservedRecovery(ctx, svc, observed, live)
 }
 
 func (e *Engine) finishRecovery(observed Inspection) (Result, error) {
@@ -418,4 +447,63 @@ func (e *Engine) prepareRecovery(ctx context.Context) (Result, error) {
 		return Result{Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	return Result{}, nil
+}
+
+func (e *Engine) checkEnvironmentRecovery(observed Inspection, environmentID string) error {
+	state, err := e.store.Load()
+	if err != nil {
+		return err
+	}
+	var authority *domain.EnvironmentAuthority
+	if environmentID != "" {
+		authority = &domain.EnvironmentAuthority{EnvironmentID: environmentID}
+	}
+	if err := transaction.ValidateEnvironmentRecoveryScope(state, authority); err != nil {
+		return fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+	}
+	for _, j := range observed.Recovery.Journals {
+		owner := j.EnvironmentID
+		if owner != environmentID {
+			return fmt.Errorf("%w: foreign or indeterminate journal %s", ErrRecoveryRequired, j.OperationID)
+		}
+	}
+	return nil
+}
+
+func (e *Engine) applyObservedRecovery(ctx context.Context, svc usecase.Service, observed, live Inspection) (Result, error) {
+	if !live.Recovery.Required {
+		if observed.Recovery.Required && leftoverSwapArtifacts(observed.Recovery) {
+			return Result{
+				Outcome: OutcomeRecovery, Reason: "incomplete_recovery",
+				Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, ErrRecoveryRequired),
+			}, fmt.Errorf("%w: journal vanished with leftover swap artifacts", ErrRecoveryRequired)
+		}
+		return Result{Outcome: OutcomeUnchanged, Reason: "already_recovered", Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, nil)}, nil
+	}
+	if err := e.recoverNativeIntents(ctx, svc, live.Recovery); err != nil {
+		after, afterErr := e.observe()
+		result := Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}
+		if errors.Is(err, ErrPlanChanged) {
+			result.Outcome, result.Reason = OutcomeConflict, "plan_changed"
+		}
+		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+	}
+	return e.finishRecovery(observed)
+}
+
+func populateInspectedBinding(inspected *InspectedBinding, binding domain.ClientBinding, owners []domain.EnvironmentReceipt, installationID string) {
+	if binding.PackageRevision != nil {
+		inspected.Revision = binding.PackageRevision.ResolvedRevision
+	}
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "managed_package_directory" {
+			inspected.ProjectionDigest = object.ManagedDigest
+		}
+	}
+	for _, owner := range owners {
+		if owner.InstallationID == installationID && owner.ClientBindingID == binding.ClientBindingID {
+			cloned := owner
+			inspected.Owner = &cloned
+		}
+	}
 }

@@ -458,10 +458,12 @@ class Matrix:
         self.command(
             fixture, evidence, "migrate-apply", "migrate-state", expect=True)
         migrated = json.loads(state.read_text(encoding="utf-8"))
-        check(migrated["schema_version"] == 4,
-              "migration did not fix state forward to schema 4")
+        check(migrated["schema_version"] == 5,
+              "migration did not fix state forward to schema 5")
         check(len(migrated["installations"]) == 1,
               "migration lost the legacy installation")
+        check(not migrated.get("environment_receipts"),
+              "migration invented dependency environment ownership")
         backups = list(state.parent.glob(
             f"{state.name}.schema{schema}.backup-agentplugins-*"))
         check(len(backups) == 1 and backups[0].read_bytes() == original,

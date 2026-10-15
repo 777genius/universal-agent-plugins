@@ -46,6 +46,7 @@ type ProfileOwner struct {
 	Authority       *directoryidentity.Authority `json:"authority"`
 }
 type Receipt struct {
+	EnvironmentID          string                       `json:"environment_id,omitempty"`
 	ProfileOwners          []ProfileOwner               `json:"profile_owners,omitempty"`
 	DataReceiptID          string                       `json:"data_receipt_id,omitempty"`
 	OwnedBaseAuthority     *directoryidentity.Authority `json:"owned_base_authority,omitempty"`
@@ -73,6 +74,7 @@ type Receipt struct {
 }
 
 type Input struct {
+	EnvironmentID   string
 	ProfileOwners   []ProfileOwner
 	DataReceiptID   string
 	OperationID     string
@@ -558,6 +560,7 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 		PublishedIdentity: publishedIdentity, PublishedDigest: publishedDigest,
 		BackupIdentity: backupIdentity, BackupDigest: backupDigest, QuarantinePath: quarantinePath,
 		SchemaVersion:   receiptSchemaVersion,
+		EnvironmentID:   input.EnvironmentID,
 		Operation:       operation,
 		OperationID:     input.OperationID,
 		ClientBindingID: input.ClientBindingID,
@@ -582,23 +585,31 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 		receipt.OldObject = physical.OldObject
 		receipt.PublishedObject = physical.PublishedObject
 	}
+	if input.EnvironmentID != "" {
+		receipt.SchemaVersion += 2
+	}
 	if err := manager.validateReceipt(receipt); err != nil {
 		return Receipt{}, err
 	}
 	return receipt, nil
 }
 
+func (r Receipt) isPhysical() bool { return r.SchemaVersion == 5 || r.SchemaVersion == 7 }
+
 func (manager Manager) validateReceipt(receipt Receipt) error {
+	if (receipt.SchemaVersion >= 6) != (receipt.EnvironmentID != "") {
+		return fmt.Errorf("directory swap receipt environment authority is inconsistent with schema")
+	}
 	if err := manager.validatePhysical(receipt); err != nil {
 		return err
 	}
-	if receipt.SchemaVersion != receiptSchemaVersion && receipt.SchemaVersion != 5 {
+	if receipt.SchemaVersion != receiptSchemaVersion && receipt.SchemaVersion != 5 && receipt.SchemaVersion != 6 && receipt.SchemaVersion != 7 {
 		return fmt.Errorf("unsupported directory swap receipt schema_version %d", receipt.SchemaVersion)
 	}
 	if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 		return fmt.Errorf("unsafe directory swap receipt operation id: %w", err)
 	}
-	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil && (receipt.SchemaVersion != 5 || receipt.DataReceiptID == "" || receipt.ClientBindingID != "") {
+	if err := pathpolicy.ValidateLeafID(receipt.ClientBindingID); err != nil && (!receipt.isPhysical() || receipt.DataReceiptID == "" || receipt.ClientBindingID != "") {
 		return fmt.Errorf("unsafe directory swap receipt client binding id: %w", err)
 	}
 	if receipt.Sequence < 1 {
@@ -796,7 +807,7 @@ func (manager Manager) validatePhysical(r Receipt) error {
 	if err := manager.validateOwners(context.Background(), manager.RequiredOwners); err != nil {
 		return err
 	}
-	if r.SchemaVersion != 5 {
+	if !r.isPhysical() {
 		if len(r.ProfileOwners) != 0 || r.OwnedBaseAuthority != nil || r.StagingParentAuthority != nil || r.OldObject != nil || r.PublishedObject != nil {
 			return fmt.Errorf("physical proofs require schema 5")
 		}

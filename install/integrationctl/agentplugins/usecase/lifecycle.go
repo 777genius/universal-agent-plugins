@@ -10,15 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-func lifecycleConverged(client domain.ClientBinding) bool {
-	if client.InstallIntent == domain.InstallIntentPrepare {
-		return client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationPackageValid
-	}
-	authComplete := client.Authentication == domain.AuthenticationNotRequired || client.Authentication == domain.AuthenticationComplete
-	return client.Materialization == domain.MaterializationMaterialized &&
-		client.Activation == domain.ActivationActive &&
-		client.Verification == domain.VerificationInstalled && authComplete
-}
+func lifecycleConverged(client domain.ClientBinding) bool { return client.LifecycleConverged() }
 
 // resume retries only the external client lifecycle against an existing,
 // digest-verified managed package. It deliberately creates no directory

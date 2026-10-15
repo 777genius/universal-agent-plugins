@@ -25,8 +25,12 @@ func newInstallationID(reader io.Reader) (string, error) {
 }
 
 func ComputeSourceBindingID(source SourceIdentity) string {
+	canonicalSource := source.CanonicalSource
+	if source.SourceBindingHint == "uap-dependency-git" || source.SourceBindingHint == "uap-dependency-registry" {
+		canonicalSource = "github:" + strings.ToLower(source.Repository) + ":" + source.PackageSubpath
+	}
 	canonical := strings.Join([]string{
-		strings.TrimSpace(source.CanonicalSource),
+		strings.TrimSpace(canonicalSource),
 		strings.TrimSpace(source.Repository),
 		strings.TrimSpace(source.PackageSubpath),
 	}, "\x00")

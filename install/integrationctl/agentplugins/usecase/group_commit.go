@@ -182,6 +182,7 @@ func (session *groupSession) buildGroupMutations() []transaction.DirectoryMutati
 			Verify: func(verifyContext context.Context, activePath string) error {
 				return stager.Verify(verifyContext, activePath, delivery.ArtifactDigest)
 			},
+			EnvironmentAuthority: target.input.EnvironmentAuthority,
 		})
 	}
 	return mutations

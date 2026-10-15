@@ -191,6 +191,9 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, Confirmed: true,
 		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
 		BackendExecutable: prepared.req.ClientExecutable,
+		OriginMode:        prepared.snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(prepared.snapshot.Directory),
+		Hints:                prepared.req.acquiredCompatibility(),
+		EnvironmentAuthority: prepared.req.EnvironmentAuthority,
 	})
 	err = wrapLifecycleError(err)
 	result := Result{Operation: prepared.req.Operation, InstallationID: added.InstallationID, Binding: prepared.facts,
@@ -313,6 +316,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 		Selector: prepared.plan.InstallationID, Client: prepared.client, Scope: domain.ScopeUser,
 		Confirmed: true, OperationID: prepared.req.OperationID, BackendExecutable: prepared.req.ClientExecutable,
 		ExternalUninstalled: prepared.req.ExternalUninstalled, SelectedDelivery: prepared.plan.SelectedDelivery,
+		EnvironmentAuthority: prepared.req.EnvironmentAuthority,
 	})
 	result := Result{Operation: OpRemove, InstallationID: removed.InstallationID, Binding: prepared.facts, Mutated: removed.Mutated, Client: removalClientResult(prepared.facts)}
 	if err == nil {
@@ -326,13 +330,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 			e.report(ProgressVerify)
 			e.report(ProgressComplete)
 		}
-		if view, inspectErr := e.observe(); inspectErr == nil {
-			for _, installation := range view.Installations {
-				if installation.InstallationID == result.InstallationID {
-					result.DataRetained = installation.DataRetained
-				}
-			}
-		}
+		e.inspectRemovalOutcome(&result, prepared.plan.BindingID)
 	} else {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = err.Error()
@@ -517,4 +515,22 @@ func (p *PreparedOperation) beginApply(decision Decision) (Operation, error) {
 	op := p.req.Operation
 	p.mu.Unlock()
 	return op, nil
+}
+
+func (e *Engine) inspectRemovalOutcome(result *Result, bindingID string) {
+	if view, inspectErr := e.observe(); inspectErr == nil {
+		for _, installation := range view.Installations {
+			if installation.InstallationID == result.InstallationID {
+				result.DataRetained = installation.DataRetained
+				for _, live := range installation.Bindings {
+					if live.BindingID == bindingID {
+						result.Outcome = OutcomeIncomplete
+						result.NoChange = false
+						result.Reason = "external removal requires explicit attestation"
+						result.NextActions = []NextAction{{Kind: "external_uninstall", Reason: result.Reason}}
+					}
+				}
+			}
+		}
+	}
 }

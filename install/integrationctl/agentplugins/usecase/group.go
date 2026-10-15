@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type GroupInput struct {
@@ -183,7 +184,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return GroupResult{}, err
 	}
 	service = session.service
-	release, err := service.beginMutation(ctx, input.DryRun, input.Confirmed)
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, session.first.EnvironmentAuthority)
 	if err != nil {
 		return GroupResult{}, err
 	}
@@ -220,6 +221,13 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	session.buildDesiredGroupState()
+	for _, target := range session.planned {
+		if target.input.EnvironmentAuthority != nil {
+			_ = transaction.UpsertEnvironmentReceipt(&session.desired, target.input.EnvironmentAuthority,
+				session.installationID, target.clientBindingID, firstEnvironmentSourceKey(target.input.EnvironmentAuthority, session.sourceID),
+				target.input.Envelope.TreeDigest, target.plan.ProfileAuthority(), "committed")
+		}
+	}
 	for _, target := range session.planned {
 		if err := session.reportGroupProgress(target, GroupProgressConfiguring); err != nil {
 			return session.result, err
