@@ -92,7 +92,6 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
       dependencySaveMode,
       dependencyAddFlag,
       isPinnedGitSource,
-      isPinnedGitSource,
     },
   );
   const spec = api.getResolvedPluginInstallSpec('gitlab');

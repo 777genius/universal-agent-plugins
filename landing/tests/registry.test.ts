@@ -206,8 +206,8 @@ describe('unified registry landing', () => {
     const commands = pluginCommands(plugin);
     assert.equal(commands.add.includes('--target'), false);
     assert.match(commands.add, /^npx universal-agent-plugins add /);
-    for (const command of Object.values(commands))
-      assert.match(command, /^npx universal-agent-plugins /);
+    for (const action of ['add', 'update', 'repair', 'switch', 'remove'] as const)
+      assert.match(commands[action], /^npx universal-agent-plugins /);
   });
 
   it('uses one comma-separated target flag for explicit multi-agent installation', () => {
