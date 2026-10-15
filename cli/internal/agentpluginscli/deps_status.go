@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"path"
@@ -58,95 +59,11 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	}
 	status.PendingRecovery = state.Recovery.Required
 
-	receipts := map[string]domain.EnvironmentReceipt{}
-	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault {
-			receipts[receipt.Alias+"\x00"+receipt.ClientID] = receipt
-		}
-	}
-	if lockErr == nil {
-		for _, pkg := range lock.Packages {
-			for _, target := range pkg.Targets {
-				fact := dependencyStatusFact{Alias: pkg.Alias, ClientID: target, PackageDigest: pkg.TreeDigest}
-				if _, err := app.dependencyStore().Get(cmd.Context(), pkg.DigestAlgorithm, pkg.TreeDigest); err != nil {
-					if errors.Is(err, environmentstore.ErrMismatch) {
-						fact.Facts = append(fact.Facts, "store_mismatch")
-					} else {
-						fact.Facts = append(fact.Facts, "store_missing")
-					}
-				}
-				receipt, owned := receipts[pkg.Alias+"\x00"+target]
-				if !owned {
-					fact.Facts = append(fact.Facts, "not_synced")
-					for _, installation := range state.Installations {
-						if installation.SourceKey == pkg.SourceKey {
-							for _, binding := range installation.Bindings {
-								if binding.ClientID == target {
-									fact.Facts = append(fact.Facts, "foreign")
-								}
-							}
-						}
-					}
-					status.Facts = append(status.Facts, fact)
-					continue
-				}
-				fact.InstallationID, fact.BindingID, fact.Owner = receipt.InstallationID, receipt.ClientBindingID, receipt.EnvironmentID
-				if receipt.SourceKey != pkg.SourceKey || receipt.PackageDigest != pkg.TreeDigest {
-					fact.Facts = append(fact.Facts, "not_synced")
-				}
-				binding, found := findInspectedEnvironmentBinding(state, receipt)
-				if !found {
-					fact.Facts = append(fact.Facts, "partial")
-				} else {
-					appendBindingStatusFacts(&fact, binding, pkg)
-				}
-
-				status.Facts = append(status.Facts, fact)
-			}
-		}
-	}
-	for key, receipt := range receipts {
-		found := false
-		if lockErr == nil {
-			for _, pkg := range lock.Packages {
-				for _, target := range pkg.Targets {
-					if key == pkg.Alias+"\x00"+target {
-						found = true
-					}
-				}
-			}
-		}
-		if !found {
-			status.Facts = append(status.Facts, dependencyStatusFact{Alias: receipt.Alias, ClientID: receipt.ClientID,
-				InstallationID: receipt.InstallationID, BindingID: receipt.ClientBindingID, Owner: receipt.EnvironmentID,
-				PackageDigest: receipt.PackageDigest, Facts: []string{"not_synced"}})
-		}
-	}
+	status.Facts = append(status.Facts, inspectDependencyFacts(cmd.Context(), app, state, lock, lockErr == nil)...)
 	if status.PendingRecovery {
 		status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"pending_recovery"}})
 	}
-	sort.SliceStable(status.Facts, func(i, j int) bool {
-		if status.Facts[i].Alias != status.Facts[j].Alias {
-			return status.Facts[i].Alias < status.Facts[j].Alias
-		}
-		return status.Facts[i].ClientID < status.Facts[j].ClientID
-	})
-	if opts.format == "json" {
-		return renderJSON(cmd.OutOrStdout(), status)
-	}
-	for _, fact := range status.Facts {
-		name := fact.Alias
-		if fact.ClientID != "" {
-			name += "/" + fact.ClientID
-		}
-		if name == "" {
-			name = "environment"
-		}
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", name, joinUnique(fact.Facts)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return renderDependencyStatus(cmd, opts, status)
 }
 
 func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lock environment.Lock) {
@@ -164,7 +81,14 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 	}
 }
 
+func bindingLifecycleIncomplete(binding installer.InspectedBinding) bool {
+	return !binding.LifecycleConverged
+}
+
 func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage) {
+	if bindingLifecycleIncomplete(binding) {
+		fact.Facts = append(fact.Facts, "partial")
+	}
 	fact.Revision, fact.ProjectionDigest = binding.Revision, binding.ProjectionDigest
 	if binding.TreeDigest != pkg.TreeDigest || binding.Revision != lockedCommit(pkg) {
 		fact.Facts = append(fact.Facts, "not_synced")
@@ -198,18 +122,6 @@ func lockedCommit(pkg environment.LockedPackage) string {
 		return pkg.Source.Registry.Commit
 	}
 	return ""
-}
-
-func findEnvironmentBinding(state domain.StateFileV2, receipt domain.EnvironmentReceipt) (domain.Installation, domain.ClientBinding, bool) {
-	for _, installation := range state.Installations {
-		if installation.InstallationID != receipt.InstallationID {
-			continue
-		}
-		if binding, ok := installation.Clients[receipt.ClientBindingID]; ok {
-			return installation, binding, true
-		}
-	}
-	return domain.Installation{}, domain.ClientBinding{}, false
 }
 
 func joinUnique(values []string) string {
@@ -266,7 +178,7 @@ func runDependencyRecover(cmd *cobra.Command, app App, opts *options, yes bool) 
 	}
 	if !yes {
 		if opts.format == "json" {
-			return renderJSON(cmd.OutOrStdout(), map[string]any{"outcome": "cancelled", "recovery": observed.Recovery})
+			return renderJSON(cmd.OutOrStdout(), map[string]any{"outcome": "canceled", "recovery": observed.Recovery})
 		}
 		_, err = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
 		return err
@@ -285,4 +197,118 @@ func runDependencyRecover(cmd *cobra.Command, app App, opts *options, yes bool) 
 		return writeErr
 	}
 	return recoverErr
+}
+
+func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependencyStatus) error {
+	sort.SliceStable(status.Facts, func(i, j int) bool {
+		if status.Facts[i].Alias != status.Facts[j].Alias {
+			return status.Facts[i].Alias < status.Facts[j].Alias
+		}
+		return status.Facts[i].ClientID < status.Facts[j].ClientID
+	})
+	if opts.format == "json" {
+		return renderJSON(cmd.OutOrStdout(), status)
+	}
+	for _, fact := range status.Facts {
+		name := fact.Alias
+		if fact.ClientID != "" {
+			name += "/" + fact.ClientID
+		}
+		if name == "" {
+			name = "environment"
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", name, joinUnique(fact.Facts)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspection, lock environment.Lock, validLock bool) []dependencyStatusFact {
+	receipts := map[string]domain.EnvironmentReceipt{}
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.EnvironmentID == environment.EnvironmentUserDefault {
+			receipts[receipt.Alias+"\x00"+receipt.ClientID] = receipt
+		}
+	}
+	var facts []dependencyStatusFact
+	if validLock {
+		for _, pkg := range lock.Packages {
+			for _, target := range pkg.Targets {
+				key := pkg.Alias + "\x00" + target
+				receipt, owned := receipts[key]
+				facts = append(facts, desiredDependencyFact(ctx, app, state, pkg, target, receipt, owned))
+				delete(receipts, key)
+			}
+		}
+	}
+	for _, receipt := range receipts {
+		fact := dependencyStatusFact{Alias: receipt.Alias, ClientID: receipt.ClientID, PackageDigest: receipt.PackageDigest, Facts: []string{"not_synced"}}
+		appendStoreStatus(ctx, app, &fact, domain.TreeDigestAlgorithm)
+		appendReceiptStatus(&fact, state, receipt)
+		facts = append(facts, fact)
+	}
+	return facts
+}
+
+func desiredDependencyFact(ctx context.Context, app App, state installer.Inspection, pkg environment.LockedPackage, target string, receipt domain.EnvironmentReceipt, owned bool) dependencyStatusFact {
+	fact := dependencyStatusFact{Alias: pkg.Alias, ClientID: target, PackageDigest: pkg.TreeDigest}
+	appendStoreStatus(ctx, app, &fact, pkg.DigestAlgorithm)
+	if !owned {
+		fact.Facts = append(fact.Facts, "not_synced")
+		if hasDependencyBinding(state, pkg.SourceKey, target) {
+			fact.Facts = append(fact.Facts, "foreign")
+		}
+		return fact
+	}
+	if receipt.SourceKey != pkg.SourceKey || receipt.PackageDigest != pkg.TreeDigest {
+		fact.Facts = append(fact.Facts, "not_synced")
+	}
+	fact.InstallationID, fact.BindingID, fact.Owner = receipt.InstallationID, receipt.ClientBindingID, receipt.EnvironmentID
+	if binding, found := findInspectedEnvironmentBinding(state, receipt); found {
+		appendBindingStatusFacts(&fact, binding, pkg)
+	} else {
+		fact.Facts = append(fact.Facts, "partial")
+	}
+	return fact
+}
+
+func hasDependencyBinding(state installer.Inspection, sourceKey, target string) bool {
+	for _, installation := range state.Installations {
+		if installation.SourceKey != sourceKey {
+			continue
+		}
+		for _, binding := range installation.Bindings {
+			if binding.ClientID == target {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func appendStoreStatus(ctx context.Context, app App, fact *dependencyStatusFact, algorithm string) {
+	if _, err := app.dependencyStore().Get(ctx, algorithm, fact.PackageDigest); err != nil {
+		if errors.Is(err, environmentstore.ErrMismatch) {
+			fact.Facts = append(fact.Facts, "store_mismatch")
+		} else {
+			fact.Facts = append(fact.Facts, "store_missing")
+		}
+	}
+}
+
+func appendReceiptStatus(fact *dependencyStatusFact, state installer.Inspection, receipt domain.EnvironmentReceipt) {
+	fact.InstallationID, fact.BindingID, fact.Owner = receipt.InstallationID, receipt.ClientBindingID, receipt.EnvironmentID
+	binding, found := findInspectedEnvironmentBinding(state, receipt)
+	if !found {
+		fact.Facts = append(fact.Facts, "partial")
+		return
+	}
+	fact.Revision, fact.ProjectionDigest = binding.Revision, binding.ProjectionDigest
+	if binding.ProjectionStatus != "" {
+		fact.Facts = append(fact.Facts, binding.ProjectionStatus)
+	}
+	if bindingLifecycleIncomplete(binding) {
+		fact.Facts = append(fact.Facts, "partial")
+	}
 }

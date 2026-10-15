@@ -22,7 +22,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		return AddResult{}, err
 	}
 	session.input = prepared[0]
-	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority, "repair")
+	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -62,7 +62,7 @@ func (service Service) RefreshProjection(ctx context.Context, input AddInput) (A
 		return AddResult{}, err
 	}
 	session.input = prepared[0]
-	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority, "repair")
+	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
 	if err != nil {
 		return AddResult{}, err
 	}

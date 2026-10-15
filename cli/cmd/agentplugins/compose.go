@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"golang.org/x/term"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
@@ -36,6 +35,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -186,16 +186,7 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 		Targets:              planner,
 		DirectoryClient:      directoryClient,
 		DirectoryClientForDryRun: func(root string) (agentpluginscli.DirectoryClient, error) {
-			copied := *directoryClient
-			copied.Cache.Path = filepath.Join(root, "directory-cache.json")
-			if body, err := os.ReadFile(directoryClient.Cache.Path); err == nil {
-				if err := os.WriteFile(copied.Cache.Path, body, 0600); err != nil {
-					return nil, err
-				}
-			} else if !os.IsNotExist(err) && directoryClient.Cache.Path != "" {
-				return nil, err
-			}
-			return &copied, nil
+			return cloneDependencyDirectoryClient(directoryClient, root)
 		},
 		DiscoveryClient:     discoveryClient,
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
@@ -220,4 +211,17 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 		PromptFactory: terminalprompts.New,
 		Terminal:      term.IsTerminal(int(os.Stdin.Fd())),
 	}
+}
+
+func cloneDependencyDirectoryClient(directoryClient *directoryv1.Client, root string) (agentpluginscli.DirectoryClient, error) {
+	copied := *directoryClient
+	copied.Cache.Path = filepath.Join(root, "directory-cache.json")
+	if bundle, err := directoryClient.Cache.Load(directoryClient.Trust); err == nil {
+		if err := copied.Cache.Store(bundle, directoryClient.Trust); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) && directoryClient.Cache.Path != "" {
+		return nil, err
+	}
+	return &copied, nil
 }

@@ -188,7 +188,7 @@ func Validate(state domain.StateFileV2) error {
 	environmentKeys := map[string]struct{}{}
 	environmentBindings := map[string]struct{}{}
 	installationsByID := make(map[string]domain.Installation, len(state.Installations))
-	clientBindingsByID := make(map[string]domain.ClientBinding, len(state.Installations)*2)
+	clientBindingsByID := make(map[string]domain.ClientBinding)
 	for _, installation := range state.Installations {
 		installationsByID[installation.InstallationID] = installation
 		for _, client := range installation.Clients {

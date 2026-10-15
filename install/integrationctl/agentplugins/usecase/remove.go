@@ -54,7 +54,7 @@ func (service Service) Remove(ctx context.Context, input RemoveInput) (RemoveRes
 		return RemoveResult{}, err
 	}
 	input.Client = frozen[0]
-	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.EnvironmentAuthority, "remove")
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.EnvironmentAuthority)
 	if err != nil {
 		return RemoveResult{}, err
 	}

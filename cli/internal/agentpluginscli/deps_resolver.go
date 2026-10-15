@@ -18,41 +18,19 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
-type dependencyResolved struct {
-	locked   environment.LockedPackage
-	loaded   loadedPackage
-	snapshot domain.PackageSnapshot
-}
-
 type dependencyResolver struct {
 	requirements environment.Requirements
 	app          App
 	dryRun       bool
-	tempRoot     string
 }
 
 func readDependencyLock(path string, requirements environment.Requirements) (environment.Lock, error) {
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return environment.Lock{}, err
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.DisallowUnknownFields()
-	var lock environment.Lock
-	if err := decoder.Decode(&lock); err != nil {
-		return environment.Lock{}, fmt.Errorf("decode uap.lock: %w", err)
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return environment.Lock{}, errors.New("uap.lock contains trailing JSON values")
-	}
-	canonicalizeRequirementsFromLock(&requirements, lock)
-	if err := lock.Validate(requirements); err != nil {
-		return environment.Lock{}, err
-	}
-	return lock, nil
+	return readValidatedDependencyLock(path, requirements, false)
 }
-
 func readCompatibleDependencyLock(path string, requirements environment.Requirements) (environment.Lock, error) {
+	return readValidatedDependencyLock(path, requirements, true)
+}
+func readValidatedDependencyLock(path string, requirements environment.Requirements, compatible bool) (environment.Lock, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return environment.Lock{}, err
@@ -67,7 +45,12 @@ func readCompatibleDependencyLock(path string, requirements environment.Requirem
 		return environment.Lock{}, errors.New("uap.lock contains trailing JSON values")
 	}
 	canonicalizeRequirementsFromLock(&requirements, lock)
-	if err := lock.ValidateCompatiblePins(requirements); err != nil {
+	if compatible {
+		err = lock.ValidateCompatiblePins(requirements)
+	} else {
+		err = lock.Validate(requirements)
+	}
+	if err != nil {
 		return environment.Lock{}, err
 	}
 	return lock, nil
@@ -88,7 +71,7 @@ func (resolver dependencyResolver) Resolve(ctx context.Context, requirement envi
 	if requirement.Git != nil {
 		return resolver.resolveGit(ctx, requirement, previous, update)
 	}
-	return resolver.resolveRegistry(ctx, requirement, previous)
+	return resolver.resolveRegistry(ctx, requirement)
 }
 
 func sameRequestedSelector(requirement environment.Requirement, previous environment.LockedPackage) bool {
@@ -107,12 +90,17 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 		var err error
 		if named, ok := resolver.app.SourceAcquirer.(interface {
 			ResolveGitHubSelector(context.Context, string, string) (sourceacquisition.RefResolution, error)
+			ResolveGitHubRef(context.Context, string, string) (sourceacquisition.RefResolution, error)
 		}); ok {
 			selector := source.Selector.Value
 			if source.Selector.Kind == environment.SelectorDefault {
 				selector = "default"
 			}
-			resolution, err = named.ResolveGitHubSelector(ctx, source.Repository, selector)
+			if source.Selector.Kind == environment.SelectorDefault {
+				resolution, err = named.ResolveGitHubSelector(ctx, source.Repository, selector)
+			} else {
+				resolution, err = named.ResolveGitHubRef(ctx, source.Repository, selector)
+			}
 		} else {
 			return environment.LockedPackage{}, errors.New("source acquirer cannot resolve Git refs")
 		}
@@ -152,7 +140,7 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 	return locked, resolver.finishLoaded(loaded)
 }
 
-func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, previous *environment.LockedPackage) (environment.LockedPackage, error) {
+func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement) (environment.LockedPackage, error) {
 	sequence, _ := parseReleaseSequence(requirement.Registry.Selector.Value)
 	request := packageResolutionRequest{Operation: domain.DirectoryInstall, DesiredReleaseSequence: sequence}
 	for target, aliases := range resolver.requirements.Targets {
@@ -168,7 +156,7 @@ func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirem
 	}
 	if loaded.directorySelection == nil || loaded.directory == nil {
 		_ = loaded.cleanup()
-		return environment.LockedPackage{}, errors.New("Directory dependency resolved without publication identity")
+		return environment.LockedPackage{}, errors.New("directory dependency resolved without publication identity")
 	}
 	selection := *loaded.directorySelection
 	locked := environment.LockedPackage{

@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // Inspect is read-only. It does not recover journals or invoke host seams.
@@ -122,26 +123,13 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 			receipt := installation.DataReceipts[binding.DataReceiptID]
 			digest := recordedBindingDigest(binding, installation.Source.TreeDigest)
 			item.Bindings = append(item.Bindings, InspectedBinding{
-				ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
+				LifecycleConverged: binding.LifecycleConverged(), ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
 				TargetPath: binding.TargetLocator, DataRoot: receipt.Locator,
 				TreeDigest: digest, Materialization: string(binding.Materialization), Activation: string(binding.Activation),
 				Authentication: string(binding.Authentication), Verification: string(binding.Verification),
 			})
 			inspected := &item.Bindings[len(item.Bindings)-1]
-			if binding.PackageRevision != nil {
-				inspected.Revision = binding.PackageRevision.ResolvedRevision
-			}
-			for _, object := range binding.NativeObjects {
-				if object.Kind == "managed_package_directory" {
-					inspected.ProjectionDigest = object.ManagedDigest
-				}
-			}
-			for _, owner := range state.EnvironmentReceipts {
-				if owner.InstallationID == installation.InstallationID && owner.ClientBindingID == binding.ClientBindingID {
-					copy := owner
-					inspected.Owner = &copy
-				}
-			}
+			populateInspectedBinding(inspected, binding, state.EnvironmentReceipts, installation.InstallationID)
 			bindingIndex[binding.ClientBindingID] = observedBinding{
 				InstallationID: installation.InstallationID,
 				TargetPath:     binding.TargetLocator,
@@ -352,24 +340,7 @@ func (e *Engine) recover(ctx context.Context, observed Inspection, environmentID
 	if err := e.checkEnvironmentRecovery(live, environmentID); err != nil {
 		return Result{Outcome: OutcomeRecovery, Reason: err.Error()}, err
 	}
-	if !live.Recovery.Required {
-		if observed.Recovery.Required && leftoverSwapArtifacts(observed.Recovery) {
-			return Result{
-				Outcome: OutcomeRecovery, Reason: "incomplete_recovery",
-				Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, ErrRecoveryRequired),
-			}, fmt.Errorf("%w: journal vanished with leftover swap artifacts", ErrRecoveryRequired)
-		}
-		return Result{Outcome: OutcomeUnchanged, Reason: "already_recovered", Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, nil)}, nil
-	}
-	if err := e.recoverNativeIntents(ctx, svc, live.Recovery); err != nil {
-		after, afterErr := e.observe()
-		result := Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}
-		if errors.Is(err, ErrPlanChanged) {
-			result.Outcome, result.Reason = OutcomeConflict, "plan_changed"
-		}
-		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
-	}
-	return e.finishRecovery(observed)
+	return e.applyObservedRecovery(ctx, svc, observed, live)
 }
 
 func (e *Engine) finishRecovery(observed Inspection) (Result, error) {
@@ -497,4 +468,42 @@ func (e *Engine) checkEnvironmentRecovery(observed Inspection, environmentID str
 		}
 	}
 	return nil
+}
+
+func (e *Engine) applyObservedRecovery(ctx context.Context, svc usecase.Service, observed, live Inspection) (Result, error) {
+	if !live.Recovery.Required {
+		if observed.Recovery.Required && leftoverSwapArtifacts(observed.Recovery) {
+			return Result{
+				Outcome: OutcomeRecovery, Reason: "incomplete_recovery",
+				Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, ErrRecoveryRequired),
+			}, fmt.Errorf("%w: journal vanished with leftover swap artifacts", ErrRecoveryRequired)
+		}
+		return Result{Outcome: OutcomeUnchanged, Reason: "already_recovered", Recovery: classifyRecovery(observed.Recovery, live.Recovery, true, nil)}, nil
+	}
+	if err := e.recoverNativeIntents(ctx, svc, live.Recovery); err != nil {
+		after, afterErr := e.observe()
+		result := Result{Outcome: OutcomeRecovery, Reason: err.Error(), Recovery: classifyRecovery(observed.Recovery, after.Recovery, afterErr == nil, err)}
+		if errors.Is(err, ErrPlanChanged) {
+			result.Outcome, result.Reason = OutcomeConflict, "plan_changed"
+		}
+		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+	}
+	return e.finishRecovery(observed)
+}
+
+func populateInspectedBinding(inspected *InspectedBinding, binding domain.ClientBinding, owners []domain.EnvironmentReceipt, installationID string) {
+	if binding.PackageRevision != nil {
+		inspected.Revision = binding.PackageRevision.ResolvedRevision
+	}
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "managed_package_directory" {
+			inspected.ProjectionDigest = object.ManagedDigest
+		}
+	}
+	for _, owner := range owners {
+		if owner.InstallationID == installationID && owner.ClientBindingID == binding.ClientBindingID {
+			cloned := owner
+			inspected.Owner = &cloned
+		}
+	}
 }

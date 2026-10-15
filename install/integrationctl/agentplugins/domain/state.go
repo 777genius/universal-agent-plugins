@@ -312,3 +312,14 @@ func CloneProfileAuthority(a *ProfileAuthority) *ProfileAuthority {
 func SameProfileAuthority(a, b *ProfileAuthority) bool {
 	return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
 }
+
+// LifecycleConverged is the shared persisted lifecycle completion contract.
+func (client ClientBinding) LifecycleConverged() bool {
+	if client.InstallIntent == InstallIntentPrepare {
+		return client.Materialization == MaterializationMaterialized && client.Activation == ActivationPrepared && client.Verification == VerificationPackageValid
+	}
+	authComplete := client.Authentication == AuthenticationNotRequired || client.Authentication == AuthenticationComplete
+	return client.Materialization == MaterializationMaterialized &&
+		client.Activation == ActivationActive &&
+		client.Verification == VerificationInstalled && authComplete
+}

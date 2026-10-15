@@ -2,12 +2,13 @@ package agentpluginscli
 
 import (
 	"context"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 func TestDependencyManifestRejectsUnknownConflictingAndMissingIntent(t *testing.T) {
@@ -90,7 +91,7 @@ func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer loaded.cleanup()
+	defer func() { _ = loaded.cleanup() }()
 	distribution := &fixture.directory.bundle.Snapshot.Distributions[0]
 	distribution.ReleasePolicies[0].Status = domain.ReleaseSuperseded
 	release := distribution.Releases[0]

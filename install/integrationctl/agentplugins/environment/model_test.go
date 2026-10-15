@@ -85,7 +85,11 @@ func TestPrepareSyncSeparatesUnchangedUpdateAndSourceChange(t *testing.T) {
 	if len(plan.Bindings) != 1 || plan.Bindings[0].Action != ActionUnchanged {
 		t.Fatalf("unchanged action = %+v", plan.Bindings)
 	}
-	plan, err = (Coordinator{}).PrepareSync(requirements, lock, []BindingObservation{{Alias: "review", ClientID: "codex",
+	plan, err = (Coordinator{}).PrepareSync(requirements, lock, []BindingObservation{{Alias: "review", ClientID: "codex", SourceKey: pkg.SourceKey, PackageDigest: pkg.TreeDigest, Revision: pkg.Source.Git.Commit, Managed: true, Incomplete: true}})
+	if err != nil || len(plan.Bindings) != 1 || plan.Bindings[0].Action != ActionUpdate {
+		t.Fatalf("incomplete lifecycle must resume at same pin: %+v %v", plan, err)
+	}
+	_, err = (Coordinator{}).PrepareSync(requirements, lock, []BindingObservation{{Alias: "review", ClientID: "codex",
 		SourceKey: "github:other/repository:", PackageDigest: pkg.TreeDigest, Revision: pkg.Source.Git.Commit, Managed: true}})
 	if !errors.Is(err, ErrSourceChange) {
 		t.Fatalf("source change was not refused: %v", err)

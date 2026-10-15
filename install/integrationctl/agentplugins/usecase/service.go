@@ -168,7 +168,7 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	}
 	session.service, session.input.Client = service, frozen[0]
 	session.input.InstallationID = session.installationID
-	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority, mutationAction(session.replace))
+	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -262,13 +262,6 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 	return release, nil
 }
 
-func mutationAction(replace bool) string {
-	if replace {
-		return "update"
-	}
-	return "install"
-}
-
 func firstEnvironmentSourceKey(authority *domain.EnvironmentAuthority, fallback string) string {
 	if authority != nil && authority.SourceKey != "" {
 		return authority.SourceKey
@@ -276,7 +269,7 @@ func firstEnvironmentSourceKey(authority *domain.EnvironmentAuthority, fallback 
 	return fallback
 }
 
-func (service Service) beginEnvironmentMutation(ctx context.Context, dryRun, confirmed bool, authority *domain.EnvironmentAuthority, action string) (ports.UnlockFunc, error) {
+func (service Service) beginEnvironmentMutation(ctx context.Context, dryRun, confirmed bool, authority *domain.EnvironmentAuthority) (ports.UnlockFunc, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
 		return nil, err
@@ -525,6 +518,11 @@ func (service Service) guardEnvironmentRecovery() error {
 	// may continue only when the complete pending scope is unmanaged.
 	if err := transaction.ValidateEnvironmentRecoveryScope(state, nil); err != nil {
 		return err
+	}
+	// An unmanaged in-memory planner may have no journal backend configured.
+	// State ownership was checked above; managed operations still require a backend.
+	if service.Kernel.Directory.JournalDir == "" && service.environmentAuthority == nil && len(state.EnvironmentReceipts) == 0 {
+		return nil
 	}
 	journals, err := service.Kernel.Directory.ListOpen()
 	if err != nil {

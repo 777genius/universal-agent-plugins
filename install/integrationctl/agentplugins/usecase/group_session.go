@@ -93,29 +93,8 @@ func (session *groupSession) resolveGroupInstallation() error {
 	} else if session.replace {
 		return fmt.Errorf("update requires an existing installation")
 	}
-	action := "install"
-	if session.replace {
-		action = "update"
-	}
-	if session.input.Repair {
-		action = "repair"
-	}
-	for _, target := range session.input.Targets {
-		bindingID := ""
-		bindings := map[string]domain.ClientBinding{}
-		if existing {
-			bindings = state.Installations[installationIndex].Clients
-		}
-		for _, binding := range bindings {
-			if binding.ClientID == string(target.Client.ClientID) {
-				bindingID = binding.ClientBindingID
-				break
-			}
-		}
-		if err := transaction.AuthorizeEnvironmentMutation(state, target.EnvironmentAuthority, action,
-			session.installationID, bindingID, session.sourceID, action == "install"); err != nil {
-			return err
-		}
+	if err := session.authorizeEnvironmentGroup(); err != nil {
+		return err
 	}
 	if session.installationID == "" {
 		session.installationID, err = domain.NewInstallationID()
@@ -197,6 +176,34 @@ func (session *groupSession) validateGroupSwitch(installation domain.Installatio
 	for otherIndex, other := range session.state.Installations {
 		if otherIndex != session.installationIndex && other.Source.SourceBindingID == session.sourceID {
 			return fmt.Errorf("switch source is already bound to installation %s", other.InstallationID)
+		}
+	}
+	return nil
+}
+
+func (session *groupSession) authorizeEnvironmentGroup() error {
+	action := "install"
+	if session.replace {
+		action = "update"
+	}
+	if session.input.Repair {
+		action = "repair"
+	}
+	for _, target := range session.input.Targets {
+		bindingID := ""
+		bindings := map[string]domain.ClientBinding{}
+		if session.existing {
+			bindings = session.state.Installations[session.installationIndex].Clients
+		}
+		for _, binding := range bindings {
+			if binding.ClientID == string(target.Client.ClientID) {
+				bindingID = binding.ClientBindingID
+				break
+			}
+		}
+		if err := transaction.AuthorizeEnvironmentMutation(session.state, target.EnvironmentAuthority, action,
+			session.installationID, bindingID, session.sourceID, action == "install"); err != nil {
+			return err
 		}
 	}
 	return nil

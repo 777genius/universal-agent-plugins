@@ -1,16 +1,13 @@
 package agentpluginscli
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 func newDepsCommand(app App, opts *options) *cobra.Command {
@@ -28,16 +26,7 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
-			manifest, _ := app.dependencyPaths()
-			if _, err := os.Lstat(manifest); err == nil {
-				return fmt.Errorf("%s already exists; init never rewrites it", filepath.Base(manifest))
-			} else if !os.IsNotExist(err) {
-				return err
-			}
-			if opts.dryRun {
-				return renderJSON(cmd.OutOrStdout(), map[string]any{"dry_run": true, "action": "create_manifest"})
-			}
-			return writeInitialDependencyManifest(manifest)
+			return initializeDependencies(cmd, app, opts)
 		},
 	})
 	command.AddCommand(&cobra.Command{
@@ -84,16 +73,7 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	sync.Flags().BoolVar(&locked, "locked", false, "require an exact existing lock and never resolve refs")
 	sync.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted sync without an interactive prompt")
 	command.AddCommand(sync)
-	recover := &cobra.Command{
-		Use: "recover", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return runDependencyRecover(cmd, app, opts, yes)
-		},
-	}
-	recover.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted recovery without an interactive prompt")
-	command.AddCommand(recover)
+	command.AddCommand(newDependencyRecoverCommand(app, opts, &yes))
 	return command
 }
 
@@ -141,49 +121,20 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	if err != nil {
 		return dependencyLockResult{}, err
 	}
-	for target := range requirements.Targets {
-		if app.ClientRegistry == nil {
-			return dependencyLockResult{}, errors.New("client registry unavailable")
-		}
-		if _, ok := app.ClientRegistry.Lookup(domain.ClientID(target)); !ok {
-			return dependencyLockResult{}, fmt.Errorf("unsupported target %q", target)
-		}
+	if err := validateDependencyTargets(app, requirements); err != nil {
+		return dependencyLockResult{}, err
 	}
-	preview, cleanup, err := dependencyPreviewApp(ctx, app, opts)
+	preview, cleanup, err := dependencyPreviewApp(app, opts)
 	if err != nil {
 		return dependencyLockResult{}, err
 	}
 	defer cleanup()
 	app = preview
-	requirements, err = app.canonicalizeDependencyRequirements(ctx, requirements)
+	requirements, previous, locked, err := resolveDependencyLock(ctx, app, opts, requirements, lockPath, updateAlias)
 	if err != nil {
 		return dependencyLockResult{}, err
 	}
-	var previous environment.Lock
-	hadPrevious := false
-	if body, readErr := os.ReadFile(lockPath); readErr == nil {
-		previous, err = decodeCompatibleDependencyLockBytes(body, requirements)
-		if err != nil {
-			return dependencyLockResult{}, err
-		}
-		hadPrevious = err == nil
-	} else if !os.IsNotExist(readErr) {
-		return dependencyLockResult{}, readErr
-	}
-	resolver := dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}
-	var previousPin *environment.Lock
-	if hadPrevious {
-		previousPin = &previous
-	}
-	locked, err := (environment.Coordinator{Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
-	if err != nil {
-		return dependencyLockResult{}, err
-	}
-	if !opts.dryRun {
-		if err := ensureDependencyStore(ctx, app, locked); err != nil {
-			return dependencyLockResult{}, err
-		}
-	}
+	hadPrevious := previous.LockVersion != 0
 	changed := !hadPrevious || !equalDependencyLock(previous, locked)
 	if allowWrite && changed && !opts.dryRun {
 		manifestAfter, readErr := os.ReadFile(manifestPath)
@@ -204,31 +155,13 @@ func derefLock(lock *environment.Lock) environment.Lock {
 	return *lock
 }
 
-func decodeDependencyLockBytes(body []byte, requirements environment.Requirements) (environment.Lock, error) {
-	temp, err := os.CreateTemp("", "uap-lock-*.json")
-	if err != nil {
-		return environment.Lock{}, err
-	}
-	name := temp.Name()
-	defer os.Remove(name)
-	if _, err = temp.Write(body); err == nil {
-		err = temp.Close()
-	} else {
-		_ = temp.Close()
-	}
-	if err != nil {
-		return environment.Lock{}, err
-	}
-	return readDependencyLock(name, requirements)
-}
-
 func decodeCompatibleDependencyLockBytes(body []byte, requirements environment.Requirements) (environment.Lock, error) {
 	temp, err := os.CreateTemp("", "uap-lock-*.json")
 	if err != nil {
 		return environment.Lock{}, err
 	}
 	name := temp.Name()
-	defer os.Remove(name)
+	defer func() { _ = os.Remove(name) }()
 	if _, err = temp.Write(body); err == nil {
 		err = temp.Close()
 	} else {
@@ -250,7 +183,7 @@ func jsonMarshal(value any) ([]byte, error) {
 	return json.Marshal(value)
 }
 
-func dependencyPreviewApp(ctx context.Context, app App, opts *options) (App, func(), error) {
+func dependencyPreviewApp(app App, opts *options) (App, func(), error) {
 	noop := func() {}
 	if !opts.dryRun {
 		return app, noop, nil
@@ -322,191 +255,73 @@ func renderDependencyLock(cmd *cobra.Command, opts *options, result dependencyLo
 
 type dependencyAction = environment.PreparedBinding
 
-func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock) ([]dependencyAction, error) {
-	if view.Recovery.Required {
-		return nil, installer.ErrRecoveryRequired
-	}
-	for _, pkg := range lock.Packages {
-		for _, installed := range view.Installations {
-			if installed.SourceKey != pkg.SourceKey {
-				continue
-			}
-			for _, binding := range installed.Bindings {
-				for _, target := range pkg.Targets {
-					if binding.ClientID == target && (binding.Owner == nil || binding.Owner.EnvironmentID != environment.EnvironmentUserDefault || binding.Owner.Alias != pkg.Alias) {
-						return nil, fmt.Errorf("foreign: %s/%s already has a live binding outside this environment alias", pkg.Alias, target)
-					}
-				}
-			}
-		}
-	}
-	var observations []environment.BindingObservation
-	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
-			continue
-		}
-		current := environment.BindingObservation{Alias: receipt.Alias, ClientID: receipt.ClientID, InstallationID: receipt.InstallationID, BindingID: receipt.ClientBindingID, SourceKey: receipt.SourceKey, PackageDigest: receipt.PackageDigest, Managed: true, Receipt: &receipt}
-		found := false
-		for _, installation := range view.Installations {
-			if installation.InstallationID != receipt.InstallationID {
-				continue
-			}
-			for _, binding := range installation.Bindings {
-				if binding.BindingID != receipt.ClientBindingID {
-					continue
-				}
-				found = true
-				current.Revision = binding.Revision
-				current.Drift = binding.ProjectionStatus != ""
-				current.Pending = binding.Materialization != string(domain.MaterializationMaterialized)
-				if binding.TreeDigest != receipt.PackageDigest {
-					return nil, errors.New("receipt/live binding package mismatch")
-				}
-			}
-		}
-		if !found {
-			return nil, errors.New("partial: environment receipt has no live binding")
-		}
-		observations = append(observations, current)
-	}
-	prepared, err := (environment.Coordinator{}).PrepareSync(requirements, lock, observations)
-	return prepared.Bindings, err
-}
-
-func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, yes bool) error {
-	if app.Installer == nil {
-		return errors.New("typed SDK installer is unavailable")
-	}
-	preview, cleanup, previewErr := dependencyPreviewApp(cmd.Context(), app, opts)
-	if previewErr != nil {
-		return previewErr
-	}
-	defer cleanup()
-	app = preview
-	manifestPath, lockPath := app.dependencyPaths()
-	requirements, err := readDependencyManifest(manifestPath)
-	if err != nil {
-		return err
-	}
-	requirements, err = app.canonicalizeDependencyRequirements(cmd.Context(), requirements)
-	if err != nil {
-		return err
-	}
-	var lock environment.Lock
-	if lockedOnly {
-		lock, err = readDependencyLock(lockPath, requirements)
-		if err != nil {
-			return fmt.Errorf("--locked requires an exact current uap.lock: %w", err)
-		}
-	} else {
-		result, lockErr := runDependencyLock(cmd.Context(), app, opts, "", true)
-		if lockErr != nil {
-			return lockErr
-		}
-		lock = result.Lock
-	}
-	manifestBytes, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return err
-	}
-	var lockBytes []byte
-	if !opts.dryRun {
-		lockBytes, err = os.ReadFile(lockPath)
-		if err != nil {
-			return err
-		}
-	}
-	state, err := app.Installer.Inspect(cmd.Context())
-	if err != nil {
-		return err
-	}
-	actions, err := dependencyActions(state, requirements, lock)
-	if err != nil {
-		return err
-	}
-	clients, err := app.Detector.Detect(cmd.Context())
-	if err != nil {
-		return err
-	}
-	detected := map[domain.ClientID]domain.DetectedClient{}
-	for _, client := range clients {
-		detected[client.ClientID] = client
-	}
-	prepared, err := preflightDependencyActions(cmd, app, opts, actions, detected)
-	if err != nil {
+func initializeDependencies(cmd *cobra.Command, app App, opts *options) error {
+	manifest, _ := app.dependencyPaths()
+	if _, err := os.Lstat(manifest); err == nil {
+		return fmt.Errorf("%s already exists; init never rewrites it", filepath.Base(manifest))
+	} else if !os.IsNotExist(err) {
 		return err
 	}
 	if opts.dryRun {
-		return renderDependencySync(cmd, opts, prepared, true)
+		return renderJSON(cmd.OutOrStdout(), map[string]any{"dry_run": true, "action": "create_manifest"})
 	}
-	if !yes && app.Terminal && opts.format == "human" {
-		reader := bufio.NewReader(cmd.InOrStdin())
-		confirmed, promptErr := promptYesNo(cmd.Context(), reader, cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply the preflighted dependency sync? [y/N]")
-		if promptErr != nil {
-			return promptErr
-		}
-		yes = confirmed
-	}
-	if !yes {
-		return errors.New("dependency sync requires --yes or explicit interactive confirmation")
-	}
-	var unlock func() error
-	if !opts.dryRun {
-		unlock, err = processlock.Lock{Path: app.EnvironmentLockPath}.Acquire(cmd.Context())
-		if err != nil {
-			return err
-		}
-		defer func() { _ = unlock() }()
-		state, err = app.Installer.Inspect(cmd.Context())
-		if err != nil {
-			return err
-		}
-		actions, err = dependencyActions(state, requirements, lock)
-		if err != nil {
-			return err
-		}
-		if _, err = preflightDependencyActions(cmd, app, opts, actions, detected); err != nil {
-			return fmt.Errorf("dependency sync changed after preflight: %w", err)
-		}
-	}
-	if !reflect.DeepEqual(actions, prepared) {
-		return installer.ErrPlanChanged
-	}
-	if err := ensureDependencyStore(cmd.Context(), app, lock); err != nil {
-		return err
-	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, beforeApply: func() error {
-		m, err := os.ReadFile(manifestPath)
-		if err != nil {
-			return err
-		}
-		l, err := os.ReadFile(lockPath)
-		if err != nil {
-			return err
-		}
-		if string(m) != string(manifestBytes) || string(l) != string(lockBytes) {
-			return installer.ErrPlanChanged
-		}
-		return nil
-	}}
-	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: lock.ManifestDigest, Bindings: actions}, true)
-	if applyErr != nil {
-		if opts.format == "json" {
-			_ = renderJSON(cmd.OutOrStdout(), map[string]any{"outcome": "partial", "results": results, "actions": actions})
-		}
-		return fmt.Errorf("dependency sync stopped; inspect results and recover pending work before retry: %w", applyErr)
-	}
-	return renderDependencySync(cmd, opts, prepared, false)
+	return writeInitialDependencyManifest(manifest)
 }
 
-func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependencyAction, dryRun bool) error {
-	if opts.format == "json" {
-		return renderJSON(cmd.OutOrStdout(), map[string]any{"actions": actions, "dry_run": dryRun})
-	}
-	for _, action := range actions {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s\n", action.Action, action.Alias, action.ClientID); err != nil {
-			return err
+func validateDependencyTargets(app App, requirements environment.Requirements) error {
+	for target := range requirements.Targets {
+		if app.ClientRegistry == nil {
+			return errors.New("client registry unavailable")
+		}
+		if _, ok := app.ClientRegistry.Lookup(domain.ClientID(target)); !ok {
+			return fmt.Errorf("unsupported target %q", target)
 		}
 	}
 	return nil
+}
+
+func resolveDependencyLock(ctx context.Context, app App, opts *options, requirements environment.Requirements, lockPath, updateAlias string) (environment.Requirements, environment.Lock, environment.Lock, error) {
+	requirements, err := app.canonicalizeDependencyRequirements(ctx, requirements)
+	if err != nil {
+		return requirements, environment.Lock{}, environment.Lock{}, err
+	}
+	var previous environment.Lock
+	hadPrevious := false
+	if body, readErr := os.ReadFile(lockPath); readErr == nil {
+		previous, err = decodeCompatibleDependencyLockBytes(body, requirements)
+		if err != nil {
+			return requirements, environment.Lock{}, environment.Lock{}, err
+		}
+		hadPrevious = err == nil
+	} else if !os.IsNotExist(readErr) {
+		return requirements, environment.Lock{}, environment.Lock{}, readErr
+	}
+	resolver := dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}
+	var previousPin *environment.Lock
+	if hadPrevious {
+		previousPin = &previous
+	}
+	locked, err := (environment.Coordinator{Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
+	if err != nil {
+		return requirements, environment.Lock{}, environment.Lock{}, err
+	}
+	if !opts.dryRun {
+		if err := ensureDependencyStore(ctx, app, locked); err != nil {
+			return requirements, environment.Lock{}, environment.Lock{}, err
+		}
+	}
+	return requirements, previous, locked, nil
+}
+
+func newDependencyRecoverCommand(app App, opts *options, yes *bool) *cobra.Command {
+	recovery := &cobra.Command{
+		Use: "recover", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := validateDepsOptions(opts); err != nil {
+				return err
+			}
+			return runDependencyRecover(cmd, app, opts, *yes)
+		},
+	}
+	recovery.Flags().BoolVar(yes, "yes", false, "confirm the complete preflighted recovery without an interactive prompt")
+	return recovery
 }

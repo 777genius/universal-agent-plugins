@@ -55,7 +55,7 @@ func (store Store) Put(ctx context.Context, snapshot domain.PackageSnapshot) (Pa
 	}
 	sealed, err := (packagedigest.Builder{TempRoot: store.tempRoot()}).SnapshotWithExecutables(ctx, snapshot.Root, snapshot.Source, snapshot.ExecutableFiles)
 	if err != nil {
-		return Package{}, fmt.Errorf("%w: %v", ErrMismatch, err)
+		return Package{}, fmt.Errorf("%w: %w", ErrMismatch, err)
 	}
 	sealedDigest, sealedAlgorithm := sealed.TreeDigest, sealed.DigestAlgorithm
 	_ = packagedigest.Remove(sealed)
@@ -85,56 +85,7 @@ func (store Store) Put(ctx context.Context, snapshot domain.PackageSnapshot) (Pa
 		}
 		return existing, nil
 	}
-	if err := os.MkdirAll(filepath.Join(store.Root, ".staging"), 0o700); err != nil {
-		return Package{}, err
-	}
-	stage, err := os.MkdirTemp(filepath.Join(store.Root, ".staging"), "entry-")
-	if err != nil {
-		return Package{}, err
-	}
-	defer func() { _ = os.RemoveAll(stage) }()
-	if err := copyTree(snapshot.Root, filepath.Join(stage, "package"), snapshot.ExecutableFiles); err != nil {
-		return Package{}, err
-	}
-	metadata := Metadata{SchemaVersion: 1, DigestAlgorithm: snapshot.DigestAlgorithm, TreeDigest: snapshot.TreeDigest,
-		ExecutableFiles: append([]string{}, snapshot.ExecutableFiles...), Source: snapshot.Source}
-	body, err := json.MarshalIndent(metadata, "", "  ")
-	if err != nil {
-		return Package{}, err
-	}
-	if err := atomicfile.Write(filepath.Join(stage, "metadata.json"), append(body, '\n'), 0o600); err != nil {
-		return Package{}, err
-	}
-	verified, _, err := store.inspect(ctx, stage)
-	if err != nil {
-		return Package{}, err
-	}
-	if verified.Metadata.TreeDigest != snapshot.TreeDigest {
-		return Package{}, fmt.Errorf("%w: staged bytes changed", ErrMismatch)
-	}
-	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
-		return Package{}, err
-	}
-	quarantine := ""
-	if replaceCorrupt {
-		quarantine = stage + "-corrupt"
-		if err := os.Rename(destination, quarantine); err != nil {
-			return Package{}, err
-		}
-	}
-	if err := os.Rename(stage, destination); err != nil {
-		if quarantine != "" {
-			_ = os.Rename(quarantine, destination)
-		}
-		if existing, ok, inspectErr := store.inspect(ctx, destination); inspectErr == nil && ok {
-			return existing, nil
-		}
-		return Package{}, fmt.Errorf("publish environment store entry: %w", err)
-	}
-	if err := atomicfile.SyncDirectory(filepath.Dir(destination)); err != nil {
-		return Package{}, err
-	}
-	return Package{Root: filepath.Join(destination, "package"), Metadata: metadata}, nil
+	return store.publish(ctx, snapshot, destination, replaceCorrupt)
 }
 
 func (store Store) Get(ctx context.Context, algorithm, digest string) (Package, error) {
@@ -171,12 +122,12 @@ func (store Store) inspect(ctx context.Context, entryRoot string) (Package, bool
 	}
 	var metadata Metadata
 	if err := json.Unmarshal(metadataBody, &metadata); err != nil {
-		return Package{}, false, fmt.Errorf("%w: decode environment store metadata: %v", ErrMismatch, err)
+		return Package{}, false, fmt.Errorf("%w: decode environment store metadata: %w", ErrMismatch, err)
 	}
 	packageRoot := filepath.Join(entryRoot, "package")
 	snapshot, err := (packagedigest.Builder{TempRoot: store.tempRoot()}).SnapshotWithExecutables(ctx, packageRoot, metadata.Source, append([]string{}, metadata.ExecutableFiles...))
 	if err != nil {
-		return Package{}, false, fmt.Errorf("%w: %v", ErrMismatch, err)
+		return Package{}, false, fmt.Errorf("%w: %w", ErrMismatch, err)
 	}
 	verifiedDigest := snapshot.TreeDigest
 	_ = packagedigest.Remove(snapshot)
@@ -226,54 +177,63 @@ func copyTree(sourceRoot, destinationRoot string, executables []string) error {
 	if err := os.MkdirAll(destinationRoot, 0o700); err != nil {
 		return err
 	}
+	source, err := os.OpenRoot(sourceRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = source.Close() }()
+	destination, err := os.OpenRoot(destinationRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = destination.Close() }()
 	executable := map[string]bool{}
 	for _, item := range executables {
 		executable[item] = true
 	}
-	return filepath.WalkDir(sourceRoot, func(source string, entry fs.DirEntry, walkErr error) error {
+	return fs.WalkDir(source.FS(), ".", func(relative string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
-		}
-		relative, err := filepath.Rel(sourceRoot, source)
-		if err != nil {
-			return err
 		}
 		if relative == "." {
 			return nil
 		}
-		target := filepath.Join(destinationRoot, filepath.FromSlash(filepath.ToSlash(relative)))
-		info, err := os.Lstat(source)
-		if err != nil {
-			return err
-		}
-		switch {
-		case info.IsDir():
-			return os.Mkdir(target, 0o700)
-		case info.Mode()&os.ModeSymlink != 0:
-			link, err := os.Readlink(source)
-			if err != nil {
-				return err
-			}
-			return os.Symlink(link, target)
-		case info.Mode().IsRegular():
-			mode := os.FileMode(0o600)
-			if executable[filepath.ToSlash(relative)] {
-				mode = 0o700
-			}
-			return copyFile(source, target, mode)
-		default:
-			return fmt.Errorf("unsupported package file type %q", relative)
-		}
+		return copyRootedEntry(source, destination, relative, executable[relative])
 	})
 }
 
-func copyFile(source, destination string, mode os.FileMode) error {
-	input, err := os.Open(source)
+func copyRootedEntry(source, destination *os.Root, relative string, executable bool) error {
+	info, err := source.Lstat(relative)
+	if err != nil {
+		return err
+	}
+	switch {
+	case info.IsDir():
+		return destination.Mkdir(relative, 0o700)
+	case info.Mode()&os.ModeSymlink != 0:
+		link, err := source.Readlink(relative)
+		if err != nil {
+			return err
+		}
+		return destination.Symlink(link, relative)
+	case info.Mode().IsRegular():
+		mode := os.FileMode(0o600)
+		if executable {
+			mode = 0o700
+		}
+		return copyRootedFile(source, destination, relative, mode)
+	default:
+		return fmt.Errorf("unsupported package file type %q", relative)
+	}
+}
+
+func copyRootedFile(source, destination *os.Root, relative string, mode os.FileMode) error {
+	input, err := source.Open(relative)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = input.Close() }()
-	output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+	output, err := destination.OpenFile(relative, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 	if err != nil {
 		return err
 	}
@@ -304,4 +264,65 @@ func MetadataDigest(metadata Metadata) string {
 	body, _ := json.Marshal(metadata)
 	sum := sha256.Sum256(body)
 	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func (store Store) publish(ctx context.Context, snapshot domain.PackageSnapshot, destination string, replaceCorrupt bool) (Package, error) {
+	if err := os.MkdirAll(filepath.Join(store.Root, ".staging"), 0o700); err != nil {
+		return Package{}, err
+	}
+	stage, err := os.MkdirTemp(filepath.Join(store.Root, ".staging"), "entry-")
+	if err != nil {
+		return Package{}, err
+	}
+	defer func() { _ = os.RemoveAll(stage) }()
+	metadata, err := store.stageSnapshot(ctx, snapshot, stage)
+	if err != nil {
+		return Package{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
+		return Package{}, err
+	}
+	quarantine := ""
+	if replaceCorrupt {
+		quarantine = stage + "-corrupt"
+		if err := os.Rename(destination, quarantine); err != nil {
+			return Package{}, err
+		}
+	}
+	if err := os.Rename(stage, destination); err != nil {
+		if quarantine != "" {
+			_ = os.Rename(quarantine, destination)
+		}
+		if existing, ok, inspectErr := store.inspect(ctx, destination); inspectErr == nil && ok {
+			return existing, nil
+		}
+		return Package{}, fmt.Errorf("publish environment store entry: %w", err)
+	}
+	if err := atomicfile.SyncDirectory(filepath.Dir(destination)); err != nil {
+		return Package{}, err
+	}
+	return Package{Root: filepath.Join(destination, "package"), Metadata: metadata}, nil
+}
+
+func (store Store) stageSnapshot(ctx context.Context, snapshot domain.PackageSnapshot, stage string) (Metadata, error) {
+	if err := copyTree(snapshot.Root, filepath.Join(stage, "package"), snapshot.ExecutableFiles); err != nil {
+		return Metadata{}, err
+	}
+	metadata := Metadata{SchemaVersion: 1, DigestAlgorithm: snapshot.DigestAlgorithm, TreeDigest: snapshot.TreeDigest,
+		ExecutableFiles: append([]string{}, snapshot.ExecutableFiles...), Source: snapshot.Source}
+	body, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		return Metadata{}, err
+	}
+	if err := atomicfile.Write(filepath.Join(stage, "metadata.json"), append(body, '\n'), 0o600); err != nil {
+		return Metadata{}, err
+	}
+	verified, _, err := store.inspect(ctx, stage)
+	if err != nil {
+		return Metadata{}, err
+	}
+	if verified.Metadata.TreeDigest != snapshot.TreeDigest {
+		return Metadata{}, fmt.Errorf("%w: staged bytes changed", ErrMismatch)
+	}
+	return metadata, nil
 }

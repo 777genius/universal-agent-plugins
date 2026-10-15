@@ -24,20 +24,11 @@ func AuthorizeEnvironmentMutation(state domain.StateFileV2, authority *domain.En
 		}
 		return nil
 	}
-	if authority.EnvironmentID == "" || authority.Alias == "" || authority.ClientID == "" || authority.ExpectedAction != action {
-		return fmt.Errorf("%w: incomplete or wrong expected action", ErrEnvironmentAuthority)
+	if err := validateEnvironmentMutationIdentity(authority, action, installationID, bindingID, allowCreate); err != nil {
+		return err
 	}
 	if authority.SourceKey != "" {
 		sourceKey = authority.SourceKey
-	}
-	if !allowCreate && (authority.InstallationID == "" || authority.ClientBindingID == "") {
-		return fmt.Errorf("%w: existing binding identity is required", ErrEnvironmentAuthority)
-	}
-	if authority.InstallationID != "" && authority.InstallationID != installationID {
-		return fmt.Errorf("%w: installation identity changed", ErrEnvironmentAuthority)
-	}
-	if authority.ClientBindingID != "" && authority.ClientBindingID != bindingID {
-		return fmt.Errorf("%w: binding identity changed", ErrEnvironmentAuthority)
 	}
 	var receipt *domain.EnvironmentReceipt
 	for index := range state.EnvironmentReceipts {
@@ -48,26 +39,7 @@ func AuthorizeEnvironmentMutation(state domain.StateFileV2, authority *domain.En
 		}
 	}
 	if receipt == nil {
-		if !allowCreate {
-			return fmt.Errorf("%w: no environment receipt owns this binding", ErrEnvironmentAuthority)
-		}
-		if installationID == "" && bindingID == "" {
-			return nil
-		}
-		if bindingID == "" && authority.ClientBindingID == "" && authority.ReceiptID == "" {
-			for _, installation := range state.Installations {
-				if installation.InstallationID == installationID && len(installation.Clients) == 0 {
-					return nil
-				}
-			}
-		}
-		for _, existing := range state.EnvironmentReceipts {
-			if existing.EnvironmentID == authority.EnvironmentID && existing.Alias == authority.Alias &&
-				existing.InstallationID == installationID {
-				return nil
-			}
-		}
-		return fmt.Errorf("%w: unmanaged installation cannot be adopted", ErrEnvironmentAuthority)
+		return authorizeEnvironmentCreation(state, authority, installationID, bindingID, allowCreate)
 	}
 	if authority.ReceiptID != "" && authority.ReceiptID != receipt.ReceiptID {
 		return fmt.Errorf("%w: expected receipt changed", ErrEnvironmentAuthority)
@@ -148,23 +120,8 @@ func ValidateEnvironmentRecoveryScope(state domain.StateFileV2, authority *domai
 	}
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
-			for _, receipt := range binding.Receipts {
-				if receipt.Phase != "" && receipt.Phase != "committed" {
-					if err := check(receipt.EnvironmentAuthority); err != nil {
-						return err
-					}
-				}
-			}
-			if binding.PendingNativeIntent != nil {
-				var owner *domain.EnvironmentAuthority
-				for _, r := range state.EnvironmentReceipts {
-					if r.InstallationID == installation.InstallationID && r.ClientBindingID == binding.ClientBindingID {
-						owner = &domain.EnvironmentAuthority{EnvironmentID: r.EnvironmentID}
-					}
-				}
-				if err := check(owner); err != nil {
-					return err
-				}
+			if err := validateBindingRecoveryScope(state, installation.InstallationID, binding, check); err != nil {
+				return err
 			}
 		}
 	}
@@ -182,4 +139,64 @@ func environmentID(authority *domain.EnvironmentAuthority) string {
 		return ""
 	}
 	return authority.EnvironmentID
+}
+
+func authorizeEnvironmentCreation(state domain.StateFileV2, authority *domain.EnvironmentAuthority, installationID, bindingID string, allowCreate bool) error {
+	if !allowCreate {
+		return fmt.Errorf("%w: no environment receipt owns this binding", ErrEnvironmentAuthority)
+	}
+	if installationID == "" && bindingID == "" {
+		return nil
+	}
+	if bindingID == "" && authority.ClientBindingID == "" && authority.ReceiptID == "" {
+		for _, installation := range state.Installations {
+			if installation.InstallationID == installationID && len(installation.Clients) == 0 {
+				return nil
+			}
+		}
+	}
+	for _, existing := range state.EnvironmentReceipts {
+		if existing.EnvironmentID == authority.EnvironmentID && existing.Alias == authority.Alias &&
+			existing.InstallationID == installationID {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: unmanaged installation cannot be adopted", ErrEnvironmentAuthority)
+
+}
+
+func validateBindingRecoveryScope(state domain.StateFileV2, installationID string, binding domain.ClientBinding, check func(*domain.EnvironmentAuthority) error) error {
+	for _, receipt := range binding.Receipts {
+		if receipt.Phase != "" && receipt.Phase != "committed" {
+			if err := check(receipt.EnvironmentAuthority); err != nil {
+				return err
+			}
+		}
+	}
+	if binding.PendingNativeIntent == nil {
+		return nil
+	}
+	var owner *domain.EnvironmentAuthority
+	for _, receipt := range state.EnvironmentReceipts {
+		if receipt.InstallationID == installationID && receipt.ClientBindingID == binding.ClientBindingID {
+			owner = &domain.EnvironmentAuthority{EnvironmentID: receipt.EnvironmentID}
+		}
+	}
+	return check(owner)
+}
+
+func validateEnvironmentMutationIdentity(authority *domain.EnvironmentAuthority, action, installationID, bindingID string, allowCreate bool) error {
+	if authority.EnvironmentID == "" || authority.Alias == "" || authority.ClientID == "" || authority.ExpectedAction != action {
+		return fmt.Errorf("%w: incomplete or wrong expected action", ErrEnvironmentAuthority)
+	}
+	if !allowCreate && (authority.InstallationID == "" || authority.ClientBindingID == "") {
+		return fmt.Errorf("%w: existing binding identity is required", ErrEnvironmentAuthority)
+	}
+	if authority.InstallationID != "" && authority.InstallationID != installationID {
+		return fmt.Errorf("%w: installation identity changed", ErrEnvironmentAuthority)
+	}
+	if authority.ClientBindingID != "" && authority.ClientBindingID != bindingID {
+		return fmt.Errorf("%w: binding identity changed", ErrEnvironmentAuthority)
+	}
+	return nil
 }

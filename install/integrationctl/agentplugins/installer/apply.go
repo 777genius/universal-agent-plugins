@@ -330,21 +330,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 			e.report(ProgressVerify)
 			e.report(ProgressComplete)
 		}
-		if view, inspectErr := e.observe(); inspectErr == nil {
-			for _, installation := range view.Installations {
-				if installation.InstallationID == result.InstallationID {
-					result.DataRetained = installation.DataRetained
-					for _, live := range installation.Bindings {
-						if live.BindingID == prepared.plan.BindingID {
-							result.Outcome = OutcomeIncomplete
-							result.NoChange = false
-							result.Reason = "external removal requires explicit attestation"
-							result.NextActions = []NextAction{{Kind: "external_uninstall", Reason: result.Reason}}
-						}
-					}
-				}
-			}
-		}
+		e.inspectRemovalOutcome(&result, prepared.plan.BindingID)
 	} else {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = err.Error()
@@ -529,4 +515,22 @@ func (p *PreparedOperation) beginApply(decision Decision) (Operation, error) {
 	op := p.req.Operation
 	p.mu.Unlock()
 	return op, nil
+}
+
+func (e *Engine) inspectRemovalOutcome(result *Result, bindingID string) {
+	if view, inspectErr := e.observe(); inspectErr == nil {
+		for _, installation := range view.Installations {
+			if installation.InstallationID == result.InstallationID {
+				result.DataRetained = installation.DataRetained
+				for _, live := range installation.Bindings {
+					if live.BindingID == bindingID {
+						result.Outcome = OutcomeIncomplete
+						result.NoChange = false
+						result.Reason = "external removal requires explicit attestation"
+						result.NextActions = []NextAction{{Kind: "external_uninstall", Reason: result.Reason}}
+					}
+				}
+			}
+		}
+	}
 }

@@ -9,12 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"path"
 	"regexp"
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 const (
@@ -115,6 +116,7 @@ type BindingObservation struct {
 	SourceKey, PackageDigest, ProfileAuthorityDigest, Revision string
 	Managed                                                    bool
 	Receipt                                                    *domain.EnvironmentReceipt
+	Incomplete                                                 bool
 	Drift, Pending                                             bool
 }
 
@@ -200,7 +202,7 @@ func (requirement Requirement) Validate() error {
 			return err
 		}
 		if requirement.Git.Selector.Kind != SelectorCommit && requirement.Git.Selector.Kind != SelectorRef && requirement.Git.Selector.Kind != SelectorDefault {
-			return errors.New("Git source requires commit, ref or default selector")
+			return errors.New("git source requires commit, ref or default selector")
 		}
 		return requirement.Git.Selector.Validate()
 	}
@@ -422,6 +424,10 @@ func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 		}
 		return nil
 	}
+	return validateLockedRegistrySelector(requirement, pkg)
+}
+
+func validateLockedRegistrySelector(requirement Requirement, pkg LockedPackage) error {
 	source := pkg.Source.Registry
 	if source == nil || pkg.Source.Git != nil || source.Distribution != requirement.Registry.Distribution ||
 		source.Requested != requirement.Registry.Selector || source.ReleaseSequence == 0 || fmt.Sprint(source.ReleaseSequence) != requirement.Registry.Selector.Value ||

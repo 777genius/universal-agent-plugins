@@ -82,48 +82,13 @@ func snapshotRequestPackage(ctx context.Context, tempRoot string, req Request) (
 }
 
 func snapshotAcquiredRequest(ctx context.Context, tempRoot string, req Request) (domain.PackageSnapshot, error) {
+	if err := validateAcquiredRequest(req); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
 	acquired := req.AcquiredSnapshot
-	source := acquired.Source
-	expected := "github:" + source.Repository + "@" + source.ResolvedRevision
-	if source.PackageSubpath != "" {
-		expected += "//" + source.PackageSubpath
-	}
-	if source.Repository == "" || len(source.ResolvedRevision) != 40 || (acquired.OriginMode == domain.OriginModeDirect && source.RequestedSource != expected) || source.CanonicalSource != expected {
-		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired source coordinates disagree", ErrInvalidRequest)
-	}
-	if req.EnvironmentAuthority != nil {
-		key := "github:" + strings.ToLower(acquired.Source.Repository) + ":" + acquired.Source.PackageSubpath
-		if acquired.OriginMode == domain.OriginModeDirectory {
-			if acquired.Directory == nil {
-				return domain.PackageSnapshot{}, fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)
-			}
-			key = "directory:" + strings.ToLower(acquired.Directory.DistributionID)
-		}
-		if req.EnvironmentAuthority.SourceKey != key {
-			return domain.PackageSnapshot{}, fmt.Errorf("%w: environment source key differs from acquisition", ErrInvalidRequest)
-		}
-	}
-	if acquired.OriginMode != domain.OriginModeDirect && acquired.OriginMode != domain.OriginModeDirectory {
-		return domain.PackageSnapshot{}, ErrInvalidRequest
-	}
-	if len(req.Targets) != 0 {
-		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshots support single-target requests only", ErrInvalidRequest)
-	}
-	if acquired.TreeDigest == "" || acquired.DigestAlgorithm != domain.TreeDigestAlgorithm {
-		return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot digest identity is incomplete", ErrInvalidRequest)
-	}
-	if req.ExecutableFiles != nil && !equalStrings(req.ExecutableFiles, acquired.ExecutableFiles) {
-		return domain.PackageSnapshot{}, fmt.Errorf("%w: request executable inventory differs from acquired snapshot", ErrInvalidRequest)
-	}
 	files := append([]string{}, acquired.ExecutableFiles...)
-	for _, relative := range files {
-		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
-			return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot executable path is invalid", ErrInvalidRequest)
-		}
-		info, err := os.Lstat(filepath.Join(req.PackageRoot, filepath.FromSlash(relative)))
-		if err != nil || !info.Mode().IsRegular() {
-			return domain.PackageSnapshot{}, fmt.Errorf("%w: acquired snapshot executable is not a regular package file", ErrInvalidRequest)
-		}
+	if err := validateAcquiredExecutables(req.PackageRoot, files); err != nil {
+		return domain.PackageSnapshot{}, err
 	}
 	snapshot, err := (packagedigest.Builder{TempRoot: tempRoot}).SnapshotWithExecutables(ctx, req.PackageRoot, acquired.Source, files)
 	if err != nil {
@@ -144,8 +109,8 @@ func cloneAcquiredDirectory(origin *domain.DirectoryOrigin) *domain.DirectoryOri
 	if origin == nil {
 		return nil
 	}
-	copy := *origin
-	return &copy
+	cloned := *origin
+	return &cloned
 }
 
 func equalStrings(left, right []string) bool {
@@ -402,4 +367,53 @@ func wrapLifecycleError(err error) error {
 		return fmt.Errorf("%w: %w", ErrNotInstalled, err)
 	}
 	return err
+}
+
+func validateAcquiredRequest(req Request) error {
+	acquired := req.AcquiredSnapshot
+	source := acquired.Source
+	expected := "github:" + source.Repository + "@" + source.ResolvedRevision
+	if source.PackageSubpath != "" {
+		expected += "//" + source.PackageSubpath
+	}
+	if source.Repository == "" || len(source.ResolvedRevision) != 40 || (acquired.OriginMode == domain.OriginModeDirect && source.RequestedSource != expected) || source.CanonicalSource != expected {
+		return fmt.Errorf("%w: acquired source coordinates disagree", ErrInvalidRequest)
+	}
+	if req.EnvironmentAuthority != nil {
+		key := "github:" + strings.ToLower(acquired.Source.Repository) + ":" + acquired.Source.PackageSubpath
+		if acquired.OriginMode == domain.OriginModeDirectory {
+			if acquired.Directory == nil {
+				return fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)
+			}
+			key = "directory:" + strings.ToLower(acquired.Directory.DistributionID)
+		}
+		if req.EnvironmentAuthority.SourceKey != key {
+			return fmt.Errorf("%w: environment source key differs from acquisition", ErrInvalidRequest)
+		}
+	}
+	if acquired.OriginMode != domain.OriginModeDirect && acquired.OriginMode != domain.OriginModeDirectory {
+		return ErrInvalidRequest
+	}
+	if len(req.Targets) != 0 {
+		return fmt.Errorf("%w: acquired snapshots support single-target requests only", ErrInvalidRequest)
+	}
+	if acquired.TreeDigest == "" || acquired.DigestAlgorithm != domain.TreeDigestAlgorithm {
+		return fmt.Errorf("%w: acquired snapshot digest identity is incomplete", ErrInvalidRequest)
+	}
+	if req.ExecutableFiles != nil && !equalStrings(req.ExecutableFiles, acquired.ExecutableFiles) {
+		return fmt.Errorf("%w: request executable inventory differs from acquired snapshot", ErrInvalidRequest)
+	}
+	return nil
+}
+func validateAcquiredExecutables(root string, files []string) error {
+	for _, relative := range files {
+		if relative == "." || relative == ".." || path.IsAbs(relative) || path.Clean(relative) != relative || strings.HasPrefix(relative, "../") || strings.Contains(relative, `\`) || filepath.VolumeName(relative) != "" {
+			return fmt.Errorf("%w: acquired snapshot executable path is invalid", ErrInvalidRequest)
+		}
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(relative)))
+		if err != nil || !info.Mode().IsRegular() {
+			return fmt.Errorf("%w: acquired snapshot executable is not a regular package file", ErrInvalidRequest)
+		}
+	}
+	return nil
 }

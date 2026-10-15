@@ -73,7 +73,7 @@ func (service Service) RemoveGroup(ctx context.Context, input RemoveGroupInput) 
 	for i := range session.input.Targets {
 		session.input.Targets[i].Client = frozen[i]
 	}
-	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.Targets[0].EnvironmentAuthority, "remove")
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, input.Targets[0].EnvironmentAuthority)
 	if err != nil {
 		return RemoveGroupResult{}, err
 	}

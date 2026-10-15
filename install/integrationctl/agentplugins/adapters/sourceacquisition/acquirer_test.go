@@ -498,3 +498,29 @@ func runGit(t *testing.T, args ...string) string {
 	}
 	return string(output)
 }
+
+func TestExactRefKindPreservesDefaultAndSHAShapedNames(t *testing.T) {
+	repo := newRepository(t)
+	writeRepo(t, repo, "plugin.json", "{}", 0600)
+	old := commit(t, repo)
+	runGit(t, "-C", repo, "branch", "default", old)
+	shaName := strings.Repeat("f", 40)
+	runGit(t, "-C", repo, "branch", shaName, old)
+	writeRepo(t, repo, "next", "different HEAD", 0600)
+	head := commit(t, repo)
+	a := Acquirer{TempRoot: t.TempDir(), Runner: localGitTestRunner{}, URLForRepo: func(string) string { return repo }}
+	for _, ref := range []string{"default", shaName} {
+		got, err := a.ResolveGitHubRef(context.Background(), "acme/demo", ref)
+		if err != nil || got.Commit != old || got.ResolvedRef != "refs/heads/"+ref {
+			t.Fatalf("ref %s: %+v %v", ref, got, err)
+		}
+	}
+	got, err := a.ResolveGitHubSelector(context.Background(), "acme/demo", "default")
+	if err != nil || got.Commit != head {
+		t.Fatalf("omitted selector default: %+v %v", got, err)
+	}
+	runGit(t, "-C", repo, "tag", "default", head)
+	if _, err := a.ResolveGitHubRef(context.Background(), "acme/demo", "default"); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("default branch/tag ambiguity: %v", err)
+	}
+}

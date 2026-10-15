@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
-	"sort"
 )
 
 var ErrSourceChange = errors.New("source_change")
@@ -78,8 +79,8 @@ func pinOrNil(pkg LockedPackage, exists bool) *LockedPackage {
 	if !exists {
 		return nil
 	}
-	copy := pkg
-	return &copy
+	cloned := pkg
+	return &cloned
 }
 
 func targetsFor(requirements Requirements, alias string) []string {
@@ -110,22 +111,10 @@ func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock,
 	for _, pkg := range lock.Packages {
 		for _, target := range pkg.Targets {
 			current := byAliasTarget[pkg.Alias+"\x00"+target]
-			if current.Drift {
-				return PreparedSync{}, fmt.Errorf("drift: %s/%s; preserve edits and explicitly repair the recorded pin", pkg.Alias, target)
-			}
-			if current.Pending {
-				return PreparedSync{}, installer.ErrRecoveryRequired
-			}
-			for _, existing := range observed {
-				if existing.Managed && existing.Alias == pkg.Alias && existing.SourceKey != pkg.SourceKey {
-					return PreparedSync{}, ErrSourceChange
-				}
-				if existing.Managed && existing.Alias != pkg.Alias && existing.SourceKey == pkg.SourceKey {
-					return PreparedSync{}, ErrSourceChange
-				}
-				if current.InstallationID == "" && existing.Managed && existing.Alias == pkg.Alias {
-					current.InstallationID = existing.InstallationID
-				}
+			var err error
+			current, err = validateDesiredBinding(pkg, target, current, observed)
+			if err != nil {
+				return PreparedSync{}, err
 			}
 			action, reason := syncAction(pkg, current)
 			plan.Bindings = append(plan.Bindings, PreparedBinding{
@@ -174,7 +163,7 @@ func syncAction(pkg LockedPackage, observed BindingObservation) (DesiredAction, 
 	} else if pkg.Source.Registry != nil {
 		revision = pkg.Source.Registry.Commit
 	}
-	if observed.PackageDigest == pkg.TreeDigest && observed.Revision == revision {
+	if observed.PackageDigest == pkg.TreeDigest && observed.Revision == revision && !observed.Incomplete {
 		return ActionUnchanged, "pinned package digest already matches"
 	}
 	return ActionUpdate, "pinned package digest differs"
@@ -217,4 +206,25 @@ func bindingAuthority(alias, target, source string, action DesiredAction, observ
 		out.ReceiptID = observed.Receipt.ReceiptID
 	}
 	return out
+}
+
+func validateDesiredBinding(pkg LockedPackage, target string, current BindingObservation, observed []BindingObservation) (BindingObservation, error) {
+	if current.Drift {
+		return current, fmt.Errorf("drift: %s/%s; preserve edits and explicitly repair the recorded pin", pkg.Alias, target)
+	}
+	if current.Pending {
+		return current, installer.ErrRecoveryRequired
+	}
+	for _, existing := range observed {
+		if existing.Managed && existing.Alias == pkg.Alias && existing.SourceKey != pkg.SourceKey {
+			return current, ErrSourceChange
+		}
+		if existing.Managed && existing.Alias != pkg.Alias && existing.SourceKey == pkg.SourceKey {
+			return current, ErrSourceChange
+		}
+		if current.InstallationID == "" && existing.Managed && existing.Alias == pkg.Alias {
+			current.InstallationID = existing.InstallationID
+		}
+	}
+	return current, nil
 }

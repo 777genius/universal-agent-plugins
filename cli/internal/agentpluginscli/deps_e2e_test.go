@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/spf13/cobra"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type dependencyTestScanner struct{ fail bool }
@@ -50,20 +52,20 @@ func (s *dependencyTestSource) ResolveGitHubSelector(ctx context.Context, repo, 
 func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	repo := writeCLIPlugin(t)
 	writeCLIMCP(t, repo)
-	git := func(args ...string) string {
+	git := func(args ...string) {
 		t.Helper()
-		c := exec.Command("git", args...)
+		c := exec.CommandContext(context.Background(), "git", args...)
 		c.Dir = repo
 		c.Env = append(os.Environ(), "GIT_AUTHOR_NAME=iliya", "GIT_AUTHOR_EMAIL=iliyazelenkog@gmail.com", "GIT_COMMITTER_NAME=iliya", "GIT_COMMITTER_EMAIL=iliyazelenkog@gmail.com")
 		b, e := c.CombinedOutput()
 		if e != nil {
 			t.Fatalf("git %v: %v %s", args, e, b)
 		}
-		return strings.TrimSpace(string(b))
 	}
 	git("init", "-b", "main")
 	git("add", ".")
 	git("commit", "-m", "test: disposable dependency fixture")
+	var runners []*dependencyClaudeListing
 	setup := func() (cliFixture, *dependencyTestSource) {
 		client := fixtureClient(t, domain.ClientCodex)
 		client.ExecutablePath = filepath.Join(t.TempDir(), "codex")
@@ -75,7 +77,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		f.app.Installer, e = installer.New(installer.Config{StateRoot: root, StateFile: f.store.Path, LockFile: filepath.Join(root, "mutation.lock"), OperationsDir: f.operations, PluginDataBase: filepath.Join(root, "plugin-data"), ManagedRoot: f.app.ManagedRoot, TempRoot: filepath.Join(root, "installer-tmp"), Registry: f.app.ClientRegistry, HelperExecutable: helper, Runner: &dependencyClaudeListing{root: claude.ConfigRoot}})
+		runner := &dependencyClaudeListing{root: claude.ConfigRoot}
+		runners = append(runners, runner)
+		f.app.Installer, e = installer.New(installer.Config{StateRoot: root, StateFile: f.store.Path, LockFile: filepath.Join(root, "mutation.lock"), OperationsDir: f.operations, PluginDataBase: filepath.Join(root, "plugin-data"), ManagedRoot: f.app.ManagedRoot, TempRoot: filepath.Join(root, "installer-tmp"), Registry: f.app.ClientRegistry, HelperExecutable: helper, Runner: runner})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -117,7 +121,26 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		}
 	}
 	run(f, "deps", "lock", "--format", "json")
+	runners[0].failNextCodexAdd = true
+	if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
+		t.Fatal("injected post-materialization activation failure reported success")
+	}
+	failedView, err := f.app.Installer.Inspect(context.Background())
+	if err != nil || failedView.Recovery.Required || len(failedView.EnvironmentReceipts) != 1 {
+		t.Fatalf("expected committed recoverable lifecycle failure without pending transaction: %+v %v", failedView, err)
+	}
+	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "partial") {
+		t.Fatal("failed lifecycle hidden: " + status)
+	}
+	failedProjection := failedView.Installations[0].Bindings[0].ProjectionDigest
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
+	resumedView, err := f.app.Installer.Inspect(context.Background())
+	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationActive) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
+		t.Fatalf("same-pin retry did not resume lifecycle: %+v %v", resumedView, err)
+	}
+	if status := run(f, "deps", "status", "--format", "json"); !strings.Contains(status, "partial") {
+		t.Fatal("unchecked authentication must remain visible: " + status)
+	}
 	beforeDownloads, beforeLookups := source.downloads, source.lookups
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	run(f, "deps", "lock", "--format", "json")
@@ -168,6 +191,47 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	status = run(f, "deps", "status", "--format", "json")
 	if !strings.Contains(status, "store_mismatch") || strings.Contains(status, "projection_mismatch") {
 		t.Fatal("store/projection facts conflated: " + status)
+	}
+	savedLock, err := os.ReadFile(lp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	independentEdit := filepath.Join(managed, "independent-edit.txt")
+	if err := os.WriteFile(independentEdit, []byte("user change"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, agreement := range []string{"missing", "stale", "removed-assignment"} {
+		if agreement == "missing" {
+			if err := os.Remove(lp); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			if err := os.WriteFile(mp, []byte("schema_version = 1\n[targets]\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if agreement == "removed-assignment" {
+				run(f, "deps", "lock", "--format", "json")
+			}
+		}
+		lookups, downloads := source.lookups, source.downloads
+		report := run(f, "deps", "status", "--format", "json")
+		for _, fact := range []string{"not_synced", "store_mismatch", "projection_mismatch"} {
+			if !strings.Contains(report, fact) {
+				t.Fatalf("%s hid %s: %s", agreement, fact, report)
+			}
+		}
+		if source.lookups != lookups || source.downloads != downloads {
+			t.Fatal("status performed source acquisition")
+		}
+		if err := os.WriteFile(mp, manifest, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(lp, savedLock, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Remove(independentEdit); err != nil {
+		t.Fatal(err)
 	}
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	driftPath := filepath.Join(managed, "user-edit.txt")
@@ -251,8 +315,12 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	}
 	f2, _ := setup()
 	mp2, lp2 := f2.app.dependencyPaths()
-	os.WriteFile(mp2, manifest, 0600)
-	os.WriteFile(lp2, transferred, 0600)
+	if err := os.WriteFile(mp2, manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lp2, transferred, 0600); err != nil {
+		t.Fatal(err)
+	}
 	f2.app.SecurityEvaluator = dependencyTestScanner{fail: true}
 	if _, _, e := f2.execute(false, "deps", "sync", "--locked", "--yes", "--accept-security-risk"); e == nil {
 		t.Fatal("scanner failure bypassed")
@@ -422,8 +490,9 @@ func (m *dependencyInterruptedMutator) Apply(ctx context.Context, prepared *inst
 // The public process-runner seam supplies exact disposable Claude listing
 // evidence. No external agent is launched by this integration test.
 type dependencyClaudeListing struct {
-	root    string
-	codexID string
+	root             string
+	codexID          string
+	failNextCodexAdd bool
 }
 
 func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -431,6 +500,10 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 		if strings.HasPrefix(value, "CODEX_HOME=") {
 			args := command.Argv[1:]
 			if len(args) >= 3 && args[0] == "plugin" && args[1] == "add" {
+				if r.failNextCodexAdd {
+					r.failNextCodexAdd = false
+					return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("injected activation failure")}, nil
+				}
 				r.codexID = args[2]
 			}
 			if len(args) >= 2 && args[0] == "plugin" && args[1] == "list" {
@@ -473,4 +546,9 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 	}
 	body, err := json.Marshal(listed)
 	return legacyports.CommandResult{Stdout: body}, err
+}
+
+func (s *dependencyTestSource) ResolveGitHubRef(ctx context.Context, repo, ref string) (sourceacquisition.RefResolution, error) {
+	s.lookups++
+	return s.Acquirer.ResolveGitHubRef(ctx, repo, ref)
 }

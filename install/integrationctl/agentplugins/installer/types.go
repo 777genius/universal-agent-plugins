@@ -302,6 +302,7 @@ type InspectedInstallation struct {
 
 // InspectedBinding is a public subset of one client binding.
 type InspectedBinding struct {
+	LifecycleConverged                                           bool
 	ClientID, BindingID, Scope, TargetPath, DataRoot, TreeDigest string
 	Materialization, Activation, Authentication, Verification    string
 	Revision                                                     string

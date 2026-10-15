@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	"sort"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 type GroupInput struct {
@@ -184,7 +184,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return GroupResult{}, err
 	}
 	service = session.service
-	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, session.first.EnvironmentAuthority, mutationAction(replace))
+	release, err := service.beginEnvironmentMutation(ctx, input.DryRun, input.Confirmed, session.first.EnvironmentAuthority)
 	if err != nil {
 		return GroupResult{}, err
 	}
