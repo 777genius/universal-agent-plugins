@@ -42,6 +42,10 @@ func readDependencyManifest(path string) (environment.Requirements, error) {
 	if err != nil {
 		return environment.Requirements{}, err
 	}
+	return readDependencyManifestBytes(path, body)
+}
+
+func readDependencyManifestBytes(path string, body []byte) (environment.Requirements, error) {
 	var generic map[string]any
 	if err := toml.Unmarshal(body, &generic); err != nil {
 		return environment.Requirements{}, manifestError(path, body, err)
@@ -156,13 +160,7 @@ func rejectManifestUnknown(path string, body []byte, generic map[string]any) err
 }
 
 func writeInitialDependencyManifest(path string) error {
-	body := []byte(`# Agent Plugins dependency environment
-schema_version = 1
-
-[dependencies]
-
-[targets]
-`)
+	body := initialDependencyManifest()
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err
@@ -175,4 +173,14 @@ schema_version = 1
 		return err
 	}
 	return closeErr
+}
+
+func initialDependencyManifest() []byte {
+	return []byte(`# Agent Plugins dependency environment
+schema_version = 1
+
+[dependencies]
+
+[targets]
+`)
 }

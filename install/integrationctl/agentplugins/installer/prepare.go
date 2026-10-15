@@ -95,6 +95,9 @@ func (p *PreparedOperation) closeLocked() error {
 // Prepare captures a sealed snapshot for install or inspects owned state for remove.
 // It does not mutate installed client config or the Notifications runtime ledger.
 func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, error) {
+	if (req.ActivationComplete || req.AuthComplete) && (req.Operation == OpRemove || len(req.Targets) > 0) {
+		return nil, fmt.Errorf("%w: completion attestation requires a single mutating target", ErrInvalidRequest)
+	}
 	if ctx == nil {
 		return nil, fmt.Errorf("%w: context is required", ErrInvalidRequest)
 	}
@@ -249,6 +252,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: hints,
 		EnvironmentAuthority: req.EnvironmentAuthority,
+		ActivationComplete:   req.ActivationComplete, AuthComplete: req.AuthComplete,
 	})
 	if err != nil {
 		_ = handle.closeLocked()

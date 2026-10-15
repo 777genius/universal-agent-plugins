@@ -84,6 +84,10 @@ type App struct {
 }
 
 type options struct {
+	environmentOutput   map[string]any
+	noSave              bool
+	alias               string
+	environmentReason   string
 	chatGPTAppID        string
 	installIntents      map[domain.ClientID]domain.InstallIntent
 	color               terminaltheme.Policy

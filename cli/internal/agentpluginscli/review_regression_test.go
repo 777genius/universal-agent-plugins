@@ -95,7 +95,7 @@ func TestUnrelatedRetainedPreparationPreservesAutomaticDirectoryGate(t *testing.
 	check := func() {
 		t.Helper()
 		calls := r.acquirer.verifiedCalls
-		out, _, err := r.cli.execute(false, "add", "rollout-demo", "--target", "kiro")
+		out, _, err := r.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "kiro")
 		if err == nil || !strings.Contains(err.Error(), "current trusted runtime evidence failed for kiro") {
 			t.Fatalf("automatic Directory evidence gate: %s %v", out, err)
 		}
@@ -155,7 +155,7 @@ func TestUnrelatedPreparationPreservesAutomaticUpdateAndRepairEvidence(t *testin
 	// Seed a recorded native binding with disposable preparation, then model a
 	// historical automatic binding. Every command below must fail at resolution,
 	// before acquisition or activation can execute a client.
-	if out, _, err := r.cli.execute(false, "add", "rollout-demo", "--target", "kiro"); err != nil {
+	if out, _, err := r.cli.execute(false, "add", "--no-save", "rollout-demo", "--target", "kiro"); err != nil {
 		t.Fatalf("seed: %s %v", out, err)
 	}
 	state, err := r.cli.store.Load()

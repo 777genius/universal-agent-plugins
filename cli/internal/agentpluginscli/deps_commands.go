@@ -120,7 +120,7 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	if manifestReadErr != nil {
 		return dependencyLockResult{}, manifestReadErr
 	}
-	requirements, err := readDependencyManifest(manifestPath)
+	requirements, err := readDependencyManifestBytes(manifestPath, manifestBefore)
 	if err != nil {
 		return dependencyLockResult{}, err
 	}
@@ -159,21 +159,7 @@ func derefLock(lock *environment.Lock) environment.Lock {
 }
 
 func decodeCompatibleDependencyLockBytes(body []byte, requirements environment.Requirements) (environment.Lock, error) {
-	temp, err := os.CreateTemp("", "uap-lock-*.json")
-	if err != nil {
-		return environment.Lock{}, err
-	}
-	name := temp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if _, err = temp.Write(body); err == nil {
-		err = temp.Close()
-	} else {
-		_ = temp.Close()
-	}
-	if err != nil {
-		return environment.Lock{}, err
-	}
-	return readCompatibleDependencyLock(name, requirements)
+	return decodeDependencyLockBytes(body, requirements, true)
 }
 
 func equalDependencyLock(left, right environment.Lock) bool {

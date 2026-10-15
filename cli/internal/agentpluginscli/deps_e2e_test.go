@@ -256,8 +256,8 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
 		t.Fatal(status)
 	}
-	if _, _, e := f.execute(false, "remove", id, "--target", "codex", "--format", "json"); e == nil {
-		t.Fatal("imperative remove adopted managed authority")
+	if _, _, e := f.execute(false, "add", githubIdentity("acme/demo", pinned.Source.Git.Commit, ""), "--target", "codex", "--no-save", "--format", "json"); e == nil {
+		t.Fatal("imperative add adopted managed authority")
 	}
 	// A mixed owned/foreign recovery scope is rejected as a whole, before repair
 	// or recovery can touch any receipt. Then the owned-only scope is recoverable.

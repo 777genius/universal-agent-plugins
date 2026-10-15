@@ -52,7 +52,7 @@ func context7GuidedFixture(t *testing.T) (cliFixture, *fixedDirectoryClient, *lo
 
 func TestContext7GuidedMissingRegistrationAndResume(t *testing.T) {
 	f, directory, acquirer := context7GuidedFixture(t)
-	out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--format", "json")
+	out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgpt", "--format", "json")
 	if err != nil {
 		t.Fatalf("install peers before ChatGPT setup: %s %v", out, err)
 	}
@@ -329,7 +329,7 @@ func TestContext7GuidedForeignFilesAndCancellation(t *testing.T) {
 
 func TestContext7GuidedMixedUpdateUsesOneNewImmutableRelease(t *testing.T) {
 	f, d, a := context7GuidedFixture(t)
-	if out, _, err := f.execute(false, "add", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
+	if out, _, err := f.execute(false, "add", "--no-save", "context7", "--target", "kiro,chatgpt", "--chatgpt-app-id", fixturePersonalAppID); err != nil {
 		t.Fatalf("%s %v", out, err)
 	}
 	raw, err := os.ReadFile(filepath.Join(a.root, "plugin.json"))

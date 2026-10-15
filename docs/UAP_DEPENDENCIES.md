@@ -95,3 +95,37 @@ An installation with any environment receipt requires environment authority for
 all its bindings, including new targets. Mixing an imperative binding into it
 is refused. Conversely an environment cannot adopt an installation containing
 unmanaged bindings, even when the unmanaged target is absent from the manifest.
+
+## Ordinary commands (unreleased)
+
+Eligible remote `add` commands now save exact dependency intent by default in the
+current user's `uap.toml` and `uap.lock`. For example:
+
+```sh
+agentplugins add github:acme/demo@0123456789012345678901234567890123456789 --target codex
+agentplugins update demo
+agentplugins remove demo --target codex
+```
+
+The optional `--alias` selects the saved name. Repeating the same pin and targets
+keeps the files and installed state unchanged. Updating a moving Git ref changes
+only that alias; exact Git pins change through a new `add` command. Owned removal
+removes target assignments and then the dependency when its final target is
+removed. If manual external uninstall is still pending, repeat `remove` with
+`--external-uninstalled`; the live owner receipt remains sufficient after the
+manifest table has gone. Package data and the content store remain retained.
+
+Saved targets must be supported by the typed installer (currently Codex and
+Claude). Other or mixed remote target selections fail before acquisition and
+provide a `--no-save` command. Explicit local paths, discovery sources,
+ChatGPT-only preparation and `--no-save` keep the imperative flow; JSON reports
+`environment.saved=false` and its reason. `--no-save` never overrides an existing
+environment owner receipt.
+
+Saving publishes the manifest first, followed by the derived lock, after
+preflight and confirmation. Each file is replaced atomically; this is not a
+transaction across both files. If lock publication fails, no installation is
+applied: run `agentplugins deps lock`, then retry, or review `agentplugins deps
+sync`. Ordinary commands refuse mismatched intent and lock files until this
+reconciliation. An external editor can still race a rename; the session rechecks
+published bytes before applying each binding and refuses a changed plan.

@@ -232,7 +232,7 @@ func TestKiroPreparationUsesNormalDirectoryResolution(t *testing.T) {
 			rollout.directory.bundle.Snapshot.Products[0].ID = "context7"
 			rollout.directory.bundle.Snapshot.Distributions[0].ProductID = "context7"
 			rollout.directory.bundle.Snapshot.Products[0].Aliases = append(rollout.directory.bundle.Snapshot.Products[0].Aliases, "context7")
-			out, _, err := rollout.cli.execute(false, "add", "context7", "--target", "kiro", "--format", "json")
+			out, _, err := rollout.cli.execute(false, "add", "--no-save", "context7", "--target", "kiro", "--format", "json")
 			if !supported {
 				if err == nil || rollout.acquirer.verifiedCalls != 0 {
 					t.Fatalf("bypassed compatibility: %s %v", out, err)
@@ -267,10 +267,10 @@ func TestKiroPreparationUsesNormalDirectoryResolution(t *testing.T) {
 			rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies = rollout.directory.bundle.Snapshot.Distributions[0].ReleasePolicies[:1]
 			rollout.directory.bundle.Snapshot.Products[0].Aliases = append(rollout.directory.bundle.Snapshot.Products[0].Aliases, "new-context-alias")
 			for _, args := range [][]string{
-				{"add", "new-context-alias", "--target", "kiro"},
+				{"add", "--no-save", "new-context-alias", "--target", "kiro"},
 				{"update", "demo", "--target", "kiro"},
 				{"remove", "demo", "--target", "kiro"},
-				{"add", "new-context-alias", "--target", "kiro"},
+				{"add", "--no-save", "new-context-alias", "--target", "kiro"},
 			} {
 				if out, _, err := rollout.cli.execute(false, args...); err != nil {
 					t.Fatalf("%v: %s %v", args, out, err)

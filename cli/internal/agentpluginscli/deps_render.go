@@ -65,7 +65,16 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 		outcome = "partial"
 	}
 	if opts.format == "json" {
-		return renderJSON(cmd.OutOrStdout(), map[string]any{"outcome": outcome, "actions": dependencyActionOutput(actions), "results": out})
+		data := map[string]any{"outcome": outcome, "actions": dependencyActionOutput(actions), "results": out}
+		if opts.environmentOutput != nil {
+			data["environment"] = opts.environmentOutput
+			status := "success"
+			if applyErr != nil {
+				status = "failure"
+			}
+			return writeJSONResult(cmd.OutOrStdout(), "add", status, data)
+		}
+		return renderJSON(cmd.OutOrStdout(), data)
 	}
 	for _, result := range out {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s: %s %s\n", result.Operation, result.InstallationID, result.ClientID, result.Outcome, result.Reason); err != nil {
