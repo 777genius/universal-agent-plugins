@@ -1,3 +1,9 @@
+import {
+  SAVED_DEPENDENCIES_CLI_RELEASED,
+  dependencySaveMode,
+  dependencyAddFlag,
+  isPinnedGitSource,
+} from './savedDependencies.ts';
 import type { RegistryPlugin } from '../types/registry';
 
 const CLI_INVOCATION = 'npx universal-agent-plugins';
@@ -25,7 +31,11 @@ function communityAddSource(plugin: RegistryPlugin): string {
     : `'${selector.replaceAll("'", "'\\''")}'`;
 }
 
-export function pluginCommands(plugin: RegistryPlugin, targets?: string | readonly string[]) {
+export function pluginCommands(
+  plugin: RegistryPlugin,
+  targets?: string | readonly string[],
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+) {
   const values = (targets === undefined ? [] : Array.isArray(targets) ? targets : [targets])
     .map((target) => target.trim())
     .filter((target, index, all) => target && all.indexOf(target) === index);
@@ -35,11 +45,17 @@ export function pluginCommands(plugin: RegistryPlugin, targets?: string | readon
     plugin.trust_state === 'conformant_unreviewed'
       ? communityAddSource(plugin)
       : plugin.install_source;
+  const mode = dependencySaveMode(addSource, values);
+  const owned = savedDependenciesReleased && mode === 'saved';
   return {
-    add: `${CLI_INVOCATION} add ${addSource}${targetFlag}`,
-    update: `${CLI_INVOCATION} update ${plugin.name}${targetFlag}`,
+    saveMode: savedDependenciesReleased ? mode : undefined,
+    add: `${CLI_INVOCATION} add ${addSource}${targetFlag}${dependencyAddFlag(mode, savedDependenciesReleased)}`,
+    update:
+      owned && isPinnedGitSource(addSource)
+        ? `${CLI_INVOCATION} add ${addSource}${targetFlag}`
+        : `${CLI_INVOCATION} update ${plugin.name}${owned ? '' : targetFlag}`,
     repair: `${CLI_INVOCATION} repair ${plugin.name}${targetFlag}`,
     switch: `${CLI_INVOCATION} switch ${plugin.name} --to <distribution-id>`,
-    remove: `${CLI_INVOCATION} remove ${plugin.name}${targetFlag}`,
+    remove: `${CLI_INVOCATION} remove ${plugin.name}${owned ? '' : targetFlag}`,
   };
 }

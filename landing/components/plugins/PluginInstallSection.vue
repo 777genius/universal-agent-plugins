@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { mdiApps, mdiArrowRight, mdiChevronUp, mdiOpenInNew } from '@mdi/js';
 import CommandSnippetCard from '~/components/shared/CommandSnippetCard.vue';
 import { resolveAgentBadge } from '~/data/agentBadges';
-import { buildInstallCommandForSelection } from '~/data/pluginInstall';
+import { buildInstallCommandForSelection, buildManageCommandsForSelection } from '~/data/pluginInstall';
 import type { PluginInstallTargetId, InstallChannel, PluginCard, PluginResolvedInstallSpec } from '~/types/content';
 import { applyCliInvocation, getCliInvocation } from '~/utils/cliInvocation';
 
@@ -74,10 +74,6 @@ const selectedCliInvocation = computed(() =>
   getCliInvocation(selectedInstallChannel.value?.invocation),
 );
 
-const selectedTargetArgument = computed(() =>
-  selectedTargets.value.map((lane) => lane.targetId).join(','),
-);
-
 const supportLanes = computed(() =>
   props.installSpec.recommendedTargetOrder
     .map((targetId) => targetLanes.value.find((lane) => lane.targetId === targetId))
@@ -100,11 +96,14 @@ const renderedInstallCommand = computed(() =>
   applyCliInvocation(installCommand.value, selectedCliInvocation.value),
 );
 
-const renderedManageCommands = computed(() => ({
-  update: `${applyCliInvocation(props.installSpec.manageCommands.update, selectedCliInvocation.value)} --target ${selectedTargetArgument.value}`,
-  repair: `${applyCliInvocation(props.installSpec.manageCommands.repair, selectedCliInvocation.value)} --target ${selectedTargetArgument.value}`,
-  remove: `${applyCliInvocation(props.installSpec.manageCommands.remove, selectedCliInvocation.value)} --target ${selectedTargetArgument.value}`,
-}));
+const renderedManageCommands = computed(() => {
+  const commands = buildManageCommandsForSelection(props.installSpec, selectedTargetIds.value);
+  return {
+    update: applyCliInvocation(commands.update, selectedCliInvocation.value),
+    repair: applyCliInvocation(commands.repair, selectedCliInvocation.value),
+    remove: applyCliInvocation(commands.remove, selectedCliInvocation.value),
+  };
+});
 
 const selectionScope = computed(() => {
   const uniqueScopes = [...new Set(selectedTargets.value.map((lane) => lane.scope))];

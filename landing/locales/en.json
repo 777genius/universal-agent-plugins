@@ -705,7 +705,14 @@
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "The CLI will fail before mutation and suggest compatible target/source combinations; it never mixes distributions across clients.",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "The CLI checks every selected agent before changing files and shows any sign-in or activation step. OAuth credentials stay with the agent.",
       "chatgptFinish": "Open ChatGPT, select {name} in Apps or Plugins, connect it, and start a new chat. Availability depends on your account and workspace.",
-      "expectedFallback": "Expected source fallback: {source}."
+      "expectedFallback": "Expected source fallback: {source}.",
+      "dependencySaving": {
+        "saved": "Saved for the current user. Remove applies to all saved targets; use the dependency alias printed by the CLI if needed.",
+        "noSave": "This target selection uses --no-save and does not record a dependency.",
+        "local": "Local packages are not saved as portable dependencies.",
+        "discovery": "Discovery selectors are not saved as dependencies.",
+        "chatgpt": "ChatGPT preparation does not save a dependency."
+      }
     },
     "authentication": {
       "not_required": "No account required",

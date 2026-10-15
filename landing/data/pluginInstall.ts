@@ -1,3 +1,9 @@
+import {
+  SAVED_DEPENDENCIES_CLI_RELEASED,
+  dependencySaveMode,
+  dependencyAddFlag,
+  isPinnedGitSource,
+} from '../utils/savedDependencies';
 import { contentByLocale } from '~/data/content';
 import type {
   PluginInstallCommandSet,
@@ -38,18 +44,16 @@ const targetDefinitions: Record<PluginInstallTargetId, PluginTargetInstallLane> 
   opencode: {
     targetId: 'opencode',
     badgeLabel: 'OpenCode',
-    scope: 'project',
-    installPath: 'opencode.json and .opencode/',
-    projectRootRequired: true,
+    scope: 'user',
+    installPath: 'OpenCode user configuration',
     followUp: 'none',
     vendorDocsHref: 'https://opencode.ai/docs/plugins/',
   },
   cursor: {
     targetId: 'cursor',
     badgeLabel: 'Cursor',
-    scope: 'project',
-    installPath: '.cursor/mcp.json',
-    projectRootRequired: true,
+    scope: 'user',
+    installPath: '~/.cursor',
     followUp: 'none',
     vendorDocsHref: 'https://docs.cursor.com/context/mcp',
   },
@@ -109,6 +113,7 @@ const buildInstallCommand = (
   targetIds: PluginInstallTargetId[],
   scope?: PluginInstallScope,
   includeTargets = true,
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): string => {
   const args = ['universal-agent-plugins', 'add', cliSource];
 
@@ -120,11 +125,24 @@ const buildInstallCommand = (
     args.push('--scope', 'project');
   }
 
-  return args.join(' ');
+  return (
+    args.join(' ') +
+    dependencyAddFlag(dependencySaveMode(cliSource, targetIds), savedDependenciesReleased)
+  );
 };
 
-const buildManageCommands = (integrationName: string): PluginManageCommands => ({
-  update: `universal-agent-plugins update ${integrationName}`,
+const buildManageCommands = (
+  integrationName: string,
+  cliSource: string,
+  targetIds: PluginInstallTargetId[],
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+): PluginManageCommands => ({
+  update:
+    savedDependenciesReleased &&
+    isPinnedGitSource(cliSource) &&
+    dependencySaveMode(cliSource, targetIds) === 'saved'
+      ? buildInstallCommand(cliSource, targetIds, undefined, true, savedDependenciesReleased)
+      : `universal-agent-plugins update ${integrationName}`,
   repair: `universal-agent-plugins repair ${integrationName}`,
   remove: `universal-agent-plugins remove ${integrationName}`,
 });
@@ -133,17 +151,37 @@ const buildCommandSet = (
   cliSource: string,
   integrationName: string,
   lane: PluginTargetInstallLane,
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): PluginInstallCommandSet => ({
-  install: buildInstallCommand(cliSource, [lane.targetId], lane.scope, true),
-  update: `universal-agent-plugins update ${integrationName}`,
+  install: buildInstallCommand(
+    cliSource,
+    [lane.targetId],
+    lane.scope,
+    true,
+    savedDependenciesReleased,
+  ),
+  update: buildManageCommands(
+    integrationName,
+    cliSource,
+    [lane.targetId],
+    savedDependenciesReleased,
+  ).update,
   repair: `universal-agent-plugins repair ${integrationName} --target ${lane.targetId}`,
   remove: `universal-agent-plugins remove ${integrationName}`,
 });
 
-const resolveSupportedTargets = (spec: PluginInstallSpec): PluginResolvedInstallLane[] =>
+const resolveSupportedTargets = (
+  spec: PluginInstallSpec,
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+): PluginResolvedInstallLane[] =>
   spec.supportedTargets.map((lane) => ({
     ...lane,
-    commands: buildCommandSet(spec.cliSource, spec.integrationName, lane),
+    commands: buildCommandSet(
+      spec.cliSource,
+      spec.integrationName,
+      lane,
+      savedDependenciesReleased,
+    ),
   }));
 
 const assertCatalogCoverage = () => {
@@ -165,6 +203,7 @@ export const getPluginInstallSpec = (slug: string): PluginInstallSpec | undefine
 
 export const getResolvedPluginInstallSpec = (
   slug: string,
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): PluginResolvedInstallSpec | undefined => {
   const spec = getPluginInstallSpec(slug);
   if (!spec) {
@@ -176,14 +215,20 @@ export const getResolvedPluginInstallSpec = (
     cliSource: spec.cliSource,
     integrationName: spec.integrationName,
     recommendedTargetOrder: spec.recommendedTargetOrder,
-    supportedTargets: resolveSupportedTargets(spec),
-    manageCommands: buildManageCommands(spec.integrationName),
+    supportedTargets: resolveSupportedTargets(spec, savedDependenciesReleased),
+    manageCommands: buildManageCommands(
+      spec.integrationName,
+      spec.cliSource,
+      [],
+      savedDependenciesReleased,
+    ),
   };
 };
 
 export const buildInstallCommandForSelection = (
   spec: PluginResolvedInstallSpec,
   selectedTargetIds: PluginInstallTargetId[],
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
 ): string => {
   const allTargetIds = spec.recommendedTargetOrder.filter((targetId) =>
     spec.supportedTargets.some((lane) => lane.targetId === targetId),
@@ -203,5 +248,38 @@ export const buildInstallCommandForSelection = (
       ? 'project'
       : undefined;
 
-  return buildInstallCommand(spec.cliSource, normalizedTargetIds, scope, includeTargets);
+  return buildInstallCommand(
+    spec.cliSource,
+    normalizedTargetIds,
+    scope,
+    includeTargets,
+    savedDependenciesReleased,
+  );
+};
+
+export const buildManageCommandsForSelection = (
+  spec: PluginResolvedInstallSpec,
+  selectedTargetIds: PluginInstallTargetId[],
+  savedDependenciesReleased = SAVED_DEPENDENCIES_CLI_RELEASED,
+): PluginManageCommands => {
+  const targetIds =
+    selectedTargetIds.length > 0
+      ? selectedTargetIds
+      : spec.recommendedTargetOrder.filter((targetId) =>
+          spec.supportedTargets.some((lane) => lane.targetId === targetId),
+        );
+  const targetFlag = targetIds.length ? ` --target ${targetIds.join(',')}` : '';
+  const saved =
+    savedDependenciesReleased && dependencySaveMode(spec.cliSource, targetIds) === 'saved';
+  const commands = savedDependenciesReleased
+    ? buildManageCommands(spec.integrationName, spec.cliSource, targetIds, true)
+    : spec.manageCommands;
+  // Owned Directory updates advance the alias as a whole. Git pins advance only
+  // through add of the current exact source, retaining the selected target set.
+  const update = saved ? commands.update : `${commands.update}${targetFlag}`;
+  return {
+    update,
+    repair: `${commands.repair}${targetFlag}`,
+    remove: `${commands.remove}${targetFlag}`,
+  };
 };

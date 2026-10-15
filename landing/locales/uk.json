@@ -688,7 +688,14 @@
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершить роботу з помилкою до внесення змін і запропонує сумісні поєднання цілей та джерел; він ніколи не змішує дистрибутиви між клієнтами.",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI перевіряє кожного вибраного агента до зміни файлів і показує всі кроки входу чи активації. Облікові дані OAuth залишаються в агента.",
       "chatgptFinish": "Відкрийте ChatGPT, виберіть {name} у Застосунках або Плагінах, підключіть його й почніть новий чат. Доступність залежить від вашого облікового запису та робочого простору.",
-      "expectedFallback": "Очікуване резервне джерело: {source}."
+      "expectedFallback": "Очікуване резервне джерело: {source}.",
+      "dependencySaving": {
+        "saved": "Зберігається для поточного користувача. Remove застосовується до всіх збережених цілей; за потреби використовуйте псевдонім залежності з виводу CLI.",
+        "noSave": "Для вибраних клієнтів використовується --no-save: залежність не записується.",
+        "local": "Локальні пакети не зберігаються як переносні залежності.",
+        "discovery": "Селектори discovery не зберігаються як залежності.",
+        "chatgpt": "Підготовка ChatGPT не зберігає залежність."
+      }
     },
     "authentication": {
       "not_required": "Обліковий запис не потрібен",
