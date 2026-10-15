@@ -28,6 +28,16 @@ func TestSelectedSyncAndAttestation(t *testing.T) {
 	if err != nil || plan.Bindings[0].Action != ActionUnchanged {
 		t.Fatalf("%+v %v", plan, err)
 	}
+	for _, bad := range []BindingObservation{
+		{Alias: "demo", ClientID: "codex", Managed: true, SourceKey: pkg.SourceKey, PackageDigest: pkg.TreeDigest, Revision: "old"},
+		{Alias: "demo", ClientID: "codex", Managed: true, SourceKey: pkg.SourceKey, PackageDigest: "old", Revision: pkg.Source.Git.Commit},
+		{Alias: "demo", ClientID: "codex", SourceKey: pkg.SourceKey},
+	} {
+		if _, err = c.PrepareSyncFor(req, lock, []BindingObservation{bad}, []string{"demo"}, &Attestation{Alias: "demo", ClientID: "codex", AuthComplete: true}); err == nil {
+			t.Fatal("attested unmatched pin")
+		}
+	}
+
 	empty := Requirements{SchemaVersion: 1}
 	digest, _ := ManifestDigest(empty)
 	plan, err = c.PrepareSyncFor(empty, Lock{LockVersion: 1, ManifestDigest: digest}, observed[:1], []string{"demo"}, nil)

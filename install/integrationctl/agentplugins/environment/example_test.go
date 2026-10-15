@@ -36,7 +36,7 @@ func ExampleCoordinator_PrepareSyncFor() {
 	if err != nil {
 		panic(err)
 	}
-	defer os.RemoveAll(root)
+	defer func() { _ = os.RemoveAll(root) }()
 	registry, err := clients.NewRegistry()
 	if err != nil {
 		panic(err)
