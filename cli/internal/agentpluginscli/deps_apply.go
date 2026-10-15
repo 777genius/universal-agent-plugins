@@ -49,18 +49,7 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 	defer cleanup()
 	app = preview
 	manifestPath, lockPath := app.dependencyPaths()
-	requirements, err := readDependencyManifest(manifestPath)
-	if err != nil {
-		return err
-	}
-	if err := validateDependencyTargets(app, requirements); err != nil {
-		return err
-	}
-	requirements, err = app.canonicalizeDependencySyncRequirements(cmd.Context(), requirements, lockPath, lockedOnly)
-	if err != nil {
-		return err
-	}
-	lock, err := selectDependencySyncLock(cmd.Context(), app, opts, lockedOnly, lockPath, requirements)
+	requirements, lock, err := prepareDependencySyncLock(cmd.Context(), app, opts, lockedOnly, manifestPath, lockPath)
 	if err != nil {
 		return err
 	}
@@ -76,17 +65,8 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 	if err != nil {
 		return err
 	}
-	if opts.externalUninstalled {
-		hasRemoval := false
-		for _, action := range actions {
-			if action.Action == environment.ActionRemove {
-				hasRemoval = true
-				break
-			}
-		}
-		if !hasRemoval {
-			return errors.New("--external-uninstalled requires at least one removal")
-		}
+	if err := validateDependencyRemovals(opts, actions); err != nil {
+		return err
 	}
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
@@ -118,26 +98,9 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 
 func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, yes bool) error {
 	requirements, lock, prepared, detected := request.requirements, request.lock, request.prepared, request.detected
-	manifestPath, lockPath, manifestBytes, lockBytes := request.manifestPath, request.lockPath, request.manifestBytes, request.lockBytes
 	var actions []dependencyAction
-	if opts.format == "human" {
-		if err := renderDependencySync(cmd, opts, prepared, false); err != nil {
-			return err
-		}
-	}
-	if opts.externalUninstalled {
-		removals := 0
-		for _, action := range prepared {
-			if action.Action == environment.ActionRemove {
-				removals++
-				if opts.format == "human" {
-					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Attest external uninstall: %s/%s\n", action.Alias, action.ClientID)
-				}
-			}
-		}
-		if removals == 0 {
-			return errors.New("--external-uninstalled requires at least one removal")
-		}
+	if err := renderDependencyConfirmation(cmd, opts, prepared); err != nil {
+		return err
 	}
 	if !yes && app.Terminal && opts.format == "human" {
 		reader := bufio.NewReader(cmd.InOrStdin())
@@ -178,20 +141,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	if err := ensureDependencyStore(cmd.Context(), app, lock); err != nil {
 		return err
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, beforeApply: func() error {
-		m, err := os.ReadFile(manifestPath)
-		if err != nil {
-			return err
-		}
-		l, err := os.ReadFile(lockPath)
-		if err != nil {
-			return err
-		}
-		if string(m) != string(manifestBytes) || string(l) != string(lockBytes) {
-			return installer.ErrPlanChanged
-		}
-		return nil
-	}}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, beforeApply: request.checkInputs}
 	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: lock.ManifestDigest, Bindings: actions}, true)
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
@@ -266,4 +216,73 @@ func requireDependencyMutationReady(app App) error {
 		return guard.RequireMutationReady()
 	}
 	return nil
+}
+
+func validateDependencyRemovals(opts *options, actions []dependencyAction) error {
+	if !opts.externalUninstalled {
+		return nil
+	}
+	for _, action := range actions {
+		if action.Action == environment.ActionRemove {
+			return nil
+		}
+	}
+	return errors.New("--external-uninstalled requires at least one removal")
+}
+
+func renderDependencyConfirmation(cmd *cobra.Command, opts *options, prepared []dependencyAction) error {
+	if opts.format == "human" {
+		if err := renderDependencySync(cmd, opts, prepared, false); err != nil {
+			return err
+		}
+	}
+	if opts.externalUninstalled {
+		removals := 0
+		for _, action := range prepared {
+			if action.Action == environment.ActionRemove {
+				removals++
+				if opts.format == "human" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Attest external uninstall: %s/%s\n", action.Alias, action.ClientID)
+				}
+			}
+		}
+		if removals == 0 {
+			return errors.New("--external-uninstalled requires at least one removal")
+		}
+	}
+	return nil
+}
+
+func (request dependencySyncRequest) checkInputs() error {
+	m, err := os.ReadFile(request.manifestPath)
+	if err != nil {
+		return err
+	}
+	l, err := os.ReadFile(request.lockPath)
+	if err != nil {
+		return err
+	}
+	if string(m) != string(request.manifestBytes) || string(l) != string(request.lockBytes) {
+		return installer.ErrPlanChanged
+	}
+	return nil
+}
+
+func prepareDependencySyncLock(ctx context.Context, app App, opts *options, lockedOnly bool, manifestPath, lockPath string) (environment.Requirements, environment.Lock, error) {
+	requirements, err := readDependencyManifest(manifestPath)
+	if err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	if err := validateDependencyTargets(app, requirements); err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	requirements, err = app.canonicalizeDependencySyncRequirements(ctx, requirements, lockPath, lockedOnly)
+	if err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	lock, err := selectDependencySyncLock(ctx, app, opts, lockedOnly, lockPath, requirements)
+	if err != nil {
+		return environment.Requirements{}, environment.Lock{}, err
+	}
+	return requirements, lock, nil
 }

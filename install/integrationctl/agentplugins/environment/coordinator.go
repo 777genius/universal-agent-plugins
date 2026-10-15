@@ -141,16 +141,7 @@ func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock,
 			plan.Bindings = append(plan.Bindings, PreparedBinding{Alias: current.Alias, ClientID: current.ClientID, InstallationID: current.InstallationID, BindingID: current.BindingID, Action: ActionRemove, Authority: bindingAuthority(current.Alias, current.ClientID, current.SourceKey, ActionRemove, current)})
 		}
 	}
-	sort.SliceStable(plan.Bindings, func(i, j int) bool {
-		if plan.Bindings[i].Alias != plan.Bindings[j].Alias {
-			return plan.Bindings[i].Alias < plan.Bindings[j].Alias
-		}
-		// Update the shared installation pin before attaching another target.
-		if (plan.Bindings[i].Action == ActionInstall) != (plan.Bindings[j].Action == ActionInstall) {
-			return plan.Bindings[j].Action == ActionInstall
-		}
-		return plan.Bindings[i].ClientID < plan.Bindings[j].ClientID
-	})
+	sortSyncBindings(plan.Bindings)
 	return plan, nil
 }
 
@@ -234,4 +225,17 @@ func validateDesiredBinding(pkg LockedPackage, target string, current BindingObs
 		}
 	}
 	return current, nil
+}
+
+func sortSyncBindings(bindings []PreparedBinding) {
+	sort.SliceStable(bindings, func(i, j int) bool {
+		if bindings[i].Alias != bindings[j].Alias {
+			return bindings[i].Alias < bindings[j].Alias
+		}
+		// Update the shared installation pin before attaching another target.
+		if (bindings[i].Action == ActionInstall) != (bindings[j].Action == ActionInstall) {
+			return bindings[j].Action == ActionInstall
+		}
+		return bindings[i].ClientID < bindings[j].ClientID
+	})
 }
