@@ -50,11 +50,15 @@ func (s *dependencyTestSource) ResolveGitHubSelector(ctx context.Context, repo, 
 // Real Git acquisition, standard loader, digest store, public SDK transaction,
 // Codex projection and CLI commands run against exclusively disposable roots.
 func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
+	// Standard Windows ambient names must not block native lifecycle retries.
+	// Reproduce the same environment boundary on every test host.
+	t.Setenv("ProgramFiles(x86)", "ignored-windows-installation-metadata")
+	t.Setenv("CommonProgramFiles(x86)", "ignored-windows-installation-metadata")
 	repo := writeCLIPlugin(t)
 	writeCLIMCP(t, repo)
 	git := func(args ...string) {
 		t.Helper()
-		c := exec.CommandContext(context.Background(), "git", args...)
+		c := exec.CommandContext(context.Background(), "git", append([]string{"-c", "commit.gpgsign=false"}, args...)...)
 		c.Dir = repo
 		c.Env = append(os.Environ(), "GIT_AUTHOR_NAME=iliya", "GIT_AUTHOR_EMAIL=iliyazelenkog@gmail.com", "GIT_COMMITTER_NAME=iliya", "GIT_COMMITTER_EMAIL=iliyazelenkog@gmail.com")
 		b, e := c.CombinedOutput()

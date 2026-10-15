@@ -3,9 +3,11 @@ package statemigration
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -510,5 +512,50 @@ func TestMigrateExpectedRejectsLegacyStateChangedAfterPlan(t *testing.T) {
 	}
 	if _, err := os.Stat(migrator.V2Store.Path); !os.IsNotExist(err) {
 		t.Fatalf("state v2 was created: %v", err)
+	}
+}
+
+// Schema 4 already records explicit Directory provenance; a schema-only upgrade
+// must not infer the old frozen catalog's community distribution and release 1.
+func TestMigrateSchema4PreservesDirectoryProvenance(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state-v2.json")
+	original := []byte(`{"schema_version":4,"installations":[{"installation_id":"00000000-0000-4000-8000-000000000001","declared_name":"demo","origin_mode":"directory","directory":{"product_id":"demo","distribution_id":"publisher/demo","distribution_kind":"community","desired_release_sequence":7},"source":{"source_binding_id":"src_demo","requested_source":"demo","canonical_source":"https://github.com/publisher/demo","repository":"publisher/demo","resolved_revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tree_digest":"sha256:tree"},"package":{"loader_kind":"agent_plugins","format_id":"agent-plugins/1.0.0","schema_uri":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","declared_name":"demo","manifest_digest":"sha256:manifest","inventory":{}},"clients":{"client_a":{"client_binding_id":"client_a","client_id":"codex","scope":"user","target_locator":"user","physical_artifact_id":"physical_a","materialization":"materialized","activation":"active","authentication":"not_required","policy":"allowed","verification":"installation_verified","package_revision":{"distribution_id":"publisher/demo","release_sequence":6,"resolved_revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","tree_digest":"sha256:client-tree","manifest_digest":"sha256:client-manifest"},"updated_at":"2026-08-01T00:00:00Z"}},"created_at":"2026-08-01T00:00:00Z","updated_at":"2026-08-01T00:00:00Z"}]}`)
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var expected domain.StateFileV2
+	if err := json.Unmarshal(original, &expected); err != nil {
+		t.Fatal(err)
+	}
+	migrator := Migrator{V2Store: statev2.Store{Path: path}, Lock: &migrationTestLock{}, PendingCheck: func(context.Context) error { return nil }}
+	plan, err := migrator.PlanCurrentV2()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.SourceSchema != 4 || plan.Installations != 1 || plan.NeedsRebind != 0 {
+		t.Fatalf("plan: %+v", plan)
+	}
+	afterPlan, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(afterPlan, original) {
+		t.Fatalf("plan rewrote state: %v", err)
+	}
+	report, err := migrator.MigrateCurrentV2(t.Context(), plan.LegacyDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Migrated != 1 || report.NeedsRebind != plan.NeedsRebind {
+		t.Fatalf("report: %+v", report)
+	}
+	backup, err := os.ReadFile(report.BackupPath)
+	if err != nil || !bytes.Equal(backup, original) {
+		t.Fatalf("backup: %v", err)
+	}
+	state, err := migrator.V2Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected.SchemaVersion = domain.StateSchemaVersion
+	if !reflect.DeepEqual(state, expected) {
+		t.Fatalf("schema-only upgrade changed provenance:\ngot %+v\nwant %+v", state, expected)
 	}
 }

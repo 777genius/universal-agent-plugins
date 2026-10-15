@@ -43,7 +43,7 @@ type Plan struct {
 	SourceSchema  int    `json:"source_schema,omitempty"`
 }
 
-// PlanCurrentV2 inspects authoritative schema 2 without writing it. The digest
+// PlanCurrentV2 inspects authoritative schemas 2-4 without writing them. The digest
 // is the token the apply step must recheck under the global mutation lock.
 func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 	body, err := os.ReadFile(migrator.V2Store.Path)
@@ -75,9 +75,8 @@ func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 			return Plan{}, fmt.Errorf("old-schema pending recovery blocks migration: %w", err)
 		}
 	}
-	for index := range state.Installations {
-		installation := &state.Installations[index]
-		migrateV2Origin(installation)
+	migrateLegacyOrigins(&state, header.SchemaVersion)
+	for _, installation := range state.Installations {
 		if installation.NeedsRebind {
 			plan.NeedsRebind++
 		}
@@ -85,7 +84,7 @@ func (migrator Migrator) PlanCurrentV2() (Plan, error) {
 	return plan, nil
 }
 
-// MigrateCurrentV2 performs the explicit schema 2 -> current migration in
+// MigrateCurrentV2 performs the explicit schema 2-4 -> current migration in
 // place. It is intentionally separate from MigrateExpected, which migrates the
 // pre-v2 legacy store into a new authoritative file.
 func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest string) (Report, error) {
@@ -133,10 +132,7 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 	if err := refusePendingOldState(state); err != nil {
 		return Report{}, err
 	}
-	for installationIndex := range state.Installations {
-		installation := &state.Installations[installationIndex]
-		migrateV2Origin(installation)
-	}
+	migrateLegacyOrigins(&state, header.SchemaVersion)
 	state.SchemaVersion = domain.StateSchemaVersion
 	if err := statev2.Validate(state); err != nil {
 		return Report{}, fmt.Errorf("validate migrated state before backup: %w", err)
@@ -165,6 +161,16 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 		}
 	}
 	return report, nil
+}
+
+// Schema 4 already carries explicit origins; only earlier schemas need inference.
+func migrateLegacyOrigins(state *domain.StateFileV2, sourceSchema int) {
+	if sourceSchema >= domain.PreviousStateSchemaV4 {
+		return
+	}
+	for index := range state.Installations {
+		migrateV2Origin(&state.Installations[index])
+	}
 }
 
 func migrateV2Origin(installation *domain.Installation) {

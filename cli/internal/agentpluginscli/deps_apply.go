@@ -70,7 +70,7 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 	if err != nil {
 		return err
 	}
-	requirements, err = app.canonicalizeDependencyRequirements(cmd.Context(), requirements)
+	requirements, err = app.canonicalizeDependencySyncRequirements(cmd.Context(), requirements, lockPath, lockedOnly)
 	if err != nil {
 		return err
 	}
@@ -241,4 +241,18 @@ func readDependencySyncInputs(manifestPath, lockPath string, dryRun bool) ([]byt
 		}
 	}
 	return manifestBytes, lockBytes, nil
+}
+
+func (app App) canonicalizeDependencySyncRequirements(ctx context.Context, requirements environment.Requirements, lockPath string, lockedOnly bool) (environment.Requirements, error) {
+	readLock := readCompatibleDependencyLock
+	if lockedOnly {
+		readLock = readDependencyLock
+	}
+	lock, err := readLock(lockPath, requirements)
+	if err == nil {
+		canonicalizeRequirementsFromLock(&requirements, lock)
+	} else if lockedOnly || !os.IsNotExist(err) {
+		return environment.Requirements{}, fmt.Errorf("read dependency lock: %w", err)
+	}
+	return app.canonicalizeDependencyRequirements(ctx, requirements)
 }

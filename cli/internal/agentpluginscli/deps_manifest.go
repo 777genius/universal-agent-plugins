@@ -57,7 +57,10 @@ func readDependencyManifest(path string) (environment.Requirements, error) {
 	for alias, item := range raw.Dependencies {
 		requirement, err := requirementFromRaw(alias, item)
 		if err != nil {
-			return environment.Requirements{}, manifestError(path, body, fmt.Errorf("dependencies.%s: %w", alias, err))
+			return environment.Requirements{}, manifestError(path, body, fmt.Errorf("dependencies.%s: %w", alias, err), "dependencies", alias)
+		}
+		if err := requirement.Validate(); err != nil {
+			return environment.Requirements{}, manifestError(path, body, err, "dependencies", alias)
 		}
 		requirements.Dependencies[alias] = requirement
 	}
@@ -65,7 +68,7 @@ func readDependencyManifest(path string) (environment.Requirements, error) {
 		requirements.Targets[target] = append([]string(nil), aliases...)
 	}
 	if err := requirements.Validate(); err != nil {
-		return environment.Requirements{}, manifestError(path, body, err)
+		return environment.Requirements{}, manifestError(path, body, err, requirementErrorLocation(requirements, err)...)
 	}
 	return requirements, nil
 }
@@ -130,7 +133,7 @@ func rawSelector(raw rawDependency) (environment.Selector, error) {
 func rejectManifestUnknown(path string, body []byte, generic map[string]any) error {
 	for key := range generic {
 		if key != "schema_version" && key != "dependencies" && key != "targets" {
-			return manifestError(path, body, fmt.Errorf("unknown top-level field %q", key))
+			return manifestError(path, body, fmt.Errorf("unknown top-level field %q", key), key)
 		}
 	}
 	dependencies, ok := generic["dependencies"].(map[string]any)
@@ -138,34 +141,18 @@ func rejectManifestUnknown(path string, body []byte, generic map[string]any) err
 		for alias, value := range dependencies {
 			fields, ok := value.(map[string]any)
 			if !ok {
-				return manifestError(path, body, fmt.Errorf("dependencies.%s must be a table", alias))
+				return manifestError(path, body, fmt.Errorf("dependencies.%s must be a table", alias), "dependencies", alias)
 			}
 			for key := range fields {
 				switch key {
 				case "git", "path", "ref", "commit", "registry", "distribution", "release":
 				default:
-					return manifestError(path, body, fmt.Errorf("dependencies.%s contains unknown field %q", alias, key))
+					return manifestError(path, body, fmt.Errorf("dependencies.%s contains unknown field %q", alias, key), "dependencies", alias, key)
 				}
 			}
 		}
 	}
 	return nil
-}
-
-func manifestError(path string, body []byte, cause error) error {
-	message := cause.Error()
-	line := 1
-	token := ""
-	if fields := strings.Fields(message); len(fields) != 0 {
-		token = strings.Trim(fields[0], `"'`)
-	}
-	for index, text := range strings.Split(string(body), "\n") {
-		if token != "" && strings.Contains(text, token) {
-			line = index + 1
-			break
-		}
-	}
-	return fmt.Errorf("%s:%d: %w", filepath.Base(path), line, cause)
 }
 
 func writeInitialDependencyManifest(path string) error {

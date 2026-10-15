@@ -368,6 +368,17 @@ func ResolveDirectory(snapshot DirectorySnapshot, request DirectoryResolveReques
 		}
 		qualified = request.Recorded.DistributionID
 	}
+	// Release sequences are distribution-local. Resolve an exact short selector
+	// before eligibility checks, so an ineligible publisher cannot be substituted.
+	if request.DesiredReleaseSequence != 0 && qualified == "" {
+		distributions := orderedDistributions(snapshot, product)
+		if len(distributions) > 1 {
+			return DirectorySelection{}, fmt.Errorf("%w: exact release for %q requires a qualified distribution ID", ErrDirectoryAmbiguous, selector)
+		}
+		if len(distributions) == 1 {
+			qualified = distributions[0].ID
+		}
+	}
 	if qualified != "" {
 		distribution := distributionByID(snapshot, product, qualified)
 		if distribution == nil {

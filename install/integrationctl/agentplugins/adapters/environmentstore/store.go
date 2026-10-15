@@ -301,6 +301,13 @@ func (store Store) publish(ctx context.Context, snapshot domain.PackageSnapshot,
 	if err := atomicfile.SyncDirectory(filepath.Dir(destination)); err != nil {
 		return Package{}, err
 	}
+	// The replacement is durable now. Remove only this publication's unique quarantine;
+	// earlier failure paths retain it for diagnosis or recovery.
+	if quarantine != "" {
+		if err := os.RemoveAll(quarantine); err != nil {
+			return Package{}, fmt.Errorf("remove repaired store quarantine: %w", err)
+		}
+	}
 	return Package{Root: filepath.Join(destination, "package"), Metadata: metadata}, nil
 }
 

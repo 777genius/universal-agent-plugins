@@ -62,5 +62,10 @@ func TestStorePublishesExecutableInventoryAndRejectsTampering(t *testing.T) {
 		if _, err := store.Get(ctx, snapshot.DigestAlgorithm, snapshot.TreeDigest); err != nil {
 			t.Fatal(err)
 		}
+		leftovers, err := filepath.Glob(filepath.Join(root, ".staging", "*-corrupt"))
+		if err != nil || len(leftovers) != 0 {
+			t.Fatalf("successful repair retained quarantine: %v %v", leftovers, err)
+		}
+
 	}
 }

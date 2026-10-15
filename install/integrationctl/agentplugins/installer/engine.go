@@ -319,5 +319,12 @@ func (e *Engine) preparedClients(req Request) (domain.DetectedClient, map[domain
 func (e *Engine) WithTemporaryRoot(root string) (*Engine, error) {
 	cfg := e.cfg
 	cfg.TempRoot = root
-	return New(cfg)
+	derived, err := New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	// Prepare always uses DryRun; preserve the observation policy for an
+	// eventual confirmed Apply without enabling writes during preparation.
+	derived.persistObservations = e.persistObservations
+	return derived, nil
 }
