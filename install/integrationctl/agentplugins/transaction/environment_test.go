@@ -51,6 +51,9 @@ func TestEnvironmentAuthorityPreservesUnmanagedImperativeOperations(t *testing.T
 		if err := AuthorizeEnvironmentMutation(state, nil, action, "owned", "owned-binding", "", false); !errors.Is(err, ErrEnvironmentAuthority) {
 			t.Fatalf("owned %s escaped: %v", action, err)
 		}
+		if err := AuthorizeEnvironmentMutation(state, nil, action, "owned", "new-unmanaged-binding", "", true); !errors.Is(err, ErrEnvironmentAuthority) {
+			t.Fatalf("new sibling %s escaped installation authority: %v", action, err)
+		}
 	}
 }
 

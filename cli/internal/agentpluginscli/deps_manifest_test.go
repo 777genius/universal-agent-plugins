@@ -106,6 +106,10 @@ func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *test
 	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, recorded); err != nil {
 		t.Fatalf("installed exact repair lost recorded eligibility: %v", err)
 	}
+	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, recorded, domain.DirectoryNewTarget); err != nil {
+		t.Fatalf("live installed new-target eligibility: %v", err)
+	}
+
 }
 
 func TestDependencyManifestErrorLocations(t *testing.T) {
@@ -156,6 +160,15 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	if _, err := readDependencyLock(path, canonical); err != nil {
 		t.Fatal(err)
 	}
+	// Resolving commands must reuse lock identity before Directory lookup.
+	previousClient := fixture.cli.app.DirectoryClient
+	fixture.cli.app.DirectoryClient = nil
+	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID
+	resolved, _, next, err := resolveDependencyLock(context.Background(), fixture.cli.app, &options{dryRun: true}, requirements, path, "")
+	if err != nil || resolved.Dependencies["docs"].Registry.Distribution != "owner/rollout" || next.Packages[0].TreeDigest != lock.Packages[0].TreeDigest {
+		t.Fatalf("resolve lock-first identity: %+v %v", next, err)
+	}
+	fixture.cli.app.DirectoryClient = previousClient
 	// Canonicalization grants no fresh-install eligibility for that recorded identity.
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)
 	if err != nil {
@@ -164,5 +177,53 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	defer func() { _ = loaded.cleanup() }()
 	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, lock.Packages[0], nil); err == nil {
 		t.Fatal("lock-based canonicalization admitted a superseded new install")
+	}
+}
+
+func TestDependencyInitColdRootAndDryRun(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		f := newCLIFixture(t, nil)
+		f.app.DependenciesRoot = filepath.Join(t.TempDir(), "cold")
+		args := []string{"deps", "init", "--format", "json"}
+		if dry {
+			args = append(args, "--dry-run")
+		}
+		out, _, err := f.execute(false, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mp, _ := f.app.dependencyPaths()
+		if dry {
+			if _, err := os.Stat(f.app.DependenciesRoot); !os.IsNotExist(err) {
+				t.Fatal("dry init created root")
+			}
+			continue
+		}
+		if !strings.Contains(out, "manifest_path") || !strings.Contains(out, "created") {
+			t.Fatal(out)
+		}
+		if _, err := readDependencyManifest(mp); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := f.execute(false, args...); err == nil || !strings.Contains(err.Error(), mp) {
+			t.Fatalf("existing file: %v", err)
+		}
+	}
+}
+
+func TestDependencyStatusColdRoot(t *testing.T) {
+	f := newCLIFixture(t, nil)
+	f.app.DependenciesRoot = filepath.Join(t.TempDir(), "cold")
+	out, _, err := f.execute(false, "deps", "status", "--format", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"scope", "manifest_path", "lock_path", "supported_targets"} {
+		if !strings.Contains(out, field) {
+			t.Fatal(out)
+		}
+	}
+	if _, err := os.Stat(f.app.DependenciesRoot); !os.IsNotExist(err) {
+		t.Fatal("status created cold root")
 	}
 }

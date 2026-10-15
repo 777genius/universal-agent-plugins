@@ -122,7 +122,7 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 	}
 	snapshot.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: source.Repository,
 		PackageSubpath: source.Path, ResolvedRevision: commit, SourceBindingHint: "uap-dependency-git"}
-	loaded, err := resolver.app.loadSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
+	loaded, err := resolver.app.loadStandardSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
 	if err != nil {
 		return environment.LockedPackage{}, err
 	}
@@ -142,7 +142,7 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 
 func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement) (environment.LockedPackage, error) {
 	sequence, _ := parseReleaseSequence(requirement.Registry.Selector.Value)
-	request := packageResolutionRequest{Operation: domain.DirectoryInstall, DesiredReleaseSequence: sequence}
+	request := packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, DesiredReleaseSequence: sequence}
 	for target, aliases := range resolver.requirements.Targets {
 		for _, alias := range aliases {
 			if alias == requirement.Alias {

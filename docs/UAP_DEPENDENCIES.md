@@ -1,7 +1,10 @@
 # UAP dependency environments
 
+**Unreleased:** this workflow is available in current source and has not been
+qualified as a published CLI release.
+
 `agentplugins deps` manages one current-user environment in
-`AGENTPLUGINS_HOME`. `uap.toml` records intent and `uap.lock` records exact
+`AGENTPLUGINS_HOME` (default: `os.UserConfigDir()/agentplugins`). `uap.toml` records intent and `uap.lock` records exact
 sources and package digests. The files are portable; local receipts, the
 verified package store, profile paths and `PLUGIN_DATA` are not.
 
@@ -44,6 +47,11 @@ is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
+Only targets registered by the composed SDK installer are supported: currently
+Claude and Codex. `deps status` prints the scope, exact manifest/lock paths and
+supported targets, including before `deps init`. Initialization creates a private
+root when necessary and never overwrites an existing manifest.
+
 Dependency commands always use manifest targets. They reject inherited
 `--target` and `--scope project`. Use `--dry-run` for an in-memory preview;
 it does not write the lock, store, state, profiles or persistent scanner cache.
@@ -67,3 +75,23 @@ Schema 2/3/4 state requires the existing explicit `migrate-state --dry-run`
 followed by `migrate-state`. Pending old-schema transactions must first be
 recovered with their corresponding previous binary. Migration retains a backup
 and leaves all historical installations unmanaged.
+
+A copied registry lock is identity, not proof of an installed release. On a fresh
+machine the signed Directory must still permit a new installation of that exact
+release. A superseded release requires a newer pin; a revoked release cannot be
+reproduced. Existing installed releases retain only their explicit signed-policy
+exceptions, using live state rather than the copied lock.
+
+Authentication is reported separately from retryable lifecycle work. An active,
+materialized, installation-verified binding with unchecked authentication shows
+`auth_unverified`; pending or failed authentication shows `auth_pending` or
+`auth_failed`. These facts do not repeatedly reinstall the package. Activation
+or installation-verification failures still retry. Sync prints planned changes
+before confirmation and reports actual per-binding outcomes, manual actions and
+SDK next actions after execution. Run `deps recover` only when inspection reports
+pending recovery; an activation failure alone does not imply pending recovery.
+
+An installation with any environment receipt requires environment authority for
+all its bindings, including new targets. Mixing an imperative binding into it
+is refused. Conversely an environment cannot adopt an installation containing
+unmanaged bindings, even when the unmanaged target is absent from the manifest.

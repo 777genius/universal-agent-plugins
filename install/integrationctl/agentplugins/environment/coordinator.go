@@ -145,6 +145,10 @@ func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock,
 		if plan.Bindings[i].Alias != plan.Bindings[j].Alias {
 			return plan.Bindings[i].Alias < plan.Bindings[j].Alias
 		}
+		// Update the shared installation pin before attaching another target.
+		if (plan.Bindings[i].Action == ActionInstall) != (plan.Bindings[j].Action == ActionInstall) {
+			return plan.Bindings[j].Action == ActionInstall
+		}
 		return plan.Bindings[i].ClientID < plan.Bindings[j].ClientID
 	})
 	return plan, nil
@@ -216,6 +220,9 @@ func validateDesiredBinding(pkg LockedPackage, target string, current BindingObs
 		return current, installer.ErrRecoveryRequired
 	}
 	for _, existing := range observed {
+		if !existing.Managed && existing.SourceKey == pkg.SourceKey {
+			return current, fmt.Errorf("foreign: %s has an unmanaged binding in installation %s; remove it before adding the dependency", pkg.Alias, existing.InstallationID)
+		}
 		if existing.Managed && existing.Alias == pkg.Alias && existing.SourceKey != pkg.SourceKey {
 			return current, ErrSourceChange
 		}
