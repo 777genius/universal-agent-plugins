@@ -688,7 +688,14 @@
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "سيفشل CLI قبل إجراء أي تعديل وسيقترح تركيبات متوافقة من الأهداف والمصادر؛ ولا يخلط أبدًا توزيعات مختلفة بين العملاء.",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "يتحقق CLI من كل وكيل محدد قبل تغيير الملفات ويعرض أي خطوة لتسجيل الدخول أو التفعيل. تبقى بيانات اعتماد OAuth مع الوكيل.",
       "chatgptFinish": "افتح ChatGPT، واختر {name} من التطبيقات أو الإضافات، ثم وصله وابدأ محادثة جديدة. يعتمد التوفر على حسابك ومساحة العمل لديك.",
-      "expectedFallback": "مصدر الرجوع المتوقع: {source}."
+      "expectedFallback": "مصدر الرجوع المتوقع: {source}.",
+      "dependencySaving": {
+        "saved": "يُحفظ للمستخدم الحالي. ينطبق remove على جميع الأهداف المحفوظة؛ استخدم الاسم المستعار للتبعية الذي تعرضه CLI عند الحاجة.",
+        "noSave": "يستخدم هذا الاختيار --no-save ولا يسجل تبعية.",
+        "local": "لا تُحفظ الحزم المحلية كتبعيات قابلة للنقل.",
+        "discovery": "لا تُحفظ محددات discovery كتبعيات.",
+        "chatgpt": "لا يحفظ إعداد ChatGPT تبعية."
+      }
     },
     "authentication": {
       "not_required": "لا يلزم حساب",

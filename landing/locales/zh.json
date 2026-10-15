@@ -688,7 +688,14 @@
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI 将在突变之前失败并建议兼容的目标/源组合；它从不混合跨客户端的发行版。",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI 在更改文件之前检查每个选定的代理并显示任何登录或激活步骤。 OAuth 凭据由代理保留。",
       "chatgptFinish": "打开ChatGPT，在应用程序或插件中选择{name}，连接它，然后开始新的聊天。可用性取决于您的帐户和工作空间。",
-      "expectedFallback": "预期的源回退：{source}。"
+      "expectedFallback": "预期的源回退：{source}。",
+      "dependencySaving": {
+        "saved": "为当前用户保存。Remove 适用于所有已保存的目标；必要时请使用 CLI 输出的依赖别名。",
+        "noSave": "此目标选择使用 --no-save，不会记录依赖。",
+        "local": "本地包不会保存为可移植依赖。",
+        "discovery": "discovery 选择器不会保存为依赖。",
+        "chatgpt": "ChatGPT 准备操作不会保存依赖。"
+      }
     },
     "authentication": {
       "not_required": "无需帐户",

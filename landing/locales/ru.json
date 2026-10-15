@@ -688,7 +688,14 @@
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "CLI завершится ошибкой до изменения данных и предложит совместимые комбинации целей и источников; он никогда не смешивает дистрибутивы разных клиентов.",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "CLI проверяет каждого выбранного агента до изменения файлов и показывает любой шаг входа или активации. Учётные данные OAuth остаются у агента.",
       "chatgptFinish": "Откройте ChatGPT, выберите {name} в Apps или Plugins, подключите его и начните новый чат. Доступность зависит от вашей учётной записи и рабочей области.",
-      "expectedFallback": "Ожидаемый резервный источник: {source}."
+      "expectedFallback": "Ожидаемый резервный источник: {source}.",
+      "dependencySaving": {
+        "saved": "Сохраняется для текущего пользователя. Remove применяется ко всем сохранённым целям; при необходимости используйте алиас зависимости из вывода CLI.",
+        "noSave": "Для выбранных клиентов используется --no-save: зависимость не записывается.",
+        "local": "Локальные пакеты не сохраняются как переносимые зависимости.",
+        "discovery": "Селекторы discovery не сохраняются как зависимости.",
+        "chatgpt": "Подготовка ChatGPT не сохраняет зависимость."
+      }
     },
     "authentication": {
       "not_required": "Учётная запись не требуется",

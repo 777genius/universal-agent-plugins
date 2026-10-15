@@ -688,7 +688,14 @@
       "theCliWillFailBeforeMutationAndSuggestCompatibleTargetSourceCombinationsItNeverMixesDistributionsAcrossClients": "La CLI fallará antes de la mutación y sugerirá combinaciones compatibles de objetivo/fuente; nunca mezcla distribuciones entre clientes.",
       "theCliChecksEverySelectedAgentBeforeChangingFilesAndShowsAnySignInOrActivationStepOauthCredentialsStayWithTheAgent": "La CLI verifica cada agente seleccionado antes de cambiar archivos y muestra cualquier paso de inicio de sesión o activación. Las credenciales de OAuth permanecen con el agente.",
       "chatgptFinish": "Abra ChatGPT, seleccione {name} en Aplicaciones o Complementos, conéctelo e inicie un nuevo chat. La disponibilidad depende de su cuenta y espacio de trabajo.",
-      "expectedFallback": "Reserva de fuente esperada: {source}."
+      "expectedFallback": "Reserva de fuente esperada: {source}.",
+      "dependencySaving": {
+        "saved": "Se guarda para el usuario actual. Remove se aplica a todos los destinos guardados; si es necesario, usa el alias de dependencia mostrado por la CLI.",
+        "noSave": "Esta selección usa --no-save y no registra una dependencia.",
+        "local": "Los paquetes locales no se guardan como dependencias portátiles.",
+        "discovery": "Los selectores discovery no se guardan como dependencias.",
+        "chatgpt": "La preparación de ChatGPT no guarda una dependencia."
+      }
     },
     "authentication": {
       "not_required": "No se requiere cuenta",

@@ -216,6 +216,9 @@ watch(availableClients, (next) => {
         </div>
         <CommandSnippet :label="t('registryUi.install.add')" kind="add" :command="commands.add" />
       </div>
+      <p v-if="commands.saveMode" class="install-panel__notice">
+        {{ t(`registryUi.install.dependencySaving.${commands.saveMode}`) }}
+      </p>
       <CommandSnippet
         :label="t('registryUi.install.update')"
         kind="update"
