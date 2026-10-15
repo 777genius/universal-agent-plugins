@@ -3,8 +3,9 @@ package installer
 import (
 	"context"
 	"errors"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestProjectedInstallRequiresPreparedOwnedUpdate(t *testing.T) {

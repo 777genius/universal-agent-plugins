@@ -23,12 +23,8 @@ func (e *Engine) PreviewInstallAfterUpdate(ctx context.Context, req Request, upd
 	if update.closed || update.busy || update.applied || update.req.Operation != OpUpdate || req.Operation != OpInstall || len(req.Targets) != 0 {
 		return nil, ErrInvalidHandle
 	}
-	old, wanted := update.req.EnvironmentAuthority, req.EnvironmentAuthority
-	if old == nil || wanted == nil || old.EnvironmentID != wanted.EnvironmentID || old.Alias != wanted.Alias || old.SourceKey != wanted.SourceKey || req.InstallationID == "" || req.InstallationID != update.req.InstallationID || wanted.InstallationID != req.InstallationID || wanted.ClientID == old.ClientID || wanted.ReceiptID != "" || wanted.ClientBindingID != "" {
-		return nil, fmt.Errorf("%w: projected install requires the same owned installation and a new target", ErrInvalidRequest)
-	}
-	if req.AcquiredSnapshot == nil || req.AcquiredSnapshot.TreeDigest != update.snapshot.TreeDigest {
-		return nil, fmt.Errorf("%w: projected pin differs from prepared update", ErrInvalidRequest)
+	if err := validateProjectedInstallIdentity(req, update); err != nil {
+		return nil, err
 	}
 	state, err := e.store.Load()
 	if err != nil {
@@ -57,6 +53,19 @@ func (e *Engine) PreviewInstallAfterUpdate(ctx context.Context, req Request, upd
 	projected := *e
 	projected.store = projectedPinStore{state: state}
 	return projected.Prepare(ctx, req)
+}
+
+// validateProjectedInstallIdentity binds the projected pin to the same owner
+// and installation while requiring an unbound, distinct target.
+func validateProjectedInstallIdentity(req Request, update *PreparedOperation) error {
+	old, wanted := update.req.EnvironmentAuthority, req.EnvironmentAuthority
+	if old == nil || wanted == nil || old.EnvironmentID != wanted.EnvironmentID || old.Alias != wanted.Alias || old.SourceKey != wanted.SourceKey || req.InstallationID == "" || req.InstallationID != update.req.InstallationID || wanted.InstallationID != req.InstallationID || wanted.ClientID == old.ClientID || wanted.ReceiptID != "" || wanted.ClientBindingID != "" {
+		return fmt.Errorf("%w: projected install requires the same owned installation and a new target", ErrInvalidRequest)
+	}
+	if req.AcquiredSnapshot == nil || req.AcquiredSnapshot.TreeDigest != update.snapshot.TreeDigest {
+		return fmt.Errorf("%w: projected pin differs from prepared update", ErrInvalidRequest)
+	}
+	return nil
 }
 
 type projectedPinStore struct{ state domain.StateFileV2 }

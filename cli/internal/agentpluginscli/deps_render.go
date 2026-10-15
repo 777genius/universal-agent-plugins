@@ -51,9 +51,10 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 	for _, result := range results {
 		item := dependencyResultDTO{InstallationID: result.InstallationID, ClientID: result.Client.ClientID, Operation: string(result.Operation), Outcome: string(result.Outcome), Reason: result.Reason, ManualActions: result.ManualActions}
 		fact := dependencyStatusFact{ClientID: result.Client.ClientID}
-		if result.Client.Authentication == "auth_pending" {
+		switch result.Client.Authentication {
+		case "auth_pending":
 			fact.Facts = []string{"auth_pending"}
-		} else if result.Client.Authentication == "failed" {
+		case "failed":
 			fact.Facts = []string{"auth_failed"}
 		}
 		item.NextActions = dependencyNextActions(fact, result.NextActions...)
