@@ -47,13 +47,13 @@ is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
-The composed installer supports the 11 qualified local clients: Codex, Claude,
+The saved dependency workflow supports the 11 qualified local clients: Codex, Claude,
 Cursor, Copilot, Kiro, Gemini, OpenCode, Cline, Windsurf, Grok Build and
 Kimi Code. `deps status` prints the scope, exact manifest/lock paths, supported
 targets and `excluded_targets`, including before `deps init`. ChatGPT is listed
 as `manual_preparation_only`. VS Code qualification is deferred by owner scope
 and is reported as `dependency_management_deferred`; its existing imperative
-adapter remains available. Initialization creates a private root when necessary
+adapter and explicitly registered SDK APIs remain available. Initialization creates a private root when necessary
 and never overwrites an existing manifest.
 
 Each mutating target must be detected with an explicit local profile. CLI

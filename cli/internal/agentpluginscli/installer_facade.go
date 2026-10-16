@@ -12,10 +12,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
-// qualifiedLocalFacadeClients records local-file route qualification separately
-// from saved-dependency support. Broadening it requires local route qualification.
-var qualifiedLocalFacadeClients = map[domain.ClientID]bool{domain.ClientClaude: true, domain.ClientCodex: true}
-
 // useInstallerFacadeForLocalAdd is intentionally narrow: one explicit local
 // standard package, one qualified facade client, and a non-interactive user
 // scope operation. Remote, Directory, multi-target, interactive lifecycle, and
@@ -24,7 +20,7 @@ func useInstallerFacadeForLocalAdd(app App, opts *options, loaded loadedPackage,
 	if app.Installer == nil || opts == nil || len(targets) != 1 || activationComplete || authComplete || needsInstallConfirmation {
 		return false
 	}
-	if !qualifiedLocalFacadeClients[targets[0]] {
+	if !domain.ClientTraitsFor(targets[0]).QualifiedLocalInstallerFacade {
 		return false
 	}
 	if !automatedMutation(app, opts) || opts.scope != string(domain.ScopeUser) || loaded.origin != domain.OriginModeDirect {

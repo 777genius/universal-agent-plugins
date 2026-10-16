@@ -44,8 +44,8 @@ func New(cfg Config) (*Engine, error) {
 	return &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile}}, nil
 }
 
-// ClientSupported reports whether a registered adapter has a local profile that
-// the installer can own. Hostless manual preparation remains a CLI workflow.
+// ClientSupported reports saved-dependency qualification for an explicit
+// registry. It is separate from existing SDK adapter registration.
 func ClientSupported(registry *clients.Registry, clientID string) bool {
 	return ClientSupportExclusionReason(registry, clientID) == ""
 }
@@ -57,9 +57,8 @@ func ClientSupportExclusionReason(registry *clients.Registry, clientID string) s
 	if !defined {
 		return "not_registered"
 	}
-	if definition.ID == domain.ClientVSCode {
-		// Owner scope decision: defer new saved-dependency/SDK qualification for VS
-		// Code. Preserve its existing imperative adapter and all legacy capabilities.
+	if definition.Traits.SavedDependenciesDeferred {
+		// Owner qualification scope does not remove existing SDK/imperative capabilities.
 		return "dependency_management_deferred"
 	}
 	if definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare {
@@ -73,7 +72,11 @@ func ClientSupportExclusionReason(registry *clients.Registry, clientID string) s
 
 // SupportsClient preserves the composition root's explicit registry boundary.
 func (e *Engine) SupportsClient(clientID string) bool {
-	return e != nil && ClientSupported(e.cfg.Registry, clientID)
+	if e == nil {
+		return false
+	}
+	_, registered := e.cfg.Registry.Lookup(domain.ClientID(clientID))
+	return registered
 }
 
 func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, detected map[domain.ClientID]domain.DetectedClient) usecase.Service {

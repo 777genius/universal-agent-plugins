@@ -38,11 +38,12 @@ activation. If that handoff fails, a repeat with the same package and args
 resumes the pending lifecycle without another directory receipt. Group
 projection refresh is not supported.
 
-Single-target Prepare/Apply supports the eleven qualified registered local
-adapters. `ClientSupported` and `Discover` exclude hostless ChatGPT preparation
-and owner-deferred VS Code dependency qualification. Existing imperative VS Code
-source and capabilities are preserved. Registration alone never claims automatic
-activation or support for every component. `ClientMetadata.Capabilities` reports
+`Engine.SupportsClient` and `Discover` preserve explicit SDK registry membership,
+including existing VS Code APIs. Saved dependency admission uses the separate
+`ClientSupported` policy: eleven qualified local adapters, with hostless ChatGPT
+preparation and owner-deferred VS Code excluded from that workflow. Existing SDK
+and imperative capabilities remain available. Registration alone never claims
+automatic activation or support for every component. `ClientMetadata.Capabilities` reports
 the existing domain capability contract. `Plan.Delivery.Components` carries actual
 package support decisions, including unsupported components in a mixed package.
 A package with no supported components is refused before installed effects.

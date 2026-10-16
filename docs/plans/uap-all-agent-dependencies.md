@@ -31,9 +31,11 @@ part of this implementation lane. `SAVED_DEPENDENCIES_CLI_RELEASED` stays `false
 ## Support and host authority
 
 `installer.ClientSupported(registry, id)` requires a registered adapter and a
-known definition that is neither hostless nor personal-mapping-only.
-`Engine.SupportsClient`, `Discover`, CLI target selection and the generated landing
-capability artifact use this authority. Generic installer packages never import
+known definition that is neither hostless nor personal-mapping-only, and whose
+domain traits do not defer saved dependency qualification. CLI saved target
+selection and the generated landing capability artifact use this authority.
+`Engine.SupportsClient` and `Discover` preserve explicit SDK registry membership,
+including legacy VS Code APIs; saved qualification cannot disable them. Generic installer packages never import
 the all-client composition package. The CLI composition injects the same canonical
 registry into the installer that it already uses for planning and detection.
 
@@ -169,3 +171,8 @@ saved-dependency tests on the parent's hosted test workspace. Do not run heavy
 local tests, duplicate an active job, or repeat passed checks without a changed
 risk. Parent owns final independent review, broader repository checks and any
 later delivery decision. This plan is not evidence that those gates have passed.
+
+Windows preserves the existing Kiro automatic ACP containment refusal: the matrix
+asserts its real preflight error and absence of installed effects. Kiro’s complete
+MCP lifecycle runs on supported Unix platforms; Windows fixture capabilities do
+not claim automatic ACP support.

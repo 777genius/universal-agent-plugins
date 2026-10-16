@@ -84,11 +84,12 @@ type ClientDefinition struct {
 
 var clientDefinitions = []ClientDefinition{
 	clientDefinition(ClientCodex, "OpenAI Codex", "codex", "managed", "projected", true, PackageProjection, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleCLIRegistry,
-		HonorsOpenAIMCPAuthHints: true,
-		SupportsPreparedRecovery: true,
-		BindsNativeProfileRoot:   true,
+		QualifiedLocalInstallerFacade: true,
+		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                 LifecycleCLIRegistry,
+		HonorsOpenAIMCPAuthHints:      true,
+		SupportsPreparedRecovery:      true,
+		BindsNativeProfileRoot:        true,
 	}),
 	withoutHostPresence(withDirectoryPreparation(
 		clientDefinition(ClientChatGPT, "ChatGPT", "chatgpt", "manual_activation", "projected", false, PackageProjection, SupportProjected, SupportUnsupported, SupportUnsupported, SupportProjected, SupportUnsupported, ClientTraits{
@@ -106,8 +107,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleCLIRegistry,
 	}),
 	clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
+		SavedDependenciesDeferred: true,
+		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:             LifecycleCLIRegistry,
 	}),
 	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
@@ -115,9 +117,10 @@ var clientDefinitions = []ClientDefinition{
 		TracksNativeEffects: true,
 	}),
 	withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:            LifecycleCLIRegistry,
-		UsesManagedStdioLauncher: true,
+		QualifiedLocalInstallerFacade: true,
+		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:                 LifecycleCLIRegistry,
+		UsesManagedStdioLauncher:      true,
 	}), ActivationAutomatic),
 	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},

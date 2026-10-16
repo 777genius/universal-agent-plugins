@@ -24,9 +24,6 @@ func (e *Engine) Discover() []ClientMetadata {
 	result := make([]ClientMetadata, 0, len(registered))
 	for _, adapter := range registered {
 		id := string(adapter.ID())
-		if !e.SupportsClient(id) {
-			continue
-		}
 		result = append(result, e.clientMetadata(id, byClient[id]))
 	}
 	return result

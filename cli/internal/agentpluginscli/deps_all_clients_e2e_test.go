@@ -8,10 +8,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -170,7 +172,12 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			out := dependencyRun(t, f, "add", githubIdentity("acme/demo", strings.TrimSpace(string(head)), ""), "--target", string(spec.id), "--format", "json")
+			sourceID := githubIdentity("acme/demo", strings.TrimSpace(string(head)), "")
+			if spec.id == domain.ClientKiro && runtime.GOOS == "windows" {
+				dependencyKiroPlatformRefusal(t, f, runner, sourceID)
+				return
+			}
+			out := dependencyRun(t, f, "add", sourceID, "--target", string(spec.id), "--format", "json")
 			var saved struct {
 				Data struct {
 					Environment struct {
@@ -312,6 +319,30 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 	}
 }
 
+// Windows deliberately cannot authorize automatic Kiro ACP containment or
+// settlement. Exercise the real preflight refusal, before any installed effects,
+// instead of advertising a successful fixture capability on that platform.
+func dependencyKiroPlatformRefusal(t *testing.T, f cliFixture, runner *dependencyFixtureRunner, source string) {
+	t.Helper()
+	mp, lp := f.app.dependencyPaths()
+	manifest := dependencyRead(t, mp)
+	out, stderr, err := f.execute(false, "add", source, "--target", "kiro", "--format", "json")
+	if err == nil || !strings.Contains(out+stderr+err.Error(), "containment preflight failed") {
+		t.Fatalf("Kiro platform preflight did not refuse honestly: %v\n%s\n%s", err, out, stderr)
+	}
+	if runner.duplex != 0 || runner.mutations != 0 {
+		t.Fatalf("unsupported Kiro platform performed native work: %+v", runner)
+	}
+	if dependencyRead(t, mp) != manifest {
+		t.Fatal("Kiro platform refusal changed manifest")
+	}
+	for _, path := range []string{lp, f.store.Path, f.app.ManagedRoot, runner.claude.root} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("Kiro platform refusal wrote installed effect %s: %v", path, err)
+		}
+	}
+}
+
 type dependencyFixtureRunner struct {
 	id                        domain.ClientID
 	claude                    dependencyClaudeListing
@@ -357,7 +388,14 @@ func (r *dependencyFixtureRunner) Run(ctx context.Context, command legacyports.C
 	}
 	return legacyports.CommandResult{}, fmt.Errorf("unexpected native fixture command: %v", command.Argv)
 }
-func (*dependencyFixtureRunner) DuplexCapability() error { return nil }
+func (*dependencyFixtureRunner) DuplexCapability() error {
+	if runtime.GOOS == "windows" {
+		// This production preflight is read-only and never starts a process on
+		// Windows. Unix uses the fixture's real deadline-capable pipe exchange.
+		return (process.OS{}).DuplexCapability()
+	}
+	return nil
+}
 func (r *dependencyFixtureRunner) RunDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
 	r.duplex++
 	// Keep a real pipe writer alive through Kiro's post-success settlement.

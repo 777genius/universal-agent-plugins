@@ -56,16 +56,21 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 			}
 		})
 	}
-	for _, id := range []string{"chatgpt", "vscode", "unknown", ""} {
+	for _, id := range []string{"chatgpt", "vscode"} {
+		if !engine.SupportsClient(id) || ClientSupported(all.Default(), id) {
+			t.Fatalf("saved qualification changed registered SDK capability for %s", id)
+		}
+	}
+	for _, id := range []string{"unknown", ""} {
 		if engine.SupportsClient(id) || ClientSupported(all.Default(), id) {
-			t.Fatalf("unsupported %s admitted", id)
+			t.Fatalf("unknown %s admitted", id)
 		}
 	}
 	if ClientSupported(nil, "codex") {
 		t.Fatal("nil registry broadened")
 	}
 	metadata := engine.Discover()
-	if len(metadata) != 11 {
+	if len(metadata) != 13 {
 		t.Fatalf("Discover clients=%d", len(metadata))
 	}
 	for _, meta := range metadata {

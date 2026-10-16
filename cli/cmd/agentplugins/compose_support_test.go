@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 func TestInstallerFacadeComposesAllLocalClients(t *testing.T) {
@@ -24,8 +25,10 @@ func TestInstallerFacadeComposesAllLocalClients(t *testing.T) {
 			t.Fatalf("composition excluded %s", id)
 		}
 	}
-	if app.Installer.SupportsClient("chatgpt") || app.Installer.SupportsClient("vscode") {
-		t.Fatal("composition claims an excluded managed target")
+	for _, id := range []string{"chatgpt", "vscode"} {
+		if !app.Installer.SupportsClient(id) || installer.ClientSupported(app.ClientRegistry, id) {
+			t.Fatalf("SDK registration and saved qualification conflated for %s", id)
+		}
 	}
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatalf("composition wrote state: %v", err)

@@ -272,7 +272,7 @@ func validateDependencyTargets(app App, requirements environment.Requirements) e
 		if definition, ok := domain.ClientDefinitionFor(domain.ClientID(target)); ok && (definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare) {
 			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, target)
 		}
-		if app.Installer == nil || !app.Installer.SupportsClient(target) {
+		if !supportsDependencyTarget(app, target) {
 			return fmt.Errorf("unsupported dependency target %q; supported targets: %v", target, supportedDependencyTargets(app))
 		}
 	}
@@ -330,9 +330,16 @@ func newDependencyRecoverCommand(app App, opts *options, yes *bool) *cobra.Comma
 func supportedDependencyTargets(app App) []string {
 	out := []string{}
 	for _, target := range domain.SupportedClientIDs() {
-		if app.Installer != nil && app.Installer.SupportsClient(string(target)) {
+		if supportsDependencyTarget(app, string(target)) {
 			out = append(out, string(target))
 		}
 	}
 	return out
+}
+
+// Saved qualification is narrower than SDK adapter registration. The SDK keeps
+// all explicitly registered legacy capabilities; this flow admits only the
+// owner's qualified dependency targets.
+func supportsDependencyTarget(app App, target string) bool {
+	return app.Installer != nil && app.Installer.SupportsClient(target) && installer.ClientSupported(app.ClientRegistry, target)
 }
