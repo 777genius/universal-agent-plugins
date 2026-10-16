@@ -99,15 +99,35 @@ func TestRequiresNativeProjectorMatchesPackageAndLifecycle(t *testing.T) {
 	}
 }
 
-// Siblings install through one backend, so one of them withholding an
-// explicit-only command while the other delivers it would put the command in
-// front of the model through the sibling's client after all.
-func TestBackendSiblingsAgreeOnExplicitSkillInvocation(t *testing.T) {
+// Siblings install one shared package through one backend, so they must
+// agree on every command they receive. Otherwise one of them withholding a
+// command, an explicit-only one in particular, while the other delivers it
+// would put the command in front of the first client after all, and each
+// update would rewrite the shared package for its own client.
+func TestBackendSiblingsAgreeOnCommandDelivery(t *testing.T) {
 	for _, definition := range ClientDefinitions() {
-		for _, sibling := range BackendSiblings(definition.ID) {
-			if ClientTraitsFor(sibling).EnforcesExplicitSkillInvocation != definition.Traits.EnforcesExplicitSkillInvocation {
-				t.Errorf("%s and its backend sibling %s disagree on EnforcesExplicitSkillInvocation", definition.ID, sibling)
+		for _, id := range BackendSiblings(definition.ID) {
+			sibling, _ := ClientDefinitionFor(id)
+			if sibling.Traits.EnforcesExplicitSkillInvocation != definition.Traits.EnforcesExplicitSkillInvocation {
+				t.Errorf("%s and its backend sibling %s disagree on EnforcesExplicitSkillInvocation", definition.ID, id)
 			}
+			if sibling.CommandSupport != definition.CommandSupport {
+				t.Errorf("%s and its backend sibling %s disagree on CommandSupport", definition.ID, id)
+			}
+		}
+	}
+}
+
+// Visual Studio Code is frozen, so the github-copilot family it shares a
+// package with receives no commands; every other client takes them as skills.
+func TestOnlyTheFrozenFamilyWithholdsCommands(t *testing.T) {
+	for _, definition := range ClientDefinitions() {
+		withheld := definition.CommandSupport == SupportUnsupported
+		if family := definition.BackendFamily == "github-copilot"; withheld != family {
+			t.Errorf("%s withholds commands = %v, want %v", definition.ID, withheld, family)
+		}
+		if DeliversCommand(Command{Name: "echo"}, definition) == withheld {
+			t.Errorf("%s delivers an ordinary command although it withholds commands = %v", definition.ID, withheld)
 		}
 	}
 }

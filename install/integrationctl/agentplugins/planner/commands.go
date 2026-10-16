@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/commandext"
@@ -10,6 +11,11 @@ import (
 // ExplicitInvocationNotEnforceable is the warning code, and the
 // compatibility limitation, of an explicit-only command withheld from a client.
 const ExplicitInvocationNotEnforceable = "explicit_invocation_not_enforceable"
+
+// CommandNotSupportedByClient is the warning code, and the compatibility
+// limitation, of a command withheld because the client's registry entry
+// withholds every command.
+const CommandNotSupportedByClient = "command_not_supported_by_client"
 
 // Reasons a component is not delivered, shared by plans and compatibility rows.
 const (
@@ -34,7 +40,10 @@ func commandDecisions(envelope domain.PackageEnvelope, definition domain.ClientD
 			continue
 		}
 		code, message := componentNotSupported, "this client does not take skills, so the command is not delivered"
-		if command.ExplicitOnly {
+		switch {
+		case definition.CommandSupport == domain.SupportUnsupported:
+			code, message = CommandNotSupportedByClient, "this client does not receive commands, so the command is not delivered"
+		case command.ExplicitOnly:
 			code, message = ExplicitInvocationNotEnforceable, "this client cannot keep the command out of automatic invocation, so it is not delivered"
 		}
 		withheld = append(withheld, domain.Diagnostic{
@@ -76,6 +85,15 @@ func commandCompatibility(envelope domain.PackageEnvelope, definition domain.Cli
 		})
 	}
 	return rows
+}
+
+// CommandWithheld reports whether a compatibility row is a valid command the
+// client does not receive by policy: withheld, which is safe, rather than
+// rejected as invalid or unsupported.
+func CommandWithheld(row ComponentCompatibility) bool {
+	return row.Source == domain.ComponentSourceCommand && slices.ContainsFunc(row.Limitations, func(code string) bool {
+		return code == ExplicitInvocationNotEnforceable || code == CommandNotSupportedByClient
+	})
 }
 
 // commandErrorCodes are the fixed error codes reported for one invalid

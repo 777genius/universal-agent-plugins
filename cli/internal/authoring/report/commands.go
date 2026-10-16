@@ -30,12 +30,13 @@ func (r *Report) commandsAssessment(pkg *domain.PackageEnvelope) Assessment {
 	return result
 }
 
-// addCommandCompatibility handles the rows of explicit-only commands a client
-// withholds. Withholding is the safe outcome, so it is a warning while the
-// client still gets something; with nothing deliverable left it fails like
-// any unsupported component.
+// addCommandCompatibility handles the rows of commands a client withholds,
+// either explicit-only ones it cannot enforce or every command when its
+// registry entry withholds them. Withholding is the safe outcome, so it is a
+// warning while the client still gets something; with nothing deliverable
+// left it fails like any unsupported component.
 func (r *Report) addCommandCompatibility(c planner.ClientCompatibility, component planner.ComponentCompatibility) bool {
-	if component.Source != domain.ComponentSourceCommand || !slices.Contains(component.Limitations, planner.ExplicitInvocationNotEnforceable) {
+	if !planner.CommandWithheld(component) {
 		return false
 	}
 	deliverable := slices.ContainsFunc(c.Components, func(row planner.ComponentCompatibility) bool { return row.Support != domain.SupportUnsupported })

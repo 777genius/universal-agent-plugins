@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -40,10 +41,11 @@ func hasCommandDiagnostic(diagnostics []domain.Diagnostic, item, code string) bo
 	return false
 }
 
-// The planner is the only place that decides whether an explicit-only
-// command reaches a client, and it decides by the declared trait alone. A
-// client without the trait must never get the command as an ordinary skill.
-func TestCommandDeliveryFollowsTheExplicitInvocationTrait(t *testing.T) {
+// The planner is the only place that decides whether a command reaches a
+// client, and it decides by the registry alone: a client whose entry withholds
+// commands gets none, and an explicit-only command needs the declared trait. A
+// withheld command is a warning, and a plan left with nothing is unsupported.
+func TestCommandDeliveryFollowsTheRegistry(t *testing.T) {
 	t.Parallel()
 	root := goldenRoot(t)
 	planner := testPlanner(Planner{ManagedRoot: filepath.Join(root, "managed")})
@@ -53,16 +55,34 @@ func TestCommandDeliveryFollowsTheExplicitInvocationTrait(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{"echo=demo-echo"}
-			if definition.Traits.EnforcesExplicitSkillInvocation {
-				want = append(want, "wizard=demo-wizard")
-			} else if !hasCommandDiagnostic(plan.Diagnostics, "wizard", ExplicitInvocationNotEnforceable) {
+			want := make([]string, 0, 2)
+			switch {
+			case definition.CommandSupport == domain.SupportUnsupported:
+				if !hasCommandDiagnostic(plan.Diagnostics, "echo", CommandNotSupportedByClient) || !hasCommandDiagnostic(plan.Diagnostics, "wizard", CommandNotSupportedByClient) {
+					t.Fatalf("withheld commands have no diagnostic: %+v", plan.Diagnostics)
+				}
+				if plan.Status != domain.PlanUnsupported || !compatContains(plan.Warnings, "no_supported_components") {
+					t.Fatalf("commands-only plan = %s %v", plan.Status, plan.Warnings)
+				}
+			case definition.Traits.EnforcesExplicitSkillInvocation:
+				want = append(want, "echo=demo-echo", "wizard=demo-wizard")
+			case !hasCommandDiagnostic(plan.Diagnostics, "wizard", ExplicitInvocationNotEnforceable):
 				t.Fatalf("withheld command has no diagnostic: %+v", plan.Diagnostics)
+			default:
+				want = append(want, "echo=demo-echo")
 			}
-			if got := commandComponents(plan); !reflect.DeepEqual(got, want) {
+			if got := commandComponents(plan); !slices.Equal(got, want) {
 				t.Fatalf("command components = %v, want %v", got, want)
 			}
 		})
+	}
+	for _, id := range []domain.ClientID{domain.ClientCopilot, domain.ClientVSCode} {
+		withSkill := commandEnvelope()
+		withSkill.Skills = map[string]domain.Skill{"guide": {Name: "guide"}}
+		plan, err := planner.Plan(context.Background(), withSkill, goldenClient(id, root), domain.ScopeUser, "demo-0123456789ab")
+		if err != nil || plan.Status == domain.PlanUnsupported || commandComponents(plan) != nil || !compatContains(plan.Warnings, CommandNotSupportedByClient) {
+			t.Fatalf("%s: skill plus withheld commands = %+v, %v", id, plan, err)
+		}
 	}
 	enforcing, _ := domain.ClientDefinitionFor(domain.ClientClaude)
 	enforcing.Traits.EnforcesExplicitSkillInvocation = true

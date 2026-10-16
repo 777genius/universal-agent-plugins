@@ -78,26 +78,32 @@ func TestInvalidCommandFailsReadinessOnly(t *testing.T) {
 	}
 }
 
-// Withholding an explicit command is the safe outcome: a warning while the
-// client still receives the package's skill, a failure when nothing is left.
+// Withholding a command is the safe outcome: a warning while the client still
+// receives the package's skill, a failure when nothing is left. Claude
+// withholds an explicit-only command; the github-copilot family withholds
+// every command by its registry entry.
 func TestWithheldCommandCompatibility(t *testing.T) {
 	t.Parallel()
-	compatibility := func(files map[string]string) Report {
-		p := readCommandProject(t, files)
-		r := Build("validate", "test", p, false)
-		clients, err := readiness.Compatibility(all.Default(), p, []domain.ClientID{domain.ClientClaude})
-		if err != nil {
-			t.Fatal(err)
+	const ordinaryEntry = "---\ndescription: Echo\ndisable-model-invocation: false\n---\nEcho it.\n"
+	cases := map[domain.ClientID]string{domain.ClientClaude: explicitEntry, domain.ClientCopilot: ordinaryEntry, domain.ClientVSCode: ordinaryEntry}
+	for client, entry := range cases {
+		compatibility := func(files map[string]string) Report {
+			p := readCommandProject(t, files)
+			r := Build("validate", "test", p, false)
+			clients, err := readiness.Compatibility(all.Default(), p, []domain.ClientID{client})
+			if err != nil {
+				t.Fatal(err)
+			}
+			r.AddCompatibility(clients)
+			return r
 		}
-		r.AddCompatibility(clients)
-		return r
-	}
-	withSkill := compatibility(map[string]string{"plugin.json": commandsCore, "skills/guide/SKILL.md": guideSkill, commandext.RelativeDirectory + "/wizard.md": explicitEntry})
-	if withSkill.Compatibility.Status != Pass || findingCodes(withSkill, "compatibility")["target_command_withheld"] != "warning" {
-		t.Fatalf("skill plus withheld command: %s %v", withSkill.Compatibility.Status, findingCodes(withSkill, "compatibility"))
-	}
-	only := compatibility(map[string]string{"plugin.json": commandsCore, commandext.RelativeDirectory + "/wizard.md": explicitEntry})
-	if only.Compatibility.Status != Fail || findingCodes(only, "compatibility")["target_command_withheld"] != "error" {
-		t.Fatalf("withheld command only: %s %v", only.Compatibility.Status, findingCodes(only, "compatibility"))
+		withSkill := compatibility(map[string]string{"plugin.json": commandsCore, "skills/guide/SKILL.md": guideSkill, commandext.RelativeDirectory + "/withheld.md": entry})
+		if withSkill.Compatibility.Status != Pass || findingCodes(withSkill, "compatibility")["target_command_withheld"] != "warning" {
+			t.Fatalf("%s: skill plus withheld command: %s %v", client, withSkill.Compatibility.Status, findingCodes(withSkill, "compatibility"))
+		}
+		only := compatibility(map[string]string{"plugin.json": commandsCore, commandext.RelativeDirectory + "/withheld.md": entry})
+		if only.Compatibility.Status != Fail || findingCodes(only, "compatibility")["target_command_withheld"] != "error" {
+			t.Fatalf("%s: withheld command only: %s %v", client, only.Compatibility.Status, findingCodes(only, "compatibility"))
+		}
 	}
 }
