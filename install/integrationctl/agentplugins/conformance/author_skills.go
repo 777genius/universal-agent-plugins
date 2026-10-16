@@ -62,34 +62,82 @@ func (d Decoder) DecodeSkill(ctx context.Context, input SkillInput) (Facts, erro
 	return f, nil
 }
 
+// Frontmatter is a Markdown YAML header decoded under the bounded author
+// grammar. It is syntax only: no trust, no package identity.
+type Frontmatter struct {
+	// Keys are the root keys in document order, as written. Merge and
+	// non-string keys stay in the list so a closed grammar can reject them.
+	Keys []string
+	// Values holds only the requested root fields; other values stay opaque.
+	Values map[string]any
+	// Body is everything after the closing delimiter, with CRLF folded to LF.
+	// It is set as soon as the delimiters are found, even when the header
+	// then fails to decode, so a caller can still check the content.
+	Body []byte
+}
+
+// DecodeFrontmatter applies the author Skill grammar to any Markdown document
+// with a YAML header: one document, a mapping root, no duplicate keys, and the
+// byte, depth, node and member budgets of limits. Nonpositive limits select
+// the defaults. Failures are the same typed errors DecodeSkill reports.
+func DecodeFrontmatter(ctx context.Context, body []byte, limits Limits, fields map[string]struct{}) (Frontmatter, error) {
+	return decodeFrontmatter(ctx, body, limits.bounded(), fields)
+}
+
 func boundedFrontmatter(ctx context.Context, body []byte, l Limits) (map[string]any, error) {
+	front, err := decodeFrontmatter(ctx, body, l, skillFields)
+	return front.Values, err
+}
+
+func decodeFrontmatter(ctx context.Context, body []byte, l Limits, fields map[string]struct{}) (Frontmatter, error) {
 	// Share the exact LF/CRLF and closing-delimiter grammar with the installer.
 	// A leading UTF-8 encoding signature is not Skill content. Installer grammar
 	// remains unchanged; original bytes are retained in the canonical Skill.
-	data, err := frontmatterBytes(bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf}))
+	data, rest, err := splitFrontmatter(bytes.TrimPrefix(body, []byte{0xef, 0xbb, 0xbf}))
 	if err != nil {
-		return nil, err
+		return Frontmatter{}, err
 	}
+	front := Frontmatter{Body: rest}
 	if len(data) > l.FrontmatterBytes {
-		return nil, &parseFailure{Code: "frontmatter_bytes_limit"}
+		return front, &parseFailure{Code: "frontmatter_bytes_limit"}
 	}
 	if err = ctx.Err(); err != nil {
-		return nil, err
+		return front, err
 	}
 	if err = preflightYAML(ctx, data, l.Depth); err != nil {
-		return nil, err
+		return front, err
 	}
 	// Decode nodes without alias expansion. At most 64 KiB reaches YAML's parser;
 	// node/depth/member budgets are checked before map construction or expansion.
 	var document yaml.Node
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	if err = decoder.Decode(&document); err != nil {
-		return nil, skillError("skill_yaml_invalid", "invalid YAML frontmatter")
+		return front, skillError("skill_yaml_invalid", "invalid YAML frontmatter")
 	}
 	var extra yaml.Node
 	if err = decoder.Decode(&extra); err != io.EOF {
-		return nil, skillError("skill_yaml_documents", "frontmatter must contain one YAML document")
+		return front, skillError("skill_yaml_documents", "frontmatter must contain one YAML document")
 	}
+	if err = checkYAMLBudget(ctx, &document, l); err != nil {
+		return front, err
+	}
+	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
+		return front, skillError("skill_frontmatter_type", "frontmatter must be an object")
+	}
+	root := document.Content[0]
+	var values map[string]any
+	if err = filterFields(root, fields).Decode(&values); err != nil {
+		return front, &parseFailure{Code: "yaml_materialization_unavailable"}
+	}
+	front.Values = values
+	front.Keys = make([]string, 0, len(root.Content)/2)
+	for i := 0; i < len(root.Content); i += 2 {
+		front.Keys = append(front.Keys, root.Content[i].Value)
+	}
+	return front, nil
+}
+
+func checkYAMLBudget(ctx context.Context, document *yaml.Node, l Limits) error {
 	nodes, members := 0, 0
 	active := map[*yaml.Node]bool{}
 	var walk func(*yaml.Node, int) error
@@ -143,41 +191,30 @@ func boundedFrontmatter(ctx context.Context, body []byte, l Limits) (map[string]
 		}
 		return nil
 	}
-	if err = walk(&document, 0); err != nil {
-		return nil, err
-	}
-	if len(document.Content) != 1 || document.Content[0].Kind != yaml.MappingNode {
-		return nil, skillError("skill_frontmatter_type", "frontmatter must be an object")
-	}
-	var values map[string]any
-	filtered := filterSkillFields(document.Content[0])
-	if err = filtered.Decode(&values); err != nil {
-		return nil, &parseFailure{Code: "yaml_materialization_unavailable"}
-	}
-	return values, nil
+	return walk(document, 0)
 }
 
 // Unknown YAML values are opaque. Filter only at the root field boundary, also
 // through bounded YAML merge sources; never coerce known scalars into strings.
-func filterSkillFields(n *yaml.Node) *yaml.Node {
+func filterFields(n *yaml.Node, fields map[string]struct{}) *yaml.Node {
 	copy := *n
 	switch n.Kind {
 	case yaml.AliasNode:
-		copy.Alias = filterSkillFields(n.Alias)
+		copy.Alias = filterFields(n.Alias, fields)
 	case yaml.SequenceNode:
 		copy.Content = nil
 		for _, v := range n.Content {
-			copy.Content = append(copy.Content, filterSkillFields(v))
+			copy.Content = append(copy.Content, filterFields(v, fields))
 		}
 	case yaml.MappingNode:
 		copy.Content = nil
 		for i := 0; i < len(n.Content); i += 2 {
 			key, value := n.Content[i], n.Content[i+1]
 			if key.Tag == "!!merge" {
-				copy.Content = append(copy.Content, key, filterSkillFields(value))
+				copy.Content = append(copy.Content, key, filterFields(value, fields))
 				continue
 			}
-			if _, known := skillFields[key.Value]; known && key.Kind == yaml.ScalarNode && key.Tag == "!!str" {
+			if _, known := fields[key.Value]; known && key.Kind == yaml.ScalarNode && key.Tag == "!!str" {
 				copy.Content = append(copy.Content, key, value)
 			}
 		}

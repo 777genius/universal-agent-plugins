@@ -88,20 +88,26 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 }
 
 func frontmatterBytes(body []byte) ([]byte, error) {
+	header, _, err := splitFrontmatter(body)
+	return header, err
+}
+
+// splitFrontmatter returns the YAML header and everything after its closing
+// delimiter, both with CRLF folded to LF.
+func splitFrontmatter(body []byte) ([]byte, []byte, error) {
 	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 	if !bytes.HasPrefix(normalized, []byte("---\n")) {
-		return nil, skillError("skill_frontmatter_open", "SKILL.md must begin with YAML frontmatter")
+		return nil, nil, skillError("skill_frontmatter_open", "SKILL.md must begin with YAML frontmatter")
 	}
 	remainder := normalized[len("---\n"):]
 	end := bytes.Index(remainder, []byte("\n---\n"))
 	if end < 0 {
 		if bytes.HasSuffix(remainder, []byte("\n---")) {
-			end = len(remainder) - len("\n---")
-		} else {
-			return nil, skillError("skill_frontmatter_close", "SKILL.md frontmatter is not terminated")
+			return remainder[:len(remainder)-len("\n---")], nil, nil
 		}
+		return nil, nil, skillError("skill_frontmatter_close", "SKILL.md frontmatter is not terminated")
 	}
-	return remainder[:end], nil
+	return remainder[:end], remainder[end+len("\n---\n"):], nil
 }
 func skillFrontmatter(body []byte) (map[string]any, error) {
 	data, err := frontmatterBytes(body)
