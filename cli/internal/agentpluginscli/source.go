@@ -686,6 +686,7 @@ func (app App) loadSnapshotMode(ctx context.Context, snapshot domain.PackageSnap
 		}
 		result, securityErr := app.SecurityEvaluator.Evaluate(ctx, domain.SecurityEvaluationInput{
 			SnapshotRoot: snapshot.Root, TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest, Trusted: trusted,
+			Commands: envelope.Commands, PluginName: envelope.Manifest.Name,
 		})
 		if securityErr != nil {
 			return fail(fmt.Errorf("security assessment failed before installation: %w", securityErr))

@@ -90,6 +90,10 @@ type SecurityEvaluationInput struct {
 	TreeDigest     string
 	ManifestDigest string
 	Trusted        *SecurityAssessment
+	// Commands and PluginName let the evaluator scan the package as delivered,
+	// with each command rendered as the skill a client would receive.
+	Commands   map[string]Command
+	PluginName string
 }
 
 func (assessment SecurityAssessment) Validate(requirement SecurityRequirement, subject SecuritySubject) error {

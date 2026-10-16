@@ -104,6 +104,7 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 	if app.SecurityEvaluator != nil {
 		result, securityErr := app.SecurityEvaluator.Evaluate(ctx, domain.SecurityEvaluationInput{
 			SnapshotRoot: pkg.Root, TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
+			Commands: envelope.Commands, PluginName: envelope.Manifest.Name,
 		})
 		if securityErr != nil {
 			return loadedPackage{}, fmt.Errorf("security assessment failed before dependency sync: %w", securityErr)
