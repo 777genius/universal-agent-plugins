@@ -181,6 +181,56 @@ func TestOpenCodeZeroEffectPreparationNeverProbes(t *testing.T) {
 	}
 }
 
+// A package with no skills/ of its own still gives OpenCode a skill when a
+// command is delivered as one, so preparation must qualify the host for
+// skills, with or without MCP. A withheld explicit-only command adds nothing.
+func TestOpenCodePreparationCountsDeliveredCommandSkills(t *testing.T) {
+	ordinary := domain.Command{Name: "echo", Description: "Echo the text", Body: []byte("Reply with UAP-ECHO.\n")}
+	explicit := domain.Command{Name: "wizard", Description: "Run the wizard", ExplicitOnly: true, Body: []byte("Reply with UAP-WIZARD.\n")}
+	docs := map[string]domain.MCPServer{"docs": {Type: "streamable-http", Decoded: map[string]any{"url": "https://docs.test"}}}
+	cases := map[string]struct {
+		envelope   domain.PackageEnvelope
+		skills     bool
+		transports []string
+	}{
+		"mcp and a command":      {domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: docs}, Commands: map[string]domain.Command{"echo": ordinary}}, true, []string{"streamable-http"}},
+		"a command alone":        {domain.PackageEnvelope{Commands: map[string]domain.Command{"echo": ordinary}}, true, nil},
+		"a withheld command":     {domain.PackageEnvelope{Commands: map[string]domain.Command{"wizard": explicit}}, false, nil},
+		"mcp and a withheld one": {domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: docs}, Commands: map[string]domain.Command{"wizard": explicit}}, false, []string{"streamable-http"}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			registry, err := clients.NewRegistry(opencode.New())
+			if err != nil {
+				t.Fatal(err)
+			}
+			preparer := NewOpenCodeClientPreparation(registry)
+			preparer.environment = []string{"PATH="}
+			preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+				return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "2.0.21", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture-native-bytes"}}, nil
+			}
+			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: filepath.Join(root, "native"), ExecutablePath: filepath.Join(root, "selected-opencode")}
+			host, err := preparer.PrepareClient(t.Context(), tc.envelope, client, nil, client.ExecutablePath, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tc.skills && len(tc.transports) == 0 {
+				if host != nil {
+					t.Fatalf("zero effects acquired a host: %v", host)
+				}
+				return
+			}
+			if host == nil || host.ValidateNative(tc.skills, tc.transports) != nil {
+				t.Fatalf("prepared host does not cover skills=%v transports=%v: %v", tc.skills, tc.transports, host)
+			}
+			if !tc.skills && host.ValidateNative(true, tc.transports) == nil {
+				t.Fatal("a withheld command qualified the host for skills")
+			}
+		})
+	}
+}
+
 // The selected root can change while the native --version probe is running.
 // A successful version result must not authorize the newly targeted profile.
 func TestOpenCodeRevalidationRejectsRootRetargetDuringProbe(t *testing.T) {
