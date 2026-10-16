@@ -48,23 +48,37 @@ func (session *groupSession) stageGroupDeliveries() error {
 }
 
 // requireRecordedRepairProjections keeps a group repair of a package with
-// commands to its recorded bytes, as Repair does. When the staged tree
-// differs, the command rules have most likely changed: an intact target
-// stops with ErrProjectionRefreshRequired, since only update applies the
-// current rules, and a missing one, which neither can restore, is told to be
-// added again.
+// commands from applying new command rules, as Repair does. An intact target
+// whose installed command skills differ from the current rendering stops with
+// ErrProjectionRefreshRequired, since only update applies the rules; other
+// projection changes proceed as for a package without commands. A missing
+// target that cannot be rebuilt as recorded is told to be added again, as
+// neither repair nor update can restore it.
 func (session *groupSession) requireRecordedRepairProjections() error {
 	if !session.input.Repair {
 		return nil
 	}
 	for _, target := range session.planned {
-		if target.noChange || target.managed == nil || !target.input.Envelope.HasInstallerRenderedComponents() || target.delivery.ArtifactDigest == managedDigest(*target.managed) {
+		if target.noChange || target.managed == nil || !target.input.Envelope.HasInstallerRenderedComponents() {
 			continue
 		}
+		recorded := target.delivery.ArtifactDigest == managedDigest(*target.managed)
 		if target.requireAbsent {
-			return fmt.Errorf("staged reconstruction for %s does not match the recorded package digest, most likely because the command rules changed since installation; remove the package and add it again", target.input.Client.ClientID)
+			if !recorded {
+				return fmt.Errorf("staged reconstruction for %s does not match the recorded package digest, because the command rules or host projection changed since installation; remove the package and add it again", target.input.Client.ClientID)
+			}
+			continue
 		}
-		return fmt.Errorf("repair %s: %w", target.input.Client.ClientID, ErrProjectionRefreshRequired)
+		current, verified, err := session.service.commandSkillsCurrent(session.ctx, target.plan.ActivePath, target.input.Envelope, target.plan)
+		if err != nil {
+			return err
+		}
+		if !verified {
+			current = recorded
+		}
+		if !current {
+			return fmt.Errorf("repair %s: %w", target.input.Client.ClientID, ErrProjectionRefreshRequired)
+		}
 	}
 	return nil
 }

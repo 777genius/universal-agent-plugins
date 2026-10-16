@@ -11,6 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/commandext"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -196,6 +197,42 @@ func TestActiveNativeProjectionRefusesAnOutdatedCommandTree(t *testing.T) {
 		if _, err := stager.ProjectActiveNative(context.Background(), envelope, tc.plan, digest, ""); !errors.Is(err, domain.ErrProjectionRefreshRequired) {
 			t.Errorf("%s: projection error = %v", name, err)
 		}
+	}
+}
+
+// Reading command skills back must look where each client's projection puts
+// them, Claude Code's isolated runtime directory included, or an installed
+// tree would look outdated forever. For every client that receives commands,
+// a freshly staged tree verifies as current, and as outdated against a plan
+// that no longer delivers the command.
+func TestCommandSkillVerifierFollowsEveryProjector(t *testing.T) {
+	t.Parallel()
+	envelope := commandPackage(t)
+	stager := testStager(Stager{})
+	for _, definition := range domain.ClientDefinitions() {
+		if !domain.DeliversCommand(envelope.Commands["echo"], definition) {
+			continue
+		}
+		t.Run(string(definition.ID), func(t *testing.T) {
+			t.Parallel()
+			plan := stagingPlan(t, definition.ID, definition.Capabilities.PackageMode)
+			plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "demo-echo", Support: definition.Capabilities.SkillSupport, Source: domain.ComponentSourceCommand, SourceName: "echo"}}
+			if definition.ID == domain.ClientOpenCode {
+				plan.OpenCodeHost = contracttest.OpenCodeV1Host{}
+			}
+			delivery, err := stager.Stage(context.Background(), envelope, plan, "operation-verify", domain.CompatibilityHints{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := stager.VerifyCommandSkills(context.Background(), delivery.StagingPath, envelope, plan); err != nil {
+				t.Fatalf("staged tree is not current: %v", err)
+			}
+			withheld := plan
+			withheld.Components = nil
+			if err := stager.VerifyCommandSkills(context.Background(), delivery.StagingPath, envelope, withheld); !errors.Is(err, domain.ErrProjectionRefreshRequired) {
+				t.Fatalf("a withheld command still verified: %v", err)
+			}
+		})
 	}
 }
 

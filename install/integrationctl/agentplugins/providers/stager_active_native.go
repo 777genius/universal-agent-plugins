@@ -25,7 +25,7 @@ func (stager Stager) ProjectActiveNative(ctx context.Context, envelope domain.Pa
 	if !ok {
 		return nil, fmt.Errorf("client %q has no read-only native projection", plan.ClientID)
 	}
-	if err := stager.requireInstalledCommandSkills(ctx, plan.ActivePath, envelope, plan); err != nil {
+	if err := stager.VerifyCommandSkills(ctx, plan.ActivePath, envelope, plan); err != nil {
 		return nil, err
 	}
 	envelope, err := commandext.WithCommandSkills(envelope, plan)

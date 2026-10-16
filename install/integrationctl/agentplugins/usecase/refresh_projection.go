@@ -1,9 +1,12 @@
 package usecase
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 func (session *repairSession) refreshIntactProjection() (AddResult, error) {
@@ -16,6 +19,9 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 	if !session.input.Confirmed {
 		session.result.RequiresConfirmation = true
 		return session.result, nil
+	}
+	if current, err := session.commandSkillsAlreadyCurrent(); current || err != nil {
+		return session.result, err
 	}
 	delivery, err := session.stageRepairDelivery(true)
 	if err != nil {
@@ -35,28 +41,7 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 		return session.result, fmt.Errorf("managed package changed after refresh preflight; rerun refresh: %w", err)
 	}
 	if !changed {
-		if session.input.refreshChangedProjectionOnly {
-			// The update that follows owns selection and activation; an
-			// identical projection leaves nothing for this refresh to do.
-			session.result.NoChange = true
-			return session.result, nil
-		}
-		if session.hasEmptyLocalMaintenanceRoute(delivery, selectionChanged) {
-			// Prepared/package-valid is the certain Local registration result,
-			// not an outstanding activation. Verify the retained empty route
-			// through the existing native maintenance path without a new attempt.
-			return session.repairNative()
-		}
-		if selectionChanged {
-			if err := session.persistRefreshedSelection(); err != nil {
-				return session.result, err
-			}
-		}
-		if pendingActivation {
-			return session.activateRefreshedProjection(delivery)
-		}
-		session.result.NoChange = true
-		return session.result, nil
+		return session.finishUnchangedProjection(delivery, selectionChanged, pendingActivation)
 	}
 	pending := lifecycleOutcome(session.client)
 	pending.Activation = domain.ActivationPrepared
@@ -66,6 +51,69 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 		return result, err
 	}
 	return session.activateRefreshedProjection(delivery)
+}
+
+// commandSkillsAlreadyCurrent ends a refresh ahead of an update, with no
+// change, when the installed command skills already match the current rules.
+// Only command rules bring an update here; other host projection inputs, such
+// as a config file the client created since, stay with RefreshProjection, as
+// they do for a package without commands.
+func (session *repairSession) commandSkillsAlreadyCurrent() (bool, error) {
+	if !session.input.refreshChangedProjectionOnly {
+		return false, nil
+	}
+	current, verified, err := session.service.commandSkillsCurrent(session.ctx, session.target.ActivePath, session.input.Envelope, session.plan)
+	if err != nil || !verified || !current {
+		return false, err
+	}
+	session.result.NoChange = true
+	return true, nil
+}
+
+// finishUnchangedProjection settles a refresh whose staged digest equals the
+// recorded one.
+func (session *repairSession) finishUnchangedProjection(delivery domain.StagedDelivery, selectionChanged, pendingActivation bool) (AddResult, error) {
+	if session.input.refreshChangedProjectionOnly {
+		// The update that follows owns selection and activation; an
+		// identical projection leaves nothing for this refresh to do.
+		session.result.NoChange = true
+		return session.result, nil
+	}
+	if session.hasEmptyLocalMaintenanceRoute(delivery, selectionChanged) {
+		// Prepared/package-valid is the certain Local registration result,
+		// not an outstanding activation. Verify the retained empty route
+		// through the existing native maintenance path without a new attempt.
+		return session.repairNative()
+	}
+	if selectionChanged {
+		if err := session.persistRefreshedSelection(); err != nil {
+			return session.result, err
+		}
+	}
+	if pendingActivation {
+		return session.activateRefreshedProjection(delivery)
+	}
+	session.result.NoChange = true
+	return session.result, nil
+}
+
+// commandSkillsCurrent reports whether the installed tree at root already
+// holds the command skills the current rules render. Only command rules
+// decide; other host projection inputs do not. verified is false when the
+// stager cannot tell, and callers then fall back to comparing a staged digest.
+func (service Service) commandSkillsCurrent(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) (current, verified bool, err error) {
+	verifier, ok := service.Stager.(ports.CommandSkillVerifier)
+	if !ok {
+		return false, false, nil
+	}
+	switch err := verifier.VerifyCommandSkills(ctx, root, envelope, plan); {
+	case err == nil:
+		return true, true, nil
+	case errors.Is(err, ErrProjectionRefreshRequired):
+		return false, true, nil
+	default:
+		return false, true, err
+	}
 }
 
 func (session *repairSession) hasEmptyLocalMaintenanceRoute(delivery domain.StagedDelivery, selectionChanged bool) bool {

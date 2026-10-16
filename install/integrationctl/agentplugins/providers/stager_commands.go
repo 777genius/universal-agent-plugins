@@ -101,17 +101,21 @@ func writeCommandSkills(paths ports.PathPolicy, stagingPath string, rendered com
 	return nil
 }
 
-// requireInstalledCommandSkills fails with domain.ErrProjectionRefreshRequired
-// unless an installed tree holds exactly the command skills the plan renders,
-// byte for byte, and none of the package's other command skills. A tree
-// rendered under other rules then never reaches a native projection.
-func (stager Stager) requireInstalledCommandSkills(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+// VerifyCommandSkills fails with domain.ErrProjectionRefreshRequired unless
+// the installed tree at root holds exactly the command skills the plan
+// renders, byte for byte, and none of the package's other command skills. It
+// looks where the client's projection keeps skills and writes nothing.
+func (stager Stager) VerifyCommandSkills(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
 	rendered, err := stager.renderCommandSkills(ctx, envelope, plan)
 	if err != nil {
 		return err
 	}
+	skillsDirectory := "skills"
+	if locator, ok := clients.As[clients.SkillsLocator](stager.Registry, plan.ClientID); ok {
+		skillsDirectory = locator.InstalledSkillsDirectory(plan)
+	}
 	for _, name := range commandext.ProjectedSkillNames(envelope) {
-		installed, err := readInstalledSkill(filepath.Join(root, "skills", name))
+		installed, err := readInstalledSkill(filepath.Join(root, filepath.FromSlash(skillsDirectory), name))
 		if err != nil && !errors.Is(err, errUnknownSkillEntry) {
 			return fmt.Errorf("read installed command skill %q: %w", name, err)
 		}

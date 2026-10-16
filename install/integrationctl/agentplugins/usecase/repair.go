@@ -51,10 +51,12 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 
 // repairRenderedProjection guards an intact package whose tree also depends
 // on installer rendering. Repair restores recorded bytes only, so a confirmed
-// repair first stages under the current rules and stops with
-// ErrProjectionRefreshRequired when the result differs. Without confirmation
-// nothing is staged, and the native check is not attempted either, since an
-// outdated projection would fail it for the wrong reason.
+// repair stops with ErrProjectionRefreshRequired when the installed command
+// skills differ from what the current rules render. Other host projection
+// changes do not stop it, as they do not for a package without commands.
+// Without confirmation nothing is checked, and the native check is not
+// attempted either, since an outdated projection would fail it for the wrong
+// reason.
 func (session *repairSession) repairRenderedProjection() (AddResult, error) {
 	if session.input.DryRun {
 		return session.result, nil
@@ -63,12 +65,19 @@ func (session *repairSession) repairRenderedProjection() (AddResult, error) {
 		session.result.RequiresConfirmation = true
 		return session.result, nil
 	}
-	delivery, err := session.stageRepairDelivery(true)
+	current, verified, err := session.service.commandSkillsCurrent(session.ctx, session.target.ActivePath, session.input.Envelope, session.plan)
 	if err != nil {
 		return session.result, err
 	}
-	session.service.discardSettledDelivery(session.input.OperationID, delivery)
-	if delivery.ArtifactDigest != session.expectedDigest {
+	if !verified {
+		delivery, err := session.stageRepairDelivery(true)
+		if err != nil {
+			return session.result, err
+		}
+		session.service.discardSettledDelivery(session.input.OperationID, delivery)
+		current = delivery.ArtifactDigest == session.expectedDigest
+	}
+	if !current {
 		return session.result, ErrProjectionRefreshRequired
 	}
 	return session.repairNative()

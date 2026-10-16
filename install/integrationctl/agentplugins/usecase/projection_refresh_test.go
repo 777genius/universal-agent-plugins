@@ -10,7 +10,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -224,6 +227,76 @@ func TestUpdateUnderUnchangedRulesKeepsState(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Fatalf("an update under unchanged rules rewrote state\nbefore=%s\nafter=%s", before, after)
+	}
+}
+
+// The refresh ahead of an update exists for command rules only. A host input
+// that changed since installation, here the opencode.jsonc that OpenCode
+// creates on its first run and that its projection points at, is left to
+// RefreshProjection, as for a package without commands: an unchanged update
+// stays a no-op, single or grouped, and repair goes ahead.
+func TestUpdateIgnoresHostDriftOutsideCommands(t *testing.T) {
+	t.Parallel()
+	for _, group := range []bool{false, true} {
+		t.Run(map[bool]string{false: "single", true: "group"}[group], func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			service, store, _ := serviceFixture(t)
+			preparer, err := hostprep.New(clientregistry.Default(), func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+				return bridgeEvidence("TEST-injected-identity"), nil
+			}, []string{"PATH="})
+			if err != nil {
+				t.Fatal(err)
+			}
+			service.OpenCodeHosts = preparer
+			service.Detected = map[domain.ClientID]domain.DetectedClient{}
+			service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+			client := domain.DetectedClient{ClientID: domain.ClientOpenCode, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode"), ExecutablePath: filepath.Join(t.TempDir(), "opencode-bin")}
+			input := commandInput(t, client)
+			if _, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{input}, OperationGroupID: "host-drift-add", Confirmed: true}); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(client.ConfigRoot, "opencode.jsonc"), []byte("{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var mutated bool
+			if group {
+				result, err := service.UpdateGroup(ctx, GroupInput{Targets: []AddInput{input}, OperationGroupID: "host-drift-update", Confirmed: true})
+				if err != nil {
+					t.Fatal(err)
+				}
+				mutated = result.Mutated
+			} else {
+				input.OperationID = "host-drift-update"
+				result, err := service.Update(ctx, input)
+				if err != nil {
+					t.Fatal(err)
+				}
+				mutated = result.Mutated
+			}
+			after, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mutated || !bytes.Equal(before, after) {
+				t.Fatalf("unchanged update after host drift: mutated = %v\nbefore=%s\nafter=%s", mutated, before, after)
+			}
+			// Repair refuses only outdated command skills, so the drift does
+			// not send it to an update that has nothing to do.
+			input.OperationID = "host-drift-repair"
+			if group {
+				_, err = service.RepairGroup(ctx, GroupInput{Targets: []AddInput{input}, OperationGroupID: "host-drift-repair", Confirmed: true})
+			} else {
+				_, err = service.Repair(ctx, input)
+			}
+			if err != nil {
+				t.Fatalf("repair after host drift: %v", err)
+			}
+		})
 	}
 }
 
