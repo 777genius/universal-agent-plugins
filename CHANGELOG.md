@@ -15,6 +15,53 @@ Changes after `v1.2.4` land here.
   receipt reconciliation, exact native discovery, the observed client version,
   and path-free command evidence without changing its additive schema-version 1
   envelope or mutating installation state.
+- Portable commands for Agent Plugins packages. A Markdown file in
+  `io.github.777genius.agentplugins/commands/` becomes the skill
+  `<slug>-<name>` in every client that takes skills. A command marked
+  `disable-model-invocation: true` is explicit-only: it reaches a client only
+  when that client is confirmed to keep it out of automatic invocation, and is
+  otherwise withheld with the `explicit_invocation_not_enforceable` warning. No
+  client is confirmed yet, so explicit-only commands are withheld everywhere in
+  this release. See [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md) and
+  [ADR 0008](docs/adr/0008-portable-commands.md).
+- `agentplugins validate` counts `commands` and `invalid_commands`, plans of
+  `add`, `update` and `info` mark rendered skills with `source` and
+  `source_name`, and command problems are diagnostics with `boundary: command`.
+
+### Changed
+
+The following `agentplugins` changes are breaking. They ship in the next minor
+0.x release without a compatibility layer; each item says how to move.
+
+- **`io.github.777genius.agentplugins/commands/` is now read.** Every entry in
+  it except dotfiles must be a valid command; an invalid one is reported and
+  not delivered. Move unrelated files elsewhere, and add the CI check from
+  [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md#checking-commands-in-ci), since
+  `agentplugins validate` still exits with success on invalid commands.
+- **Update refreshes command skills first.** For a package with commands,
+  `update` of an unchanged revision now re-renders the command skills with the
+  current rules before the ordinary update, and an embedded installer's preview
+  of such an update requires confirmation. After upgrading the installer, run
+  `agentplugins update <name>` for packages with commands. Saved dependency
+  environments pick up new rules at their next pin change.
+- **Repair refuses an outdated command projection.** A single-target repair
+  through the embedded installer returns `usecase.ErrProjectionRefreshRequired`
+  when the command skills of an intact package would render differently today.
+  Check for it with `errors.Is` and run `OpUpdate` instead.
+- **Go API.** `installer.ComponentDecision` gains `Source` and `SourceName`, so
+  unkeyed literals must name their fields. `clients.OpenCodeNativeRequirements`
+  takes the client definition, because commands alone can deliver skills.
+  `domain.SecurityEvaluationInput` gains `Commands` and `PluginName`; hosts
+  that call the evaluator directly pass them so the scan covers the rendered
+  commands. An adapter that sets `ClientTraits.EnforcesExplicitSkillInvocation`
+  must implement `clients.ExplicitSkillDecorator`.
+- **Security review.** A package with commands is always scanned locally, or
+  served from a cache entry for the same rendered commands; a signed Directory
+  verdict is not accepted for it.
+- **Authoring reports.** Invalid commands fail Readiness as `installer_policy`
+  findings without changing Conformance or HostSafety. Compatibility reports a
+  withheld explicit-only command as the warning `target_command_withheld`, and
+  as an error only when the client gets nothing else.
 
 ### Fixed
 
