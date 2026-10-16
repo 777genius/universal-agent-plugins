@@ -20,7 +20,7 @@ func semanticHuhTheme(dark bool) *huh.Styles {
 		// Keep that choice visible when color is disabled or hard to distinguish.
 		f.FocusedButton = f.FocusedButton.Foreground(lipgloss.Color("0")).SetString("✓")
 		// Only the selected choice gets a background; the other stays plain text.
-		f.BlurredButton = f.BlurredButton.UnsetBackground().Foreground(terminaltheme.Color(terminaltheme.Muted))
+		f.BlurredButton = f.BlurredButton.UnsetBackground().UnsetForeground()
 	}
 	return t
 }

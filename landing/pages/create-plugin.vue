@@ -20,7 +20,7 @@ usePageSeo('publicAuthoring.title', 'publicAuthoring.intro', {
       <section id="use-plugins" aria-labelledby="use-title">
         <h2 id="use-title">{{ t('publicAuthoring.useTitle') }}</h2>
         <p>{{ t('publicAuthoring.available') }}</p>
-        <pre><code>npx universal-agent-plugins add context7</code></pre>
+        <pre><code>npx -y universal-agent-plugins add context7</code></pre>
         <p>{{ t('publicAuthoring.installHelp') }}</p>
         <a :href="quickstartUrl">
           {{ t('publicAuthoring.installLink') }}
