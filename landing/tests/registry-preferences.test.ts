@@ -82,7 +82,7 @@ test('expired community card and detail produce pinned commands with compatible 
   setActivePinia(createPinia());
   const data = signedDiscoveryFixture({ generated: '2000-01-01T00:00:00Z', expires: '2000-01-02T00:00:00Z' });
   const plugin = discoveryPlugin(data.snapshot.records[0]!, data.snapshot);
-  const expected = `npx universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
+  const expected = `npx -y universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
   const instance = card(packageProps(plugin));
   assert.equal(instance.state.command.value, expected);
   instance.state.updateTargets(['codex']);

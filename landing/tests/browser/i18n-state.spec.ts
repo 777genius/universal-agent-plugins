@@ -92,7 +92,7 @@ for (const locale of locales) {
     await page.keyboard.press('Escape');
     await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
     await card.locator('.command-snippet').getByRole('button').click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx universal-agent-plugins add i18n-state-00');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx -y universal-agent-plugins add i18n-state-00');
     expect(errors).toEqual([]);
   });
 }
@@ -154,7 +154,7 @@ test('manual download channel beats delayed detection and locale remount', async
     await expect(npm).toHaveAttribute('aria-pressed', 'true');
     const commands = await page.locator('.download-section__steps code').allTextContents();
     expect(commands.length).toBeGreaterThan(0);
-    expect(commands.join('\n')).toContain('npx universal-agent-plugins add');
+    expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
     gate.release();
     await expect(page.locator('.download-section__platform-note')).toContainText(wording('en')('download.platforms.linux'));
     await expect(npm).toHaveAttribute('aria-pressed', 'true');

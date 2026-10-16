@@ -1014,8 +1014,8 @@
       "description": "Самый быстрый вариант, если Node.js 22+ уже установлен: команда плагина запускается сразу.",
       "href": "https://www.npmjs.com/package/universal-agent-plugins",
       "note": "Без постоянной установки: npx скачивает проверенный CLI и запускает команду плагина за один шаг.",
-      "command": "npx universal-agent-plugins version",
-      "invocation": "npx universal-agent-plugins"
+      "command": "npx -y universal-agent-plugins version",
+      "invocation": "npx -y universal-agent-plugins"
     },
     {
       "id": "script",
@@ -1056,7 +1056,7 @@
     {
       "id": "install-cli",
       "title": "Запустите CLI",
-      "command": "npx universal-agent-plugins version",
+      "command": "npx -y universal-agent-plugins version",
       "note": "Для быстрой пробы используйте npx, а для ежедневной работы установите бинарник."
     },
     {

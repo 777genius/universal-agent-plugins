@@ -18,8 +18,8 @@ describe('native-first installation', () => {
       'agentplugins add context7',
     );
     assert.equal(
-      applyCliInvocation('universal-agent-plugins add context7', 'npx universal-agent-plugins'),
-      'npx universal-agent-plugins add context7',
+      applyCliInvocation('universal-agent-plugins add context7', 'npx -y universal-agent-plugins'),
+      'npx -y universal-agent-plugins add context7',
     );
   });
 
@@ -47,7 +47,7 @@ describe('native-first installation', () => {
       assert.equal(selected[0]?.recommended, true, locale);
       assert.equal(selected[0]?.command, 'brew install 777genius/agentplugins/agentplugins');
       assert.equal(selected[0]?.invocation, 'agentplugins');
-      assert.equal(selected[1]?.invocation, 'npx universal-agent-plugins');
+      assert.equal(selected[1]?.invocation, 'npx -y universal-agent-plugins');
       assert.equal(selected[2]?.invocation, '$HOME/.local/bin/agentplugins');
       assert.equal(selected[3]?.invocation, '& "$HOME\\.local\\bin\\agentplugins.exe"');
       assert.ok(
