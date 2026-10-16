@@ -1,5 +1,13 @@
 # Agent instructions
 
+## VS Code is frozen (owner decision, 2026-10-16)
+
+Do not change VS Code implementation, adapters, protocols, configuration,
+or dedicated fixtures/tests. Preserve existing behavior and source. New dependency-managed
+installation and release work targets Claude, Codex, OpenCode, Cursor and Gemini;
+VS Code remains excluded. Reopening VS Code work requires a new explicit owner
+instruction.
+
 ## Standard-first authoring: preserve legacy capabilities
 
 For this authoring program, read docs/AUTHORING_CAPABILITY_PRESERVATION.md and

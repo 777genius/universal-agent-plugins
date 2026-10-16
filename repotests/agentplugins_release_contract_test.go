@@ -373,6 +373,17 @@ func TestAgentpluginsPublicNpmRepairFixtureIsIsolatedAndUnambiguous(t *testing.T
 	mustContain(t, job, `[.installations[] | select(.declared_name == "context7") | .clients[] | select(.client_id == "opencode") | .native_objects[] | select(.kind == "opencode_global_mcp_server") | .path] | if length == 1 and (.[0] | type == "string" and length > 0) then .[0] else error("expected exactly one Context7 OpenCode repair path") end`)
 	mustNotContain(t, job, `.installations[0]`)
 	mustAppearBefore(t, job, add, `repair_file="$(jq -er`)
+	// Keep the release proof on saved admission and portable replay. Runtime
+	// smoke verifies the lifecycle rather than duplicating its jq implementation.
+	for _, want := range []string{
+		`.data.environment.saved == true`,
+		`.[0].digest_algorithm == "agentplugins-tree-sha256-v1"`,
+		`test ! -e "${AGENTPLUGINS_HOME}/state-v2.json"`,
+		`test ! -e "${AGENTPLUGINS_HOME}/store"`,
+		`.facts[0].package_digest == $digest`,
+	} {
+		mustContain(t, job, want)
+	}
 }
 
 func TestAgentpluginsNativeInstallSurfaceIsChecksumAndVersionBound(t *testing.T) {
