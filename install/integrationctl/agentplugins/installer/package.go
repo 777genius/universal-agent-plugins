@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -12,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // snapshotLocalPackage uses packagedigest executable overrides so Windows
@@ -355,7 +357,8 @@ func wrapLifecycleError(err error) error {
 		return nil
 	}
 	msg := err.Error()
-	if strings.Contains(msg, "run update separately") ||
+	if errors.Is(err, usecase.ErrProjectionRefreshRequired) ||
+		strings.Contains(msg, "run update separately") ||
 		strings.Contains(msg, "at a different revision; use update") ||
 		strings.Contains(msg, "differs from the installed revision; use update") ||
 		strings.Contains(msg, "use switch to change source") {

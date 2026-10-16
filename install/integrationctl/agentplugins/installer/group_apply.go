@@ -70,7 +70,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 			result.Outcome = OutcomeConflict
 			result.Reason = "plan_changed"
 		}
-		if strings.Contains(err.Error(), "run update separately") {
+		if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
 			result.Outcome = OutcomeConflict
 			result.Reason = "update_required"
 		}
