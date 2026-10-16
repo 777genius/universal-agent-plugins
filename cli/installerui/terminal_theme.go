@@ -2,6 +2,7 @@ package installerui
 
 import (
 	"charm.land/huh/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 )
@@ -17,7 +18,9 @@ func semanticHuhTheme(dark bool) *huh.Styles {
 		f.MultiSelectSelector = f.MultiSelectSelector.Foreground(terminaltheme.Color(terminaltheme.Label))
 		// Huh uses FocusedButton for the selected confirmation choice.
 		// Keep that choice visible when color is disabled or hard to distinguish.
-		f.FocusedButton = f.FocusedButton.Foreground(terminaltheme.Color(terminaltheme.Label)).SetString("✓")
+		f.FocusedButton = f.FocusedButton.Foreground(lipgloss.Color("0")).SetString("✓")
+		// Only the selected choice gets a background; the other stays plain text.
+		f.BlurredButton = f.BlurredButton.UnsetBackground().Foreground(terminaltheme.Color(terminaltheme.Muted))
 	}
 	return t
 }

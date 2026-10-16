@@ -48,6 +48,11 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	if matches == nil && !isDirectorySelector(source) {
 		return true, errors.New("saved add requires an exact GitHub commit or Directory selector; use --no-save")
 	}
+	if len(targets) == 0 && app.Terminal && opts.format == "human" {
+		if app, err = withPrompter(cmd, app, opts); err != nil {
+			return true, err
+		}
+	}
 	targets, err = savedAddTargets(cmd, app, opts, source, targets)
 	if err != nil {
 		return true, err
