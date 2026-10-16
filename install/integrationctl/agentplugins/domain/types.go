@@ -186,6 +186,15 @@ type PackageEnvelope struct {
 	ManifestDigest  string             `json:"manifest_digest"`
 	ExecutableFiles []string           `json:"executable_files,omitempty"`
 	SnapshotRoot    string             `json:"-"`
+
+	// Commands are the valid authored commands; InvalidCommands names the
+	// rejected entries by file stem. Each rejection has a BoundaryCommand
+	// diagnostic.
+	Commands        map[string]Command `json:"commands,omitempty"`
+	InvalidCommands []string           `json:"invalid_commands,omitempty"`
+	// SkillsDirEntries are the physical names directly under skills/, valid or
+	// not, so a projected command skill can be checked against all of them.
+	SkillsDirEntries []string `json:"-"`
 }
 
 type LoadInput struct {

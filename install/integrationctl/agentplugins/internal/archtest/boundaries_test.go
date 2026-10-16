@@ -56,6 +56,13 @@ func TestLayerBoundaries(t *testing.T) {
 			modulePath + "/install/integrationctl/agentplugins/ports",
 			legacyPortsPath,
 		}},
+		// The command format is shared by the loader, the authoring reader,
+		// the stager and the security scan; it stays pure so all of them can.
+		{pkg: agentplugins + "/commandext", allow: []string{
+			modulePath + "/install/integrationctl/agentplugins/domain",
+			modulePath + "/install/integrationctl/agentplugins/conformance",
+			"gopkg.in/yaml.v3",
+		}},
 		{pkg: agentplugins + "/usecase", deny: []string{
 			modulePath + "/install/integrationctl/adapters",
 			modulePath + "/install/integrationctl/agentplugins/adapters",

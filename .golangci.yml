@@ -134,6 +134,15 @@ linters:
             # Duplicating the types into domain would create two sources of truth
             # and a conversion on every call. See docs/ARCHITECTURE.md.
             - "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+        commandext-pure:
+          # One command format for the loader, the authoring reader, the
+          # stager and the security scan. It reads no files and knows no client.
+          files: ["**/install/integrationctl/agentplugins/commandext/**", "!$test"]
+          allow:
+            - "$gostd"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+            - "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
+            - "gopkg.in/yaml.v3"
         usecase-through-ports: # deny list grows as violations are removed
           files: ["**/install/integrationctl/agentplugins/usecase/**", "!$test"]
           # Deny list, not allow list: adding an `allow` key here would turn the

@@ -11,12 +11,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -62,12 +66,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         }
       ],
@@ -113,12 +121,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -164,12 +176,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         }
       ],
@@ -215,12 +231,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -266,12 +286,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -318,12 +342,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -369,12 +397,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -420,12 +452,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -471,12 +507,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -522,12 +562,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -573,12 +617,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -624,12 +672,16 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "local",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],

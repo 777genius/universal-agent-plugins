@@ -323,6 +323,10 @@ type ComponentDecision struct {
 	Name    string        `json:"name"`
 	Support SupportLevel  `json:"support"`
 	Reason  string        `json:"reason,omitempty"`
+	// Source and SourceName are set only for a component the installer
+	// renders, such as ComponentSourceCommand and the command's name.
+	Source     string `json:"source,omitempty"`
+	SourceName string `json:"source_name,omitempty"`
 }
 
 type DeliveryPlan struct {
