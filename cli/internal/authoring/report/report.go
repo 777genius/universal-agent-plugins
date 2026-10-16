@@ -292,10 +292,12 @@ func Build(command, revision string, p project.Result, release bool) Report {
 			r.Loadability.FindingIDs = append(r.Loadability.FindingIDs, f.ID)
 		}
 	}
-	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status)
+	commands := r.commandsAssessment(f.Package)
+	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status, commands.Status)
 	if r.Readiness.Status == Pass && (!c.Complete || !v.Coverage.TreeComplete) {
 		r.Readiness.Status = NotEvaluated
 	}
+	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, commands.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Loadability.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Conformance.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.HostSafety.FindingIDs...)
@@ -443,7 +445,7 @@ func (r *Report) AddCompatibility(clients []planner.ClientCompatibility) {
 	r.Compatibility = assessment(Pass)
 	for _, c := range clients {
 		for _, component := range c.Components {
-			if component.Support == "unsupported" {
+			if component.Support == "unsupported" && !r.addCommandCompatibility(c, component) {
 				id := r.add(Finding{Code: "target_component_unsupported", Layer: "compatibility", Rule: "planner/static-support", ItemID: opaque(string(c.ClientID) + ":" + string(component.Kind)), Severity: "error"})
 				r.Compatibility.Status = Fail
 				r.Compatibility.FindingIDs = append(r.Compatibility.FindingIDs, id)

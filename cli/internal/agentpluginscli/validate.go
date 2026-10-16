@@ -15,6 +15,11 @@ type validationComponents struct {
 	AppBindings   int      `json:"app_bindings"`
 	Extensions    int      `json:"extensions"`
 	MCPTransports []string `json:"mcp_transports,omitempty"`
+	// Commands are valid authored commands. InvalidCommands counts rejected
+	// entries; their diagnostics have boundary "command". Neither changes
+	// Conformant, which stays about the Agent Plugins specification.
+	Commands        int `json:"commands,omitempty"`
+	InvalidCommands int `json:"invalid_commands,omitempty"`
 }
 
 type validationSource struct {
@@ -66,9 +71,9 @@ func newValidateCommand(app App, opts *options) *cobra.Command {
 			if loaded.security != nil {
 				renderSecurityAssessment(cmd, *loaded.security, true)
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Valid Agent Plugin: %s %s\nSchema: %s\nSource: %s\nComponents: %d skills, %d MCP servers, %d app bindings\n",
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Valid Agent Plugin: %s %s\nSchema: %s\nSource: %s\nComponents: %d skills, %d MCP servers, %d app bindings%s\n",
 				result.Name, result.Version, result.SchemaURI, publicPackageSource(loaded.envelope.Source),
-				result.Components.Skills, result.Components.MCPServers, result.Components.AppBindings)
+				result.Components.Skills, result.Components.MCPServers, result.Components.AppBindings, commandSummary(result.Components))
 			return err
 		},
 	}
@@ -98,7 +103,20 @@ func newValidationResult(envelope domain.PackageEnvelope) validationResult {
 			Skills: len(envelope.Inventory.Skills), MCPServers: len(envelope.Inventory.MCPServers),
 			AppBindings: len(envelope.Inventory.AppBindings), Extensions: len(envelope.Inventory.Extensions),
 			MCPTransports: transports,
+			Commands:      len(envelope.Commands), InvalidCommands: len(envelope.InvalidCommands),
 		},
 		Diagnostics: append([]domain.Diagnostic(nil), envelope.Diagnostics...),
 	}
+}
+
+// commandSummary is empty for a package without commands, so existing output
+// keeps its exact shape.
+func commandSummary(components validationComponents) string {
+	switch {
+	case components.InvalidCommands > 0:
+		return fmt.Sprintf(", %d commands (%d invalid)", components.Commands+components.InvalidCommands, components.InvalidCommands)
+	case components.Commands > 0:
+		return fmt.Sprintf(", %d commands", components.Commands)
+	}
+	return ""
 }

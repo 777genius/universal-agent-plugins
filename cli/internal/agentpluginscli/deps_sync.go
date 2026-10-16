@@ -151,7 +151,7 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 		}
 		components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
 		for _, component := range plan.Delivery.Components {
-			components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason})
+			components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
 		}
 		opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
 

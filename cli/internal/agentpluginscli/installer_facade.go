@@ -128,7 +128,7 @@ func facadePlanAddResult(plan installer.Plan, envelope domain.PackageEnvelope) u
 		NoChange:             plan.NoChange,
 	}
 	for _, component := range delivery.Components {
-		out.Plan.Components = append(out.Plan.Components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason})
+		out.Plan.Components = append(out.Plan.Components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
 	}
 	for _, diagnostic := range delivery.Diagnostics {
 		out.Plan.Diagnostics = append(out.Plan.Diagnostics, domain.Diagnostic{Severity: domain.Severity(diagnostic.Severity), Boundary: domain.FailureBoundary(diagnostic.Boundary), Code: diagnostic.Code, Path: diagnostic.Path, Item: diagnostic.Item, Message: diagnostic.Message})

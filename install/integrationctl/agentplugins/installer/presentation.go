@@ -15,7 +15,7 @@ func deliveryPlan(plan domain.DeliveryPlan) DeliveryPlan {
 		UserActions: slices.Clone(plan.UserActions), LocalActions: slices.Clone(plan.LocalActions), Warnings: slices.Clone(plan.Warnings),
 	}
 	for _, component := range plan.Components {
-		out.Components = append(out.Components, ComponentDecision{Kind: string(component.Kind), Name: component.Name, Support: string(component.Support), Reason: component.Reason})
+		out.Components = append(out.Components, ComponentDecision{Kind: string(component.Kind), Name: component.Name, Support: string(component.Support), Reason: component.Reason, Source: component.Source, SourceName: component.SourceName})
 	}
 	for _, diagnostic := range plan.Diagnostics {
 		out.Diagnostics = append(out.Diagnostics, PlanDiagnostic{Severity: string(diagnostic.Severity), Boundary: string(diagnostic.Boundary), Code: diagnostic.Code, Path: diagnostic.Path, Item: diagnostic.Item, Message: diagnostic.Message})

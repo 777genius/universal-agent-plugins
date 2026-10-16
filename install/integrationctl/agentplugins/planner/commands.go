@@ -7,10 +7,13 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// ExplicitInvocationNotEnforceable is the warning code, and the
+// compatibility limitation, of an explicit-only command withheld from a client.
+const ExplicitInvocationNotEnforceable = "explicit_invocation_not_enforceable"
+
 const (
-	explicitInvocationNotEnforceable = "explicit_invocation_not_enforceable"
-	componentNotSupported            = "component_not_supported_by_client"
-	invalidComponent                 = "invalid_component"
+	componentNotSupported = "component_not_supported_by_client"
+	invalidComponent      = "invalid_component"
 )
 
 // commandDecisions turns the package's valid commands into the skills this
@@ -31,7 +34,7 @@ func commandDecisions(envelope domain.PackageEnvelope, definition domain.ClientD
 		}
 		code, message := componentNotSupported, "this client does not take skills, so the command is not delivered"
 		if command.ExplicitOnly {
-			code, message = explicitInvocationNotEnforceable, "this client cannot keep the command out of automatic invocation, so it is not delivered"
+			code, message = ExplicitInvocationNotEnforceable, "this client cannot keep the command out of automatic invocation, so it is not delivered"
 		}
 		withheld = append(withheld, domain.Diagnostic{
 			Severity: domain.SeverityWarning, Boundary: domain.BoundaryCommand, Code: code,

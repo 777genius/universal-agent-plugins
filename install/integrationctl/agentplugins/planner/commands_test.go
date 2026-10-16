@@ -56,7 +56,7 @@ func TestCommandDeliveryFollowsTheExplicitInvocationTrait(t *testing.T) {
 			want := []string{"echo=demo-echo"}
 			if definition.Traits.EnforcesExplicitSkillInvocation {
 				want = append(want, "wizard=demo-wizard")
-			} else if !hasCommandDiagnostic(plan.Diagnostics, "wizard", explicitInvocationNotEnforceable) {
+			} else if !hasCommandDiagnostic(plan.Diagnostics, "wizard", ExplicitInvocationNotEnforceable) {
 				t.Fatalf("withheld command has no diagnostic: %+v", plan.Diagnostics)
 			}
 			if got := commandComponents(plan); !reflect.DeepEqual(got, want) {
@@ -95,7 +95,7 @@ func TestCommandVerdicts(t *testing.T) {
 	}
 	withSkill := onlyExplicit
 	withSkill.Skills = map[string]domain.Skill{"guide": {Name: "guide"}}
-	if result := plan(withSkill); result.Status == domain.PlanUnsupported || !compatContains(result.Warnings, explicitInvocationNotEnforceable) {
+	if result := plan(withSkill); result.Status == domain.PlanUnsupported || !compatContains(result.Warnings, ExplicitInvocationNotEnforceable) {
 		t.Fatalf("skill plus withheld command = %+v", result)
 	}
 	invalid := domain.PackageEnvelope{
@@ -136,7 +136,7 @@ func TestCommandCompatibilityRows(t *testing.T) {
 		{1, "", domain.SupportUnsupported, []string{invalidComponent}},
 		{2, domain.ComponentSourceCommand, domain.SupportUnsupported, []string{invalidComponent, "command_body_empty", "command_unknown_field"}},
 		{3, domain.ComponentSourceCommand, domain.SupportProjected, nil},
-		{4, domain.ComponentSourceCommand, domain.SupportUnsupported, []string{explicitInvocationNotEnforceable}},
+		{4, domain.ComponentSourceCommand, domain.SupportUnsupported, []string{ExplicitInvocationNotEnforceable}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("rows = %+v, want %+v", got, want)
