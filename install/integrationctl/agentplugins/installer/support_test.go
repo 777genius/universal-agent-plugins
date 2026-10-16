@@ -40,18 +40,27 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 				t.Fatalf("missing executable: %v", err)
 			}
 			facts := []TargetFacts{{ClientID: test.id, BindingID: "binding", ConfigRoot: request.ClientConfigRoot}}
-			_, err = engine.knownTargetIndex(facts)
+			_, err = engine.knownTargetIndex(OpInstall, facts)
 			if test.executable && !errors.Is(err, ErrTargetFactsUnavailable) || !test.executable && err != nil {
 				t.Fatalf("known target missing executable: %v", err)
 			}
 			for _, operation := range []Operation{OpInstall, OpUpdate, OpRepair, OpRemove} {
+				_, err := engine.knownTargetIndex(operation, facts)
+				if test.executable && operation != OpRemove && !errors.Is(err, ErrTargetFactsUnavailable) || (!test.executable || operation == OpRemove) && err != nil {
+					t.Fatalf("known target executable authority for %s: %v", operation, err)
+				}
+				facts[0].Executable = "relative/probe"
+				if _, err := engine.knownTargetIndex(operation, facts); !errors.Is(err, ErrTargetFactsUnavailable) {
+					t.Fatalf("relative known target executable for %s: %v", operation, err)
+				}
+				facts[0].Executable = ""
 				request.Operation, request.ClientExecutable = operation, "relative/probe"
 				if _, err := engine.detectedClient(request); !errors.Is(err, ErrInvalidRequest) {
 					t.Fatalf("relative executable accepted for %s: %v", operation, err)
 				}
 			}
 			facts[0].Executable = "relative/probe"
-			if _, err := engine.knownTargetIndex(facts); !errors.Is(err, ErrTargetFactsUnavailable) {
+			if _, err := engine.knownTargetIndex(OpInstall, facts); !errors.Is(err, ErrTargetFactsUnavailable) {
 				t.Fatalf("relative known target executable: %v", err)
 			}
 		})

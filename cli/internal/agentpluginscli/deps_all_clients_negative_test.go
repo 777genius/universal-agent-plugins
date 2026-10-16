@@ -268,3 +268,43 @@ func TestDependencyAllClientsNativeRecovery(t *testing.T) {
 		t.Fatalf("native recovery incomplete: %+v %v", view, err)
 	}
 }
+
+// A recorded profile remains removal authority after detection loses the CLI.
+// In particular, KnownTargets must not reintroduce install-only executable facts.
+func TestDependencyRemovalWithoutClientExecutable(t *testing.T) {
+	repo := dependencyRepo(t)
+	f, _, runner := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientCodex, executable: true})
+	dependencyRun(t, f, "deps", "init", "--format", "json")
+	mp, _ := f.app.dependencyPaths()
+	dependencyWrite(t, mp, "schema_version = 1\n[dependencies.demo]\ngit = \"acme/demo\"\nref = \"main\"\n[targets]\ncodex = [\"demo\"]\n")
+	dependencyRun(t, f, "deps", "lock", "--format", "json")
+	dependencyRun(t, f, "deps", "sync", "--locked", "--yes", "--format", "json")
+	binding := dependencyBinding(t, f)
+	clients, err := f.app.Detector.Detect(context.Background())
+	if err != nil || len(clients) != 1 {
+		t.Fatalf("fixture detection: %+v %v", clients, err)
+	}
+	if err := os.Remove(clients[0].ExecutablePath); err != nil {
+		t.Fatal(err)
+	}
+	clients[0].ExecutablePath, clients[0].Status = "", domain.DetectionNotDetected
+	f.app.Detector = staticDetector{clients: clients}
+	dependencyWrite(t, mp, "schema_version = 1\n[targets]\n")
+	dependencyRun(t, f, "deps", "lock", "--format", "json")
+	if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
+		t.Fatal("recorded removal bypassed external uninstall attestation")
+	}
+	_ = dependencyBinding(t, f)
+	mutations := runner.mutations
+	dependencyRun(t, f, "deps", "sync", "--locked", "--yes", "--external-uninstalled", "--format", "json")
+	view, err := f.app.Installer.Inspect(context.Background())
+	if err != nil || len(view.EnvironmentReceipts) != 0 {
+		t.Fatalf("recorded removal retained ownership: %+v %v", view, err)
+	}
+	if _, err := os.Stat(binding.TargetPath); !os.IsNotExist(err) {
+		t.Fatalf("recorded projection survived removal: %v", err)
+	}
+	if runner.mutations != mutations {
+		t.Fatal("recorded removal attempted missing client executable")
+	}
+}

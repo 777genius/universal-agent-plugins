@@ -414,7 +414,7 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 	for _, candidate := range req.Targets {
 		selected[candidate.ClientID] = struct{}{}
 	}
-	known, err := e.knownTargetIndex(req.KnownTargets)
+	known, err := e.knownTargetIndex(req.Operation, req.KnownTargets)
 	if err != nil {
 		return nil, err
 	}
