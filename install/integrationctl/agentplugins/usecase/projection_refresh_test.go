@@ -408,28 +408,65 @@ func TestUpdateGroupRefreshesCommandProjection(t *testing.T) {
 	}
 }
 
-// A refresh that fails part way stops the group before its update starts
-// and reports what the earlier refreshes already changed.
+// A refresh that fails part way stops the group before its update starts. The
+// result reports what the earlier refreshes already changed, the failed
+// target, and every target the stop left untouched.
 func TestUpdateGroupStopsAtAFailedRefresh(t *testing.T) {
 	t.Parallel()
-	base, _, cursor := serviceFixture(t)
-	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
-	service, withhold := withRules(base, true)
-	targets := []AddInput{commandInput(t, cursor), commandInput(t, kiro)}
-	for index := range targets {
-		targets[index].Envelope = targets[0].Envelope
+	for name, broken := range map[string]int{"first target": 0, "second target": 1} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			base, _, cursor := serviceFixture(t)
+			kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+			service, withhold := withRules(base, true)
+			targets := []AddInput{commandInput(t, cursor), commandInput(t, kiro)}
+			for index := range targets {
+				targets[index].Envelope = targets[0].Envelope
+			}
+			added, err := service.AddGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-add", Confirmed: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			*withhold = false
+			if err := os.WriteFile(filepath.Join(added.Targets[broken].Plan.ActivePath, "plugin.json"), []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			result, err := service.UpdateGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-partial", Confirmed: true})
+			failed := result.Targets[broken]
+			if err == nil || failed.Mutated || failed.GroupPhase != GroupTargetExternalFailed || failed.Failure == nil {
+				t.Fatalf("partial group refresh = %+v, %v", result, err)
+			}
+			if broken == 0 {
+				if result.Phase != GroupPhasePreparationFailed || result.Mutated || result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted {
+					t.Fatalf("group stopped at its first refresh = %+v", result)
+				}
+				return
+			}
+			if result.Phase != GroupPhaseExternalPartialFailure || !result.Mutated || !result.Targets[0].Mutated || result.Targets[0].GroupPhase != "" {
+				t.Fatalf("group stopped after a changing refresh = %+v", result)
+			}
+		})
 	}
-	added, err := service.AddGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-add", Confirmed: true})
-	if err != nil {
-		t.Fatal(err)
+}
+
+// When the group update fails after a refresh already changed a target, the
+// group is a partial failure unless the update reports a later stage itself,
+// and an update that returned no targets still shows the refreshed ones.
+func TestMergeRefreshedGroupKeepsRefreshChanges(t *testing.T) {
+	t.Parallel()
+	refreshed := GroupResult{InstallationID: "installation", Mutated: true, Targets: []AddResult{{Mutated: true}, {}}}
+	failure := errors.New("group update failed")
+	for _, phase := range []GroupPhase{"", GroupPhasePreparationFailed, GroupPhaseManagedRolledBack} {
+		merged := mergeRefreshedGroup(GroupResult{Phase: phase, Targets: []AddResult{{NoChange: true}, {NoChange: true}}}, refreshed, failure)
+		if merged.Phase != GroupPhaseExternalPartialFailure || !merged.Mutated || !merged.Targets[0].Mutated || merged.Targets[0].NoChange || !merged.Targets[1].NoChange {
+			t.Fatalf("after %q: %+v", phase, merged)
+		}
 	}
-	*withhold = false
-	if err := os.WriteFile(filepath.Join(added.Targets[1].Plan.ActivePath, "plugin.json"), []byte("{}"), 0o644); err != nil {
-		t.Fatal(err)
+	if merged := mergeRefreshedGroup(GroupResult{Phase: GroupPhaseManagedActivationFailed}, refreshed, failure); merged.Phase != GroupPhaseManagedActivationFailed || merged.InstallationID != "installation" || len(merged.Targets) != 2 {
+		t.Fatalf("later stage or missing targets: %+v", merged)
 	}
-	result, err := service.UpdateGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-partial", Confirmed: true})
-	if err == nil || result.Phase != GroupPhaseExternalPartialFailure || !result.Mutated || !result.Targets[0].Mutated || result.Targets[1].Mutated {
-		t.Fatalf("partial group refresh = %+v, %v", result, err)
+	if merged := mergeRefreshedGroup(GroupResult{Phase: GroupPhaseCompleted, Targets: []AddResult{{}, {}}}, refreshed, nil); merged.Phase != GroupPhaseCompleted {
+		t.Fatalf("successful update: %+v", merged)
 	}
 }
 

@@ -82,6 +82,19 @@ func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (Group
 		return refreshed, err
 	}
 	result, err := service.applyGroup(ctx, input, true)
+	return mergeRefreshedGroup(result, refreshed, err), err
+}
+
+// mergeRefreshedGroup folds the refreshes into the group update's result. A
+// refresh that changed a target stays reported when the update then fails:
+// unless the update names a later stage itself, the group ends as a partial
+// failure rather than as a failure that changed nothing.
+func mergeRefreshedGroup(result, refreshed GroupResult, err error) GroupResult {
+	if len(result.Targets) == 0 {
+		result.InstallationID = refreshed.InstallationID
+		result.OperationGroupID = refreshed.OperationGroupID
+		result.Targets = refreshed.Targets
+	}
 	for index, target := range refreshed.Targets {
 		if target.Mutated && index < len(result.Targets) {
 			result.Targets[index].Mutated = true
@@ -89,9 +102,18 @@ func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (Group
 		}
 	}
 	result.Mutated = result.Mutated || refreshed.Mutated
-	return result, err
+	if err != nil && refreshed.Mutated {
+		switch result.Phase {
+		case "", GroupPhasePlanned, GroupPhasePreparationFailed, GroupPhaseManagedUnchanged, GroupPhaseManagedRolledBack:
+			result.Phase = GroupPhaseExternalPartialFailure
+		}
+	}
+	return result
 }
 
+// refreshGroupTargets refreshes the eligible targets in order and stops at the
+// first failure. The failed target and every target not reached by then are
+// marked, so the partial result says which ones the stop left untouched.
 func (service Service) refreshGroupTargets(ctx context.Context, input GroupInput, eligible map[int]string) (GroupResult, error) {
 	indexes := make([]int, 0, len(eligible))
 	for index := range eligible {
@@ -99,9 +121,11 @@ func (service Service) refreshGroupTargets(ctx context.Context, input GroupInput
 	}
 	sort.Ints(indexes)
 	partial := GroupResult{OperationGroupID: input.OperationGroupID, Targets: make([]AddResult, len(input.Targets))}
+	attempted := map[int]bool{}
 	for _, index := range indexes {
 		target := input.Targets[index]
 		target.Confirmed, target.DryRun = true, false
+		attempted[index] = true
 		result, err := service.refreshBeforeUpdate(ctx, target, eligible[index], refreshOperationID(input.OperationGroupID, "-refresh-"+string(target.Client.ClientID)))
 		partial.InstallationID = eligible[index]
 		partial.Targets[index] = result
@@ -110,6 +134,14 @@ func (service Service) refreshGroupTargets(ctx context.Context, input GroupInput
 			partial.Phase = GroupPhasePreparationFailed
 			if partial.Mutated {
 				partial.Phase = GroupPhaseExternalPartialFailure
+			}
+			partial.Targets[index].GroupPhase = GroupTargetExternalFailed
+			partial.Targets[index].Failure = &GroupTargetFailure{Stage: "refresh", Message: err.Error()}
+			for other := range partial.Targets {
+				if !attempted[other] {
+					partial.Targets[other].GroupPhase = GroupTargetExternalNotAttempted
+					partial.Targets[other].Failure = &GroupTargetFailure{Stage: "refresh", Message: "processing stopped because an earlier projection refresh failed"}
+				}
 			}
 			return partial, err
 		}
