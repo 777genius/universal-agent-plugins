@@ -93,7 +93,7 @@ func (p *Preparer) PrepareOpenCodeHost(ctx context.Context, client domain.Detect
 			selected.MCP.Servers[name] = server
 		}
 	}
-	skills, transports := clients.OpenCodeNativeRequirements(selected)
+	skills, transports := clients.OpenCodeNativeRequirements(selected, definition)
 	if !skills && len(transports) == 0 {
 		client.OpenCodeHost = nil
 		return client, nil

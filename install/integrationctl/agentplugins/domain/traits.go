@@ -33,6 +33,11 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// EnforcesExplicitSkillInvocation means the client has a verified way to
+	// keep a skill out of the model's automatic choice, so an explicit-only
+	// command can be delivered. The adapter must then implement
+	// clients.ExplicitSkillDecorator. Backend siblings must agree.
+	EnforcesExplicitSkillInvocation bool
 }
 
 // ClientTraitsFor returns the declared traits for a known client. Unknown ids

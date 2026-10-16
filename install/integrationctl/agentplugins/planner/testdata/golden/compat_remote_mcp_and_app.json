@@ -24,6 +24,7 @@
         "Limitations": [
           "remote_app_registration_not_checked"
         ],
+        "Source": "",
         "Support": "projected"
       },
       {
@@ -33,6 +34,7 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -41,12 +43,14 @@
         "Limitations": [
           "remote_app_registration_not_checked"
         ],
+        "Source": "",
         "Support": "projected"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -87,6 +91,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -96,18 +101,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -145,6 +153,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -154,18 +163,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -203,6 +215,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -212,18 +225,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -262,6 +278,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -270,18 +287,21 @@
         "Limitations": [
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -320,6 +340,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -328,18 +349,21 @@
         "Limitations": [
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -378,6 +402,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -387,18 +412,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -437,6 +465,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -446,18 +475,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -496,6 +528,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -505,18 +538,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -555,6 +591,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -564,18 +601,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -614,6 +654,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -623,18 +664,21 @@
           "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
@@ -672,6 +716,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -680,18 +725,21 @@
         "Limitations": [
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
@@ -730,6 +778,7 @@
         "Limitations": [
           "component_not_supported_by_client"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
@@ -738,18 +787,21 @@
         "Limitations": [
           "extension_semantics_not_established"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],

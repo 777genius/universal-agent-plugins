@@ -102,7 +102,8 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	}
 	plan.TargetAnchor, plan.TargetRoot, plan.ActivePath = target.TargetAnchor, target.TargetRoot, target.ActivePath
 	plan.Components = componentDecisions(request.Envelope, definition.Capabilities)
-	if err := planner.qualify(input, definition.Capabilities, &plan); err != nil {
+	commandsWithheld := applyCommandDecisions(&plan, request.Envelope, definition)
+	if err := planner.qualify(input, definition.Capabilities, commandsWithheld, &plan); err != nil {
 		return plan, err
 	}
 	if plan.Status == domain.PlanUnsupported {
@@ -182,7 +183,7 @@ func admissible(definition domain.ClientDefinition, request domain.PlanRequest, 
 // authorization of a local preparation, otherwise the pinned catalog, then the
 // package diagnostics, then the client's admission rules, then the generic
 // "nothing usable is left" check.
-func (planner Planner) qualify(input clients.PlanInput, capabilities domain.ClientCapabilities, plan *domain.DeliveryPlan) error {
+func (planner Planner) qualify(input clients.PlanInput, capabilities domain.ClientCapabilities, commandsWithheld bool, plan *domain.DeliveryPlan) error {
 	authorized := false
 	if authorizer, ok := clients.As[clients.LocalPreparationAuthorizer](planner.Registry, plan.ClientID); ok {
 		granted, err := authorizer.AuthorizeLocalPreparation(input, plan)
@@ -200,7 +201,7 @@ func (planner Planner) qualify(input clients.PlanInput, capabilities domain.Clie
 			return err
 		}
 	}
-	applyComponentVerdict(plan, hasComponentErrors)
+	applyComponentVerdict(plan, hasComponentErrors, commandsWithheld)
 	return nil
 }
 
@@ -222,7 +223,7 @@ func applyDiagnostics(plan *domain.DeliveryPlan, envelope domain.PackageEnvelope
 // diagnostic describes a part of the package it never looks at.
 func invalidatesComponent(boundary domain.FailureBoundary, capabilities domain.ClientCapabilities) bool {
 	switch boundary {
-	case domain.BoundaryMCP, domain.BoundaryMCPServer, domain.BoundarySkill, domain.BoundaryExtension:
+	case domain.BoundaryMCP, domain.BoundaryMCPServer, domain.BoundarySkill, domain.BoundaryExtension, domain.BoundaryCommand:
 		return true
 	case domain.BoundaryApp:
 		return capabilities.AppSupport != domain.SupportUnsupported
@@ -230,11 +231,16 @@ func invalidatesComponent(boundary domain.FailureBoundary, capabilities domain.C
 	return false
 }
 
-func applyComponentVerdict(plan *domain.DeliveryPlan, hasComponentErrors bool) {
+// applyComponentVerdict rejects a plan with nothing left to deliver. Withheld
+// commands count as unsupported components: a package of explicit-only
+// commands is not an empty, trivially installable package.
+func applyComponentVerdict(plan *domain.DeliveryPlan, hasComponentErrors, commandsWithheld bool) {
 	switch {
 	case !hasComponents(plan.Components) && hasComponentErrors:
 		rejectPlan(plan, "no_valid_components")
 	case hasComponents(plan.Components) && !hasSupportedComponent(plan.Components):
+		rejectPlan(plan, "no_supported_components")
+	case !hasComponents(plan.Components) && commandsWithheld:
 		rejectPlan(plan, "no_supported_components")
 	}
 }

@@ -98,3 +98,16 @@ func TestRequiresNativeProjectorMatchesPackageAndLifecycle(t *testing.T) {
 		t.Fatal("projection and manual clients do not require a projector")
 	}
 }
+
+// Siblings install through one backend, so one of them withholding an
+// explicit-only command while the other delivers it would put the command in
+// front of the model through the sibling's client after all.
+func TestBackendSiblingsAgreeOnExplicitSkillInvocation(t *testing.T) {
+	for _, definition := range ClientDefinitions() {
+		for _, sibling := range BackendSiblings(definition.ID) {
+			if ClientTraitsFor(sibling).EnforcesExplicitSkillInvocation != definition.Traits.EnforcesExplicitSkillInvocation {
+				t.Errorf("%s and its backend sibling %s disagree on EnforcesExplicitSkillInvocation", definition.ID, sibling)
+			}
+		}
+	}
+}

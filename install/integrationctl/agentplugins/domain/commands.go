@@ -56,3 +56,27 @@ type RenderedSkill struct {
 func (envelope PackageEnvelope) HasInstallerRenderedComponents() bool {
 	return len(envelope.Commands)+len(envelope.InvalidCommands) > 0
 }
+
+// DeliversCommand reports whether a client receives a command as a skill. An
+// explicit-only command needs a client that enforces explicit invocation; it
+// is withheld rather than delivered as a skill the model may pick on its own.
+func DeliversCommand(command Command, definition ClientDefinition) bool {
+	support := definition.Capabilities.SkillSupport
+	return support != "" && support != SupportUnsupported &&
+		(!command.ExplicitOnly || definition.Traits.EnforcesExplicitSkillInvocation)
+}
+
+// DeliversSkills reports whether a client gets any skill from the package,
+// authored or rendered from a command. Host preparation sizes skill support
+// from this answer, so it has to agree with the planner.
+func DeliversSkills(envelope PackageEnvelope, definition ClientDefinition) bool {
+	if len(envelope.Skills) > 0 {
+		return true
+	}
+	for _, command := range envelope.Commands {
+		if DeliversCommand(command, definition) {
+			return true
+		}
+	}
+	return false
+}

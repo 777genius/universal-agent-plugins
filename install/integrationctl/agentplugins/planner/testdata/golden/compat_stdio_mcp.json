@@ -25,12 +25,14 @@
           "component_not_supported_by_client",
           "chatgpt_app_binding_required"
         ],
+        "Source": "",
         "Support": "unsupported"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -70,12 +72,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -111,12 +115,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -152,12 +158,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "projected"
       }
     ],
@@ -194,12 +202,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -236,12 +246,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -278,12 +290,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -320,12 +334,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -362,12 +378,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -404,12 +422,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "native"
       }
     ],
@@ -446,12 +466,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
@@ -487,12 +509,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
@@ -529,12 +553,14 @@
         "Index": 1,
         "Kind": "mcp_server",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       },
       {
         "Index": 1,
         "Kind": "skill",
         "Limitations": null,
+        "Source": "",
         "Support": "prepared"
       }
     ],
