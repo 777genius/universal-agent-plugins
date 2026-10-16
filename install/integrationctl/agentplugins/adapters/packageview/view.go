@@ -311,6 +311,19 @@ func (l *Lease) finish(err *error) {
 }
 func isParentRelative(p string) bool { return len(p) > 3 && p[:3] == ".."+string(filepath.Separator) }
 func (l *Lease) Data() Input         { l.mu.Lock(); defer l.mu.Unlock(); return clone(l.input) }
+
+// Content returns a copy of the exact bytes a successful Capture read for one
+// captured inventory file, by logical path. Like Data it remains usable after
+// Close; before a successful Capture, or for any other path, it reports false.
+func (l *Lease) Content(path string) ([]byte, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	b, ok := l.contents[path]
+	if !l.completed || !ok {
+		return nil, false
+	}
+	return append([]byte(nil), b...), true
+}
 func clone(v Input) Input {
 	v.Plugin.Bytes = append([]byte(nil), v.Plugin.Bytes...)
 	v.MCP.Bytes = append([]byte(nil), v.MCP.Bytes...)
