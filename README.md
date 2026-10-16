@@ -387,6 +387,7 @@ make vet
 - Security policy: [SECURITY.md](SECURITY.md)
 - Support boundary: [docs/SUPPORT.md](docs/SUPPORT.md)
 - Native CLI installation: [docs/NATIVE_INSTALL.md](docs/NATIVE_INSTALL.md)
+- Portable commands: [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md)
 - Client E2E evidence: [docs/AGENTPLUGINS_CLIENT_E2E.md](docs/AGENTPLUGINS_CLIENT_E2E.md)
 - Registry repository: https://github.com/777genius/universal-agent-plugins-registry
 
