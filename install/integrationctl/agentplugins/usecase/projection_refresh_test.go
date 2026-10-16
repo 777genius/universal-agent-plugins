@@ -117,7 +117,8 @@ func TestUpdateRefreshesCommandProjection(t *testing.T) {
 	}
 	assertUsecaseMissing(t, commandSkillPath(active))
 
-	input.OperationID = "update-rules"
+	// The longest id a host may pass; the refresh derives its own from it.
+	input.OperationID = strings.Repeat("u", 64)
 	updated, err := service.Update(context.Background(), input)
 	if err != nil || !updated.Mutated || updated.NoChange {
 		t.Fatalf("update = %+v, %v", updated, err)
@@ -395,7 +396,8 @@ func TestUpdateGroupRefreshesCommandProjection(t *testing.T) {
 	for _, target := range added.Targets {
 		assertUsecaseMissing(t, commandSkillPath(target.Plan.ActivePath))
 	}
-	updated, err := service.UpdateGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-update", Confirmed: true})
+	// The longest group id the group stage accepts; each refresh derives its own from it.
+	updated, err := service.UpdateGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: strings.Repeat("g", 60), Confirmed: true})
 	if err != nil || !updated.Mutated || !updated.Targets[0].Mutated || !updated.Targets[1].Mutated {
 		t.Fatalf("group update = %+v, %v", updated, err)
 	}

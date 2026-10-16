@@ -69,3 +69,23 @@ func TestPhysicalIdentityDoesNotSanitizeNonstandardLegacyNames(t *testing.T) {
 		}
 	}
 }
+
+// An id derived from a host's operation id stays one valid path component at
+// any base length, is the same every time, keeps a base that fits unchanged
+// and keeps long bases that share a prefix apart.
+func TestDeriveLeafIDStaysOneComponent(t *testing.T) {
+	const suffix = "-refresh-opencode"
+	long := strings.Repeat("a", 64)
+	for _, base := range []string{"op-1", strings.Repeat("b", 64-len(suffix)), long, long + "x", strings.Repeat("c.", 40)} {
+		got := domain.DeriveLeafID(base, suffix)
+		if err := pathpolicy.ValidateLeafID(got); err != nil || !strings.HasSuffix(got, suffix) || domain.DeriveLeafID(base, suffix) != got {
+			t.Fatalf("%q -> %q: %v", base, got, err)
+		}
+	}
+	if got := domain.DeriveLeafID("op-1", suffix); got != "op-1"+suffix {
+		t.Fatalf("a base that fits changed: %q", got)
+	}
+	if domain.DeriveLeafID(long, suffix) == domain.DeriveLeafID(long+"x", suffix) {
+		t.Fatal("long bases with a shared prefix derived one id")
+	}
+}

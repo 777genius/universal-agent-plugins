@@ -153,11 +153,12 @@ func (service Service) refreshBeforeUpdate(ctx context.Context, input AddInput, 
 	return service.RefreshProjection(ctx, input)
 }
 
-// refreshOperationID derives the refresh's own operation id. An empty base
-// leaves it empty, so the refresh generates one.
+// refreshOperationID derives the refresh's own operation id, which has to
+// stay a valid leaf id however long the host's id is. An empty base leaves it
+// empty, so the refresh generates one.
 func refreshOperationID(base, suffix string) string {
 	if strings.TrimSpace(base) == "" {
 		return ""
 	}
-	return strings.TrimSpace(base) + suffix
+	return domain.DeriveLeafID(strings.TrimSpace(base), suffix)
 }
