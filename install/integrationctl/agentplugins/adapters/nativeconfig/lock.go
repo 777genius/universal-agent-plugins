@@ -184,7 +184,7 @@ func tryAcquireClineLock(lockDir, token string) (*acquiredClineLock, bool, error
 		cleanup()
 		return nil, false, err
 	}
-	identity, err := os.Lstat(stagingDir)
+	identity, err := clineLockDirectoryIdentity(stagingDir)
 	if err != nil {
 		cleanup()
 		return nil, false, err
@@ -213,8 +213,33 @@ func tryAcquireClineLock(lockDir, token string) (*acquiredClineLock, bool, error
 	}, true, nil
 }
 
+// Windows Lstat defers file-ID lookup until SameFile, using the original path.
+// Capture identity through an open handle before publishing/reclaiming by rename.
+func clineLockDirectoryIdentity(path string) (os.FileInfo, error) {
+	before, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("invalid Cline native config lock: not an exact directory: %w", ErrConcurrentChange)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	identity, statErr := file.Stat()
+	closeErr := file.Close()
+	if err := errors.Join(statErr, closeErr); err != nil {
+		return nil, err
+	}
+	if !identity.IsDir() || !os.SameFile(before, identity) {
+		return nil, fmt.Errorf("changed Cline native config lock identity: %w", ErrConcurrentChange)
+	}
+	return identity, nil
+}
+
 func reclaimStaleClineLock(lockDir string, staleAfter time.Duration) (bool, error) {
-	current, err := os.Lstat(lockDir)
+	current, err := clineLockDirectoryIdentity(lockDir)
 	if os.IsNotExist(err) {
 		return false, nil
 	}

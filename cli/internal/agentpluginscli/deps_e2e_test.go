@@ -75,27 +75,9 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		client.ExecutablePath = filepath.Join(t.TempDir(), "codex")
 		claude := fixtureClient(t, domain.ClientClaude)
 		claude.ExecutablePath = filepath.Join(t.TempDir(), "claude")
-		f := newCLIFixture(t, []domain.DetectedClient{client, claude})
-		root := filepath.Join(f.root, "data")
-		helper, e := os.Executable()
-		if e != nil {
-			t.Fatal(e)
-		}
 		runner := &dependencyClaudeListing{root: claude.ConfigRoot}
 		runners = append(runners, runner)
-		f.app.Installer, e = installer.New(installer.Config{StateRoot: root, StateFile: f.store.Path, LockFile: filepath.Join(root, "mutation.lock"), OperationsDir: f.operations, PluginDataBase: filepath.Join(root, "plugin-data"), ManagedRoot: f.app.ManagedRoot, TempRoot: filepath.Join(root, "installer-tmp"), Registry: f.app.ClientRegistry, HelperExecutable: helper, Runner: runner})
-		if e != nil {
-			t.Fatal(e)
-		}
-		f.app.DependenciesRoot = root
-		f.app.EnvironmentLockPath = filepath.Join(root, "environment.lock")
-		f.app.EnvironmentStoreRoot = filepath.Join(root, "store")
-		f.app.SecurityEvaluator = dependencyTestScanner{}
-		source := &dependencyTestSource{Acquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir(), URLForRepo: func(string) string { return repo }}}
-		f.app.SourceAcquirer = source
-		if e := os.MkdirAll(root, 0700); e != nil {
-			t.Fatal(e)
-		}
+		f, source := newDependencyHarness(t, repo, []domain.DetectedClient{client, claude}, installer.Config{Runner: runner})
 		return f, source
 	}
 	f, source := setup()

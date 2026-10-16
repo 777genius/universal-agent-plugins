@@ -28,8 +28,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -117,15 +115,11 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 	stager := newManagedStager(clientRegistry, paths, helperExecutable)
 	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
 	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
-	installerRegistry, err := clients.NewRegistry(claude.New(), codex.New())
-	if err != nil {
-		return agentpluginscli.App{}, err
-	}
 	facade, err := installer.New(installer.Config{
 		StateRoot: dataRoot, StateFile: v2Store.Path, LockFile: filepath.Join(dataRoot, "mutation.lock"),
 		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
 		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
-		HelperExecutable: helperExecutable, HelperVersion: version, Registry: installerRegistry, Runner: runner,
+		HelperExecutable: helperExecutable, HelperVersion: version, Registry: clientRegistry, Runner: runner,
 		EnableNativeObserver: true,
 	})
 	if err != nil {

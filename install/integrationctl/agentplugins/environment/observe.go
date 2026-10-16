@@ -10,6 +10,17 @@ import (
 // LifecycleFacts reports convergence for automatic sync. Authentication alone
 // requires explicit user attestation, rather than repeated package mutations.
 func LifecycleFacts(binding installer.InspectedBinding) (retry bool, facts []string) {
+	// Manual readiness is not observed native activation. Retain that fact and
+	// offer attestation without automatically repeating an already prepared tree.
+	if binding.Materialization == string(domain.MaterializationMaterialized) &&
+		(binding.Verification == string(domain.VerificationPackageValid) || binding.Verification == string(domain.VerificationInstalled) || binding.Verification == string(domain.VerificationRuntime)) {
+		switch binding.Activation {
+		case string(domain.ActivationManual):
+			return false, append([]string{"activation_manual"}, authenticationFacts(binding.Authentication)...)
+		case string(domain.ActivationPrepared):
+			return false, append([]string{"activation_prepared"}, authenticationFacts(binding.Authentication)...)
+		}
+	}
 	if binding.LifecycleConverged {
 		return false, nil
 	}
@@ -64,4 +75,16 @@ func Observe(view installer.Inspection) ([]BindingObservation, error) {
 		}
 	}
 	return out, nil
+}
+
+func authenticationFacts(authentication string) []string {
+	switch authentication {
+	case string(domain.AuthenticationNotChecked):
+		return []string{"auth_unverified"}
+	case string(domain.AuthenticationPending):
+		return []string{"auth_pending"}
+	case string(domain.AuthenticationFailed):
+		return []string{"auth_failed"}
+	}
+	return nil
 }

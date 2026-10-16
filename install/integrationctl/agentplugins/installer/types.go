@@ -314,6 +314,7 @@ type InspectedBinding struct {
 
 // ClientMetadata is read-only provider surface. Discover does not execute files.
 type ClientMetadata struct {
+	Capabilities      domain.ClientCapabilities
 	ClientID          string
 	Scopes            []string
 	ExecutablePresent bool

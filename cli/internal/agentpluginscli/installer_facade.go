@@ -20,6 +20,9 @@ func useInstallerFacadeForLocalAdd(app App, opts *options, loaded loadedPackage,
 	if app.Installer == nil || opts == nil || len(targets) != 1 || activationComplete || authComplete || needsInstallConfirmation {
 		return false
 	}
+	if !domain.ClientTraitsFor(targets[0]).QualifiedLocalInstallerFacade {
+		return false
+	}
 	if !automatedMutation(app, opts) || opts.scope != string(domain.ScopeUser) || loaded.origin != domain.OriginModeDirect {
 		return false
 	}

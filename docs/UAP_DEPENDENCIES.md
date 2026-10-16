@@ -47,10 +47,45 @@ is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
-Only targets registered by the composed SDK installer are supported: currently
-Claude and Codex. `deps status` prints the scope, exact manifest/lock paths and
-supported targets, including before `deps init`. Initialization creates a private
-root when necessary and never overwrites an existing manifest.
+The saved dependency workflow supports the 11 qualified local clients: Codex, Claude,
+Cursor, Copilot, Kiro, Gemini, OpenCode, Cline, Windsurf, Grok Build and
+Kimi Code. `deps status` prints the scope, exact manifest/lock paths, supported
+targets and `excluded_targets`, including before `deps init`. ChatGPT is listed
+as `manual_preparation_only`. VS Code qualification is deferred by owner scope
+and is reported as `dependency_management_deferred`; its existing imperative
+adapter and explicitly registered SDK APIs remain available. Initialization creates a private root when necessary
+and never overwrites an existing manifest.
+
+Each mutating target must be detected with an explicit local profile. CLI
+registries (Codex, Claude, Cursor, Copilot, Kiro, Grok) also need an
+explicit absolute executable, as does OpenCode's host-version probe. Native
+configuration clients (Gemini, Cline, Windsurf, Kimi) do not require an executable.
+Any supplied executable must be an absolute clean path. A detected client with
+a discovery error cannot authorize installation, update or repair. Removal can
+use an existing recorded profile even when the client is no longer installed.
+
+Support is per component, not a promise that every package feature works in every
+client. Preflight rejects packages with no supported components. A mixed package
+installs its supported components and reports `component_support` for each binding
+in sync/dry-run/saved-add JSON; human output identifies unsupported components.
+For example, Kimi supports skills but cannot install an SSE MCP server. Partial
+component support alone does not trigger repeated lifecycle updates.
+
+| Status fact | Meaning and follow-up |
+| --- | --- |
+| `activation_manual` | Prepared materialized artifact; verify activation in the client, then use `agentplugins add <same-source> --target <agent> --activation-complete`. |
+| `activation_prepared` | Validated prepared artifact; complete the client's manual steps and attest activation with the same command. |
+| `auth_unverified`, `auth_pending`, `auth_failed` | Authentication remains separate from activation; complete authentication and use `--auth-complete` when required. |
+| `partial` | Failed/unverified activation or incomplete materialization; inspect and retry the failed lifecycle after addressing the cause. |
+
+Manual readiness remains visible and stops automatic repeated installation.
+It does not claim observed native activation. For Cursor, explicit `--activation-complete` uses the existing composed provider's
+operator-attestation contract. Its active/installation-verified state is attested,
+not observed runtime discovery. Authentication can still remain `auth_unverified`;
+this does not require repeating activation. Codex with an unknown
+plugin-list contract also retains manual readiness rather than repeating update
+on every sync. Failed/not-run verification and unmaterialized packages never
+qualify as ready. Persisted lifecycle convergence semantics are unchanged.
 
 Dependency commands always use manifest targets. They reject inherited
 `--target` and `--scope project`. Use `--dry-run` for an in-memory preview;
@@ -115,9 +150,9 @@ removed. If manual external uninstall is still pending, repeat `remove` with
 `--external-uninstalled`; the live owner receipt remains sufficient after the
 manifest table has gone. Package data and the content store remain retained.
 
-Saved targets must be supported by the typed installer (currently Codex and
-Claude). Other or mixed remote target selections fail before acquisition and
-provide a `--no-save` command. Explicit local paths, discovery sources,
+Saved targets must be registered local clients supported by the typed installer.
+ChatGPT mixed with local targets is rejected before source acquisition: prepare
+ChatGPT separately, or explicitly choose the imperative `--no-save` flow. Explicit local paths, discovery sources,
 ChatGPT-only preparation and `--no-save` keep the imperative flow; JSON reports
 `environment.saved=false` and its reason. `--no-save` never overrides an existing
 environment owner receipt.
@@ -129,3 +164,20 @@ applied: run `agentplugins deps lock`, then retry, or review `agentplugins deps
 sync`. Ordinary commands refuse mismatched intent and lock files until this
 reconciliation. An external editor can still race a rename; the session rechecks
 published bytes before applying each binding and refuses a changed plan.
+
+
+ChatGPT uses the existing manual preparation path, separate from reproducible
+local profile installation: `agentplugins add <source> --target chatgpt` prepares
+an eligible package and marketplace without saving a dependency. App bindings
+must come from signed Directory evidence or the verified personal mapping path.
+The user installs the package in ChatGPT Plugins, verifies the remote connection
+in a new chat, and can attest with `--activation-complete`. External uninstall
+precedes `remove --external-uninstalled`. This does not install a local stdio
+server into ChatGPT or claim automatic remote connector registration.
+
+These flows share one installer lifecycle, ownership receipts, immutable package
+store and locks. They do not enable project scope, expand the separately qualified
+local-file facade route, or publish a CLI/npm/site release. Adapter contract tests
+use disposable profiles, fixture native processes and a small trusted helper
+fixture whose real digest/copy/metadata contracts are exercised; they are not qualification
+of running native clients.

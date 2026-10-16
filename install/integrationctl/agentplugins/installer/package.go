@@ -177,7 +177,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if req.ClientConfigRoot == "" || !validRoot(req.ClientConfigRoot) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if req.Operation == OpInstall && (req.ClientExecutable == "" || !validRoot(req.ClientExecutable)) {
+	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id) && req.ClientExecutable == "") {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
 	}
 	root := req.ClientConfigRoot
@@ -416,4 +416,14 @@ func validateAcquiredExecutables(root string, files []string) error {
 		}
 	}
 	return nil
+}
+
+// Native configuration adapters need only an explicit profile. CLI registries
+// and host-profile probes also require the caller's executable authority.
+func requiresExecutable(registry *clients.Registry, id domain.ClientID) bool {
+	if domain.ClientTraitsFor(id).LifecycleKind == domain.LifecycleCLIRegistry {
+		return true
+	}
+	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](registry, id)
+	return ok && consumer.UsesOpenCodeHostProfile()
 }

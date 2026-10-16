@@ -193,7 +193,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		var eligible []domain.DetectedClient
 		var skipped []targetSkip
 		for _, client := range clients {
-			if app.Installer != nil && app.Installer.SupportsClient(string(client.ClientID)) {
+			if supportsDependencyTarget(app, string(client.ClientID)) {
 				eligible = append(eligible, client)
 			} else {
 				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "use --no-save"})
@@ -208,7 +208,10 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		return nil, errors.New("automated installation requires --target")
 	}
 	for _, target := range targets {
-		if app.Installer == nil || !app.Installer.SupportsClient(string(target)) {
+		if domain.ClientTraitsFor(target).RequiresPersonalMappingForPrepare && len(targets) > 1 {
+			return nil, errors.New("ChatGPT is prepared manually; run agentplugins add <source> --target chatgpt separately, or use --no-save for the mixed imperative workflow")
+		}
+		if !supportsDependencyTarget(app, string(target)) {
 			return nil, fmt.Errorf("target %s cannot be saved; retry agentplugins add %s --target %s --no-save", target, source, opts.target)
 		}
 	}

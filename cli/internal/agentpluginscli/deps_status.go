@@ -32,20 +32,34 @@ type dependencyStatusFact struct {
 	Facts            []string                  `json:"facts"`
 }
 
+type dependencyExcludedTarget struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
 type dependencyStatus struct {
-	Scope            string                 `json:"scope"`
-	ManifestPath     string                 `json:"manifest_path"`
-	LockPath         string                 `json:"lock_path"`
-	SupportedTargets []string               `json:"supported_targets"`
-	ManifestDigest   string                 `json:"manifest_digest,omitempty"`
-	LockDigest       string                 `json:"lock_digest,omitempty"`
-	PendingRecovery  bool                   `json:"pending_recovery"`
-	Facts            []dependencyStatusFact `json:"facts"`
+	ExcludedTargets  []dependencyExcludedTarget `json:"excluded_targets"`
+	Scope            string                     `json:"scope"`
+	ManifestPath     string                     `json:"manifest_path"`
+	LockPath         string                     `json:"lock_path"`
+	SupportedTargets []string                   `json:"supported_targets"`
+	ManifestDigest   string                     `json:"manifest_digest,omitempty"`
+	LockDigest       string                     `json:"lock_digest,omitempty"`
+	PendingRecovery  bool                       `json:"pending_recovery"`
+	Facts            []dependencyStatusFact     `json:"facts"`
 }
 
 func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	manifestPath, lockPath := app.dependencyPaths()
 	status := dependencyStatus{Scope: "user", ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
+	status.ExcludedTargets = []dependencyExcludedTarget{}
+	for _, definition := range domain.ClientDefinitions() {
+		reason := installer.ClientSupportExclusionReason(app.ClientRegistry, string(definition.ID))
+		if reason != "" && reason != "not_registered" {
+			status.ExcludedTargets = append(status.ExcludedTargets, dependencyExcludedTarget{ID: string(definition.ID), Reason: reason})
+		}
+	}
+
 	requirements, err := readDependencyManifest(manifestPath)
 	missingManifest := os.IsNotExist(err)
 	if err != nil && !missingManifest {
@@ -341,6 +355,9 @@ func dependencyNextActions(fact dependencyStatusFact, sdk ...installer.NextActio
 		out = append(out, dependencyNextActionDTO{Kind: next.Kind, Reason: next.Reason})
 	}
 	for _, item := range fact.Facts {
+		if item == "activation_manual" || item == "activation_prepared" {
+			out = append(out, dependencyNextActionDTO{Kind: "attest_activation", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --activation-complete", fact.ClientID)})
+		}
 		if item == "auth_pending" || item == "auth_failed" {
 			return append(out, dependencyNextActionDTO{Kind: "attest_authentication", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --auth-complete", fact.ClientID)})
 		}

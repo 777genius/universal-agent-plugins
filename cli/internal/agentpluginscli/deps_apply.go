@@ -95,7 +95,7 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 
 func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependencyAction, dryRun bool) error {
 	if opts.format == "json" {
-		data := map[string]any{"actions": dependencyActionOutput(actions), "dry_run": dryRun}
+		data := map[string]any{"actions": dependencyActionOutput(actions, opts.dependencyComponents), "dry_run": dryRun}
 		if opts.environmentOutput != nil {
 			data["environment"] = opts.environmentOutput
 			return writeJSONResult(cmd.OutOrStdout(), "add", "success", data)
@@ -107,7 +107,7 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 			return err
 		}
 	}
-	return nil
+	return renderDependencyComponents(cmd, opts, actions)
 }
 
 func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, yes bool) error {

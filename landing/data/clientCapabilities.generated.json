@@ -1,0 +1,197 @@
+[
+  {
+    "id": "codex",
+    "display_name": "OpenAI Codex",
+    "package_mode": "compatibility_projection",
+    "skill_support": "projected",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "projected",
+      "streamable-http": "projected"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "chatgpt",
+    "display_name": "ChatGPT",
+    "package_mode": "compatibility_projection",
+    "skill_support": "projected",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "unsupported",
+      "streamable-http": "unsupported"
+    },
+    "app_support": "projected",
+    "extension_support": "unsupported",
+    "saved_dependency": false,
+    "excluded_reason": "manual_preparation_only"
+  },
+  {
+    "id": "cursor",
+    "display_name": "Cursor",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "native",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "native",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "copilot",
+    "display_name": "GitHub Copilot CLI",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "native",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "native",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "vscode",
+    "display_name": "Visual Studio Code",
+    "package_mode": "prepared_package",
+    "skill_support": "prepared",
+    "mcp_transports": {
+      "sse": "prepared",
+      "stdio": "prepared",
+      "streamable-http": "prepared"
+    },
+    "app_support": "unsupported",
+    "extension_support": "prepared",
+    "saved_dependency": false,
+    "excluded_reason": "dependency_management_deferred"
+  },
+  {
+    "id": "kiro",
+    "display_name": "Kiro",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "native",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "claude",
+    "display_name": "Claude Code",
+    "package_mode": "compatibility_projection",
+    "skill_support": "projected",
+    "mcp_transports": {
+      "sse": "projected",
+      "stdio": "projected",
+      "streamable-http": "projected"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "gemini",
+    "display_name": "Gemini CLI",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "native",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "opencode",
+    "display_name": "OpenCode",
+    "package_mode": "prepared_package",
+    "skill_support": "prepared",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "prepared",
+      "streamable-http": "prepared"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "cline",
+    "display_name": "Cline",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "native",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "windsurf",
+    "display_name": "Windsurf / Devin",
+    "package_mode": "prepared_package",
+    "skill_support": "prepared",
+    "mcp_transports": {
+      "sse": "prepared",
+      "stdio": "prepared",
+      "streamable-http": "prepared"
+    },
+    "app_support": "unsupported",
+    "extension_support": "prepared",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "grok",
+    "display_name": "Grok Build",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  },
+  {
+    "id": "kimi",
+    "display_name": "Kimi Code",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "native"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
+  }
+]

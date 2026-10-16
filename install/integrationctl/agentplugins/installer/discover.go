@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Discover returns metadata for the explicitly registered providers, including
@@ -29,6 +31,8 @@ func (e *Engine) Discover() []ClientMetadata {
 
 func (e *Engine) clientMetadata(id string, bindings []InspectedBinding) ClientMetadata {
 	meta := ClientMetadata{ClientID: id, Scopes: []string{"user"}, Bindings: append([]InspectedBinding(nil), bindings...)}
+	definition, _ := domain.ClientDefinitionFor(domain.ClientID(id))
+	meta.Capabilities = definition.Capabilities
 	explicit := ""
 	if e.cfg.ClientExecutables != nil {
 		explicit = e.cfg.ClientExecutables[id]

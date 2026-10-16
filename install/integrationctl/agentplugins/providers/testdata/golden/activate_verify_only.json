@@ -209,7 +209,7 @@
         "enable the managed plugin in Kimi Code"
       ],
       "LocalEntryObservation": null,
-      "NativeEffect": "",
+      "NativeEffect": "unchanged",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [

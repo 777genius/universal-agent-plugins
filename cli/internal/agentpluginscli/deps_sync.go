@@ -146,6 +146,15 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
 		}
 		plan := prepared.Plan()
+		if opts.dependencyComponents == nil {
+			opts.dependencyComponents = map[string][]domain.ComponentDecision{}
+		}
+		components := make([]domain.ComponentDecision, 0, len(plan.Delivery.Components))
+		for _, component := range plan.Delivery.Components {
+			components = append(components, domain.ComponentDecision{Kind: domain.ComponentKind(component.Kind), Name: component.Name, Support: domain.SupportLevel(component.Support), Reason: component.Reason})
+		}
+		opts.dependencyComponents[action.Alias+"\x00"+action.ClientID] = components
+
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
 		} else {
@@ -181,8 +190,8 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		action.Authority = &cloned
 	}
 	client, ok := adapter.detected[domain.ClientID(action.ClientID)]
-	if !ok {
-		return nil, fmt.Errorf("target %s is not detected", action.ClientID)
+	if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
+		return nil, fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
 	}
 	view, err := adapter.app.Installer.Inspect(ctx)
 	if err != nil {

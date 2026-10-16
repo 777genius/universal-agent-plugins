@@ -12,6 +12,8 @@ import {
   SAVED_DEPENDENCIES_CLI_RELEASED,
 } from '../utils/savedDependencies.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
+import type { PluginInstallTargetId } from '../types/content.ts';
+import clientCapabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 
 const plugin: RegistryPlugin = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
@@ -19,6 +21,14 @@ const plugin: RegistryPlugin = JSON.parse(
 
 test('production gate stays closed and preserves released command bytes', () => {
   assert.equal(SAVED_DEPENDENCIES_CLI_RELEASED, false);
+  for (const targets of [['gemini'], ['opencode'], ['cursor'], ['chatgpt'], ['chatgpt', 'codex']]) {
+    const commands = pluginCommands(plugin, targets);
+    const targetFlag = ` --target ${targets.join(',')}`;
+    assert.equal(commands.add, `npx universal-agent-plugins add gitlab${targetFlag}`);
+    assert.equal(commands.update, `npx universal-agent-plugins update gitlab${targetFlag}`);
+    assert.equal(commands.remove, `npx universal-agent-plugins remove gitlab${targetFlag}`);
+    assert.equal(commands.saveMode, undefined);
+  }
   const commands = pluginCommands(plugin, ['codex', 'cursor']);
   assert.equal(commands.add, 'npx universal-agent-plugins add gitlab --target codex,cursor');
   assert.equal(commands.update, 'npx universal-agent-plugins update gitlab --target codex,cursor');
@@ -44,10 +54,17 @@ test('released generator saves supported remote selections and manages all owned
     assert.equal(commands.remove, 'npx universal-agent-plugins remove gitlab');
   }
   assert.equal(pluginCommands(plugin, undefined, true).saveMode, 'saved');
+  for (const targets of [['gemini'], ['opencode'], ['cursor'], ['codex', 'cursor']]) {
+    const commands = pluginCommands(plugin, targets, true);
+    assert.equal(commands.add, `npx universal-agent-plugins add gitlab --target ${targets.join(',')}`);
+    assert.equal(commands.saveMode, 'saved');
+    assert.equal(commands.update, 'npx universal-agent-plugins update gitlab');
+    assert.equal(commands.remove, 'npx universal-agent-plugins remove gitlab');
+  }
 });
 
 test('released generator explicitly opts unsupported and mixed remote selections out', () => {
-  for (const targets of [['cursor'], ['codex', 'cursor'], ['chatgpt', 'claude']]) {
+  for (const targets of [['unknown'], ['vscode'], ['chatgpt', 'codex'], ['chatgpt', 'claude']]) {
     const commands = pluginCommands(plugin, targets, true);
     assert.equal(
       commands.add,
@@ -59,6 +76,28 @@ test('released generator explicitly opts unsupported and mixed remote selections
       `npx universal-agent-plugins remove gitlab --target ${targets.join(',')}`,
     );
   }
+});
+
+test('generated capabilities describe every landing install target', () => {
+  // Exhaustiveness is checked by TypeScript when a new install lane is added.
+  const targets: Record<PluginInstallTargetId, true> = {
+    claude: true,
+    codex: true,
+    gemini: true,
+    opencode: true,
+    cursor: true,
+  };
+  for (const target of Object.keys(targets)) {
+    const metadata = clientCapabilities.filter((client) => client.id === target);
+    assert.equal(metadata.length, 1, `metadata for ${target}`);
+    assert.equal(metadata[0].saved_dependency, true);
+  }
+  const chatgpt = clientCapabilities.find((client) => client.id === 'chatgpt');
+  assert.equal(chatgpt?.saved_dependency, false);
+  assert.equal(chatgpt?.excluded_reason, 'manual_preparation_only');
+  const vscode = clientCapabilities.find((client) => client.id === 'vscode');
+  assert.equal(vscode?.saved_dependency, false);
+  assert.equal(vscode?.excluded_reason, 'dependency_management_deferred');
 });
 
 test('local, literal discovery, and ChatGPT-only keep imperative commands and truthful notices', () => {
@@ -79,7 +118,7 @@ test('local, literal discovery, and ChatGPT-only keep imperative commands and tr
   assert.equal(dependencySaveMode('github:example/plugin@main', ['codex']), 'noSave');
 });
 
-test('catalog selection generator preserves old supported bytes and gates no-save for user-scoped lanes', () => {
+test('catalog selection generator preserves released bytes and saves eligible user-scoped lanes', () => {
   const source = readFileSync(new URL('../data/pluginInstall.ts', import.meta.url), 'utf8')
     .replace(/^import[\s\S]*?;\n/gm, '')
     .replace(/^export /gm, '');
@@ -134,7 +173,9 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
     for (const action of ['update', 'repair', 'remove'] as const) {
       assert.equal(
         all[action],
-        `npx universal-agent-plugins ${action} gitlab --target claude,codex,gemini,opencode,cursor`,
+        released && action === 'update'
+          ? 'npx universal-agent-plugins update gitlab'
+          : `npx universal-agent-plugins ${action} gitlab --target claude,codex,gemini,opencode,cursor`,
       );
       assert.doesNotMatch(all[action], /--target(?:\s*$|\s+--)/);
     }
@@ -146,7 +187,7 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
   const gitSpec = api.getResolvedPluginInstallSpec('gitlab', true);
   assert.equal(
     displayed(true, gitSpec, []).update,
-    'npx universal-agent-plugins update gitlab --target claude,codex,gemini,opencode,cursor',
+    `npx universal-agent-plugins add ${exactSource} --target claude,codex,gemini,opencode,cursor`,
   );
 
   assert.equal(
@@ -162,7 +203,7 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
   // Derive future commands from the current selection rather than those stale bases.
   assert.equal(
     displayed(true, gitSpec, ['codex', 'cursor']).update,
-    'npx universal-agent-plugins update gitlab --target codex,cursor',
+    `npx universal-agent-plugins add ${exactSource} --target codex,cursor`,
   );
   const legacyGitSpec = api.getResolvedPluginInstallSpec('gitlab', false);
   assert.equal(
@@ -202,11 +243,11 @@ test('catalog selection generator preserves old supported bytes and gates no-sav
   );
   assert.equal(
     api.buildInstallCommandForSelection(spec, ['codex', 'cursor'], true),
-    'universal-agent-plugins add gitlab --target codex,cursor --no-save',
+    'universal-agent-plugins add gitlab --target codex,cursor',
   );
   assert.equal(
     api.buildInstallCommandForSelection(spec, [], true),
-    'universal-agent-plugins add gitlab --target claude,codex,gemini,opencode,cursor --no-save',
+    'universal-agent-plugins add gitlab --target claude,codex,gemini,opencode,cursor',
   );
 });
 

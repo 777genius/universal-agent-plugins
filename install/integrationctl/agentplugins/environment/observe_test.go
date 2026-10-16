@@ -44,3 +44,32 @@ func TestObserveIncludesUnmanagedSiblingsAndRejectsReceiptMismatch(t *testing.T)
 		t.Fatal("orphan receipt accepted")
 	}
 }
+
+// Prepared artifacts stop automatic retries without claiming native activation;
+// failed, absent and unverified materializations must still be retried.
+func TestLifecycleFactsManualReadiness(t *testing.T) {
+	for _, test := range []struct {
+		materialization, activation, verification string
+		retry                                     bool
+		fact                                      string
+	}{
+		{"materialized", "manual_activation_required", "package_validated", false, "activation_manual"},
+		{"materialized", "prepared", "package_validated", false, "activation_prepared"},
+		{"materialized", "manual_activation_required", "failed", true, "partial"},
+		{"materialized", "manual_activation_required", "not_run", true, "partial"},
+		{"materialized", "manual_activation_required", "", true, "partial"},
+		{"materialized", "failed", "package_validated", true, "partial"},
+		{"not_materialized", "manual_activation_required", "package_validated", true, "partial"},
+	} {
+		binding := installer.InspectedBinding{Materialization: test.materialization, Activation: test.activation, Verification: test.verification}
+		retry, facts := LifecycleFacts(binding)
+		if retry != test.retry || len(facts) != 1 || facts[0] != test.fact {
+			t.Fatalf("%+v: %v %v", test, retry, facts)
+		}
+	}
+	binding := installer.InspectedBinding{Materialization: "materialized", Activation: "manual_activation_required", Verification: "package_validated", Authentication: "failed"}
+	retry, facts := LifecycleFacts(binding)
+	if retry || len(facts) != 2 || facts[1] != "auth_failed" {
+		t.Fatalf("manual authentication failure hidden: %v %v", retry, facts)
+	}
+}

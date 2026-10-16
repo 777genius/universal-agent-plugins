@@ -6,7 +6,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func (e *Engine) knownTargetIndex(facts []TargetFacts) (map[string]TargetFacts, error) {
+func (e *Engine) knownTargetIndex(operation Operation, facts []TargetFacts) (map[string]TargetFacts, error) {
 	indexed := make(map[string]TargetFacts, len(facts))
 	for _, fact := range facts {
 		if !e.SupportsClient(fact.ClientID) {
@@ -18,7 +18,7 @@ func (e *Engine) knownTargetIndex(facts []TargetFacts) (map[string]TargetFacts, 
 		if !validRoot(fact.ConfigRoot) {
 			return nil, fmt.Errorf("%w: ConfigRoot must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
 		}
-		if !validRoot(fact.Executable) {
+		if (fact.Executable != "" && !validRoot(fact.Executable)) || (operation != OpRemove && requiresExecutable(e.cfg.Registry, domain.ClientID(fact.ClientID)) && fact.Executable == "") {
 			return nil, fmt.Errorf("%w: Executable must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
 		}
 		if _, exists := indexed[fact.ClientID]; exists {
@@ -64,7 +64,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 			}
 		}
 	}
-	known, err := e.knownTargetIndex(req.KnownTargets)
+	known, err := e.knownTargetIndex(req.Operation, req.KnownTargets)
 	if err != nil {
 		return nil, err
 	}
