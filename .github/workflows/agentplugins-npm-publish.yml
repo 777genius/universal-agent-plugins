@@ -265,14 +265,14 @@ jobs:
           jq -e '.result == "success" and .data.environment.saved == true and .data.outcome == "completed" and (.data.actions | length) == 1 and .data.actions[0].client_id == "opencode"' "${root}/saved-add.json" >/dev/null
           test -s "${AGENTPLUGINS_HOME}/uap.toml"
           test -s "${AGENTPLUGINS_HOME}/uap.lock"
-          package_digest="$(jq -er '.packages | if length == 1 and .[0].alias == "context7" and .[0].targets == ["opencode"] and .[0].digest_algorithm == "sha256" and (.[0].tree_digest | test("^sha256:[0-9a-f]{64}$")) then .[0].tree_digest else error("expected one exact Context7 pin") end' "${AGENTPLUGINS_HOME}/uap.lock")"
+          package_digest="$(jq -er '.packages | if length == 1 and .[0].alias == "context7" and .[0].targets == ["opencode"] and .[0].digest_algorithm == "agentplugins-tree-sha256-v1" and (.[0].tree_digest | test("^sha256:[0-9a-f]{64}$")) then .[0].tree_digest else error("expected one exact Context7 pin") end' "${AGENTPLUGINS_HOME}/uap.lock")"
           jq -e --arg digest "${package_digest}" '[.environment_receipts[] | select(.alias == "context7" and .client_id == "opencode" and .package_digest == $digest)] | length == 1' "${AGENTPLUGINS_HOME}/state-v2.json" >/dev/null
           sha256sum "${AGENTPLUGINS_HOME}/uap.toml" "${AGENTPLUGINS_HOME}/uap.lock" "${AGENTPLUGINS_HOME}/state-v2.json" > "${root}/repeat-before.sha256"
           run_agentplugins deps sync --locked --yes --format json > "${root}/locked-repeat.json"
           jq -e '.outcome == "completed" and (.actions | length) == 1 and .actions[0].action == "unchanged" and (.results | length) == 0' "${root}/locked-repeat.json" >/dev/null
           sha256sum --check "${root}/repeat-before.sha256"
           run_agentplugins deps status --format json > "${root}/saved-status.json"
-          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all(.facts[0].facts[]; . == "auth_unverified")' "${root}/saved-status.json" >/dev/null
+          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified")' "${root}/saved-status.json" >/dev/null
           # Only the portable agreement crosses into a second empty profile.
           # The released CLI must fetch and verify the same immutable digest.
           mkdir -p "${root}/transfer/state" "${root}/transfer/home" "${root}/transfer/config/opencode" "${root}/transfer/tmp"
@@ -285,9 +285,9 @@ jobs:
             jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].outcome == "completed"' "${root}/transfer-sync.json" >/dev/null
             cmp "${AGENTPLUGINS_HOME}/uap.lock" "${root}/state/uap.lock"
             run_agentplugins deps status --format json > "${root}/transfer-status.json"
-            jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all(.facts[0].facts[]; . == "auth_unverified")' "${root}/transfer-status.json" >/dev/null
+            jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified")' "${root}/transfer-status.json" >/dev/null
           )
-          store_entry="${AGENTPLUGINS_HOME}/store/packages/sha256/${package_digest#sha256:}"
+          store_entry="${AGENTPLUGINS_HOME}/store/packages/agentplugins-tree-sha256-v1/${package_digest#sha256:}"
           test -s "${store_entry}/metadata.json"
           find "${store_entry}" -type f -print0 | sort -z | xargs -0 sha256sum > "${root}/retained-store.sha256"
           data_root="$(jq -er '[.installations[] | select(.declared_name == "context7") | .data_receipts[] | select(.state == "owned") | .locator] | if length == 1 and (.[0] | startswith("/")) then .[0] else error("expected one owned Context7 data root") end' "${AGENTPLUGINS_HOME}/state-v2.json")"
@@ -309,7 +309,7 @@ jobs:
           run_agentplugins remove context7 --external-uninstalled --format json > "${root}/saved-remove.json"
           jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].operation == "remove" and .results[0].outcome == "completed"' "${root}/saved-remove.json" >/dev/null
           jq -e '[.environment_receipts[]? | select(.alias == "context7")] | length == 0' "${AGENTPLUGINS_HOME}/state-v2.json" >/dev/null
-          jq -e '.packages | all(.[]; .alias != "context7")' "${AGENTPLUGINS_HOME}/uap.lock" >/dev/null
+          jq -e '(.packages // []) | all(.[]; .alias != "context7")' "${AGENTPLUGINS_HOME}/uap.lock" >/dev/null
           run_agentplugins deps status --format json | jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' >/dev/null
           jq -e '.mcp.context7 == null' "${repair_file}" >/dev/null
           test ! -e "${managed_path}"

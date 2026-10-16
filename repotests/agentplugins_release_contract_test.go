@@ -377,6 +377,7 @@ func TestAgentpluginsPublicNpmRepairFixtureIsIsolatedAndUnambiguous(t *testing.T
 	// smoke verifies the lifecycle rather than duplicating its jq implementation.
 	for _, want := range []string{
 		`.data.environment.saved == true`,
+		`.[0].digest_algorithm == "agentplugins-tree-sha256-v1"`,
 		`test ! -e "${AGENTPLUGINS_HOME}/state-v2.json"`,
 		`test ! -e "${AGENTPLUGINS_HOME}/store"`,
 		`.facts[0].package_digest == $digest`,
