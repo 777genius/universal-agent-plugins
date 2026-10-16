@@ -42,6 +42,7 @@ point inward.
 | Use cases | `agentplugins/usecase` | stdlib, `domain`, `ports`, `transaction`, `pathcontract`, `install/integrationctl/ports` for the legacy lock (see below) | yes, `usecase-through-ports` |
 | Client contract | `agentplugins/clients` (+ `clients/shared`) | stdlib, `domain`, `ports`, `adapters/nativeconfig` (see below) | yes, `clients-no-upward`, `clients-no-concrete-clients` |
 | Client adapters | `agentplugins/clients/<id>` | the client contract, `clients/shared`, `domain`, `ports` | yes, `clients-no-upward`, `clients-no-concrete-clients` |
+| Command format | `agentplugins/commandext` | stdlib, `domain`, `conformance`, `gopkg.in/yaml.v3` | yes, `commandext-pure` |
 | Adapters | `agentplugins/{adapters,providers,planner}` | the layers above, never `clients/all` | partly, `libraries-take-an-injected-registry` |
 | Installer facade | `agentplugins/installer` | public DTOs plus the layers above through one composition boundary; injected registry only | yes, `libraries-take-an-injected-registry` and the client-id ratchet |
 | CLI | `agentpluginscli` | the public facades of the layers above, never providers or pathpolicy | yes, `cli-no-core-internals` |
@@ -49,8 +50,8 @@ point inward.
 
 The "Enforced today" column is deliberate: the middle column is the target, and
 the left-hand rules are checked by `depguard` in `.golangci.yml`. Domain, ports,
-the use cases, the client contract, the client adapters and the CLI are covered
-in full. The adapter row is covered in part: `libraries-take-an-injected-registry`
+the use cases, the client contract, the client adapters, the command format and
+the CLI are covered in full. The adapter row is covered in part: `libraries-take-an-injected-registry`
 forbids `clients/all` there, but nothing yet stops an adapter from importing
 another one. The composition root is allowed to import everything because it is
 the wiring, not a layer.
@@ -104,6 +105,29 @@ probe calls, and that nothing comes back detected - an adapter that stats a real
 path behind the host's back reports evidence the host never gave it. That is a
 necessary condition rather than a sandbox: an ambient read whose result never
 reaches the `Detection` stays invisible to it.
+
+### Portable commands
+
+`commandext` is the single owner of the portable command format
+([ADR 0008](./adr/0008-portable-commands.md)). It does no I/O: the loader and
+the authoring package view hand it the entries they read, the stager renders
+command skills through it, and the security evaluator builds the delivered
+view from it. That is why it may import only `domain`, `conformance` and
+`gopkg.in/yaml.v3`; `commandext-pure` in `.golangci.yml` and
+`internal/archtest` hold the list, so none of the four users can pull adapter,
+client or planner code into the shared rules.
+
+Whether a client receives an explicit-only command is decided once, in the
+planner, from `ClientTraits.EnforcesExplicitSkillInvocation`. The client
+contract adds one capability for it: a client that declares the trait must
+implement `clients.ExplicitSkillDecorator`. The parity test in `clients/all`
+checks that pairing, and the stager refuses to write an explicit-only command
+for a client without both.
+
+Authoring reports keep command diagnostics in their own `installer_policy`
+layer. Commands are an installer extension rather than part of the Agent
+Plugins specification, so these findings fail Readiness but never pass through
+conformance facts: Conformance and HostSafety keep their meaning.
 
 ### Accepted exceptions
 
