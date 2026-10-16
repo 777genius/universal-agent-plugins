@@ -247,6 +247,26 @@ func commandsRequireMutated(t *testing.T, label string, result map[string]any, w
 	}
 }
 
+// commandsDropManagedArtifact deletes the managed package directory that the
+// installer keeps under its state home for target, as the absent-artifact
+// repair needs, and returns its path.
+func commandsDropManagedArtifact(t *testing.T, root, stateHome, target string, latest map[string]any) string {
+	t.Helper()
+	physical := nativeFindString(latest, "physical_artifact_id")
+	if physical == "" {
+		t.Fatalf("installer result omitted the physical artifact id: %v", latest)
+	}
+	managed := filepath.Join(stateHome, "managed", "clients", target, physical)
+	if _, err := os.Stat(managed); err != nil {
+		t.Fatalf("managed artifact not found before deleting it: %v", err)
+	}
+	nativeRequireContained(t, root, managed)
+	if err := os.RemoveAll(managed); err != nil {
+		t.Fatal(err)
+	}
+	return managed
+}
+
 func commandsStages() map[string]nativeStage {
 	stages := map[string]nativeStage{}
 	for _, name := range []string{"install", "command_skill_discovery", "explicit_command_withheld", "unchanged_update", "invocation_change_update", "intact_repair", "absent_repair", "remove"} {
