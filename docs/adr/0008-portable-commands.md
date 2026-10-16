@@ -26,7 +26,9 @@ with a closed frontmatter of exactly `description` and
 `disable-model-invocation` (a required YAML boolean). The body may not use
 plugin or client variables, argument placeholders or shell injection syntax.
 Anything outside that format is a `command_*` diagnostic with
-`boundary: command`, and the command is not delivered. The format is checked by
+`boundary: command`, and the command is not delivered. A file the reader
+cannot read gets its own code, `command_read_failed`, so an I/O failure is
+not reported as an authoring mistake. The format is checked by
 the pure `commandext` package, shared by the loader, the package view used by
 authoring, the stager and the security scan; it imports only `domain`,
 `conformance` and `gopkg.in/yaml.v3` (depguard `commandext-pure`, archtest).
@@ -50,22 +52,44 @@ unsupported compatibility row. A plan left with nothing else is rejected with
 the stager refuses an explicit-only command for a client without the trait or
 without the decorator, refuses a decorator that changes name, description or
 body, and requires `disable-model-invocation: true` in every explicit skill it
-writes. Backend siblings must agree on the trait. The trait is false for every
+writes. That header field is the installer's own marker, checked on the
+written bytes the same way for every client, not only Claude Code's
+mechanism. The Codex decorator therefore keeps it next to
+`agents/openai.yaml`, the file Codex acts on: Codex's skill loader ignores
+header fields it does not know, so the marker changes nothing there, while
+one client-independent check stays possible. Backend siblings must agree on
+the trait. The trait is false for every
 client until a probe with the real client confirms its mechanism.
 
 **New rules for an unchanged package.** A package with commands depends on the
 installer's rendering rules, so a newer installer can change its tree without a
 new package revision. `Update` therefore runs `RefreshProjection` before the
 ordinary apply when the installation has no environment authority and its
-binding is materialized at the same revision. Refresh authorizes only
-`repair`, which a saved-dependency sync never grants, so environment bindings
-pick up new rules at the next pin change.
+binding is materialized at the same revision. That refresh acts only when the
+staged digest differs from the recorded one and otherwise leaves files and
+state alone. A preview cannot know the answer without staging, so the preview
+of such an update, single or grouped, is never unchanged: hosts and
+`update --all` that skip unchanged previews still run it. Refresh authorizes
+only `repair`, which a saved-dependency sync never grants, so environment
+bindings pick up new rules at the next pin change.
 
 **Repair keeps recorded bytes.** For an intact package with commands, a
 confirmed single-target `Service.Repair`, which the embedded installer uses,
 first stages under the current rules. If the digest differs from the recorded
 one, it stops with `usecase.ErrProjectionRefreshRequired` and leaves the change
-to update.
+to update. A group repair, which `agentplugins repair` uses, compares every
+staged digest the same way before it commits anything.
+
+**Other operations keep the installed tree.** A repeated add, a resumed
+activation and an unchanged group target rebuild a native projection from the
+installed tree on clients that track native objects. The stager's read-only
+projection first compares the installed command skills with what the current
+rules render, byte for byte, including skills of commands that are no longer
+delivered, and fails with `domain.ErrProjectionRefreshRequired` (the same
+value as the use case error) on any difference. A dry-run add and a group run
+this check before any effect. The embedded installer reports the error as
+`ErrUpdateRequired`, with a conflict outcome and the reason
+`update_required`.
 
 **Security review of the delivered view.** When a package has commands, the
 security evaluator scans the snapshot plus the rendered command skills, keys
@@ -87,8 +111,21 @@ not cover commands.
 - The installer has two kinds of input for one installed tree: the package and
   its own rules. Rendering changes must be called out in the changelog with the
   instruction to run `agentplugins update`.
-- A package that is damaged while the rules also changed cannot be repaired;
-  remove and add it again.
+- A package that is damaged or missing while the rules also changed cannot be
+  repaired; remove and add it again.
+- On clients that track native objects, a saved-dependency binding whose
+  command skills predate the current rules cannot be updated at the same pin:
+  update and an unfinished sync stop with `ErrProjectionRefreshRequired` until
+  the pin changes.
+- OpenCode expands `@path` file references in skill text. The body rules do
+  not reject them, so such a reference reads a file in OpenCode only. This is
+  a known limitation, not a format rule.
+- Visual Studio Code is frozen by an owner decision of 2026-10-16. It installs
+  through the GitHub Copilot CLI backend it shares with Copilot CLI, so it
+  sees the command skills of that one physical package. Leaving VS Code
+  without commands while Copilot CLI keeps them would need two different trees
+  for one shared package, which the backend sibling contract does not allow;
+  it needs an owner decision on Copilot CLI.
 - The embedded `installer` facade does not scan packages itself, so a host that
   embeds it gets a command-aware review only if it supplies an assessment.
 

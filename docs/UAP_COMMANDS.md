@@ -119,6 +119,12 @@ that takes skills, which today is all 13 supported clients. The user runs the
 skill the way the client runs skills by hand. Like any skill, the model may
 also choose it on its own.
 
+Visual Studio Code is frozen by an owner decision of 2026-10-16: its adapter
+does not change for commands, and command delivery to it is not qualified.
+It installs through the GitHub Copilot CLI backend it shares with Copilot CLI,
+so it sees whatever command skills that shared backend holds; a package
+cannot give one of the two clients commands and the other none.
+
 **Explicit-only commands** (`disable-model-invocation: true`) reach a client
 only when its adapter declares that the client enforces explicit invocation.
 Delivering such a command as an ordinary skill would let the model run it
@@ -147,6 +153,15 @@ plugin skills that use it. The Claude Code and Codex adapters already render the
 `policy.allow_implicit_invocation: false`), and stay disabled until their
 probes pass.
 
+Every explicit-only skill also carries `disable-model-invocation: true` in its
+header, whatever the client's own mechanism is. It is the one marker the
+installer checks on the written bytes for every client, so no decorator can
+deliver an explicit-only command without it. For Codex the field is only that
+marker: Codex's skill loader ignores header fields it does not know, and the
+policy it acts on is `agents/openai.yaml`. Codex's optional skill-creator
+validator does list allowed fields and would flag it, but the loader does not
+use that validator.
+
 The table records what each client documents or ships, as reviewed on
 2026-10-16. It is not a statement of what `agentplugins` delivers.
 
@@ -157,7 +172,7 @@ The table records what each client documents or ships, as reviewed on
 | ChatGPT | `@` | not confirmed | no |
 | Cursor | `/`, `@` | documented; plugin skills that use it are hidden (reported bug) | no |
 | GitHub Copilot CLI | `/SKILL-NAME` | documented: `disable-model-invocation` | no, not probed |
-| Visual Studio Code | `/` | documented: `disable-model-invocation` | no, not probed |
+| Visual Studio Code | `/` | documented: `disable-model-invocation` | no; frozen by owner decision (2026-10-16) |
 | Kiro | `/skill` | none found | no |
 | Gemini CLI | `/skill` in source v0.64.0 | none found | no |
 | OpenCode | the stable release exposes a skill as a command | not in the stable release; development source reads `disable-model-invocation` | no |
@@ -190,18 +205,37 @@ rules, so both kinds of change have to reach the client.
   enforce it.
 - **The same revision after an installer upgrade.** `agentplugins update
   <name>` first refreshes the command skills with the current rules, then runs
-  the ordinary update. When the rules produce the same tree, the installed
-  files stay as they are. An embedded installer's update preview for such a
-  package reports that it requires confirmation.
+  the ordinary update. Only staging shows whether the rules changed the tree,
+  so neither `update <name>` nor `update --all` reports such a package as
+  current in its plan: every target with commands is planned and asks for
+  confirmation, and the update stages it once. When the rules produce the
+  same tree, the refresh stops there and leaves files and state as they are.
+  An embedded installer's update preview for such a package reports
+  `RequiresConfirmation` and never `NoChange`. `update --all` still skips a
+  Directory installation that the signed Discovery record reports as current;
+  run `agentplugins update <name>` for it.
+- **Operations that keep the installed tree** do not apply new rules. On
+  clients that rebuild their native projection from the installed tree (Kiro,
+  Gemini CLI, OpenCode, Cline, Windsurf / Devin), a repeated `add`, a resumed
+  activation and an unchanged target of a group `add` stop with
+  `usecase.ErrProjectionRefreshRequired` before any change when the installed
+  command skills differ from what the current rules render. Other clients keep
+  the installed skills and report no change. Run `agentplugins update <name>`.
 - **Repair** is for restoring a damaged installation, not for applying new
-  rules; use `agentplugins update <name>` for that. Through the embedded
-  installer, a single-target repair of an intact package whose command skills
-  would now render differently stops with `usecase.ErrProjectionRefreshRequired`.
-  If the package is damaged and the rules changed as well, remove and add it
-  again.
+  rules; use `agentplugins update <name>` for that. `agentplugins repair` and a
+  single-target repair through the embedded installer stop with
+  `usecase.ErrProjectionRefreshRequired` when the command skills of an intact
+  package would now render differently. If the package is missing or damaged
+  and the rules changed as well, remove and add it again.
+- **The embedded installer** reports `usecase.ErrProjectionRefreshRequired`
+  wrapped in `installer.ErrUpdateRequired`, with a conflict outcome and the
+  reason `update_required`; `errors.Is` finds either error.
 - **Saved dependency environments** (`agentplugins deps`) do not use the
   refresh. New rendering rules reach those installations at the next pin
-  change.
+  change. Until then a sync leaves a settled binding as it is, but on the
+  clients listed above an update of the binding at an unchanged pin, or a sync
+  that still has to finish its activation, stops with
+  `usecase.ErrProjectionRefreshRequired`.
 
 ## Security review
 
@@ -209,6 +243,13 @@ The security review of the `agentplugins` CLI scans the package as clients
 receive it: the package snapshot plus every command rendered as its skill. A signed Directory
 verdict does not cover commands yet, so a package with commands is always
 scanned locally or served from a cache entry keyed to its rendered commands.
+
+## Known limitations
+
+- OpenCode expands `@path` file references in skill text. The body rules do
+  not reject `@path`, so such a reference in a command reads a file in
+  OpenCode and stays plain text in other clients. Write file names without a
+  leading `@` when the command must mean the same everywhere.
 
 ## Not supported
 

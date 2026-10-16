@@ -124,6 +124,13 @@ implement `clients.ExplicitSkillDecorator`. The parity test in `clients/all`
 checks that pairing, and the stager refuses to write an explicit-only command
 for a client without both.
 
+An installed tree depends on these rules as well as on the package. The
+stager's read-only native projection compares the installed command skills
+with the current rendering and returns `domain.ErrProjectionRefreshRequired`
+on a difference. The error lives in `domain` so an adapter can return it
+without importing the use cases; `usecase.ErrProjectionRefreshRequired` is the
+same value.
+
 Authoring reports keep command diagnostics in their own `installer_policy`
 layer. Commands are an installer extension rather than part of the Agent
 Plugins specification, so these findings fail Readiness but never pass through

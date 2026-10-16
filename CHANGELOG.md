@@ -40,14 +40,24 @@ The following `agentplugins` changes are breaking. They ship in the next minor
   `agentplugins validate` still exits with success on invalid commands.
 - **Update refreshes command skills first.** For a package with commands,
   `update` of an unchanged revision now re-renders the command skills with the
-  current rules before the ordinary update, and an embedded installer's preview
-  of such an update requires confirmation. After upgrading the installer, run
-  `agentplugins update <name>` for packages with commands. Saved dependency
-  environments pick up new rules at their next pin change.
-- **Repair refuses an outdated command projection.** A single-target repair
-  through the embedded installer returns `usecase.ErrProjectionRefreshRequired`
-  when the command skills of an intact package would render differently today.
-  Check for it with `errors.Is` and run `OpUpdate` instead.
+  current rules before the ordinary update, and changes nothing when the rules
+  give the same tree. Its preview, single or grouped, is never unchanged:
+  `update --all` and the batch update plan such a package instead of skipping
+  it as current, and an embedded installer's preview reports
+  `RequiresConfirmation` rather than `NoChange`. Hosts that skip unchanged
+  previews need no change. After upgrading the installer, run
+  `agentplugins update <name>` for packages with commands; `update --all`
+  still skips Directory installations reported current by Discovery. Saved
+  dependency environments pick up new rules at their next pin change.
+- **Outdated command projections are refused.** Operations that keep the
+  installed tree return `usecase.ErrProjectionRefreshRequired` (the same
+  value as the new `domain.ErrProjectionRefreshRequired`) when the command
+  skills of an intact package would render differently today: repair, both
+  single-target and the group repair behind `agentplugins repair`, and, on
+  clients that track native objects, a repeated add, a resumed activation and
+  an unchanged group target. The embedded installer wraps it in
+  `ErrUpdateRequired` with the `update_required` reason. Check for either with
+  `errors.Is` and run `OpUpdate` instead.
 - **Go API.** `installer.ComponentDecision` gains `Source` and `SourceName`, so
   unkeyed literals must name their fields. `clients.OpenCodeNativeRequirements`
   takes the client definition, because commands alone can deliver skills.
