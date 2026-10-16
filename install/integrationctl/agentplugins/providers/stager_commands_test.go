@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 const takenSkill = "---\nname: demo-taken\ndescription: A real skill\n---\nKeep these exact bytes.\r\n"
@@ -134,6 +136,66 @@ func TestStagerProjectsCommandSkillsForNativeClients(t *testing.T) {
 	}
 	if got := ownedKiroSkills(active); len(got) != 1 || got[0] != staged[0] {
 		t.Fatalf("active projection = %+v, staged %+v", got, staged)
+	}
+}
+
+// An installed tree rendered under other command rules is intact, so only a
+// comparison with the current rendering finds it. Every kind of difference
+// stops the read-only projection with the typed error instead of a missing
+// file or a quietly different native projection.
+func TestActiveNativeProjectionRefusesAnOutdatedCommandTree(t *testing.T) {
+	t.Parallel()
+	envelope := commandPackage(t)
+	echo := domain.ComponentDecision{Kind: domain.ComponentSkill, Name: "demo-echo", Support: domain.SupportNative, Source: domain.ComponentSourceCommand, SourceName: "echo"}
+	withEcho := stagingPlan(t, domain.ClientKiro, domain.PackageNative)
+	withEcho.Components = []domain.ComponentDecision{echo}
+	withoutEcho := withEcho
+	withoutEcho.Components = nil
+	installed := filepath.Join(withEcho.ActivePath, "skills", "demo-echo")
+	cases := map[string]struct {
+		plan   domain.DeliveryPlan
+		change func(*testing.T)
+	}{
+		"rules now withhold the command": {plan: withoutEcho},
+		"rules now deliver the command": {plan: withEcho, change: func(t *testing.T) {
+			if err := os.RemoveAll(installed); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		"rules now render other bytes": {plan: withEcho, change: func(t *testing.T) {
+			writeTestFile(t, filepath.Join(installed, commandext.SkillFile), "---\nname: \"demo-echo\"\ndescription: \"Echo the text\"\n---\nOlder body.\n")
+		}},
+		"rules now add a file": {plan: withEcho, change: func(t *testing.T) {
+			writeTestFile(t, filepath.Join(installed, "agents", "openai.yaml"), "policy: {}\n")
+		}},
+	}
+	for name, tc := range cases {
+		stager := testStager(Stager{})
+		delivery, err := stager.Stage(context.Background(), envelope, withEcho, "operation-outdated", domain.CompatibilityHints{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.RemoveAll(withEcho.ActivePath); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(withEcho.ActivePath), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(delivery.StagingPath, withEcho.ActivePath); err != nil {
+			t.Fatal(err)
+		}
+		digest := delivery.ArtifactDigest
+		if tc.change != nil {
+			tc.change(t)
+			var mismatch *ports.VerificationError
+			if err := stager.Verify(context.Background(), withEcho.ActivePath, digest); !errors.As(err, &mismatch) {
+				t.Fatalf("%s: changed tree verified: %v", name, err)
+			}
+			digest = mismatch.ActualDigest
+		}
+		if _, err := stager.ProjectActiveNative(context.Background(), envelope, tc.plan, digest, ""); !errors.Is(err, domain.ErrProjectionRefreshRequired) {
+			t.Errorf("%s: projection error = %v", name, err)
+		}
 	}
 }
 

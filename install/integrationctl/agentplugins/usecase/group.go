@@ -196,6 +196,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.preflightCompatibleBindings(); err != nil {
 		return session.result, err
 	}
+	if err := session.preflightUnchangedProjections(); err != nil {
+		return session.result, err
+	}
 	if session.input.DryRun || !session.input.Confirmed {
 		return session.result, nil
 	}

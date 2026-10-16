@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -64,6 +65,20 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		return delivery, false, err
 	}
 	return delivery, confirmedNativeProjection(client.NativeObjects, delivery.NativeObjects), nil
+}
+
+// requireCurrentCommandProjection derives the installed native projection of
+// an unchanged binding ahead of time, so a tree rendered under other command
+// rules stops a preview or a group with ErrProjectionRefreshRequired before
+// any effect. Other projection failures stay with the step that uses it.
+func (service Service) requireCurrentCommandProjection(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, client domain.ClientBinding) error {
+	if !input.Envelope.HasInstallerRenderedComponents() || !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
+		return nil
+	}
+	if _, _, err := service.activeNativeDelivery(ctx, input, plan, installation, client); errors.Is(err, ErrProjectionRefreshRequired) {
+		return err
+	}
+	return nil
 }
 
 // nonNativeRegistrationComplete separates CLI effects from package reuse.

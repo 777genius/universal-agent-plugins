@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -82,6 +84,27 @@ func WithCommandSkills(envelope domain.PackageEnvelope, plan domain.DeliveryPlan
 	}
 	envelope.Skills = skills
 	return envelope, nil
+}
+
+// ProjectedSkillNames lists, sorted, every skill directory a command of this
+// package can own in an installed tree under any rules: the projection of each
+// valid command, and of each rejected entry whose name would still make a
+// portable skill name. A name the package's own skills/ uses is never one.
+func ProjectedSkillNames(envelope domain.PackageEnvelope) []string {
+	taken := foldedNames(envelope.SkillsDirEntries)
+	for name := range envelope.Skills {
+		taken[strings.ToLower(name)] = true
+	}
+	keys := append(slices.Collect(maps.Keys(envelope.Commands)), envelope.InvalidCommands...)
+	var names []string
+	for _, key := range keys {
+		projected := SkillName(envelope.Manifest.Name, key)
+		if !taken[strings.ToLower(projected)] && portableSkillName(projected) {
+			names = append(names, projected)
+		}
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
 }
 
 func cloneSkill(skill domain.RenderedSkill) domain.RenderedSkill {

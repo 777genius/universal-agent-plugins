@@ -11,7 +11,9 @@ import (
 
 // ProjectActiveNative recomputes the selected native projection in place from
 // the exact installed package. The package digest is checked before reading any
-// projected files; unlike Project, these builders never write to the tree.
+// projected files; unlike Project, these builders never write to the tree. A
+// tree whose command skills the current rules would render differently fails
+// with domain.ErrProjectionRefreshRequired.
 func (stager Stager) ProjectActiveNative(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, expectedDigest, dataPath string) ([]domain.NativeObjectOwnership, error) {
 	if err := stager.requireDeps(); err != nil {
 		return nil, err
@@ -22,6 +24,9 @@ func (stager Stager) ProjectActiveNative(ctx context.Context, envelope domain.Pa
 	projector, ok := clients.As[clients.ActiveNativeProjector](stager.Registry, plan.ClientID)
 	if !ok {
 		return nil, fmt.Errorf("client %q has no read-only native projection", plan.ClientID)
+	}
+	if err := stager.requireInstalledCommandSkills(ctx, plan.ActivePath, envelope, plan); err != nil {
+		return nil, err
 	}
 	envelope, err := commandext.WithCommandSkills(envelope, plan)
 	if err != nil {

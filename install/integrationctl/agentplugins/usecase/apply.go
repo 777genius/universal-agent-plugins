@@ -267,6 +267,11 @@ func (session *applySession) dryRunPath() (AddResult, error) {
 		if !session.replace && !packageRevisionMatches(current.PackageRevision, session.input.Envelope) {
 			return session.result, fmt.Errorf("plugin is already materialized for %s at a different revision; use update", session.input.Client.ClientID)
 		}
+		if !session.replace {
+			if err := session.service.requireCurrentCommandProjection(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current); err != nil {
+				return session.result, err
+			}
+		}
 		session.result.NoChange = !session.replace && !session.registrationMigration && lifecycleConverged(current)
 	}
 	return session.result, nil

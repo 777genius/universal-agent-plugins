@@ -1,5 +1,13 @@
 package domain
 
+import "errors"
+
+// ErrProjectionRefreshRequired means an installed tree holds command skills
+// other than the ones the current rules render for it. Only an update
+// applies the current rules; operations that keep the installed tree stop
+// with this error instead.
+var ErrProjectionRefreshRequired = errors.New("command projection rules changed since installation; run `agentplugins update`")
+
 // ExtensionNamespace is the package directory reserved for agentplugins'
 // own content. Authors write CommandsDir and LockedRuntimeDir below it; the
 // installer writes ManagedStdioDir into the staged copy.

@@ -226,6 +226,12 @@ func packageCodes(pluginName, command string, taken map[string]bool) []finding {
 	return nil
 }
 
+// portableSkillName reports whether a projected name passes both checks of
+// packageCodes that do not depend on the package's other skills.
+func portableSkillName(name string) bool {
+	return !strings.Contains(name, "--") && skillName.MatchString(name) && len(name) <= maxSkillName
+}
+
 func foldedNames(names []string) map[string]bool {
 	folded := make(map[string]bool, len(names))
 	for _, name := range names {

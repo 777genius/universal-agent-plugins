@@ -1,8 +1,11 @@
 package providers
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -92,6 +95,67 @@ func writeCommandSkills(paths ports.PathPolicy, stagingPath string, rendered com
 		}
 	}
 	return nil
+}
+
+// requireInstalledCommandSkills fails with domain.ErrProjectionRefreshRequired
+// unless an installed tree holds exactly the command skills the plan renders,
+// byte for byte, and none of the package's other command skills. A tree
+// rendered under other rules then never reaches a native projection.
+func (stager Stager) requireInstalledCommandSkills(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	rendered, err := stager.renderCommandSkills(ctx, envelope, plan)
+	if err != nil {
+		return err
+	}
+	for _, name := range commandext.ProjectedSkillNames(envelope) {
+		installed, err := readInstalledSkill(filepath.Join(root, "skills", name))
+		if err != nil && !errors.Is(err, errUnknownSkillEntry) {
+			return fmt.Errorf("read installed command skill %q: %w", name, err)
+		}
+		if want, planned := rendered[name]; err != nil || planned != (installed != nil) || !maps.EqualFunc(installed, want, bytes.Equal) {
+			return fmt.Errorf("%w: installed skill %q differs from the current command projection", domain.ErrProjectionRefreshRequired, name)
+		}
+	}
+	return nil
+}
+
+// errUnknownSkillEntry marks an installed entry the stager never writes for a
+// command skill, so the skill cannot be the rendered one.
+var errUnknownSkillEntry = errors.New("installed skill holds an entry that is not a directory or regular file")
+
+// readInstalledSkill returns the files below one installed skill directory,
+// keyed by slash path, or nil when it is absent. It reads through an os.Root,
+// so no link below the directory is followed.
+func readInstalledSkill(directory string) (map[string][]byte, error) {
+	info, err := os.Lstat(directory)
+	switch {
+	case os.IsNotExist(err):
+		return nil, nil
+	case err != nil:
+		return nil, err
+	case !info.IsDir():
+		return nil, errUnknownSkillEntry
+	}
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	tree := root.FS()
+	files := map[string][]byte{}
+	err = fs.WalkDir(tree, ".", func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case entry.IsDir():
+			return nil
+		case !entry.Type().IsRegular():
+			return errUnknownSkillEntry
+		}
+		body, err := fs.ReadFile(tree, path)
+		files[path] = body
+		return err
+	})
+	return files, err
 }
 
 func writeNewFile(path string, body []byte) error {

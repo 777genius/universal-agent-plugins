@@ -225,6 +225,59 @@ func TestUpdateUnderUnchangedRulesKeepsState(t *testing.T) {
 	}
 }
 
+// A repeated add keeps the installed tree. Once the rules render the
+// commands differently, it stops with the typed error in a preview, in the
+// resumed and the settled lifecycle and in a group, and leaves state alone;
+// under the rules it was installed with it still passes.
+func TestRepeatedAddRefusesAnOutdatedCommandProjection(t *testing.T) {
+	t.Parallel()
+	for name, intent := range map[string]domain.InstallIntent{"resumed": domain.InstallIntentAutomatic, "settled": domain.InstallIntentPrepare} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			base, store, _ := serviceFixture(t)
+			service, withhold := withRules(base, true)
+			input := commandInput(t, domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")})
+			input.InstallIntent = intent
+			if _, err := service.Add(ctx, input); err != nil {
+				t.Fatal(err)
+			}
+			input.OperationID = "add-same-rules"
+			if _, err := service.Add(ctx, input); err != nil {
+				t.Fatalf("repeated add under the same rules: %v", err)
+			}
+			before, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			*withhold = false
+			preview := input
+			preview.DryRun, preview.Confirmed = true, false
+			input.OperationID = "add-new-rules"
+			attempts := map[string]func() error{
+				"preview": func() error { _, err := service.Add(ctx, preview); return err },
+				"add":     func() error { _, err := service.Add(ctx, input); return err },
+				"group": func() error {
+					_, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{input}, OperationGroupID: "group-new-rules", Confirmed: true})
+					return err
+				},
+			}
+			for label, attempt := range attempts {
+				if err := attempt(); !errors.Is(err, ErrProjectionRefreshRequired) {
+					t.Errorf("%s: %v", label, err)
+				}
+			}
+			after, err := os.ReadFile(store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(before, after) {
+				t.Fatalf("refused adds changed state\nbefore=%s\nafter=%s", before, after)
+			}
+		})
+	}
+}
+
 // Saved-dependency sync authorizes only "update", which RefreshProjection
 // does not accept, so those bindings keep the ordinary update path.
 func TestEnvironmentUpdateDoesNotRefresh(t *testing.T) {

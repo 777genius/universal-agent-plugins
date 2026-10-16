@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"strings"
 
@@ -11,8 +10,10 @@ import (
 
 // ErrProjectionRefreshRequired means an intact package with installer-rendered
 // components would be staged differently today than the recorded projection.
-// Repair only restores recorded bytes; update applies the current rules.
-var ErrProjectionRefreshRequired = errors.New("command projection rules changed since installation; run `agentplugins update`")
+// Repair, a repeated add and a resumed activation keep the installed tree;
+// only update applies the current rules. It is domain.ErrProjectionRefreshRequired,
+// which the stager also returns.
+var ErrProjectionRefreshRequired = domain.ErrProjectionRefreshRequired
 
 // Update applies a new package revision. For an unchanged revision whose
 // delivered tree also depends on installer rendering, it first refreshes the
