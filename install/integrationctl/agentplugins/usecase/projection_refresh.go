@@ -148,6 +148,7 @@ func (service Service) projectionRefreshTarget(input AddInput) (string, bool, er
 func (service Service) refreshBeforeUpdate(ctx context.Context, input AddInput, installationID, operationID string) (AddResult, error) {
 	input.InstallationID = installationID
 	input.OperationID = operationID
+	input.refreshChangedProjectionOnly = true
 	return service.RefreshProjection(ctx, input)
 }
 

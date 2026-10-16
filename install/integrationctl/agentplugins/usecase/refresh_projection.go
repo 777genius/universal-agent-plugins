@@ -35,6 +35,12 @@ func (session *repairSession) refreshIntactProjection() (AddResult, error) {
 		return session.result, fmt.Errorf("managed package changed after refresh preflight; rerun refresh: %w", err)
 	}
 	if !changed {
+		if session.input.refreshChangedProjectionOnly {
+			// The update that follows owns selection and activation; an
+			// identical projection leaves nothing for this refresh to do.
+			session.result.NoChange = true
+			return session.result, nil
+		}
 		if session.hasEmptyLocalMaintenanceRoute(delivery, selectionChanged) {
 			// Prepared/package-valid is the certain Local registration result,
 			// not an outstanding activation. Verify the retained empty route

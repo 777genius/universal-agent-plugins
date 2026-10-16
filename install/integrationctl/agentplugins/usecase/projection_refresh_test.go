@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -194,6 +195,34 @@ func TestUpdateRemovesWithheldCommandSkill(t *testing.T) {
 		assertUsecaseMissing(t, commandSkillPath(installed.Plan.ActivePath))
 		assertUsecaseMissing(t, native)
 	})
+}
+
+// Under unchanged rules the refresh before an update stages the same tree
+// and stops there. Kiro keeps a prepared activation as its settled state,
+// which must not pass for an unfinished one and be activated again.
+func TestUpdateUnderUnchangedRulesKeepsState(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	input := commandInput(t, domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")})
+	input.InstallIntent = domain.InstallIntentPrepare
+	if installed, err := service.Add(context.Background(), input); err != nil || installed.Activation.Activation != domain.ActivationPrepared {
+		t.Fatalf("add = %+v, %v", installed.Activation, err)
+	}
+	before, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.OperationID = "update-unchanged"
+	if result, err := service.Update(context.Background(), input); err != nil || result.Mutated {
+		t.Fatalf("update = %+v, %v", result, err)
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("an update under unchanged rules rewrote state\nbefore=%s\nafter=%s", before, after)
+	}
 }
 
 // Saved-dependency sync authorizes only "update", which RefreshProjection
