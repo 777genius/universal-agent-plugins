@@ -43,7 +43,8 @@ bytes, and the state schema does not change.
 
 **One rule for explicit-only commands.** The planner alone decides, from the
 declared trait `ClientTraits.EnforcesExplicitSkillInvocation`. An ordinary
-command reaches every client that takes skills. An explicit-only command
+command reaches every client that takes skills and does not withhold commands
+(see below). An explicit-only command
 reaches a client only when that trait is true; otherwise it is withheld: no
 component, a plan warning `explicit_invocation_not_enforceable`, and an
 unsupported compatibility row. A plan left with nothing else is rejected with
@@ -91,6 +92,18 @@ this check before any effect. The embedded installer reports the error as
 `ErrUpdateRequired`, with a conflict outcome and the reason
 `update_required`.
 
+**Frozen client family.** Visual Studio Code is frozen by an owner decision
+of 2026-10-16, so its adapters do not change for commands. It installs through
+the GitHub Copilot CLI backend and shares one physical package with Copilot
+CLI; group operations coalesce the two plans and either client's update
+restages that package. Withholding commands from VS Code alone would need two
+different trees for one package. The client registry therefore carries a
+declarative `CommandSupport` entry, empty by default and unsupported for both
+members of the github-copilot family, and backend siblings must agree on it.
+The planner withholds every command from such a client with the warning
+`command_not_supported_by_client`, exactly like a withheld explicit-only
+command; the rest of the package is unaffected.
+
 **Security review of the delivered view.** When a package has commands, the
 security evaluator scans the snapshot plus the rendered command skills, keys
 its cache by that view, and does not accept a signed-index verdict, which does
@@ -120,12 +133,11 @@ not cover commands.
 - OpenCode expands `@path` file references in skill text. The body rules do
   not reject them, so such a reference reads a file in OpenCode only. This is
   a known limitation, not a format rule.
-- Visual Studio Code is frozen by an owner decision of 2026-10-16. It installs
-  through the GitHub Copilot CLI backend it shares with Copilot CLI, so it
-  sees the command skills of that one physical package. Leaving VS Code
-  without commands while Copilot CLI keeps them would need two different trees
-  for one shared package, which the backend sibling contract does not allow;
-  it needs an owner decision on Copilot CLI.
+- GitHub Copilot CLI receives no commands while Visual Studio Code is frozen,
+  although nothing about Copilot CLI itself requires it. The change is
+  reversible: removing `withoutCommands` from both registry entries delivers
+  commands to the family again, and `agentplugins update` then adds the
+  command skills to installed packages.
 - The embedded `installer` facade does not scan packages itself, so a host that
   embeds it gets a command-aware review only if it supplies an assessment.
 

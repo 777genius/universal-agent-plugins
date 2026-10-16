@@ -22,7 +22,10 @@ Changes after `v1.2.4` land here.
   when that client is confirmed to keep it out of automatic invocation, and is
   otherwise withheld with the `explicit_invocation_not_enforceable` warning. No
   client is confirmed yet, so explicit-only commands are withheld everywhere in
-  this release. See [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md) and
+  this release. GitHub Copilot CLI and Visual Studio Code receive no commands
+  at all while Visual Studio Code is frozen: they share one installed package,
+  so each command is withheld from both with the
+  `command_not_supported_by_client` warning. See [docs/UAP_COMMANDS.md](docs/UAP_COMMANDS.md) and
   [ADR 0008](docs/adr/0008-portable-commands.md).
 - `agentplugins validate` counts `commands` and `invalid_commands`, plans of
   `add`, `update` and `info` mark rendered skills with `source` and

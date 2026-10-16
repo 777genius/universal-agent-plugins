@@ -115,15 +115,29 @@ The skill appears in plans as `kind: skill` with `source: command` and
 installer writes them into the client's copy.
 
 **Ordinary commands** (`disable-model-invocation: false`) reach every client
-that takes skills, which today is all 13 supported clients. The user runs the
-skill the way the client runs skills by hand. Like any skill, the model may
-also choose it on its own.
+that takes skills and receives commands, which today is every supported client
+except GitHub Copilot CLI and Visual Studio Code (see below). The user runs
+the skill the way the client runs skills by hand. Like any skill, the model
+may also choose it on its own.
 
-Visual Studio Code is frozen by an owner decision of 2026-10-16: its adapter
-does not change for commands, and command delivery to it is not qualified.
-It installs through the GitHub Copilot CLI backend it shares with Copilot CLI,
-so it sees whatever command skills that shared backend holds; a package
-cannot give one of the two clients commands and the other none.
+**GitHub Copilot CLI and Visual Studio Code receive no commands.** Visual
+Studio Code is frozen by an owner decision of 2026-10-16, and it installs
+through the GitHub Copilot CLI backend, sharing one package with Copilot CLI.
+One package cannot hold commands for one of the two and not for the other, so
+the client registry withholds commands from both:
+
+- every command is withheld with the plan warning
+  `command_not_supported_by_client`, and its compatibility row is unsupported
+  with the same limitation;
+- the package's skills, MCP servers and other components still install as
+  before;
+- a package with nothing else for these clients is rejected with
+  `no_supported_components`;
+- authoring reports show the warning `target_command_withheld`, and an error
+  only when the client gets nothing else.
+
+When the freeze is lifted, both clients receive commands again; run
+`agentplugins update <name>` after upgrading the installer.
 
 **Explicit-only commands** (`disable-model-invocation: true`) reach a client
 only when its adapter declares that the client enforces explicit invocation.
@@ -171,8 +185,8 @@ The table records what each client documents or ships, as reviewed on
 | OpenAI Codex | `$skill`, plugin skills `plugin:skill` | documented: `agents/openai.yaml`, `policy.allow_implicit_invocation: false` | no, probe pending |
 | ChatGPT | `@` | not confirmed | no |
 | Cursor | `/`, `@` | documented; plugin skills that use it are hidden (reported bug) | no |
-| GitHub Copilot CLI | `/SKILL-NAME` | documented: `disable-model-invocation` | no, not probed |
-| Visual Studio Code | `/` | documented: `disable-model-invocation` | no; frozen by owner decision (2026-10-16) |
+| GitHub Copilot CLI | `/SKILL-NAME` | documented: `disable-model-invocation` | no; no commands reach the GitHub Copilot family while VS Code is frozen |
+| Visual Studio Code | `/` | documented: `disable-model-invocation` | no; frozen by owner decision (2026-10-16), no commands at all |
 | Kiro | `/skill` | none found | no |
 | Gemini CLI | `/skill` in source v0.64.0 | none found | no |
 | OpenCode | the stable release exposes a skill as a command | not in the stable release; development source reads `disable-model-invocation` | no |
