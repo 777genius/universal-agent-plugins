@@ -25,23 +25,23 @@ test('community commands save exact source pins and retain package identity', ()
     const commands = pluginCommands(plugin, ['codex', 'cursor']);
     assert.equal(
       commands.add,
-      `npx universal-agent-plugins add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
+      `npx -y universal-agent-plugins add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
     );
     assert.equal(plugin.install_source, identity);
     assert.equal(
       commands.update,
-      `npx universal-agent-plugins add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
+      `npx -y universal-agent-plugins add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
     );
-    assert.equal(commands.repair, `npx universal-agent-plugins repair ${plugin.name} --target codex,cursor`);
-    assert.equal(commands.remove, `npx universal-agent-plugins remove ${plugin.name}`);
+    assert.equal(commands.repair, `npx -y universal-agent-plugins repair ${plugin.name} --target codex,cursor`);
+    assert.equal(commands.remove, `npx -y universal-agent-plugins remove ${plugin.name}`);
     assert.equal(
       commands.switch,
-      `npx universal-agent-plugins switch ${plugin.name} --to <distribution-id>`,
+      `npx -y universal-agent-plugins switch ${plugin.name} --to <distribution-id>`,
     );
   }
   assert.equal(
     pluginCommands(reviewed).add,
-    `npx universal-agent-plugins add ${reviewed.install_source}`,
+    `npx -y universal-agent-plugins add ${reviewed.install_source}`,
   );
 });
 
@@ -82,6 +82,7 @@ test('community selector remains one literal shell argument with spaces, quotes,
   });
   assert.equal(shell.status, 0, shell.stderr);
   assert.deepEqual(shell.stdout.split('\0').slice(0, -1), [
+    '-y',
     'universal-agent-plugins',
     'add',
     `github:example/plugin@${revision}//${path}`,

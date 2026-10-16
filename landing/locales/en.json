@@ -684,7 +684,7 @@
       "allInstalledAgents": "All installed agents",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "We found this project, but it doesn't include any tools the installer can add yet.",
       "chooseTargetAgents": "Choose target agents",
-      "add": "Add",
+      "add": "Copy and run in your terminal",
       "update": "Update",
       "repair": "Repair",
       "remove": "Remove",
@@ -707,7 +707,7 @@
       "chatgptFinish": "Open ChatGPT, select {name} in Apps or Plugins, connect it, and start a new chat. Availability depends on your account and workspace.",
       "expectedFallback": "Expected source fallback: {source}.",
       "dependencySaving": {
-        "saved": "Saved for your user account in uap.toml and uap.lock. Locate them with npx universal-agent-plugins deps status. Remove affects all saved targets.",
+        "saved": "Saved for your user account in uap.toml and uap.lock. Locate them with npx -y universal-agent-plugins deps status. Remove affects all saved targets.",
         "noSave": "This target selection uses --no-save and does not record a dependency.",
         "local": "Local packages are not saved as portable dependencies.",
         "discovery": "Discovery selectors are not saved as dependencies.",

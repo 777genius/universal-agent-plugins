@@ -137,7 +137,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, ruContent, `"testimonials"`)
 	mustContain(t, ruContent, `"title": "Проверяемый установочный скрипт"`)
 	mustContain(t, ruContent, `"title": "npx · Node.js 22+"`)
-	mustContain(t, ruContent, `"invocation": "npx universal-agent-plugins"`)
+	mustContain(t, ruContent, `"invocation": "npx -y universal-agent-plugins"`)
 	mustContain(t, ruContent, `"note": "Без постоянной установки: npx скачивает проверенный CLI и запускает команду плагина за один шаг."`)
 	mustNotContain(t, ruContent, `Public-beta обёртка`)
 	mustNotContain(t, ruContent, `"pricing"`)
@@ -326,7 +326,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustContain(t, agentPage, `'@type': 'ItemList'`)
 	mustContain(t, agentPage, `'@type': 'BreadcrumbList'`)
 	mustContain(t, agentPage, `const needsLocalExample = client.id === 'grok' || client.id === 'kimi'`)
-	mustContain(t, agentPage, `npx universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target`)
+	mustContain(t, agentPage, `npx -y universal-agent-plugins add ${needsLocalExample ? './my-plugin' : 'context7'} --target`)
 
 	enContentBody, err := os.ReadFile(filepath.Join(landingRoot, "content", "en.json"))
 	if err != nil {

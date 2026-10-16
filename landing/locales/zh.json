@@ -667,7 +667,7 @@
       "allInstalledAgents": "所有已安装的代理",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "我们找到了这个项目，但它不包含安装程序可以添加的任何工具。",
       "chooseTargetAgents": "选择目标代理商",
-      "add": "添加",
+      "add": "复制并在终端中运行",
       "update": "更新",
       "repair": "维修",
       "remove": "删除",
@@ -690,7 +690,7 @@
       "chatgptFinish": "打开ChatGPT，在应用程序或插件中选择{name}，连接它，然后开始新的聊天。可用性取决于您的帐户和工作空间。",
       "expectedFallback": "预期的源回退：{source}。",
       "dependencySaving": {
-        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 npx universal-agent-plugins deps status 查看文件路径。Remove 会影响所有已保存的目标。",
+        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 npx -y universal-agent-plugins deps status 查看文件路径。Remove 会影响所有已保存的目标。",
         "noSave": "此目标选择使用 --no-save，不会记录依赖。",
         "local": "本地包不会保存为可移植依赖。",
         "discovery": "discovery 选择器不会保存为依赖。",

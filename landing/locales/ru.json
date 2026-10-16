@@ -667,7 +667,7 @@
       "allInstalledAgents": "Все установленные агенты",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "Мы нашли этот проект, но в нём пока нет инструментов, которые может добавить установщик.",
       "chooseTargetAgents": "Выберите целевых агентов",
-      "add": "Добавить",
+      "add": "Скопируй и запусти в терминале",
       "update": "Обновить",
       "repair": "Исправить",
       "remove": "Удалить",
@@ -690,7 +690,7 @@
       "chatgptFinish": "Откройте ChatGPT, выберите {name} в Apps или Plugins, подключите его и начните новый чат. Доступность зависит от вашей учётной записи и рабочей области.",
       "expectedFallback": "Ожидаемый резервный источник: {source}.",
       "dependencySaving": {
-        "saved": "Сохраняется для вашей учётной записи в uap.toml и uap.lock. Команда npx universal-agent-plugins deps status покажет их пути. Remove затрагивает все сохранённые цели.",
+        "saved": "Сохраняется для вашей учётной записи в uap.toml и uap.lock. Команда npx -y universal-agent-plugins deps status покажет их пути. Remove затрагивает все сохранённые цели.",
         "noSave": "Для выбранных клиентов используется --no-save: зависимость не записывается.",
         "local": "Локальные пакеты не сохраняются как переносимые зависимости.",
         "discovery": "Селекторы discovery не сохраняются как зависимости.",

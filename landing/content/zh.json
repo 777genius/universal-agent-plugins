@@ -1014,8 +1014,8 @@
       "description": "如果已安装 Node.js 22+，这是最快的方式：直接运行插件命令。",
       "href": "https://www.npmjs.com/package/universal-agent-plugins",
       "note": "无需永久安装：npx 下载已验证的 CLI，并一步运行插件命令。",
-      "command": "npx universal-agent-plugins version",
-      "invocation": "npx universal-agent-plugins"
+      "command": "npx -y universal-agent-plugins version",
+      "invocation": "npx -y universal-agent-plugins"
     },
     {
       "id": "script",
@@ -1056,7 +1056,7 @@
     {
       "id": "install-cli",
       "title": "运行 CLI",
-      "command": "npx universal-agent-plugins version",
+      "command": "npx -y universal-agent-plugins version",
       "note": "使用 npx 快速开始，或安装二进制文件供日常使用。"
     },
     {

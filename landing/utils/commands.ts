@@ -6,7 +6,7 @@ import {
 } from './savedDependencies.ts';
 import type { RegistryPlugin } from '../types/registry';
 
-const CLI_INVOCATION = 'npx universal-agent-plugins';
+const CLI_INVOCATION = 'npx -y universal-agent-plugins';
 
 function communityAddSource(plugin: RegistryPlugin): string {
   const source = plugin.source;

@@ -667,7 +667,7 @@
       "allInstalledAgents": "كل الوكلاء المثبتين",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "عثرنا على هذا المشروع، لكنه لا يتضمن بعد أي أدوات يستطيع المثبّت إضافتها.",
       "chooseTargetAgents": "اختيار الوكلاء المستهدفين",
-      "add": "إضافة",
+      "add": "انسخ وشغّل في الطرفية",
       "update": "تحديث",
       "repair": "إصلاح",
       "remove": "إزالة",
@@ -690,7 +690,7 @@
       "chatgptFinish": "افتح ChatGPT، واختر {name} من التطبيقات أو الإضافات، ثم وصله وابدأ محادثة جديدة. يعتمد التوفر على حسابك ومساحة العمل لديك.",
       "expectedFallback": "مصدر الرجوع المتوقع: {source}.",
       "dependencySaving": {
-        "saved": "يُحفظ لحساب المستخدم في uap.toml وuap.lock. اعرض مساريهما بالأمر npx universal-agent-plugins deps status. يؤثر Remove في جميع الوجهات المحفوظة.",
+        "saved": "يُحفظ لحساب المستخدم في uap.toml وuap.lock. اعرض مساريهما بالأمر npx -y universal-agent-plugins deps status. يؤثر Remove في جميع الوجهات المحفوظة.",
         "noSave": "يستخدم هذا الاختيار --no-save ولا يسجل تبعية.",
         "local": "لا تُحفظ الحزم المحلية كتبعيات قابلة للنقل.",
         "discovery": "لا تُحفظ محددات discovery كتبعيات.",

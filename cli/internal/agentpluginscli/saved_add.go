@@ -199,6 +199,11 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "use --no-save"})
 			}
 		}
+		if len(eligible) > 1 {
+			if app, err = withPrompter(cmd, app, opts); err != nil {
+				return nil, err
+			}
+		}
 		targets, _, err = promptTargetChoices(cmd, app, eligible, skipped, clients)
 		if err != nil {
 			return nil, err

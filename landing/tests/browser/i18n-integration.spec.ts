@@ -145,7 +145,7 @@ for (const locale of publishedLocales) {
         messages.publicAuthoring.title,
       );
       await expect(page.locator('#use-plugins code')).toHaveText(
-        'npx universal-agent-plugins add context7',
+        'npx -y universal-agent-plugins add context7',
       );
       await expect(page.locator('#historical-v1')).toHaveCount(0);
     } finally {

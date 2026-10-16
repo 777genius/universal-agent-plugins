@@ -667,7 +667,7 @@
       "allInstalledAgents": "Todos los agentes instalados",
       "weFoundThisProjectButItDoesnTIncludeAnyToolsTheInstallerCanAddYet": "Encontramos este proyecto, pero aún no incluye ninguna herramienta que el instalador pueda agregar.",
       "chooseTargetAgents": "Elija agentes objetivo",
-      "add": "Añadir",
+      "add": "Copia y ejecuta en tu terminal",
       "update": "Actualizar",
       "repair": "Reparación",
       "remove": "Quitar",
@@ -690,7 +690,7 @@
       "chatgptFinish": "Abra ChatGPT, seleccione {name} en Aplicaciones o Complementos, conéctelo e inicie un nuevo chat. La disponibilidad depende de su cuenta y espacio de trabajo.",
       "expectedFallback": "Reserva de fuente esperada: {source}.",
       "dependencySaving": {
-        "saved": "Se guarda para tu cuenta de usuario en uap.toml y uap.lock. Consulta sus rutas con npx universal-agent-plugins deps status. Remove afecta a todos los destinos guardados.",
+        "saved": "Se guarda para tu cuenta de usuario en uap.toml y uap.lock. Consulta sus rutas con npx -y universal-agent-plugins deps status. Remove afecta a todos los destinos guardados.",
         "noSave": "Esta selección usa --no-save y no registra una dependencia.",
         "local": "Los paquetes locales no se guardan como dependencias portátiles.",
         "discovery": "Los selectores discovery no se guardan como dependencias.",

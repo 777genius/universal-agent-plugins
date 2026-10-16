@@ -50,7 +50,7 @@ for (const client of clientLandingPages) {
     await page.goto(`./agents/${client.slug}/`);
     await hydrated(page);
     const source = client.id === 'grok' || client.id === 'kimi' ? './my-plugin' : 'context7';
-    const command = `npx universal-agent-plugins add ${source} --target ${client.id}`;
+    const command = `npx -y universal-agent-plugins add ${source} --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     await expect(install.locator('code').first()).toHaveText(command);
     await install.getByRole('button', { name: 'Copy command', exact: true }).click();

@@ -1014,8 +1014,8 @@
       "description": "Fastest when Node.js 22+ is already installed: run the plugin command immediately.",
       "href": "https://www.npmjs.com/package/universal-agent-plugins",
       "note": "Zero-install: npx downloads the verified CLI and runs the plugin command in one step.",
-      "command": "npx universal-agent-plugins version",
-      "invocation": "npx universal-agent-plugins"
+      "command": "npx -y universal-agent-plugins version",
+      "invocation": "npx -y universal-agent-plugins"
     },
     {
       "id": "script",
@@ -1056,7 +1056,7 @@
     {
       "id": "install-cli",
       "title": "Run the CLI",
-      "command": "npx universal-agent-plugins version",
+      "command": "npx -y universal-agent-plugins version",
       "note": "Use npx for a quick start, or install the binary for daily use."
     },
     {

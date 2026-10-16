@@ -32,7 +32,7 @@ test('expired authenticated mirror keeps community catalog interactive with exac
   expect(source).toBeTruthy();
   const record = snapshot.records.find((record) => record.slug === source);
   expect(record).toBeDefined();
-  const expectedAdd = `npx universal-agent-plugins add github:${record!.repository}@${record!.revision}${record!.package_path ? `//${record!.package_path}` : ''}`;
+  const expectedAdd = `npx -y universal-agent-plugins add github:${record!.repository}@${record!.revision}${record!.package_path ? `//${record!.package_path}` : ''}`;
   await community.locator('.plugin-card__install-toggle').click();
   await expect(community.locator('.command-snippet--add code')).toHaveText(expectedAdd);
   await expect(community.locator('.plugin-card__security')).toHaveCount(0);
