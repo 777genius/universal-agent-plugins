@@ -7,6 +7,7 @@ on:
       - 'repotests/agentplugins_*native*'
       - 'repotests/agentplugins_*runtime*'
       - 'repotests/testdata/agentplugins_native_probe/**'
+      - 'repotests/testdata/agentplugins_commands_fixture/**'
       - 'install/integrationctl/agentplugins/**'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client*.py'

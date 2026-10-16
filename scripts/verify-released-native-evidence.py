@@ -17,10 +17,12 @@ import stat
 import struct
 import zipfile
 
+# Mirrors REQUIRED_TESTS in run-native-client-matrix.py, which the draft
+# aggregate enforces; scripts/test_native_client_matrix.py keeps them equal.
 CLIENT_TESTS = {
-    'codex': {'TestAgentpluginsCodexNativeLifecycle'},
-    'claude': {'TestAgentpluginsClaudeNativeLifecycle', 'TestAgentpluginsClaudeNativeRuntimeLifecycle'},
-    'opencode': {'TestAgentpluginsOpenCodeNativeLifecycle', 'TestAgentpluginsOpenCodeNativeToolCollision', 'TestAgentpluginsOpenCodeNativeRuntimeExtended'},
+    'codex': {'TestAgentpluginsCodexNativeLifecycle', 'TestAgentpluginsCodexNativeCommandsLifecycle'},
+    'claude': {'TestAgentpluginsClaudeNativeLifecycle', 'TestAgentpluginsClaudeNativeRuntimeLifecycle', 'TestAgentpluginsClaudeNativeCommandsLifecycle'},
+    'opencode': {'TestAgentpluginsOpenCodeNativeLifecycle', 'TestAgentpluginsOpenCodeNativeToolCollision', 'TestAgentpluginsOpenCodeNativeRuntimeExtended', 'TestAgentpluginsOpenCodeNativeCommandsLifecycle'},
 }
 TARGETS = ('darwin-arm64', 'windows-amd64', 'linux-arm64')
 SCOPES = {'historical-nine': TARGETS, 'linux-amd64': ('linux-amd64',)}
