@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
@@ -43,14 +44,36 @@ func New(cfg Config) (*Engine, error) {
 	return &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile}}, nil
 }
 
-// SupportsClient reports whether the composition root registered the client
-// for this engine. The facade never broadens a caller's explicit registry.
-func (e *Engine) SupportsClient(clientID string) bool {
-	if e == nil || e.cfg.Registry == nil || clientID == "" {
-		return false
+// ClientSupported reports whether a registered adapter has a local profile that
+// the installer can own. Hostless manual preparation remains a CLI workflow.
+func ClientSupported(registry *clients.Registry, clientID string) bool {
+	return ClientSupportExclusionReason(registry, clientID) == ""
+}
+
+// ClientSupportExclusionReason is the shared qualification policy for the SDK,
+// CLI and generated public metadata. It never removes a registered adapter.
+func ClientSupportExclusionReason(registry *clients.Registry, clientID string) string {
+	definition, defined := domain.ClientDefinitionFor(domain.ClientID(clientID))
+	if !defined {
+		return "not_registered"
 	}
-	_, ok := e.cfg.Registry.Lookup(domain.ClientID(clientID))
-	return ok
+	if definition.ID == domain.ClientVSCode {
+		// Owner scope decision: defer new saved-dependency/SDK qualification for VS
+		// Code. Preserve its existing imperative adapter and all legacy capabilities.
+		return "dependency_management_deferred"
+	}
+	if definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare {
+		return "manual_preparation_only"
+	}
+	if _, registered := registry.Lookup(definition.ID); !registered {
+		return "not_registered"
+	}
+	return ""
+}
+
+// SupportsClient preserves the composition root's explicit registry boundary.
+func (e *Engine) SupportsClient(clientID string) bool {
+	return e != nil && ClientSupported(e.cfg.Registry, clientID)
 }
 
 func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, detected map[domain.ClientID]domain.DetectedClient) usecase.Service {

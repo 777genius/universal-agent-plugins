@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +23,9 @@ func (e *Engine) Discover() []ClientMetadata {
 	result := make([]ClientMetadata, 0, len(registered))
 	for _, adapter := range registered {
 		id := string(adapter.ID())
+		if !e.SupportsClient(id) {
+			continue
+		}
 		result = append(result, e.clientMetadata(id, byClient[id]))
 	}
 	return result
@@ -29,6 +33,8 @@ func (e *Engine) Discover() []ClientMetadata {
 
 func (e *Engine) clientMetadata(id string, bindings []InspectedBinding) ClientMetadata {
 	meta := ClientMetadata{ClientID: id, Scopes: []string{"user"}, Bindings: append([]InspectedBinding(nil), bindings...)}
+	definition, _ := domain.ClientDefinitionFor(domain.ClientID(id))
+	meta.Capabilities = definition.Capabilities
 	explicit := ""
 	if e.cfg.ClientExecutables != nil {
 		explicit = e.cfg.ClientExecutables[id]

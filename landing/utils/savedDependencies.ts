@@ -1,3 +1,9 @@
+import clientCapabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
+
+const savedDependencyTargets = new Set(
+  clientCapabilities.filter((client) => client.saved_dependency).map((client) => client.id),
+);
+
 // Enable only after the public CLI release includes default saving and --no-save.
 export const SAVED_DEPENDENCIES_CLI_RELEASED = false;
 
@@ -11,7 +17,7 @@ export function dependencySaveMode(source: string, targets: readonly string[]): 
   const github = isPinnedGitSource(source);
   const directory = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(source) && !source.startsWith('.');
   if (!github && !directory) return 'noSave';
-  return targets.every((target) => target === 'claude' || target === 'codex') ? 'saved' : 'noSave';
+  return targets.every((target) => savedDependencyTargets.has(target)) ? 'saved' : 'noSave';
 }
 
 export function dependencyAddFlag(mode: DependencySaveMode, released: boolean): string {

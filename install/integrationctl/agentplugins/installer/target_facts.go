@@ -18,7 +18,7 @@ func (e *Engine) knownTargetIndex(facts []TargetFacts) (map[string]TargetFacts, 
 		if !validRoot(fact.ConfigRoot) {
 			return nil, fmt.Errorf("%w: ConfigRoot must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
 		}
-		if !validRoot(fact.Executable) {
+		if (fact.Executable != "" && !validRoot(fact.Executable)) || (requiresExecutable(e.cfg.Registry, domain.ClientID(fact.ClientID)) && fact.Executable == "") {
 			return nil, fmt.Errorf("%w: Executable must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
 		}
 		if _, exists := indexed[fact.ClientID]; exists {

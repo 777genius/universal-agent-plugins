@@ -38,6 +38,22 @@ activation. If that handoff fails, a repeat with the same package and args
 resumes the pending lifecycle without another directory receipt. Group
 projection refresh is not supported.
 
+Single-target Prepare/Apply supports the eleven qualified registered local
+adapters. `ClientSupported` and `Discover` exclude hostless ChatGPT preparation
+and owner-deferred VS Code dependency qualification. Existing imperative VS Code
+source and capabilities are preserved. Registration alone never claims automatic
+activation or support for every component. `ClientMetadata.Capabilities` reports
+the existing domain capability contract. `Plan.Delivery.Components` carries actual
+package support decisions, including unsupported components in a mixed package.
+A package with no supported components is refused before installed effects.
+
+CLI-registry adapters require `ClientExecutable` on install; OpenCode also needs
+it for bounded host preparation. Native config clients Gemini, Cline, Windsurf
+and Kimi need only an explicit profile. Any supplied executable, including known
+sibling target facts, must be an absolute clean path. Existing group and historical
+removal boundaries above are unchanged; broader single-target qualification does
+not expand the separately qualified local-file CLI route.
+
 ## Contract
 
 ```go
@@ -149,7 +165,7 @@ Client.Activation stay separate fields.
 
 Confirmed Apply re-reads live target/ownership before mutation and returns
 `plan_changed` instead of applying a stale confirmation. Discover reports
-supported Claude/Codex user-scope metadata, executable presence, and current
+registered local-client user-scope metadata and component capabilities, executable presence, and current
 bindings without creating state or executing found files. Inspect after a group
 install reports both live bindings and TreeDigest without mutating state or
 running a helper; Recover of that clean observation is `already_recovered`.

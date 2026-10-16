@@ -285,3 +285,38 @@ func TestRegistryRefusesUnownedEntryAndPreservesDisabledState(t *testing.T) {
 		t.Fatal("user disabled state overwritten")
 	}
 }
+
+// Native-config success must acknowledge its effect to the generic persisted
+// attempt recorder. Missing effect classification strands an otherwise active
+// installation behind the unresolved-native-attempt guard.
+func TestActivationReportsNativeEffectCompletion(t *testing.T) {
+	r := fixture(t)
+	r.PreviousNativeObjects = []domain.NativeObjectOwnership{{Kind: "managed_package_directory", Path: r.Delivery.ActivePath, ManagedDigest: "fixture-digest"}}
+	out, err := New().Activate(context.Background(), clients.Env{}, r)
+	if err != nil || out.NativeEffect != domain.NativeEffectCommitted || out.Activation != domain.ActivationActive || out.Verification != domain.VerificationInstalled || !reflect.DeepEqual(out.NativeObjects, r.PreviousNativeObjects) {
+		t.Fatalf("native completion: %+v %v", out, err)
+	}
+	r.VerifyOnly = true
+	out, err = New().Activate(context.Background(), clients.Env{}, r)
+	if err != nil || out.NativeEffect != domain.NativeEffectUnchanged {
+		t.Fatalf("read-only verification reported mutation: %+v %v", out, err)
+	}
+	missing := fixture(t)
+	if err := os.Remove(filepath.Join(missing.Delivery.ActivePath, ".kimi-plugin", "plugin.json")); err != nil {
+		t.Fatal(err)
+	}
+	out, err = New().Activate(context.Background(), clients.Env{}, missing)
+	if err == nil || out.NativeEffect != domain.NativeEffectUnchanged {
+		t.Fatalf("pre-effect failure classification: %+v %v", out, err)
+	}
+	// A failed registry mutation/readback cannot acknowledge an attempt as done.
+	blocked := fixture(t)
+	if err := os.MkdirAll(filepath.Dir(registryPath(blocked.Client.ConfigRoot)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	write(t, registryPath(blocked.Client.ConfigRoot)+".agentplugins.lock", "another writer")
+	out, err = New().Activate(context.Background(), clients.Env{}, blocked)
+	if err == nil || out.NativeEffect != domain.NativeEffectUncertain {
+		t.Fatalf("possible write failure lost uncertainty: %+v %v", out, err)
+	}
+}

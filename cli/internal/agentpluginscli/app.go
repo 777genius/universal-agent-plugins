@@ -84,22 +84,23 @@ type App struct {
 }
 
 type options struct {
-	environmentOutput   map[string]any
-	noSave              bool
-	alias               string
-	environmentReason   string
-	chatGPTAppID        string
-	installIntents      map[domain.ClientID]domain.InstallIntent
-	color               terminaltheme.Policy
-	target              string
-	scope               string
-	dryRun              bool
-	format              string
-	plain               bool
-	externalUninstalled bool
-	purgeData           bool
-	acceptSecurityRisk  bool
-	securityDetails     bool
+	dependencyComponents map[string][]domain.ComponentDecision
+	environmentOutput    map[string]any
+	noSave               bool
+	alias                string
+	environmentReason    string
+	chatGPTAppID         string
+	installIntents       map[domain.ClientID]domain.InstallIntent
+	color                terminaltheme.Policy
+	target               string
+	scope                string
+	dryRun               bool
+	format               string
+	plain                bool
+	externalUninstalled  bool
+	purgeData            bool
+	acceptSecurityRisk   bool
+	securityDetails      bool
 }
 
 func (app App) input() io.Reader {

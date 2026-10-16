@@ -46,6 +46,11 @@ func (*Adapter) PreflightActivation(_ clients.Env, r domain.ActivationRequest) e
 }
 func (a *Adapter) Activate(ctx context.Context, env clients.Env, r domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	out := shared.StartedActivation(r)
+	// Native-config lifecycle persists an attempt before dispatch. Report its
+	// effect explicitly so verified success can clear that marker; failures
+	// after a possible registry write must retain uncertainty.
+	out.NativeEffect = domain.NativeEffectUnchanged
+	out.NativeObjects = append([]domain.NativeObjectOwnership(nil), r.PreviousNativeObjects...)
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
@@ -65,6 +70,7 @@ func (a *Adapter) Activate(ctx context.Context, env clients.Env, r domain.Activa
 		if env.Now != nil {
 			now = env.Now()
 		}
+		out.NativeEffect = domain.NativeEffectUncertain
 		if err := mutateRegistry(r.Client.ConfigRoot, r.DeclaredName, r.Delivery.ActivePath, false, r.Replacing, now); err != nil {
 			return shared.FailedActivation(out, "retry Kimi plugin registration", err)
 		}
@@ -79,6 +85,9 @@ func (a *Adapter) Activate(ctx context.Context, env clients.Env, r domain.Activa
 	}
 	if record == nil || record["enabled"] != true {
 		return shared.FailedActivation(out, "enable the managed plugin in Kimi Code", fmt.Errorf("%w: Kimi plugin absent or disabled", shared.ErrRecognizedNegativeEvidence))
+	}
+	if !r.VerifyOnly {
+		out.NativeEffect = domain.NativeEffectCommitted
 	}
 	out.Activation = domain.ActivationActive
 	out.Verification = domain.VerificationInstalled

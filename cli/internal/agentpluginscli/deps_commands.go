@@ -269,6 +269,9 @@ func initializeDependencies(cmd *cobra.Command, app App, opts *options) error {
 
 func validateDependencyTargets(app App, requirements environment.Requirements) error {
 	for target := range requirements.Targets {
+		if definition, ok := domain.ClientDefinitionFor(domain.ClientID(target)); ok && (definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare) {
+			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, target)
+		}
 		if app.Installer == nil || !app.Installer.SupportsClient(target) {
 			return fmt.Errorf("unsupported dependency target %q; supported targets: %v", target, supportedDependencyTargets(app))
 		}
