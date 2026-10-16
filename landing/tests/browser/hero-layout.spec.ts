@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
-const exactCommand = 'npx universal-agent-plugins add context7 --target codex,cursor,vscode';
+const exactCommand = 'npx universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;

@@ -18,7 +18,7 @@ function community(path = ''): RegistryPlugin {
   };
 }
 
-test('community ADD pins the trusted source commit for root and nested packages without changing identity or maintenance commands', () => {
+test('community commands save exact source pins and retain package identity', () => {
   for (const path of ['', 'plugins/nested']) {
     const plugin = community(path);
     const identity = plugin.install_source;
@@ -28,11 +28,12 @@ test('community ADD pins the trusted source commit for root and nested packages 
       `npx universal-agent-plugins add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
     );
     assert.equal(plugin.install_source, identity);
-    for (const action of ['update', 'repair', 'remove'] as const)
-      assert.equal(
-        commands[action],
-        `npx universal-agent-plugins ${action} ${plugin.name} --target codex,cursor`,
-      );
+    assert.equal(
+      commands.update,
+      `npx universal-agent-plugins add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
+    );
+    assert.equal(commands.repair, `npx universal-agent-plugins repair ${plugin.name} --target codex,cursor`);
+    assert.equal(commands.remove, `npx universal-agent-plugins remove ${plugin.name}`);
     assert.equal(
       commands.switch,
       `npx universal-agent-plugins switch ${plugin.name} --to <distribution-id>`,

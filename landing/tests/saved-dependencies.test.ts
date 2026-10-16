@@ -19,17 +19,22 @@ const plugin: RegistryPlugin = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
 
-test('production gate stays closed and preserves released command bytes', () => {
-  assert.equal(SAVED_DEPENDENCIES_CLI_RELEASED, false);
+test('production saves supported selections and retains explicit legacy command bytes', () => {
+  assert.equal(SAVED_DEPENDENCIES_CLI_RELEASED, true);
+  const published = pluginCommands(plugin, ['codex', 'cursor']);
+  assert.equal(published.saveMode, 'saved');
+  assert.equal(published.add, 'npx universal-agent-plugins add gitlab --target codex,cursor');
+  assert.equal(published.update, 'npx universal-agent-plugins update gitlab');
+  assert.equal(published.remove, 'npx universal-agent-plugins remove gitlab');
   for (const targets of [['gemini'], ['opencode'], ['cursor'], ['chatgpt'], ['chatgpt', 'codex']]) {
-    const commands = pluginCommands(plugin, targets);
+    const commands = pluginCommands(plugin, targets, false);
     const targetFlag = ` --target ${targets.join(',')}`;
     assert.equal(commands.add, `npx universal-agent-plugins add gitlab${targetFlag}`);
     assert.equal(commands.update, `npx universal-agent-plugins update gitlab${targetFlag}`);
     assert.equal(commands.remove, `npx universal-agent-plugins remove gitlab${targetFlag}`);
     assert.equal(commands.saveMode, undefined);
   }
-  const commands = pluginCommands(plugin, ['codex', 'cursor']);
+  const commands = pluginCommands(plugin, ['codex', 'cursor'], false);
   assert.equal(commands.add, 'npx universal-agent-plugins add gitlab --target codex,cursor');
   assert.equal(commands.update, 'npx universal-agent-plugins update gitlab --target codex,cursor');
   assert.equal(commands.remove, 'npx universal-agent-plugins remove gitlab --target codex,cursor');

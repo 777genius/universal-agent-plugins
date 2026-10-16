@@ -690,7 +690,7 @@
       "chatgptFinish": "打开ChatGPT，在应用程序或插件中选择{name}，连接它，然后开始新的聊天。可用性取决于您的帐户和工作空间。",
       "expectedFallback": "预期的源回退：{source}。",
       "dependencySaving": {
-        "saved": "为当前用户保存。Remove 适用于所有已保存的目标；必要时请使用 CLI 输出的依赖别名。",
+        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 npx universal-agent-plugins deps status 查看文件路径。Remove 会影响所有已保存的目标。",
         "noSave": "此目标选择使用 --no-save，不会记录依赖。",
         "local": "本地包不会保存为可移植依赖。",
         "discovery": "discovery 选择器不会保存为依赖。",

@@ -36,6 +36,34 @@ Compatibility is package-specific. Schema validation does not prove runtime, OAu
 
 [Tested client versions and platform limitations](/en/reference/client-compatibility)
 
+### Save and restore your plugins
+
+Eligible remote installs automatically save `uap.toml` and `uap.lock` for your
+user account, outside the current project. Find their exact paths and check your
+saved plugins with:
+
+```bash
+npx universal-agent-plugins deps status
+```
+
+By default, the files live in `~/.config/agentplugins` on Linux
+(`$XDG_CONFIG_HOME/agentplugins` when set), `~/Library/Application Support/agentplugins`
+on macOS, or `%APPDATA%\agentplugins` on Windows. `AGENTPLUGINS_HOME` can select
+another directory.
+
+To restore on another machine, install your target agents, copy those two files
+into the directory shown by `deps status`, then run:
+
+```bash
+npx universal-agent-plugins deps sync --locked --yes
+```
+
+The lockfile restores the recorded package revisions. Agent sign-in and any
+manual activation remain separate steps. Local paths, literal `discovery:`
+selectors and ChatGPT preparation are not saved as portable dependencies.
+
+[Saved dependency guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md)
+
 ## Build plugins {#build-plugins}
 
 <a id="recommended-default"></a>

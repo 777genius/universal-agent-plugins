@@ -690,7 +690,7 @@
       "chatgptFinish": "Abra o ChatGPT, selecione {name} em Apps ou Plugins, conecte-o e inicie uma nova conversa. A disponibilidade depende da sua conta e do espaço de trabalho.",
       "expectedFallback": "Origem alternativa esperada: {source}.",
       "dependencySaving": {
-        "saved": "Salvo para o usuário atual. Remove se aplica a todos os destinos salvos; se necessário, use o alias da dependência exibido pela CLI.",
+        "saved": "Salvo para sua conta de usuário em uap.toml e uap.lock. Veja os caminhos com npx universal-agent-plugins deps status. Remove afeta todos os destinos salvos.",
         "noSave": "Esta seleção usa --no-save e não registra uma dependência.",
         "local": "Pacotes locais não são salvos como dependências portáteis.",
         "discovery": "Seletores discovery não são salvos como dependências.",

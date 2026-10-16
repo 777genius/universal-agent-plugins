@@ -707,7 +707,7 @@
       "chatgptFinish": "Open ChatGPT, select {name} in Apps or Plugins, connect it, and start a new chat. Availability depends on your account and workspace.",
       "expectedFallback": "Expected source fallback: {source}.",
       "dependencySaving": {
-        "saved": "Saved for the current user. Remove applies to all saved targets; use the dependency alias printed by the CLI if needed.",
+        "saved": "Saved for your user account in uap.toml and uap.lock. Locate them with npx universal-agent-plugins deps status. Remove affects all saved targets.",
         "noSave": "This target selection uses --no-save and does not record a dependency.",
         "local": "Local packages are not saved as portable dependencies.",
         "discovery": "Discovery selectors are not saved as dependencies.",

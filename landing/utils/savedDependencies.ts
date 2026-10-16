@@ -5,7 +5,7 @@ const savedDependencyTargets = new Set(
 );
 
 // Enable only after the public CLI release includes default saving and --no-save.
-export const SAVED_DEPENDENCIES_CLI_RELEASED = false;
+export const SAVED_DEPENDENCIES_CLI_RELEASED = true;
 
 export type DependencySaveMode = 'saved' | 'noSave' | 'local' | 'discovery' | 'chatgpt';
 
