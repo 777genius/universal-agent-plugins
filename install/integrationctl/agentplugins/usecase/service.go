@@ -145,10 +145,6 @@ func (service Service) Add(ctx context.Context, input AddInput) (AddResult, erro
 	return service.apply(ctx, input, false)
 }
 
-func (service Service) Update(ctx context.Context, input AddInput) (AddResult, error) {
-	return service.apply(ctx, input, true)
-}
-
 func (service Service) apply(ctx context.Context, input AddInput, replace bool) (AddResult, error) {
 	session := &applySession{service: service, ctx: ctx, input: input, replace: replace}
 	if err := session.validateApplyInput(); err != nil {

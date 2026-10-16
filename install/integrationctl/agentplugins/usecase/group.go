@@ -90,10 +90,6 @@ func (service Service) AddGroup(ctx context.Context, input GroupInput) (GroupRes
 	return service.applyGroup(ctx, input, false)
 }
 
-func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
-	return service.applyGroup(ctx, input, true)
-}
-
 func (service Service) SwitchGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	input.Switch = true
 	return service.applyGroup(ctx, input, true)

@@ -41,9 +41,37 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		}
 	}
 	if session.verifyErr == nil {
+		if session.input.Envelope.HasInstallerRenderedComponents() {
+			return session.repairRenderedProjection()
+		}
 		return session.repairNative()
 	}
 	return session.repairPackage()
+}
+
+// repairRenderedProjection guards an intact package whose tree also depends
+// on installer rendering. Repair restores recorded bytes only, so a confirmed
+// repair first stages under the current rules and stops with
+// ErrProjectionRefreshRequired when the result differs. Without confirmation
+// nothing is staged, and the native check is not attempted either, since an
+// outdated projection would fail it for the wrong reason.
+func (session *repairSession) repairRenderedProjection() (AddResult, error) {
+	if session.input.DryRun {
+		return session.result, nil
+	}
+	if !session.input.Confirmed {
+		session.result.RequiresConfirmation = true
+		return session.result, nil
+	}
+	delivery, err := session.stageRepairDelivery(true)
+	if err != nil {
+		return session.result, err
+	}
+	session.service.discardSettledDelivery(session.input.OperationID, delivery)
+	if delivery.ArtifactDigest != session.expectedDigest {
+		return session.result, ErrProjectionRefreshRequired
+	}
+	return session.repairNative()
 }
 
 // RefreshProjection restages an intact, exactly bound package with the caller's
