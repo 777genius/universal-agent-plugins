@@ -11,6 +11,10 @@ const (
 )
 
 const (
+	// ExplicitInvocationField is the command field that asks for explicit
+	// invocation. Every skill rendered from an explicit-only command carries
+	// it as the YAML boolean true, whatever else its client needs.
+	ExplicitInvocationField = "disable-model-invocation"
 	// BoundaryCommand marks a diagnostic about one authored command or the
 	// commands directory as a whole.
 	BoundaryCommand FailureBoundary = "command"

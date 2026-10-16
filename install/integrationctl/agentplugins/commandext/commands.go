@@ -22,7 +22,7 @@ const RelativeDirectory = domain.ExtensionNamespace + "/" + domain.CommandsDir
 
 const (
 	fieldDescription  = "description"
-	fieldExplicitOnly = "disable-model-invocation"
+	fieldExplicitOnly = domain.ExplicitInvocationField
 	maxDescription    = 1024
 	maxSkillName      = 64
 )

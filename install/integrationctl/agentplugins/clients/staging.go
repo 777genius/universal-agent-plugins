@@ -30,6 +30,16 @@ type ActiveNativeProjector interface {
 	ProjectActiveNative(context.Context, string, domain.PackageEnvelope, domain.DeliveryPlan, string) ([]domain.NativeObjectOwnership, error)
 }
 
+// ExplicitSkillDecorator adds the client's mechanism for explicit-only
+// invocation to a skill rendered from a command: header fields and files, never
+// other changes. A client whose definition declares
+// EnforcesExplicitSkillInvocation must implement it; the stager refuses to
+// deliver an explicit-only command otherwise, and also when the decorated
+// header no longer says domain.ExplicitInvocationField: true.
+type ExplicitSkillDecorator interface {
+	DecorateExplicitSkill(domain.RenderedSkill) (domain.RenderedSkill, error)
+}
+
 // ProjectionInput is everything a projector is allowed to see. StagingPath is
 // the tree to write into; Plan.ActivePath is the future location the projection
 // has to encode, and the two are deliberately different.

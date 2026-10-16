@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/commandext"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -21,6 +22,10 @@ func (stager Stager) ProjectActiveNative(ctx context.Context, envelope domain.Pa
 	projector, ok := clients.As[clients.ActiveNativeProjector](stager.Registry, plan.ClientID)
 	if !ok {
 		return nil, fmt.Errorf("client %q has no read-only native projection", plan.ClientID)
+	}
+	envelope, err := commandext.WithCommandSkills(envelope, plan)
+	if err != nil {
+		return nil, err
 	}
 	return projector.ProjectActiveNative(ctx, plan.ActivePath, envelope, plan, dataPath)
 }
