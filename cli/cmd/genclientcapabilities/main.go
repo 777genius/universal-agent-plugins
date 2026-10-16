@@ -1,5 +1,5 @@
 // Command genclientcapabilities derives landing metadata from the SDK registry.
-// Run from cli: go run ./internal/tools/genclientcapabilities
+// Run from cli: go run ./cmd/genclientcapabilities
 package main
 
 import (

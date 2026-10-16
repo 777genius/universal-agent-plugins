@@ -1,10 +1,11 @@
 package installer
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Discover returns metadata for the explicitly registered providers, including

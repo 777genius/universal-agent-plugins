@@ -366,8 +366,8 @@ func (r *dependencyFixtureRunner) RunDuplexWithPlannedShutdown(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
-	defer writer.Close()
+	defer func() { _ = reader.Close() }()
+	defer func() { _ = writer.Close() }()
 	stop := context.AfterFunc(ctx, func() { _ = reader.Close(); _ = writer.Close() })
 	defer stop()
 	if err := reader.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {

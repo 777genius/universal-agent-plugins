@@ -19,12 +19,12 @@ func TestGeneratedCapabilitiesAreCurrent(t *testing.T) {
 	if !ok {
 		t.Fatal("locate generator source")
 	}
-	path := filepath.Join(filepath.Dir(source), "../../../../landing/data/clientCapabilities.generated.json")
+	path := filepath.Join(filepath.Dir(source), "../../../landing/data/clientCapabilities.generated.json")
 	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatal("landing client capabilities are stale; run from cli: go run ./internal/tools/genclientcapabilities")
+		t.Fatal("landing client capabilities are stale; run from cli: go run ./cmd/genclientcapabilities")
 	}
 }
