@@ -26,8 +26,13 @@ func TestLoadCommandsFromTheReservedDirectory(t *testing.T) {
 	writeLoaderFile(t, filepath.Join(commands, "hello.md"), loaderCommand)
 	writeLoaderFile(t, filepath.Join(commands, ".gitkeep"), "")
 	writeLoaderFile(t, filepath.Join(commands, ".drafts", "x.md"), "draft")
+	// Only the link case needs symlinks, which Windows may not grant; the
+	// rest of the reader is checked either way.
+	var wantInvalid, wantCodes []string
 	if err := os.Symlink(filepath.Join(commands, "hello.md"), filepath.Join(commands, "alias.md")); err != nil {
-		t.Skipf("symlinks unavailable: %v", err)
+		t.Logf("symlinks unavailable, link case not checked: %v", err)
+	} else {
+		wantInvalid, wantCodes = []string{"alias"}, []string{"alias:command_name_invalid"}
 	}
 	envelope, err := testLoader(t).Load(context.Background(), domain.LoadInput{SnapshotRoot: root})
 	if err != nil {
@@ -36,8 +41,8 @@ func TestLoadCommandsFromTheReservedDirectory(t *testing.T) {
 	if command := envelope.Commands["hello"]; len(envelope.Commands) != 1 || command.Description != "Say hello" || string(command.Body) != "Hello\n" {
 		t.Fatalf("commands = %+v", envelope.Commands)
 	}
-	if !reflect.DeepEqual(envelope.InvalidCommands, []string{"alias"}) {
-		t.Fatalf("invalid = %v", envelope.InvalidCommands)
+	if !reflect.DeepEqual(envelope.InvalidCommands, wantInvalid) {
+		t.Fatalf("invalid = %v, want %v", envelope.InvalidCommands, wantInvalid)
 	}
 	var commandCodes []string
 	for _, diagnostic := range envelope.Diagnostics {
@@ -45,8 +50,8 @@ func TestLoadCommandsFromTheReservedDirectory(t *testing.T) {
 			commandCodes = append(commandCodes, diagnostic.Item+":"+diagnostic.Code)
 		}
 	}
-	if !reflect.DeepEqual(commandCodes, []string{"alias:command_name_invalid"}) {
-		t.Fatalf("command diagnostics = %v", commandCodes)
+	if !reflect.DeepEqual(commandCodes, wantCodes) {
+		t.Fatalf("command diagnostics = %v, want %v", commandCodes, wantCodes)
 	}
 	entries := append([]string(nil), envelope.SkillsDirEntries...)
 	if !reflect.DeepEqual(entries, []string{"guide", "notes.txt"}) {
