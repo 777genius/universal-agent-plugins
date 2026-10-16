@@ -76,14 +76,14 @@ frontmatter error does not stop the body checks.
 | `command_read_failed` | The file could not be read. |
 | `command_frontmatter_invalid` | No frontmatter, unreadable YAML, not a mapping, duplicate keys, or a size or nesting limit exceeded. |
 | `command_unknown_field` | Any field other than the two above. |
-| `command_description_invalid` | `description` missing, not a string, blank, longer than 1,024 characters, or more than one line. |
+| `command_description_invalid` | `description` missing, not a string, blank, longer than 1,024 characters, more than one line, or holding a control character (NUL included) or a Unicode line or paragraph separator. |
 | `command_invocation_flag_invalid` | `disable-model-invocation` missing or not a YAML boolean. |
 | `command_body_encoding` | Invalid UTF-8 or a NUL byte. |
 | `command_body_empty` | Empty or whitespace-only body. |
 | `command_plugin_variable` | A plugin root or data variable: `CLAUDE_PLUGIN_ROOT`, `CLAUDE_PLUGIN_DATA`, `CLAUDE_SKILL_DIR`, `COPILOT_PLUGIN_ROOT`, `CURSOR_PLUGIN_ROOT`, `DEVIN_PLUGIN_ROOT`, `PLUGIN_ROOT` or `PLUGIN_DATA` after `$` or `${`, or `${extensionPath}`. |
 | `command_client_variable` | Any other `${CLAUDE_...}`, `${COPILOT_...}`, `${CURSOR_...}` or `${DEVIN_...}`. The braceless form, such as `$CLAUDE_NOTIFICATIONS_BIN`, is allowed. |
 | `command_argument_placeholder` | `$ARGUMENTS`, `${ARGUMENTS}`, `$` directly followed by a digit (`$1`, also `$5`), or `{{args}}`. Describe the input in prose instead: "the text the user wrote after the command". |
-| `command_shell_injection` | `` !` ``, `!{`, or a fence line opened with ```` ```! ```` or `~~~!`. |
+| `command_shell_injection` | `` !` ``, `!{`, or three or more backticks or tildes followed by `!` anywhere in the text, such as ```` ```! ```` at a line start, after `- ` or `> `, or inline. |
 
 The package itself adds three checks on the skill name the command becomes:
 `command_projected_name_invalid`, `command_projected_name_too_long` (more than

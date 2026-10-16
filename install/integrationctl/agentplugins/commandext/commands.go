@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
@@ -197,8 +198,8 @@ func checkFrontmatter(front conformance.Frontmatter, command *domain.Command) []
 	switch {
 	case !ok:
 		findings = append(findings, finding{"command_description_invalid", "description is required and must be a string"})
-	case strings.TrimSpace(description) == "" || utf8.RuneCountInString(description) > maxDescription || strings.ContainsAny(description, "\r\n"):
-		findings = append(findings, finding{"command_description_invalid", fmt.Sprintf("description must be one non-blank line of at most %d characters", maxDescription)})
+	case strings.TrimSpace(description) == "" || utf8.RuneCountInString(description) > maxDescription || !plainLine(description):
+		findings = append(findings, finding{"command_description_invalid", fmt.Sprintf("description must be one non-blank line of at most %d characters, without control characters", maxDescription)})
 	default:
 		command.Description = description
 	}
@@ -224,6 +225,18 @@ func packageCodes(pluginName, command string, taken map[string]bool) []finding {
 		return []finding{{"command_skill_name_collision", fmt.Sprintf("skills/%s already exists in the package", projected)}}
 	}
 	return nil
+}
+
+// plainLine reports whether text is UTF-8 on a single line: no control
+// character, NUL and line breaks included, and no Unicode line or paragraph
+// separator, which some renderers also break on.
+func plainLine(text string) bool {
+	if !utf8.ValidString(text) {
+		return false
+	}
+	return !strings.ContainsFunc(text, func(r rune) bool {
+		return unicode.IsControl(r) || r == '\u2028' || r == '\u2029'
+	})
 }
 
 // portableSkillName reports whether a projected name passes both checks of

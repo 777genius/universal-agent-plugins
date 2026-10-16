@@ -14,8 +14,11 @@ var (
 	clientVariable = regexp.MustCompile(`\$\{(?:CLAUDE|COPILOT|CURSOR|DEVIN)_[A-Z0-9_]+\}`)
 	argument       = regexp.MustCompile(`\$\{?(?:ARGUMENTS|\d)|\{\{\s*args\s*\}\}`)
 	// Claude Code runs !`cmd` and blocks fenced with ```! in a skill before
-	// the model reads it; Gemini CLI runs !{cmd} in its commands.
-	shellInjection = regexp.MustCompile("!`|!\\{|(?m:^[ \\t]*(?:`{3,}|~{3,})!)")
+	// the model reads it; Gemini CLI runs !{cmd} in its commands. A fence is
+	// matched anywhere, not only at the start of a line: Markdown also opens
+	// one inside a list item or a quote, and the check must not depend on
+	// how a client reads line starts.
+	shellInjection = regexp.MustCompile("!`|!\\{|(?:`{3,}|~{3,})!")
 )
 
 func checkBody(body []byte) []finding {
