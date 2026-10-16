@@ -72,6 +72,8 @@ func TestMarshalKeepsScalarTypes(t *testing.T) {
 		{Frontmatter: []domain.FrontmatterField{{Key: "n", Value: "a"}, {Key: "n", Value: "b"}}},
 		{Files: map[string][]byte{"../escape": nil}},
 		{Files: map[string][]byte{"skill.md": nil}},
+		{Files: map[string][]byte{`agents\openai.yaml`: nil}},
+		{Files: map[string][]byte{"agents/openai.yaml:stream": nil}},
 	} {
 		if _, err := commandext.Marshal(bad); err == nil {
 			t.Fatalf("Marshal(%+v) succeeded", bad)

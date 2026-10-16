@@ -39,7 +39,7 @@ func (stager Stager) renderCommandSkills(ctx context.Context, envelope domain.Pa
 func renderCommandSkills(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, enforcesExplicit bool, decorator clients.ExplicitSkillDecorator) (commandSkills, error) {
 	rendered := commandSkills{}
 	for _, component := range plan.Components {
-		if component.Source != domain.ComponentSourceCommand || component.Support == domain.SupportUnsupported {
+		if !commandext.DeliveredSkill(component) {
 			continue
 		}
 		command, err := commandext.PlannedCommand(envelope, component)
@@ -89,7 +89,11 @@ func writeCommandSkills(paths ports.PathPolicy, stagingPath string, rendered com
 			return fmt.Errorf("create command skill %q: %w", name, err)
 		}
 		for _, file := range slices.Sorted(maps.Keys(rendered[name])) {
-			if err := writeNewFile(filepath.Join(directory, filepath.FromSlash(file)), rendered[name][file]); err != nil {
+			path := filepath.Join(directory, filepath.FromSlash(file))
+			if err := paths.RequireContainedChild(directory, path); err != nil {
+				return fmt.Errorf("unsafe file %q in command skill %q: %w", file, name, err)
+			}
+			if err := writeNewFile(path, rendered[name][file]); err != nil {
 				return fmt.Errorf("write command skill %q: %w", name, err)
 			}
 		}

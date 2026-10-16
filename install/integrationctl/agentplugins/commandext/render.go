@@ -15,6 +15,10 @@ import (
 // SkillFile is the main file of a rendered skill.
 const SkillFile = "SKILL.md"
 
+// windowsReserved are characters no Windows file name may hold. fs.ValidPath
+// accepts them, so Marshal rejects them itself.
+const windowsReserved = `\:*?"<>|`
+
 // Render turns a command into the client-neutral skill: name and description
 // in the header, the command body unchanged. Client decorators may add fields
 // and files to the result; nothing else is per client.
@@ -59,7 +63,7 @@ func Marshal(skill domain.RenderedSkill) (map[string][]byte, error) {
 	document.Write(skill.Body)
 	files := map[string][]byte{SkillFile: document.Bytes()}
 	for name, body := range skill.Files {
-		if !fs.ValidPath(name) || name == "." || strings.EqualFold(name, SkillFile) {
+		if !fs.ValidPath(name) || name == "." || strings.EqualFold(name, SkillFile) || strings.ContainsAny(name, windowsReserved) {
 			return nil, fmt.Errorf("rendered skill file %q is not a plain relative path", name)
 		}
 		files[name] = append([]byte(nil), body...)

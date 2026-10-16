@@ -199,6 +199,19 @@ func TestActiveNativeProjectionRefusesAnOutdatedCommandTree(t *testing.T) {
 	}
 }
 
+// Rendered files come from a client decorator. Writing them re-checks that
+// each one stays inside its skill directory, so a decorator that names a
+// path outside it writes nothing there.
+func TestWriteCommandSkillsKeepsFilesInTheSkill(t *testing.T) {
+	t.Parallel()
+	staging := t.TempDir()
+	rendered := commandSkills{"demo-echo": {commandext.SkillFile: []byte("skill\n"), "../../escape.txt": []byte("outside\n")}}
+	if err := writeCommandSkills(testStager(Stager{}).Paths, staging, rendered); err == nil {
+		t.Fatal("a file outside the command skill was written")
+	}
+	assertMissing(t, filepath.Join(staging, "escape.txt"))
+}
+
 func ownedKiroSkills(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
 	var skills []domain.NativeObjectOwnership
 	for _, object := range objects {

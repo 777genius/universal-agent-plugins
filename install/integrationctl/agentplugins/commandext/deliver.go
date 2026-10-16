@@ -61,13 +61,21 @@ func PlannedCommand(envelope domain.PackageEnvelope, component domain.ComponentD
 	return command, nil
 }
 
+// DeliveredSkill reports whether a planned component is a command skill the
+// client receives. The planner never marks one unsupported; a plan that does
+// gets no skill for it, neither in the staged tree nor in the envelope the
+// client projector sees.
+func DeliveredSkill(component domain.ComponentDecision) bool {
+	return component.Source == domain.ComponentSourceCommand && component.Support != domain.SupportUnsupported
+}
+
 // WithCommandSkills adds the planned command skills to envelope.Skills as they
 // appear in a staged or installed tree, so client projectors handle them like
 // authored skills. It never touches the filesystem.
 func WithCommandSkills(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) (domain.PackageEnvelope, error) {
 	skills := maps.Clone(envelope.Skills)
 	for _, component := range plan.Components {
-		if component.Source != domain.ComponentSourceCommand {
+		if !DeliveredSkill(component) {
 			continue
 		}
 		command, err := PlannedCommand(envelope, component)
