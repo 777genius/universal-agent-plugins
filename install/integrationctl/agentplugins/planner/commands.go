@@ -11,6 +11,7 @@ import (
 // compatibility limitation, of an explicit-only command withheld from a client.
 const ExplicitInvocationNotEnforceable = "explicit_invocation_not_enforceable"
 
+// Reasons a component is not delivered, shared by plans and compatibility rows.
 const (
 	componentNotSupported = "component_not_supported_by_client"
 	invalidComponent      = "invalid_component"

@@ -249,7 +249,7 @@ func applyKindCompatibility(envelope domain.PackageEnvelope, item domain.Compone
 		}
 	case domain.ComponentApp:
 		if !envelope.App.Enabled || envelope.App.Bindings[item.Name].ID == "" {
-			reject("invalid_component")
+			reject(invalidComponent)
 		}
 	}
 }

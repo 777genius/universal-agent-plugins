@@ -24,13 +24,10 @@ const RelativeDirectory = domain.ExtensionNamespace + "/" + domain.CommandsDir
 const (
 	fieldDescription  = "description"
 	fieldExplicitOnly = domain.ExplicitInvocationField
-	maxDescription    = 1024
-	maxSkillName      = 64
 )
 
 var (
 	commandFileName = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*\.md$`)
-	skillName       = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 	commandFields   = map[string]struct{}{fieldDescription: {}, fieldExplicitOnly: {}}
 )
 
@@ -198,8 +195,8 @@ func checkFrontmatter(front conformance.Frontmatter, command *domain.Command) []
 	switch {
 	case !ok:
 		findings = append(findings, finding{"command_description_invalid", "description is required and must be a string"})
-	case strings.TrimSpace(description) == "" || utf8.RuneCountInString(description) > maxDescription || !plainLine(description):
-		findings = append(findings, finding{"command_description_invalid", fmt.Sprintf("description must be one non-blank line of at most %d characters, without control characters", maxDescription)})
+	case strings.TrimSpace(description) == "" || utf8.RuneCountInString(description) > conformance.MaxSkillDescriptionRunes || !plainLine(description):
+		findings = append(findings, finding{"command_description_invalid", fmt.Sprintf("description must be one non-blank line of at most %d characters, without control characters", conformance.MaxSkillDescriptionRunes)})
 	default:
 		command.Description = description
 	}
@@ -217,10 +214,10 @@ func checkFrontmatter(front conformance.Frontmatter, command *domain.Command) []
 func packageCodes(pluginName, command string, taken map[string]bool) []finding {
 	projected := SkillName(pluginName, command)
 	switch {
-	case strings.Contains(projected, "--") || !skillName.MatchString(projected):
+	case !conformance.PortableSkillNameForm(projected):
 		return []finding{{"command_projected_name_invalid", fmt.Sprintf("the skill name %q made from the plugin name is not a portable skill name", projected)}}
-	case len(projected) > maxSkillName:
-		return []finding{{"command_projected_name_too_long", fmt.Sprintf("the skill name %q is longer than %d characters", projected, maxSkillName)}}
+	case len(projected) > conformance.MaxSkillNameBytes:
+		return []finding{{"command_projected_name_too_long", fmt.Sprintf("the skill name %q is longer than %d characters", projected, conformance.MaxSkillNameBytes)}}
 	case taken[strings.ToLower(projected)]:
 		return []finding{{"command_skill_name_collision", fmt.Sprintf("skills/%s already exists in the package", projected)}}
 	}
@@ -242,7 +239,7 @@ func plainLine(text string) bool {
 // portableSkillName reports whether a projected name passes both checks of
 // packageCodes that do not depend on the package's other skills.
 func portableSkillName(name string) bool {
-	return !strings.Contains(name, "--") && skillName.MatchString(name) && len(name) <= maxSkillName
+	return conformance.PortableSkillNameForm(name) && len(name) <= conformance.MaxSkillNameBytes
 }
 
 func foldedNames(names []string) map[string]bool {

@@ -463,7 +463,7 @@ func decision(kind domain.ComponentKind, name string, support domain.SupportLeve
 	}
 	value := domain.ComponentDecision{Kind: kind, Name: name, Support: support}
 	if support == domain.SupportUnsupported {
-		value.Reason = "component_not_supported_by_client"
+		value.Reason = componentNotSupported
 	}
 	return value
 }
