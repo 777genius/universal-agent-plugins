@@ -101,6 +101,11 @@ func TestUpdateRefreshesCommandProjection(t *testing.T) {
 	if _, err := service.Repair(context.Background(), preview); err != nil {
 		t.Fatal(err)
 	}
+	// The dry run is what the installer engine prepares from; an unchanged
+	// answer there would skip the update entirely.
+	if result, err := service.Update(context.Background(), preview); err != nil || result.NoChange || !result.RequiresConfirmation || result.Mutated {
+		t.Fatalf("dry-run update = %+v, %v", result, err)
+	}
 	preview.DryRun = false
 	if result, err := service.Update(context.Background(), preview); err != nil || !result.RequiresConfirmation || result.Mutated {
 		t.Fatalf("unconfirmed update = %+v, %v", result, err)
@@ -224,10 +229,28 @@ func TestUpdateGroupRefreshesCommandProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, target := range added.Targets {
+		assertUsecaseMissing(t, commandSkillPath(target.Plan.ActivePath))
+	}
 	*withhold = false
-	preview, err := service.UpdateGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-preview"})
-	if err != nil || preview.Mutated || !preview.Targets[0].RequiresConfirmation || !preview.Targets[1].RequiresConfirmation {
-		t.Fatalf("group preview = %+v, %v", preview, err)
+	// Both preview forms: the CLI batch and update --all plan with DryRun and
+	// skip the package when every target is unchanged, as does the engine.
+	for _, preview := range []GroupInput{
+		{Targets: targets, OperationGroupID: "group-preview"},
+		{Targets: targets, OperationGroupID: "group-dry-run", DryRun: true},
+	} {
+		planned, err := service.UpdateGroup(context.Background(), preview)
+		if err != nil || planned.Mutated {
+			t.Fatalf("group preview = %+v, %v", planned, err)
+		}
+		for index, target := range planned.Targets {
+			if target.NoChange || !target.RequiresConfirmation {
+				t.Fatalf("group preview target %d = %+v", index, target)
+			}
+		}
+	}
+	for _, target := range added.Targets {
+		assertUsecaseMissing(t, commandSkillPath(target.Plan.ActivePath))
 	}
 	updated, err := service.UpdateGroup(context.Background(), GroupInput{Targets: targets, OperationGroupID: "group-update", Confirmed: true})
 	if err != nil || !updated.Mutated || !updated.Targets[0].Mutated || !updated.Targets[1].Mutated {

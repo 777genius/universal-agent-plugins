@@ -17,7 +17,8 @@ var ErrProjectionRefreshRequired = errors.New("command projection rules changed 
 // Update applies a new package revision. For an unchanged revision whose
 // delivered tree also depends on installer rendering, it first refreshes the
 // projection, so newer rules reach the installed tree; the ordinary update
-// then runs as before, including runtime preparation and resume.
+// then runs as before, including runtime preparation and resume. Its preview
+// is never reported as unchanged.
 func (service Service) Update(ctx context.Context, input AddInput) (AddResult, error) {
 	installationID, eligible, err := service.projectionRefreshTarget(input)
 	if err != nil {
@@ -31,14 +32,27 @@ func (service Service) Update(ctx context.Context, input AddInput) (AddResult, e
 		return refreshed, err
 	}
 	applied, err := service.apply(ctx, input, true)
+	if input.DryRun {
+		markRefreshPending(&applied)
+		return applied, err
+	}
 	applied.Mutated = applied.Mutated || refreshed.Mutated
 	applied.NoChange = applied.NoChange && !refreshed.Mutated
 	return applied, err
 }
 
+// markRefreshPending keeps the preview of an eligible target from reporting
+// the package as current. Only staging shows whether the current rules change
+// the tree, and a preview never stages, so callers that skip unchanged
+// previews must still run this update.
+func markRefreshPending(result *AddResult) {
+	result.NoChange = false
+	result.RequiresConfirmation = true
+}
+
 // UpdateGroup refreshes every eligible target in turn before the group
-// update. A preview only marks those targets as needing confirmation, and a
-// refresh failure stops before the group update starts.
+// update. A preview marks those targets as needing confirmation and never as
+// unchanged, and a refresh failure stops before the group update starts.
 func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	eligible := map[int]string{}
 	for index, target := range input.Targets {
@@ -57,7 +71,7 @@ func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (Group
 		result, err := service.applyGroup(ctx, input, true)
 		for index := range eligible {
 			if index < len(result.Targets) {
-				result.Targets[index].RequiresConfirmation = true
+				markRefreshPending(&result.Targets[index])
 			}
 		}
 		return result, err
