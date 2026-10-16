@@ -260,14 +260,60 @@ jobs:
           # app metadata and is not a suitable repair fixture.
           repair_source="777genius/universal-agent-plugins-registry@1388c89521bca4b53454776b584ee0c4996b31c0//plugins/context7"
           mkdir -p "${XDG_CONFIG_HOME}/opencode"
-          run_agentplugins add "${repair_source}" --target opencode --format json | jq -e '.result == "success" and .data.succeeded == 1 and .data.failed == 0' >/dev/null
+          # This remote source uses save-default admission: no deps init/lock.
+          run_agentplugins add "${repair_source}" --target opencode --format json > "${root}/saved-add.json"
+          jq -e '.result == "success" and .data.environment.saved == true and .data.outcome == "completed" and (.data.actions | length) == 1 and .data.actions[0].client_id == "opencode"' "${root}/saved-add.json" >/dev/null
+          test -s "${AGENTPLUGINS_HOME}/uap.toml"
+          test -s "${AGENTPLUGINS_HOME}/uap.lock"
+          package_digest="$(jq -er '.packages | if length == 1 and .[0].alias == "context7" and .[0].targets == ["opencode"] and .[0].digest_algorithm == "sha256" and (.[0].tree_digest | test("^sha256:[0-9a-f]{64}$")) then .[0].tree_digest else error("expected one exact Context7 pin") end' "${AGENTPLUGINS_HOME}/uap.lock")"
+          jq -e --arg digest "${package_digest}" '[.environment_receipts[] | select(.alias == "context7" and .client_id == "opencode" and .package_digest == $digest)] | length == 1' "${AGENTPLUGINS_HOME}/state-v2.json" >/dev/null
+          sha256sum "${AGENTPLUGINS_HOME}/uap.toml" "${AGENTPLUGINS_HOME}/uap.lock" "${AGENTPLUGINS_HOME}/state-v2.json" > "${root}/repeat-before.sha256"
+          run_agentplugins deps sync --locked --yes --format json > "${root}/locked-repeat.json"
+          jq -e '.outcome == "completed" and (.actions | length) == 1 and .actions[0].action == "unchanged" and (.results | length) == 0' "${root}/locked-repeat.json" >/dev/null
+          sha256sum --check "${root}/repeat-before.sha256"
+          run_agentplugins deps status --format json > "${root}/saved-status.json"
+          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all(.facts[0].facts[]; . == "auth_unverified")' "${root}/saved-status.json" >/dev/null
+          # Only the portable agreement crosses into a second empty profile.
+          # The released CLI must fetch and verify the same immutable digest.
+          mkdir -p "${root}/transfer/state" "${root}/transfer/home" "${root}/transfer/config/opencode" "${root}/transfer/tmp"
+          cp "${AGENTPLUGINS_HOME}/uap.toml" "${AGENTPLUGINS_HOME}/uap.lock" "${root}/transfer/state/"
+          (
+            export HOME="${root}/transfer/home" USERPROFILE="${root}/transfer/home" XDG_CONFIG_HOME="${root}/transfer/config" XDG_CACHE_HOME="${root}/transfer/cache" AGENTPLUGINS_HOME="${root}/transfer/state" TMPDIR="${root}/transfer/tmp"
+            test ! -e "${AGENTPLUGINS_HOME}/state-v2.json"
+            test ! -e "${AGENTPLUGINS_HOME}/store"
+            run_agentplugins deps sync --locked --yes --format json > "${root}/transfer-sync.json"
+            jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].outcome == "completed"' "${root}/transfer-sync.json" >/dev/null
+            cmp "${AGENTPLUGINS_HOME}/uap.lock" "${root}/state/uap.lock"
+            run_agentplugins deps status --format json > "${root}/transfer-status.json"
+            jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all(.facts[0].facts[]; . == "auth_unverified")' "${root}/transfer-status.json" >/dev/null
+          )
+          store_entry="${AGENTPLUGINS_HOME}/store/packages/sha256/${package_digest#sha256:}"
+          test -s "${store_entry}/metadata.json"
+          find "${store_entry}" -type f -print0 | sort -z | xargs -0 sha256sum > "${root}/retained-store.sha256"
+          data_root="$(jq -er '[.installations[] | select(.declared_name == "context7") | .data_receipts[] | select(.state == "owned") | .locator] | if length == 1 and (.[0] | startswith("/")) then .[0] else error("expected one owned Context7 data root") end' "${AGENTPLUGINS_HOME}/state-v2.json")"
+          case "${data_root}" in "${AGENTPLUGINS_HOME}/plugin-data/"*) ;; *) echo "Context7 data root escaped isolated profile" >&2; exit 1 ;; esac
+          test -d "${data_root}"
+          printf '%s\n' 'public-proof retained data' > "${data_root}/release-proof.txt"
           repair_file="$(jq -er '[.installations[] | select(.declared_name == "context7") | .clients[] | select(.client_id == "opencode") | .native_objects[] | select(.kind == "opencode_global_mcp_server") | .path] | if length == 1 and (.[0] | type == "string" and length > 0) then .[0] else error("expected exactly one Context7 OpenCode repair path") end' "${AGENTPLUGINS_HOME}/state-v2.json")"
+          managed_path="$(jq -er '[.installations[] | select(.declared_name == "context7") | .clients[] | select(.client_id == "opencode") | .target_locator] | if length == 1 and (.[0] | startswith("/")) then .[0] else error("expected one managed Context7 projection") end' "${AGENTPLUGINS_HOME}/state-v2.json")"
+          test -d "${managed_path}"
           test -f "${repair_file}"
           jq -e '.mcp.context7' "${repair_file}" > /dev/null
           jq 'del(.mcp.context7)' "${repair_file}" > "${root}/repair-mutated.json"
           mv "${root}/repair-mutated.json" "${repair_file}"
-          run_agentplugins repair context7 --target opencode --format json | jq -e '.result == "success" and .data.succeeded == 1 and .data.failed == 0 and .data.targets[0].target == "opencode" and .data.targets[0].output.result.mutated == true' >/dev/null
+          run_agentplugins repair context7 --target opencode --format json > "${root}/saved-repair.json"
+          jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].operation == "repair" and .results[0].outcome == "completed"' "${root}/saved-repair.json" >/dev/null
           jq -e '.mcp.context7' "${repair_file}" > /dev/null
-          run_agentplugins remove context7 --target opencode --external-uninstalled --format json | jq -e '.result == "success" and .data.succeeded == 1 and .data.failed == 0' >/dev/null
+          sha256sum --check "${root}/retained-store.sha256"
+          grep -Fx 'public-proof retained data' "${data_root}/release-proof.txt"
+          run_agentplugins remove context7 --external-uninstalled --format json > "${root}/saved-remove.json"
+          jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].operation == "remove" and .results[0].outcome == "completed"' "${root}/saved-remove.json" >/dev/null
+          jq -e '[.environment_receipts[]? | select(.alias == "context7")] | length == 0' "${AGENTPLUGINS_HOME}/state-v2.json" >/dev/null
+          jq -e '.packages | all(.[]; .alias != "context7")' "${AGENTPLUGINS_HOME}/uap.lock" >/dev/null
+          run_agentplugins deps status --format json | jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' >/dev/null
+          jq -e '.mcp.context7 == null' "${repair_file}" >/dev/null
+          test ! -e "${managed_path}"
+          sha256sum --check "${root}/retained-store.sha256"
+          grep -Fx 'public-proof retained data' "${data_root}/release-proof.txt"
           test "$(sha256sum "${root}/fixture-bin/opencode" | cut -d' ' -f1)" = "${opencode_fixture_sha}"
           jq -s -e 'length > 0 and all(.[]; . == ["--version"])' "${root}/fixture-bin/opencode-invocations.jsonl" >/dev/null

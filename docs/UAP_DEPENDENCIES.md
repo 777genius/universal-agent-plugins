@@ -51,7 +51,8 @@ The saved dependency workflow supports the 11 qualified local clients: Codex, Cl
 Cursor, Copilot, Kiro, Gemini, OpenCode, Cline, Windsurf, Grok Build and
 Kimi Code. `deps status` prints the scope, exact manifest/lock paths, supported
 targets and `excluded_targets`, including before `deps init`. ChatGPT is listed
-as `manual_preparation_only`. VS Code qualification is deferred by owner scope
+as `manual_preparation_only`. VS Code is frozen by owner decision; its new
+dependency qualification is excluded from this release
 and is reported as `dependency_management_deferred`; its existing imperative
 adapter and explicitly registered SDK APIs remain available. Initialization creates a private root when necessary
 and never overwrites an existing manifest.
