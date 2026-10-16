@@ -65,7 +65,7 @@ test('installable install-time fixture with no targets exposes all four automati
   for (const action of ['add', 'update', 'repair', 'remove']) {
     assert.equal(
       state.commands.value[action],
-      `npx universal-agent-plugins ${action} ${action === 'add' ? `github:example/targetless-fixture@${'a'.repeat(40)}` : targetlessFixture.name}`,
+      `npx universal-agent-plugins ${action === 'update' ? 'add' : action} ${action === 'add' || action === 'update' ? `github:example/targetless-fixture@${'a'.repeat(40)}` : targetlessFixture.name}`,
     );
     assert.equal(state.commands.value[action].includes('--target'), false);
   }

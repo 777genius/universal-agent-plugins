@@ -690,7 +690,7 @@
       "chatgptFinish": "Ouvrez ChatGPT, sélectionnez {name} dans les applications ou les plugins, connectez-le et démarrez une nouvelle discussion. La disponibilité dépend de votre compte et de votre espace de travail.",
       "expectedFallback": "Source de secours attendue : {source}.",
       "dependencySaving": {
-        "saved": "Enregistré pour l’utilisateur actuel. Remove concerne toutes les cibles enregistrées ; utilisez si nécessaire l’alias de dépendance affiché par la CLI.",
+        "saved": "Enregistré pour votre compte utilisateur dans uap.toml et uap.lock. Trouvez leurs chemins avec npx universal-agent-plugins deps status. Remove concerne toutes les cibles enregistrées.",
         "noSave": "Cette sélection utilise --no-save et n’enregistre aucune dépendance.",
         "local": "Les paquets locaux ne sont pas enregistrés comme dépendances portables.",
         "discovery": "Les sélecteurs discovery ne sont pas enregistrés comme dépendances.",

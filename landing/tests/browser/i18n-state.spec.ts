@@ -13,13 +13,20 @@ for (const locale of ['ru', 'uk'] as const) {
     await projections(page, registryFixture());
     await navigate(page, '/plugins/i18n-state-00/');
     const panel = page.locator('.install-panel');
-    await targets(page, panel, ['Codex', 'Cursor']);
-    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor');
+    const selectedNames = ['Codex', 'Cursor', 'Claude', 'Gemini', 'OpenCode'];
+    await targets(page, panel, selectedNames);
+    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
+    await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
+      wording('en')('registryUi.install.dependencySaving.saved'),
+    );
     await navigate(page, '/plugins/i18n-state-00/', locale);
     await expect(panel.getByRole('heading', { name: wording(locale)('registryUi.install.useWithYourAgent'), exact: true })).toBeVisible();
-    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor');
+    await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
+    await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
+      wording(locale)('registryUi.install.dependencySaving.saved'),
+    );
     await panel.locator('.app-multiselect__trigger').click();
-    for (const name of ['Codex', 'Cursor']) await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}\\s`) })).toBeChecked();
+    for (const name of selectedNames) await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}\\s`) })).toBeChecked();
     await page.keyboard.press('Escape');
     await automatic(page, panel, locale);
     await exactCommands(page, panel, 'i18n-state-00');
