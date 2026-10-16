@@ -221,7 +221,7 @@ func clineLockDirectoryIdentity(path string) (os.FileInfo, error) {
 		return nil, err
 	}
 	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
-		return nil, fmt.Errorf("Cline native config lock is not an exact directory: %w", ErrConcurrentChange)
+		return nil, fmt.Errorf("cline native config lock is not an exact directory: %w", ErrConcurrentChange)
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -233,7 +233,7 @@ func clineLockDirectoryIdentity(path string) (os.FileInfo, error) {
 		return nil, err
 	}
 	if !identity.IsDir() || !os.SameFile(before, identity) {
-		return nil, fmt.Errorf("Cline native config lock identity changed: %w", ErrConcurrentChange)
+		return nil, fmt.Errorf("cline native config lock identity changed: %w", ErrConcurrentChange)
 	}
 	return identity, nil
 }
