@@ -40,6 +40,32 @@ func (session *groupSession) stageGroupDeliveries() error {
 			return err
 		}
 	}
+	if err := session.requireRecordedRepairProjections(); err != nil {
+		session.cleanupStaged()
+		return err
+	}
+	return nil
+}
+
+// requireRecordedRepairProjections keeps a group repair of a package with
+// commands to its recorded bytes, as Repair does. When the staged tree
+// differs, the command rules have most likely changed: an intact target
+// stops with ErrProjectionRefreshRequired, since only update applies the
+// current rules, and a missing one, which neither can restore, is told to be
+// added again.
+func (session *groupSession) requireRecordedRepairProjections() error {
+	if !session.input.Repair {
+		return nil
+	}
+	for _, target := range session.planned {
+		if target.noChange || target.managed == nil || !target.input.Envelope.HasInstallerRenderedComponents() || target.delivery.ArtifactDigest == managedDigest(*target.managed) {
+			continue
+		}
+		if target.requireAbsent {
+			return fmt.Errorf("staged reconstruction for %s does not match the recorded package digest, most likely because the command rules changed since installation; remove the package and add it again", target.input.Client.ClientID)
+		}
+		return fmt.Errorf("repair %s: %w", target.input.Client.ClientID, ErrProjectionRefreshRequired)
+	}
 	return nil
 }
 

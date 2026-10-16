@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -276,6 +277,66 @@ func TestRepeatedAddRefusesAnOutdatedCommandProjection(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A group repair restores recorded bytes, as Repair does. After a rules
+// change it stops before any commit: an intact package with the typed error,
+// a removed one, which update cannot restore either, with advice to add it
+// again. Under the rules it was installed with it still passes.
+func TestRepairGroupRefusesAnOutdatedCommandProjection(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	repairGroup := func(service Service, input AddInput, operationGroupID string) error {
+		_, err := service.RepairGroup(ctx, GroupInput{Targets: []AddInput{input}, OperationGroupID: operationGroupID, Confirmed: true})
+		return err
+	}
+	t.Run("intact", func(t *testing.T) {
+		t.Parallel()
+		base, store, cursor := serviceFixture(t)
+		service, withhold := withRules(base, true)
+		input := commandInput(t, cursor)
+		installed, err := service.Add(ctx, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := repairGroup(service, input, "repair-same-rules"); err != nil {
+			t.Fatalf("repair under the same rules: %v", err)
+		}
+		before, err := os.ReadFile(store.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		*withhold = false
+		if err := repairGroup(service, input, "repair-intact"); !errors.Is(err, ErrProjectionRefreshRequired) {
+			t.Fatalf("repair of an intact outdated projection = %v", err)
+		}
+		assertUsecaseMissing(t, commandSkillPath(installed.Plan.ActivePath))
+		if after, err := os.ReadFile(store.Path); err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("refused repair changed state: %v\nbefore=%s\nafter=%s", err, before, after)
+		}
+	})
+	t.Run("missing", func(t *testing.T) {
+		t.Parallel()
+		base, _, _ := serviceFixture(t)
+		service, withhold := withRules(base, true)
+		codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
+		input := commandInput(t, codex)
+		added, err := service.AddGroup(ctx, GroupInput{Targets: []AddInput{input}, OperationGroupID: "missing-add", Confirmed: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		active := added.Targets[0].Plan.ActivePath
+		if err := os.RemoveAll(active); err != nil {
+			t.Fatal(err)
+		}
+		service.NativeObserver = &recoveryProbeNativeObserver{stager: service.Stager}
+		input.InstallationID = added.InstallationID
+		*withhold = false
+		if err := repairGroup(service, input, "repair-missing"); err == nil || errors.Is(err, ErrProjectionRefreshRequired) || !strings.Contains(err.Error(), "add it again") {
+			t.Fatalf("repair of a missing outdated projection = %v", err)
+		}
+		assertUsecaseMissing(t, active)
+	})
 }
 
 // Saved-dependency sync authorizes only "update", which RefreshProjection
