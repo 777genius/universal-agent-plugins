@@ -91,7 +91,7 @@ func TestKimiRemoveChangesExactlyTheRegistry(t *testing.T) {
 		t.Fatalf("foreign registry metadata lost: %s", body)
 	}
 	records, _ := document["plugins"].([]any)
-	var ids []string
+	ids := make([]string, 0, len(records))
 	for _, raw := range records {
 		record, _ := raw.(map[string]any)
 		ids = append(ids, record["id"].(string))
