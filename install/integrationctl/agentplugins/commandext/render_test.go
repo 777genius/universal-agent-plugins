@@ -74,6 +74,11 @@ func TestMarshalKeepsScalarTypes(t *testing.T) {
 		{Files: map[string][]byte{"skill.md": nil}},
 		{Files: map[string][]byte{`agents\openai.yaml`: nil}},
 		{Files: map[string][]byte{"agents/openai.yaml:stream": nil}},
+		{Files: map[string][]byte{"a\x01b": nil}},
+		{Files: map[string][]byte{"CON": nil}},
+		{Files: map[string][]byte{"agents/NUL.yaml": nil}},
+		{Files: map[string][]byte{"x.": nil}},
+		{Files: map[string][]byte{"agents /x": nil}},
 	} {
 		if _, err := commandext.Marshal(bad); err == nil {
 			t.Fatalf("Marshal(%+v) succeeded", bad)

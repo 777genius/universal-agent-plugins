@@ -16,7 +16,7 @@ import (
 const SkillFile = "SKILL.md"
 
 // windowsReserved are characters no Windows file name may hold. fs.ValidPath
-// accepts them, so Marshal rejects them itself.
+// accepts them, so portableFileName rejects them itself.
 const windowsReserved = `\:*?"<>|`
 
 // Render turns a command into the client-neutral skill: name and description
@@ -63,12 +63,29 @@ func Marshal(skill domain.RenderedSkill) (map[string][]byte, error) {
 	document.Write(skill.Body)
 	files := map[string][]byte{SkillFile: document.Bytes()}
 	for name, body := range skill.Files {
-		if !fs.ValidPath(name) || name == "." || strings.EqualFold(name, SkillFile) || strings.ContainsAny(name, windowsReserved) {
+		if !portableFileName(name) || strings.EqualFold(name, SkillFile) {
 			return nil, fmt.Errorf("rendered skill file %q is not a plain relative path", name)
 		}
 		files[name] = append([]byte(nil), body...)
 	}
 	return files, nil
+}
+
+// portableFileName reports whether a rendered file path can be written on
+// every client platform: slash-separated segments without a control
+// character, a character Windows forbids, a trailing dot or space, or a
+// reserved Windows device name.
+func portableFileName(name string) bool {
+	if !fs.ValidPath(name) || name == "." {
+		return false
+	}
+	for _, segment := range strings.Split(name, "/") {
+		if strings.ContainsAny(segment, windowsReserved) || strings.ContainsFunc(segment, func(r rune) bool { return r < 0x20 }) ||
+			strings.HasSuffix(segment, ".") || strings.HasSuffix(segment, " ") || domain.ReservedPhysicalStem(segment) {
+			return false
+		}
+	}
+	return true
 }
 
 func scalar(field domain.FrontmatterField) (*yaml.Node, error) {
