@@ -96,6 +96,11 @@ func (service Service) SwitchGroup(ctx context.Context, input GroupInput) (Group
 }
 
 func (service Service) RepairGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
+	result, err := service.repairGroup(ctx, input)
+	return result, forSavedDependency(err, groupEnvironmentAuthority(input))
+}
+
+func (service Service) repairGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	if service.StateStore == nil {
 		return GroupResult{}, fmt.Errorf("state store is required")
 	}

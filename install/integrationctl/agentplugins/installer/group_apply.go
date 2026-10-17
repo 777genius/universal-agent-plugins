@@ -74,6 +74,10 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 			result.Outcome = OutcomeConflict
 			result.Reason = "update_required"
 		}
+		if errors.Is(err, usecase.ErrProjectionPinChangeRequired) {
+			result.Outcome = OutcomeConflict
+			result.Reason = "pin_change_required"
+		}
 		return result, err
 	}
 	if pending && e.anyGroupHostHandoffPending(prepared) {

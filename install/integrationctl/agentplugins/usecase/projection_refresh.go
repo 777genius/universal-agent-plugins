@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 
@@ -15,12 +16,42 @@ import (
 // which the stager also returns.
 var ErrProjectionRefreshRequired = domain.ErrProjectionRefreshRequired
 
+// ErrProjectionPinChangeRequired is what a saved dependency gets instead of
+// ErrProjectionRefreshRequired: an update cannot refresh it, so the new rules
+// wait for its next pin change.
+var ErrProjectionPinChangeRequired = domain.ErrProjectionPinChangeRequired
+
+// forSavedDependency keeps a saved dependency from being told to run an update
+// that cannot help it.
+func forSavedDependency(err error, authority *domain.EnvironmentAuthority) error {
+	if authority == nil || !errors.Is(err, ErrProjectionRefreshRequired) {
+		return err
+	}
+	return ErrProjectionPinChangeRequired
+}
+
+// groupEnvironmentAuthority is the saved-dependency authority of a group, if
+// any of its targets carries one.
+func groupEnvironmentAuthority(input GroupInput) *domain.EnvironmentAuthority {
+	for _, target := range input.Targets {
+		if target.EnvironmentAuthority != nil {
+			return target.EnvironmentAuthority
+		}
+	}
+	return nil
+}
+
 // Update applies a new package revision. For an unchanged revision whose
 // delivered tree also depends on installer rendering, it first refreshes the
 // projection, so newer rules reach the installed tree; the ordinary update
 // then runs as before, including runtime preparation and resume. Its preview
 // is never reported as unchanged.
 func (service Service) Update(ctx context.Context, input AddInput) (AddResult, error) {
+	result, err := service.update(ctx, input)
+	return result, forSavedDependency(err, input.EnvironmentAuthority)
+}
+
+func (service Service) update(ctx context.Context, input AddInput) (AddResult, error) {
 	installationID, eligible, err := service.projectionRefreshTarget(input)
 	if err != nil {
 		return AddResult{}, err
@@ -55,6 +86,11 @@ func markRefreshPending(result *AddResult) {
 // update. A preview marks those targets as needing confirmation and never as
 // unchanged, and a refresh failure stops before the group update starts.
 func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
+	result, err := service.updateGroup(ctx, input)
+	return result, forSavedDependency(err, groupEnvironmentAuthority(input))
+}
+
+func (service Service) updateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	eligible := map[int]string{}
 	for index, target := range input.Targets {
 		installationID, ok, err := service.projectionRefreshTarget(target)

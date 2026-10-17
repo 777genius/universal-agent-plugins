@@ -13,6 +13,11 @@ import (
 // resolved package. It never uses a persisted target until that target has
 // been matched to the target resolver's current safe result.
 func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, error) {
+	result, err := service.repair(ctx, input)
+	return result, forSavedDependency(err, input.EnvironmentAuthority)
+}
+
+func (service Service) repair(ctx context.Context, input AddInput) (AddResult, error) {
 	session := &repairSession{service: service, ctx: ctx, input: input}
 	if err := session.validateRepairInput(); err != nil {
 		return AddResult{}, err

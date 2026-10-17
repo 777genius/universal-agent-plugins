@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -434,6 +435,25 @@ func TestClientsWithoutCommandsSkipTheRefresh(t *testing.T) {
 				t.Fatalf("update preview = %+v, %v", preview.Targets[0], err)
 			}
 		})
+	}
+}
+
+// A saved dependency cannot take new command rules through an update, so it
+// is told that they wait for its next pin change instead of being sent to an
+// update that cannot help; everyone else keeps the refresh error.
+func TestSavedDependencyIsNotSentToUpdate(t *testing.T) {
+	t.Parallel()
+	authority := &domain.EnvironmentAuthority{}
+	refresh := fmt.Errorf("target kiro: %w", ErrProjectionRefreshRequired)
+	if got := forSavedDependency(refresh, groupEnvironmentAuthority(GroupInput{Targets: []AddInput{{}, {EnvironmentAuthority: authority}}})); !errors.Is(got, ErrProjectionPinChangeRequired) || errors.Is(got, ErrProjectionRefreshRequired) {
+		t.Fatalf("saved dependency error = %v", got)
+	}
+	if got := forSavedDependency(refresh, nil); !errors.Is(got, ErrProjectionRefreshRequired) {
+		t.Fatalf("plain installation error = %v", got)
+	}
+	other := errors.New("unrelated")
+	if got := forSavedDependency(other, authority); !errors.Is(got, other) {
+		t.Fatalf("unrelated error = %v", got)
 	}
 }
 

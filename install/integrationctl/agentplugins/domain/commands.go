@@ -8,6 +8,11 @@ import "errors"
 // with this error instead.
 var ErrProjectionRefreshRequired = errors.New("command projection rules changed since installation; run `agentplugins update`")
 
+// ErrProjectionPinChangeRequired replaces ErrProjectionRefreshRequired for a
+// saved dependency. Its update cannot refresh the projection, so the new
+// command rules reach it only with its next pin change.
+var ErrProjectionPinChangeRequired = errors.New("command projection rules changed since installation; this saved dependency applies them at its next pin change")
+
 // ExtensionNamespace is the package directory reserved for agentplugins'
 // own content. Authors write CommandsDir and LockedRuntimeDir below it; the
 // installer writes ManagedStdioDir into the staged copy.

@@ -22,3 +22,19 @@ func TestProjectionRefreshRequiredIsAnUpdateConflict(t *testing.T) {
 		t.Fatalf("result = %+v, %v", result, err)
 	}
 }
+
+// A saved dependency cannot take new command rules through an update, so it
+// is not told to run one: its own reason carries no update next action, and
+// it is not an update requirement.
+func TestProjectionPinChangeIsNotAnUpdateRequirement(t *testing.T) {
+	t.Parallel()
+	wrapped := wrapLifecycleError(usecase.ErrProjectionPinChangeRequired)
+	if errors.Is(wrapped, ErrUpdateRequired) || errors.Is(wrapped, usecase.ErrProjectionRefreshRequired) {
+		t.Fatalf("wrapped error = %v", wrapped)
+	}
+	result, err := (&Engine{}).finishMutatingPackage(Result{Operation: OpUpdate}, usecase.AddResult{}, false, wrapped)
+	attachNextActions(&result)
+	if !errors.Is(err, usecase.ErrProjectionPinChangeRequired) || result.Outcome != OutcomeConflict || result.Reason != "pin_change_required" || len(result.NextActions) != 0 {
+		t.Fatalf("result = %+v, %v", result, err)
+	}
+}
