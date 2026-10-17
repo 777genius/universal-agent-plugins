@@ -19,6 +19,8 @@ Under the hood they still map into the same target system, generation contracts,
 - Gemini packaging: production-ready official Gemini CLI extension packaging lane through `generate|import|validate` and local `extensions link|config|disable|enable`
 - Gemini runtime: optional production-ready 9-hook Go runtime lane for `SessionStart`, `SessionEnd`, `BeforeModel`, `AfterModel`, `BeforeToolSelection`, `BeforeAgent`, `AfterAgent`, `BeforeTool`, and `AfterTool`, with dedicated deterministic runtime smoke and dedicated opt-in real CLI runtime smoke
 - Cursor: packaged plugin target with `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`; `cursor-workspace` remains the secondary repo-local `.cursor/` subset when you explicitly need workspace files instead of a package bundle
+- Grok: packaged plugin target with `.grok-plugin/plugin.json`, root `skills/**`, and optional wrapped `.mcp.json`
+- Kimi: packaged plugin target with `.kimi-plugin/plugin.json`, root `skills/**`, and optional inline MCP in the plugin manifest
 - OpenCode: workspace-config-only target with a stable repo-local local-plugin-loading subset for official-style plugin subtree ownership and shared package metadata, plus first-class beta standalone tools and permission-first passthrough config semantics; `custom_tools` remain beta
 
 Repo-local executable runtime boundary:
@@ -36,7 +38,7 @@ This workflow does not imply a universal package-management contract or packaged
 Use Homebrew to install the `plugin-kit-ai` CLI locally when possible, use `npm i -g plugin-kit-ai` as the official `public-beta` JavaScript ecosystem path, use `pipx install plugin-kit-ai` as the `public-beta` Python ecosystem path only when that release was published to PyPI, use `scripts/install.sh` as the verified fallback, and use `777genius/universal-agent-plugins/setup-plugin-kit-ai@v1` to bootstrap the same verified CLI in CI.
 
 Canonical authored inputs live under `plugin/`: `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, optional `plugin/launcher.yaml`, optional `plugin/skills/**`, optional `plugin/publish/**`, and `plugin/targets/<platform>/...`.
-Plugin-root `README.md`, Claude/Codex/Gemini/Cursor/OpenCode native config files, and other root manifests are generated managed artifacts and should be treated as generated outputs. Root `CLAUDE.md` and `AGENTS.md` are committed boundary docs that tell humans and agents to edit only `plugin/`.
+Plugin-root `README.md`, Claude/Codex/Gemini/Cursor/Grok/Kimi/OpenCode native config files, and other root manifests are generated managed artifacts and should be treated as generated outputs. Root `CLAUDE.md` and `AGENTS.md` are committed boundary docs that tell humans and agents to edit only `plugin/`.
 
 ## Canonical Production Lane
 
@@ -46,7 +48,7 @@ Run this exact sequence before shipping a plugin repo:
 plugin-kit-ai normalize .
 plugin-kit-ai generate .
 plugin-kit-ai generate --check .
-plugin-kit-ai validate . --platform <claude|codex-runtime|codex-package|cursor|opencode> --strict
+plugin-kit-ai validate . --platform <claude|codex-runtime|codex-package|cursor|opencode|grok|kimi> --strict
 ```
 
 Then run the fixture-driven smoke:
@@ -54,6 +56,8 @@ Then run the fixture-driven smoke:
 - Claude: run `plugin-kit-ai test . --platform claude --all`; generated launcher-based Claude projects already scaffold `fixtures/claude/{Stop,PreToolUse,UserPromptSubmit}.json` and matching `goldens/claude/*`, and `--update-golden` is only needed when you intentionally want to refresh that checked-in output contract
 - Codex: run `plugin-kit-ai test . --platform codex-runtime --event Notify`; generated launcher-based Codex runtime projects already scaffold `fixtures/codex-runtime/Notify.json` and matching `goldens/codex-runtime/*`, and `--update-golden` is only needed when you intentionally want to refresh that checked-in output contract
 - Cursor: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`
+- Grok: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.grok-plugin/plugin.json`, root `skills/**`, and optional wrapped `.mcp.json`
+- Kimi: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.kimi-plugin/plugin.json`, root `skills/**`, and optional inline MCP
 - OpenCode: run `make test-opencode-e2e-live` for the full stable live lane, or run `make test-opencode-live` for the loader smoke, `make test-opencode-cli-live` for stable real-model local-plugin-loading evidence, `make test-opencode-tools-live` for standalone-tools beta evidence, and `make test-opencode-mcp-live` for the shared portable MCP init proof; all remain opt-in and require `opencode` in `PATH`
 
 For interpreted runtimes, add the bootstrap step before `validate --strict`:
@@ -153,6 +157,28 @@ Reference implementation:
 
 - [examples/plugins/cursor-basic](../examples/plugins/cursor-basic)
 
+## Grok Packaged Plugin Path
+
+- Start from `plugin-kit-ai init --platform grok` or `plugin-kit-ai import --from grok`
+- Keep `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, and optional `plugin/skills/**` as the authored source of truth
+- Commit generated `.grok-plugin/plugin.json`, generated `skills/**` when portable skills are authored, and generated wrapped `.mcp.json` when portable MCP is authored
+- Treat this lane as the Grok packaged-plugin path in the current contract; phase 1 keeps `hooks/agents/commands/lsp` as target-native future work rather than pretending they are already part of the portable core
+
+Reference implementation:
+
+- [examples/plugins/grok-basic](../examples/plugins/grok-basic)
+
+## Kimi Packaged Plugin Path
+
+- Start from `plugin-kit-ai init --platform kimi` or `plugin-kit-ai import --from kimi`
+- Keep `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, and optional `plugin/skills/**` as the authored source of truth
+- Commit generated `.kimi-plugin/plugin.json` and generated `skills/**` when portable skills are authored; Kimi requires MCP servers inline in the plugin manifest and does not resolve MCP file refs
+- Treat this lane as the Kimi packaged-plugin path in the current contract; phase 1 keeps `commands/hooks/agents/systemPrompt` as target-native future work rather than pretending they are already part of the portable core
+
+Reference implementation:
+
+- [examples/plugins/kimi-basic](../examples/plugins/kimi-basic)
+
 ## What This Workflow Guarantees
 
 - normalized `plugin.yaml` with no unknown fields
@@ -163,6 +189,8 @@ Reference implementation:
 - OpenCode standalone tools beta evidence is recorded separately through the deterministic marker-based `test-opencode-tools-live` smoke path
 - OpenCode shared portable MCP initialization is evidenced through the deterministic `test-opencode-mcp-live` smoke path
 - Cursor packaged-plugin readiness is bounded to deterministic generate/import/validate behavior for `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`
+- Grok packaged-plugin readiness is bounded to deterministic generate/import/validate behavior for `.grok-plugin/plugin.json`, root `skills/**`, and optional wrapped `.mcp.json`. Live Grok CLI activation uses `grok plugin install --trust` and `grok plugin list --json`; a copy into `~/.grok/plugins` is the UserGrok load path, not the CLI registry
+- Kimi packaged-plugin readiness is bounded to deterministic generate/import/validate behavior for `.kimi-plugin/plugin.json`, root `skills/**`, and optional inline MCP. Installer activation copies into `~/.kimi-code/plugins/managed` and records `plugins/installed.json`; Kimi has no non-interactive plugin CLI
 
 ## Gemini Packaging Boundary
 

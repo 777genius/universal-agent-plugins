@@ -20,7 +20,10 @@ func TestClientRegistryDrivesTargetValidationOrderAndAliases(t *testing.T) {
 	if normalizeTarget("devin") != domain.ClientWindsurf || normalizeTarget("claude-code") != domain.ClientClaude {
 		t.Fatal("new client aliases were not normalized")
 	}
-	for _, id := range []string{"claude", "gemini", "opencode", "cline", "windsurf"} {
+	if normalizeTarget("grok-build") != domain.ClientGrok || normalizeTarget("kimi-code") != domain.ClientKimi {
+		t.Fatal("Grok/Kimi aliases were not normalized")
+	}
+	for _, id := range []string{"claude", "gemini", "opencode", "cline", "windsurf", "grok", "kimi"} {
 		if !strings.Contains(supportedTargetHelp(), id) {
 			t.Fatalf("target help missing %q: %s", id, supportedTargetHelp())
 		}

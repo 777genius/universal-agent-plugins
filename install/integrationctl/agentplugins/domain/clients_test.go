@@ -9,6 +9,7 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
 		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf,
+		ClientGrok, ClientKimi,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)
@@ -50,5 +51,13 @@ func TestNewClientsUsePreparedReadOnlyFoundation(t *testing.T) {
 	gemini, ok := ClientDefinitionFor(ClientGemini)
 	if !ok || gemini.Capabilities.PackageMode != PackageNative || gemini.DirectoryDelivery != "managed" || gemini.CatalogPackage != "native" || gemini.LegacyCatalogRequired {
 		t.Fatalf("Gemini client definition = %+v", gemini)
+	}
+	grok, ok := ClientDefinitionFor(ClientGrok)
+	if !ok || grok.Capabilities.PackageMode != PackageNative || grok.DirectoryDelivery != "managed" || grok.CatalogPackage != "native" || grok.LegacyCatalogRequired {
+		t.Fatalf("Grok client definition = %+v", grok)
+	}
+	kimi, ok := ClientDefinitionFor(ClientKimi)
+	if !ok || kimi.Capabilities.PackageMode != PackageNative || kimi.DirectoryDelivery != "managed" || kimi.CatalogPackage != "native" || kimi.LegacyCatalogRequired {
+		t.Fatalf("Kimi client definition = %+v", kimi)
 	}
 }

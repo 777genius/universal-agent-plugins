@@ -1177,3 +1177,96 @@ func commandArgv(commands []legacyports.Command) [][]string {
 	}
 	return result
 }
+
+func TestActivatorInstallsGrokThroughPluginCLI(t *testing.T) {
+	t.Parallel()
+	request := activationRequest(t, domain.ClientGrok)
+	request.BackendExecutable = "/test/bin/grok"
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
+	writeIdentityFile(t, filepath.Join(request.Delivery.ActivePath, ".grok-plugin", "plugin.json"), `{"name":"demo","version":"0.1.0"}`)
+	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
+		joined := strings.Join(command.Argv, " ")
+		if strings.HasSuffix(joined, "plugin list --json") {
+			return legacyports.CommandResult{Stdout: []byte(`[{"status":"installed","name":"demo","repo_key":"demo-abc","version":"0.1.0","path":"/tmp/installed/demo-abc","source":"/tmp/src","marketplace":null}]`)}
+		}
+		return legacyports.CommandResult{}
+	}}
+	outcome, err := (Activator{Runner: runner}).Activate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	want := [][]string{
+		{"/test/bin/grok", "plugin", "install", "--trust", request.Delivery.ActivePath},
+		{"/test/bin/grok", "plugin", "list", "--json"},
+	}
+	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v, want %#v", got, want)
+	}
+}
+
+func TestActivatorKeepsGrokManualWithoutCLI(t *testing.T) {
+	t.Parallel()
+	request := activationRequest(t, domain.ClientGrok)
+	writeIdentityFile(t, filepath.Join(request.Delivery.ActivePath, ".grok-plugin", "plugin.json"), `{"name":"demo","version":"0.1.0"}`)
+	outcome, err := (Activator{}).Activate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Activation != domain.ActivationManual || !strings.Contains(strings.Join(outcome.UserActions, "\n"), "grok plugin install --trust") {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	body, err := json.Marshal(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), request.Delivery.ActivePath) {
+		t.Fatalf("public JSON leaked local path: %s", body)
+	}
+}
+
+func TestActivatorUninstallsGrokThroughPluginCLI(t *testing.T) {
+	t.Parallel()
+	runner := &recordingRunner{}
+	request := domain.DeactivationRequest{
+		Client:            domain.DetectedClient{ClientID: domain.ClientGrok},
+		DeclaredName:      "demo",
+		CurrentActivation: domain.ActivationActive,
+		BackendExecutable: "/test/bin/grok",
+		Confirmed:         true,
+	}
+	outcome, err := (Activator{Runner: runner}).Deactivate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.ExternalRemovalComplete {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	want := [][]string{{"/test/bin/grok", "plugin", "uninstall", "--confirm", "demo"}}
+	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
+		t.Fatalf("commands = %#v, want %#v", got, want)
+	}
+}
+
+func TestActivatorRegistersKimiInstalledJSON(t *testing.T) {
+	t.Parallel()
+	request := activationRequest(t, domain.ClientKimi)
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}
+	writeIdentityFile(t, filepath.Join(request.Delivery.ActivePath, ".kimi-plugin", "plugin.json"), `{"name":"demo","version":"0.1.0"}`)
+	outcome, err := (Activator{}).Activate(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+	file, err := readKimiInstalled(request.Client.ConfigRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(file.Plugins) != 1 || file.Plugins[0].ID != "demo" || !samePath(file.Plugins[0].Root, request.Delivery.ActivePath) {
+		t.Fatalf("installed.json = %+v", file)
+	}
+}

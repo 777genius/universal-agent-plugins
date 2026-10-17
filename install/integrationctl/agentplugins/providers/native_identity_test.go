@@ -47,8 +47,8 @@ func TestNativeIdentityCursorReadsEveryAuthoritativeLocalManifest(t *testing.T) 
 
 	writeIdentityFile(t, filepath.Join(root, "foreign-path", ".cursor-plugin", "plugin.json"), `{"name":`)
 	observation, err = (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, nil)
-	if observation.State != domain.NativeIdentityIndeterminate || err == nil {
-		t.Fatalf("malformed observation = %+v, err = %v", observation, err)
+	if err != nil || observation.State != domain.NativeIdentityAbsent {
+		t.Fatalf("unreadable foreign sibling was treated as a proven claim: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -84,7 +84,6 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 		t.Fatalf("real collision was not caught alongside a foreign file: observation = %+v, err = %v", observation, err)
 	}
 
-	// A symlink entry must still fail closed.
 	if err := os.RemoveAll(filepath.Join(root, "foreign-path")); err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +91,8 @@ func TestNativeIdentityUnqualifiedPluginRootIgnoresForeignNonDirectoryEntries(t 
 		t.Fatal(err)
 	}
 	observation, err = observer.ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientCursor}, plan, managed)
-	if observation.State != domain.NativeIdentityIndeterminate {
-		t.Fatalf("symlink entry was not refused: observation = %+v, err = %v", observation, err)
+	if observation.State != domain.NativeIdentityUnmanaged || err != nil {
+		t.Fatalf("same-name symlink was not a collision: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -123,35 +122,85 @@ func TestNativeIdentityOpenCodeIgnoresForeignNonDirectoryEntries(t *testing.T) {
 	}
 }
 
-// TestNativeIdentityClaudeSkillsRegistryIgnoresForeignNonDirectoryEntries is
-// the Claude-specific counterpart: reproduces the exact reported scenario
-// (a bare .DS_Store in <CLAUDE_CONFIG_DIR>/skills blocking every plugin's
-// repair) against inspectClaudeSkillsRegistry directly.
-func TestNativeIdentityClaudeSkillsRegistryIgnoresForeignNonDirectoryEntries(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "skills")
-	plan := identityPlan(root)
+func TestNativeIdentityClaudePreparedIgnoresForeignSkillsNeighborhood(t *testing.T) {
+	config := filepath.Join(t.TempDir(), "claude-config")
+	skills := filepath.Join(config, "skills")
+	managed := filepath.Join(t.TempDir(), "managed", "clients", "claude")
+	plan := identityPlan(managed)
 	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".claude-plugin", "plugin.json"), `{"name":"demo"}`)
-	if err := os.WriteFile(filepath.Join(root, ".DS_Store"), []byte{0}, 0o600); err != nil {
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".claude-plugin", "marketplace.json"), `{"name":"`+managedMarketplaceName(plan.PhysicalArtifactID)+`","plugins":[{"name":"demo"}]}`)
+	if err := os.MkdirAll(filepath.Join(skills, "unrelated-empty-dir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
-	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
-	observation, err := observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
-	if err != nil || observation.State != domain.NativeIdentityManaged {
-		t.Fatalf("foreign .DS_Store blocked Claude skill classification: observation = %+v, err = %v", observation, err)
+	if err := os.WriteFile(filepath.Join(skills, ".DS_Store"), []byte{0}, 0o600); err != nil {
+		t.Fatal(err)
 	}
+	writeIdentityFile(t, filepath.Join(skills, "social-autoposter", "SKILL.md"), "---\nname: social-autoposter\ndescription: Neighbor\n---\n")
+	shared := filepath.Join(t.TempDir(), "shared-skill")
+	writeIdentityFile(t, filepath.Join(shared, "SKILL.md"), "---\nname: linked\ndescription: Linked\n---\n")
+	if err := os.MkdirAll(skills, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(shared, filepath.Join(skills, "linked-skill")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing-ccc"), filepath.Join(skills, "ccc")); err != nil {
+		t.Fatal(err)
+	}
+	owned := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observation, err := observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, owned)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("foreign Claude skills neighborhood blocked managed identity: observation = %+v, err = %v", observation, err)
+	}
+}
 
-	// A directory that legitimately has no manifest and no SKILL.md is still
-	// genuinely ambiguous and must remain refused (unchanged behavior).
+func TestNativeIdentityClaudeManagedSameNameIsCollision(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "managed", "clients", "claude")
+	plan := identityPlan(root)
+	writeIdentityFile(t, filepath.Join(root, "foreign-demo", ".claude-plugin", "marketplace.json"), `{"name":"`+managedMarketplaceName(plan.PhysicalArtifactID)+`","plugins":[{"name":"demo"}]}`)
+	observation, err := (NativeIdentityObserver{}).ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("same-name managed sibling was not a collision: observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityClaudeUnreadableManagedSiblingDoesNotBlock(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "managed", "clients", "claude")
+	plan := identityPlan(root)
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".claude-plugin", "marketplace.json"), `{"name":"`+managedMarketplaceName(plan.PhysicalArtifactID)+`","plugins":[{"name":"demo"}]}`)
 	if err := os.MkdirAll(filepath.Join(root, "unrelated-empty-dir"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	observation, err = observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, managed)
-	if observation.State != domain.NativeIdentityIndeterminate {
-		t.Fatalf("ambiguous foreign directory was not refused: observation = %+v, err = %v", observation, err)
+	writeIdentityFile(t, filepath.Join(root, "broken", "plugin.json"), `{"name":`)
+	owned := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observer := NativeIdentityObserver{Stager: acceptingPackageVerifier{}}
+	observation, err := observer.ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, owned)
+	if err != nil || observation.State != domain.NativeIdentityManaged {
+		t.Fatalf("unreadable foreign sibling blocked Claude classification: observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityClaudeLinkedSameNameIsCollision(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "managed", "clients", "claude")
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	plan := identityPlan(root)
+	foreign := filepath.Join(t.TempDir(), "foreign-plugin")
+	writeIdentityFile(t, filepath.Join(foreign, ".claude-plugin", "marketplace.json"), `{"name":"`+managedMarketplaceName(plan.PhysicalArtifactID)+`","plugins":[{"name":"demo"}]}`)
+	if err := os.Symlink(foreign, filepath.Join(root, "linked-demo")); err != nil {
+		t.Fatal(err)
+	}
+	observation, err := (NativeIdentityObserver{}).ObservePreparedIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("linked same-name plugin was not a collision: observation = %+v, err = %v", observation, err)
 	}
 }
 
@@ -423,7 +472,7 @@ func TestNativeIdentityPreservesNativeDiscoveryWhenPreparedRegistryBlocksOverall
 		wantError bool
 	}{
 		{name: "collision", manifest: `{"name":"demo"}`, wantState: domain.NativeIdentityUnmanaged},
-		{name: "malformed", manifest: `{"name":`, wantState: domain.NativeIdentityIndeterminate, wantError: true},
+		{name: "malformed", manifest: `{"name":`, wantState: domain.NativeIdentityAbsent},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
@@ -495,6 +544,32 @@ func TestNativeIdentityKiroManualPowerAuthorizesOnlyLocalPreparation(t *testing.
 	observation, err := (NativeIdentityObserver{}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientKiro}, plan, nil)
 	if err != nil || observation.State != domain.NativeIdentityAbsent {
 		t.Fatalf("observation = %+v, err = %v", observation, err)
+	}
+}
+
+func TestNativeIdentityGrokUsesPluginListJSON(t *testing.T) {
+	t.Parallel()
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryExecutable = "/test/bin/grok"
+	if err := os.MkdirAll(plan.ActivePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	writeIdentityFile(t, filepath.Join(plan.ActivePath, ".grok-plugin", "plugin.json"), `{"name":"demo"}`)
+	runner := &identityRunner{result: legacyports.CommandResult{Stdout: []byte(`[{"status":"installed","name":"demo","repo_key":"demo-abc","version":"0.1.0","path":"/tmp/installed/demo-abc","source":"/tmp/src","marketplace":null}]`)}}
+	observation, err := (NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(context.Background(), domain.DetectedClient{ClientID: domain.ClientGrok}, plan, nil)
+	if err != nil || observation.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("unowned listing = %+v err=%v", observation, err)
+	}
+	if !reflect.DeepEqual(runner.commands, [][]string{{"/test/bin/grok", "plugin", "list", "--json"}}) {
+		t.Fatalf("commands = %#v", runner.commands)
+	}
+
+	managed := &domain.ClientBinding{NativeObjects: []domain.NativeObjectOwnership{{Kind: "managed_package_directory", ManagedDigest: "sha256:owned"}}}
+	observation, err = (NativeIdentityObserver{Runner: runner, Stager: acceptingPackageVerifier{}}).ObserveNativeIdentity(
+		context.Background(), domain.DetectedClient{ClientID: domain.ClientGrok}, plan, managed,
+	)
+	if err != nil || observation.State != domain.NativeIdentityManaged || !observation.NativeDiscoveryReconciled {
+		t.Fatalf("owned listing = %+v err=%v", observation, err)
 	}
 }
 

@@ -16,6 +16,10 @@ func filesForPlatform(platform string, extras bool) ([]TemplateFile, bool) {
 		return cursorPlatformFiles(extras), true
 	case "cursor-workspace":
 		return cursorWorkspacePlatformFiles(extras), true
+	case "grok":
+		return grokPlatformFiles(extras), true
+	case "kimi":
+		return kimiPlatformFiles(extras), true
 	default:
 		return nil, false
 	}
@@ -120,5 +124,31 @@ func cursorWorkspacePlatformFiles(extras bool) []TemplateFile {
 	}
 	return append(files,
 		TemplateFile{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
+	)
+}
+
+func grokPlatformFiles(extras bool) []TemplateFile {
+	files := []TemplateFile{
+		{Path: authoredPath("README.md"), Template: "grok.README.md.tmpl", Extra: false},
+	}
+	if !extras {
+		return files
+	}
+	return append(files,
+		TemplateFile{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
+		TemplateFile{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
+	)
+}
+
+func kimiPlatformFiles(extras bool) []TemplateFile {
+	files := []TemplateFile{
+		{Path: authoredPath("README.md"), Template: "kimi.README.md.tmpl", Extra: false},
+	}
+	if !extras {
+		return files
+	}
+	return append(files,
+		TemplateFile{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
+		TemplateFile{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
 	)
 }

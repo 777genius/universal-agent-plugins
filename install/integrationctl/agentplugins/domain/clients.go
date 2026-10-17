@@ -21,6 +21,8 @@ const (
 	ClientOpenCode ClientID = "opencode"
 	ClientCline    ClientID = "cline"
 	ClientWindsurf ClientID = "windsurf"
+	ClientGrok     ClientID = "grok"
+	ClientKimi     ClientID = "kimi"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
@@ -79,6 +81,8 @@ var clientDefinitions = []ClientDefinition{
 	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported), ActivationAutomatic),
 	withActivation(clientDefinition(ClientCline, "Cline", "cline", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported), ActivationAutomatic),
 	clientDefinition(ClientWindsurf, "Windsurf / Devin", "windsurf", "prepared", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared),
+	clientDefinition(ClientGrok, "Grok Build", "grok", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported),
+	clientDefinition(ClientKimi, "Kimi Code", "kimi", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {

@@ -61,6 +61,11 @@ func (activator Activator) AutomaticallyActivates(request domain.ActivationReque
 		return strings.TrimSpace(request.Client.ConfigRoot) != "" && openCodeNativeComponents(request.Plan.Components)
 	case domain.ClientGemini:
 		return strings.TrimSpace(request.Client.ConfigRoot) != "" && geminiNativeComponents(request.Plan.Components)
+	case domain.ClientKimi:
+		return strings.TrimSpace(request.Client.ConfigRoot) != "" && openCodeNativeComponents(request.Plan.Components)
+	case domain.ClientGrok:
+		return strings.TrimSpace(request.Client.ConfigRoot) != "" && openCodeNativeComponents(request.Plan.Components) &&
+			activationObservable(request, activator.Runner)
 	case domain.ClientWindsurf:
 		return strings.TrimSpace(request.Client.ConfigRoot) != "" && len(windsurfObjects(request.Delivery.NativeObjects)) > 0
 	}
@@ -102,29 +107,44 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 	switch request.Client.ClientID {
 	case domain.ClientCursor:
 		return outcome, nil
-	case domain.ClientClaude:
-		// The official @skills-dir flow is removed by the transaction kernel's
-		// owned-directory removal. A confirmed mutation first verifies the exact
-		// id and installPath through the trusted Claude CLI; previews stay inert.
-		if !request.Confirmed {
-			outcome.UserActions = append(outcome.UserActions, "agentplugins will verify and remove its managed Claude Code @skills-dir plugin")
+	case domain.ClientGrok:
+		if request.ExternalUninstalled {
+			outcome.ExternalRemovalComplete = true
 			return outcome, nil
 		}
 		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
-			return outcome, fmt.Errorf("trusted Claude Code CLI is required for exact removal verification")
-		}
-		listed, err := activator.runClaudeListResult(ctx, request.BackendExecutable, request.Client.ConfigRoot, request.ManagedArtifactPath)
-		if err != nil {
-			return outcome, fmt.Errorf("verify Claude Code plugin before removal: %w", err)
-		}
-		switch claudePluginStatus(listed.Stdout, request.DeclaredName, request.ManagedArtifactPath) {
-		case claudeStatusInstalled:
-		case claudeStatusAbsent:
 			if request.CurrentActivation == domain.ActivationActive {
-				return outcome, fmt.Errorf("%w: managed Claude Code plugin is absent before removal", errRecognizedNegativeEvidence)
+				return requireExternalUninstall(outcome, false, fmt.Sprintf("run `grok plugin uninstall --confirm %s`, then rerun remove with `--external-uninstalled`", request.DeclaredName)), nil
 			}
-		default:
-			return outcome, fmt.Errorf("Claude Code plugin identity is not exact before removal")
+			return outcome, nil
+		}
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will uninstall the managed Grok plugin")
+			return outcome, nil
+		}
+		if err := activator.deactivateGrok(ctx, request); err != nil {
+			return outcome, err
+		}
+		outcome.ExternalRemovalComplete = true
+		return outcome, nil
+	case domain.ClientKimi:
+		if err := removeKimiInstalledRecord(request.Client.ConfigRoot, request.DeclaredName, request.ManagedArtifactPath); err != nil {
+			return outcome, err
+		}
+		return outcome, nil
+	case domain.ClientClaude:
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will uninstall the managed Claude Code marketplace plugin")
+			return outcome, nil
+		}
+		if strings.TrimSpace(request.PhysicalArtifactID) == "" {
+			return outcome, fmt.Errorf("managed Claude Code marketplace identity is missing")
+		}
+		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+			return outcome, fmt.Errorf("trusted Claude Code CLI is required to uninstall the managed marketplace plugin")
+		}
+		if err := activator.deactivateClaude(ctx, request); err != nil {
+			return outcome, err
 		}
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil
@@ -347,6 +367,47 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		outcome.UserActions = append(outcome.UserActions, "register the prepared package in Cursor and verify it is visible before using its components")
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("open Cursor and register %s, then reload Cursor and verify %s is visible", request.Delivery.ActivePath, request.DeclaredName))
 		return outcome, nil
+	case domain.ClientGrok:
+		if err := verifyPackagedPluginRoot(request.Client.ClientID, request.Delivery.ActivePath, request.DeclaredName); err != nil {
+			return failedActivation(outcome, fmt.Sprintf("confirm %s is present at %s", request.DeclaredName, request.Delivery.ActivePath), err)
+		}
+		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
+			outcome.Activation = domain.ActivationManual
+			outcome.UserActions = append(outcome.UserActions, "install the prepared package with `grok plugin install --trust`, then verify it with `grok plugin list`")
+			outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("run `grok plugin install --trust %s`, then `grok plugin list --json`", request.Delivery.ActivePath))
+			return outcome, nil
+		}
+		if request.VerifyOnly {
+			if err := activator.verifyGrok(ctx, request); err != nil {
+				if errors.Is(err, errGrokListContractUnknown) {
+					return manualGrokVerification(outcome, request), nil
+				}
+				return failedActivation(outcome, fmt.Sprintf("verify with `%s plugin list --json`", request.BackendExecutable), err)
+			}
+			outcome.Activation = domain.ActivationActive
+			outcome.Verification = domain.VerificationInstalled
+			return outcome, nil
+		}
+		if err := activator.activateGrok(ctx, request); err != nil {
+			if errors.Is(err, errGrokListContractUnknown) {
+				return manualGrokVerification(outcome, request), nil
+			}
+			return failedActivation(outcome, fmt.Sprintf("run `grok plugin install --trust %s`, then verify with `%s plugin list --json`", request.Delivery.ActivePath, request.BackendExecutable), err)
+		}
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		return outcome, nil
+	case domain.ClientKimi:
+		if err := verifyPackagedPluginRoot(request.Client.ClientID, request.Delivery.ActivePath, request.DeclaredName); err != nil {
+			return failedActivation(outcome, fmt.Sprintf("confirm %s is present at %s", request.DeclaredName, request.Delivery.ActivePath), err)
+		}
+		if err := upsertKimiInstalledRecord(request.Client.ConfigRoot, request.DeclaredName, request.Delivery.ActivePath); err != nil {
+			return failedActivation(outcome, fmt.Sprintf("register %s in Kimi installed.json", request.DeclaredName), err)
+		}
+		outcome.UserActions = append(outcome.UserActions, "reload Kimi Code or run `/plugins reload` so the managed package is picked up")
+		outcome.Activation = domain.ActivationActive
+		outcome.Verification = domain.VerificationInstalled
+		return outcome, nil
 	case domain.ClientCodex:
 		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
 			outcome.Activation = domain.ActivationManual
@@ -376,10 +437,18 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 		return outcome, nil
 	case domain.ClientClaude:
 		if strings.TrimSpace(request.BackendExecutable) == "" || activator.Runner == nil {
-			return failedActivation(outcome, "install Claude Code CLI and retry exact @skills-dir verification", fmt.Errorf("trusted Claude Code CLI is required"))
+			return failedActivation(outcome, "install Claude Code CLI and retry managed marketplace installation", fmt.Errorf("trusted Claude Code CLI is required"))
 		}
-		if err := activator.verifyClaude(ctx, request); err != nil {
-			return failedActivation(outcome, fmt.Sprintf("verify with `%s plugin list --json`", request.BackendExecutable), err)
+		if request.VerifyOnly {
+			if err := activator.verifyClaude(ctx, request); err != nil {
+				return failedActivation(outcome, fmt.Sprintf("verify with `%s plugin list --json`", request.BackendExecutable), err)
+			}
+			outcome.Activation = domain.ActivationActive
+			outcome.Verification = domain.VerificationInstalled
+			return outcome, nil
+		}
+		if err := activator.activateClaude(ctx, request); err != nil {
+			return failedActivation(outcome, fmt.Sprintf("run Claude Code activation again for the prepared package at %s, then verify with `%s plugin list --json`", request.Delivery.ActivePath, request.BackendExecutable), err)
 		}
 		outcome.Activation = domain.ActivationActive
 		outcome.Verification = domain.VerificationInstalled
@@ -639,6 +708,76 @@ func (activator Activator) verifyCodex(ctx context.Context, request domain.Activ
 	}
 }
 
+func (activator Activator) activateClaude(ctx context.Context, request domain.ActivationRequest) error {
+	if _, err := prepareClaudeActivationProbe(request); err != nil {
+		return fmt.Errorf("prepare Claude Code marketplace installation: %w", err)
+	}
+	configRoot := filepath.Clean(strings.TrimSpace(request.Client.ConfigRoot))
+	marketplace := managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	pluginSpec := request.DeclaredName + "@" + marketplace
+	if request.Replacing {
+		if _, err := activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "marketplace", "update", marketplace); err != nil {
+			if ctx.Err() != nil {
+				return err
+			}
+			if _, fallbackErr := activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "marketplace", "add", request.Delivery.ActivePath); fallbackErr != nil {
+				return fmt.Errorf("refresh Claude Code marketplace: %v; fallback registration: %w", err, fallbackErr)
+			}
+		}
+		if err := activator.removeClaudePlugin(ctx, request.BackendExecutable, configRoot, pluginSpec); err != nil {
+			return err
+		}
+	} else if _, err := activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "marketplace", "add", request.Delivery.ActivePath); err != nil {
+		if ctx.Err() != nil {
+			return err
+		}
+		if _, fallbackErr := activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "marketplace", "update", marketplace); fallbackErr != nil {
+			return fmt.Errorf("register Claude Code marketplace: %v; fallback refresh: %w", err, fallbackErr)
+		}
+	}
+	if _, err := activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "install", pluginSpec, "--scope", "user"); err != nil {
+		if !request.Replacing && ctx.Err() == nil {
+			_, _ = activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "marketplace", "remove", marketplace)
+		}
+		return fmt.Errorf("activate Claude Code plugin: %w", err)
+	}
+	return activator.verifyClaude(ctx, request)
+}
+
+func (activator Activator) deactivateClaude(ctx context.Context, request domain.DeactivationRequest) error {
+	configRoot := filepath.Clean(strings.TrimSpace(request.Client.ConfigRoot))
+	if !filepath.IsAbs(configRoot) {
+		return fmt.Errorf("absolute Claude Code config root is required")
+	}
+	marketplace := managedMarketplaceName(request.PhysicalArtifactID)
+	pluginSpec := request.DeclaredName + "@" + marketplace
+	if err := activator.removeClaudePlugin(ctx, request.BackendExecutable, configRoot, pluginSpec); err != nil {
+		return err
+	}
+	remove, err := activator.runClaudeManagedResult(ctx, request.BackendExecutable, configRoot, "plugin", "marketplace", "remove", marketplace)
+	if err != nil && !claudeAbsentOutput(remove, "is not registered", "not found", "not configured") {
+		return fmt.Errorf("remove managed Claude Code marketplace %s: %w", marketplace, err)
+	}
+	return nil
+}
+
+func (activator Activator) removeClaudePlugin(ctx context.Context, executable, configRoot, pluginSpec string) error {
+	remove, err := activator.runClaudeManagedResult(ctx, executable, configRoot, "plugin", "uninstall", pluginSpec, "--scope", "user")
+	if err != nil && !claudeAbsentOutput(remove, "is not installed", "not found", "not enabled") {
+		return fmt.Errorf("remove managed Claude Code plugin %s: %w", pluginSpec, err)
+	}
+	return nil
+}
+
+func claudeAbsentOutput(result legacyports.CommandResult, fragments ...string) bool {
+	for _, fragment := range fragments {
+		if commandOutputContains(result, fragment) {
+			return true
+		}
+	}
+	return false
+}
+
 func (activator Activator) verifyClaude(ctx context.Context, request domain.ActivationRequest) error {
 	probe, err := prepareClaudeActivationProbe(request)
 	if err != nil {
@@ -648,11 +787,12 @@ func (activator Activator) verifyClaude(ctx context.Context, request domain.Acti
 	if err != nil {
 		return fmt.Errorf("verify Claude Code plugin listing: %w", err)
 	}
-	switch claudePluginStatus(listed.Stdout, request.DeclaredName, probe.activePath) {
+	pluginSpec := request.DeclaredName + "@" + managedMarketplaceName(request.Plan.PhysicalArtifactID)
+	switch claudePluginStatus(listed.Stdout, request.DeclaredName, managedMarketplaceName(request.Plan.PhysicalArtifactID)) {
 	case claudeStatusInstalled:
 		return nil
 	case claudeStatusAbsent, claudeStatusCollision:
-		return fmt.Errorf("%w: verify Claude Code plugin listing: %s@skills-dir is not enabled at the managed path", errRecognizedNegativeEvidence, request.DeclaredName)
+		return fmt.Errorf("%w: verify Claude Code plugin listing: %s is not enabled", errRecognizedNegativeEvidence, pluginSpec)
 	default:
 		return fmt.Errorf("Claude Code plugin list output is not recognized")
 	}
@@ -731,15 +871,22 @@ func (activator Activator) runClientResult(ctx context.Context, client, executab
 	return result, nil
 }
 
-func (activator Activator) runClaudeListResult(ctx context.Context, executable, configRoot, activePath string) (legacyports.CommandResult, error) {
+func (activator Activator) runClaudeManagedResult(ctx context.Context, executable, configRoot string, args ...string) (legacyports.CommandResult, error) {
+	if err := ctx.Err(); err != nil {
+		return legacyports.CommandResult{}, err
+	}
 	if activator.Runner == nil {
 		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
 	}
-	command, err := claudeListCommand(executable, configRoot, activePath)
+	command, err := claudeManagedCommand(executable, configRoot, args...)
 	if err != nil {
 		return legacyports.CommandResult{}, err
 	}
 	return activator.runPreparedClaudeListResult(ctx, command)
+}
+
+func (activator Activator) runClaudeListResult(ctx context.Context, executable, configRoot string) (legacyports.CommandResult, error) {
+	return activator.runClaudeManagedResult(ctx, executable, configRoot, "plugin", "list", "--json")
 }
 
 func (activator Activator) runPreparedClaudeListResult(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -888,7 +1035,7 @@ const (
 	claudeStatusCollision
 )
 
-func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
+func claudePluginStatus(body []byte, name, marketplace string) claudeStatus {
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
 	parsed, err := decodeUniqueJSONValue(decoder)
@@ -902,8 +1049,12 @@ func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 	if !ok {
 		return claudeStatusUnknown
 	}
-	expectedID := name + "@skills-dir"
-	expectedPath := filepath.Clean(activePath)
+	name = strings.TrimSpace(name)
+	marketplace = strings.TrimSpace(marketplace)
+	if name == "" || marketplace == "" {
+		return claudeStatusUnknown
+	}
+	expectedID := name + "@" + marketplace
 	seen := map[string]struct{}{}
 	found := false
 	for _, value := range entries {
@@ -926,7 +1077,7 @@ func claudePluginStatus(body []byte, name, activePath string) claudeStatus {
 		if id != expectedID {
 			continue
 		}
-		if filepath.Clean(installPath) != expectedPath || scope != "user" {
+		if scope != "user" {
 			return claudeStatusCollision
 		}
 		if found {
@@ -1147,7 +1298,7 @@ func activationObservable(request domain.ActivationRequest, runner CommandRunner
 		return false
 	}
 	switch request.Client.ClientID {
-	case domain.ClientCodex, domain.ClientClaude, domain.ClientCopilot, domain.ClientVSCode:
+	case domain.ClientCodex, domain.ClientClaude, domain.ClientCopilot, domain.ClientVSCode, domain.ClientGrok:
 		return true
 	case domain.ClientKiro:
 		if !kiroNativeComponents(request.Plan.Components) || !isKiroCLI(request.BackendExecutable) {
@@ -1171,6 +1322,16 @@ func attestedUnknownVerification(outcome domain.ActivationOutcome, request domai
 	outcome.Verification = domain.VerificationInstalled
 	outcome.ActivationAttested = true
 	return outcome, true
+}
+
+func manualGrokVerification(outcome domain.ActivationOutcome, request domain.ActivationRequest) domain.ActivationOutcome {
+	if attested, ok := attestedUnknownVerification(outcome, request); ok {
+		return attested
+	}
+	outcome.Activation = domain.ActivationManual
+	outcome.UserActions = []string{"confirm the managed plugin is installed and enabled in Grok Build"}
+	outcome.LocalActions = []string{fmt.Sprintf("the `%s plugin list --json` output contract was not recognized; inspect %s manually", request.BackendExecutable, request.DeclaredName)}
+	return outcome
 }
 
 func manualCodexVerification(outcome domain.ActivationOutcome, request domain.ActivationRequest) domain.ActivationOutcome {
@@ -1206,4 +1367,35 @@ func manualCopilotVerification(outcome domain.ActivationOutcome, request domain.
 func commandOutputContains(result legacyports.CommandResult, fragment string) bool {
 	output := string(result.Stdout) + "\n" + string(result.Stderr)
 	return strings.Contains(strings.ToLower(output), strings.ToLower(fragment))
+}
+
+func verifyPackagedPluginRoot(clientID domain.ClientID, pluginRoot, declaredName string) error {
+	manifests := []string{filepath.Join(pluginRoot, ".grok-plugin", "plugin.json")}
+	if clientID == domain.ClientKimi {
+		manifests = []string{
+			filepath.Join(pluginRoot, "kimi.plugin.json"),
+			filepath.Join(pluginRoot, ".kimi-plugin", "plugin.json"),
+		}
+	}
+	var last error
+	for _, path := range manifests {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			last = err
+			continue
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(body, &doc); err != nil {
+			return fmt.Errorf("parse plugin manifest: %w", err)
+		}
+		name, _ := doc["name"].(string)
+		if strings.TrimSpace(name) != strings.TrimSpace(declaredName) {
+			return fmt.Errorf("plugin manifest name %q does not match %q", name, declaredName)
+		}
+		return nil
+	}
+	if last == nil {
+		last = fmt.Errorf("plugin manifest is missing")
+	}
+	return last
 }

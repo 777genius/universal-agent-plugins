@@ -44,12 +44,12 @@ Build custom plugin logic - Advanced:
   Plain init remains as a legacy compatibility path for the older codex-runtime plus Go starter.
 
 Already have native config:
-  Use plugin-kit-ai import to bring current Claude/Codex/Gemini/OpenCode/Cursor native files into the package-standard authored layout.
+  Use plugin-kit-ai import to bring current Claude/Codex/Gemini/OpenCode/Cursor/Grok/Kimi native files into the package-standard authored layout.
   init is for creating a new package-standard project, not for preserving native files as the authored source of truth.
 
 Public flags:
   --template   Recommended start: "online-service", "local-tool", or "custom-logic".
-  --platform   Advanced override: "codex-runtime" (default), "codex-package", "claude", "gemini", "opencode", "cursor", or "cursor-workspace".
+  --platform   Advanced override: "codex-runtime" (default), "codex-package", "claude", "gemini", "opencode", "cursor", "cursor-workspace", "grok", or "kimi".
   --runtime    Supported: "go" (default), "python", "node", "shell" for launcher-based targets only.
   --typescript Generate a TypeScript scaffold on top of the node runtime lane (requires --runtime node).
   --runtime-package
@@ -74,7 +74,7 @@ func newInitCmd(runner initCommandRunner) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&flags.template, "template", "", `recommended start ("online-service", "local-tool", or "custom-logic")`)
-	cmd.Flags().StringVar(&flags.platform, "platform", "codex-runtime", `target lane ("codex-runtime", "codex-package", "claude", "gemini", "opencode", "cursor", or "cursor-workspace")`)
+	cmd.Flags().StringVar(&flags.platform, "platform", "codex-runtime", `target lane ("codex-runtime", "codex-package", "claude", "gemini", "opencode", "cursor", "cursor-workspace", "grok", or "kimi")`)
 	cmd.Flags().StringVar(&flags.runtime, "runtime", "go", `runtime ("go", "python", "node", or "shell")`)
 	cmd.Flags().BoolVar(&flags.typescript, "typescript", false, "generate a TypeScript scaffold on top of the node runtime lane")
 	cmd.Flags().BoolVar(&flags.runtimePackage, "runtime-package", false, "for --runtime python or --runtime node, import the shared plugin-kit-ai-runtime package instead of vendoring the helper file")

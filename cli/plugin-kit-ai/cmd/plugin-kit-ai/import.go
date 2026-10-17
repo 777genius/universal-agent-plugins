@@ -24,6 +24,8 @@ Codex import materializes either the official package lane or the local runtime 
 Gemini import backfills the extension package layout and may preserve an optional launcher-based Go runtime lane when that authored project already uses one. That runtime lane now exposes a production-ready 9-hook surface, but it still does not imply blanket Gemini runtime parity for future hooks beyond the promoted contract.
 OpenCode import is workspace-config-only in the current contract: it normalizes project-native JSON/JSONC config, commands, agents, themes, local plugin code, plugin-local package metadata, compatible skill roots, and optional user-scope OpenCode sources into the canonical package-standard layout.
 Cursor import defaults to the packaged plugin lane through .cursor-plugin/plugin.json, root skills/, and optional .mcp.json. Use --from cursor-workspace when you intentionally want the repo-local .cursor workspace subset instead.
+Grok import reads .grok-plugin/plugin.json plus a wrapped MCP sidecar.
+Kimi import reads .kimi-plugin/plugin.json or kimi.plugin.json and requires MCP servers inline.
 
 Use --source to import from a remote or external source reference such as github:owner/repo@ref//subdir into the destination path.`,
 	Args: cobra.MaximumNArgs(1),
@@ -52,7 +54,7 @@ Use --source to import from a remote or external source reference such as github
 
 func init() {
 	importCmd.Flags().StringVar(&importSource, "source", "", "native source reference to import from (local path, github:owner/repo@ref//subdir, or git URL with optional #ref)")
-	importCmd.Flags().StringVar(&importFrom, "from", "", `source platform ("claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", or "cursor-workspace"; omit to auto-detect current native layouts)`)
+	importCmd.Flags().StringVar(&importFrom, "from", "", `source platform ("claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", "grok", or "kimi"; omit to auto-detect current native layouts)`)
 	importCmd.Flags().BoolVarP(&importForce, "force", "f", false, "overwrite plugin/plugin.yaml if it already exists")
 	importCmd.Flags().BoolVar(&importIncludeUserScope, "include-user-scope", false, "include explicit user-scope native sources when supported by the import target")
 }

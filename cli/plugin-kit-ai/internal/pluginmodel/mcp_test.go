@@ -24,6 +24,8 @@ servers:
       - gemini
       - opencode
       - cursor
+      - grok
+      - kimi
     overrides:
       gemini:
         excludeTools:
@@ -43,6 +45,8 @@ servers:
       - opencode
       - cursor
       - cursor-workspace
+      - grok
+      - kimi
 `))
 	if err != nil {
 		t.Fatal(err)
@@ -100,6 +104,27 @@ servers:
 	cursorArgs, ok := cursorLocal["args"].([]any)
 	if !ok || len(cursorArgs) != 1 || cursorArgs[0] != "./server.mjs" {
 		t.Fatalf("cursor local-tools args = %#v", cursorLocal["args"])
+	}
+	for _, target := range []string{"grok", "kimi"} {
+		projected, err := mcp.RenderForTarget(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		local, ok := projected["local-tools"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s local-tools = %#v", target, projected["local-tools"])
+		}
+		args, ok := local["args"].([]any)
+		if !ok || len(args) != 1 || args[0] != "./server.mjs" {
+			t.Fatalf("%s local-tools args = %#v", target, local["args"])
+		}
+		docs, ok := projected["docs"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s docs = %#v", target, projected["docs"])
+		}
+		if got, _ := docs["type"].(string); got != "http" {
+			t.Fatalf("%s docs type = %q, want http", target, got)
+		}
 	}
 	cursorWorkspace, err := mcp.RenderForTarget("cursor-workspace")
 	if err != nil {

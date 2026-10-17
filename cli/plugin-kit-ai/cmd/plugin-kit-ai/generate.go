@@ -22,7 +22,9 @@ var generateCmd = &cobra.Command{
 Claude and Codex runtime/package lanes generate their managed native artifacts from the package graph.
 Gemini generation always produces the native extension package artifacts and may also carry the optional Go runtime lane when the authored project includes it; that lane now exposes a production-ready 9-hook runtime surface, but it still does not imply blanket runtime parity for future hooks beyond the promoted contract.
 OpenCode generation is workspace-config-only: it produces opencode.json plus mirrored skills, commands, agents, themes, local plugin code, and plugin-local package metadata without introducing a launcher/runtime contract.
-Cursor generation now defaults to the packaged plugin lane: it produces .cursor-plugin/plugin.json plus managed skills/ and optional .mcp.json from canonical portable inputs. Use target cursor-workspace only when you intentionally need repo-local .cursor config generation and mirrored .cursor/rules/**.`,
+Cursor generation now defaults to the packaged plugin lane: it produces .cursor-plugin/plugin.json plus managed skills/ and optional .mcp.json from canonical portable inputs. Use target cursor-workspace only when you intentionally need repo-local .cursor config generation and mirrored .cursor/rules/**.
+Grok generation produces .grok-plugin/plugin.json plus managed skills/ and a wrapped .mcp.json sidecar.
+Kimi generation produces .kimi-plugin/plugin.json plus managed skills/, with MCP servers inlined in the manifest.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		root := "."
@@ -50,6 +52,6 @@ Cursor generation now defaults to the packaged plugin lane: it produces .cursor-
 }
 
 func init() {
-	generateCmd.Flags().StringVar(&generateTarget, "target", "all", `generate target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", or "cursor-workspace")`)
+	generateCmd.Flags().StringVar(&generateTarget, "target", "all", `generate target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", "grok", or "kimi")`)
 	generateCmd.Flags().BoolVar(&generateCheck, "check", false, "fail if generated artifacts are out of date")
 }

@@ -3,6 +3,7 @@ package planner
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -138,6 +139,34 @@ func TestPlannerCarriesNonFatalLoaderDiagnosticsToPlan(t *testing.T) {
 	}
 }
 
+func TestPlannerClaudeDeliversToManagedMarketplaceRootNotSkills(t *testing.T) {
+	t.Parallel()
+	config := filepath.Join(t.TempDir(), ".claude")
+	if err := os.MkdirAll(filepath.Join(config, "skills"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	managed, err := filepath.Abs(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := detectedClient(domain.ClientClaude, config)
+	client.ExecutablePath = "/test/bin/claude"
+	plan, err := (Planner{ManagedRoot: managed}).Plan(context.Background(), testEnvelope(), client, domain.ScopeUser, "demo-0123456789ab")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(managed, "clients", "claude", "demo-0123456789ab")
+	if plan.ActivePath != want || plan.TargetRoot != filepath.Dir(want) || plan.Status != domain.PlanReady {
+		t.Fatalf("plan = %+v, want managed marketplace root %s", plan, want)
+	}
+	if strings.Contains(plan.ActivePath, string(filepath.Separator)+"skills"+string(filepath.Separator)) || strings.HasSuffix(plan.ActivePath, string(filepath.Separator)+"skills") {
+		t.Fatalf("Claude planner still targeted skills: %s", plan.ActivePath)
+	}
+	if plan.NativeRegistryRoot != config || plan.NativeRegistryExecutable != "/test/bin/claude" {
+		t.Fatalf("native registry = root %q executable %q", plan.NativeRegistryRoot, plan.NativeRegistryExecutable)
+	}
+}
+
 func TestPlannerUsesNativeCursorTargetAndDoesNotExposeItInJSON(t *testing.T) {
 	t.Parallel()
 	config := filepath.Join(t.TempDir(), ".cursor")
@@ -159,6 +188,49 @@ func TestPlannerUsesNativeCursorTargetAndDoesNotExposeItInJSON(t *testing.T) {
 	}
 	if strings.Contains(string(body), config) {
 		t.Fatalf("public JSON leaked path: %s", body)
+	}
+}
+
+func TestPlannerUsesNativeGrokAndKimiTargets(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		id     domain.ClientID
+		home   string
+		active []string
+	}{
+		{id: domain.ClientGrok, home: ".grok", active: []string{"plugins"}},
+		{id: domain.ClientKimi, home: ".kimi-code", active: []string{"plugins", "managed"}},
+	} {
+		tc := tc
+		t.Run(string(tc.id), func(t *testing.T) {
+			t.Parallel()
+			config := filepath.Join(t.TempDir(), tc.home)
+			planner := Planner{ManagedRoot: t.TempDir()}
+			plan, err := planner.Plan(context.Background(), testEnvelope(), detectedClient(tc.id, config), domain.ScopeUser, "demo-0123456789ab")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := filepath.Join(append([]string{config}, append(tc.active, "demo-0123456789ab")...)...)
+			if plan.ActivePath != want || plan.Status != domain.PlanReady || plan.PackageMode != domain.PackageNative {
+				t.Fatalf("plan = %+v, want ready active %s", plan, want)
+			}
+			if plan.DeclaredName != "demo" || plan.NativeRegistryRoot != config {
+				t.Fatalf("native identity inputs = name %q root %q", plan.DeclaredName, plan.NativeRegistryRoot)
+			}
+			if tc.id == domain.ClientGrok && !containsText(plan.UserActions, "grok plugin install --trust") {
+				t.Fatalf("grok user actions = %#v", plan.UserActions)
+			}
+			if tc.id == domain.ClientKimi && !containsText(plan.UserActions, "/plugins reload") {
+				t.Fatalf("kimi user actions = %#v", plan.UserActions)
+			}
+			body, err := json.Marshal(plan)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), config) {
+				t.Fatalf("public JSON leaked path: %s", body)
+			}
+		})
 	}
 }
 

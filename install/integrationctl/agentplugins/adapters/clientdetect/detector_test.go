@@ -58,7 +58,7 @@ func TestDetectorFindsNewCLIClientsFromOfficialHomeAndXDGSurfaces(t *testing.T) 
 	t.Parallel()
 	home := t.TempDir()
 	xdg := filepath.Join(home, "xdg")
-	for _, root := range []string{filepath.Join(home, ".claude"), filepath.Join(home, ".gemini"), filepath.Join(xdg, "opencode")} {
+	for _, root := range []string{filepath.Join(home, ".claude"), filepath.Join(home, ".gemini"), filepath.Join(home, ".grok"), filepath.Join(home, ".kimi-code"), filepath.Join(xdg, "opencode")} {
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -67,13 +67,15 @@ func TestDetectorFindsNewCLIClientsFromOfficialHomeAndXDGSurfaces(t *testing.T) 
 		"claude":   filepath.Join(home, "bin", "claude"),
 		"gemini":   filepath.Join(home, "bin", "gemini"),
 		"opencode": filepath.Join(home, "bin", "opencode"),
+		"grok":     filepath.Join(home, "bin", "grok"),
+		"kimi":     filepath.Join(home, "bin", "kimi"),
 	})
 	detector.Environment["XDG_CONFIG_HOME"] = xdg
 	clients, err := detector.Detect(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []domain.ClientID{domain.ClientClaude, domain.ClientGemini, domain.ClientOpenCode} {
+	for _, id := range []domain.ClientID{domain.ClientClaude, domain.ClientGemini, domain.ClientOpenCode, domain.ClientGrok, domain.ClientKimi} {
 		if statusOf(clients, id) != domain.DetectionDetected {
 			t.Fatalf("%s was not detected: %+v", id, clientOf(clients, id))
 		}

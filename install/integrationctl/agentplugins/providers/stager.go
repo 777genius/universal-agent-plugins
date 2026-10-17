@@ -31,9 +31,6 @@ func (stager Stager) Discard(ctx context.Context, delivery domain.StagedDelivery
 		return err
 	}
 	stagingBase := filepath.Clean(delivery.OwnedBase)
-	if delivery.ClientID == domain.ClientClaude {
-		stagingBase = filepath.Dir(stagingBase)
-	}
 	if filepath.Dir(filepath.Clean(delivery.StagingPath)) != stagingBase ||
 		!strings.HasPrefix(filepath.Base(delivery.StagingPath), ".agentplugins-staging-") {
 		return fmt.Errorf("refuse unsafe staged delivery cleanup")
@@ -155,14 +152,6 @@ func (stager Stager) stage(
 	}
 	suffix := sha256.Sum256([]byte(operationID))
 	stagingBase := plan.TargetRoot
-	// Claude Code discovers every plugin-shaped directory directly below its
-	// skills root. Keep the transaction staging directory beside that watched
-	// root so a pre-commit read-only `plugin list` cannot mistake it for an
-	// installed plugin. TargetAnchor and TargetRoot are on the same configured
-	// client filesystem; dirswap still performs the final atomic rename.
-	if plan.ClientID == domain.ClientClaude {
-		stagingBase = plan.TargetAnchor
-	}
 	if err := os.MkdirAll(stagingBase, 0o700); err != nil {
 		return domain.StagedDelivery{}, fmt.Errorf("create client staging root: %w", err)
 	}
@@ -199,6 +188,9 @@ func (stager Stager) stage(
 			if err := projectClaude(stagingPath, envelope, plan, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
 			}
+			if err := projectClaudeMarketplace(stagingPath, envelope, plan); err != nil {
+				return domain.StagedDelivery{}, err
+			}
 		case domain.ClientChatGPT:
 			if err := projectChatGPT(stagingPath, envelope, plan, hints, pluginDataPath); err != nil {
 				return domain.StagedDelivery{}, err
@@ -225,6 +217,16 @@ func (stager Stager) stage(
 	}
 	if plan.ClientID == domain.ClientCursor {
 		if err := projectCursor(stagingPath, envelope, plan, pluginDataPath); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
+	if plan.ClientID == domain.ClientGrok {
+		if err := projectGrok(stagingPath, envelope, plan, pluginDataPath); err != nil {
+			return domain.StagedDelivery{}, err
+		}
+	}
+	if plan.ClientID == domain.ClientKimi {
+		if err := projectKimi(stagingPath, envelope, plan, pluginDataPath); err != nil {
 			return domain.StagedDelivery{}, err
 		}
 	}
@@ -348,9 +350,6 @@ func validatePlanPaths(plan domain.DeliveryPlan) error {
 	}
 	if err := pathpolicy.RequireContainedChild(plan.TargetAnchor, plan.TargetRoot); err != nil {
 		return fmt.Errorf("unsafe delivery target root: %w", err)
-	}
-	if plan.ClientID == domain.ClientClaude && filepath.Clean(plan.TargetRoot) != filepath.Join(filepath.Clean(plan.TargetAnchor), "skills") {
-		return fmt.Errorf("Claude delivery target root must be the exact configured skills directory")
 	}
 	if filepath.Dir(filepath.Clean(plan.ActivePath)) != filepath.Clean(plan.TargetRoot) {
 		return fmt.Errorf("delivery active path must be a direct child of target root")
@@ -650,6 +649,106 @@ func projectCursor(root string, envelope domain.PackageEnvelope, plan domain.Del
 		return fmt.Errorf("write Cursor plugin manifest: %w", err)
 	}
 	return projectCursorMCP(root, envelope, serverNames, plan.ActivePath, dataPath)
+}
+
+func projectGrok(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
+	manifest, serverNames, err := packagedPluginManifest(envelope, plan, "./mcp.json")
+	if err != nil {
+		return err
+	}
+	if err := writeJSON(filepath.Join(root, ".grok-plugin", "plugin.json"), manifest); err != nil {
+		return fmt.Errorf("write Grok plugin manifest: %w", err)
+	}
+	return projectWrappedMCP(root, "mcp.json", envelope, serverNames, plan.ActivePath, dataPath)
+}
+
+func projectKimi(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
+	manifest, serverNames, err := packagedPluginManifest(envelope, plan, "")
+	if err != nil {
+		return err
+	}
+	if len(serverNames) > 0 {
+		servers, err := projectedMCPServers(root, envelope, serverNames, plan.ActivePath, dataPath)
+		if err != nil {
+			return err
+		}
+		manifest["mcpServers"] = servers
+	}
+	if err := writeJSON(filepath.Join(root, ".kimi-plugin", "plugin.json"), manifest); err != nil {
+		return fmt.Errorf("write Kimi plugin manifest: %w", err)
+	}
+	for _, portableManifest := range []string{"mcp.json", ".mcp.json"} {
+		if err := os.Remove(filepath.Join(root, portableManifest)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove portable %s from Kimi projection: %w", portableManifest, err)
+		}
+	}
+	return nil
+}
+
+func packagedPluginManifest(envelope domain.PackageEnvelope, plan domain.DeliveryPlan, mcpRef string) (map[string]any, []string, error) {
+	manifest := map[string]any{"name": envelope.Manifest.Name}
+	copyString := func(key, value string) {
+		if strings.TrimSpace(value) != "" {
+			manifest[key] = value
+		}
+	}
+	copyString("version", envelope.Manifest.Version)
+	copyString("description", envelope.Manifest.Description)
+	copyString("homepage", envelope.Manifest.Homepage)
+	copyString("repository", envelope.Manifest.Repository)
+	copyString("license", envelope.Manifest.License)
+	if envelope.Manifest.Author != nil && strings.TrimSpace(envelope.Manifest.Author.Name) != "" {
+		author := map[string]string{"name": envelope.Manifest.Author.Name}
+		if strings.TrimSpace(envelope.Manifest.Author.Email) != "" {
+			author["email"] = envelope.Manifest.Author.Email
+		}
+		manifest["author"] = author
+	}
+	if len(envelope.Manifest.Keywords) > 0 {
+		manifest["keywords"] = envelope.Manifest.Keywords
+	}
+	if hasSupported(plan, domain.ComponentSkill) {
+		manifest["skills"] = "./skills/"
+	}
+	serverNames := supportedMCPNames(plan)
+	if len(serverNames) > 0 && strings.TrimSpace(mcpRef) != "" {
+		manifest["mcpServers"] = mcpRef
+	}
+	return manifest, serverNames, nil
+}
+
+func projectWrappedMCP(root, rel string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string) error {
+	if len(serverNames) == 0 {
+		return nil
+	}
+	servers, err := projectedMCPServers(root, envelope, serverNames, pluginRoot, dataPath)
+	if err != nil {
+		return err
+	}
+	return writeJSON(filepath.Join(root, rel), map[string]any{"mcpServers": servers})
+}
+
+func projectedMCPServers(stagingRoot string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string) (map[string]map[string]any, error) {
+	servers := make(map[string]map[string]any, len(serverNames))
+	for _, name := range serverNames {
+		server := envelope.MCP.Servers[name]
+		config := cloneObject(server.Decoded)
+		switch server.Type {
+		case "stdio":
+			delete(config, "type")
+			if err := applyStdioDataContract(config, pluginRoot, dataPath, stagingRoot); err != nil {
+				return nil, fmt.Errorf("project stdio MCP server %s: %w", name, err)
+			}
+		case "streamable-http":
+			config["type"] = "http"
+		case "sse":
+			config["type"] = "sse"
+		default:
+			continue
+		}
+		servers[name] = config
+	}
+	return servers, nil
 }
 
 func projectCursorMCP(root string, envelope domain.PackageEnvelope, serverNames []string, pluginRoot, dataPath string) error {

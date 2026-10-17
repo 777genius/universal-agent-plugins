@@ -92,6 +92,28 @@ var generatedPlatforms = map[string]PlatformDefinition{
 			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
 		},
 	},
+	"grok": {
+		Name: "grok",
+		Files: []TemplateFile{
+			{Path: "plugin/plugin.yaml", Template: "plugin.yaml.tmpl", Extra: false},
+			{Path: "plugin/README.md", Template: "grok.README.md.tmpl", Extra: false},
+			{Path: "plugin/mcp/servers.yaml", Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
+		},
+	},
+	"kimi": {
+		Name: "kimi",
+		Files: []TemplateFile{
+			{Path: "plugin/plugin.yaml", Template: "plugin.yaml.tmpl", Extra: false},
+			{Path: "plugin/README.md", Template: "kimi.README.md.tmpl", Extra: false},
+			{Path: "plugin/mcp/servers.yaml", Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
+		},
+	},
 	"opencode": {
 		Name: "opencode",
 		Files: []TemplateFile{

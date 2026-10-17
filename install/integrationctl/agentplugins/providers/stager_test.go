@@ -107,6 +107,10 @@ func TestStagerProjectsClaudeSkillsDirectoryPluginWithRootMCP(t *testing.T) {
 	if manifest["name"] != "demo" || manifest["skills"] != "./.agentplugins-runtime/skills/" || manifest["mcpServers"] != "./.mcp.json" {
 		t.Fatalf("Claude manifest = %+v", manifest)
 	}
+	catalog := readObject(t, filepath.Join(delivery.StagingPath, ".claude-plugin", "marketplace.json"))
+	if catalog["name"] != managedMarketplaceName(plan.PhysicalArtifactID) {
+		t.Fatalf("Claude marketplace = %+v", catalog)
+	}
 	mcp := readObject(t, filepath.Join(delivery.StagingPath, ".mcp.json"))
 	notion := mcp["notion"].(map[string]any)
 	if notion["type"] != "http" || notion["url"] != "https://mcp.notion.com/mcp" {
@@ -140,7 +144,7 @@ func TestClaudeProjectionExposesOnlyPlannedSurfacesAndRebindsRuntime(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if delivery.OwnedBase != plan.TargetRoot || filepath.Dir(delivery.StagingPath) != plan.TargetAnchor {
+	if delivery.OwnedBase != plan.TargetRoot || filepath.Dir(delivery.StagingPath) != plan.TargetRoot {
 		t.Fatalf("Claude transaction paths = owned %q staging %q", delivery.OwnedBase, delivery.StagingPath)
 	}
 	entries, err := os.ReadDir(delivery.StagingPath)
@@ -348,6 +352,70 @@ func TestStagerProjectsCursorNativeManifestAndRuntimeContract(t *testing.T) {
 	if env["PLUGIN_ROOT"] != plan.ActivePath || env["PLUGIN_DATA"] != ownedData || projected["cwd"] != plan.ActivePath {
 		t.Fatalf("Cursor runtime contract = %+v", projected)
 	}
+}
+
+func TestStagerProjectsGrokNativeManifestAndWrappedMCP(t *testing.T) {
+	t.Parallel()
+	envelope := stagingEnvelope(t)
+	server := domain.MCPServer{Name: "local", Type: "stdio", Decoded: map[string]any{
+		"type": "stdio", "command": "node",
+		"args": []any{"${PLUGIN_ROOT}/runtime/launcher.mjs", "${PLUGIN_DATA}/cache"},
+	}}
+	envelope.MCP.Servers = map[string]domain.MCPServer{"local": server}
+	plan := stagingPlan(t, domain.ClientGrok, domain.PackageNative)
+	plan.Components = []domain.ComponentDecision{
+		{Kind: domain.ComponentSkill, Name: "good", Support: domain.SupportNative},
+		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportNative},
+	}
+	ownedData := filepath.Join(t.TempDir(), "owned-plugin-data")
+	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-grok-data", domain.CompatibilityHints{}, ownedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := readObject(t, filepath.Join(delivery.StagingPath, ".grok-plugin", "plugin.json"))
+	if manifest["name"] != "demo" || manifest["mcpServers"] != "./mcp.json" || manifest["skills"] != "./skills/" {
+		t.Fatalf("Grok manifest = %+v", manifest)
+	}
+	document := readObject(t, filepath.Join(delivery.StagingPath, "mcp.json"))
+	projected := document["mcpServers"].(map[string]any)["local"].(map[string]any)
+	args := projected["args"].([]any)
+	if projected["type"] != nil || args[0] != filepath.Join(plan.ActivePath, "runtime", "launcher.mjs") || args[1] != filepath.Join(ownedData, "cache") {
+		t.Fatalf("Grok MCP = %+v", projected)
+	}
+}
+
+func TestStagerProjectsKimiNativeManifestWithInlineMCP(t *testing.T) {
+	t.Parallel()
+	envelope := stagingEnvelope(t)
+	server := domain.MCPServer{Name: "local", Type: "stdio", Decoded: map[string]any{
+		"type": "stdio", "command": "node",
+		"args": []any{"${PLUGIN_ROOT}/runtime/launcher.mjs", "${PLUGIN_DATA}/cache"},
+	}}
+	envelope.MCP.Servers = map[string]domain.MCPServer{"local": server}
+	plan := stagingPlan(t, domain.ClientKimi, domain.PackageNative)
+	plan.Components = []domain.ComponentDecision{
+		{Kind: domain.ComponentSkill, Name: "good", Support: domain.SupportNative},
+		{Kind: domain.ComponentMCPServer, Name: "local", Support: domain.SupportNative},
+	}
+	ownedData := filepath.Join(t.TempDir(), "owned-plugin-data")
+	delivery, err := (Stager{}).StageWithPluginData(context.Background(), envelope, plan, "operation-kimi-data", domain.CompatibilityHints{}, ownedData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := readObject(t, filepath.Join(delivery.StagingPath, ".kimi-plugin", "plugin.json"))
+	if manifest["name"] != "demo" || manifest["skills"] != "./skills/" {
+		t.Fatalf("Kimi manifest = %+v", manifest)
+	}
+	if _, ok := manifest["mcpServers"].(string); ok {
+		t.Fatalf("Kimi must inline MCP, not use a file ref: %+v", manifest)
+	}
+	projected := manifest["mcpServers"].(map[string]any)["local"].(map[string]any)
+	args := projected["args"].([]any)
+	if projected["type"] != nil || args[0] != filepath.Join(plan.ActivePath, "runtime", "launcher.mjs") || args[1] != filepath.Join(ownedData, "cache") {
+		t.Fatalf("Kimi MCP = %+v", projected)
+	}
+	assertMissing(t, filepath.Join(delivery.StagingPath, "mcp.json"))
+	assertMissing(t, filepath.Join(delivery.StagingPath, ".mcp.json"))
 }
 
 func TestStagerResolvesBundledStdioCommandForNativeProjection(t *testing.T) {
@@ -612,9 +680,6 @@ func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) 
 	t.Helper()
 	anchor := filepath.Join(t.TempDir(), "managed")
 	target := filepath.Join(anchor, "clients", string(client))
-	if client == domain.ClientClaude {
-		target = filepath.Join(anchor, "skills")
-	}
 	active := filepath.Join(target, "demo-0123456789ab")
 	status := domain.PlanReady
 	activation := domain.ActivationActive

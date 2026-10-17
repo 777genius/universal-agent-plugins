@@ -27,7 +27,7 @@ func TestValidateProjectName(t *testing.T) {
 
 func TestLookupPlatform(t *testing.T) {
 	t.Parallel()
-	for _, name := range []string{"claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace"} {
+	for _, name := range []string{"claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", "grok", "kimi"} {
 		if _, ok := LookupPlatform(name); !ok {
 			t.Fatalf("LookupPlatform(%q) = missing", name)
 		}
@@ -1501,6 +1501,38 @@ func TestRenderTemplate_GoReadmesIncludeStableContractGuidance(t *testing.T) {
 				"`plugin/targets/cursor-workspace/rules/`",
 				"`.cursor/mcp.json`",
 				"root `AGENTS.md`",
+			},
+		},
+		{
+			name:     "grok-go",
+			template: "grok.README.md.tmpl",
+			wants: []string{
+				"Target lane: `grok`",
+				"Platform family: `ide_plugin`",
+				"Launcher: not used",
+				"plugin-kit-ai generate --check .",
+				"plugin-kit-ai validate . --platform grok --strict",
+				"grok plugin install --trust .",
+				"`plugin/mcp/servers.yaml`",
+				"`plugin/skills/`",
+				"`.grok-plugin/plugin.json`",
+				"`.mcp.json`",
+			},
+		},
+		{
+			name:     "kimi-go",
+			template: "kimi.README.md.tmpl",
+			wants: []string{
+				"Target lane: `kimi`",
+				"Platform family: `ide_plugin`",
+				"Launcher: not used",
+				"plugin-kit-ai generate --check .",
+				"plugin-kit-ai validate . --platform kimi --strict",
+				"plugins/installed.json",
+				"`plugin/mcp/servers.yaml`",
+				"`plugin/skills/`",
+				"`.kimi-plugin/plugin.json`",
+				"inline",
 			},
 		},
 	}

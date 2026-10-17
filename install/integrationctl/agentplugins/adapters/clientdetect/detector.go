@@ -138,6 +138,10 @@ func (detector Detector) detectClient(ctx context.Context, definition domain.Cli
 		return detector.detectCline(ctx, probeVersion)
 	case domain.ClientWindsurf:
 		return detector.detectWindsurf(ctx, probeVersion)
+	case domain.ClientGrok:
+		return detector.detectGrok(ctx, probeVersion)
+	case domain.ClientKimi:
+		return detector.detectKimi(ctx, probeVersion)
 	default:
 		return domain.DetectedClient{ClientID: definition.ID, DisplayName: definition.DisplayName, Status: domain.DetectionNotDetected}
 	}
@@ -259,6 +263,30 @@ func (detector Detector) detectGemini(ctx context.Context, probeVersion bool) do
 		detector.directorySurface("gemini_config", configRoot),
 	}
 	return detector.detectedClient(ctx, probeVersion, domain.ClientGemini, "Gemini CLI", configRoot, detector.lookup("gemini"), surfaces)
+}
+
+func (detector Detector) detectGrok(ctx context.Context, probeVersion bool) domain.DetectedClient {
+	configRoot := filepath.Join(detector.HomeDir, ".grok")
+	if configured := strings.TrimSpace(detector.Environment["GROK_HOME"]); configured != "" {
+		configRoot = configured
+	}
+	surfaces := []domain.ClientSurface{
+		detector.binarySurface("grok_cli", "grok"),
+		detector.directorySurface("grok_config", configRoot),
+	}
+	return detector.detectedClient(ctx, probeVersion, domain.ClientGrok, "Grok Build", configRoot, detector.lookup("grok"), surfaces)
+}
+
+func (detector Detector) detectKimi(ctx context.Context, probeVersion bool) domain.DetectedClient {
+	configRoot := filepath.Join(detector.HomeDir, ".kimi-code")
+	if configured := strings.TrimSpace(detector.Environment["KIMI_CODE_HOME"]); configured != "" {
+		configRoot = configured
+	}
+	surfaces := []domain.ClientSurface{
+		detector.binarySurface("kimi_cli", "kimi"),
+		detector.directorySurface("kimi_config", configRoot),
+	}
+	return detector.detectedClient(ctx, probeVersion, domain.ClientKimi, "Kimi Code", configRoot, detector.lookup("kimi"), surfaces)
 }
 
 func (detector Detector) detectOpenCode(ctx context.Context, probeVersion bool) domain.DetectedClient {

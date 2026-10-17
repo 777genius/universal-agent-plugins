@@ -8,7 +8,7 @@ import (
 
 // Paths lists relative paths created by Write (for tests and docs).
 func Paths(platform, name string, extras bool) []string {
-	if platform == "gemini" || platform == "codex-package" || platform == "opencode" || platform == "cursor" || platform == "cursor-workspace" {
+	if platform == "gemini" || platform == "codex-package" || platform == "opencode" || platform == "cursor" || platform == "cursor-workspace" || platform == "grok" || platform == "kimi" {
 		return PathsForRuntime(platform, "", name, extras)
 	}
 	return PathsForRuntime(platform, RuntimeGo, name, extras)

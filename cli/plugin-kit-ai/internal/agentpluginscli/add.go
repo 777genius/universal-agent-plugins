@@ -49,6 +49,7 @@ func newAddCommand(app App, opts *options) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				writeProgress(app, opts.format, "Checking selected agents and preparing the install plan...")
 				if preloaded != nil && preloaded.cleanup != nil {
 					defer preloaded.cleanup()
 				}
@@ -224,8 +225,11 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected, skipped, allClie
 		return nil, nil, err
 	}
 	if len(detected) == 1 {
-		for _, label := range request.SkippedLabels {
-			if _, err := fmt.Fprintln(reviewWriter(cmd, app), "Skipped installed clients that this package cannot install together: "+label); err != nil {
+		if len(request.SkippedLabels) > 0 {
+			writer := reviewWriter(cmd, app)
+			notice := prompt.SkippedClientsNotice(request.SkippedLabels)
+			heading := terminaltheme.For(writer).Text(terminaltheme.Warning, prompt.SkippedClientsHeading)
+			if _, err := fmt.Fprint(writer, strings.Replace(notice, prompt.SkippedClientsHeading, heading, 1)); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -404,6 +408,10 @@ func normalizeTarget(value string) domain.ClientID {
 		return domain.ClientCline
 	case "windsurf", "devin":
 		return domain.ClientWindsurf
+	case "grok", "grok-build":
+		return domain.ClientGrok
+	case "kimi", "kimi-code":
+		return domain.ClientKimi
 	default:
 		return domain.ClientID(strings.ToLower(strings.TrimSpace(value)))
 	}

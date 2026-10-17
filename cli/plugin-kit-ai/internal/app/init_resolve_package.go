@@ -45,7 +45,7 @@ func resolvePackageOnlyTargets(templateName string, opts InitOptions, platform s
 		return nil, errUnknownPlatform(opts.Platform)
 	}
 	switch meta.Name {
-	case "claude", "codex-package", "gemini", "opencode", "cursor", "cursor-workspace":
+	case "claude", "codex-package", "gemini", "opencode", "cursor", "cursor-workspace", "grok", "kimi":
 		return []string{meta.Name}, nil
 	default:
 		return nil, fmt.Errorf("--template %s only supports package and workspace outputs; use --template custom-logic for %s", templateName, meta.Name)

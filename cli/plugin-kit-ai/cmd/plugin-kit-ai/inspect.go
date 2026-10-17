@@ -59,7 +59,7 @@ func newInspectCmd(runner inspectRunner) *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&inspectTarget, "target", "all", `inspect target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", or "cursor-workspace")`)
+	cmd.Flags().StringVar(&inspectTarget, "target", "all", `inspect target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", "grok", or "kimi")`)
 	cmd.Flags().StringVar(&inspectFormat, "format", "text", "output format: text or json")
 	cmd.Flags().BoolVar(&inspectAuthoring, "authoring", false, "show a plain-language authoring view instead of the raw contract view")
 	return cmd

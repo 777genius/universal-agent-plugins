@@ -87,7 +87,7 @@ func (planner Planner) Plan(
 		plan.Status = domain.PlanUnsupported
 		plan.Activation = domain.ActivationFailed
 		plan.Warnings = append(plan.Warnings, "trusted_claude_cli_required")
-		plan.UserActions = append(plan.UserActions, "install Claude Code CLI so agentplugins can verify the exact @skills-dir identity")
+		plan.UserActions = append(plan.UserActions, "install Claude Code CLI so agentplugins can register the managed marketplace and install the plugin")
 		return plan, nil
 	}
 	target, err := planner.ResolveTarget(ctx, client, scope, physicalArtifactID)
@@ -178,6 +178,11 @@ func (planner Planner) Plan(
 		plan.Status = domain.PlanReady
 		plan.Activation = domain.ActivationPrepared
 	}
+	if plan.Status != domain.PlanUnsupported && (client.ClientID == domain.ClientGrok || client.ClientID == domain.ClientKimi) &&
+		strings.TrimSpace(client.ConfigRoot) != "" && hasOnlyPortableNativeComponents(plan.Components) {
+		plan.Status = domain.PlanReady
+		plan.Activation = domain.ActivationPrepared
+	}
 
 	switch client.ClientID {
 	case domain.ClientCodex:
@@ -192,6 +197,14 @@ func (planner Planner) Plan(
 		}
 	case domain.ClientCursor:
 		plan.UserActions = append(plan.UserActions, "reload Cursor, then verify the plugin appears before using its components")
+	case domain.ClientGrok:
+		if strings.TrimSpace(client.ExecutablePath) != "" {
+			plan.UserActions = append(plan.UserActions, "agentplugins will install through Grok CLI with `grok plugin install --trust` and verify with `grok plugin list --json`")
+		} else {
+			plan.UserActions = append(plan.UserActions, "install the prepared package with `grok plugin install --trust`, then verify with `grok plugin list`")
+		}
+	case domain.ClientKimi:
+		plan.UserActions = append(plan.UserActions, "reload Kimi Code or run `/plugins reload` after the managed package is written")
 	case domain.ClientCopilot:
 		if strings.TrimSpace(client.ExecutablePath) != "" {
 			plan.UserActions = append(plan.UserActions, "agentplugins will install and verify the plugin through GitHub Copilot CLI automatically")
@@ -371,18 +384,24 @@ func Capabilities(clientID domain.ClientID) (domain.ClientCapabilities, bool) {
 
 func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.PackageMode) (string, string, error) {
 	var anchor, root string
-	if client.ClientID == domain.ClientClaude && mode == domain.PackageProjection {
-		if strings.TrimSpace(client.ConfigRoot) == "" {
-			return "", "", fmt.Errorf("Claude Code config root is unavailable")
-		}
-		anchor = client.ConfigRoot
-		root = filepath.Join(client.ConfigRoot, "skills")
-	} else if client.ClientID == domain.ClientCursor && mode == domain.PackageNative {
+	if client.ClientID == domain.ClientCursor && mode == domain.PackageNative {
 		if strings.TrimSpace(client.ConfigRoot) == "" {
 			return "", "", fmt.Errorf("Cursor config root is unavailable")
 		}
 		anchor = client.ConfigRoot
 		root = filepath.Join(client.ConfigRoot, "plugins", "local")
+	} else if client.ClientID == domain.ClientGrok && mode == domain.PackageNative {
+		if strings.TrimSpace(client.ConfigRoot) == "" {
+			return "", "", fmt.Errorf("Grok config root is unavailable")
+		}
+		anchor = client.ConfigRoot
+		root = filepath.Join(client.ConfigRoot, "plugins")
+	} else if client.ClientID == domain.ClientKimi && mode == domain.PackageNative {
+		if strings.TrimSpace(client.ConfigRoot) == "" {
+			return "", "", fmt.Errorf("Kimi config root is unavailable")
+		}
+		anchor = client.ConfigRoot
+		root = filepath.Join(client.ConfigRoot, "plugins", "managed")
 	} else {
 		if strings.TrimSpace(planner.ManagedRoot) == "" {
 			return "", "", fmt.Errorf("managed client root is required")

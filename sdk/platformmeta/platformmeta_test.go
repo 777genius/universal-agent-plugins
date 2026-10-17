@@ -16,6 +16,8 @@ func TestIDsReturnStableProfileOrder(t *testing.T) {
 		"cursor",
 		"cursor-workspace",
 		"opencode",
+		"grok",
+		"kimi",
 	}
 	if got := IDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("IDs() = %#v, want %#v", got, want)

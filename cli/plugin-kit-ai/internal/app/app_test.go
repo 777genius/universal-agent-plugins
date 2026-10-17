@@ -614,6 +614,32 @@ func TestInitRunner_opencodeRejectsRuntimeFlag(t *testing.T) {
 	}
 }
 
+func TestInitRunner_grokRejectsRuntimeFlag(t *testing.T) {
+	t.Parallel()
+	var r InitRunner
+	out := filepath.Join(t.TempDir(), "genplug")
+	_, err := r.Run(InitOptions{ProjectName: "genplug", Platform: "grok", Runtime: "python", OutputDir: out})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "--runtime is not supported with --platform grok") {
+		t.Fatalf("error = %q", err)
+	}
+}
+
+func TestInitRunner_kimiRejectsRuntimeFlag(t *testing.T) {
+	t.Parallel()
+	var r InitRunner
+	out := filepath.Join(t.TempDir(), "genplug")
+	_, err := r.Run(InitOptions{ProjectName: "genplug", Platform: "kimi", Runtime: "python", OutputDir: out})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "--runtime is not supported with --platform kimi") {
+		t.Fatalf("error = %q", err)
+	}
+}
+
 func TestInitRunner_cursorStarter(t *testing.T) {
 	t.Parallel()
 	var r InitRunner
@@ -669,6 +695,110 @@ func TestInitRunner_cursorStarter(t *testing.T) {
 	}
 	if got := strings.TrimSpace(fmt.Sprint(server["url"])); got != "https://example.com/mcp" {
 		t.Fatalf("cursor example-http url = %q want https://example.com/mcp\n%s", got, mcpBody)
+	}
+}
+
+func TestInitRunner_grokStarter(t *testing.T) {
+	t.Parallel()
+	var r InitRunner
+	out := filepath.Join(t.TempDir(), "genplug")
+	got, err := r.Run(InitOptions{ProjectName: "genplug", Platform: "grok", OutputDir: out, Extras: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != out {
+		t.Fatalf("out = %q, want %q", got, out)
+	}
+	for _, rel := range []string{
+		filepath.Join("plugin", "plugin.yaml"),
+		filepath.Join("plugin", "mcp", "servers.yaml"),
+		filepath.Join("plugin", "skills", "genplug", "SKILL.md"),
+		"CLAUDE.md",
+		"AGENTS.md",
+		"README.md",
+		filepath.Join(".grok-plugin", "plugin.json"),
+		".mcp.json",
+		filepath.Join("skills", "genplug", "SKILL.md"),
+	} {
+		if _, err := os.Stat(filepath.Join(out, rel)); err != nil {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	assertRuntimeTestAssetsAbsent(t, out)
+	manifestBody, err := os.ReadFile(filepath.Join(out, ".grok-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifestBody), `"./.mcp.json"`) {
+		t.Fatalf("grok manifest missing MCP ref:\n%s", manifestBody)
+	}
+	mcpBody, err := os.ReadFile(filepath.Join(out, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wrapped struct {
+		MCPServers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(mcpBody, &wrapped); err != nil {
+		t.Fatalf("parse grok .mcp.json: %v\n%s", err, mcpBody)
+	}
+	server, ok := wrapped.MCPServers["docs"]
+	if !ok {
+		t.Fatalf("grok .mcp.json missing docs server:\n%s", mcpBody)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(server["type"])); got != "http" {
+		t.Fatalf("grok example-http type = %q want http\n%s", got, mcpBody)
+	}
+}
+
+func TestInitRunner_kimiStarter(t *testing.T) {
+	t.Parallel()
+	var r InitRunner
+	out := filepath.Join(t.TempDir(), "genplug")
+	got, err := r.Run(InitOptions{ProjectName: "genplug", Platform: "kimi", OutputDir: out, Extras: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != out {
+		t.Fatalf("out = %q, want %q", got, out)
+	}
+	for _, rel := range []string{
+		filepath.Join("plugin", "plugin.yaml"),
+		filepath.Join("plugin", "mcp", "servers.yaml"),
+		filepath.Join("plugin", "skills", "genplug", "SKILL.md"),
+		"CLAUDE.md",
+		"AGENTS.md",
+		"README.md",
+		filepath.Join(".kimi-plugin", "plugin.json"),
+		filepath.Join("skills", "genplug", "SKILL.md"),
+	} {
+		if _, err := os.Stat(filepath.Join(out, rel)); err != nil {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, ".mcp.json")); !os.IsNotExist(err) {
+		t.Fatalf("kimi starter must not write sidecar .mcp.json")
+	}
+	assertRuntimeTestAssetsAbsent(t, out)
+	manifestBody, err := os.ReadFile(filepath.Join(out, ".kimi-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(manifestBody), `"./.mcp.json"`) {
+		t.Fatalf("kimi manifest must inline MCP:\n%s", manifestBody)
+	}
+	var doc struct {
+		MCPServers map[string]map[string]any `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(manifestBody, &doc); err != nil {
+		t.Fatalf("parse kimi plugin manifest: %v\n%s", err, manifestBody)
+	}
+	server, ok := doc.MCPServers["docs"]
+	if !ok {
+		t.Fatalf("kimi plugin manifest missing inline docs server:\n%s", manifestBody)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(server["type"])); got != "http" {
+		t.Fatalf("kimi example-http type = %q want http\n%s", got, manifestBody)
 	}
 }
 

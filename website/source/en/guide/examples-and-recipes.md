@@ -20,7 +20,9 @@ These are the clearest examples of finished public shapes:
 - [`claude-basic-prod`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/claude-basic-prod): Go plus `claude` production repo
 - [`codex-package-prod`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/codex-package-prod): `codex-package` target
 - [`gemini-extension-package`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/gemini-extension-package): `gemini` packaging target
-- [`cursor-basic`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/cursor-basic): `cursor` workspace-config target
+- [`cursor-basic`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/cursor-basic): `cursor` packaged plugin target
+- [`grok-basic`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/grok-basic): `grok` packaged plugin target
+- [`kimi-basic`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/kimi-basic): `kimi` packaged plugin target
 - [`opencode-basic`](https://github.com/777genius/plugin-kit-ai/tree/main/examples/plugins/opencode-basic): `opencode` workspace-config target
 
 Read these when you want:
