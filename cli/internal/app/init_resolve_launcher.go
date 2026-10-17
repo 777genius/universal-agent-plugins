@@ -53,7 +53,7 @@ func validateInitPlatformOptions(name string, opts InitOptions, config resolvedI
 		if runtimeFlag := strings.ToLower(strings.TrimSpace(config.Runtime)); runtimeFlag != "" && runtimeFlag != scaffold.RuntimeGo {
 			return fmt.Errorf("--runtime is not supported with --platform %s", config.Platform)
 		}
-	case "opencode", "cursor", "cursor-workspace":
+	case "opencode", "cursor", "cursor-workspace", "qoder":
 		if opts.TypeScript {
 			return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
 		}
@@ -68,14 +68,14 @@ func validateInitPlatformOptions(name string, opts InitOptions, config resolvedI
 			return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
 		}
 	}
-	if opts.RuntimePackage && (config.Platform == "gemini" || config.Platform == "codex-package" || config.Platform == "opencode" || config.Platform == "cursor" || config.Platform == "cursor-workspace") {
+	if opts.RuntimePackage && (config.Platform == "gemini" || config.Platform == "codex-package" || config.Platform == "opencode" || config.Platform == "cursor" || config.Platform == "cursor-workspace" || config.Platform == "qoder") {
 		return fmt.Errorf("--runtime-package is not supported with --platform %s", config.Platform)
 	}
 	return nil
 }
 
 func validateInitRuntimeOptions(opts InitOptions, config *resolvedInitConfig) error {
-	if config.Platform != "codex-package" && config.Platform != "opencode" && config.Platform != "cursor" && config.Platform != "cursor-workspace" {
+	if config.Platform != "codex-package" && config.Platform != "opencode" && config.Platform != "cursor" && config.Platform != "cursor-workspace" && config.Platform != "qoder" {
 		if _, ok := scaffold.LookupRuntime(config.Runtime); !ok {
 			return errUnknownRuntime(opts.Runtime)
 		}

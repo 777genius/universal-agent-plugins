@@ -72,6 +72,8 @@ func inspectAuthoringTargetLabel(target string) string {
 		return "Cursor plugin (cursor)"
 	case "cursor-workspace":
 		return "Cursor workspace (cursor-workspace)"
+	case "qoder":
+		return "Qoder (qoder)"
 	default:
 		trimmed := strings.TrimSpace(target)
 		if trimmed == "" {

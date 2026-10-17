@@ -60,7 +60,7 @@ explicit outcome of "passed", "failed", or "failed_strict_warnings".`,
 		},
 	}
 
-	cmd.Flags().StringVar(&platform, "platform", "", `target override ("codex-package", "codex-runtime", "claude", "gemini", "opencode", "cursor", or "cursor-workspace")`)
+	cmd.Flags().StringVar(&platform, "platform", "", `target override ("codex-package", "codex-runtime", "claude", "gemini", "opencode", "cursor", "cursor-workspace", or "qoder")`)
 	cmd.Flags().BoolVar(&strict, "strict", false, "treat validation warnings as errors")
 	cmd.Flags().StringVar(&format, "format", "text", `output format ("text" or "json")`)
 	return cmd

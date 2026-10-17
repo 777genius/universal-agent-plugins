@@ -113,6 +113,17 @@ var generatedPlatforms = map[string]PlatformDefinition{
 			{Path: "plugin/targets/opencode/package.json", Template: "opencode.package.json.tmpl", Extra: true},
 		},
 	},
+	"qoder": {
+		Name: "qoder",
+		Files: []TemplateFile{
+			{Path: "plugin/plugin.yaml", Template: "plugin.yaml.tmpl", Extra: false},
+			{Path: "plugin/README.md", Template: "qoder.README.md.tmpl", Extra: false},
+			{Path: "plugin/mcp/servers.yaml", Template: "mcp.servers.yaml.tmpl", Extra: true},
+			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
+			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
+			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
+		},
+	},
 }
 
 func LookupPlatform(name string) (PlatformDefinition, bool) {

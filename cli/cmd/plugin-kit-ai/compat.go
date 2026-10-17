@@ -78,9 +78,9 @@ func newCompatCmd(runner compatRunner) *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&compatTarget, "target", "all", `compatibility target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", or "cursor-workspace")`)
+	cmd.Flags().StringVar(&compatTarget, "target", "all", `compatibility target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", or "qoder")`)
 	cmd.Flags().StringVar(&compatFormat, "format", "text", "output format: text or json")
-	cmd.Flags().StringVar(&compatFrom, "from", "", `source platform ("claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", or "cursor-workspace"; omit to auto-detect current native layouts)`)
+	cmd.Flags().StringVar(&compatFrom, "from", "", `source platform ("claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", or "qoder"; omit to auto-detect current native layouts)`)
 	cmd.Flags().BoolVar(&compatIncludeUserScope, "include-user-scope", false, "include explicit user-scope native sources when supported by the detected import target")
 	return cmd
 }

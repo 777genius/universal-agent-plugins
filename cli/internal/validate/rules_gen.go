@@ -83,6 +83,17 @@ var generatedRules = map[string]Rule{
 		},
 		BuildTargets: []string{},
 	},
+	"qoder": {
+		Platform: "qoder",
+		RequiredFiles: []string{
+			"README.md",
+			".qoder-plugin/plugin.json",
+		},
+		ForbiddenFiles: []string{
+			"launcher.yaml",
+		},
+		BuildTargets: []string{},
+	},
 }
 
 func LookupRule(name string) (Rule, bool) {

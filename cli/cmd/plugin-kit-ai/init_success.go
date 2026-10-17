@@ -67,7 +67,7 @@ func formatInitSuccess(outDir string, opts app.InitOptions) string {
 		return strings.Join(lines, "\n") + "\n"
 	}
 
-	if platform == "gemini" || platform == "codex-package" || platform == "opencode" || platform == "cursor" || platform == "cursor-workspace" {
+	if platform == "gemini" || platform == "codex-package" || platform == "opencode" || platform == "cursor" || platform == "cursor-workspace" || platform == "qoder" {
 		if opts.Extras {
 			lines = append(lines, "  Portable MCP starter: plugin/mcp/servers.yaml")
 		}

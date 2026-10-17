@@ -25,12 +25,14 @@ const (
 	ClientWindsurf ClientID = "windsurf"
 	ClientGrok     ClientID = "grok"
 	ClientKimi     ClientID = "kimi"
+	ClientQoder    ClientID = "qoder"
 
 	DetectionNotDetected DetectionStatus = "not_detected"
 	DetectionDetected    DetectionStatus = "detected"
 
 	ScopeUser    InstallScope = "user"
 	ScopeProject InstallScope = "project"
+	ScopeLocal   InstallScope = "local"
 
 	PackageNative     PackageMode = "native"
 	PackageProjection PackageMode = "compatibility_projection"
@@ -155,6 +157,10 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
 	}),
+	stdioOnlyMCP(withScopes(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents: []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:  LifecycleCLIRegistry,
+	}), ScopeUser, ScopeProject, ScopeLocal)),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
@@ -169,6 +175,20 @@ func withActivation(definition ClientDefinition, activation ActivationMode) Clie
 // from both entries delivers commands to the family again.
 func withoutCommands(definition ClientDefinition) ClientDefinition {
 	definition.CommandSupport = SupportUnsupported
+	return definition
+}
+
+// stdioOnlyMCP withholds remote MCP transports from a client whose native
+// plugin contract only carries local stdio servers.
+func stdioOnlyMCP(definition ClientDefinition) ClientDefinition {
+	definition.Capabilities.MCPTransports["streamable-http"] = SupportUnsupported
+	return definition
+}
+
+// withScopes replaces the default user-only scope list with the exact set the
+// client's native install contract accepts.
+func withScopes(definition ClientDefinition, scopes ...InstallScope) ClientDefinition {
+	definition.Capabilities.Scopes = append([]InstallScope(nil), scopes...)
 	return definition
 }
 
@@ -243,6 +263,8 @@ var clientAliases = map[string]ClientID{
 	"devin":          ClientWindsurf,
 	"grok-build":     ClientGrok,
 	"kimi-code":      ClientKimi,
+	"qoder-cli":      ClientQoder,
+	"qoder-desktop":  ClientQoder,
 }
 
 // ParseClientID folds case and whitespace, maps known aliases onto canonical

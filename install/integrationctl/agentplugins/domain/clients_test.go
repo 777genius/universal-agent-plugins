@@ -12,6 +12,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"claude": ClientClaude, "gemini": ClientGemini, "opencode": ClientOpenCode,
 		"cline": ClientCline, "windsurf": ClientWindsurf,
 		"grok": ClientGrok, "kimi": ClientKimi,
+		"qoder": ClientQoder,
 	}
 	for input, want := range canonical {
 		got, ok := ParseClientID(input)
@@ -24,6 +25,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 		"gemini-cli": ClientGemini, "open-code": ClientOpenCode, "devin": ClientWindsurf,
 		"  CURSOR  ": ClientCursor, "Claude-Code": ClientClaude,
 		"grok-build": ClientGrok, "kimi-code": ClientKimi,
+		"qoder-cli": ClientQoder, "qoder-desktop": ClientQoder,
 	}
 	for input, want := range aliases {
 		got, ok := ParseClientID(input)
@@ -44,7 +46,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
-		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi,
+		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)
@@ -54,6 +56,35 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	}
 	if !SharesBackend(ClientCopilot, ClientVSCode) || SharesBackend(ClientCursor, ClientVSCode) {
 		t.Fatal("SharesBackend must match SameClientBackend")
+	}
+}
+
+// TestQoderClientDefinition pins Qoder's single identity shared by Desktop and
+// CLI: native plugin bundles, stdio-only MCP, and the three install scopes the
+// `qoder plugins install --scope` contract accepts.
+func TestQoderClientDefinition(t *testing.T) {
+	definition, ok := ClientDefinitionFor(ClientQoder)
+	if !ok {
+		t.Fatal("qoder definition is missing")
+	}
+	if definition.DisplayName != "Qoder" || definition.DirectoryDelivery != "managed" || definition.CatalogPackage != "native" {
+		t.Fatalf("Qoder definition identity = %+v", definition)
+	}
+	capabilities := definition.Capabilities
+	if capabilities.PackageMode != PackageNative || capabilities.SkillSupport != SupportNative {
+		t.Fatalf("Qoder native skill capability = %+v", capabilities)
+	}
+	if capabilities.MCPTransports["stdio"] != SupportNative || capabilities.MCPTransports["streamable-http"] != SupportUnsupported || capabilities.MCPTransports["sse"] != SupportUnsupported {
+		t.Fatalf("Qoder MCP transports = %v", capabilities.MCPTransports)
+	}
+	if capabilities.AppSupport != SupportUnsupported || capabilities.ExtensionSupport != SupportUnsupported {
+		t.Fatalf("Qoder app/extension support = %+v", capabilities)
+	}
+	if want := []InstallScope{ScopeUser, ScopeProject, ScopeLocal}; !reflect.DeepEqual(capabilities.Scopes, want) {
+		t.Fatalf("Qoder scopes = %v, want %v", capabilities.Scopes, want)
+	}
+	if definition.Traits.LifecycleKind != LifecycleCLIRegistry || !definition.Traits.Allows(InstallIntentAutomatic) {
+		t.Fatalf("Qoder traits = %+v", definition.Traits)
 	}
 }
 

@@ -42,6 +42,8 @@ func portableMCPProjectionVariableReplacements(target string) map[string]string 
 		packageRoot = "${extensionPath}"
 	case "cursor-workspace":
 		packageRoot = "${workspaceFolder}"
+	case "qoder":
+		packageRoot = "${QODER_PLUGIN_ROOT}"
 	}
 	return map[string]string{
 		"${package.root}": packageRoot,
