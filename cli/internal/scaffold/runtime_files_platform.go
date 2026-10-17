@@ -126,9 +126,10 @@ func cursorWorkspacePlatformFiles(extras bool) []TemplateFile {
 }
 
 func qoderPlatformFiles(extras bool) []TemplateFile {
-	files := []TemplateFile{
-		{Path: authoredPath("README.md"), Template: "qoder.README.md.tmpl", Extra: false},
-	}
+	files := make([]TemplateFile, 0, 3)
+	files = append(files,
+		TemplateFile{Path: authoredPath("README.md"), Template: "qoder.README.md.tmpl", Extra: false},
+	)
 	if !extras {
 		return files
 	}

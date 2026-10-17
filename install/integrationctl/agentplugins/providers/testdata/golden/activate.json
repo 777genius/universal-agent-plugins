@@ -291,6 +291,33 @@
       "Verification": "installation_verified"
     }
   },
+  "qoder": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "",
+    "Outcome": {
+      "Activation": "manual_activation_required",
+      "ActivationAttested": false,
+      "Authentication": "not_checked",
+      "AuthenticationAttested": false,
+      "AuthoritativeObservation": false,
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "NativeEffect": "",
+      "NativeObjects": null,
+      "Policy": "allowed",
+      "UserActions": [
+        "verify that the managed plugin is installed in Qoder, then run /plugins reload or restart Qoder"
+      ],
+      "Verification": "package_validated"
+    }
+  },
   "vscode": {
     "Commands": [
       [

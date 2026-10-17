@@ -158,6 +158,11 @@ func goldenRespondingRunner(id domain.ClientID, request domain.ActivationRequest
 		return &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
 			return legacyports.CommandResult{Stdout: []byte(listing)}
 		}}
+	case domain.ClientQoder:
+		listing := fmt.Sprintf(`[{"id":%q,"version":%q}]`, request.DeclaredName+"@local", "1.0.0")
+		return &recordingRunner{run: func(legacyports.Command) legacyports.CommandResult {
+			return legacyports.CommandResult{Stdout: []byte(listing)}
+		}}
 	default:
 		return &recordingRunner{}
 	}

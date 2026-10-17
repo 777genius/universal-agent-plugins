@@ -41,7 +41,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err != nil {
 		return activationError(outcome, request, err)
 	}
-	if _, foreign := findForeign(entries, request.DeclaredName); foreign {
+	if findForeign(entries, request.DeclaredName) {
 		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is registered from a different source", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	entry, found := findEntry(entries, request.DeclaredName)
@@ -79,7 +79,7 @@ func verifyActivation(ctx context.Context, env clients.Env, request domain.Activ
 	if !found || !versionMatches(entry, request.Plan.DeclaredVersion) {
 		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is absent or has a different version", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
-	if _, foreign := findForeign(entries, request.DeclaredName); foreign {
+	if findForeign(entries, request.DeclaredName) {
 		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is registered from a different source", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
@@ -130,7 +130,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil
 	}
-	if _, foreign := findForeign(entries, request.DeclaredName); foreign {
+	if findForeign(entries, request.DeclaredName) {
 		return outcome, fmt.Errorf("qoder plugin %q is registered from a different source; refusing to uninstall it", request.DeclaredName)
 	}
 	_, uninstallErr := shared.RunClientCommand(ctx, env.Runner, "Qoder CLI", request.BackendExecutable, "plugins", "uninstall", request.DeclaredName)

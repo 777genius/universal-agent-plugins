@@ -33,12 +33,12 @@ type pluginEntry struct {
 
 func localPluginID(name string) string { return name + "@local" }
 
-func splitPluginID(id string) (name, qualifier string, ok bool) {
+func pluginNameFromID(id string) (string, bool) {
 	split := strings.LastIndexByte(id, '@')
 	if split <= 0 || split == len(id)-1 {
-		return "", "", false
+		return "", false
 	}
-	return id[:split], id[split+1:], true
+	return id[:split], true
 }
 
 // parseList accepts only a complete, unambiguous list. A missing or changed
@@ -91,7 +91,7 @@ func parseEntry(value any) (pluginEntry, error) {
 		}
 	}
 	entry := pluginEntry{ID: fields["id"], Version: fields["version"]}
-	if _, _, ok := splitPluginID(entry.ID); !ok {
+	if _, ok := pluginNameFromID(entry.ID); !ok {
 		return pluginEntry{}, errUnknownList
 	}
 	return entry, nil
@@ -109,13 +109,13 @@ func findEntry(entries []pluginEntry, name string) (pluginEntry, bool) {
 // findForeign reports a claim on the same plugin name under a different id,
 // such as a marketplace installation. `qoder plugins uninstall` addresses a
 // plugin by name, so two claims on one name are never ours to mutate.
-func findForeign(entries []pluginEntry, name string) (pluginEntry, bool) {
+func findForeign(entries []pluginEntry, name string) bool {
 	for _, entry := range entries {
-		if entryName, _, ok := splitPluginID(entry.ID); ok && entryName == name && entry.ID != localPluginID(name) {
-			return entry, true
+		if entryName, ok := pluginNameFromID(entry.ID); ok && entryName == name && entry.ID != localPluginID(name) {
+			return true
 		}
 	}
-	return pluginEntry{}, false
+	return false
 }
 
 // versionMatches accepts a listing without a version member but never a
@@ -163,7 +163,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
-	if _, foreign := findForeign(entries, plan.DeclaredName); foreign {
+	if findForeign(entries, plan.DeclaredName) {
 		return clients.RegistryCollision, nil
 	}
 	if _, found := findEntry(entries, plan.DeclaredName); !found {

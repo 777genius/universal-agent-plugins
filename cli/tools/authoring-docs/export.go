@@ -214,7 +214,7 @@ func exportTrees(checkout, sha, out string, load func() ([]*cobra.Command, error
 // Hash the actual deterministic rendered facts, with fixed provenance rather
 // than caller SHA/host paths. Length framing and sorted names bind every byte.
 // This is a reviewed golden, never regenerated automatically during export.
-const reviewedProjection = "9574037ebefff19273a4e2fbfc1eb7a815fbde54ec91549162660ed2d2eae7ee"
+const reviewedProjection = "9308548cdf6c2fb69676c620b04fa6188514f2c8255b4c4f33054b8ceab7a6a9"
 
 func projectionFingerprint(roots []*cobra.Command) (string, error) {
 	files, err := render("SOURCE_SHA", nil, roots)

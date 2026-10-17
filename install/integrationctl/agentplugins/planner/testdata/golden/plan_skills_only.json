@@ -517,6 +517,53 @@
       ]
     }
   },
+  "qoder": {
+    "Error": "",
+    "Plan": {
+      "Activation": "prepared",
+      "ActivePath": "\u003croot\u003e/managed/clients/qoder/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "qoder",
+      "Components": [
+        {
+          "Kind": "skill",
+          "Name": "docs",
+          "Reason": "",
+          "Source": "",
+          "SourceName": "",
+          "Support": "native"
+        }
+      ],
+      "DeclaredName": "demo",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": null,
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/qoder",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/qoder",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "ready",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/qoder",
+      "UserActions": [
+        "verify the plugin's authentication requirements before using it",
+        "agentplugins will register and verify the plugin through Qoder CLI; run /plugins reload or restart Qoder to use it"
+      ],
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified"
+      ]
+    }
+  },
   "vscode": {
     "Error": "",
     "Plan": {

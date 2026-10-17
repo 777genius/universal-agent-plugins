@@ -405,7 +405,7 @@ func TestContractClarity_RuntimeMetadataAndDocsStayAligned(t *testing.T) {
 	mustContain(t, string(productionDoc), "helper delivery tradeoff: see [CHOOSING_HELPER_DELIVERY_MODE.md](./CHOOSING_HELPER_DELIVERY_MODE.md)")
 	mustContain(t, string(productionDoc), "dedicated opt-in real CLI runtime smoke")
 	mustContain(t, string(productionDoc), "Cursor: packaged plugin target with `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`; `cursor-workspace` remains the secondary repo-local `.cursor/` subset when you explicitly need workspace files instead of a package bundle")
-	mustContain(t, string(productionDoc), "plugin-kit-ai validate . --platform <claude|codex-runtime|codex-package|cursor|opencode> --strict")
+	mustContain(t, string(productionDoc), "plugin-kit-ai validate . --platform <claude|codex-runtime|codex-package|cursor|opencode|qoder> --strict")
 	mustContain(t, string(productionDoc), "Cursor: treat `generate --check` plus `validate --strict` as the packaged plugin readiness gate for `.cursor-plugin/plugin.json`, root `skills/**`, and optional shared `.mcp.json`")
 	mustContain(t, string(productionDoc), "## Cursor Packaged Plugin Path")
 	mustContain(t, string(productionDoc), "## Cursor Workspace Secondary Path")

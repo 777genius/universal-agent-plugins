@@ -17,7 +17,7 @@ func (qoderAdapter) Import(root string, seed ImportSeed) (ImportResult, error) {
 		return ImportResult{}, err
 	}
 	if !ok {
-		return ImportResult{}, fmt.Errorf("Qoder plugin import requires %s", qoderPluginManifestPath)
+		return ImportResult{}, fmt.Errorf("qoder plugin import requires %s", qoderPluginManifestPath)
 	}
 	if name := stringMapField(manifest, "name"); name != "" {
 		result.Manifest.Name = name

@@ -44,7 +44,7 @@ func readQoderMCPDocument(root string) (map[string]any, bool, error) {
 func qoderMCPServersFromDocument(doc map[string]any) (map[string]any, error) {
 	servers, err := pluginmodel.UnwrapNativeMCPServers(doc)
 	if err != nil {
-		return nil, fmt.Errorf("Qoder MCP config .mcp.json: %w", err)
+		return nil, fmt.Errorf("qoder MCP config .mcp.json: %w", err)
 	}
 	return servers, nil
 }
@@ -84,7 +84,7 @@ func importedQoderPluginMCP(root string, manifest map[string]any) (map[string]an
 	case map[string]any:
 		return typed, true, nil
 	default:
-		return nil, false, fmt.Errorf("Qoder plugin field %q must be a string ref or object", "mcpServers")
+		return nil, false, fmt.Errorf("qoder plugin field %q must be a string ref or object", "mcpServers")
 	}
 }
 
