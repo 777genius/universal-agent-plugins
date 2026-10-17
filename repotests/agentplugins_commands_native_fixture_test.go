@@ -32,8 +32,6 @@ import (
 const (
 	commandsPluginName   = "uap-commands-fixture"
 	commandsGuideSkill   = "fixture-guide"
-	commandsDirectory    = "io.github.777genius.agentplugins/commands"
-	commandsWithheldCode = "explicit_invocation_not_enforceable"
 	commandsEvidenceFile = "commands-evidence.json"
 )
 
@@ -62,11 +60,14 @@ func commandsFixtureSource(t *testing.T) string {
 func commandsSwapInvocation(t *testing.T, pkg string) {
 	t.Helper()
 	for command, flags := range map[string][2]string{"echo": {"false", "true"}, "wizard": {"true", "false"}} {
-		path := filepath.Join(pkg, filepath.FromSlash(commandsDirectory), command+".md")
+		path := filepath.Join(pkg, filepath.FromSlash(commandext.RelativeDirectory), command+".md")
 		body, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
+		// A checkout may turn the fixture's line endings into CRLF; the
+		// installer folds them, so the swap may too.
+		body = bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 		old := []byte("disable-model-invocation: " + flags[0] + "\n")
 		if bytes.Count(body, old) != 1 {
 			t.Fatalf("%s does not declare %q exactly once", path, old)
@@ -128,12 +129,12 @@ func commandsPlanSelection(result map[string]any, delivered, withheld string) er
 			commandDiagnostics = append(commandDiagnostics, fmt.Sprint(diagnostic["severity"], ":", diagnostic["code"], ":", diagnostic["item"]))
 		}
 	}
-	if want := []string{"warning:" + commandsWithheldCode + ":" + withheld}; !slices.Equal(commandDiagnostics, want) {
+	if want := []string{"warning:" + planner.ExplicitInvocationNotEnforceable + ":" + withheld}; !slices.Equal(commandDiagnostics, want) {
 		return fmt.Errorf("command diagnostics = %v, want %v", commandDiagnostics, want)
 	}
 	warnings, _ := plan["warnings"].([]any)
-	if !slices.Contains(warnings, any(commandsWithheldCode)) {
-		return fmt.Errorf("plan warnings %v omit %s", warnings, commandsWithheldCode)
+	if !slices.Contains(warnings, any(planner.ExplicitInvocationNotEnforceable)) {
+		return fmt.Errorf("plan warnings %v omit %s", warnings, planner.ExplicitInvocationNotEnforceable)
 	}
 	return nil
 }
@@ -412,7 +413,7 @@ func TestAgentpluginsCommandsFixtureAdmission(t *testing.T) {
 		for _, row := range client.Components {
 			switch {
 			case row.Source != domain.ComponentSourceCommand:
-			case row.Support == domain.SupportUnsupported && slices.Equal(row.Limitations, []string{commandsWithheldCode}):
+			case row.Support == domain.SupportUnsupported && slices.Equal(row.Limitations, []string{planner.ExplicitInvocationNotEnforceable}):
 				withheld++
 			case row.Support != domain.SupportUnsupported && len(row.Limitations) == 0:
 				delivered++
