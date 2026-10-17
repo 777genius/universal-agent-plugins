@@ -706,9 +706,23 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	// and no plugin-named file may survive in the Codex home. The full
 	// inventory diff is recorded as evidence of exactly what was removed.
 	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, f.CodexHome, filepath.Join(f.Root, "installer-state")))
+	// The Codex CLI's own volatile arg0 scratch (<CodexHome>/tmp: shims and
+	// lock files) is created and cleaned up by the client across any codex
+	// invocation, so deletions there say nothing about plugin removal. They
+	// are recorded separately instead of being miscounted as foreign damage.
+	clientScratchPrefix := filepath.Join(f.CodexHome, "tmp") + string(os.PathSeparator)
+	pluginRemoved := []string{}
+	clientScratchRemoved := []string{}
 	for _, path := range removedPaths {
+		if strings.HasPrefix(path, clientScratchPrefix) {
+			clientScratchRemoved = append(clientScratchRemoved, path)
+			continue
+		}
+		pluginRemoved = append(pluginRemoved, path)
+	}
+	for _, path := range pluginRemoved {
 		if !strings.Contains(path, "native-proof") && !strings.Contains(path, "agentplugins-") && !strings.HasPrefix(path, active) {
-			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (removed=%v)", path, removedPaths)
+			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (pluginRemoved=%v)", path, pluginRemoved)
 		}
 	}
 	survivors := []string{}
@@ -721,8 +735,8 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	if len(survivors) != 0 {
 		t.Fatalf("plugin-named files survived removal in the Codex home: %v", survivors)
 	}
-	nativeJSON(t, filepath.Join(f.Root, "remove-inventory-diff.json"), map[string]any{"removed": removedPaths, "added": addedPaths, "changed": changedPaths})
-	stages["remove"] = nativeStage{Status: "passed", Reason: fmt.Sprintf("New CLI/app-server inventory excludes plugin; native data retained; exact inventory diff recorded (removed=%d all plugin-owned, added=%d, changed=%d)", len(removedPaths), len(addedPaths), len(changedPaths)), Artifacts: []string{"remove-inventory-diff.json"}}
+	nativeJSON(t, filepath.Join(f.Root, "remove-inventory-diff.json"), map[string]any{"removed": pluginRemoved, "client_scratch_removed": clientScratchRemoved, "added": addedPaths, "changed": changedPaths})
+	stages["remove"] = nativeStage{Status: "passed", Reason: fmt.Sprintf("New CLI/app-server inventory excludes plugin; native data retained; exact inventory diff recorded (removed=%d all plugin-owned, client-scratch=%d, added=%d, changed=%d)", len(pluginRemoved), len(clientScratchRemoved), len(addedPaths), len(changedPaths)), Artifacts: []string{"remove-inventory-diff.json"}}
 	nativeAttempt(stages, "foreign_preservation", "removed-rpc.jsonl")
 	for path, body := range foreign {
 		got, err := os.ReadFile(path)
