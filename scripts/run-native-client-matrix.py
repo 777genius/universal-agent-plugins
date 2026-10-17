@@ -59,15 +59,18 @@ PINS = {
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }
+# Exact, anchored selections: every selected test is required and every
+# required test is selected (scripts/test_native_client_matrix.py checks both
+# against the Go sources).
 PATTERNS = {
-    "codex": r"^TestAgentpluginsCodexNativeLifecycle$",
-    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle)$",
-    "opencode": r"^TestAgentpluginsOpenCodeNative",
+    "codex": r"^TestAgentpluginsCodexNative(Lifecycle|CommandsLifecycle)$",
+    "claude": r"^TestAgentpluginsClaudeNative(Lifecycle|RuntimeLifecycle|CommandsLifecycle)$",
+    "opencode": r"^TestAgentpluginsOpenCodeNative(Lifecycle|ToolCollision|RuntimeExtended|CommandsLifecycle)$",
 }
 REQUIRED_TESTS = {
-    "codex": {"TestAgentpluginsCodexNativeLifecycle"},
-    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle"},
-    "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended"},
+    "codex": {"TestAgentpluginsCodexNativeLifecycle", "TestAgentpluginsCodexNativeCommandsLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle"},
+    "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
 
 

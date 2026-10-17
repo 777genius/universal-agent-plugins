@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Source is explicitly created by the composition root from its own executable.
@@ -51,7 +53,7 @@ func (source *Source) Available() error {
 
 // CheckCollision never follows an authored namespace symlink or overwrites files.
 func CheckCollision(root string) (bool, error) {
-	parent := filepath.Join(root, "io.github.777genius.agentplugins")
+	parent := filepath.Join(root, domain.ExtensionNamespace)
 	info, err := os.Lstat(parent)
 	if os.IsNotExist(err) {
 		return false, nil

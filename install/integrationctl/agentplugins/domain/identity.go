@@ -44,18 +44,36 @@ func ComputeClientBindingID(installationID, clientID, scope, targetLocator strin
 	return "client_" + hex.EncodeToString(sum[:12])
 }
 
+// leafIDBytes is the longest identifier that names one path component, the
+// same limit the path policy enforces.
+const leafIDBytes = 64
+
+// DeriveLeafID appends suffix to an identifier the caller supplied, such as an
+// operation id, and keeps the result one path component long. A base too long
+// for that is cut and followed by a short digest of the whole base, so the
+// same base always derives the same identifier and different ones stay apart.
+func DeriveLeafID(base, suffix string) string {
+	if len(base)+len(suffix) <= leafIDBytes {
+		return base + suffix
+	}
+	sum := sha256.Sum256([]byte(base))
+	digest := hex.EncodeToString(sum[:6])
+	keep := min(max(leafIDBytes-len(suffix)-len(digest)-1, 0), len(base))
+	return strings.TrimRight(base[:keep], ".-") + "-" + digest + suffix
+}
+
 func ComputePhysicalArtifactID(declaredName, installationID string) string {
 	sum := sha256.Sum256([]byte(installationID))
 	suffix := hex.EncodeToString(sum[:6])
 	name := strings.TrimSpace(declaredName)
-	maximumNameBytes := 64 - 1 - len(suffix)
+	maximumNameBytes := leafIDBytes - 1 - len(suffix)
 	if len(name) > maximumNameBytes {
 		name = strings.TrimRight(name[:maximumNameBytes], ".-")
 	}
 	candidate := name + "-" + suffix
 	// Preserve historical safe output, including its exact truncation.
 	// Only schema-valid portable names use the reserved-basename fallback.
-	if portableDeclaredName(declaredName) && reservedPhysicalStem(candidate) {
+	if portableDeclaredName(declaredName) && ReservedPhysicalStem(candidate) {
 		maximumNameBytes -= len("p-")
 		if len(name) > maximumNameBytes {
 			name = strings.TrimRight(name[:maximumNameBytes], ".-")
@@ -71,9 +89,9 @@ func portableDeclaredName(name string) bool {
 	return len(name) <= 64 && physicalDeclaredNamePattern.MatchString(name) && !strings.Contains(name, "--") && !strings.Contains(name, "..")
 }
 
-// reservedPhysicalStem mirrors the narrow Windows basename invariant. The
+// ReservedPhysicalStem mirrors the narrow Windows basename invariant. The
 // external-package tests keep this pure domain check in parity with pathpolicy.
-func reservedPhysicalStem(name string) bool {
+func ReservedPhysicalStem(name string) bool {
 	stem := strings.ToUpper(strings.SplitN(name, ".", 2)[0])
 	switch stem {
 	case "CON", "PRN", "AUX", "NUL", "CLOCK$":

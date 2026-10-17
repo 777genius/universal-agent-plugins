@@ -101,7 +101,10 @@ func (s Service) read(ctx context.Context, exactRoot string, generated packagevi
 		}
 	}
 	result.Facts, err = decoder.Decode(ctx, converted)
-	return result, err
+	if err != nil || result.Facts.Package == nil {
+		return result, err
+	}
+	return result, withCommands(ctx, &result.Facts, input, lease)
 }
 
 func document(d packageview.Document) conformance.Document {

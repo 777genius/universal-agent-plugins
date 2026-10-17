@@ -11,7 +11,21 @@ import (
 	"unicode/utf8"
 )
 
+// MaxSkillNameBytes and MaxSkillDescriptionRunes are the Agent Skills limits
+// for a skill's name and its description.
+const (
+	MaxSkillNameBytes        = 64
+	MaxSkillDescriptionRunes = 1024
+)
+
 var skillNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
+
+// PortableSkillNameForm reports whether name has the form of a portable skill
+// name, length aside: lowercase ASCII letters and digits with single inner
+// hyphens. Together with MaxSkillNameBytes it is the installer's name rule.
+func PortableSkillNameForm(name string) bool {
+	return skillNamePattern.MatchString(name) && !strings.Contains(name, "--")
+}
 
 var skillFields = map[string]struct{}{
 	"name": {}, "description": {}, "license": {}, "compatibility": {}, "metadata": {}, "allowed-tools": {},
@@ -21,7 +35,7 @@ func ParseInstallerSkill(directoryName string, body []byte) (domain.Skill, error
 	return parseSkill(directoryName, body, skillFrontmatter, false)
 }
 func parseSkill(directoryName string, body []byte, front func([]byte) (map[string]any, error), author bool) (domain.Skill, error) {
-	if (!author && (len(directoryName) > 64 || !skillNamePattern.MatchString(directoryName) || strings.Contains(directoryName, "--"))) || (author && !normativeSkillName(directoryName)) {
+	if (!author && (len(directoryName) > MaxSkillNameBytes || !PortableSkillNameForm(directoryName))) || (author && !normativeSkillName(directoryName)) {
 		return domain.Skill{}, skillError("skill_name_invalid", "directory name %q is not a portable Agent Skill name", directoryName)
 	}
 	frontmatter, err := front(body)
@@ -44,8 +58,8 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 	if err != nil {
 		return domain.Skill{}, err
 	}
-	if count := utf8.RuneCountInString(description); count < 1 || count > 1024 {
-		return domain.Skill{}, skillError("skill_description_length", "description length must be between 1 and 1024 characters")
+	if count := utf8.RuneCountInString(description); count < 1 || count > MaxSkillDescriptionRunes {
+		return domain.Skill{}, skillError("skill_description_length", "description length must be between 1 and %d characters", MaxSkillDescriptionRunes)
 	}
 	license, err := optionalString(frontmatter, "license")
 	if err != nil {
@@ -88,20 +102,26 @@ func parseSkill(directoryName string, body []byte, front func([]byte) (map[strin
 }
 
 func frontmatterBytes(body []byte) ([]byte, error) {
+	header, _, err := splitFrontmatter(body)
+	return header, err
+}
+
+// splitFrontmatter returns the YAML header and everything after its closing
+// delimiter, both with CRLF folded to LF.
+func splitFrontmatter(body []byte) ([]byte, []byte, error) {
 	normalized := bytes.ReplaceAll(body, []byte("\r\n"), []byte("\n"))
 	if !bytes.HasPrefix(normalized, []byte("---\n")) {
-		return nil, skillError("skill_frontmatter_open", "SKILL.md must begin with YAML frontmatter")
+		return nil, nil, skillError("skill_frontmatter_open", "SKILL.md must begin with YAML frontmatter")
 	}
 	remainder := normalized[len("---\n"):]
 	end := bytes.Index(remainder, []byte("\n---\n"))
 	if end < 0 {
 		if bytes.HasSuffix(remainder, []byte("\n---")) {
-			end = len(remainder) - len("\n---")
-		} else {
-			return nil, skillError("skill_frontmatter_close", "SKILL.md frontmatter is not terminated")
+			return remainder[:len(remainder)-len("\n---")], nil, nil
 		}
+		return nil, nil, skillError("skill_frontmatter_close", "SKILL.md frontmatter is not terminated")
 	}
-	return remainder[:end], nil
+	return remainder[:end], remainder[end+len("\n---\n"):], nil
 }
 func skillFrontmatter(body []byte) (map[string]any, error) {
 	data, err := frontmatterBytes(body)
@@ -151,7 +171,7 @@ func skillError(code, format string, args ...any) error {
 }
 func normativeSkillName(name string) bool {
 	n := utf8.RuneCountInString(name)
-	if n < 1 || n > 64 || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
+	if n < 1 || n > MaxSkillNameBytes || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
 		return false
 	}
 	for _, r := range name {

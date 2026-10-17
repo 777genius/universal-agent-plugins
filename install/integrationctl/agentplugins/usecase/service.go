@@ -97,10 +97,14 @@ type PluginDataManager interface {
 
 type AddInput struct {
 	refreshSelectedDelivery bool
-	InstallIntent           domain.InstallIntent
-	Envelope                domain.PackageEnvelope
-	Client                  domain.DetectedClient
-	Scope                   domain.InstallScope
+	// refreshChangedProjectionOnly limits a refresh to a changed projected
+	// digest. Update sets it: the update itself finishes any outstanding
+	// activation, and a settled prepared state is not one.
+	refreshChangedProjectionOnly bool
+	InstallIntent                domain.InstallIntent
+	Envelope                     domain.PackageEnvelope
+	Client                       domain.DetectedClient
+	Scope                        domain.InstallScope
 	// OnlinePreview permits host probing during a read-only normal-operation preview.
 	// It grants no mutation or confirmation permission.
 	OnlinePreview      bool
@@ -143,10 +147,6 @@ type AddResult struct {
 
 func (service Service) Add(ctx context.Context, input AddInput) (AddResult, error) {
 	return service.apply(ctx, input, false)
-}
-
-func (service Service) Update(ctx context.Context, input AddInput) (AddResult, error) {
-	return service.apply(ctx, input, true)
 }
 
 func (service Service) apply(ctx context.Context, input AddInput, replace bool) (AddResult, error) {

@@ -156,7 +156,9 @@ type DeliveryPlan struct {
 	Diagnostics                                            []PlanDiagnostic
 }
 
-type ComponentDecision struct{ Kind, Name, Support, Reason string }
+// ComponentDecision is one planned component. Source and SourceName are set
+// only for a component the installer renders, such as a command's skill.
+type ComponentDecision struct{ Kind, Name, Support, Reason, Source, SourceName string }
 type PlanDiagnostic struct{ Severity, Boundary, Code, Path, Item, Message string }
 
 // PlanTarget is one client's prepared identity in a group handle.

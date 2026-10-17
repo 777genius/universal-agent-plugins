@@ -87,7 +87,7 @@ func desiredOpenCodeNativeRequirements(envelope domain.PackageEnvelope, id domai
 	}
 	slices.Sort(transports)
 	skillSupport := definition.Capabilities.SkillSupport
-	return len(envelope.Skills) > 0 && skillSupport != "" && skillSupport != domain.SupportUnsupported, transports
+	return domain.DeliversSkills(envelope, definition) && skillSupport != "" && skillSupport != domain.SupportUnsupported, transports
 }
 
 func offlineOpenCodeHost(host domain.OpenCodeHostAuthority, skills bool, transports []string) (domain.OpenCodeHostAuthority, error) {

@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import re
 import tarfile
 import tempfile
 import sys
@@ -15,6 +16,9 @@ import zipfile
 SPEC = importlib.util.spec_from_file_location("native_matrix", Path(__file__).with_name("run-native-client-matrix.py"))
 matrix = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(matrix)
+RELEASED_SPEC = importlib.util.spec_from_file_location("released_native_evidence", Path(__file__).with_name("verify-released-native-evidence.py"))
+released = importlib.util.module_from_spec(RELEASED_SPEC)
+RELEASED_SPEC.loader.exec_module(released)
 
 
 class NativeMatrixTests(unittest.TestCase):
@@ -111,6 +115,26 @@ class NativeMatrixTests(unittest.TestCase):
 
     def test_extended_runtime_is_required_for_opencode_proof(self):
         self.assertIn("TestAgentpluginsOpenCodeNativeRuntimeExtended", matrix.REQUIRED_TESTS["opencode"])
+
+    def test_command_lifecycle_is_required_for_every_client(self):
+        for client, test in {"codex": "TestAgentpluginsCodexNativeCommandsLifecycle",
+                             "claude": "TestAgentpluginsClaudeNativeCommandsLifecycle",
+                             "opencode": "TestAgentpluginsOpenCodeNativeCommandsLifecycle"}.items():
+            self.assertIn(test, matrix.REQUIRED_TESTS[client])
+
+    def test_patterns_select_exactly_the_required_tests(self):
+        # The Go suite is the source of truth: a pattern that misses a required
+        # test fails the run late, and one that selects an unrequired test lets
+        # a skip or an unreviewed test into the proof.
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(set(matrix.PATTERNS), set(matrix.REQUIRED_TESTS))
+        self.assertEqual(released.CLIENT_TESTS, matrix.REQUIRED_TESTS)
+        for client, pattern in matrix.PATTERNS.items():
+            self.assertTrue(pattern.startswith("^") and pattern.endswith("$"), client)
+            selected = {name for name in declared if re.search(pattern, name)}
+            self.assertEqual(selected, matrix.REQUIRED_TESTS[client], client)
 
     def test_runtime_rejects_ambient_and_self_hosted_machine(self):
         for env in [{}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}]:

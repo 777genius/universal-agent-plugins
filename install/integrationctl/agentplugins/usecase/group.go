@@ -90,16 +90,17 @@ func (service Service) AddGroup(ctx context.Context, input GroupInput) (GroupRes
 	return service.applyGroup(ctx, input, false)
 }
 
-func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
-	return service.applyGroup(ctx, input, true)
-}
-
 func (service Service) SwitchGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	input.Switch = true
 	return service.applyGroup(ctx, input, true)
 }
 
 func (service Service) RepairGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
+	result, err := service.repairGroup(ctx, input)
+	return result, forSavedDependency(err, groupEnvironmentAuthority(input))
+}
+
+func (service Service) repairGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
 	if service.StateStore == nil {
 		return GroupResult{}, fmt.Errorf("state store is required")
 	}
@@ -198,6 +199,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	if err := session.preflightCompatibleBindings(); err != nil {
+		return session.result, err
+	}
+	if err := session.preflightUnchangedProjections(); err != nil {
 		return session.result, err
 	}
 	if session.input.DryRun || !session.input.Confirmed {

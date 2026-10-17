@@ -289,6 +289,25 @@ func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compa
 	return nil
 }
 
+// preflightUnchangedProjections stops before any effect when the installed
+// tree of an unchanged target no longer matches the command rules, instead of
+// recording a failed activation for it. An update preview is exempt: the
+// confirmed update refreshes such a tree before the group runs.
+func (session *groupSession) preflightUnchangedProjections() error {
+	if session.replace && (session.input.DryRun || !session.input.Confirmed) {
+		return nil
+	}
+	for _, target := range session.planned {
+		if !target.noChange || target.managed == nil {
+			continue
+		}
+		if err := session.service.requireCurrentCommandProjection(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed); err != nil {
+			return fmt.Errorf("target %s: %w", target.input.Client.ClientID, err)
+		}
+	}
+	return nil
+}
+
 func (session *groupSession) reviewGroupDirectoryAbsence(plan domain.DeliveryPlan, managed *domain.ClientBinding) (bool, error) {
 	if managed == nil {
 		return true, nil

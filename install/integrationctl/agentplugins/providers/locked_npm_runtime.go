@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	lockedRuntimePath = "io.github.777genius.agentplugins/runtime"
+	lockedRuntimePath = domain.ExtensionNamespace + "/" + domain.LockedRuntimeDir
 	lockedLauncherArg = "${PLUGIN_ROOT}/" + lockedRuntimePath + "/launcher.mjs"
 	runtimeMarkerName = ".agentplugins-runtime.json"
 )

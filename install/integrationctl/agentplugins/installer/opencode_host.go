@@ -23,7 +23,8 @@ func (e *Engine) prepareOpenCodeHost(ctx context.Context, handle *PreparedOperat
 	if !ok || !consumer.UsesOpenCodeHostProfile() {
 		return nil
 	}
-	skills, transports := clients.OpenCodeNativeRequirements(handle.envelope)
+	definition, _ := domain.ClientDefinitionFor(handle.client.ClientID)
+	skills, transports := clients.OpenCodeNativeRequirements(handle.envelope, definition)
 	previousEffects, ownedCodec, err := e.previousOpenCodeEffects(handle, consumer)
 	if err != nil {
 		return err

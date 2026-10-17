@@ -250,19 +250,9 @@ func (e *Engine) readCommittedPackage(prepared *PreparedOperation, added usecase
 }
 
 func (e *Engine) finishMutatingPackage(result Result, added usecase.AddResult, committed bool, err error) (Result, error) {
-	if errors.Is(err, ErrPlanChanged) {
+	if reason, conflict := lifecycleConflictReason(err); conflict {
 		result.Outcome = OutcomeConflict
-		result.Reason = "plan_changed"
-		return result, err
-	}
-	if errors.Is(err, ErrUpdateRequired) {
-		result.Outcome = OutcomeConflict
-		result.Reason = "update_required"
-		return result, err
-	}
-	if errors.Is(err, ErrTargetFactsUnavailable) {
-		result.Outcome = OutcomeConflict
-		result.Reason = "target_facts_unavailable"
+		result.Reason = reason
 		return result, err
 	}
 	if added.NoChange && err == nil {

@@ -13,12 +13,14 @@ import (
 var ErrUnknownCompatibilityClient = errors.New("unknown compatibility client")
 
 // ComponentCompatibility describes static adapter support, never activation.
-// Index is one-based within Kind, ordered by the input's component map keys
-// (including invalid inventory entries). Names are intentionally not returned:
-// even malformed component keys and diagnostic items can contain secrets/paths.
+// Index is one-based within Kind, ordered by Source (authored components
+// first) and then by the input's component map keys (including invalid
+// inventory entries). Names are intentionally not returned: even malformed
+// component keys and diagnostic items can contain secrets/paths.
 type ComponentCompatibility struct {
 	Kind        domain.ComponentKind `json:"kind"`
 	Index       int                  `json:"index"`
+	Source      string               `json:"source,omitempty"`
 	Support     domain.SupportLevel  `json:"support"`
 	Limitations []string             `json:"limitations,omitempty"`
 }
@@ -48,16 +50,16 @@ func Compatibility(registry *clients.Registry, envelope domain.PackageEnvelope, 
 	if registry == nil {
 		return nil, clients.ErrRegistryRequired
 	}
-	targets := make(map[domain.ClientID]domain.ClientCapabilities)
+	targets := make(map[domain.ClientID]domain.ClientDefinition)
 	for _, id := range targetIDs {
 		if _, exists := targets[id]; exists {
 			continue
 		}
-		capabilities, ok := Capabilities(id)
+		definition, ok := domain.ClientDefinitionFor(id)
 		if !ok {
 			return nil, ErrUnknownCompatibilityClient
 		}
-		targets[id] = capabilities
+		targets[id] = definition
 	}
 	result := make([]ClientCompatibility, 0, len(targets))
 	ids := make([]domain.ClientID, 0, len(targets))
@@ -72,7 +74,8 @@ func Compatibility(registry *clients.Registry, envelope domain.PackageEnvelope, 
 	return result, nil
 }
 
-func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities, limiter clients.CompatibilityLimiter) ClientCompatibility {
+func compatibilityFor(envelope domain.PackageEnvelope, definition domain.ClientDefinition, limiter clients.CompatibilityLimiter) ClientCompatibility {
+	capabilities := definition.Capabilities
 	result := newClientCompatibility(capabilities)
 	if capabilities.ActivationMode == domain.ActivationByUser {
 		result.Limitations = append(result.Limitations, "manual_activation_required")
@@ -85,6 +88,7 @@ func compatibilityFor(envelope domain.PackageEnvelope, capabilities domain.Clien
 	decisions, invalid, invalidKind := compatibilityInventory(envelope, capabilities)
 	result.Limitations = applyErrorDiagnostics(envelope, invalid, invalidKind, result.Limitations)
 	includeMissingInvalid(&decisions, invalid)
+	decisions = append(decisions, commandCompatibility(envelope, definition)...)
 	sortCompatibilityDecisions(decisions)
 	result.Components = compatibilityComponents(envelope, limiter, decisions, invalid, invalidKind)
 	sort.Strings(result.Limitations)
@@ -152,6 +156,9 @@ func sortCompatibilityDecisions(decisions []domain.ComponentDecision) {
 		if decisions[i].Kind != decisions[j].Kind {
 			return decisions[i].Kind < decisions[j].Kind
 		}
+		if decisions[i].Source != decisions[j].Source {
+			return decisions[i].Source < decisions[j].Source
+		}
 		return decisions[i].Name < decisions[j].Name
 	})
 }
@@ -201,7 +208,7 @@ func compatibilityComponents(envelope domain.PackageEnvelope, limiter clients.Co
 
 func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clients.CompatibilityLimiter, item domain.ComponentDecision, invalid map[domain.ComponentKind]map[string]bool, invalidKind map[domain.ComponentKind]bool, counts map[domain.ComponentKind]int) ComponentCompatibility {
 	counts[item.Kind]++
-	component := ComponentCompatibility{Kind: item.Kind, Index: counts[item.Kind], Support: item.Support}
+	component := ComponentCompatibility{Kind: item.Kind, Index: counts[item.Kind], Source: item.Source, Support: item.Support}
 	reject := func(code string) {
 		component.Support = domain.SupportUnsupported
 		component.Limitations = appendUnique(component.Limitations, code)
@@ -209,8 +216,16 @@ func refineComponentCompatibility(envelope domain.PackageEnvelope, limiter clien
 	if item.Reason != "" {
 		component.Limitations = append(component.Limitations, item.Reason)
 	}
-	if invalid[item.Kind][item.Name] || invalidKind[item.Kind] {
-		reject("invalid_component")
+	switch {
+	case item.Source == domain.ComponentSourceCommand:
+		// A command row is judged by its own entry, never by the skills root.
+		if item.Reason == invalidComponent {
+			for _, code := range commandErrorCodes(envelope, item.SourceName) {
+				reject(code)
+			}
+		}
+	case invalid[item.Kind][item.Name] || invalidKind[item.Kind]:
+		reject(invalidComponent)
 	}
 	applyKindCompatibility(envelope, item, reject)
 	if limiter != nil {
@@ -234,7 +249,7 @@ func applyKindCompatibility(envelope domain.PackageEnvelope, item domain.Compone
 		}
 	case domain.ComponentApp:
 		if !envelope.App.Enabled || envelope.App.Bindings[item.Name].ID == "" {
-			reject("invalid_component")
+			reject(invalidComponent)
 		}
 	}
 }

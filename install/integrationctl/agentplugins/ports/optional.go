@@ -56,6 +56,13 @@ type PluginDataAwareStager interface {
 	StageWithPluginData(context.Context, domain.PackageEnvelope, domain.DeliveryPlan, string, domain.CompatibilityHints, string) (domain.StagedDelivery, error)
 }
 
+// CommandSkillVerifier compares the command skills of an installed tree with
+// what the current rules render for plan, without writing anything. A tree
+// that differs fails with domain.ErrProjectionRefreshRequired.
+type CommandSkillVerifier interface {
+	VerifyCommandSkills(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error
+}
+
 // ActiveNativeProjector computes native delivery from a digest-verified active
 // package. It must not write to the package or inspect external client state.
 type ActiveNativeProjector interface {

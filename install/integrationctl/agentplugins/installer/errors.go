@@ -1,6 +1,10 @@
 package installer
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
+)
 
 var (
 	ErrInvalidConfig            = errors.New("installer config rejected")
@@ -21,3 +25,20 @@ var (
 	ErrCompatibilityUnavailable = errors.New("sibling compatibility checks are unavailable")
 	ErrTargetFactsUnavailable   = errors.New("target facts are unavailable or conflict with owned state")
 )
+
+// lifecycleConflictReason names the conflict a lifecycle error reports instead
+// of an incomplete outcome. A saved dependency waiting for a pin change has
+// its own reason, which carries no update next action: an update cannot help.
+func lifecycleConflictReason(err error) (string, bool) {
+	switch {
+	case errors.Is(err, ErrPlanChanged):
+		return "plan_changed", true
+	case errors.Is(err, ErrUpdateRequired):
+		return "update_required", true
+	case errors.Is(err, ErrTargetFactsUnavailable):
+		return "target_facts_unavailable", true
+	case errors.Is(err, usecase.ErrProjectionPinChangeRequired):
+		return "pin_change_required", true
+	}
+	return "", false
+}

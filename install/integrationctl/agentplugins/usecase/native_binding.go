@@ -176,6 +176,16 @@ func (s profileStager) ProjectActiveNative(ctx context.Context, e domain.Package
 	}
 	return inner.ProjectActiveNative(ctx, e, p, path, data)
 }
+func (s profileStager) VerifyCommandSkills(ctx context.Context, root string, e domain.PackageEnvelope, p domain.DeliveryPlan) error {
+	if err := s.check(); err != nil {
+		return err
+	}
+	inner, ok := s.PackageStager.(ports.CommandSkillVerifier)
+	if !ok {
+		return fmt.Errorf("command skill verifier is missing")
+	}
+	return inner.VerifyCommandSkills(ctx, root, e, p)
+}
 func (s profileStager) PreflightManagedStdio(command string) error {
 	if err := s.check(); err != nil {
 		return err

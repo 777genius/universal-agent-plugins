@@ -105,6 +105,16 @@ func traitParityRequirements() []contracttest.CapabilityRequirement {
 			},
 		},
 		{
+			Name: "EnforcesExplicitSkillInvocation",
+			Holds: func(definition domain.ClientDefinition) bool {
+				return definition.Traits.EnforcesExplicitSkillInvocation
+			},
+			Implements: func(adapter clients.Adapter) bool {
+				_, ok := adapter.(clients.ExplicitSkillDecorator)
+				return ok
+			},
+		},
+		{
 			Name: "native projector",
 			Holds: func(definition domain.ClientDefinition) bool {
 				return domain.RequiresNativeProjector(definition.ID)

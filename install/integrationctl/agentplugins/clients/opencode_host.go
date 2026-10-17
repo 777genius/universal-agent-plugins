@@ -19,7 +19,10 @@ type OpenCodeHostProfileConsumer interface {
 	OwnedOpenCodeNativeRequirements([]domain.NativeObjectOwnership) (skills, config bool)
 }
 
-func OpenCodeNativeRequirements(envelope domain.PackageEnvelope) (bool, []string) {
+// OpenCodeNativeRequirements sizes host preparation. Skills count as required
+// when the client gets any skill, including one rendered from a command, so
+// the prepared host agrees with the plan RefinePlan later validates.
+func OpenCodeNativeRequirements(envelope domain.PackageEnvelope, definition domain.ClientDefinition) (bool, []string) {
 	var transports []string
 	if len(envelope.MCP.Servers) > 0 {
 		transports = make([]string, 0, len(envelope.MCP.Servers))
@@ -28,7 +31,7 @@ func OpenCodeNativeRequirements(envelope domain.PackageEnvelope) (bool, []string
 		transports = append(transports, server.Type)
 	}
 	slices.Sort(transports)
-	return len(envelope.Skills) > 0, transports
+	return domain.DeliversSkills(envelope, definition), transports
 }
 
 // PlannedOpenCodeNativeRequirements validates only selected effects. Historical

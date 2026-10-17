@@ -11,24 +11,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -74,24 +82,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -137,24 +153,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -200,24 +224,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "projected"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -263,24 +295,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         }
       ],
@@ -326,24 +366,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -390,24 +438,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -453,24 +509,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -516,24 +580,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -579,24 +651,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "native"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -642,24 +722,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         }
       ],
@@ -705,24 +793,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],
@@ -768,24 +864,32 @@
           "Kind": "skill",
           "Name": "docs",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "mcp_server",
           "Name": "remote",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         },
         {
           "Kind": "app",
           "Name": "remote",
           "Reason": "component_not_supported_by_client",
+          "Source": "",
+          "SourceName": "",
           "Support": "unsupported"
         },
         {
           "Kind": "extension",
           "Name": "cursor",
           "Reason": "",
+          "Source": "",
+          "SourceName": "",
           "Support": "prepared"
         }
       ],

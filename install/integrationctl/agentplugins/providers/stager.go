@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/commandext"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -160,6 +161,10 @@ func (stager Stager) stage(
 	hints domain.CompatibilityHints,
 	pluginDataPath string,
 ) (delivery domain.StagedDelivery, err error) {
+	commands, err := stager.renderCommandSkills(ctx, envelope, plan)
+	if err != nil {
+		return domain.StagedDelivery{}, err
+	}
 	layout, err := stager.preflightStage(ctx, envelope, plan, operationID)
 	if err != nil {
 		return domain.StagedDelivery{}, err
@@ -174,6 +179,14 @@ func (stager Stager) stage(
 		}
 	}()
 	if err = stager.materializeStaging(stagingPath, envelope, plan); err != nil {
+		return domain.StagedDelivery{}, err
+	}
+	// Command skills join the tree after sanitize and before the projector,
+	// which then treats them like the package's own skills.
+	if err = writeCommandSkills(stager.Paths, stagingPath, commands); err != nil {
+		return domain.StagedDelivery{}, err
+	}
+	if envelope, err = commandext.WithCommandSkills(envelope, plan); err != nil {
 		return domain.StagedDelivery{}, err
 	}
 	projected, err := stager.project(ctx, stagingPath, envelope, plan, hints, pluginDataPath)

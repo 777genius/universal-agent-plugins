@@ -30,6 +30,25 @@ type ActiveNativeProjector interface {
 	ProjectActiveNative(context.Context, string, domain.PackageEnvelope, domain.DeliveryPlan, string) ([]domain.NativeObjectOwnership, error)
 }
 
+// SkillsLocator is implemented by a client whose projection moves the
+// package's skills/ elsewhere in the delivered tree. It returns that directory
+// for plan, relative to the tree and slash-separated. Without it the skills
+// stay in skills/. Reading command skills back from an installed tree relies
+// on it, so it must agree with the client's Projector.
+type SkillsLocator interface {
+	InstalledSkillsDirectory(plan domain.DeliveryPlan) string
+}
+
+// ExplicitSkillDecorator adds the client's mechanism for explicit-only
+// invocation to a skill rendered from a command: header fields and files, never
+// other changes. A client whose definition declares
+// EnforcesExplicitSkillInvocation must implement it; the stager refuses to
+// deliver an explicit-only command otherwise, and also when the decorated
+// header no longer says domain.ExplicitInvocationField: true.
+type ExplicitSkillDecorator interface {
+	DecorateExplicitSkill(domain.RenderedSkill) (domain.RenderedSkill, error)
+}
+
 // ProjectionInput is everything a projector is allowed to see. StagingPath is
 // the tree to write into; Plan.ActivePath is the future location the projection
 // has to encode, and the two are deliberately different.

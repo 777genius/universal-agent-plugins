@@ -40,6 +40,46 @@ func (session *groupSession) stageGroupDeliveries() error {
 			return err
 		}
 	}
+	if err := session.requireRecordedRepairProjections(); err != nil {
+		session.cleanupStaged()
+		return err
+	}
+	return nil
+}
+
+// requireRecordedRepairProjections keeps a group repair of a package with
+// commands from applying new command rules, as Repair does. An intact target
+// whose installed command skills differ from the current rendering stops with
+// ErrProjectionRefreshRequired, since only update applies the rules; other
+// projection changes proceed as for a package without commands. A missing
+// target that cannot be rebuilt as recorded is told to be added again, as
+// neither repair nor update can restore it.
+func (session *groupSession) requireRecordedRepairProjections() error {
+	if !session.input.Repair {
+		return nil
+	}
+	for _, target := range session.planned {
+		if target.noChange || target.managed == nil || !rendersCommands(target.input.Envelope, target.input.Client.ClientID) {
+			continue
+		}
+		recorded := target.delivery.ArtifactDigest == managedDigest(*target.managed)
+		if target.requireAbsent {
+			if !recorded {
+				return fmt.Errorf("staged reconstruction for %s does not match the recorded package digest, because the command rules or host projection changed since installation; remove the package and add it again", target.input.Client.ClientID)
+			}
+			continue
+		}
+		current, verified, err := session.service.commandSkillsCurrent(session.ctx, target.plan.ActivePath, target.input.Envelope, target.plan)
+		if err != nil {
+			return err
+		}
+		if !verified {
+			current = recorded
+		}
+		if !current {
+			return fmt.Errorf("repair %s: %w", target.input.Client.ClientID, ErrProjectionRefreshRequired)
+		}
+	}
 	return nil
 }
 

@@ -77,6 +77,12 @@ type ClientDefinition struct {
 	// none, which is the normal case.
 	DirectoryPreparationPurpose DirectoryResolvePurpose
 	Capabilities                ClientCapabilities
+	// CommandSupport is whether the installer delivers portable commands to
+	// this client as skills. Empty follows Capabilities.SkillSupport;
+	// SupportUnsupported withholds every command. Backend siblings install one
+	// shared package, so they must agree. Like Traits, it is installer policy
+	// and not part of the public JSON capabilities contract.
+	CommandSupport SupportLevel
 	// Traits are installer policy for this client. They are not part of the
 	// public JSON capabilities contract and must not be serialized onto it.
 	Traits ClientTraits
@@ -102,15 +108,15 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
 	}),
-	clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
+	})),
+	withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
 		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:             LifecycleCLIRegistry,
-	}),
+	})),
 	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
 		LifecycleKind:       LifecycleCLIRegistry,
@@ -153,6 +159,16 @@ var clientDefinitions = []ClientDefinition{
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
 	definition.Capabilities.ActivationMode = activation
+	return definition
+}
+
+// withoutCommands withholds portable commands from a client that otherwise
+// takes skills. The github-copilot family carries it while Visual Studio Code
+// is frozen by the owner decision of 2026-10-16: VS Code installs through the
+// package it shares with Copilot CLI, so neither may get commands. Removing it
+// from both entries delivers commands to the family again.
+func withoutCommands(definition ClientDefinition) ClientDefinition {
+	definition.CommandSupport = SupportUnsupported
 	return definition
 }
 
@@ -323,6 +339,10 @@ type ComponentDecision struct {
 	Name    string        `json:"name"`
 	Support SupportLevel  `json:"support"`
 	Reason  string        `json:"reason,omitempty"`
+	// Source and SourceName are set only for a component the installer
+	// renders, such as ComponentSourceCommand and the command's name.
+	Source     string `json:"source,omitempty"`
+	SourceName string `json:"source_name,omitempty"`
 }
 
 type DeliveryPlan struct {
