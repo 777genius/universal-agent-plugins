@@ -678,7 +678,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	// Codex has no supported CLI verb for UAP to silently uninstall a plugin
 	// on the user's behalf (see usecase/remove.go and remove_group.go); every
 	// real remove against Codex must be an acknowledged external uninstall.
-	removeInventoryBefore := nativeFileInventory(f.CodexHome, filepath.Join(f.Root, "installer-state"))
+	removeInventoryBefore := nativeFileInventory(t, f.CodexHome, filepath.Join(f.Root, "installer-state"))
 	nativeInstaller(t, f, installer, client, "remove", "remove", "native-proof", "--external-uninstalled")
 	// UAP's own directory removal must be immediate and independent of
 	// whatever a later fresh app-server session reports; this isolates that
@@ -705,14 +705,14 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	// UAP managed artifact or the client's own plugin cache/registry entry),
 	// and no plugin-named file may survive in the Codex home. The full
 	// inventory diff is recorded as evidence of exactly what was removed.
-	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(f.CodexHome, filepath.Join(f.Root, "installer-state")))
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, f.CodexHome, filepath.Join(f.Root, "installer-state")))
 	for _, path := range removedPaths {
 		if !strings.Contains(path, "native-proof") && !strings.Contains(path, "agentplugins-") && !strings.HasPrefix(path, active) {
 			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (removed=%v)", path, removedPaths)
 		}
 	}
 	survivors := []string{}
-	for path := range nativeFileInventory(f.CodexHome) {
+	for path := range nativeFileInventory(t, f.CodexHome) {
 		if strings.Contains(path, "native-proof") {
 			survivors = append(survivors, path)
 		}

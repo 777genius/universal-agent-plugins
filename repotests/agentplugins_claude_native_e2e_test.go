@@ -607,7 +607,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// succeeds identically with or without the flag); omitted here rather than
 	// copy-pasted from the Codex pattern to avoid implying it exercises real
 	// Claude-specific behavior it does not. --purge-data is real and kept.
-	removeInventoryBefore := nativeFileInventory(f.ConfigDir, f.StateHome)
+	removeInventoryBefore := nativeFileInventory(t, f.ConfigDir, f.StateHome)
 	result = claudeRunInstaller(t, f, installer, clientDir, "remove", "remove", "claude-native-proof", "--target", "claude", "--purge-data")
 	if data, _ := result["data"].(map[string]any); data == nil || data["status"] != "completed" {
 		t.Fatalf("remove did not complete: %+v", result)
@@ -627,7 +627,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// no file named for the plugin may survive anywhere in the client config.
 	// The full removed/added/changed inventory is recorded as evidence so the
 	// claim "what exactly was removed" is inspectable, not inferred.
-	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(f.ConfigDir, f.StateHome))
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, f.ConfigDir, f.StateHome))
 	within := func(path, root string) bool {
 		return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
 	}
@@ -642,7 +642,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 		}
 	}
 	survivors := []string{}
-	for path := range nativeFileInventory(f.ConfigDir) {
+	for path := range nativeFileInventory(t, f.ConfigDir) {
 		if strings.Contains(path, "claude-native-proof") {
 			survivors = append(survivors, path)
 		}

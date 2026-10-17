@@ -662,22 +662,30 @@ func nativeTreeDigest(t *testing.T, root string) string {
 
 // nativeFileInventory records every regular file under the given roots keyed
 // by absolute path with its content SHA-256, so remove stages can assert the
-// exact set of deleted paths instead of spot-checking sentinels.
-func nativeFileInventory(roots ...string) map[string]string {
+// exact set of deleted paths instead of spot-checking sentinels. Failures are
+// fatal: a partial inventory would silently weaken the exact-removal claim.
+func nativeFileInventory(t *testing.T, roots ...string) map[string]string {
+	t.Helper()
 	inventory := map[string]string{}
 	for _, root := range roots {
-		_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
-			if err != nil || entry.IsDir() {
+		err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
 				return nil
 			}
-			body, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return nil
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
 			}
 			digest := sha256.Sum256(body)
 			inventory[path] = hex.EncodeToString(digest[:])
 			return nil
 		})
+		if err != nil {
+			t.Fatalf("inventory %s: %v", root, err)
+		}
 	}
 	return inventory
 }
@@ -710,14 +718,14 @@ func TestAgentpluginsNativeInventoryDiff(t *testing.T) {
 	nativeWrite(t, kept, []byte("kept"), 0600)
 	nativeWrite(t, deleted, []byte("deleted"), 0600)
 	nativeWrite(t, changed, []byte("before"), 0600)
-	before := nativeFileInventory(root)
+	before := nativeFileInventory(t, root)
 	nativeWrite(t, changed, []byte("after"), 0600)
 	added := filepath.Join(root, "added.txt")
 	nativeWrite(t, added, []byte("added"), 0600)
 	if err := os.Remove(deleted); err != nil {
 		t.Fatal(err)
 	}
-	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(before, nativeFileInventory(root))
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(before, nativeFileInventory(t, root))
 	if len(removedPaths) != 1 || removedPaths[0] != deleted {
 		t.Fatalf("wrong removed set: %v", removedPaths)
 	}
