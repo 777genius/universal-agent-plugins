@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -695,6 +696,12 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	// managed state.
 	must(os.WriteFile(configPath, preCollisionBytes, 0644))
 
+	// Exact removal accounting, same contract as the Claude/Codex native
+	// suites: every deleted path must be plugin-owned (the UAP managed
+	// artifact or the plugin's own skill directory), no plugin-named file may
+	// survive in the OpenCode config, and the full inventory diff is recorded
+	// as evidence of exactly what was removed.
+	removeInventoryBefore := nativeFileInventory(t, f.XDGConfig, f.StateHome)
 	removed := openCodeRunInstaller(t, f, installer, clientDir, "remove", "remove", "opencode-native-proof", "--target", "opencode")
 	if removed == nil || removed["result"] != "success" {
 		t.Fatalf("remove did not report success: %+v", removed)
@@ -719,8 +726,26 @@ func openCodeNativeLifecycle(t *testing.T, route string) {
 	if _, statErr := os.Stat(filepath.Join(f.XDGConfig, "opencode", "skills", "demo-skill")); !os.IsNotExist(statErr) {
 		t.Fatalf("remove did not delete the installed skill directory from disk: %v", statErr)
 	}
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, f.XDGConfig, f.StateHome))
+	managedPrefix := filepath.Join(f.StateHome, "managed") + string(os.PathSeparator)
+	for _, path := range removedPaths {
+		if !strings.Contains(path, "opencode-native-proof") && !strings.Contains(path, "demo-skill") && !strings.Contains(path, "agentplugins-") && !strings.HasPrefix(path, managedPrefix) {
+			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (removed=%v)", path, removedPaths)
+		}
+	}
+	survivors := []string{}
+	for path := range nativeFileInventory(t, f.XDGConfig) {
+		if strings.Contains(path, "opencode-native-proof") || strings.Contains(path, "demo-skill") {
+			survivors = append(survivors, path)
+		}
+	}
+	sort.Strings(survivors)
+	if len(survivors) != 0 {
+		t.Fatalf("plugin-named files survived removal in the OpenCode config: %v", survivors)
+	}
+	nativeJSON(t, filepath.Join(f.Root, "remove-inventory-diff.json"), map[string]any{"removed": removedPaths, "added": addedPaths, "changed": changedPaths})
 	assertConfigRoute()
-	stages["remove"] = openCodeNativeStage{Status: "passed", Reason: "result:success and data.status:data_retained; managed MCP entries removed from effective config; installed skill directory actually deleted from disk (not just absent from debug config); foreign sibling config entry preserved"}
+	stages["remove"] = openCodeNativeStage{Status: "passed", Reason: fmt.Sprintf("result:success and data.status:data_retained; managed MCP entries removed from effective config; installed skill directory actually deleted from disk (not just absent from debug config); foreign sibling config entry preserved; exact inventory diff recorded (removed=%d all plugin-owned, added=%d, changed=%d)", len(removedPaths), len(addedPaths), len(changedPaths))}
 
 	repeatOut, repeatErr := openCodeRunInstallerExpectError(t, f, installer, clientDir, "repeat-remove", "remove", "opencode-native-proof", "--target", "opencode")
 	if repeatErr == nil {
