@@ -7,6 +7,7 @@ import { pluginCommands } from '../utils/commands.ts';
 import { discoveryPlugin } from '../utils/discovery.ts';
 import {
   catalogVisiblePlugins,
+  catalogTrustCounts,
   filterPlugins,
   groupCatalogPlugins,
   catalogQuery,
@@ -74,6 +75,38 @@ describe('unified registry landing', () => {
       projectRegistry(registry, { kind: 'catalog' }).plugins.length,
       registry.plugins.filter((item) => item.trust_state !== 'conformant_unreviewed').length,
     );
+  });
+
+  it('intro counts match the grouped catalog total', () => {
+    const counts = catalogTrustCounts(registry.plugins);
+    assert.equal(counts.total, groupCatalogPlugins(catalogVisiblePlugins(registry.plugins)).length);
+    assert.equal(counts.reviewed + counts.community, counts.total);
+  });
+
+  it('intro counts collapse duplicate sources instead of counting raw records', () => {
+    const reviewed = registry.plugins.find(
+      (plugin) => plugin.trust_state !== 'conformant_unreviewed',
+    )!;
+    const alias = {
+      ...reviewed,
+      install_source: 'discovery:alias/plugin',
+      trust_state: 'conformant_unreviewed' as const,
+      source: { ...reviewed.source, repository: 'alias/plugin' },
+      distributions: reviewed.distributions.map((item) => ({
+        ...item,
+        id: `${item.id}-alias`,
+      })),
+    };
+    const community = {
+      ...alias,
+      install_source: 'discovery:solo/plugin',
+      name: 'solo-community',
+      source: { ...reviewed.source, repository: 'solo/plugin' },
+    };
+    const counts = catalogTrustCounts([reviewed, alias, community]);
+    assert.equal(counts.total, 2);
+    assert.equal(counts.reviewed, 1);
+    assert.equal(counts.community, 1);
   });
 
   it('groups alternate sources with a deterministic reviewed primary', () => {

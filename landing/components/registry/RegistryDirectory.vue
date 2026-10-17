@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import type { RegistryIndex } from '~/types/registry';
-import { catalogVisiblePlugins } from '~/utils/filter';
+import { catalogTrustCounts } from '~/utils/filter';
 const { t, n } = useI18n();
 
 const props = defineProps<{ registry: RegistryIndex }>();
-const catalogPlugins = computed(() => catalogVisiblePlugins(props.registry.plugins));
-const reviewedCount = computed(
-  () =>
-    catalogPlugins.value.filter((plugin) => plugin.trust_state !== 'conformant_unreviewed').length,
-);
-const discoveryCount = computed(() => catalogPlugins.value.length - reviewedCount.value);
+const counts = computed(() => catalogTrustCounts(props.registry.plugins));
+const reviewedCount = computed(() => counts.value.reviewed);
+const discoveryCount = computed(() => counts.value.community);
 const intro = computed(() =>
   discoveryCount.value
     ? t('registryUi.directory.combined', {

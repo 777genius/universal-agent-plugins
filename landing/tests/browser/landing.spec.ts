@@ -91,6 +91,17 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await waitForFullDirectory(page);
   const catalogSummary = await page.locator('.catalog-count').innerText();
   const totalPlugins = Number(catalogSummary.match(/([\d,]+) plugins/)![1].replaceAll(',', ''));
+  await expect
+    .poll(
+      async () => {
+        const intro = await page.locator('.catalog .section-heading > p').last().innerText();
+        return [...intro.matchAll(/([\d,]+) (?:reviewed plugins?|community packages?)/g)]
+          .map((match) => Number(match[1].replaceAll(',', '')))
+          .reduce((sum, count) => sum + count, 0);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(totalPlugins);
   await expect(explorePlugins).toHaveAccessibleName(
     `Explore ${totalPlugins.toLocaleString('en')} plugins`,
     { timeout: 5_000 },
