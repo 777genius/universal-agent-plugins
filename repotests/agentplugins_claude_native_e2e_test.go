@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -606,6 +607,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	// succeeds identically with or without the flag); omitted here rather than
 	// copy-pasted from the Codex pattern to avoid implying it exercises real
 	// Claude-specific behavior it does not. --purge-data is real and kept.
+	removeInventoryBefore := nativeFileInventory(t, f.ConfigDir, f.StateHome)
 	result = claudeRunInstaller(t, f, installer, clientDir, "remove", "remove", "claude-native-proof", "--target", "claude", "--purge-data")
 	if data, _ := result["data"].(map[string]any); data == nil || data["status"] != "completed" {
 		t.Fatalf("remove did not complete: %+v", result)
@@ -621,7 +623,36 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	if len(remaining) != 1 || remaining[0].ID != "foreign-plugin@skills-dir" {
 		t.Fatalf("claude plugin list after remove did not show exactly the surviving foreign plugin: %+v", remaining)
 	}
-	stages["remove"] = claudeNativeStage{Status: "passed", Reason: "managed directory removed; sibling foreign plugin's sentinel content and its sole remaining claude plugin list entry both confirmed"}
+	// Exact removal accounting: every deleted path must be plugin-owned, and
+	// no file named for the plugin may survive anywhere in the client config.
+	// The full removed/added/changed inventory is recorded as evidence so the
+	// claim "what exactly was removed" is inspectable, not inferred.
+	removedPaths, addedPaths, changedPaths := nativeInventoryDiff(removeInventoryBefore, nativeFileInventory(t, f.ConfigDir, f.StateHome))
+	within := func(path, root string) bool {
+		return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
+	}
+	for _, path := range removedPaths {
+		if !within(path, installPath) && !strings.Contains(path, "claude-native-proof") && !strings.Contains(path, "agentplugins-") {
+			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (removed=%v)", path, removedPaths)
+		}
+	}
+	for _, path := range addedPaths {
+		if within(path, filepath.Join(f.ConfigDir, "skills")) || strings.Contains(path, "claude-native-proof") {
+			t.Fatalf("remove created a file in the client's plugin-visible surface: %s (added=%v)", path, addedPaths)
+		}
+	}
+	survivors := []string{}
+	for path := range nativeFileInventory(t, f.ConfigDir) {
+		if strings.Contains(path, "claude-native-proof") {
+			survivors = append(survivors, path)
+		}
+	}
+	sort.Strings(survivors)
+	if len(survivors) != 0 {
+		t.Fatalf("plugin-named files survived removal in the client config: %v", survivors)
+	}
+	nativeJSON(t, filepath.Join(f.Root, "remove-inventory-diff.json"), map[string]any{"removed": removedPaths, "added": addedPaths, "changed": changedPaths})
+	stages["remove"] = claudeNativeStage{Status: "passed", Reason: fmt.Sprintf("managed directory removed; sibling foreign plugin's sentinel content and its sole remaining claude plugin list entry both confirmed; exact inventory diff recorded (removed=%d all plugin-owned, added=%d installer-state only, changed=%d)", len(removedPaths), len(addedPaths), len(changedPaths))}
 
 	// repeat remove must be refused, not silently succeed or crash
 	repeatOut, repeatErr := claudeRunInstallerExpectError(t, f, installer, clientDir, "repeat-remove", "remove", "claude-native-proof", "--target", "claude", "--purge-data")
