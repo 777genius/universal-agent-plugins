@@ -29,6 +29,15 @@ function normalized(value: string): string {
   return value.trim().toLowerCase();
 }
 
+/** Intro counts must match the catalog total, so both derive from grouped cards. */
+export function catalogTrustCounts(plugins: RegistryPlugin[]) {
+  const groups = groupCatalogPlugins(catalogVisiblePlugins(plugins));
+  const reviewed = groups.filter(
+    (group) => group.primary.trust_state !== 'conformant_unreviewed',
+  ).length;
+  return { reviewed, community: groups.length - reviewed, total: groups.length };
+}
+
 export const catalogQueryKeys = [
   'q',
   'category',

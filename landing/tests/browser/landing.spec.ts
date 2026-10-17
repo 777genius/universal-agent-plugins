@@ -85,12 +85,25 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await securityBadge.focus();
   const securityTooltip = page.locator('.app-tooltip');
   await expect(securityTooltip).toBeVisible();
-  await expect(securityTooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
-  await expect(securityTooltip).toContainText(/does not run the plugin or guarantee safety/i);
+  // Snapshot once: the tooltip can dismiss between per-pattern re-queries.
+  const tooltipText = await securityTooltip.innerText();
+  expect(tooltipText).toMatch(/exact indexed revision [0-9a-f]{12}/);
+  expect(tooltipText).toMatch(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
   await waitForFullDirectory(page);
   const catalogSummary = await page.locator('.catalog-count').innerText();
   const totalPlugins = Number(catalogSummary.match(/([\d,]+) plugins/)![1].replaceAll(',', ''));
+  await expect
+    .poll(
+      async () => {
+        const intro = await page.locator('.catalog .section-heading > p').last().innerText();
+        return [...intro.matchAll(/([\d,]+) (?:reviewed plugins?|community packages?)/g)]
+          .map((match) => Number(match[1].replaceAll(',', '')))
+          .reduce((sum, count) => sum + count, 0);
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(totalPlugins);
   await expect(explorePlugins).toHaveAccessibleName(
     `Explore ${totalPlugins.toLocaleString('en')} plugins`,
     { timeout: 5_000 },
