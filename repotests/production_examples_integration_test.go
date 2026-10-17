@@ -58,12 +58,17 @@ func TestProductionExamples_RenderValidateBuildAndSmoke(t *testing.T) {
 			dir:      filepath.Join(root, "examples", "plugins", "opencode-basic"),
 			platform: "opencode",
 		},
+		{
+			name:     "qoder",
+			dir:      filepath.Join(root, "examples", "plugins", "qoder-basic"),
+			platform: "qoder",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			workDir := tc.dir
-			if tc.buildGo || tc.platform == "codex-package" || tc.platform == "gemini" || tc.platform == "cursor" || tc.platform == "opencode" {
+			if tc.buildGo || tc.platform == "codex-package" || tc.platform == "gemini" || tc.platform == "cursor" || tc.platform == "opencode" || tc.platform == "qoder" {
 				workDir = filepath.Join(t.TempDir(), filepath.Base(tc.dir))
 				copyTree(t, tc.dir, workDir)
 			}
@@ -88,6 +93,10 @@ func TestProductionExamples_RenderValidateBuildAndSmoke(t *testing.T) {
 			}
 			if tc.platform == "opencode" {
 				assertOpenCodeConfig(t, workDir, "@acme/opencode-demo-plugin")
+				return
+			}
+			if tc.platform == "qoder" {
+				assertQoderConfig(t, workDir, "qoder-basic")
 				return
 			}
 			if !tc.buildGo {
@@ -257,6 +266,60 @@ func assertOpenCodeConfig(t *testing.T, root, wantPlugin string) {
 	}
 	if !bytes.Contains(packageBody, []byte(`"@opencode-ai/plugin"`)) {
 		t.Fatalf("opencode package.json missing helper dependency:\n%s", packageBody)
+	}
+}
+
+func assertQoderConfig(t *testing.T, root, wantName string) {
+	t.Helper()
+	manifestBody, err := os.ReadFile(filepath.Join(root, ".qoder-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(manifestBody, &manifest); err != nil {
+		t.Fatalf("parse qoder plugin manifest: %v\n%s", err, manifestBody)
+	}
+	if manifest["name"] != wantName {
+		t.Fatalf(".qoder-plugin/plugin.json name = %q want %q", manifest["name"], wantName)
+	}
+	if manifest["mcpServers"] != "./.mcp.json" {
+		t.Fatalf(".qoder-plugin/plugin.json mcpServers = %+v", manifest["mcpServers"])
+	}
+	if manifest["skills"] != "./skills/" {
+		t.Fatalf(".qoder-plugin/plugin.json skills = %+v", manifest["skills"])
+	}
+	body, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("parse .mcp.json: %v\n%s", err, body)
+	}
+	server, ok := doc.MCPServers["release-checks"]
+	if !ok {
+		t.Fatalf(".mcp.json missing release-checks server: %s", body)
+	}
+	if server.Command != "node" {
+		t.Fatalf("release-checks command = %q want %q", server.Command, "node")
+	}
+	if len(server.Args) != 1 || server.Args[0] != "${QODER_PLUGIN_ROOT}/bin/release-checks.mjs" {
+		t.Fatalf("release-checks args = %v", server.Args)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "release-checks", "SKILL.md")); err != nil {
+		t.Fatalf("stat generated qoder skill: %v", err)
+	}
+	generatedBody, err := os.ReadFile(filepath.Join(root, "GENERATED.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(generatedBody, []byte(".qoder-plugin/plugin.json")) {
+		t.Fatalf("unexpected GENERATED.md:\n%s", generatedBody)
 	}
 }
 
