@@ -43,8 +43,9 @@ The following `agentplugins` changes are breaking. They ship in the next minor
   `agentplugins validate` still exits with success on invalid commands.
 - **Update refreshes command skills first.** For a package with commands,
   `update` of an unchanged revision now re-renders the command skills with the
-  current rules before the ordinary update, and changes nothing when the rules
-  give the same tree. Its preview, single or grouped, is never unchanged:
+  current rules before the ordinary update when the installed command skills
+  differ from the current rendering, and changes nothing otherwise; other
+  host projection changes are left alone, as for a package without commands. Its preview, single or grouped, is never unchanged:
   `update --all` and the batch update plan such a package instead of skipping
   it as current, and an embedded installer's preview reports
   `RequiresConfirmation` rather than `NoChange`. Hosts that skip unchanged
@@ -60,14 +61,19 @@ The following `agentplugins` changes are breaking. They ship in the next minor
   clients that track native objects, a repeated add, a resumed activation and
   an unchanged group target. The embedded installer wraps it in
   `ErrUpdateRequired` with the `update_required` reason. Check for either with
-  `errors.Is` and run `OpUpdate` instead.
+  `errors.Is` and run `OpUpdate` instead. A saved dependency gets
+  `usecase.ErrProjectionPinChangeRequired` instead, reported by the embedded
+  installer with the `pin_change_required` reason and no next action, because
+  it applies new command rules only at its next pin change.
 - **Go API.** `installer.ComponentDecision` gains `Source` and `SourceName`, so
   unkeyed literals must name their fields. `clients.OpenCodeNativeRequirements`
   takes the client definition, because commands alone can deliver skills.
   `domain.SecurityEvaluationInput` gains `Commands` and `PluginName`; hosts
   that call the evaluator directly pass them so the scan covers the rendered
   commands. An adapter that sets `ClientTraits.EnforcesExplicitSkillInvocation`
-  must implement `clients.ExplicitSkillDecorator`.
+  must implement `clients.ExplicitSkillDecorator`, and an adapter whose
+  projection moves the package's `skills/` elsewhere must implement
+  `clients.SkillsLocator`, so installed command skills can be read back.
 - **Security review.** A package with commands is always scanned locally, or
   served from a cache entry for the same rendered commands; a signed Directory
   verdict is not accepted for it.

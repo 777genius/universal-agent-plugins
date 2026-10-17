@@ -67,19 +67,28 @@ installer's rendering rules, so a newer installer can change its tree without a
 new package revision. `Update` therefore runs `RefreshProjection` before the
 ordinary apply when the installation has no environment authority and its
 binding is materialized at the same revision. That refresh acts only when the
-staged digest differs from the recorded one and otherwise leaves files and
-state alone. A preview cannot know the answer without staging, so the preview
-of such an update, single or grouped, is never unchanged: hosts and
-`update --all` that skip unchanged previews still run it. Refresh authorizes
-only `repair`, which a saved-dependency sync never grants, so environment
-bindings pick up new rules at the next pin change.
+installed command skills differ from what the current rules render, checked
+by the stager's `VerifyCommandSkills` where the client's projection keeps
+skills (`clients.SkillsLocator` for Claude Code's runtime directory), and
+otherwise leaves files and state alone. Other projection inputs that changed
+since installation, such as the config file OpenCode creates on its first
+run, do not trigger it, as they do not for a package without commands; they
+stay with `RefreshProjection`. A preview does not run that check, so the
+preview of such an update, single or grouped, is never unchanged: hosts and
+`update --all` that skip unchanged previews still run it. Clients that
+receive no commands are left out. Refresh authorizes only `repair`, which a
+saved-dependency sync never grants, so environment bindings pick up new rules
+at the next pin change, and they get `ErrProjectionPinChangeRequired` (reason
+`pin_change_required`, no next action) instead of being sent to an update
+that cannot help.
 
 **Repair keeps recorded bytes.** For an intact package with commands, a
 confirmed single-target `Service.Repair`, which the embedded installer uses,
-first stages under the current rules. If the digest differs from the recorded
-one, it stops with `usecase.ErrProjectionRefreshRequired` and leaves the change
-to update. A group repair, which `agentplugins repair` uses, compares every
-staged digest the same way before it commits anything.
+first compares the installed command skills with the current rendering. If
+they differ, it stops with `usecase.ErrProjectionRefreshRequired` and leaves the
+change to update. A group repair, which `agentplugins repair` uses, checks
+every intact target the same way before it commits anything; other projection
+changes go ahead as for a package without commands.
 
 **Other operations keep the installed tree.** A repeated add, a resumed
 activation and an unchanged group target rebuild a native projection from the
@@ -175,6 +184,10 @@ not cover commands.
 - **Refreshing after a no-change apply.** Clients with read-only native
   projection verify the installed tree before that point and fail on a tree
   that misses the new skills.
+- **Deciding the refresh, or a repair refusal, by the whole staged digest.**
+  The digest also covers host inputs such as the config file a client chose,
+  so an unchanged update rewrote the tree after OpenCode created its config,
+  and repair would have pointed to an update that does nothing.
 - **Refreshing every package on update.** Packages without commands do not
   depend on rendering rules; refreshing them would only add cost and
   confirmation prompts.

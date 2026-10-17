@@ -45,7 +45,11 @@ changes remote state, and report the deployment URL when you finish.
 **File name.** `^[a-z0-9]+(-[a-z0-9]+)*\.md$`, and the stem must not be a
 reserved Windows name (`con`, `prn`, `aux`, `nul`, `clock$`, `com1`-`com9`,
 `lpt1`-`lpt9`). Anything else in `commands/` (other files, subdirectories,
-symlinks, `.MD`) reports `command_name_invalid`.
+symlinks, `.MD`) reports `command_name_invalid`. A reserved stem such as
+`con.md` does not get that far with the installer: `agentplugins validate`,
+`add` and `update` cannot read a package that holds a reserved name anywhere,
+and stop with the general error `snapshot package content failed` before any
+command check runs.
 
 **Frontmatter.** It is closed: exactly the two fields below, nothing else.
 Client-specific fields such as `allowed-tools`, `argument-hint` or `model` are
@@ -219,37 +223,50 @@ rules, so both kinds of change have to reach the client.
   enforce it.
 - **The same revision after an installer upgrade.** `agentplugins update
   <name>` first refreshes the command skills with the current rules, then runs
-  the ordinary update. Only staging shows whether the rules changed the tree,
-  so neither `update <name>` nor `update --all` reports such a package as
-  current in its plan: every target with commands is planned and asks for
-  confirmation, and the update stages it once. When the rules produce the
-  same tree, the refresh stops there and leaves files and state as they are.
-  An embedded installer's update preview for such a package reports
-  `RequiresConfirmation` and never `NoChange`. `update --all` still skips a
-  Directory installation that the signed Discovery record reports as current;
-  run `agentplugins update <name>` for it.
+  the ordinary update. The plan cannot tell in advance whether the rules
+  changed anything, so neither `update <name>` nor `update --all` reports such
+  a package as current: every target that receives commands is planned and
+  asks for confirmation. The update then compares the installed command skills
+  with the current rendering and refreshes only when they differ; otherwise it
+  leaves files and state as they are. Other projection inputs that changed
+  since installation, such as the `opencode.jsonc` OpenCode creates on its
+  first run, are not a reason to refresh, exactly as for a package without
+  commands. An embedded installer's update preview for such a package reports
+  `RequiresConfirmation` and never `NoChange`. GitHub Copilot CLI and Visual
+  Studio Code, which receive no commands, keep the ordinary update. `update
+  --all` still skips a Directory installation that the signed Discovery record
+  reports as current; run `agentplugins update <name>` for it.
 - **Operations that keep the installed tree** do not apply new rules. On
   clients that rebuild their native projection from the installed tree (Kiro,
   Gemini CLI, OpenCode, Cline, Windsurf / Devin), a repeated `add`, a resumed
   activation and an unchanged target of a group `add` stop with
-  `usecase.ErrProjectionRefreshRequired` before any change when the installed
-  command skills differ from what the current rules render. Other clients keep
-  the installed skills and report no change. Run `agentplugins update <name>`.
+  `usecase.ErrProjectionRefreshRequired` when the installed command skills
+  differ from what the current rules render. A preview, and therefore the CLI
+  and the embedded installer, stops before any change; a confirmed
+  `Service.Add` called without a preview may first prepare the installed MCP
+  runtime. Other clients keep the installed skills and report no change. Run
+  `agentplugins update <name>`.
 - **Repair** is for restoring a damaged installation, not for applying new
   rules; use `agentplugins update <name>` for that. `agentplugins repair` and a
   single-target repair through the embedded installer stop with
-  `usecase.ErrProjectionRefreshRequired` when the command skills of an intact
-  package would now render differently. If the package is missing or damaged
-  and the rules changed as well, remove and add it again.
+  `usecase.ErrProjectionRefreshRequired` when the installed command skills of
+  an intact package differ from the current rendering; other projection
+  changes do not stop them. If the package is missing or damaged and it can no
+  longer be rebuilt as recorded, remove and add it again.
 - **The embedded installer** reports `usecase.ErrProjectionRefreshRequired`
-  wrapped in `installer.ErrUpdateRequired`, with a conflict outcome and the
-  reason `update_required`; `errors.Is` finds either error.
+  wrapped in `installer.ErrUpdateRequired`, with a conflict outcome, the reason
+  `update_required` and an update next action; `errors.Is` finds either error.
+  When a group refresh stops part way, every target names its client and gets
+  a phase: completed, failed or not attempted.
 - **Saved dependency environments** (`agentplugins deps`) do not use the
   refresh. New rendering rules reach those installations at the next pin
   change. Until then a sync leaves a settled binding as it is, but on the
-  clients listed above an update of the binding at an unchanged pin, or a sync
-  that still has to finish its activation, stops with
-  `usecase.ErrProjectionRefreshRequired`.
+  clients listed above an update or repair of the binding at an unchanged pin,
+  or a sync that still has to finish its activation, stops with
+  `usecase.ErrProjectionPinChangeRequired`, which `errors.Is` does not match to
+  `ErrProjectionRefreshRequired`. The embedded installer reports it as a
+  conflict with the reason `pin_change_required` and no next action, because
+  an update cannot help.
 
 ## Security review
 
