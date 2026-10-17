@@ -112,8 +112,7 @@ func mergeRefreshedGroup(result, refreshed GroupResult, err error) GroupResult {
 }
 
 // refreshGroupTargets refreshes the eligible targets in order and stops at the
-// first failure. The failed target and every target not reached by then are
-// marked, so the partial result says which ones the stop left untouched.
+// first failure, marking every target of the partial result.
 func (service Service) refreshGroupTargets(ctx context.Context, input GroupInput, eligible map[int]string) (GroupResult, error) {
 	indexes := make([]int, 0, len(eligible))
 	for index := range eligible {
@@ -135,18 +134,33 @@ func (service Service) refreshGroupTargets(ctx context.Context, input GroupInput
 			if partial.Mutated {
 				partial.Phase = GroupPhaseExternalPartialFailure
 			}
-			partial.Targets[index].GroupPhase = GroupTargetExternalFailed
-			partial.Targets[index].Failure = &GroupTargetFailure{Stage: "refresh", Message: err.Error()}
-			for other := range partial.Targets {
-				if !attempted[other] {
-					partial.Targets[other].GroupPhase = GroupTargetExternalNotAttempted
-					partial.Targets[other].Failure = &GroupTargetFailure{Stage: "refresh", Message: "processing stopped because an earlier projection refresh failed"}
-				}
-			}
+			markStoppedRefresh(&partial, input, index, attempted, err)
 			return partial, err
 		}
 	}
 	return partial, nil
+}
+
+// markStoppedRefresh gives every target of a stopped group refresh its client,
+// scope and phase, which hosts need to report it: completed for an earlier
+// refresh, failed for the one that stopped, not attempted for the rest.
+func markStoppedRefresh(partial *GroupResult, input GroupInput, failed int, attempted map[int]bool, err error) {
+	for index := range partial.Targets {
+		target := &partial.Targets[index]
+		if target.Plan.ClientID == "" {
+			target.Plan.ClientID, target.Plan.Scope = input.Targets[index].Client.ClientID, input.Targets[index].Scope
+		}
+		switch {
+		case index == failed:
+			target.GroupPhase = GroupTargetExternalFailed
+			target.Failure = &GroupTargetFailure{Stage: "refresh", Message: err.Error()}
+		case attempted[index]:
+			target.GroupPhase = GroupTargetExternalCompleted
+		default:
+			target.GroupPhase = GroupTargetExternalNotAttempted
+			target.Failure = &GroupTargetFailure{Stage: "refresh", Message: "processing stopped because an earlier projection refresh failed"}
+		}
+	}
 }
 
 // projectionRefreshTarget reports the installation to refresh before this

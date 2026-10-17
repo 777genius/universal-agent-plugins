@@ -533,13 +533,19 @@ func TestUpdateGroupStopsAtAFailedRefresh(t *testing.T) {
 			if err == nil || failed.Mutated || failed.GroupPhase != GroupTargetExternalFailed || failed.Failure == nil {
 				t.Fatalf("partial group refresh = %+v, %v", result, err)
 			}
+			// Hosts match targets by client, so every one of them names it.
+			for index, target := range result.Targets {
+				if target.Plan.ClientID != targets[index].Client.ClientID || target.Plan.Scope != targets[index].Scope {
+					t.Fatalf("target %d does not name its client: %+v", index, target.Plan)
+				}
+			}
 			if broken == 0 {
 				if result.Phase != GroupPhasePreparationFailed || result.Mutated || result.Targets[1].GroupPhase != GroupTargetExternalNotAttempted {
 					t.Fatalf("group stopped at its first refresh = %+v", result)
 				}
 				return
 			}
-			if result.Phase != GroupPhaseExternalPartialFailure || !result.Mutated || !result.Targets[0].Mutated || result.Targets[0].GroupPhase != "" {
+			if result.Phase != GroupPhaseExternalPartialFailure || !result.Mutated || !result.Targets[0].Mutated || result.Targets[0].GroupPhase != GroupTargetExternalCompleted {
 				t.Fatalf("group stopped after a changing refresh = %+v", result)
 			}
 		})
