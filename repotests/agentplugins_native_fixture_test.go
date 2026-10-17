@@ -659,6 +659,7 @@ func nativeTreeDigest(t *testing.T, root string) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
 // nativeFileInventory records every regular file under the given roots keyed
 // by absolute path with its content SHA-256, so remove stages can assert the
 // exact set of deleted paths instead of spot-checking sentinels.
