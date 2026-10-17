@@ -261,6 +261,15 @@ func (session *removeManySession) recordRetainedData() {
 	session.result.RetainedDataAction = fmt.Sprintf("run `agentplugins remove %s --purge-data` to delete retained plugin data", session.installation.InstallationID)
 }
 
+func multiRemovalNeedsManualStep(result removeMultiResult) bool {
+	for _, target := range result.Targets {
+		if removalNeedsManualStep(target.Output.Result.Deactivation) || target.Status == "blocked" || target.Status == "not_applied" {
+			return true
+		}
+	}
+	return false
+}
+
 func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMultiResult) error {
 	if opts.format == "json" {
 		overall := "success"
@@ -280,6 +289,11 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", target.Output.NextAction); err != nil {
 				return err
 			}
+		}
+	}
+	if !result.DryRun && multiRemovalNeedsManualStep(result) {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "  "+removalIncompleteNotice); err != nil {
+			return err
 		}
 	}
 	if result.PluginDataPreserved {

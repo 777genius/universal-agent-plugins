@@ -435,6 +435,9 @@ func TestMultiTargetRemoveHumanOutputExplainsHowToPurgeRetainedData(t *testing.T
 			t.Fatalf("human grouped remove output %q omitted %q", stdout, want)
 		}
 	}
+	if strings.Contains(stdout, removalIncompleteNotice) {
+		t.Fatalf("fully completed grouped remove output claims an unfinished removal: %q", stdout)
+	}
 }
 
 func TestMultiTargetRemoveStopsBeforeMutationWhenManualStepIsRequired(t *testing.T) {
@@ -451,7 +454,7 @@ func TestMultiTargetRemoveStopsBeforeMutationWhenManualStepIsRequired(t *testing
 	if err == nil || !strings.Contains(err.Error(), "rerun with --external-uninstalled") || !strings.Contains(err.Error(), "no target was changed") {
 		t.Fatalf("grouped remove error = %v", err)
 	}
-	for _, want := range []string{"Remove demo: manual_step_required", "cursor: not_applied", "vscode: blocked", "Next: uninstall the plugin in Visual Studio Code"} {
+	for _, want := range []string{"Remove demo: manual_step_required", "cursor: not_applied", "vscode: blocked", "Next: uninstall the plugin in Visual Studio Code", removalIncompleteNotice} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("grouped remove output %q omitted %q", stdout, want)
 		}

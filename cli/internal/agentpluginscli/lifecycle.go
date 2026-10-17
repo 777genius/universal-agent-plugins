@@ -919,6 +919,9 @@ func renderRemoveResult(writer io.Writer, format string, installation domain.Ins
 	if result.Mutated {
 		_, _ = fmt.Fprintln(writer, "Removed the selected managed package.")
 	}
+	if removalNeedsManualStep(result.Deactivation) {
+		_, _ = fmt.Fprintln(writer, removalIncompleteNotice)
+	}
 	for _, action := range result.Deactivation.UserActions {
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
@@ -926,6 +929,14 @@ func renderRemoveResult(writer io.Writer, format string, installation domain.Ins
 		_, _ = fmt.Fprintf(writer, "Next: %s\n", action)
 	}
 	return nil
+}
+
+// removalIncompleteNotice keeps partial removals explicit: without it a run
+// that stopped for a manual client step reads like a finished removal.
+const removalIncompleteNotice = "Removal is not complete: a manual client step is still required."
+
+func removalNeedsManualStep(deactivation domain.DeactivationOutcome) bool {
+	return !deactivation.ArtifactRemovalAllowed || len(deactivation.UserActions) > 0
 }
 
 type removeResultData struct {
