@@ -59,7 +59,7 @@ func (session *groupSession) requireRecordedRepairProjections() error {
 		return nil
 	}
 	for _, target := range session.planned {
-		if target.noChange || target.managed == nil || !target.input.Envelope.HasInstallerRenderedComponents() {
+		if target.noChange || target.managed == nil || !rendersCommands(target.input.Envelope, target.input.Client.ClientID) {
 			continue
 		}
 		recorded := target.delivery.ArtifactDigest == managedDigest(*target.managed)

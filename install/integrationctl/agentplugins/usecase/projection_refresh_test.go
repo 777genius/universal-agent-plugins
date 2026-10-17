@@ -413,6 +413,30 @@ func TestRepairGroupRefusesAnOutdatedCommandProjection(t *testing.T) {
 	})
 }
 
+// A client whose registry entry withholds commands keeps update as for a
+// package without commands: no refresh, so its preview stays unchanged and
+// needs no confirmation.
+func TestClientsWithoutCommandsSkipTheRefresh(t *testing.T) {
+	t.Parallel()
+	for _, id := range []domain.ClientID{domain.ClientCopilot, domain.ClientVSCode} {
+		t.Run(string(id), func(t *testing.T) {
+			t.Parallel()
+			service, _, _ := serviceFixture(t)
+			input := commandInput(t, domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), string(id))})
+			if _, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{input}, OperationGroupID: "frozen-add", Confirmed: true}); err != nil {
+				t.Fatal(err)
+			}
+			if _, eligible, err := service.projectionRefreshTarget(input); err != nil || eligible {
+				t.Fatalf("refresh eligible = %v, %v", eligible, err)
+			}
+			preview, err := service.UpdateGroup(context.Background(), GroupInput{Targets: []AddInput{input}, OperationGroupID: "frozen-preview", DryRun: true})
+			if err != nil || !preview.Targets[0].NoChange || preview.Targets[0].RequiresConfirmation {
+				t.Fatalf("update preview = %+v, %v", preview.Targets[0], err)
+			}
+		})
+	}
+}
+
 // Saved-dependency sync authorizes only "update", which RefreshProjection
 // does not accept, so those bindings keep the ordinary update path.
 func TestEnvironmentUpdateDoesNotRefresh(t *testing.T) {

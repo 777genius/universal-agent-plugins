@@ -156,7 +156,7 @@ func (service Service) refreshGroupTargets(ctx context.Context, input GroupInput
 // scope is materialized at exactly this revision. It only reads state;
 // RefreshProjection checks the exact binding again under its own lock.
 func (service Service) projectionRefreshTarget(input AddInput) (string, bool, error) {
-	if input.EnvironmentAuthority != nil || !input.Envelope.HasInstallerRenderedComponents() || service.StateStore == nil {
+	if input.EnvironmentAuthority != nil || !rendersCommands(input.Envelope, input.Client.ClientID) || service.StateStore == nil {
 		return "", false, nil
 	}
 	state, err := service.StateStore.Load()
@@ -176,6 +176,15 @@ func (service Service) projectionRefreshTarget(input AddInput) (string, bool, er
 		}
 	}
 	return "", false, nil
+}
+
+// rendersCommands reports whether command rules shape this client's tree:
+// the package has command entries and the client can receive commands. A
+// client whose registry entry withholds them is left as for a package
+// without commands.
+func rendersCommands(envelope domain.PackageEnvelope, client domain.ClientID) bool {
+	definition, _ := domain.ClientDefinitionFor(client)
+	return envelope.HasInstallerRenderedComponents() && domain.ReceivesCommands(definition)
 }
 
 func (service Service) refreshBeforeUpdate(ctx context.Context, input AddInput, installationID, operationID string) (AddResult, error) {

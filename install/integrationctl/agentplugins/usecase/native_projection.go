@@ -72,7 +72,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 // rules stops a preview or a group with ErrProjectionRefreshRequired before
 // any effect. Other projection failures stay with the step that uses it.
 func (service Service) requireCurrentCommandProjection(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, client domain.ClientBinding) error {
-	if !input.Envelope.HasInstallerRenderedComponents() || !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
+	if !rendersCommands(input.Envelope, input.Client.ClientID) || !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
 		return nil
 	}
 	if _, _, err := service.activeNativeDelivery(ctx, input, plan, installation, client); errors.Is(err, ErrProjectionRefreshRequired) {

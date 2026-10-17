@@ -41,7 +41,7 @@ func (service Service) Repair(ctx context.Context, input AddInput) (AddResult, e
 		}
 	}
 	if session.verifyErr == nil {
-		if session.input.Envelope.HasInstallerRenderedComponents() {
+		if rendersCommands(session.input.Envelope, session.input.Client.ClientID) {
 			return session.repairRenderedProjection()
 		}
 		return session.repairNative()

@@ -69,15 +69,20 @@ func (envelope PackageEnvelope) HasInstallerRenderedComponents() bool {
 	return len(envelope.Commands)+len(envelope.InvalidCommands) > 0
 }
 
-// DeliversCommand reports whether a client receives a command as a skill. The
-// client has to take skills and must not withhold commands in its registry
-// entry. An explicit-only command also needs a client that enforces explicit
+// ReceivesCommands reports whether commands can reach a client at all: it
+// takes skills and its registry entry does not withhold commands. A client
+// that does not is untouched by command rules.
+func ReceivesCommands(definition ClientDefinition) bool {
+	support := definition.Capabilities.SkillSupport
+	return support != "" && support != SupportUnsupported && definition.CommandSupport != SupportUnsupported
+}
+
+// DeliversCommand reports whether a client receives a command as a skill. An
+// explicit-only command also needs a client that enforces explicit
 // invocation; it is withheld rather than delivered as a skill the model may
 // pick on its own.
 func DeliversCommand(command Command, definition ClientDefinition) bool {
-	support := definition.Capabilities.SkillSupport
-	return support != "" && support != SupportUnsupported && definition.CommandSupport != SupportUnsupported &&
-		(!command.ExplicitOnly || definition.Traits.EnforcesExplicitSkillInvocation)
+	return ReceivesCommands(definition) && (!command.ExplicitOnly || definition.Traits.EnforcesExplicitSkillInvocation)
 }
 
 // DeliversSkills reports whether a client gets any skill from the package,
