@@ -3,11 +3,14 @@ package kiro
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -91,6 +94,10 @@ func TestKiroDisposableAddUpdateACPFailureRemove(t *testing.T) {
 	if string(body) != "auth-failure\n" {
 		t.Fatalf("ACP failure restored old skill: %s", body)
 	}
+	// Exact removal accounting, the same contract as the Claude/Codex/
+	// OpenCode e2e suites: every deleted path must be plugin-owned, proven
+	// by a full file-inventory diff around the real Deactivate.
+	inventoryBefore := kiroFileInventory(t, configRoot)
 	removed, err := adapter.Deactivate(context.Background(), clients.Env{}, domain.DeactivationRequest{Client: request.Client, NativeObjects: outcome.NativeObjects, Confirmed: true})
 	if err != nil || !removed.ExternalRemovalComplete {
 		t.Fatalf("remove: %+v %v", removed, err)
@@ -103,7 +110,56 @@ func TestKiroDisposableAddUpdateACPFailureRemove(t *testing.T) {
 	if err != nil || len(recovery) != 0 {
 		t.Fatalf("completed operations left recovery: %v %v", recovery, err)
 	}
-	t.Log("disposable add -> update -> ACP auth failure -> remove: bytes, exact receipts, foreign comments/numbers and recovery paths verified; ACP runner is a fixture")
+	removedPaths, _, _ := kiroInventoryDiff(inventoryBefore, kiroFileInventory(t, configRoot))
+	for _, removedPath := range removedPaths {
+		if !strings.HasPrefix(removedPath, desired[0].Path) && !strings.Contains(removedPath, ".agentplugins-") {
+			t.Fatalf("remove deleted a file outside the plugin's owned scope: %s (removed=%v)", removedPath, removedPaths)
+		}
+	}
+	t.Logf("disposable add -> update -> ACP auth failure -> remove: bytes, exact receipts, foreign comments/numbers and recovery paths verified; ACP runner is a fixture; exact removal inventory verified (removed=%d all plugin-owned)", len(removedPaths))
+}
+
+func kiroFileInventory(t *testing.T, root string) map[string]string {
+	t.Helper()
+	inventory := map[string]string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(body)
+		inventory[path] = hex.EncodeToString(sum[:])
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("inventory %s: %v", root, err)
+	}
+	return inventory
+}
+
+func kiroInventoryDiff(before, after map[string]string) (removed, added, changed []string) {
+	for path := range before {
+		digest, ok := after[path]
+		if !ok {
+			removed = append(removed, path)
+			continue
+		}
+		if digest != before[path] {
+			changed = append(changed, path)
+		}
+	}
+	for path := range after {
+		if _, ok := before[path]; !ok {
+			added = append(added, path)
+		}
+	}
+	sort.Strings(removed)
+	sort.Strings(added)
+	sort.Strings(changed)
+	return removed, added, changed
 }
 
 func assertKiroDisposableBytes(t *testing.T, path, version string) {
