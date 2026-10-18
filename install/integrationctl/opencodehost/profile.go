@@ -91,8 +91,9 @@ func ValidVersion(v string) bool {
 	return true
 }
 
-// Resolve grants only the per-capability facts frozen in lane-a-freeze.md.
-// Explicit declarations do not bind a runtime and cannot grant eligibility.
+// Resolve selects generic integration support by the known host family.
+// Exact test evidence is informational for generic delivery; observer authority
+// remains separately bound to its verified runtime tuple.
 func Resolve(e VersionEvidence) Profile {
 	p := Profile{Schema: 1, Family: Unknown, ConfigDialect: DialectUnknown, PluginEntry: "unknown", Qualification: "unverified", Reason: "host_unverified", Capabilities: map[Capability]Support{}}
 	for _, c := range capabilities {
@@ -118,17 +119,18 @@ func Resolve(e VersionEvidence) Profile {
 	if p.Family == Unsupported || p.Family == LegacyV1 {
 		return p
 	}
-	// No prerelease, build variant, new minor or major inherits semantic support.
+	// Known config/plugin families support generic delivery without requiring a
+	// UAP release for each new OpenCode version. This does not grant observer facts.
+	p.Reason = "family_compatible"
+	for _, c := range []Capability{LocalPluginDual, GlobalSkillDirectory, MCPStdio, MCPStreamableHTTP} {
+		p.Capabilities[c] = Supported
+	}
+	// Retain exact historical evidence without making it a delivery gate.
 	switch e.Version {
 	case "1.18.33", "1.18.34", "2.0.21":
 		p.Qualification = "tested_exact"
 		p.EvidenceID = qualificationEvidenceID
 		p.Reason = "generic_qualified"
-		for _, c := range []Capability{LocalPluginDual, GlobalSkillDirectory, MCPStdio, MCPStreamableHTTP} {
-			p.Capabilities[c] = Supported
-		}
-	default:
-		p.Reason = "version_unqualified"
 	}
 	return p
 }

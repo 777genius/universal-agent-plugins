@@ -17,7 +17,7 @@ func registryTestHost(version string) domain.OpenCodeHostAuthority {
 }
 
 // RED: skills-only managed ownership chose V1 and reported RegistryClear for a
-// foreign V2 leaf. Missing/unqualified authority must also refuse this new MCP.
+// foreign V2 leaf. Missing/unknown-family authority must also refuse this new MCP.
 func TestOpenCodeSkillsOnlyBindingInspectsDesiredMCPWithPreparedCodec(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -27,7 +27,8 @@ func TestOpenCodeSkillsOnlyBindingInspectsDesiredMCPWithPreparedCodec(t *testing
 	}{
 		{"qualified-v2", registryTestHost("2.0.21"), clients.RegistryCollision, false},
 		{"missing-host", nil, clients.RegistryIndeterminate, true},
-		{"unqualified-host", registryTestHost("2.0.22"), clients.RegistryIndeterminate, true},
+		{"new-patch", registryTestHost("2.0.22"), clients.RegistryCollision, false},
+		{"unknown-major", registryTestHost("3.0.0"), clients.RegistryIndeterminate, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()

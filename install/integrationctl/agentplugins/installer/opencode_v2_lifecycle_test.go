@@ -28,7 +28,7 @@ func TestOpenCodeV2PublicLifecycle(t *testing.T) {
 	for _, ext := range []string{"json", "jsonc"} {
 		t.Run(ext, func(t *testing.T) {
 			root := openCodeTestRoot(t)
-			executable := buildOpenCodeTarget(t, filepath.Join(root, "v2"), "2.0.21", "ok")
+			executable := buildOpenCodeTarget(t, filepath.Join(root, "v2"), "2.1.0", "ok")
 			req := openCodeRequest(t, root, executable)
 			req.InstallationID = "TEST-v2-lifecycle" // identity-fix lane is integrated separately
 			writeV2MCP(t, req.PackageRoot, "https://fixture.invalid/first")

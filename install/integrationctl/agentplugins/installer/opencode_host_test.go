@@ -186,7 +186,7 @@ func TestOpenCodeMetadataOnlyPreparationNeverProbes(t *testing.T) {
 // discovery/inspection/recovery and receipt-authorized removal never probe.
 func TestOpenCodeLifecycleCopiesAndReadOnlyZeroProbes(t *testing.T) {
 	root := openCodeTestRoot(t)
-	executable := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.33", "ok")
+	executable := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.35", "ok")
 	calls, handoffs := 0, 0
 	env := []string{"PATH="}
 	engine := openCodeEngine(t, Config{StateRoot: filepath.Join(root, "state"), HelperExecutable: executable, OpenCodeProbeEnvironment: env,

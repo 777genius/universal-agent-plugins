@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// Regression: loose token extraction, failed probes, declarations, and newer
-// hosts must never manufacture a qualified V1 codec or observer capability.
+// Regression: failed probes and declarations cannot select a codec. Known
+// families allow generic delivery without inventing exact or observer evidence.
 func TestResolveClosedQualification(t *testing.T) {
 	for _, status := range []string{"absent", "failed", "timed_out", "malformed", "output_limit", "not_requested", "invented"} {
 		p := Resolve(VersionEvidence{Version: "1.18.33", Source: "executable_version", ProbeStatus: status})
@@ -34,6 +34,7 @@ func TestResolveClosedQualification(t *testing.T) {
 		qualified bool
 	}{
 		{"1.18.28", LegacyV1, DialectV1, false}, {"1.18.29", ModernV1, DialectV1, false},
+		{"1.18.35", ModernV1, DialectV1, false},
 		{"1.18.33", ModernV1, DialectV1, true}, {"1.18.34", ModernV1, DialectV1, true},
 		{"2.0.21", V2, DialectV2, true}, {"1.19.0", ModernV1, DialectV1, false},
 		{"2.1.0", V2, DialectV2, false}, {"2.0.21-rc.1", V2, DialectV2, false},
@@ -45,11 +46,12 @@ func TestResolveClosedQualification(t *testing.T) {
 			if p.Family != tc.family || p.ConfigDialect != tc.dialect || len(p.Capabilities) != 8 {
 				t.Fatalf("profile: %+v", p)
 			}
-			if (p.Capabilities[MCPStdio] == Supported) != tc.qualified || (p.Qualification == "tested_exact") != tc.qualified {
+			compatible := tc.family == ModernV1 || tc.family == V2
+			if (p.Capabilities[MCPStdio] == Supported) != compatible || (p.Qualification == "tested_exact") != tc.qualified {
 				t.Fatalf("qualification: %+v", p)
 			}
 			for _, c := range []Capability{GlobalSkillDirectory, MCPStreamableHTTP, LocalPluginDual} {
-				if (p.Capabilities[c] == Supported) != tc.qualified {
+				if (p.Capabilities[c] == Supported) != compatible {
 					t.Fatalf("independent generic qualification %s: %+v", c, p)
 				}
 			}
@@ -119,9 +121,9 @@ func TestSelectEligibilityAndFailureDiagnostics(t *testing.T) {
 		{"unknown", unknown, []ArtifactRequirement{{"v1", ConfigV1, []Capability{MCPStdio}}}, "", ErrNoAdapter},
 		{"deferred", unknown, []ArtifactRequirement{{"dual", DualPlacement, nil}}, DualPlacement, nil},
 		{"observer", v2, []ArtifactRequirement{{"observer", ObserverV2, []Capability{LocalPluginDual, ObserverTerminalError, ObserverCompletion}}}, "", ErrUnverifiedCapability},
-		{"new-minor", unqualified, []ArtifactRequirement{{"v2", ConfigV2, []Capability{MCPStdio}}}, "", ErrUnverifiedCapability},
+		{"new-minor", unqualified, []ArtifactRequirement{{"v2", ConfigV2, []Capability{MCPStdio}}}, ConfigV2, nil},
 		{"legacy-observer", legacy, []ArtifactRequirement{{"observer", ObserverV1, []Capability{LocalPluginDual, ObserverCompletion}}}, "", ErrNoAdapter},
-		{"unqualified-skills", unqualified, []ArtifactRequirement{{"skills", SkillDirectory, []Capability{GlobalSkillDirectory}}}, "", ErrNoAdapter},
+		{"new-minor-skills", unqualified, []ArtifactRequirement{{"skills", SkillDirectory, []Capability{GlobalSkillDirectory}}}, SkillDirectory, nil},
 		{"empty", v2, nil, "", ErrNoAdapter},
 	}
 	for _, tc := range tests {
