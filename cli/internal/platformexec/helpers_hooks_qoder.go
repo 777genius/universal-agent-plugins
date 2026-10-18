@@ -64,15 +64,35 @@ func qoderHookNameRecognized(name string) bool {
 }
 
 // qoderHookCommandBundled reports whether command stays inside the managed
-// plugin tree: a bare runtime name ("node") or the ${QODER_PLUGIN_ROOT} token.
-// Absolute host paths would silently escape the managed bundle.
+// plugin tree: a bare runtime name ("node") or the ${QODER_PLUGIN_ROOT} token
+// over a safe bundle-relative path. Absolute host paths would silently escape
+// the managed bundle, and dot segments like ${QODER_PLUGIN_ROOT}/../../evil
+// would escape it at execution time while passing a plain prefix check.
 func qoderHookCommandBundled(command string) bool {
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return false
 	}
 	if strings.ContainsAny(command, "/\\") {
-		return strings.HasPrefix(command, qoderHookRootPlaceholder+"/")
+		rel, ok := strings.CutPrefix(command, qoderHookRootPlaceholder+"/")
+		if !ok {
+			return false
+		}
+		return qoderBundledRelPathSafe(rel)
+	}
+	return true
+}
+
+// qoderBundledRelPathSafe rejects any remainder that could resolve outside the
+// plugin root: empty, backslashed, rooted, or dot-segment paths.
+func qoderBundledRelPathSafe(rel string) bool {
+	if rel == "" || strings.HasPrefix(rel, "/") || strings.Contains(rel, "\\") {
+		return false
+	}
+	for _, segment := range strings.Split(rel, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
 	}
 	return true
 }
