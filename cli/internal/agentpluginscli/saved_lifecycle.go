@@ -133,6 +133,7 @@ type savedLifecycleSelection struct {
 	alias        string
 	installation *domain.Installation
 	targets      []string
+	retained     *environment.LockedPackage
 }
 
 // runSavedLifecycle precedes imperative target selection: desired targets can
@@ -154,6 +155,9 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	snapshot, err := snapshotEnvironment(cmd, app)
 	if err != nil {
 		return true, err
+	}
+	if operation == "remove" && selection.retained != nil {
+		return true, renderSavedRetentionResult(cmd, opts, *selection.retained)
 	}
 	preview, cleanup, err := dependencyPreviewApp(app, opts)
 	if err != nil {
@@ -182,13 +186,21 @@ func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecyc
 		return selection, err
 	}
 	selection.alias, selection.installation, err = resolveSavedAlias(state, requirements, selector)
+	if err != nil {
+		return selection, err
+	}
+	selection, err = selectLockedLifecycle(app, state, requirements, selector, selection)
 	if err != nil || selection.alias == "" {
 		return selection, err
 	}
 	if opts.scope != "" && opts.scope != "user" {
 		return selection, errors.New("saved dependencies support user scope only")
 	}
-	selection.targets, err = selectSavedTargets(opts.target, savedAliasTargets(requirements, state, selection.alias), selection.alias)
+	targets := savedAliasTargets(requirements, state, selection.alias)
+	if selection.retained != nil {
+		targets = selection.retained.Targets
+	}
+	selection.targets, err = selectSavedTargets(opts.target, targets, selection.alias)
 	return selection, err
 }
 

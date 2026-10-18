@@ -431,6 +431,22 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 	checkPin(initial["b"], firstB)
 	checkPin(initial["c"], firstC)
 	checkParents(initial["c"], "a", "b")
+	// A transitive dependency is retained even before any client binding exists.
+	for _, format := range []string{"human", "json"} {
+		before := reconciliationFiles(t, f, "")
+		downloads, lookups, calls := source.downloads, source.lookups, directory.calls
+		output := run("remove", "c", "--target", "codex", "--format", format)
+		if !strings.Contains(output, "a") || !strings.Contains(output, "b") || !strings.Contains(output, "retained") {
+			t.Fatalf("transitive removal did not explain retention: %s", output)
+		}
+		if !reflect.DeepEqual(before, reconciliationFiles(t, f, "")) || source.downloads != downloads || source.lookups != lookups || directory.calls != calls {
+			t.Fatal("transitive removal before install changed files or acquired source")
+		}
+		view, err := f.app.Installer.Inspect(context.Background())
+		if err != nil || len(view.Installations) != 0 || len(view.EnvironmentReceipts) != 0 {
+			t.Fatalf("transitive removal installed bindings: %+v %v", view, err)
+		}
+	}
 	// 2. Install the complete recorded graph and prove both tree views are read-only.
 	run("install", "--locked", "--yes", "--format", "json")
 	installed := checkBindings(locked)

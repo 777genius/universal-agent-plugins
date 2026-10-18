@@ -132,6 +132,34 @@ func TestGraphConflictingRequirements(t *testing.T) {
 }
 
 func TestGraphBacktracksCandidateDependencies(t *testing.T) {
+	var firstLock []byte
+	for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
+		t.Run("overlap minimum "+strings.Join(order, ""), func(t *testing.T) {
+			req := conflictRequirements(map[string]string{})
+			for _, alias := range order {
+				req.Dependencies[alias] = conflictRequirement(alias, "1.0.0")
+				req.Targets["codex"] = append(req.Targets["codex"], alias)
+			}
+			resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{"acme/a": {conflictPackage("a", "1.0.0", 1, map[string]string{"acme/c": "^1.2"})}, "acme/b": {conflictPackage("b", "1.0.0", 2, map[string]string{"acme/c": "^1.3"})}, "acme/c": {conflictPackage("c", "1.2.0", 3, nil), conflictPackage("c", "1.3.0", 4, nil), conflictPackage("c", "1.10.0", 5, nil), conflictPackage("c", "2.0.0", 6, nil)}}}
+			lock, err := (Coordinator{Resolver: resolver}).Resolve(context.Background(), req, Lock{}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			c, ok := lock.Package("c")
+			if !ok || c.Version != "1.3.0" || len(c.RequiredBy) != 2 {
+				t.Fatalf("overlap minimum: %+v", lock)
+			}
+			body, err := json.Marshal(lock)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if firstLock != nil && string(firstLock) != string(body) {
+				t.Fatalf("root input order changed lock bytes:\n%s\n%s", firstLock, body)
+			}
+			firstLock = body
+		})
+	}
+
 	for _, independent := range []bool{false, true} {
 		t.Run(fmt.Sprintf("update independent root %v", independent), func(t *testing.T) {
 			req := conflictRequirements(map[string]string{"a": "^1.0"})

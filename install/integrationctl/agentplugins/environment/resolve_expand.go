@@ -84,6 +84,10 @@ func (solver *graphSolver) dependencyRequirement(distribution, value string, cho
 	}
 	key := "directory:" + strings.ToLower(distribution)
 	alias := strings.ReplaceAll(strings.ToLower(path.Base(distribution)), ".", "-")
+	// This alias only carries unresolved source intent; acquisition supplies manifest.name.
+	if !aliasPattern.MatchString(alias) {
+		alias = "dependency"
+	}
 	if root, ok := solver.roots[key]; ok {
 		alias = root.requirement.Alias
 	} else if pin, ok := solver.pins[key]; ok {
@@ -135,7 +139,7 @@ func (solver *graphSolver) checkTargets(ctx context.Context, node graphNode, pkg
 	if solver.graph == nil {
 		return nil
 	}
-	if old, ok := solver.pins[pkg.SourceKey]; ok && old.TreeDigest == pkg.TreeDigest && slices.Equal(unionTargets(old.Targets, node.targets), old.Targets) {
+	if old, ok := solver.pins[pkg.SourceKey]; ok && sameEligibilityPin(old, pkg) && slices.Equal(unionTargets(old.Targets, node.targets), old.Targets) {
 		return nil
 	}
 	eligible, err := solver.graph.Eligible(ctx, pkg, node.targets)
@@ -146,4 +150,13 @@ func (solver *graphSolver) checkTargets(ctx context.Context, node graphNode, pkg
 		return conflictFor(pkg.SourceKey, node)
 	}
 	return nil
+}
+
+func sameEligibilityPin(previous, selected LockedPackage) bool {
+	// Root renames and legacy absent version metadata do not change source eligibility.
+	previous.Alias = selected.Alias
+	if previous.Version == "" {
+		previous.Version = selected.Version
+	}
+	return SamePin(previous, selected)
 }
