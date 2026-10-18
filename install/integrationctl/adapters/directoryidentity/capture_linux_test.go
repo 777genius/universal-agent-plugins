@@ -5,6 +5,7 @@ package directoryidentity
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -52,6 +53,26 @@ func TestLinuxActualReadableDirectoryFD(t *testing.T) {
 	runtime.KeepAlive(f)
 	volume, inode, err := linuxReadableFacts(int(f.Fd()), stat)
 	if errno == unix.ENOTTY {
+		if fs.Type == unix.EXT4_SUPER_MAGIC {
+			var legacy [24]byte
+			binary.NativeEndian.PutUint32(legacy[:4], 16)
+			_, _, legacyErr := unix.Syscall(unix.SYS_IOCTL, f.Fd(), 0x8008662c, uintptr(unsafe.Pointer(&legacy[0])))
+			runtime.KeepAlive(f)
+			if legacyErr == 0 {
+				if binary.NativeEndian.Uint32(legacy[:4]) != 16 || binary.NativeEndian.Uint32(legacy[4:8]) != 0 {
+					t.Fatalf("malformed independent ext4 response: %x", legacy)
+				}
+				expected := hex.EncodeToString(legacy[8:])
+				if err != nil || volume != expected || inode != strconv.FormatUint(stat.Ino, 10) {
+					t.Fatalf("ext4 metadata mismatch: raw=%x volume=%q inode=%q err=%v", legacy, volume, inode, err)
+				}
+				t.Logf("ACTUAL_GENERIC_IOCTL=ENOTTY; ACTUAL_EXT4_IOCTL=SUCCESS; UUID=%s", volume)
+				return
+			}
+			if legacyErr != unix.ENOTTY {
+				t.Fatalf("independent ext4 ioctl failed: %v", legacyErr)
+			}
+		}
 		if !errors.Is(err, ErrUnsupported) || !errors.Is(err, unix.ENOTTY) || volume != "" || inode != "" {
 			t.Fatalf("unsupported result: %q %q %v", volume, inode, err)
 		}
@@ -296,4 +317,47 @@ func TestLinuxDirectoryCasefoldQualification(t *testing.T) {
 		t.Fatalf("actual TEST flags query: %v", err)
 	}
 	t.Log("ACTUAL_DIRECTORY_FLAGS=CASE_SENSITIVE; UUID qualification remains separate")
+}
+
+// Malformed/zero UUIDs must never become valid directory authority through
+// the older ext4 ABI. The public UUID encoding remains identical to generic.
+func TestLinuxExt4UUIDResponse(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		length          uint32
+		flags           uint32
+		zero, truncated bool
+		valid           bool
+	}{
+		{name: "valid", length: 16, valid: true},
+		{name: "short length", length: 15},
+		{name: "oversized length", length: 17},
+		{name: "unknown flags", length: 16, flags: 1},
+		{name: "zero uuid", length: 16, zero: true},
+		{name: "truncated", length: 16, truncated: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var raw [24]byte
+			binary.NativeEndian.PutUint32(raw[:4], tc.length)
+			binary.NativeEndian.PutUint32(raw[4:8], tc.flags)
+			if !tc.zero {
+				raw[23] = 1
+			}
+			input := raw[:]
+			if tc.truncated {
+				input = input[:23]
+			}
+			volume, err := decodeLinuxExt4UUID(input)
+			if (err == nil) != tc.valid {
+				t.Fatalf("volume=%q err=%v", volume, err)
+			}
+			if tc.valid && volume != "00000000000000000000000000000001" {
+				t.Fatalf("UUID bytes changed: %q", volume)
+			}
+		})
+	}
+	const readDirection, headerBytes, ioctlType, requestNumber = 2, 8, 0x66, 44
+	if uint(linuxExt4GetFSUUID) != uint(readDirection<<30|headerBytes<<16|ioctlType<<8|requestNumber) {
+		t.Fatalf("incorrect ext4 request ABI: %#x", linuxExt4GetFSUUID)
+	}
 }

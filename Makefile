@@ -19,7 +19,9 @@ CORE_TEST_TIMEOUT ?= 10m
 # A user-level core.hooksPath hook can reject the commits these tests create, so
 # the core lane runs git without any hooks. Same technique as
 # .github/workflows/authoring-native.yml.
-CORE_TEST_GIT_ENV = GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
+# Native filesystem observations use physical paths (macOS /var and /tmp are
+# aliases). Give fixtures the same spelling instead of changing assertions.
+CORE_TEST_GIT_ENV = TMPDIR="$$(cd "$${TMPDIR:-/tmp}" && pwd -P)" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null
 
 # Two passes, because --new-from-* filters by changed line and funlen/gocyclo/
 # file-length-limit report on the declaration line: growing an old function would

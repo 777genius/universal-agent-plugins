@@ -18,7 +18,7 @@ import (
 const signalScript = `printf '%s\0' "${@:3}" > "$1"
 printf '{"decision":"deny","continue":false}\n'
 printf 'handler diagnostic\n' >&2
-kill -s "$2" "$BASHPID"
+kill -s "$2" "${BASHPID:-$$}"
 exit 99
 `
 
