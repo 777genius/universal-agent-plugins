@@ -171,10 +171,12 @@ func inheritedTargets(requirements Requirements, lock Lock) map[string]map[strin
 	}
 	for client, aliases := range requirements.Targets {
 		for _, alias := range aliases {
-			if req, ok := requirements.Dependencies[alias]; ok {
-				if pkg, found := lock.PackageForRequirement(req); found {
-					targets[pkg.Alias][client] = true
-				}
+			req, ok := requirements.Dependencies[alias]
+			if !ok {
+				continue
+			}
+			if pkg, found := lock.PackageForRequirement(req); found {
+				targets[pkg.Alias][client] = true
 			}
 		}
 	}
