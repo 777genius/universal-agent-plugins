@@ -670,6 +670,11 @@ func (app App) loadSnapshotMode(ctx context.Context, snapshot domain.PackageSnap
 	if err != nil {
 		return fail(err)
 	}
+	if envelope.FormatID == domain.FormatIDAgentPluginsV1 {
+		if _, err := packageDependencyFacts(envelope); err != nil {
+			return fail(err)
+		}
+	}
 	if envelope.TreeDigest != snapshot.TreeDigest {
 		return fail(fmt.Errorf("loader changed the acquired immutable package digest"))
 	}

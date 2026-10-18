@@ -308,7 +308,9 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 	} else if !os.IsNotExist(readErr) {
 		return requirements, environment.Lock{}, environment.Lock{}, readErr
 	}
-	canonicalizeRequirementsFromLock(&requirements, previous)
+	if err := canonicalizeRequirementsFromLock(&requirements, previous); err != nil {
+		return requirements, environment.Lock{}, environment.Lock{}, err
+	}
 	requirements, err = app.canonicalizeDependencyRequirements(ctx, requirements)
 	if err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err

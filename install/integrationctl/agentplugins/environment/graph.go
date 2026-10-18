@@ -69,7 +69,7 @@ func validateGraph(lock Lock, requirements Requirements) error {
 		byAlias[pkg.Alias], sources[pkg.SourceKey] = pkg, pkg.Alias
 	}
 	for alias, requirement := range requirements.Dependencies {
-		pkg, exists := byAlias[alias]
+		pkg, exists := lock.PackageForRequirement(requirement)
 		if !exists {
 			return fmt.Errorf("lock is missing alias %q", alias)
 		}
@@ -96,6 +96,9 @@ func validateGraph(lock Lock, requirements Requirements) error {
 }
 
 func validatePin(pkg LockedPackage) error {
+	if !aliasPattern.MatchString(pkg.Alias) {
+		return fmt.Errorf("invalid locked alias %q", pkg.Alias)
+	}
 	req := Requirement{Alias: pkg.Alias}
 	if pkg.Source.Git != nil {
 		source := pkg.Source.Git
@@ -144,13 +147,16 @@ func validateEdges(packages map[string]LockedPackage) error {
 				return fmt.Errorf("%s: duplicate required_by edge from %q", pkg.Alias, edge.Alias)
 			}
 			seen[edge] = true
-			if pkg.Source.Registry == nil || (edge.Selector.Kind != SelectorVersion && edge.Selector.Kind != SelectorRange) {
-				return fmt.Errorf("%s: dependency edges require registry semver selectors", pkg.Alias)
-			}
 			if err := edge.Selector.Validate(); err != nil {
 				return fmt.Errorf("%s: invalid required_by selector: %w", pkg.Alias, err)
 			}
-			if !SelectorMatchesVersion(edge.Selector, pkg.Version) {
+			if pkg.Source.Git != nil {
+				if edge.Selector != pkg.Source.Git.Requested {
+					return fmt.Errorf("%s: Git selector differs from consumer %s", pkg.Alias, edge.Alias)
+				}
+			} else if edge.Selector.Kind != SelectorRelease && edge.Selector.Kind != SelectorVersion && edge.Selector.Kind != SelectorRange {
+				return fmt.Errorf("%s: invalid registry dependency selector", pkg.Alias)
+			} else if !registrySelectorMatches(edge.Selector, pkg) {
 				return fmt.Errorf("%s: version %q does not satisfy consumer %s selector %s", pkg.Alias, pkg.Version, edge.Alias, edge.Selector.Value)
 			}
 		}
@@ -165,8 +171,12 @@ func inheritedTargets(requirements Requirements, lock Lock) map[string]map[strin
 	}
 	for client, aliases := range requirements.Targets {
 		for _, alias := range aliases {
-			if targets[alias] != nil {
-				targets[alias][client] = true
+			req, ok := requirements.Dependencies[alias]
+			if !ok {
+				continue
+			}
+			if pkg, found := lock.PackageForRequirement(req); found {
+				targets[pkg.Alias][client] = true
 			}
 		}
 	}

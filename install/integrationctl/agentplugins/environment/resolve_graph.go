@@ -15,8 +15,12 @@ type Candidate struct {
 }
 type ResolvedPackage struct {
 	Package      LockedPackage
-	Dependencies map[string]string
+	Dependencies map[string]Requirement
 }
+
+// ErrDependencyFactsUnavailable rejects managed resolution without verified
+// package declarations, including when all previous pins are present.
+var ErrDependencyFactsUnavailable = errors.New("dependency_facts_unavailable")
 
 // ErrCandidateIneligible rejects one candidate on source policy discovered
 // during acquisition. Other acquisition errors abort resolution.
@@ -44,7 +48,6 @@ type graphSolver struct {
 	resolver     Resolver
 	graph        GraphResolver
 	requirements Requirements
-	previous     Lock
 	update       string
 	roots        map[string]graphNode
 	pins         map[string]LockedPackage
@@ -56,7 +59,7 @@ type graphConflict struct{ message string }
 func (err graphConflict) Error() string { return err.message }
 
 func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock, update string) *graphSolver {
-	solver := &graphSolver{resolver: resolver, requirements: requirements, previous: previous, update: update, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}}
+	solver := &graphSolver{resolver: resolver, requirements: requirements, update: update, roots: map[string]graphNode{}, pins: map[string]LockedPackage{}, descriptions: map[string]ResolvedPackage{}}
 	solver.graph, _ = resolver.(GraphResolver)
 	for _, pkg := range previous.Packages {
 		solver.pins[pkg.SourceKey] = pkg
@@ -64,6 +67,12 @@ func newGraphSolver(resolver Resolver, requirements Requirements, previous Lock,
 	for _, alias := range sortedKeys(requirements.Dependencies) {
 		req := requirements.Dependencies[alias]
 		key, _ := req.SourceKey()
+		if alias == update {
+			solver.update = key
+		}
+		if pin, ok := solver.pins[key]; ok {
+			req.Alias = pin.Alias
+		}
 		solver.roots[key] = graphNode{requirement: req, demands: []graphDemand{{requirement: req}}, targets: targetsFor(requirements, alias)}
 	}
 	return solver
@@ -82,7 +91,9 @@ func (solver *graphSolver) resolve(ctx context.Context) (Lock, error) {
 		pkg.Targets = node.targets
 		pkg.RequiredBy = nil
 		requested := node.requirement
-		if _, root := solver.roots[key]; !root && pkg.Source.Registry != nil {
+		if root, direct := solver.roots[key]; direct {
+			requested = root.requirement
+		} else if pkg.Source.Registry != nil {
 			cloned := *requested.Registry
 			cloned.Selector = Selector{Kind: SelectorRelease, Value: fmt.Sprint(pkg.Source.Registry.ReleaseSequence)}
 			requested.Registry = &cloned
@@ -90,7 +101,7 @@ func (solver *graphSolver) resolve(ctx context.Context) (Lock, error) {
 		setRequested(&pkg, requested)
 		for _, demand := range node.demands {
 			if demand.parent != "" {
-				pkg.RequiredBy = append(pkg.RequiredBy, RequiredBy{Alias: demand.parent, Selector: demand.requirement.Registry.Selector})
+				pkg.RequiredBy = append(pkg.RequiredBy, RequiredBy{Alias: demand.parent, Selector: requirementSelector(demand.requirement)})
 			}
 		}
 		sort.Slice(pkg.RequiredBy, func(i, j int) bool {
@@ -145,14 +156,14 @@ func (solver *graphSolver) search(ctx context.Context, choices map[string]Resolv
 
 func (solver *graphSolver) choose(ctx context.Context, key string, node graphNode, choices map[string]ResolvedPackage) (map[string]ResolvedPackage, map[string]graphNode, error) {
 	var last error
-	if solver.update != "" && node.requirement.Alias != solver.update {
+	if solver.update != "" && key != solver.update {
 		if _, root := solver.roots[key]; root {
 			if old, ok := solver.pins[key]; ok && !nodeAccepts(node, old) {
 				return nil, nil, conflictFor(key, node)
 			}
 		}
 	}
-	if old, ok := solver.pins[key]; ok && node.requirement.Alias != solver.update && nodeAccepts(node, old) {
+	if old, ok := solver.pins[key]; ok && key != solver.update && nodeAccepts(node, old) {
 		// Newly acquired saved-add seeds have source identity before graph intent.
 		// Supply their known targets when the cold manifest must be read again.
 		if len(old.Targets) == 0 {
@@ -177,7 +188,7 @@ func (solver *graphSolver) choose(ctx context.Context, key string, node graphNod
 			}
 		}
 	}
-	if solver.graph == nil || node.requirement.Git != nil || node.requirement.Registry.Selector.Kind == SelectorRelease {
+	if node.requirement.Git != nil || node.requirement.Registry.Selector.Kind == SelectorRelease {
 		return solver.chooseExact(ctx, key, node, choices, last)
 	}
 	return solver.chooseCandidates(ctx, key, node, choices, last)
@@ -223,21 +234,18 @@ func (solver *graphSolver) chooseExact(ctx context.Context, key string, node gra
 	if last != nil {
 		return nil, nil, last
 	}
-	if solver.resolver == nil {
-		return nil, nil, errors.New("resolver is required")
+	if solver.graph == nil {
+		return nil, nil, ErrDependencyFactsUnavailable
 	}
 	old, ok := solver.pins[key]
-	pkg, err := solver.resolver.Resolve(ctx, node.requirement, pinOrNil(old, ok), node.requirement.Alias == solver.update)
+	pkg, err := solver.resolver.Resolve(ctx, node.requirement, node.targets, pinOrNil(old, ok), key == solver.update)
 	if err != nil {
 		return nil, nil, err
 	}
 	pkg.Targets = append([]string{}, node.targets...)
-	selected := ResolvedPackage{Package: pkg}
-	if solver.graph != nil {
-		selected, err = solver.graph.DescribePinned(ctx, pkg)
-		if err != nil {
-			return nil, nil, err
-		}
+	selected, err := solver.graph.DescribePinned(ctx, pkg)
+	if err != nil {
+		return nil, nil, err
 	}
 	return solver.try(ctx, key, selected, choices)
 }
@@ -252,9 +260,16 @@ func (solver *graphSolver) try(ctx context.Context, key string, selected Resolve
 }
 
 func nodeAccepts(node graphNode, pkg LockedPackage) bool {
+	key, _ := node.requirement.SourceKey()
+	if pkg.SourceKey != key {
+		return false
+	}
 	for _, demand := range node.demands {
 		req := demand.requirement
 		if req.Registry != nil {
+			if pkg.Source.Registry == nil {
+				return false
+			}
 			if !registrySelectorMatches(req.Registry.Selector, pkg) {
 				return false
 			}
@@ -266,7 +281,12 @@ func nodeAccepts(node graphNode, pkg LockedPackage) bool {
 }
 func candidateAccepts(node graphNode, candidate Candidate) bool {
 	for _, demand := range node.demands {
-		if !SelectorMatchesVersion(demand.requirement.Registry.Selector, candidate.Version) {
+		selector := requirementSelector(demand.requirement)
+		if selector.Kind == SelectorRelease {
+			if selector.Value != fmt.Sprint(candidate.ReleaseSequence) {
+				return false
+			}
+		} else if !SelectorMatchesVersion(selector, candidate.Version) {
 			return false
 		}
 	}
@@ -281,7 +301,7 @@ func conflictFor(key string, node graphNode) error {
 		}
 		var selector Selector
 		if demand.requirement.Registry != nil {
-			selector = demand.requirement.Registry.Selector
+			selector = requirementSelector(demand.requirement)
 		} else {
 			selector = demand.requirement.Git.Selector
 		}

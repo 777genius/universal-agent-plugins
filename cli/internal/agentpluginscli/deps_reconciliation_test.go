@@ -155,20 +155,10 @@ func TestReconciliationCLIValidatesPinnedDeclarations(t *testing.T) {
 				t.Fatal(err)
 			}
 			if tc.declares {
-				path := filepath.Join(repo, "plugin.json")
-				var manifest map[string]any
-				if err := json.Unmarshal([]byte(dependencyRead(t, path)), &manifest); err != nil {
-					t.Fatal(err)
-				}
-				manifest["extensions"] = map[string]any{domain.ExtensionNamespace: map[string]any{"dependencies": map[string]string{"acme/missing": "^1.2"}}}
-				body, err := json.Marshal(manifest)
-				if err != nil {
-					t.Fatal(err)
-				}
-				dependencyWrite(t, path, string(body))
+				dependencyWrite(t, filepath.Join(repo, "uap.toml"), "schema_version = 1\n[dependencies]\n\"acme/missing\" = \"^1.2\"\n")
 				dependencyGit(t, repo, "add", ".")
 				dependencyGit(t, repo, "commit", "-m", "test: pinned dependency declaration")
-				pin, err := (dependencyResolver{app: f.app, requirements: req}).Resolve(context.Background(), req.Dependencies["demo"], nil, true)
+				pin, err := (dependencyResolver{app: f.app, requirements: req}).Resolve(context.Background(), req.Dependencies["demo"], []string{"codex"}, nil, true)
 				if err != nil {
 					t.Fatal(err)
 				}

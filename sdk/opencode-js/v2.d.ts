@@ -9,7 +9,9 @@ export type V2Context = {
   event: { subscribe(input: { signal: AbortSignal }): AsyncIterable<unknown> };
 };
 /** Projection of qualified native fields, never locally invented identities.
- * Sequence is optional for ephemeral events, mandatory for durable session events.
+ * Sequence is mandatory for correlated durable session events. Return undefined
+ * for irrelevant ephemeral session.text.delta/session.usage.updated events;
+ * ephemeral form/permission events may omit sequence.
  * Native public seq is sparse; positive increments are not a loss detector.
  * Preserve native version when present. undefined means irrelevant; malformed
  * relevant correlation must retain its session ID so that scope is fenced.

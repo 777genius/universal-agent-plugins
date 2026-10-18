@@ -215,7 +215,7 @@ func TestInstallDependencyGraphLifecycle(t *testing.T) {
 		}
 		manifest := map[string]any{"$schema": domain.PluginSchemaV1, "name": alias, "version": version, "description": "Disposable graph package " + alias}
 		if requirement != "" {
-			manifest["extensions"] = map[string]any{domain.ExtensionNamespace: map[string]any{"dependencies": map[string]string{"acme/c": requirement}}}
+			dependencyWrite(t, filepath.Join(root, "uap.toml"), fmt.Sprintf("schema_version = 1\n[dependencies]\n\"acme/c\" = %q\n", requirement))
 		}
 		body, err := json.Marshal(manifest)
 		if err != nil {

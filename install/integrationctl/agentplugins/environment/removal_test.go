@@ -50,7 +50,7 @@ func TestRemovalLiveReferences(t *testing.T) {
 			previous := removalLock(t, previousReq, removalPackage("a"), removalPackage("b"), removalPackage("c", "a", "b"))
 			previous.Packages = append(previous.Packages, tc.extra...)
 			req := removalRequirements(tc.roots...)
-			got, err := (Coordinator{}).Resolve(context.Background(), req, previous, "")
+			got, err := (Coordinator{Resolver: removalFacts(previous)}).Resolve(context.Background(), req, previous, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -113,7 +113,7 @@ func TestRemovalTargetBindings(t *testing.T) {
 			if tc.directC {
 				req = removalRequirements("c")
 			}
-			next, err := (Coordinator{}).Resolve(context.Background(), req, old, "")
+			next, err := (Coordinator{Resolver: removalFacts(old)}).Resolve(context.Background(), req, old, "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -183,4 +183,17 @@ func TestRemovalSelectionAndAttestation(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Package facts are independent of recorded lock edges; removal must re-read them.
+func removalFacts(lock Lock) *conflictGraphResolver {
+	resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{}}
+	declarations := map[string]map[string]string{
+		"a": {"acme/c": "^1.2"}, "b": {"acme/c": "^1.2"},
+		"d": {"acme/e": "^1.2"}, "e": {"acme/d": "^1.2"},
+	}
+	for _, pkg := range lock.Packages {
+		resolver.packages[pkg.Source.Registry.Distribution] = []ResolvedPackage{{Package: pkg, Dependencies: fixtureRequirements(declarations[pkg.Alias])}}
+	}
+	return resolver
 }

@@ -1,11 +1,17 @@
 // Real installed tarball consumers. Run with npm; no host/model is launched.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, copyFileSync, existsSync, rmSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const npm = process.env.npm_execpath;
 if (!npm) throw new Error('Run via npm run check:packed (npm CLI required)');
+const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const registryArgument = process.argv[2];
+if (process.argv.length > 3 || (registryArgument !== undefined &&
+    registryArgument !== `--registry-version=${manifest.version}`)) {
+  throw new Error('Only --registry-version=<current package version> is accepted');
+}
 const temp = mkdtempSync(join(tmpdir(), 'TEST-observer-packed-'));
 function run(args, cwd) {
   const r = spawnSync(process.execPath, [npm, ...args], { cwd, encoding: 'utf8', env: process.env });
@@ -13,14 +19,21 @@ function run(args, cwd) {
   return r.stdout;
 }
 try {
-  run(['pack', '--ignore-scripts', '--pack-destination', temp], root);
-  const archive = readdirSync(temp).find((name) => name.endsWith('.tgz'));
-  if (!archive) throw new Error('npm pack produced no tarball');
-  for (const version of ['1.18.33', '1.18.34', 'v2-only']) {
+  let installation;
+  if (registryArgument) installation = `${manifest.name}@${manifest.version}`;
+  else {
+    run(['pack', '--ignore-scripts', '--pack-destination', temp], root);
+    const archive = readdirSync(temp).find((name) => name.endsWith('.tgz'));
+    if (!archive) throw new Error('npm pack produced no tarball');
+    installation = join(temp, archive);
+  }
+  for (const version of ['1.18.33', '1.18.34', '1.19.3', 'v2-only']) {
     const cwd = join(temp, version); mkdirSync(cwd);
     writeFileSync(join(cwd, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-    run(['install', '--ignore-scripts', '--no-audit', '--no-fund', join(temp, archive), 'typescript@7.0.2',
+    run(['install', '--registry=https://registry.npmjs.org/', '--ignore-scripts', '--no-audit', '--no-fund', installation, 'typescript@7.0.2',
       ...(version === 'v2-only' ? [] : [`@opencode-ai/sdk@${version}`])], cwd);
+    const installed = JSON.parse(readFileSync(join(cwd, 'node_modules', manifest.name, 'package.json'), 'utf8'));
+    if (installed.name !== manifest.name || installed.version !== manifest.version) throw new Error('Installed package identity differs');
     if (version === 'v2-only' && existsSync(join(cwd, 'node_modules/@opencode-ai/sdk'))) throw new Error('V2 consumer pulled V1 SDK');
     const source = version === 'v2-only'
       ? `import { createV2Observer, type V2ObserverOptions, type PreparationHandoff } from 'universal-agent-plugins-opencode-events/v2';

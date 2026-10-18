@@ -89,7 +89,12 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 		return environment.ResolvedPackage{}, err
 	}
 	pkg.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
-	result := environment.ResolvedPackage{Package: pkg, Dependencies: loaded.envelope.Manifest.Dependencies}
+	facts, err := packageDependencyFacts(loaded.envelope)
+	if err != nil {
+		_ = loaded.cleanup()
+		return environment.ResolvedPackage{}, err
+	}
+	result := environment.ResolvedPackage{Package: pkg, Dependencies: facts}
 	return result, resolver.finishLoaded(loaded)
 }
 
@@ -126,5 +131,9 @@ func describePinnedDependency(ctx context.Context, app App, pin environment.Lock
 		return environment.ResolvedPackage{}, errors.New("stored dependency version differs from uap.lock")
 	}
 	pin.Version = envelope.Manifest.Version
-	return environment.ResolvedPackage{Package: pin, Dependencies: envelope.Manifest.Dependencies}, nil
+	facts, err := packageDependencyFacts(envelope)
+	if err != nil {
+		return environment.ResolvedPackage{}, err
+	}
+	return environment.ResolvedPackage{Package: pin, Dependencies: facts}, nil
 }

@@ -37,9 +37,9 @@ func conflictRequirements(roots map[string]string) Requirements {
 func conflictPackage(alias, version string, sequence uint64, deps map[string]string) ResolvedPackage {
 	digest := fmt.Sprintf("sha256:%064x", sequence)
 	return ResolvedPackage{Package: LockedPackage{Alias: alias, Version: version, SourceKey: "directory:acme/" + alias, DigestAlgorithm: TreeDigestAlgorithm, TreeDigest: digest, ManifestDigest: digest,
-		Source: LockedSource{Registry: &LockedRegistrySource{Distribution: "acme/" + alias, DistributionID: "acme/" + alias, ProductID: alias, ReleaseSequence: sequence, Requested: Selector{Kind: SelectorRelease, Value: fmt.Sprint(sequence)}, Repository: "acme/source", Commit: fmt.Sprintf("%040x", sequence)}}}, Dependencies: deps}
+		Source: LockedSource{Registry: &LockedRegistrySource{Distribution: "acme/" + alias, DistributionID: "acme/" + alias, ProductID: alias, ReleaseSequence: sequence, Requested: Selector{Kind: SelectorRelease, Value: fmt.Sprint(sequence)}, Repository: "acme/source", Commit: fmt.Sprintf("%040x", sequence)}}}, Dependencies: fixtureRequirements(deps)}
 }
-func (resolver *conflictGraphResolver) Resolve(_ context.Context, requirement Requirement, _ *LockedPackage, _ bool) (LockedPackage, error) {
+func (resolver *conflictGraphResolver) Resolve(_ context.Context, requirement Requirement, _ []string, _ *LockedPackage, _ bool) (LockedPackage, error) {
 	for _, pkg := range resolver.packages[requirement.Registry.Distribution] {
 		if registrySelectorMatches(requirement.Registry.Selector, pkg.Package) {
 			result := pkg.Package

@@ -44,9 +44,7 @@ func renderSavedRetention(cmd *cobra.Command, pkg environment.LockedPackage) err
 
 // Lock-only dependencies have no installation receipt before the first sync.
 func selectLockedLifecycle(app App, state domain.StateFileV2, requirements environment.Requirements, selector string, selection savedLifecycleSelection) (savedLifecycleSelection, error) {
-	if _, root := requirements.Dependencies[selection.alias]; root {
-		return selection, nil
-	}
+
 	_, lockPath := app.dependencyPaths()
 	lock, err := readDependencyLock(lockPath, requirements)
 	if os.IsNotExist(err) {
@@ -60,10 +58,14 @@ func selectLockedLifecycle(app App, state domain.StateFileV2, requirements envir
 		}
 		return selection, err
 	}
+	if err := canonicalizeRequirementsFromLock(&requirements, lock); err != nil {
+		return selection, err
+	}
 	alias := selection.alias
 	if alias == "" {
 		alias = selector
 	}
+	alias = dependencyNodeAlias(requirements, lock, alias)
 	pin, exists := lock.Package(alias)
 	if !exists {
 		return selection, nil
@@ -73,7 +75,8 @@ func selectLockedLifecycle(app App, state domain.StateFileV2, requirements envir
 		return selection, err
 	}
 	selection.alias, selection.installation = alias, installation
-	if _, root := requirements.Dependencies[alias]; !root && len(pin.RequiredBy) > 0 {
+	selection.declaration = dependencyRootKey(requirements, lock, alias)
+	if _, root := requirements.Dependencies[selection.declaration]; !root && len(pin.RequiredBy) > 0 {
 		selection.retained = &pin
 	}
 	return selection, nil
