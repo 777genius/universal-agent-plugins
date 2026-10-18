@@ -70,8 +70,10 @@ func TestQoderCLIHooks(t *testing.T) {
 func newQoderSDKHooksBundle(t *testing.T, name, hookBin string) string {
 	t.Helper()
 	root := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(root, ".qoder-plugin", "hooks", "bin"), 0o755); err != nil {
-		t.Fatal(err)
+	for _, dir := range []string{".qoder-plugin", "hooks", "bin"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	manifest, err := json.MarshalIndent(map[string]any{
 		"name":        name,
