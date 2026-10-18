@@ -97,7 +97,9 @@ not by live execution.
 
 Qoder hooks receive snake_case stdin JSON and use the exact argv names
 `session-start`, `user-prompt-submit`, `post-tool-use`, and `stop`. Lowercase
-`stop` selects Qoder; use canonical `Stop` for Claude. Qoder runs the SDK binary
+`stop` selects Qoder whenever any Qoder handler is registered; use canonical
+`Stop` for Claude in mixed apps. Without Qoder handlers, lowercase `stop` retains
+the registered Claude Stop handler's case-insensitive behavior. Qoder runs the SDK binary
 from the installed bundle's `bin/` directory. `make test-qoder-live` exercises
 native installation and SDK hooks; completed-turn `Stop` and `PostToolUse` cases
 skip when the authenticated account has exhausted its chat quota. A passing run
