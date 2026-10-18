@@ -55,12 +55,8 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	if app.Installer == nil {
 		return errors.New("typed SDK installer is unavailable")
 	}
-	view, inspectErr := app.Installer.Inspect(cmd.Context())
-	if inspectErr != nil {
-		return inspectErr
-	}
-	if view.Recovery.Required {
-		return installer.ErrRecoveryRequired
+	if err := requireDependencyRecoveryClear(cmd, app); err != nil {
+		return err
 	}
 	preview, cleanup, previewErr := dependencyPreviewApp(app, opts)
 	if previewErr != nil {
@@ -78,18 +74,36 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 			return convergeErr
 		}
 	}
-	requirements, lock := request.requirements, request.lock
 	state, err := app.Installer.Inspect(cmd.Context())
 	if err != nil {
 		return err
 	}
-	actions, err := dependencyActions(state, requirements, lock)
+	actions, err := dependencyActions(state, request.requirements, request.lock)
 	if err != nil {
 		return err
 	}
 	if err := validateDependencyRemovals(opts, actions); err != nil {
 		return err
 	}
+	return runDependencySyncApply(cmd, app, opts, request, actions, yes)
+}
+
+// requireDependencyRecoveryClear rejects a pending recovery transaction before
+// any sync planning touches the environment.
+func requireDependencyRecoveryClear(cmd *cobra.Command, app App) error {
+	view, err := app.Installer.Inspect(cmd.Context())
+	if err != nil {
+		return err
+	}
+	if view.Recovery.Required {
+		return installer.ErrRecoveryRequired
+	}
+	return nil
+}
+
+// runDependencySyncApply detects clients, preflights the planned actions and
+// either renders the dry-run plan or applies the converged sync.
+func runDependencySyncApply(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, actions []dependencyAction, yes bool) error {
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return err
