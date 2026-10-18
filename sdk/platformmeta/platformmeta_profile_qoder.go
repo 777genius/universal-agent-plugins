@@ -17,7 +17,7 @@ func qoderProfile() PlatformProfile {
 			GenerateSupport:        true,
 			ValidateSupport:        true,
 			PortableComponentKinds: []string{"skills", "mcp_servers"},
-			TargetComponentKinds:   []string{"hooks", "commands"},
+			TargetComponentKinds:   []string{"hooks", "commands", "bin"},
 			Summary:                "Qoder plugin packages compile portable skills and optional portable MCP plus target-native hooks and commands into the observed .qoder-plugin bundle shape consumed by both Qoder Desktop and Qoder CLI.",
 		},
 		SDK: SDKMeta{
@@ -43,6 +43,7 @@ func qoderProfile() PlatformProfile {
 			{Kind: ManagedArtifactPortableSkills, SourceRoot: authoredPath("skills"), OutputRoot: "skills"},
 			{Kind: ManagedArtifactMirror, ComponentKind: "hooks", SourceRoot: authoredPath("targets/qoder/hooks"), OutputRoot: "hooks"},
 			{Kind: ManagedArtifactMirror, ComponentKind: "commands", SourceRoot: authoredPath("targets/qoder/commands"), OutputRoot: "commands"},
+			{Kind: ManagedArtifactMirror, ComponentKind: "bin", SourceRoot: authoredPath("targets/qoder/bin"), OutputRoot: "bin"},
 			{Kind: ManagedArtifactPortableMCP, Path: ".mcp.json"},
 		},
 		Scaffold: qoderScaffold(),
@@ -71,6 +72,7 @@ func qoderScaffold() ScaffoldMeta {
 			authoredPath("skills/{{.ProjectName}}/SKILL.md"),
 			authoredPath("targets/qoder/hooks/hooks.json"),
 			authoredPath("targets/qoder/commands"),
+			authoredPath("targets/qoder/bin"),
 		},
 		ForbiddenFiles: []string{
 			"launcher.yaml",
@@ -82,7 +84,7 @@ func qoderScaffold() ScaffoldMeta {
 			{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
 			{Path: authoredPath("targets/qoder/hooks/hooks.json"), Template: "targets.qoder.hooks.json.tmpl", Extra: true},
 			{Path: authoredPath("targets/qoder/commands/{{.ProjectName}}.md"), Template: "targets.qoder.command.md.tmpl", Extra: true},
-			{Path: "bin/{{.ProjectName}}-hook", Template: "targets.qoder.hook.sh.tmpl", Extra: true},
+			{Path: authoredPath("targets/qoder/bin/{{.ProjectName}}-hook"), Template: "targets.qoder.hook.sh.tmpl", Extra: true},
 			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl"},
 			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl"},
 		},

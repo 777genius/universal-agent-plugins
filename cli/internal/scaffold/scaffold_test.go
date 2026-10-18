@@ -87,7 +87,7 @@ func TestBuildPlan_QoderHooksReferenceScaffoldedRuntime(t *testing.T) {
 	for _, want := range []string{
 		filepath.Join(authoredRootDir, "targets", "qoder", "hooks", "hooks.json"),
 		filepath.Join(authoredRootDir, "targets", "qoder", "commands", "demo.md"),
-		filepath.Join("bin", "demo-hook"),
+		filepath.Join(authoredRootDir, "targets", "qoder", "bin", "demo-hook"),
 	} {
 		if !containsPlannedFile(plan.Files, want) {
 			t.Fatalf("missing %q in %+v", want, plan.Files)
@@ -345,7 +345,7 @@ func TestPaths_QoderHooksContract(t *testing.T) {
 		"plugin.yaml",
 		filepath.Join("targets", "qoder", "hooks", "hooks.json"),
 		filepath.Join("targets", "qoder", "commands", "my-plugin.md"),
-		filepath.Join("bin", "my-plugin-hook"),
+		filepath.Join("targets", "qoder", "bin", "my-plugin-hook"),
 		filepath.Join("skills", "my-plugin", "SKILL.md"),
 	} {
 		if !contains(got, want) {

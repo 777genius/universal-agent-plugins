@@ -62,5 +62,15 @@ func (qoderAdapter) Generate(root string, graph pluginmodel.PackageGraph, state 
 		return nil, err
 	}
 	artifacts = append(artifacts, copied...)
+	if binPaths := state.ComponentPaths("bin"); len(binPaths) > 0 {
+		copied, err := copyArtifactDirs(root, artifactDir{
+			src: authoredComponentDir(state, "bin", filepath.Join("targets", "qoder", "bin")),
+			dst: "bin",
+		})
+		if err != nil {
+			return nil, err
+		}
+		artifacts = append(artifacts, copied...)
+	}
 	return compactArtifacts(artifacts), nil
 }

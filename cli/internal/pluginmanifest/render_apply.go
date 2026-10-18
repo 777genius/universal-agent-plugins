@@ -2,8 +2,10 @@ package pluginmanifest
 
 import (
 	"bytes"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -13,11 +15,29 @@ func writeArtifacts(root string, artifacts []Artifact) error {
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(full, artifact.Content, 0o644); err != nil {
+		mode := generatedArtifactMode(artifact.RelPath)
+		if err := os.WriteFile(full, artifact.Content, mode); err != nil {
+			return err
+		}
+		// WriteFile keeps the mode of an existing file, so generate must chmod
+		// too: hook runtimes under bin/ need their executable bit to survive
+		// regeneration and be reproducible from a clean checkout.
+		if err := os.Chmod(full, mode); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// generatedArtifactMode follows the scaffold write policy: files under a bin/
+// tree or with .sh/.cmd suffixes are executable so hook runtimes and launcher
+// scripts work right after generate.
+func generatedArtifactMode(rel string) fs.FileMode {
+	rel = filepath.ToSlash(rel)
+	if strings.HasPrefix(rel, "bin/") || strings.HasSuffix(rel, ".sh") || strings.HasSuffix(rel, ".cmd") {
+		return 0o755
+	}
+	return 0o644
 }
 
 func removeArtifacts(root string, relPaths []string) error {

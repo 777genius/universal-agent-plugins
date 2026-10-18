@@ -158,9 +158,9 @@ Reference implementation:
 ## Qoder Packaged Plugin Path
 
 - Start from `plugin-kit-ai init --platform qoder` or `plugin-kit-ai import --from qoder`
-- Keep `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, optional `plugin/skills/**`, and optional `plugin/targets/qoder/hooks/**` plus `plugin/targets/qoder/commands/**` as the authored source of truth
-- Commit generated `.qoder-plugin/plugin.json`, generated `skills/**` when portable skills are authored, generated `.mcp.json` when portable MCP is authored, and generated `hooks/**` plus `commands/**` mirrors when target-native hooks or commands are authored
-- Treat this lane as the packaged Qoder plugin path for both Qoder Desktop and the Qoder CLI; install the same bundle with `qoder plugins install .` (scopes `user|project|local`) and reload plugins in the client, or install it from a Qoder marketplace archive in Desktop. Target-native `hooks/**` and `commands/**` are convention-discovered from the bundle root and stay outside the portable core; `agents` and `output-styles` remain target-native future work
+- Keep `plugin/plugin.yaml`, optional `plugin/mcp/servers.yaml`, optional `plugin/skills/**`, and optional `plugin/targets/qoder/hooks/**` plus `plugin/targets/qoder/commands/**` plus `plugin/targets/qoder/bin/**` hook runtimes as the authored source of truth
+- Commit generated `.qoder-plugin/plugin.json`, generated `skills/**` when portable skills are authored, generated `.mcp.json` when portable MCP is authored, and generated `hooks/**` plus `commands/**` plus `bin/**` mirrors when target-native hooks, commands, or hook runtimes are authored
+- Treat this lane as the packaged Qoder plugin path for both Qoder Desktop and the Qoder CLI; install the same bundle with `qoder plugins install .` (scopes `user|project|local`) and reload plugins in the client, or install it from a Qoder marketplace archive in Desktop. Target-native `hooks/**`, `commands/**`, and `bin/**` are convention-discovered from the bundle root and stay outside the portable core; `agents` and `output-styles` remain target-native future work
 
 Reference implementation:
 

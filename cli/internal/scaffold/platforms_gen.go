@@ -122,7 +122,7 @@ var generatedPlatforms = map[string]PlatformDefinition{
 			{Path: "plugin/skills/{{.ProjectName}}/SKILL.md", Template: "SKILL.md.tmpl", Extra: true},
 			{Path: "plugin/targets/qoder/hooks/hooks.json", Template: "targets.qoder.hooks.json.tmpl", Extra: true},
 			{Path: "plugin/targets/qoder/commands/{{.ProjectName}}.md", Template: "targets.qoder.command.md.tmpl", Extra: true},
-			{Path: "bin/{{.ProjectName}}-hook", Template: "targets.qoder.hook.sh.tmpl", Extra: true},
+			{Path: "plugin/targets/qoder/bin/{{.ProjectName}}-hook", Template: "targets.qoder.hook.sh.tmpl", Extra: true},
 			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl", Extra: false},
 			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl", Extra: false},
 		},

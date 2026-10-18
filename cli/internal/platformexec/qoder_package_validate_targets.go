@@ -26,7 +26,34 @@ func validateQoderHooksContract(root string, state pluginmodel.TargetState) []Di
 	if diagnostics := validateQoderHooksDocumentShape(source, body); len(diagnostics) > 0 {
 		return diagnostics
 	}
-	return validateQoderMirrorProjection(root, source, filepath.ToSlash(filepath.Join("hooks", "hooks.json")))
+	diagnostics := validateQoderMirrorProjection(root, source, filepath.ToSlash(filepath.Join("hooks", "hooks.json")))
+	return append(diagnostics, validateQoderBundledCommandsExist(root, source, body)...)
+}
+
+// validateQoderBundledCommandsExist rejects hook commands pointing at
+// ${QODER_PLUGIN_ROOT}/ targets missing from the generated bundle: hooks fire
+// after installation, so a dangling bundled path only surfaces at runtime.
+func validateQoderBundledCommandsExist(root, source string, body []byte) []Diagnostic {
+	doc, err := parseQoderHooksDocument(body)
+	if err != nil {
+		return nil
+	}
+	var diagnostics []Diagnostic
+	for _, event := range sortedHookEvents(doc.Hooks) {
+		for groupIndex, group := range doc.Hooks[event] {
+			for hookIndex, hook := range group.Hooks {
+				rel, ok := strings.CutPrefix(strings.TrimSpace(hook.Command), qoderHookRootPlaceholder+"/")
+				if !ok {
+					continue
+				}
+				if fileExists(filepath.Join(root, filepath.FromSlash(rel))) {
+					continue
+				}
+				diagnostics = append(diagnostics, qoderSourceDiagnostic(source, fmt.Sprintf("Qoder hook event %q group %d hook %d references missing bundled file %s", event, groupIndex, hookIndex, rel)))
+			}
+		}
+	}
+	return diagnostics
 }
 
 func validateQoderHooksDocumentShape(source string, body []byte) []Diagnostic {
@@ -37,6 +64,9 @@ func validateQoderHooksDocumentShape(source string, body []byte) []Diagnostic {
 	for _, event := range sortedHookEvents(doc.Hooks) {
 		if !qoderHookNameRecognized(event) {
 			return []Diagnostic{qoderSourceDiagnostic(source, fmt.Sprintf("Qoder hooks document uses unrecognized hook event %q", event))}
+		}
+		if len(doc.Hooks[event]) == 0 {
+			return []Diagnostic{qoderSourceDiagnostic(source, fmt.Sprintf("Qoder hook event %q has no hook groups", event))}
 		}
 		for groupIndex, group := range doc.Hooks[event] {
 			if len(group.Hooks) == 0 {
@@ -78,6 +108,27 @@ func validateQoderCommandsContract(root string, state pluginmodel.TargetState) [
 			return []Diagnostic{qoderSourceDiagnostic(source, "Qoder command document is outside targets/qoder/commands")}
 		}
 		if diagnostics := validateQoderMirrorProjection(root, source, filepath.ToSlash(filepath.Join("commands", rel))); len(diagnostics) > 0 {
+			return diagnostics
+		}
+	}
+	return nil
+}
+
+// validateQoderBinContract mirrors the hooks and commands contracts for bundled
+// executables: the generated bin/ tree must be an exact projection of the
+// authored targets/qoder/bin sources hook commands invoke at runtime.
+func validateQoderBinContract(root string, state pluginmodel.TargetState) []Diagnostic {
+	authored := state.ComponentPaths("bin")
+	if len(authored) == 0 {
+		return validateQoderMirrorAbsent(root, "bin")
+	}
+	sourceDir := authoredComponentDir(state, "bin", filepath.Join("targets", "qoder", "bin"))
+	for _, source := range authored {
+		rel, err := filepath.Rel(sourceDir, source)
+		if err != nil {
+			return []Diagnostic{qoderSourceDiagnostic(source, "Qoder bundled executable is outside targets/qoder/bin")}
+		}
+		if diagnostics := validateQoderMirrorProjection(root, source, filepath.ToSlash(filepath.Join("bin", rel))); len(diagnostics) > 0 {
 			return diagnostics
 		}
 	}

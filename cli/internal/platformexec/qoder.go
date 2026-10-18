@@ -34,10 +34,10 @@ func (qoderAdapter) RefineDiscovery(root string, state *pluginmodel.TargetState)
 		return err
 	}
 	for _, entry := range entries {
-		if entry.Name() == "hooks" || entry.Name() == "commands" {
+		if entry.Name() == "hooks" || entry.Name() == "commands" || entry.Name() == "bin" {
 			continue
 		}
-		return fmt.Errorf("target qoder does not support %s/targets/qoder/%s: supported target-native kinds are hooks and commands", authoredRoot, entry.Name())
+		return fmt.Errorf("target qoder does not support %s/targets/qoder/%s: supported target-native kinds are hooks, commands, and bin", authoredRoot, entry.Name())
 	}
 	return nil
 }
@@ -46,9 +46,9 @@ func (qoderAdapter) ManagedPaths(root string, graph pluginmodel.PackageGraph, st
 	// .mcp.json is adapter-generated whenever portable MCP exists and becomes
 	// stale (and must be removed) when portable MCP is dropped, otherwise a
 	// later import resurrects servers from the orphaned sidecar. The same
-	// symmetry applies to the mirrored hooks/ and commands/ trees.
+	// symmetry applies to the mirrored hooks/, commands/, and bin/ trees.
 	paths := []string{".mcp.json"}
-	for _, dir := range []string{"hooks", "commands"} {
+	for _, dir := range []string{"hooks", "commands", "bin"} {
 		found, err := existingFilesUnder(root, dir)
 		if err != nil {
 			return nil, err
