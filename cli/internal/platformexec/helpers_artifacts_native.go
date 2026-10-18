@@ -2,21 +2,47 @@ package platformexec
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/pluginmodel"
 	"github.com/777genius/plugin-kit-ai/sdk/platformmeta"
 )
 
+// authoredComponentDir returns the authored directory whose tree maps onto the
+// generated surface for kind. fallback names the targets/<target>/<kind>
+// suffix that tree always keeps, so the mirror root is clamped to the suffix
+// instead of the first path's parent: deriving it from one path alone flattens
+// namespaces when every authored file lives in nested subdirectories
+// (targets/qoder/commands/ship/run.md would mirror to commands/run.md).
 func authoredComponentDir(state pluginmodel.TargetState, kind, fallback string) string {
 	paths := state.ComponentPaths(kind)
+	fallback = filepath.ToSlash(fallback)
 	if len(paths) == 0 {
-		return filepath.ToSlash(fallback)
+		return fallback
 	}
 	dir := filepath.ToSlash(filepath.Dir(paths[0]))
 	if dir == "." {
-		return filepath.ToSlash(fallback)
+		return fallback
+	}
+	if root, ok := trimAfterPathSuffix(dir, fallback); ok {
+		return root
 	}
 	return dir
+}
+
+// trimAfterPathSuffix cuts dir back to the first segment-aligned occurrence of
+// suffix, keeping every namespace below the authored component root intact.
+func trimAfterPathSuffix(dir, suffix string) (string, bool) {
+	for i := 0; i+len(suffix) <= len(dir); i++ {
+		if (i > 0 && dir[i-1] != '/') || !strings.HasPrefix(dir[i:], suffix) {
+			continue
+		}
+		if end := i + len(suffix); end < len(dir) && dir[end] != '/' {
+			continue
+		}
+		return dir[:i+len(suffix)], true
+	}
+	return "", false
 }
 
 func managedKeysForNativeDoc(target, kind string) []string {

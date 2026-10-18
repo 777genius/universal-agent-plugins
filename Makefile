@@ -1,4 +1,4 @@
-.PHONY: lint lint-fix lint-baseline-check test-core test-agentplugins-resilience test test-required test-agentplugins-native-install test-plugin-manifest-workflow test-install-compat test-extended test-polyglot-smoke test-live test-live-cli test-install-live test-gemini-live test-gemini-runtime test-gemini-runtime-live test-opencode-live test-opencode-cli-live test-opencode-tools-live test-opencode-mcp-live test-opencode-e2e-live test-cursor-live test-portable-mcp-live test-context7-live test-chrome-devtools-live test-atlassian-live test-cloudflare-live test-cloudflare-bindings-live test-cloudflare-docs-live test-cloudflare-observability-live test-cloudflare-radar-live test-heroku-live test-hubspot-crm-live test-hubspot-developer-live test-neon-live test-docker-hub-live test-notion-live test-e2e-live test-govulncheck-local test-security generated-check version-sync-check removed-contract-boundary-check release-gate release-rehearsal build-plugin-kit-ai vet
+.PHONY: lint lint-fix lint-baseline-check test-core test-agentplugins-resilience test test-required test-agentplugins-native-install test-plugin-manifest-workflow test-install-compat test-extended test-polyglot-smoke test-live test-live-cli test-install-live test-gemini-live test-gemini-runtime test-gemini-runtime-live test-opencode-live test-opencode-cli-live test-opencode-tools-live test-opencode-mcp-live test-opencode-e2e-live test-cursor-live test-qoder-live test-portable-mcp-live test-context7-live test-chrome-devtools-live test-atlassian-live test-cloudflare-live test-cloudflare-bindings-live test-cloudflare-docs-live test-cloudflare-observability-live test-cloudflare-radar-live test-heroku-live test-hubspot-crm-live test-hubspot-developer-live test-neon-live test-docker-hub-live test-notion-live test-e2e-live test-govulncheck-local test-security generated-check version-sync-check removed-contract-boundary-check release-gate release-rehearsal build-plugin-kit-ai vet
 
 GOCACHE ?= /tmp/plugin-kit-ai-gocache
 export GOCACHE
@@ -142,6 +142,9 @@ test-opencode-e2e-live:
 
 test-cursor-live:
 	PLUGIN_KIT_AI_RUN_CURSOR_CLI=1 go test -count=1 -run '^TestCursorCLI' ./repotests $(EXTENDED_TEST_ARGS)
+
+test-qoder-live:
+	PLUGIN_KIT_AI_RUN_QODER_CLI=1 go test -count=1 -run '^TestQoderCLI' ./repotests $(EXTENDED_TEST_ARGS)
 
 test-portable-mcp-live:
 	PLUGIN_KIT_AI_RUN_PORTABLE_MCP_LIVE=1 go test -count=1 -run '^TestPortableMCPLiveAcrossConsoleAgents$$' ./repotests $(EXTENDED_TEST_ARGS)

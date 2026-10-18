@@ -743,6 +743,12 @@ func TestInitRunner_qoderStarter(t *testing.T) {
 		filepath.Join(".qoder-plugin", "plugin.json"),
 		".mcp.json",
 		filepath.Join("skills", "genplug", "SKILL.md"),
+		filepath.Join("plugin", "targets", "qoder", "hooks", "hooks.json"),
+		filepath.Join("plugin", "targets", "qoder", "commands", "genplug.md"),
+		filepath.Join("plugin", "targets", "qoder", "bin", "genplug-hook"),
+		filepath.Join("bin", "genplug-hook"),
+		filepath.Join("hooks", "hooks.json"),
+		filepath.Join("commands", "genplug.md"),
 	} {
 		if _, err := os.Stat(filepath.Join(out, rel)); err != nil {
 			t.Fatalf("stat %s: %v", rel, err)
@@ -752,11 +758,15 @@ func TestInitRunner_qoderStarter(t *testing.T) {
 		filepath.Join("plugin", "launcher.yaml"),
 		"go.mod",
 		filepath.Join(".cursor-plugin", "plugin.json"),
-		filepath.Join("hooks", "hooks.json"),
 	} {
 		if _, err := os.Stat(filepath.Join(out, rel)); !os.IsNotExist(err) {
 			t.Fatalf("unexpected qoder starter file %s", rel)
 		}
+	}
+	if info, err := os.Stat(filepath.Join(out, "bin", "genplug-hook")); err != nil {
+		t.Fatalf("stat generated hook runtime: %v", err)
+	} else if info.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("generated hook runtime %s must be executable, mode %s", filepath.Join("bin", "genplug-hook"), info.Mode().Perm())
 	}
 	assertRuntimeTestAssetsAbsent(t, out)
 	manifestBody, err := os.ReadFile(filepath.Join(out, ".qoder-plugin", "plugin.json"))

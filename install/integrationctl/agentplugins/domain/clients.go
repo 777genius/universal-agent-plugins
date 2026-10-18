@@ -158,8 +158,9 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:  LifecycleNativeConfig,
 	}),
 	stdioOnlyMCP(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents: []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:  LifecycleCLIRegistry,
+		InstallIntents:       []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:        LifecycleCLIRegistry,
+		DiscoversNativeHooks: true,
 	})),
 }
 

@@ -38,6 +38,11 @@ type ClientTraits struct {
 	// command can be delivered. The adapter must then implement
 	// clients.ExplicitSkillDecorator. Backend siblings must agree.
 	EnforcesExplicitSkillInvocation bool
+	// DiscoversNativeHooks means staging must carry the package-root hooks/
+	// and commands/ surfaces through to the delivered tree: the client
+	// discovers them there by convention (Qoder plugin layout) instead of
+	// through the portable hooks contract other clients cannot consume.
+	DiscoversNativeHooks bool
 }
 
 // ClientTraitsFor returns the declared traits for a known client. Unknown ids

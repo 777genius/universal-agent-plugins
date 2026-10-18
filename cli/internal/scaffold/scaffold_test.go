@@ -78,6 +78,53 @@ func TestBuildPlan_LocalToolTemplateSingleTarget(t *testing.T) {
 	}
 }
 
+func TestBuildPlan_QoderHooksReferenceScaffoldedRuntime(t *testing.T) {
+	t.Parallel()
+	plan, err := BuildPlan(Data{ProjectName: "demo", Platform: "qoder", WithExtras: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		filepath.Join(authoredRootDir, "targets", "qoder", "hooks", "hooks.json"),
+		filepath.Join(authoredRootDir, "targets", "qoder", "commands", "demo.md"),
+		filepath.Join(authoredRootDir, "targets", "qoder", "bin", "demo-hook"),
+	} {
+		if !containsPlannedFile(plan.Files, want) {
+			t.Fatalf("missing %q in %+v", want, plan.Files)
+		}
+	}
+	hooksBody, _, err := RenderTemplate("targets.qoder.hooks.json.tmpl", Data{ProjectName: "demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(hooksBody), `"command": "${QODER_PLUGIN_ROOT}/bin/demo-hook"`) {
+		t.Fatalf("hooks do not reference the scaffolded runtime:\n%s", hooksBody)
+	}
+	scriptBody, _, err := RenderTemplate("targets.qoder.hook.sh.tmpl", Data{ProjectName: "demo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(scriptBody)
+	if !strings.HasPrefix(script, "#!/bin/sh\n") || !strings.Contains(script, "demo-hooks.log") || !strings.Contains(script, "exit 0") {
+		t.Fatalf("hook runtime script = %q", script)
+	}
+}
+
+func TestSkillTemplateCarriesFrontmatter(t *testing.T) {
+	t.Parallel()
+	body, _, err := RenderTemplate("SKILL.md.tmpl", Data{ProjectName: "demo", Platform: "qoder"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	skill := string(body)
+	if !strings.HasPrefix(skill, "---\nname: demo\n") || !strings.Contains(skill, "description:") {
+		t.Fatalf("skill stub must start with YAML frontmatter:\n%s", skill)
+	}
+	if strings.Contains(skill, "# demoAgent") || strings.Contains(skill, "# demoCodex") {
+		t.Fatalf("skill stub body is glued to the heading:\n%s", skill)
+	}
+}
+
 func TestDefaultJobTemplateTargetsDoNotIncludeGemini(t *testing.T) {
 	t.Parallel()
 	for _, templateName := range []string{InitTemplateOnlineService, InitTemplateLocalTool} {
@@ -274,6 +321,31 @@ func TestPaths_CodexPackage(t *testing.T) {
 		filepath.Join("targets", "codex-package", "app.json"),
 		filepath.Join(authoredRootDir, "mcp", "servers.yaml"),
 		"README.md",
+		filepath.Join("skills", "my-plugin", "SKILL.md"),
+	} {
+		if !contains(got, want) {
+			t.Fatalf("missing %q in %v", want, got)
+		}
+	}
+	for _, unwanted := range []string{
+		"go.mod",
+		"launcher.yaml",
+		filepath.Join("cmd", "my-plugin", "main.go"),
+	} {
+		if contains(got, unwanted) {
+			t.Fatalf("unexpected %q in %v", unwanted, got)
+		}
+	}
+}
+
+func TestPaths_QoderHooksContract(t *testing.T) {
+	t.Parallel()
+	got := Paths("qoder", "my-plugin", true)
+	for _, want := range []string{
+		"plugin.yaml",
+		filepath.Join("targets", "qoder", "hooks", "hooks.json"),
+		filepath.Join("targets", "qoder", "commands", "my-plugin.md"),
+		filepath.Join("targets", "qoder", "bin", "my-plugin-hook"),
 		filepath.Join("skills", "my-plugin", "SKILL.md"),
 	} {
 		if !contains(got, want) {

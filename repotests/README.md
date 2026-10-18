@@ -138,6 +138,9 @@
 | `PLUGIN_KIT_AI_E2E_GEMINI` | Предпочтительный путь к бинарнику `gemini` для Gemini CLI E2E. |
 | `PLUGIN_KIT_AI_SKIP_GEMINI_CLI=1` | Явно выключить Gemini CLI E2E. |
 | `PLUGIN_KIT_AI_RUN_GEMINI_RUNTIME_LIVE=1` | Включить реальный Gemini runtime hook smoke поверх generated Go runtime lane. |
+| `PLUGIN_KIT_AI_RUN_QODER_CLI=1` | Реальный бинарник `qoder` для validate/install lifecycle smoke. |
+| `PLUGIN_KIT_AI_SKIP_QODER_CLI=1` | Явно выключить Qoder CLI E2E. |
+| `PLUGIN_KIT_AI_E2E_QODER` | Путь к бинарнику `qoder`, если не в `PATH`. |
 | `PLUGIN_KIT_AI_BIND_TESTS=1` | Явно включить bind/listen-зависимые install/integration tests в средах, где loopback может быть недоступен. |
 
 ## Запуск
@@ -154,6 +157,7 @@ make test-gemini-runtime-live
 make test-opencode-cli-live
 make test-opencode-e2e-live
 make test-cursor-live
+make test-qoder-live
 make test-portable-mcp-live
 make test-context7-live
 make test-chrome-devtools-live
