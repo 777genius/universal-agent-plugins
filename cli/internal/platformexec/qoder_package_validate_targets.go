@@ -27,6 +27,7 @@ func validateQoderHooksContract(root string, state pluginmodel.TargetState) []Di
 		return diagnostics
 	}
 	diagnostics := validateQoderMirrorProjection(root, source, filepath.ToSlash(filepath.Join("hooks", "hooks.json")))
+	diagnostics = append(diagnostics, validateQoderGeneratedSurplus(root, authoredComponentDir(state, "hooks", filepath.Join("targets", "qoder", "hooks")), "hooks")...)
 	return append(diagnostics, validateQoderBundledCommandsExist(root, source, body)...)
 }
 
@@ -111,7 +112,7 @@ func validateQoderCommandsContract(root string, state pluginmodel.TargetState) [
 			return diagnostics
 		}
 	}
-	return nil
+	return validateQoderGeneratedSurplus(root, sourceDir, "commands")
 }
 
 // validateQoderBinContract mirrors the hooks and commands contracts for bundled
@@ -132,7 +133,33 @@ func validateQoderBinContract(root string, state pluginmodel.TargetState) []Diag
 			return diagnostics
 		}
 	}
-	return nil
+	return validateQoderGeneratedSurplus(root, sourceDir, "bin")
+}
+
+// validateQoderGeneratedSurplus enforces the exact-projection contract from the
+// generated side: every mirrored file must have an authored source. Byte
+// comparison of the authored list alone would let an undeclared native asset
+// (or stale hand-edited output) survive strict validation.
+func validateQoderGeneratedSurplus(root, sourceDir, generatedDir string) []Diagnostic {
+	var diagnostics []Diagnostic
+	base := filepath.Join(root, filepath.FromSlash(generatedDir))
+	_ = filepath.WalkDir(base, func(path string, d os.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return walkErr
+		}
+		rel, relErr := filepath.Rel(base, path)
+		if relErr != nil {
+			return relErr
+		}
+		rel = filepath.ToSlash(rel)
+		mirrorRel := filepath.ToSlash(filepath.Join(generatedDir, rel))
+		if fileExists(filepath.Join(root, sourceDir, rel)) {
+			return nil
+		}
+		diagnostics = append(diagnostics, qoderGeneratedDiagnostic(mirrorRel, fmt.Sprintf("Qoder generated mirror %s has no authored source under %s", mirrorRel, sourceDir)))
+		return nil
+	})
+	return diagnostics
 }
 
 func validateQoderMirrorProjection(root, source, generatedRel string) []Diagnostic {

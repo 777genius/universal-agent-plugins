@@ -488,6 +488,38 @@ func TestQoderPackagedValidateBinMirrorContract(t *testing.T) {
 	})
 }
 
+func TestQoderPackagedValidateRejectsGeneratedSurplusMirrors(t *testing.T) {
+	t.Parallel()
+	for _, dir := range []string{"hooks", "commands", "bin"} {
+		t.Run(dir, func(t *testing.T) {
+			t.Parallel()
+			root, graph, state := qoderHooksFixture(t)
+			artifacts, err := (qoderAdapter{}).Generate(root, graph, state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeQoderArtifacts(t, root, artifacts)
+			diagnostics, err := (qoderAdapter{}).Validate(root, graph, state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diagnostics) != 0 {
+				t.Fatalf("round-trip diagnostics = %+v", diagnostics)
+			}
+			surplus := filepath.Join(root, dir, "surplus.json")
+			writeQoderTestFile(t, surplus, "{}\n")
+			diagnostics, err = (qoderAdapter{}).Validate(root, graph, state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := dir + "/surplus.json has no authored source"
+			if !strings.Contains(diagnosticsText(diagnostics), want) {
+				t.Fatalf("diagnostics = %+v, want %q", diagnostics, want)
+			}
+		})
+	}
+}
+
 func TestQoderPackagedGenerateKeepsNestedCommandNamespaces(t *testing.T) {
 	t.Parallel()
 	root := qoderManifestFixture(t)
