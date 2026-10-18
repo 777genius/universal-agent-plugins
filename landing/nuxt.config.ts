@@ -37,7 +37,7 @@ const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
 // Public playback ID for the owner-uploaded product film; an empty override disables it.
 const muxPlaybackId =
-  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'whg5hoTZLPJclfEYfp8OEJQu6Gcuqc2519U6nhx7AP8';
+  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'AAEIkquATGMB02se3H3vqNSS9esJeVbfdJHCT00Ciekl00';
 
 function resolveRegistrySnapshot(): string {
   const explicit = process.env.UAP_SIGNED_SNAPSHOT_PATH;

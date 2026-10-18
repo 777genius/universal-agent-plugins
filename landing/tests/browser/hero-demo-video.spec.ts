@@ -59,6 +59,13 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
     'Explicit live CDN check; ordinary CI tests the player boundary offline.',
   );
   test.setTimeout(120_000);
+  await page.addInitScript(() => {
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      this.muted = true;
+      return play.call(this);
+    };
+  });
   await setSignedMirrorTestTime(page);
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -93,8 +100,7 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
       error: element.error?.code ?? null,
       paused: element.paused,
     }));
-    expect(media.duration).toBeGreaterThan(42);
-    expect(media.duration).toBeLessThan(43);
+    expect(Math.abs(media.duration - 2030 / 30)).toBeLessThan(0.25);
     expect(media.error).toBeNull();
     expect(media.paused).toBe(false);
     if (directory)
