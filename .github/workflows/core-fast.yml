@@ -67,6 +67,14 @@ jobs:
       - name: Qualify native Windows managed stdio process-tree ownership
         working-directory: install/integrationctl/agentplugins
         run: go test -count=1 -timeout=3m -v ./managedstdio -run '^TestWindows(JobTreeCleanup|AssignFailureKillsSuspendedProcessBeforeWait)$'
+      - name: Qualify global dependency transfer and rollback on Windows
+        working-directory: cli
+        env:
+          GIT_CONFIG_NOSYSTEM: '1'
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.hooksPath
+          GIT_CONFIG_VALUE_0: /dev/null
+        run: go test -count=1 -timeout=5m -v ./internal/agentpluginscli -run '^TestDependencyTransfer'
 
   gemini-observer-windows:
     name: gemini-observer-windows

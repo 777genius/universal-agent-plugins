@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -101,6 +102,9 @@ func restoreDependencyTransferFile(before dependencyTransferFile, candidate []by
 		return fmt.Errorf("%s changed externally; retained current file", before.path)
 	}
 	expectedMode := os.FileMode(0o600)
+	if runtime.GOOS == "windows" {
+		expectedMode = 0o666
+	}
 	if before.info != nil {
 		expectedMode = before.info.Mode().Perm()
 	}

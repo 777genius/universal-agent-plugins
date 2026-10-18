@@ -292,7 +292,7 @@ func TestDependencyTransferConfirmationRecheck(t *testing.T) {
 }
 
 func TestDependencyTransferPublicationRollback(t *testing.T) {
-	for _, scenario := range []string{"existing", "new leaves", "renamed then failed", "rollback failed", "external edit"} {
+	for _, scenario := range []string{"existing", "new leaves", "renamed then failed", "rollback failed", "external edit", "external read-only toggle"} {
 		t.Run(scenario, func(t *testing.T) {
 			fixture := transferEmptyAgreement(t)
 			mp, lp := fixture.app.dependencyPaths()
@@ -319,6 +319,11 @@ func TestDependencyTransferPublicationRollback(t *testing.T) {
 					if scenario == "external edit" {
 						dependencyWrite(t, dmp, "external editor owns these bytes")
 					}
+					if scenario == "external read-only toggle" {
+						if err := os.Chmod(dmp, 0400); err != nil {
+							t.Fatal(err)
+						}
+					}
 					return errors.New("injected second publication failure")
 				}
 				if scenario == "rollback failed" && path == dmp && string(body) == oldManifest {
@@ -330,7 +335,7 @@ func TestDependencyTransferPublicationRollback(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), "injected second publication failure") {
 				t.Fatalf("publication error lost: %v %s", err, out)
 			}
-			partial := scenario == "rollback failed" || scenario == "external edit"
+			partial := scenario == "rollback failed" || scenario == "external edit" || scenario == "external read-only toggle"
 			if partial {
 				result := transferJSON(t, out)
 				if string(result["outcome"]) != `"partial"` || !strings.Contains(err.Error(), "rollback") || !strings.Contains(err.Error(), fixture.app.DependenciesRoot) {
@@ -342,6 +347,12 @@ func TestDependencyTransferPublicationRollback(t *testing.T) {
 				}
 				if dependencyRead(t, dmp) != want {
 					t.Fatal("rollback discarded candidate/external bytes despite failure")
+				}
+				if scenario == "external read-only toggle" {
+					info, statErr := os.Stat(dmp)
+					if statErr != nil || info.Mode().Perm()&0200 != 0 || !strings.Contains(err.Error(), "mode changed externally") {
+						t.Fatalf("rollback ignored external read-only state: %v %v %v", info, statErr, err)
+					}
 				}
 			} else if scenario == "new leaves" {
 				for _, path := range []string{dmp, dlp} {
@@ -364,6 +375,11 @@ func TestDependencyTransferPublicationRollback(t *testing.T) {
 				t.Fatal("publication failure changed export source")
 			}
 			publishEnvironmentFile = publish
+			if scenario == "external read-only toggle" {
+				if err := os.Chmod(dmp, 0640); err != nil {
+					t.Fatal(err)
+				}
+			}
 			transferJSON(t, dependencyRun(t, fixture.cliFixture, "deps", "export", destination, "--yes", "--format", "json"))
 			if dependencyRead(t, dmp) != manifest || dependencyRead(t, dlp) != lock || fixture.source.lookups != 0 || fixture.source.downloads != 0 {
 				t.Fatal("retry failed to restore exact pair without resolution")
