@@ -179,14 +179,23 @@ func jsonMarshal(value any) ([]byte, error) {
 
 func dependencyPreviewApp(app App, opts *options) (App, func(), error) {
 	noop := func() {}
+	closeSnapshots := noop
+	if app.dependencySnapshots == nil {
+		app.dependencySnapshots = &dependencySnapshotCache{snapshots: map[dependencySnapshotKey]domain.PackageSnapshot{}}
+		closeSnapshots = app.dependencySnapshots.close
+	}
 	if !opts.dryRun {
-		return app, noop, nil
+		return app, closeSnapshots, nil
 	}
 	root, err := os.MkdirTemp("", "uap-dependency-preview-")
 	if err != nil {
+		closeSnapshots()
 		return app, noop, err
 	}
-	cleanup := func() { _ = os.RemoveAll(root) }
+	cleanup := func() {
+		closeSnapshots()
+		_ = os.RemoveAll(root)
+	}
 	if app.SecurityEvaluatorForDryRun != nil {
 		app.SecurityEvaluator = app.SecurityEvaluatorForDryRun(root)
 	}
@@ -221,7 +230,7 @@ func ensureDependencyStore(ctx context.Context, app App, lock environment.Lock) 
 	for _, pkg := range lock.Packages {
 		if _, err := store.Get(ctx, pkg.DigestAlgorithm, pkg.TreeDigest); err == nil {
 			continue
-		} else if !errors.Is(err, environmentstore.ErrMissing) && !errors.Is(err, environmentstore.ErrMismatch) {
+		} else if !errors.Is(err, environmentstore.ErrMissing) {
 			return err
 		}
 		loaded, err := materializeLockedPackage(ctx, app, pkg, true, nil)

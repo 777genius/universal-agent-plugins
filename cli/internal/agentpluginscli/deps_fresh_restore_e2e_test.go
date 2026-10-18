@@ -3,7 +3,9 @@ package agentpluginscli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -18,32 +20,48 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type freshRestoreFetch struct{ repository, commit, path, digest string }
 
 type freshRestoreSource struct {
 	*dependencyTestSource
-	verified []freshRestoreFetch
+	verified  []freshRestoreFetch
+	snapshots []string
 }
 
 func (source *freshRestoreSource) AcquireGitHubVerified(ctx context.Context, repository, commit, path, digest string) (domain.PackageSnapshot, error) {
 	source.verified = append(source.verified, freshRestoreFetch{repository, commit, path, digest})
-	return source.dependencyTestSource.AcquireGitHubVerified(ctx, repository, commit, path, digest)
+	snapshot, err := source.dependencyTestSource.AcquireGitHubVerified(ctx, repository, commit, path, digest)
+	if err == nil {
+		source.snapshots = append(source.snapshots, snapshot.Root)
+	}
+	return snapshot, err
+}
+
+type freshRestoreRunner struct {
+	*dependencyFixtureRunner
+	calls int
+}
+
+func (runner *freshRestoreRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	runner.calls++
+	return runner.dependencyFixtureRunner.Run(ctx, command)
 }
 
 type freshRestoreEnvironment struct {
 	cliFixture
 	client domain.DetectedClient
 	source *freshRestoreSource
-	runner *dependencyFixtureRunner
+	runner *freshRestoreRunner
 }
 
 func newFreshRestoreEnvironment(t *testing.T, repo string, directory *fixedDirectoryClient) freshRestoreEnvironment {
 	t.Helper()
 	client := fixtureClient(t, domain.ClientCodex)
 	client.ExecutablePath, client.Version = filepath.Join(t.TempDir(), "codex"), "fixture-client"
-	runner := &dependencyFixtureRunner{id: domain.ClientCodex, claude: dependencyClaudeListing{root: client.ConfigRoot}}
+	runner := &freshRestoreRunner{dependencyFixtureRunner: &dependencyFixtureRunner{id: domain.ClientCodex, claude: dependencyClaudeListing{root: client.ConfigRoot}}}
 	f, source := newDependencyHarness(t, repo, []domain.DetectedClient{client}, installer.Config{Runner: runner})
 	tracked := &freshRestoreSource{dependencyTestSource: source}
 	f.app.SourceAcquirer, f.app.DirectoryClient = tracked, directory
@@ -83,6 +101,9 @@ func TestDependencyFreshRestoreFromPortableFiles(t *testing.T) {
 	freshRestorePackage(t, original, repo, "b", "1.1.0", "b", "^1.2", 2, false)
 	freshRestorePackage(t, original, repo, "a", "1.4.0", "a-1.4.0", "^1.2", 2, true)
 	freshRestorePackage(t, original, repo, "c", "1.3.0", "c-1.3.0", "", 2, true)
+	for i := range directory.bundle.Snapshot.Distributions {
+		directory.bundle.Snapshot.Distributions[i].ReleasePolicies[0].Status = domain.ReleaseSuperseded
+	}
 	originalBefore := freshRestoreFiles(t, original.root, original.client.ConfigRoot)
 	originalDownloads, originalLookups, originalMutations := original.source.downloads, original.source.lookups, original.runner.mutations
 
@@ -93,29 +114,10 @@ func TestDependencyFreshRestoreFromPortableFiles(t *testing.T) {
 	freshRestoreCopyAgreement(t, fresh, manifestBytes, lockBytes)
 	freshMP, freshLP := fresh.app.dependencyPaths()
 	agreementBefore := freshRestoreFiles(t, fresh.app.DependenciesRoot)
+	freshRestorePreviews(t, fresh, locked)
 	dependencyRun(t, fresh.cliFixture, "install", "--locked", "--yes", "--format", "json")
-	if fresh.source.lookups != 0 || fresh.source.downloads < len(locked.Packages) || fresh.source.downloads != len(fresh.source.verified) {
-		t.Fatalf("cold restore did not use exclusively verified immutable downloads: %+v", fresh.source)
-	}
-	wantedFetches := map[freshRestoreFetch]bool{}
-	for _, pin := range locked.Packages {
-		repository, commit, path := firstB.PackageSource.Repository, firstB.PackageSource.Revision, firstB.PackageSource.Path
-		if pin.Source.Registry != nil {
-			repository, commit, path = pin.Source.Registry.Repository, pin.Source.Registry.Commit, pin.Source.Registry.Path
-		}
-		wantedFetches[freshRestoreFetch{repository, commit, path, pin.TreeDigest}] = false
-	}
-	for _, fetch := range fresh.source.verified {
-		if _, wanted := wantedFetches[fetch]; !wanted {
-			t.Fatalf("restore fetched outside the recorded immutable graph: %+v", fetch)
-		}
-		wantedFetches[fetch] = true
-	}
-	for fetch, downloaded := range wantedFetches {
-		if !downloaded {
-			t.Fatalf("restore reused unavailable local content instead of downloading %+v", fetch)
-		}
-	}
+	freshRestoreCheckFetches(t, fresh.source, locked)
+	freshRestoreAssertStagingClean(t, fresh.source)
 	freshRestoreCheckInstalled(t, fresh, locked)
 	if !reflect.DeepEqual(locked, freshRestoreReadLock(t, fresh.cliFixture)) || !reflect.DeepEqual(agreementBefore, freshRestoreFiles(t, freshMP, freshLP)) {
 		t.Fatal("locked restore rewrote the portable agreement or moved a graph pin")
@@ -154,8 +156,144 @@ func TestDependencyFreshRestoreFromPortableFiles(t *testing.T) {
 		t.Fatal("unavailable immutable source refusal resolved a replacement, published content or changed local state")
 	}
 	freshRestoreAssertNoLocalState(t, unavailable)
+	freshRestoreAssertStagingClean(t, unavailable.source)
+	freshRestorePolicyRefusals(t, repo, directory, manifestBytes, lockBytes)
 	if !reflect.DeepEqual(originalBefore, freshRestoreFiles(t, original.root, original.client.ConfigRoot)) || original.source.downloads != originalDownloads || original.source.lookups != originalLookups || original.runner.mutations != originalMutations {
 		t.Fatal("fresh restore or its refusal mutated the original environment")
+	}
+}
+
+func freshRestoreCheckFetches(t *testing.T, source *freshRestoreSource, locked environment.Lock) {
+	t.Helper()
+	if source.lookups != 0 || source.downloads != len(locked.Packages) || len(source.verified) != len(locked.Packages) {
+		t.Fatalf("cold restore must acquire each immutable pin exactly once: downloads=%d lookups=%d fetches=%+v", source.downloads, source.lookups, source.verified)
+	}
+	wanted := map[freshRestoreFetch]int{}
+	for _, pin := range locked.Packages {
+		var fetch freshRestoreFetch
+		if pin.Source.Git != nil {
+			fetch = freshRestoreFetch{pin.Source.Git.Repository, pin.Source.Git.Commit, pin.Source.Git.Path, pin.TreeDigest}
+		} else {
+			fetch = freshRestoreFetch{pin.Source.Registry.Repository, pin.Source.Registry.Commit, pin.Source.Registry.Path, pin.TreeDigest}
+		}
+		wanted[fetch] = 0
+	}
+	for _, fetch := range source.verified {
+		if _, expected := wanted[fetch]; !expected {
+			t.Fatalf("acquired source outside the locked graph: %+v", fetch)
+		}
+		wanted[fetch]++
+	}
+	for fetch, count := range wanted {
+		if count != 1 {
+			t.Fatalf("immutable pin acquired %d times: %+v", count, fetch)
+		}
+	}
+}
+
+type freshRestoreCancelScanner struct{ cancel context.CancelFunc }
+
+func (scanner freshRestoreCancelScanner) Evaluate(ctx context.Context, _ domain.SecurityEvaluationInput) (domain.SecurityAssessment, error) {
+	scanner.cancel()
+	return domain.SecurityAssessment{}, ctx.Err()
+}
+
+func freshRestorePreviews(t *testing.T, fixture freshRestoreEnvironment, locked environment.Lock) {
+	t.Helper()
+	before := freshRestoreFiles(t, fixture.root, fixture.client.ConfigRoot)
+	for _, preview := range []string{"dry-run", "decline", "cancel"} {
+		fixture.source.downloads, fixture.source.lookups = 0, 0
+		fixture.source.verified, fixture.source.snapshots = nil, nil
+		var err error
+		switch preview {
+		case "dry-run":
+			_, _, err = fixture.execute(false, "install", "--locked", "--dry-run", "--yes", "--format", "json")
+		case "decline":
+			_, _, err = fixture.executeInput(true, "n\n", "install", "--locked")
+		case "cancel":
+			ctx, cancel := context.WithCancel(context.Background())
+			app := fixture.app
+			app.Input, app.Output, app.ErrorOutput = strings.NewReader(""), io.Discard, io.Discard
+			app.SecurityEvaluator = freshRestoreCancelScanner{cancel: cancel}
+			command := NewRoot(app)
+			command.SetArgs([]string{"install", "--locked", "--yes", "--format", "json"})
+			err = command.ExecuteContext(ctx)
+			cancel()
+			if !errors.Is(err, context.Canceled) || fixture.source.downloads != 1 {
+				t.Fatalf("cancellation did not stop after first acquired pin: %v downloads=%d", err, fixture.source.downloads)
+			}
+		}
+		if preview != "cancel" {
+			if err != nil {
+				t.Fatalf("%s restore failed: %v", preview, err)
+			}
+			freshRestoreCheckFetches(t, fixture.source, locked)
+		}
+		freshRestoreAssertNoEffects(t, fixture, before)
+	}
+	fixture.source.downloads, fixture.source.lookups = 0, 0
+	fixture.source.verified, fixture.source.snapshots = nil, nil
+}
+
+func freshRestoreAssertStagingClean(t *testing.T, source *freshRestoreSource) {
+	t.Helper()
+	for _, root := range source.snapshots {
+		if _, err := os.Lstat(root); !os.IsNotExist(err) {
+			t.Fatalf("command retained acquired snapshot %s: %v", root, err)
+		}
+	}
+	entries, err := os.ReadDir(source.TempRoot)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("command retained acquisition scratch files: %v %v", entries, err)
+	}
+}
+
+func freshRestoreAssertNoEffects(t *testing.T, fixture freshRestoreEnvironment, before map[string]freshRestoreStamp) {
+	t.Helper()
+	if fixture.source.lookups != 0 || fixture.runner.mutations != 0 || !reflect.DeepEqual(before, freshRestoreFiles(t, fixture.root, fixture.client.ConfigRoot)) {
+		t.Fatal("unconfirmed or refused restore resolved refs or changed persistent files/native state")
+	}
+	freshRestoreAssertNoLocalState(t, fixture)
+	freshRestoreAssertStagingClean(t, fixture.source)
+}
+
+func freshRestorePolicyRefusals(t *testing.T, repo string, directory *fixedDirectoryClient, manifest, lock string) {
+	t.Helper()
+	baseline, err := json.Marshal(directory.bundle.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, refusal := range []string{"revoked policy", "snapshot revocation", "publication mismatch"} {
+		if err := json.Unmarshal(baseline, &directory.bundle.Snapshot); err != nil {
+			t.Fatal(err)
+		}
+		snapshot := &directory.bundle.Snapshot
+		switch refusal {
+		case "revoked policy":
+			snapshot.Distributions[0].ReleasePolicies[0].Status = domain.ReleaseRevoked
+		case "snapshot revocation":
+			snapshot.Revocations = append(snapshot.Revocations, domain.DirectoryRevocation{DistributionID: "acme/a", ReleaseSequence: 1})
+		case "publication mismatch":
+			snapshot.Distributions[0].Releases[0].PackageSource.Revision = strings.Repeat("f", 40)
+		}
+		fixture := newFreshRestoreEnvironment(t, repo, directory)
+		freshRestoreCopyAgreement(t, fixture, manifest, lock)
+		before := freshRestoreFiles(t, fixture.root, fixture.client.ConfigRoot)
+		_, _, err := fixture.execute(false, "install", "--locked", "--yes", "--format", "json")
+		if refusal == "publication mismatch" {
+			if err == nil || !strings.Contains(err.Error(), "publication differs from exact lock") {
+				t.Fatalf("changed signed publication did not refuse: %v", err)
+			}
+		} else if !errors.Is(err, domain.ErrDirectoryIneligible) || !strings.Contains(err.Error(), "revoked") {
+			t.Fatalf("%s did not refuse exact locked restore: %v", refusal, err)
+		}
+		freshRestoreAssertNoEffects(t, fixture, before)
+		if fixture.runner.calls != 0 {
+			t.Fatalf("%s reached a native client process", refusal)
+		}
+	}
+	if err := json.Unmarshal(baseline, &directory.bundle.Snapshot); err != nil {
+		t.Fatal(err)
 	}
 }
 

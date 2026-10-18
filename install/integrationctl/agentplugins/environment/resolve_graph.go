@@ -153,6 +153,11 @@ func (solver *graphSolver) choose(ctx context.Context, key string, node graphNod
 		}
 	}
 	if old, ok := solver.pins[key]; ok && node.requirement.Alias != solver.update && nodeAccepts(node, old) {
+		// Newly acquired saved-add seeds have source identity before graph intent.
+		// Supply their known targets when the cold manifest must be read again.
+		if len(old.Targets) == 0 {
+			old.Targets = append([]string{}, node.targets...)
+		}
 		selected, err := solver.describe(ctx, old)
 		if err != nil {
 			return nil, nil, err
@@ -226,6 +231,7 @@ func (solver *graphSolver) chooseExact(ctx context.Context, key string, node gra
 	if err != nil {
 		return nil, nil, err
 	}
+	pkg.Targets = append([]string{}, node.targets...)
 	selected := ResolvedPackage{Package: pkg}
 	if solver.graph != nil {
 		selected, err = solver.graph.DescribePinned(ctx, pkg)

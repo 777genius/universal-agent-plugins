@@ -538,6 +538,10 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 		if request.Operation == DirectoryUpdate && request.Recorded != nil && release.Sequence <= request.Recorded.ReleaseSequence {
 			continue
 		}
+		if request.Purpose == DirectoryResolveLockedRestore && distribution.Status != DistributionActive {
+			reasons = append(reasons, eligibilityReason{"distribution_not_active", fmt.Sprintf("distribution is %s for locked restore", distribution.Status)})
+			continue
+		}
 		if distribution.Status == DistributionSuspended && request.Operation != DirectoryRemove && request.Operation != DirectoryRepair && request.Operation != DirectoryRematerialize && request.Operation != DirectoryReproduce &&
 			!(exactRecorded && (request.Operation == DirectoryInstall || request.Operation == DirectoryNewTarget)) {
 			reasons = append(reasons, eligibilityReason{"distribution_suspended", "distribution is suspended for this operation"})
@@ -546,11 +550,12 @@ func chooseDirectoryRelease(snapshot DirectorySnapshot, product DirectoryProduct
 		if request.Operation == DirectoryRemove && exactRecorded {
 			return release, nil
 		}
-		if isRevoked(snapshot, distribution.ID, release.Sequence) || policy.Status == ReleaseRevoked {
+		if isRevoked(snapshot, distribution.ID, release.Sequence) || policy.Status == ReleaseRevoked ||
+			(request.Purpose == DirectoryResolveLockedRestore && isRevoked(snapshot, distribution.ID, 0)) {
 			reasons = append(reasons, eligibilityReason{"release_revoked", fmt.Sprintf("release %d is revoked", release.Sequence)})
 			continue
 		}
-		if policy.Status == ReleaseSuperseded && !exactRecorded {
+		if policy.Status == ReleaseSuperseded && !exactRecorded && request.Purpose != DirectoryResolveLockedRestore {
 			reasons = append(reasons, eligibilityReason{"release_superseded", fmt.Sprintf("release %d is historical only", release.Sequence)})
 			continue
 		}

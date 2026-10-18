@@ -16,6 +16,13 @@ Changes after `v1.2.4` land here.
   Locked replay verifies pinned declarations and rejects incomplete graphs
   before installation or repair. This remains an unreleased source workflow.
 
+- Locked install/sync fetches each missing immutable pin once per command,
+  stages verified bytes through preflight and publishes the store after
+  confirmation. Exact copied-lock restore permits superseded, non-revoked
+  registry releases without changing versions or claiming installed history;
+  publication identity, revocation, suspension and compatibility checks remain
+  enforced. Ordinary fresh registry selection still requires an active release.
+
 - `agentplugins install` is the everyday environment converge verb, matching
   how package managers are used: a first run installs everything declared in
   `uap.toml` and `uap.lock`, a repeat run is a successful nothing-to-do, and

@@ -18,16 +18,14 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	store := app.dependencyStore()
 	if pkg, err := store.Get(ctx, locked.DigestAlgorithm, locked.TreeDigest); err == nil {
 		return loadStoredDependency(ctx, app, pkg, locked, recorded, operation...)
+	} else if !errors.Is(err, environmentstore.ErrMissing) {
+		return loadedPackage{}, err
 	}
-	var repository, commit, packagePath string
-	if locked.Source.Git != nil {
-		repository, commit, packagePath = locked.Source.Git.Repository, locked.Source.Git.Commit, locked.Source.Git.Path
-	} else if locked.Source.Registry != nil {
-		repository, commit, packagePath = locked.Source.Registry.Repository, locked.Source.Registry.Commit, locked.Source.Registry.Path
-	} else {
-		return loadedPackage{}, errors.New("locked package has no source")
+	repository, commit, packagePath, err := lockedDependencyCoordinates(locked)
+	if err != nil {
+		return loadedPackage{}, err
 	}
-	snapshot, err := app.SourceAcquirer.AcquireGitHubVerified(ctx, repository, commit, packagePath, locked.TreeDigest)
+	snapshot, err := app.acquireLockedSnapshot(ctx, locked)
 	if err != nil {
 		return loadedPackage{}, err
 	}
@@ -49,16 +47,18 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 		_ = loaded.cleanup()
 		return loadedPackage{}, errors.New("immutable fetch does not match uap.lock")
 	}
+	checked, err := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
+	if err != nil {
+		_ = loaded.cleanup()
+		return loadedPackage{}, err
+	}
+	loaded = checked
 	if publish {
 		sealed := domain.PackageSnapshot{Root: loaded.envelope.SnapshotRoot, TreeDigest: loaded.envelope.TreeDigest,
 			DigestAlgorithm: locked.DigestAlgorithm, ExecutableFiles: append([]string{}, locked.ExecutableFiles...), Source: loaded.envelope.Source}
 		_, err = store.Put(ctx, sealed)
 	} else {
-		checked, checkErr := verifyLockedDirectory(ctx, app, loaded, locked, recorded, operation...)
-		if checkErr != nil && loaded.cleanup != nil {
-			_ = loaded.cleanup()
-		}
-		return checked, checkErr
+		return loaded, nil
 	}
 	cleanupErr := loaded.cleanup()
 	if err != nil {
@@ -235,8 +235,8 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 	return adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
 }
 
-// The lock records coordinates, never signed publication eligibility. Recheck
-// the exact requested release without granting recorded-install exceptions.
+// Recheck the exact signed publication for lock restoration. Superseded releases
+// may be restored, while installed-state exceptions still require live proof.
 func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
 	source := locked.Source.Registry
 	if source == nil {
@@ -259,6 +259,9 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	request := domain.DirectoryResolveRequest{Selector: source.DistributionID, DesiredReleaseSequence: source.ReleaseSequence,
 		Operation: domain.DirectoryInstall, Scope: domain.ScopeUser, Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
 		OS: evidenceEnv.OS, Architecture: evidenceEnv.Architecture, DependencyIdentity: evidenceEnv.DependencyIdentity}
+	if recorded == nil {
+		request.Purpose = domain.DirectoryResolveLockedRestore
+	}
 	if recorded != nil {
 		request.DesiredReleaseSequence = 0
 		request.Recorded = recorded

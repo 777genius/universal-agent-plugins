@@ -45,6 +45,8 @@ type App struct {
 	PromptFactory      func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error)
 	reviewOutput       io.Writer
 
+	dependencySnapshots *dependencySnapshotCache
+
 	Version              string
 	UserHome             string
 	ManagedRoot          string
