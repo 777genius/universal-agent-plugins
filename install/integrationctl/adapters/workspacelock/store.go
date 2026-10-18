@@ -26,11 +26,12 @@ func (s Store) Path() string {
 // is the user's explicit action.
 func (s Store) legacyNamePresent(ctx context.Context) error {
 	legacy := filepath.Join(filepath.Dir(s.File), domain.LegacyWorkspaceLockFileName)
-	if _, err := s.FS.ReadFile(ctx, legacy); err != nil {
-		return nil
+	_, err := s.FS.ReadFile(ctx, legacy)
+	if err == nil {
+		return fmt.Errorf("workspace lock uses the legacy name %q; rename it to %q (for example: mv %s %s)",
+			domain.LegacyWorkspaceLockFileName, domain.WorkspaceLockFileName, legacy, s.File)
 	}
-	return fmt.Errorf("workspace lock uses the legacy name %q; rename it to %q (for example: mv %s %s)",
-		domain.LegacyWorkspaceLockFileName, domain.WorkspaceLockFileName, legacy, s.File)
+	return nil
 }
 
 func (s Store) Load(ctx context.Context) (domain.WorkspaceLock, error) {
