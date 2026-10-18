@@ -44,8 +44,10 @@ prove running-host eligibility.
 
 One V2 semantic reducer/core drives root push compatibility and `/v2` owned-reader
 lifetimes. The strict reader consumes `.data` AsyncIterable envelopes, owns the
-subscription AbortSignal, and consumes exact native durable sequence for all
-public session events. Genuine sparse increments (including 14→16 compaction)
+subscription AbortSignal, and consumes exact native sequence for every correlated
+durable session event. Native adapters return `undefined` for irrelevant ephemeral
+`session.text.delta`/`session.usage.updated` events; those have no durable sequence.
+Ephemeral form/permission events may omit sequence. Genuine sparse increments (including 14→16 compaction)
 are allowed under the qualified direct native public stream contract. Exact
 retained duplicates are idempotent; unknown reorder, same-seq contradiction,
 source error/end and capacity uncertainty fence work. A forward seq jump alone
