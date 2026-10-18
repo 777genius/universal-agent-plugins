@@ -345,6 +345,20 @@
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
+    "restore": {
+      "eyebrow": "可复现的插件环境",
+      "title": "在下一台电脑上使用相同的插件版本",
+      "intro": "保存全局插件集及其依赖，然后在另一台电脑上恢复所记录的确切版本。",
+      "availability": "仅源代码可用 · 尚未发布",
+      "releaseNote": "尚未包含在 npm、Homebrew 或原生发行版中。",
+      "guide": "恢复指南（英文）",
+      "from": "在当前电脑上",
+      "to": "在下一台电脑上",
+      "transfer": "在运行这两条命令之间，将 {manifest} 和 {lockfile} 复制到另一台电脑。",
+      "directory": "未指定目录时，两条命令均使用当前目录。",
+      "requirements": "恢复需要记录的源仍可访问，并且客户端支持依赖管理。",
+      "excludes": "不会传输登录状态、机密信息、设置或插件数据。"
+    },
     "docs": {
       "englishLabel": "{label}（英文文档）"
     },
