@@ -50,19 +50,7 @@ type dependencyNextActionDTO struct {
 }
 
 func renderDependencyResults(cmd *cobra.Command, opts *options, actions []dependencyAction, results []installer.Result, applyErr error) error {
-	out := make([]dependencyResultDTO, 0, len(results))
-	for _, result := range results {
-		item := dependencyResultDTO{InstallationID: result.InstallationID, ClientID: result.Client.ClientID, Operation: string(result.Operation), Outcome: string(result.Outcome), Reason: result.Reason, ManualActions: result.ManualActions}
-		fact := dependencyStatusFact{ClientID: result.Client.ClientID}
-		switch result.Client.Authentication {
-		case "auth_pending":
-			fact.Facts = []string{"auth_pending"}
-		case "failed":
-			fact.Facts = []string{"auth_failed"}
-		}
-		item.NextActions = dependencyNextActions(fact, result.NextActions...)
-		out = append(out, item)
-	}
+	out := dependencyResultOutput(results)
 	outcome := "completed"
 	if applyErr != nil {
 		outcome = "partial"
@@ -130,4 +118,21 @@ func renderRetainedDependencyActions(cmd *cobra.Command, actions []dependencyAct
 		}
 	}
 	return nil
+}
+
+func dependencyResultOutput(results []installer.Result) []dependencyResultDTO {
+	out := make([]dependencyResultDTO, 0, len(results))
+	for _, result := range results {
+		item := dependencyResultDTO{InstallationID: result.InstallationID, ClientID: result.Client.ClientID, Operation: string(result.Operation), Outcome: string(result.Outcome), Reason: result.Reason, ManualActions: result.ManualActions}
+		fact := dependencyStatusFact{ClientID: result.Client.ClientID}
+		switch result.Client.Authentication {
+		case "auth_pending":
+			fact.Facts = []string{"auth_pending"}
+		case "failed":
+			fact.Facts = []string{"auth_failed"}
+		}
+		item.NextActions = dependencyNextActions(fact, result.NextActions...)
+		out = append(out, item)
+	}
+	return out
 }

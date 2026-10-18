@@ -32,6 +32,45 @@ La compatibilidad depende del paquete. Validar el esquema no demuestra ejecució
 
 [Compatibilidad de clientes (en inglés)](https://github.com/777genius/universal-agent-plugins#supported-clients)
 
+### Guardar y restaurar tus plugins
+
+**Código fuente actual, aún sin publicar:** estos comandos de transferencia
+requieren un CLI compilado desde el código actual; todavía no están cualificados
+como versión publicada. En la carpeta que quieras llevar a otro equipo, ejecuta:
+
+```bash
+agentplugins deps export
+```
+
+Copia la carpeta al otro equipo, ábrela e instala los agentes de destino.
+Después ejecuta:
+
+```bash
+agentplugins deps import
+agentplugins install --locked
+```
+
+O combina la importación y la instalación:
+
+```bash
+agentplugins deps import --install
+```
+
+La ruta es opcional: se usa la carpeta actual por defecto. La exportación lee
+el entorno global del usuario y la importación escribe el del equipo de destino;
+`AGENTPLUGINS_HOME` selecciona su directorio. Solo se copian los bytes exactos de
+`uap.toml` y `uap.lock`, validados estrictamente, sin paquetes, ajustes ni secretos.
+
+Cada copia efectiva requiere confirmación en el terminal (no por defecto) o
+`--yes`; `--dry-run` muestra una vista previa sin escribir. Los archivos idénticos
+no requieren copia ni confirmación; `--install` sigue comprobando y aplicando el
+entorno fijado. La transferencia funciona sin conexión, pero la instalación
+requiere las fuentes exactas disponibles o paquetes en caché y debe cumplir las
+reglas de seguridad actuales. El inicio de sesión y la activación manual siguen
+siendo pasos separados.
+
+[Detalles de transferencia, errores y recuperación (en inglés)](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+
 ## Crear plugins {#build-plugins}
 
 Crea un paquete portable Agent Plugins 1.0 basado en plugin.json, con skills/ y mcp.json opcionales. El soporte de cada cliente depende del paquete y sus componentes.

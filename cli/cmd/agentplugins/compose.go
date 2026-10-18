@@ -182,6 +182,9 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 		DirectoryClientForDryRun: func(root string) (agentpluginscli.DirectoryClient, error) {
 			return cloneDependencyDirectoryClient(directoryClient, root)
 		},
+		CommitDirectoryPreview: func(preview agentpluginscli.DirectoryClient) error {
+			return commitDependencyDirectoryPreview(directoryClient, preview)
+		},
 		DiscoveryClient:     discoveryClient,
 		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
 		PackageLoader:       packageLoader,
@@ -218,4 +221,22 @@ func cloneDependencyDirectoryClient(directoryClient *directoryv1.Client, root st
 		return nil, err
 	}
 	return &copied, nil
+}
+
+// Persist only a signature-verified staged observation, using the cache's
+// existing concurrent sequence/conflict checks after agreement confirmation.
+func commitDependencyDirectoryPreview(original *directoryv1.Client, preview agentpluginscli.DirectoryClient) error {
+	staged, ok := preview.(*directoryv1.Client)
+	if !ok {
+		return fmt.Errorf("unexpected dependency Directory preview client")
+	}
+	bundle, err := staged.Cache.Load(staged.Trust)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = original.Cache.Reconcile(bundle, original.Trust)
+	return err
 }

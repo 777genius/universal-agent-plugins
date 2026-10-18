@@ -51,12 +51,35 @@ By default, the files live in `~/.config/agentplugins` on Linux
 on macOS, or `%APPDATA%\agentplugins` on Windows. `AGENTPLUGINS_HOME` can select
 another directory.
 
-To restore on another machine, install your target agents, copy those two files
-into the directory shown by `deps status`, then run:
+**Current source, unreleased:** the transfer commands below require a compatible
+CLI built from current source; they are not yet qualified as a published CLI
+release. From a folder you want to carry to another machine, run:
 
 ```bash
-npx universal-agent-plugins deps sync --locked --yes
+agentplugins deps export
 ```
+
+Copy that folder to the destination machine, open it there and install your
+target agents. Then run:
+
+```bash
+agentplugins deps import
+agentplugins install --locked
+```
+
+Or combine import and locked installation with `agentplugins deps import --install`.
+The folder argument is optional and defaults to the current folder. Export reads
+your global user environment; import writes the destination's global user
+environment. Only the strictly validated, unchanged bytes of `uap.toml` and
+`uap.lock` are copied; packages, settings and secrets are not included.
+
+Each actual copy needs a default-no terminal confirmation or `--yes`;
+`--dry-run` previews it, and identical files need no copy or confirmation.
+File transfer works offline, but installation still needs the exact sources or
+cached packages and must pass current security checks. If copying is interrupted,
+rerun the original transfer from its intact source. If installation fails after
+import saves the files, address the error and retry `agentplugins install --locked`
+(use `agentplugins deps recover` first if pending recovery is reported).
 
 The lockfile restores the recorded package revisions. Agent sign-in and any
 manual activation remain separate steps. Local paths, literal `discovery:`

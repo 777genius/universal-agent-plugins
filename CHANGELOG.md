@@ -8,6 +8,12 @@ Changes after `v1.2.4` land here.
 
 ### Added
 
+- Unreleased source commands `agentplugins deps export` and `deps import`
+  transfer the exact validated `uap.toml` / `uap.lock` pair through the current
+  folder (or an optional directory), with a preview and confirmation for every
+  copy. `deps import --install` restores through the strict locked installer;
+  installation failures after saving retain the imported desired state.
+
 - Dependency environments now accept stable exact/caret registry versions and
   transitive `plugin.json` dependencies, choosing one compatible minimum version
   per source in the existing `uap.lock`. Compatible pins replay unchanged;

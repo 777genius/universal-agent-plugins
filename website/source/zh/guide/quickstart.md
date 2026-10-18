@@ -32,6 +32,39 @@ Agent Plugins 创作已在 `universal-agent-plugins` 中发布；GitHub 版本�
 
 [客户端兼容性（英文）](https://github.com/777genius/universal-agent-plugins#supported-clients)
 
+### 保存和恢复插件
+
+**当前源码，尚未发布：**以下传输命令需要从当前源码构建的 CLI，尚未完成公开
+CLI 版本的发布资格验证。在要带到另一台电脑的文件夹中运行：
+
+```bash
+agentplugins deps export
+```
+
+将文件夹复制到另一台电脑，打开该文件夹并安装目标客户端，然后运行：
+
+```bash
+agentplugins deps import
+agentplugins install --locked
+```
+
+也可合并导入和安装：
+
+```bash
+agentplugins deps import --install
+```
+
+路径可省略，默认使用当前文件夹。导出始终读取用户的全局环境，导入始终写入目标
+电脑的用户全局环境；`AGENTPLUGINS_HOME` 可指定其目录。只复制经过严格验证的
+`uap.toml` 和 `uap.lock` 的原始字节，不包含包、设置或密钥。
+
+每次实际复制都需要在终端确认（默认拒绝）或使用 `--yes`；`--dry-run` 仅预览，
+不写入文件。文件完全相同时无需复制或确认；`--install` 仍会检查并应用锁定的环境。
+文件传输可离线进行，但安装仍需可用的精确源文件或缓存包，并须通过当前的安全检查。
+客户端登录和手动激活仍需单独完成。
+
+[传输、错误及恢复的详细说明（英文）](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+
 ## 构建插件 {#build-plugins}
 
 以 plugin.json 为核心构建可移植的 Agent Plugins 1.0 包，可选包含 skills/ 和 mcp.json。客户端支持取决于包及其组件。
