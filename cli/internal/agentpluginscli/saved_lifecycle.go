@@ -133,6 +133,7 @@ type savedLifecycleSelection struct {
 	alias        string
 	installation *domain.Installation
 	targets      []string
+	retained     *environment.LockedPackage
 }
 
 // runSavedLifecycle precedes imperative target selection: desired targets can
@@ -155,6 +156,9 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	if err != nil {
 		return true, err
 	}
+	if operation == "remove" && selection.retained != nil {
+		return true, renderSavedRetentionResult(cmd, opts, *selection.retained)
+	}
 	preview, cleanup, err := dependencyPreviewApp(app, opts)
 	if err != nil {
 		return true, err
@@ -167,7 +171,7 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	if err := runSavedEnvironment(cmd, preview, opts, snapshot, requirements, locked, manifest, []string{selection.alias}, nil); err != nil {
 		return true, err
 	}
-	return true, selection.renderNextAction(cmd, opts, requirements, operation)
+	return true, selection.renderNextAction(cmd, opts, requirements, locked, operation)
 }
 
 func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecycleSelection, error) {
@@ -182,13 +186,21 @@ func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecyc
 		return selection, err
 	}
 	selection.alias, selection.installation, err = resolveSavedAlias(state, requirements, selector)
+	if err != nil {
+		return selection, err
+	}
+	selection, err = selectLockedLifecycle(app, state, requirements, selector, selection)
 	if err != nil || selection.alias == "" {
 		return selection, err
 	}
 	if opts.scope != "" && opts.scope != "user" {
 		return selection, errors.New("saved dependencies support user scope only")
 	}
-	selection.targets, err = selectSavedTargets(opts.target, savedAliasTargets(requirements, state, selection.alias), selection.alias)
+	targets := savedAliasTargets(requirements, state, selection.alias)
+	if selection.retained != nil {
+		targets = selection.retained.Targets
+	}
+	selection.targets, err = selectSavedTargets(opts.target, targets, selection.alias)
 	return selection, err
 }
 
@@ -252,22 +264,34 @@ func (selection savedLifecycleSelection) update(cmd *cobra.Command, app App, opt
 	if !exists {
 		return requirements, snapshot.Lock, fmt.Errorf("dependency %q is absent from uap.toml; run agentplugins deps sync", selection.alias)
 	}
-	if requirement.Registry != nil {
+	if requirement.Registry != nil && requirement.Registry.Selector.Kind == environment.SelectorVersion {
+		return requirements, snapshot.Lock, nil
+	}
+	if requirement.Registry != nil && requirement.Registry.Selector.Kind != environment.SelectorRange {
 		return updateSavedRegistry(cmd, app, opts, snapshot, selection.alias, selection.installation)
 	}
 	updateAlias := selection.alias
-	if requirement.Git.Selector.Kind == environment.SelectorCommit {
+	if requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit {
 		updateAlias = ""
 	}
 	locked, err := (environment.Coordinator{Resolver: dependencyResolver{requirements: requirements, app: app, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, updateAlias)
 	return requirements, locked, err
 }
 
-func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, opts *options, requirements environment.Requirements, operation string) error {
+func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, opts *options, requirements environment.Requirements, locked environment.Lock, operation string) error {
 	if opts.format == "json" {
 		return nil
 	}
+	if operation == "remove" {
+		if pkg, exists := locked.Package(selection.alias); exists && len(pkg.RequiredBy) > 0 {
+			return renderSavedRetention(cmd, pkg)
+		}
+	}
 	requirement := requirements.Dependencies[selection.alias]
+	if operation == "update" && requirement.Registry != nil && requirement.Registry.Selector.Kind == environment.SelectorVersion {
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Exact version pin retained; choose a new version in uap.toml")
+		return err
+	}
 	if operation == "update" && requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Exact commit pin retained; choose a new pin with agentplugins add <repo>@<sha>//path")
 		return err
@@ -303,11 +327,14 @@ func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot en
 		}
 		return requirements, snapshot.Lock, err
 	}
-	requirements, locked := savedRegistryCandidate(snapshot, alias, old, loaded)
+	requirements, _ = savedRegistryCandidate(snapshot, alias, old, loaded)
 	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded); err != nil {
 		return requirements, snapshot.Lock, err
 	}
-	return requirements, locked, locked.Validate(requirements)
+	// Validate the authoritative old graph before rebuilding edges from the new
+	// immutable manifests. Replacing a node inside old edges creates a false conflict.
+	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
+	return requirements, locked, err
 }
 
 func savedRegistryUpdateRequest(cmd *cobra.Command, app App, targets []string, installation *domain.Installation) (packageResolutionRequest, error) {
@@ -350,6 +377,7 @@ func savedRegistryCandidate(snapshot environmentSnapshot, alias string, old envi
 	requirement.Registry = &registry
 	requirements.Dependencies[alias] = requirement
 	next := old
+	next.Version = loaded.envelope.Manifest.Version
 	next.TreeDigest = loaded.envelope.TreeDigest
 	next.ManifestDigest = loaded.envelope.ManifestDigest
 	next.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)

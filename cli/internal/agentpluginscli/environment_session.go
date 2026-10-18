@@ -75,6 +75,9 @@ func snapshotEnvironment(cmd *cobra.Command, app App) (environmentSnapshot, erro
 		return s, fmt.Errorf("%s: %w", dependencyMismatch, err)
 	}
 	canonicalizeRequirementsFromLock(&s.Requirements, s.Lock)
+	if err := verifyDependencyDeclarations(cmd.Context(), app, s.Lock); err != nil {
+		return s, err
+	}
 	return s, nil
 }
 
@@ -87,6 +90,10 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 	if err := locked.Validate(requirements); err != nil {
 		return err
 	}
+	if err := verifyDependencyDeclarations(cmd.Context(), app, locked); err != nil {
+		return err
+	}
+	aliases = savedClosureAliases(snapshot.Lock, locked, aliases)
 	if err := verifyUnselectedPins(snapshot.Lock, locked, aliases); err != nil {
 		return err
 	}
@@ -182,7 +189,12 @@ func verifyUnselectedPins(previous, locked environment.Lock, aliases []string) e
 		found := false
 		for _, pkg := range locked.Packages {
 			if old.Alias == pkg.Alias {
-				found = reflect.DeepEqual(old, pkg)
+				// The strict loader can hydrate metadata absent from a legacy flat
+				// pin. Every recorded source coordinate and digest must still match.
+				if old.Version == "" {
+					old.Version = pkg.Version
+				}
+				found = environment.SamePin(old, pkg)
 			}
 		}
 		if !found {
@@ -228,7 +240,12 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 			} else {
 				v.Registry = "uap"
 				v.Distribution = value.Registry.Distribution
-				v.Release = value.Registry.Selector.Value
+				if value.Registry.Selector.Kind == environment.SelectorVersion || value.Registry.Selector.Kind == environment.SelectorRange {
+					v.Version = value.Registry.Selector.Value
+					v.Registry, v.Distribution = "", ""
+				} else {
+					v.Release = value.Registry.Selector.Value
+				}
 			}
 			edit.Value = v
 		}

@@ -14,6 +14,7 @@ import (
 )
 
 type rawDependency struct {
+	Version      string `toml:"-"`
 	Git          string `toml:"git"`
 	Path         string `toml:"path"`
 	Ref          string `toml:"ref"`
@@ -24,9 +25,9 @@ type rawDependency struct {
 }
 
 type dependencyManifest struct {
-	SchemaVersion int                      `toml:"schema_version"`
-	Dependencies  map[string]rawDependency `toml:"dependencies"`
-	Targets       map[string][]string      `toml:"targets"`
+	SchemaVersion int                 `toml:"schema_version"`
+	Dependencies  map[string]any      `toml:"dependencies"`
+	Targets       map[string][]string `toml:"targets"`
 }
 
 func (app App) dependencyPaths() (manifest, lock string) {
@@ -59,7 +60,11 @@ func readDependencyManifestBytes(path string, body []byte) (environment.Requirem
 	}
 	requirements := environment.Requirements{SchemaVersion: raw.SchemaVersion, Dependencies: map[string]environment.Requirement{}, Targets: map[string][]string{}}
 	for alias, item := range raw.Dependencies {
-		requirement, err := requirementFromRaw(alias, item)
+		rawItem, err := decodeRawDependency(item)
+		if err != nil {
+			return environment.Requirements{}, manifestError(path, body, err, "dependencies", alias)
+		}
+		requirement, err := requirementFromRaw(alias, rawItem)
 		if err != nil {
 			return environment.Requirements{}, manifestError(path, body, fmt.Errorf("dependencies.%s: %w", alias, err), "dependencies", alias)
 		}
@@ -77,7 +82,28 @@ func readDependencyManifestBytes(path string, body []byte) (environment.Requirem
 	return requirements, nil
 }
 
+func decodeRawDependency(value any) (rawDependency, error) {
+	if version, ok := value.(string); ok {
+		return rawDependency{Version: version}, nil
+	}
+	body, err := toml.Marshal(map[string]any{"dependency": value})
+	if err != nil {
+		return rawDependency{}, err
+	}
+	var decoded struct {
+		Dependency rawDependency `toml:"dependency"`
+	}
+	if err := toml.Unmarshal(body, &decoded); err != nil {
+		return rawDependency{}, err
+	}
+	return decoded.Dependency, nil
+}
+
 func requirementFromRaw(alias string, raw rawDependency) (environment.Requirement, error) {
+	if raw.Version != "" {
+		selector, err := rawSelector(raw)
+		return environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{Distribution: alias, Selector: selector}}, err
+	}
 	selector, err := rawSelector(raw)
 	if err != nil {
 		return environment.Requirement{}, err
@@ -105,6 +131,13 @@ func requirementFromRaw(alias string, raw rawDependency) (environment.Requiremen
 }
 
 func rawSelector(raw rawDependency) (environment.Selector, error) {
+	if raw.Version != "" {
+		kind := environment.SelectorVersion
+		if strings.HasPrefix(raw.Version, "^") {
+			kind = environment.SelectorRange
+		}
+		return environment.Selector{Kind: kind, Value: raw.Version}, nil
+	}
 	if raw.Git != "" {
 		switch {
 		case raw.Commit != "" && raw.Ref != "":
@@ -143,9 +176,15 @@ func rejectManifestUnknown(path string, body []byte, generic map[string]any) err
 	dependencies, ok := generic["dependencies"].(map[string]any)
 	if ok {
 		for alias, value := range dependencies {
+			if expression, ok := value.(string); ok {
+				if expression == "" {
+					return manifestError(path, body, errors.New("dependency version must not be empty"), "dependencies", alias)
+				}
+				continue
+			}
 			fields, ok := value.(map[string]any)
 			if !ok {
-				return manifestError(path, body, fmt.Errorf("dependencies.%s must be a table", alias), "dependencies", alias)
+				return manifestError(path, body, fmt.Errorf("dependencies.%s must be a version string or table", alias), "dependencies", alias)
 			}
 			for key := range fields {
 				switch key {

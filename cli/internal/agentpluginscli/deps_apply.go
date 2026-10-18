@@ -132,7 +132,11 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 		return renderJSON(cmd.OutOrStdout(), data)
 	}
 	for _, action := range actions {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s\n", action.Action, action.Alias, action.ClientID); err != nil {
+		reason := ""
+		if action.Reason != "" {
+			reason = ": " + action.Reason
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s%s\n", action.Action, action.Alias, action.ClientID, reason); err != nil {
 			return err
 		}
 	}
@@ -324,21 +328,9 @@ func prepareDependencySyncCandidate(cmd *cobra.Command, app App, opts *options, 
 		}
 		canonicalizeRequirementsFromLock(&requirements, previous)
 	}
-	var lock environment.Lock
-	if lockedOnly {
-		lock = previous
-		if err := lock.Validate(requirements); err != nil {
-			return dependencySyncRequest{}, fmt.Errorf("--locked requires an exact current uap.lock: %w", err)
-		}
-	} else {
-		requirements, err = app.canonicalizeDependencyRequirements(cmd.Context(), requirements)
-		if err != nil {
-			return dependencySyncRequest{}, err
-		}
-		lock, err = (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, previous, "")
-		if err != nil {
-			return dependencySyncRequest{}, err
-		}
+	requirements, lock, err := resolveDependencySyncCandidate(cmd.Context(), app, opts, requirements, previous, lockedOnly)
+	if err != nil {
+		return dependencySyncRequest{}, err
 	}
 	candidateLock, err := json.MarshalIndent(lock, "", "  ")
 	if err != nil {

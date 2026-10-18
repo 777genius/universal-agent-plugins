@@ -136,7 +136,7 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 		return environment.LockedPackage{}, err
 	}
 	locked := environment.LockedPackage{
-		Alias: requirement.Alias, SourceKey: mustSourceKey(requirement),
+		Alias: requirement.Alias, SourceKey: mustSourceKey(requirement), Version: loaded.envelope.Manifest.Version,
 		DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: loaded.envelope.TreeDigest,
 		ManifestDigest: loaded.envelope.ManifestDigest, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: source.Repository, Path: source.Path,
@@ -163,9 +163,21 @@ func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirem
 		_ = loaded.cleanup()
 		return environment.LockedPackage{}, errors.New("directory dependency resolved without publication identity")
 	}
+	locked, err := registryLockedPackage(requirement, loaded)
+	if err != nil {
+		_ = loaded.cleanup()
+		return environment.LockedPackage{}, err
+	}
+	return locked, resolver.finishLoaded(loaded)
+}
+
+func registryLockedPackage(requirement environment.Requirement, loaded loadedPackage) (environment.LockedPackage, error) {
+	if loaded.directorySelection == nil || loaded.directory == nil {
+		return environment.LockedPackage{}, errors.New("directory dependency resolved without publication identity")
+	}
 	selection := *loaded.directorySelection
 	locked := environment.LockedPackage{
-		Alias: requirement.Alias, SourceKey: mustSourceKey(requirement),
+		Alias: requirement.Alias, SourceKey: mustSourceKey(requirement), Version: loaded.envelope.Manifest.Version,
 		DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: loaded.envelope.TreeDigest,
 		ManifestDigest: loaded.envelope.ManifestDigest, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		Source: environment.LockedSource{Registry: &environment.LockedRegistrySource{
@@ -174,7 +186,7 @@ func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirem
 			Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision,
 		}},
 	}
-	return locked, resolver.finishLoaded(loaded)
+	return locked, nil
 }
 
 func (resolver dependencyResolver) finishLoaded(loaded loadedPackage) error {
@@ -232,18 +244,14 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 		if err != nil {
 			return environment.Requirements{}, err
 		}
-		var targets []domain.ClientID
-		for target, aliases := range requirements.Targets {
-			for _, item := range aliases {
-				if item == alias {
-					targets = append(targets, domain.ClientID(target))
-					break
-				}
+		targets := dependencyRequirementTargets(requirements, alias)
+		sequence := uint64(0)
+		if requirement.Registry.Selector.Kind == environment.SelectorRelease {
+			var err error
+			sequence, err = parseReleaseSequence(requirement.Registry.Selector.Value)
+			if err != nil {
+				return environment.Requirements{}, err
 			}
-		}
-		sequence, err := parseReleaseSequence(requirement.Registry.Selector.Value)
-		if err != nil {
-			return environment.Requirements{}, err
 		}
 
 		selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
@@ -263,4 +271,17 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 		}
 	}
 	return requirements, nil
+}
+
+func dependencyRequirementTargets(requirements environment.Requirements, alias string) []domain.ClientID {
+	targets := []domain.ClientID{}
+	for target, aliases := range requirements.Targets {
+		for _, item := range aliases {
+			if item == alias {
+				targets = append(targets, domain.ClientID(target))
+				break
+			}
+		}
+	}
+	return targets
 }

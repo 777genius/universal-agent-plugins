@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -78,7 +79,14 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 		}
 		return renderJSON(cmd.OutOrStdout(), data)
 	}
+	return renderDependencyHumanResults(cmd, opts, actions, out)
+}
+
+func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO) error {
 	if err := renderDependencyComponents(cmd, opts, actions); err != nil {
+		return err
+	}
+	if err := renderRetainedDependencyActions(cmd, actions); err != nil {
 		return err
 	}
 	for _, result := range out {
@@ -107,6 +115,18 @@ func renderDependencyComponents(cmd *cobra.Command, opts *options, actions []dep
 					return err
 				}
 			}
+		}
+	}
+	return nil
+}
+
+func renderRetainedDependencyActions(cmd *cobra.Command, actions []dependencyAction) error {
+	for _, action := range actions {
+		if action.Action != environment.ActionUnchanged || action.Package == nil || len(action.Package.RequiredBy) == 0 {
+			continue
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "retained %s/%s: %s\n", action.Alias, action.ClientID, action.Reason); err != nil {
+			return err
 		}
 	}
 	return nil

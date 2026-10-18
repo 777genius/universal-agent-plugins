@@ -30,6 +30,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			if err := validateEnvironmentOptions("install", opts); err != nil {
 				return err
 			}
+			app.Lifecycle.PrepareHostsForPreview = true
 			return runDependencySyncConverge(cmd, app, opts, locked, yes, func(convergeApp App) (bool, error) {
 				return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
 			})

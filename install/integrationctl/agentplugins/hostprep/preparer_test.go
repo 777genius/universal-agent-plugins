@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
@@ -17,7 +19,10 @@ import (
 // RED if extraction aliases mutable target/environment/profile/selection data,
 // infers authority from detected version text or forgets missing-root ancestors.
 func TestSharedOpenCodeSnapshotIsolationAndRootFence(t *testing.T) {
-	root := t.TempDir()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	a := filepath.Join(root, "a")
 	b := filepath.Join(root, "b")
 	link := filepath.Join(root, "selected")
@@ -51,8 +56,12 @@ func TestSharedOpenCodeSnapshotIsolationAndRootFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := client.OpenCodeHost.(*Snapshot)
-	if host.Profile().Family != opencodehost.V2 || host.Root() != filepath.Join(a, "missing", "opencode") || client.Version != "2.0.21" {
-		t.Fatal("snapshot did not bind explicit evidence/root")
+	expectedRoot := filepath.Join(a, "missing", "opencode")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		expectedRoot = strings.ToLower(expectedRoot)
+	}
+	if host.Profile().Family != opencodehost.V2 || host.Root() != expectedRoot || client.Version != "2.0.21" {
+		t.Fatalf("snapshot did not bind explicit evidence/root: family=%v root=%q version=%q, want family=%v root=%q version=2.0.21", host.Profile().Family, host.Root(), client.Version, opencodehost.V2, expectedRoot)
 	}
 	_, env := host.Target()
 	env[0] = "PATH=escaped"

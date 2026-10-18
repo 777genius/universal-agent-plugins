@@ -40,39 +40,17 @@ func (coordinator Coordinator) Resolve(ctx context.Context, requirements Require
 		}
 	}
 	if updateAlias != "" {
-		if _, ok := requirements.Dependencies[updateAlias]; !ok {
+		selected, ok := requirements.Dependencies[updateAlias]
+		if !ok {
 			return Lock{}, fmt.Errorf("unknown update alias %q", updateAlias)
 		}
-		selected := requirements.Dependencies[updateAlias]
-		if selected.Git == nil || selected.Git.Selector.Kind == SelectorCommit {
-			return Lock{}, errors.New("exact commit/release pins must be changed in the manifest")
+		moving := selected.Git != nil && selected.Git.Selector.Kind != SelectorCommit
+		moving = moving || selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange
+		if !moving {
+			return Lock{}, errors.New("exact commit/release/version pins must be changed in the manifest")
 		}
 	}
-	digest, _ := ManifestDigest(requirements)
-	out := Lock{LockVersion: LockVersion, ManifestDigest: digest}
-	for _, alias := range sortedKeys(requirements.Dependencies) {
-		old, hadOld := previous.Package(alias)
-		if !hadOld {
-			old = LockedPackage{}
-		}
-		resolved := old
-		key, _ := requirements.Dependencies[alias].SourceKey()
-		compatible := hadOld && old.SourceKey == key && validateLockedSelector(requirements.Dependencies[alias], old) == nil
-		if !compatible || alias == updateAlias {
-			if coordinator.Resolver == nil {
-				return Lock{}, errors.New("resolver is required")
-			}
-			var err error
-			resolved, err = coordinator.Resolver.Resolve(ctx, requirements.Dependencies[alias], pinOrNil(old, compatible), alias == updateAlias)
-			if err != nil {
-				return Lock{}, err
-			}
-		}
-		resolved.Alias = alias
-		resolved.Targets = targetsFor(requirements, alias)
-		out.Packages = append(out.Packages, resolved)
-	}
-	return out, out.Validate(requirements)
+	return newGraphSolver(coordinator.Resolver, requirements, previous, updateAlias).resolve(ctx)
 }
 
 func pinOrNil(pkg LockedPackage, exists bool) *LockedPackage {
@@ -115,8 +93,8 @@ func (coordinator Coordinator) PrepareSyncFor(requirements Requirements, lock Lo
 		}
 		selected[alias] = true
 	}
-	if attestation != nil && (!selected[attestation.Alias] || len(selected) != 1 || attestation.ClientID == "" || (!attestation.ActivationComplete && !attestation.AuthComplete)) {
-		return PreparedSync{}, errors.New("attestation requires one selected alias and client")
+	if attestation != nil && (!selected[attestation.Alias] || attestation.ClientID == "" || (!attestation.ActivationComplete && !attestation.AuthComplete)) {
+		return PreparedSync{}, errors.New("attestation requires its selected alias and client")
 	}
 	return coordinator.prepareSync(requirements, lock, observed, selected, attestation)
 }
@@ -280,6 +258,9 @@ func appendDesiredBindings(plan *PreparedSync, lock Lock, observed []BindingObse
 				return err
 			}
 			action, reason := syncAction(pkg, current)
+			if action == ActionUnchanged && len(pkg.RequiredBy) > 0 {
+				reason = retainedReason(pkg)
+			}
 			activation, auth := false, false
 			if attestation != nil && attestation.Alias == pkg.Alias && attestation.ClientID == target {
 				if !current.Managed || current.Pending || current.PackageDigest != pkg.TreeDigest || current.Revision != lockedRevision(pkg) {

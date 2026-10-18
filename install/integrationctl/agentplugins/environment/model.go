@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"path"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 
@@ -39,6 +38,8 @@ const (
 	SelectorRef     SelectorKind = "ref"
 	SelectorDefault SelectorKind = "default"
 	SelectorRelease SelectorKind = "release"
+	SelectorVersion SelectorKind = "version"
+	SelectorRange   SelectorKind = "range"
 )
 
 type Selector struct {
@@ -94,7 +95,14 @@ type LockedRegistrySource struct {
 	Commit          string   `json:"commit"`
 }
 
+type RequiredBy struct {
+	Alias    string   `json:"alias"`
+	Selector Selector `json:"selector"`
+}
+
 type LockedPackage struct {
+	Version         string       `json:"version,omitempty"`
+	RequiredBy      []RequiredBy `json:"required_by,omitempty"`
 	Alias           string       `json:"alias"`
 	Source          LockedSource `json:"source"`
 	SourceKey       string       `json:"source_key"`
@@ -164,6 +172,8 @@ func (selector Selector) Validate() error {
 		if selector.Value != "" {
 			return errors.New("default selector must have an empty value")
 		}
+	case SelectorVersion, SelectorRange:
+		return validateVersionSelector(selector)
 	case SelectorRelease:
 		if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value {
 			return errors.New("release selector must be a canonical nonzero sequence")
@@ -215,7 +225,7 @@ func (requirement Requirement) Validate() error {
 	if !distributionPattern.MatchString(requirement.Registry.Distribution) {
 		return errors.New("registry distribution must be canonical owner/name")
 	}
-	if requirement.Registry.Selector.Kind != SelectorRelease {
+	if requirement.Registry.Selector.Kind != SelectorRelease && requirement.Registry.Selector.Kind != SelectorVersion && requirement.Registry.Selector.Kind != SelectorRange {
 		return errors.New("registry requires exact release selector")
 	}
 	return requirement.Registry.Selector.Validate()
@@ -348,74 +358,29 @@ func (lock Lock) Validate(requirements Requirements) error {
 	if lock.ManifestDigest != digest {
 		return errors.New("lock manifest digest does not match current intent")
 	}
-	seen := map[string]bool{}
-	for _, pkg := range lock.Packages {
-		if seen[pkg.Alias] {
-			return fmt.Errorf("duplicate locked alias %q", pkg.Alias)
-		}
-		seen[pkg.Alias] = true
-		requirement, ok := requirements.Dependencies[pkg.Alias]
-		if !ok {
-			return fmt.Errorf("lock contains removed alias %q", pkg.Alias)
-		}
-		key, _ := requirement.SourceKey()
-		if pkg.SourceKey != key || pkg.DigestAlgorithm != TreeDigestAlgorithm ||
-			!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(pkg.TreeDigest) ||
-			!regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(pkg.ManifestDigest) {
-			return fmt.Errorf("locked package %q has incomplete identity", pkg.Alias)
-		}
-		if err := validateLockedSelector(requirement, pkg); err != nil {
-			return fmt.Errorf("%s: %w", pkg.Alias, err)
-		}
-		got := append([]string(nil), pkg.Targets...)
-		sort.Strings(got)
-		if !slices.Equal(got, targetsFor(requirements, pkg.Alias)) {
-			return fmt.Errorf("%s: locked targets changed", pkg.Alias)
-		}
-
-	}
-	for alias := range requirements.Dependencies {
-		if !seen[alias] {
-			return fmt.Errorf("lock is missing alias %q", alias)
-		}
-	}
-	return nil
+	return validateGraph(lock, requirements)
 }
 
-// ValidateCompatiblePins checks source and selector identity while allowing a
-// target-only manifest change to retain every existing revision pin.
-func (lock Lock) ValidateCompatiblePins(requirements Requirements) error {
+// ValidateCompatiblePins checks old pin identity using its recorded selectors;
+// compatibility with changed intent is decided by resolution.
+func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
 	if lock.LockVersion != LockVersion {
 		return fmt.Errorf("unsupported lock_version %d", lock.LockVersion)
 	}
-	seen := map[string]bool{}
+	aliases, sources := map[string]LockedPackage{}, map[string]bool{}
 	for _, pkg := range lock.Packages {
-		if seen[pkg.Alias] {
+		if _, exists := aliases[pkg.Alias]; exists {
 			return fmt.Errorf("duplicate locked alias %q", pkg.Alias)
 		}
-		seen[pkg.Alias] = true
-		req := Requirement{Alias: pkg.Alias}
-		if pkg.Source.Git != nil {
-			req.Git = &GitSource{Repository: pkg.Source.Git.Repository, Path: pkg.Source.Git.Path, Selector: pkg.Source.Git.Requested}
+		if sources[pkg.SourceKey] {
+			return fmt.Errorf("duplicate locked source %q", pkg.SourceKey)
 		}
-		if pkg.Source.Registry != nil {
-			req.Registry = &RegistrySource{Distribution: pkg.Source.Registry.Distribution, Selector: pkg.Source.Registry.Requested}
+		if err := validatePin(pkg); err != nil {
+			return fmt.Errorf("%s: %w", pkg.Alias, err)
 		}
-		key, err := req.SourceKey()
-		if err != nil {
-			return err
-		}
-		if key != pkg.SourceKey {
-			return errors.New("locked source key disagrees with coordinates")
-		}
-		if err := validateLockedSelector(req, pkg); err != nil {
-			return err
-		}
-		if pkg.DigestAlgorithm != TreeDigestAlgorithm || !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(pkg.TreeDigest) || !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(pkg.ManifestDigest) {
-			return fmt.Errorf("%s: invalid locked digest", pkg.Alias)
-		}
+		aliases[pkg.Alias], sources[pkg.SourceKey] = pkg, true
 	}
-	return nil
+	return validateEdges(aliases)
 }
 
 func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
@@ -436,7 +401,7 @@ func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 func validateLockedRegistrySelector(requirement Requirement, pkg LockedPackage) error {
 	source := pkg.Source.Registry
 	if source == nil || pkg.Source.Git != nil || source.Distribution != requirement.Registry.Distribution ||
-		source.Requested != requirement.Registry.Selector || source.ReleaseSequence == 0 || fmt.Sprint(source.ReleaseSequence) != requirement.Registry.Selector.Value ||
+		source.Requested != requirement.Registry.Selector || source.ReleaseSequence == 0 || !registrySelectorMatches(requirement.Registry.Selector, pkg) ||
 		source.DistributionID != source.Distribution || !distributionPattern.MatchString(source.DistributionID) || !repositoryPattern.MatchString(source.Repository) || validateSubpath(source.Path) != nil || !commitPattern.MatchString(source.Commit) {
 		return errors.New("locked registry identity does not match manifest")
 	}

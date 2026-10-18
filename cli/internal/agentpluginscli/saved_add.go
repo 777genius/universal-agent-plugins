@@ -92,6 +92,13 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 		alias = pin.Alias
 		if alias != "" {
 			requirement = snapshot.Requirements.Dependencies[alias]
+			if requirement.Registry == nil && pin.Source.Registry != nil {
+				source := pin.Source.Registry
+				requirement = environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{
+					Distribution: source.DistributionID,
+					Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(source.ReleaseSequence)},
+				}}
+			}
 		}
 
 	}
@@ -152,6 +159,7 @@ func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	pin.DigestAlgorithm = domain.TreeDigestAlgorithm
 	pin.TreeDigest = loaded.envelope.TreeDigest
 	pin.ManifestDigest = loaded.envelope.ManifestDigest
+	pin.Version = loaded.envelope.Manifest.Version
 	pin.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
 	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded); err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err

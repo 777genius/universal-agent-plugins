@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
@@ -23,6 +24,31 @@ type physicalLocal struct {
 	*vscode.LocalAdapter
 	captures int
 }
+
+// Freeze the capabilities of Local before physical authority was introduced.
+// In particular, Darwin's current LocalAdapter already opts into authority;
+// embedding it directly would no longer create a historical owner there.
+type historicalLocalCapabilities interface {
+	clients.Adapter
+	clients.HostDetector
+	clients.ProfileResolver
+	clients.ProfileBindingValidator
+	clients.NativeRegistryLayout
+	clients.TargetLayout
+	clients.PlanPrecondition
+	clients.LocalPreparationAuthorizer
+	clients.PlanQualifier
+	clients.PlanRefiner
+	clients.Projector
+	clients.ActiveNativeProjector
+	clients.Lifecycle
+	clients.AutomaticActivator
+	clients.ActivationPreflighter
+	clients.ReadOnlyVerifier
+	clients.RegistryInspector
+}
+
+type historicalLocal struct{ historicalLocalCapabilities }
 
 func (a *physicalLocal) CaptureProfileAuthority(ctx context.Context, c domain.DetectedClient) (domain.ProfileAuthority, error) {
 	a.captures++
@@ -50,6 +76,16 @@ func actualPhysicalLocal(t *testing.T) (string, *vscode.LocalAdapter, installer.
 		t.Fatal(err)
 	}
 	target := vscodelocalhooks.Target{Shell: vscodelocalhooks.LinuxSH}
+	tuple := vscode.SourceQualifiedTESTTuple(runtime.GOOS)
+	switch runtime.GOOS {
+	case "darwin":
+		target.Shell = vscodelocalhooks.MacOSSH
+		tuple = vscode.QualifiedDarwinTESTTuple()
+	case "windows":
+		target.Shell = vscodelocalhooks.WindowsPowerShell51
+		target.SystemRoot = os.Getenv("SystemRoot")
+		target.ComSpec = filepath.Join(target.SystemRoot, "System32", "cmd.exe")
+	}
 	specs := []vscodelocalhooks.Spec{{Event: vscodelocalhooks.Stop, Executable: executable, TimeoutSeconds: 5}}
 	hooks, err := vscodelocalhooks.Render(target, specs)
 	if err != nil {
@@ -61,7 +97,7 @@ func actualPhysicalLocal(t *testing.T) (string, *vscode.LocalAdapter, installer.
 	if err := os.WriteFile(filepath.Join(pkg, "plugin.json"), []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"physical-local-test","version":"1.0.0"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	adapter, err := vscode.NewLocal(vscode.LocalConfig{ProfileSettingsPath: settings, QualifiedTuple: vscode.SourceQualifiedTESTTuple("linux"), TargetShell: target, NativeStop: true, HookSpecs: specs, DeclaredHookDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(hooks))})
+	adapter, err := vscode.NewLocal(vscode.LocalConfig{ProfileSettingsPath: settings, QualifiedTuple: tuple, TargetShell: target, NativeStop: true, HookSpecs: specs, DeclaredHookDigest: fmt.Sprintf("sha256:%x", sha256.Sum256(hooks))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +109,11 @@ func actualPhysicalLocal(t *testing.T) (string, *vscode.LocalAdapter, installer.
 func TestPhysicalProfileHistoricalLocalCannotRecapture(t *testing.T) {
 	root, adapter, req := actualPhysicalLocal(t)
 	stateRoot := filepath.Join(root, "TEST-state")
-	eng := localTestEngine(t, stateRoot, adapter)
+	historical := historicalLocal{adapter}
+	if _, opted := any(historical).(clients.PhysicalProfileAuthority); opted {
+		t.Fatal("historical fixture unexpectedly opted into physical authority")
+	}
+	eng := localTestEngine(t, stateRoot, historical)
 	h, err := eng.Prepare(t.Context(), req)
 	if err != nil {
 		t.Fatal(err)

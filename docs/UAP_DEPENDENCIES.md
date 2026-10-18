@@ -5,11 +5,14 @@ qualified as a published CLI release.
 
 `agentplugins deps` manages one current-user environment in
 `AGENTPLUGINS_HOME` (default: `os.UserConfigDir()/agentplugins`). `uap.toml` records intent and `uap.lock` records exact
-sources and package digests. The files are portable; local receipts, the
+sources, package versions, package digests and dependency edges in one lock. The files are portable; local receipts, the
 verified package store, profile paths and `PLUGIN_DATA` are not.
 
 ```toml
 schema_version = 1
+
+[dependencies]
+context7 = "^1.2"
 
 [dependencies.review]
 git = "https://github.com/acme/agent-tools.git"
@@ -22,13 +25,42 @@ distribution = "acme/docs"
 release = 42
 
 [targets]
-codex = ["review", "docs"]
+codex = ["review", "docs", "context7"]
 claude = ["review"]
 ```
 
 Git dependencies use exactly one of `commit` and `ref`; omitting both records
-the repository default branch intent. Registry dependencies require an exact
-directory `release`. A dependency is assigned only through `[targets]`.
+the repository default branch intent. Registry tables retain exact directory
+`release` selection. A string under `[dependencies]` selects a Directory package
+by its key, using an exact stable version (`"1.2.3"`) or caret range (`"^1.2"`
+or `"^1.2.3"`). Short names resolve through the signed Directory. Prefix `v`,
+prereleases, build suffixes and other range operators are unsupported.
+
+Caret lower bounds are inclusive and upper bounds exclusive: `^1.2` ends at
+`2.0.0`, `^0.2` / `^0.2.3` at `0.3.0`, `^0.0` at `0.1.0`, and `^0.0.3` at
+`0.0.4`. Package versions differ from Directory release sequences; the lock
+records both. Existing exact Git/release pins may retain non-semver versions.
+
+Packages declare transitive dependencies in their existing `plugin.json`
+extension namespace, without client targets:
+
+```json
+{"extensions":{"io.github.777genius.agentplugins":{"dependencies":{"acme/docs":"^1.2"}}}}
+```
+
+Only roots are assigned through `[targets]`. Each dependency inherits the union
+of its consumers' targets, including any direct assignments of its own. One
+canonical source has one version across the environment. A fresh lock chooses
+the lowest compatible stable version, then the lowest release sequence for equal
+versions, subject to signed Directory policy for every required target. It tries
+later candidates when an earlier candidate has incompatible dependencies;
+exhausted conflicts report the package, consumers and selectors without applying
+a partial graph. Existing compatible pins take priority over fresh minimums.
+
+`uap.lock` remains version 1 and is the sole dependency lock. Each node records
+its exact `version` and immediate `required_by` consumers/selectors, with no
+synthetic root edge. Old flat locks remain usable when their pinned manifests
+have no dependencies; otherwise run `deps lock` to build the graph.
 
 ```sh
 agentplugins deps init
@@ -37,12 +69,26 @@ agentplugins deps sync
 agentplugins deps sync --locked
 agentplugins deps update review
 agentplugins deps status
+agentplugins deps tree
+agentplugins deps tree --format json
 agentplugins deps recover
 ```
 
 `lock` resolves changed selectors and preserves compatible pins. `update
-<alias>` is the only command that rechecks a moving ref. `sync --locked` rejects
-manifest/lock disagreement and only fetches immutable locked bytes. `status`
+<alias>` rechecks a moving Git ref or a registry range, updating the selected
+root and related dependency pins while preserving independent pins. Registry
+ranges stay unchanged in `uap.toml`; apply the new lock with install/sync. Exact
+commit, release or semver selectors require an intent change instead.
+
+`tree` reads the saved graph offline, showing roots, versions and consumers;
+shared nodes and cycles are references. JSON contains sorted `roots` and
+`packages` arrays. It neither fetches sources nor changes environment files.
+
+`sync --locked` and `install --locked` reject a missing or inconsistent lock
+before applying changes. Replay verifies pinned manifest declarations against
+the saved edges before no-op or repair, so a deleted edge cannot hide behind an
+unchanged root-intent digest. Intact replay uses store bytes without enumerating
+new versions or downloading sources. `status`
 is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
@@ -103,7 +149,10 @@ Native-only/YAML packages and implicit compatibility fallbacks are not part of
 this dependency flow.
 
 Remove a dependency or target assignment from `uap.toml`, then run `deps lock`
-and `deps sync --yes`. Store originals and `PLUGIN_DATA` are retained. If the
+and `deps sync --yes`. A shared package stays while a reachable consumer or
+direct root requires it; the output names consumers retaining it. Removing a
+target drops only bindings no longer required on that target. Unreachable
+cycles do not retain themselves. Store originals and `PLUGIN_DATA` are retained. If the
 client requires manual uninstallation, sync reports an incomplete outcome;
 after uninstalling it (or if it was never imported), explicitly attest with
 `deps sync --locked --yes --external-uninstalled`.
@@ -125,6 +174,28 @@ machine the signed Directory must still permit a new installation of that exact
 release. A superseded release requires a newer pin; a revoked release cannot be
 reproduced. Existing installed releases retain only their explicit signed-policy
 exceptions, using live state rather than the copied lock.
+
+### Restore on another machine
+
+Install a compatible `agentplugins` CLI and the required target clients, then
+copy **both** `uap.toml` and `uap.lock` into the destination environment root.
+Set `AGENTPLUGINS_HOME` explicitly when moving between systems with different
+default config directories. Run:
+
+```sh
+agentplugins install --locked --yes
+```
+
+An empty store is supported: the installer fetches the exact recorded commits
+and verifies their package and manifest digests. It does not select newer
+versions. Missing source bytes, mismatched digests or ineligible registry releases
+cause an error. Do not run `deps lock` to reproduce an existing lock; that command
+may resolve changed intent. Offline restoration requires the package bytes to
+already be available in the destination store.
+
+Configure client profiles, executable discovery and any required authentication
+on the destination. Do not copy local ownership receipts as installation proof.
+User settings, secrets and `PLUGIN_DATA` contents require their own backup.
 
 Authentication is reported separately from retryable lifecycle work. An active,
 materialized, installation-verified binding with unchecked authentication shows

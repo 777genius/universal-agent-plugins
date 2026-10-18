@@ -21,7 +21,7 @@ var ErrUnsupportedLayout = errors.New("unsupported TOML layout; edit uap.toml ma
 // Empty fields are omitted. Release is an exact sequence represented as a TOML
 // string; semantic acceptance remains the strict manifest reader's job.
 type Dependency struct {
-	Git, Path, Ref, Commit, Registry, Distribution, Release string
+	Git, Path, Ref, Commit, Registry, Distribution, Release, Version string
 }
 
 type DependencyEdit struct {
@@ -43,7 +43,7 @@ type Changes struct {
 }
 
 // Apply returns edited bytes without writing files. It accepts explicit
-// [dependencies.alias] tables and a [targets] table, including quoted keys.
+// [dependencies] strings, [dependencies.alias] tables and [targets], including quoted keys.
 // Inline and dotted assignments for these tables are rejected before output.
 // Existing key/table order and comments outside replaced values survive edits.
 // LF or CRLF is preserved for uniformly terminated input; mixed endings are
@@ -87,6 +87,24 @@ func editDependency(doc *tomledit.Document, edit DependencyEdit) error {
 		return errors.New("dependency alias is empty")
 	}
 	name := parser.Key{"dependencies", edit.Alias}
+	stringsSection := sectionFor(doc, parser.Key{"dependencies"})
+	if edit.Value != nil && edit.Value.Version != "" {
+		if old := sectionFor(doc, name); old != nil {
+			removeSection(doc, old)
+		}
+		if stringsSection == nil {
+			stringsSection = appendSection(doc, parser.Key{"dependencies"})
+		}
+		value, err := stringValue(edit.Value.Version)
+		if err != nil {
+			return err
+		}
+		setKey(stringsSection, edit.Alias, value)
+		return nil
+	}
+	if stringsSection != nil {
+		removeKey(stringsSection, edit.Alias)
+	}
 	section := sectionFor(doc, name)
 	if edit.Value == nil {
 		if section != nil {
@@ -183,7 +201,7 @@ func supportedSection(section *tomledit.Section) error {
 }
 
 func supportedAssignment(name parser.Key, kv *parser.KeyValue) error {
-	if len(kv.Name) != 1 || (name[0] == "dependencies" && len(name) != 2) {
+	if len(kv.Name) != 1 {
 		return fmt.Errorf("%w: assignment in %s", ErrUnsupportedLayout, name)
 	}
 	if name[0] == "dependencies" {

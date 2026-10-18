@@ -23,7 +23,16 @@ func main() {
 		fmt.Println(version)
 		return
 	}
-	executable, _ := os.Executable()
+	executable, err := os.Executable()
+	if err != nil {
+		os.Exit(16)
+	}
+	// Darwin returns the launch spelling; record beside the actual payload,
+	// as Linux's /proc-backed os.Executable already does.
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		os.Exit(16)
+	}
 	cwd, _ := os.Getwd()
 	input, _ := io.ReadAll(os.Stdin)
 	observed := map[string]any{"cwd": cwd, "env": os.Environ(), "stdin": string(input), "args": os.Args[1:], "pid": os.Getpid()}
