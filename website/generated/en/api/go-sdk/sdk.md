@@ -35,6 +35,7 @@ Package pluginkitai exposes the public root SDK for building plugin\-kit\-ai run
   - func \(a \*App\) Codex\(\) \*codex.Registrar
   - func \(a \*App\) Cursor\(\) \*cursor.Registrar
   - func \(a \*App\) Gemini\(\) \*gemini.Registrar
+  - func \(a \*App\) Qoder\(\) \*qoder.Registrar
   - func \(a \*App\) Run\(\) int
   - func \(a \*App\) RunContext\(ctx context.Context\) int
   - func \(a \*App\) RunCursorObserver\(ctx context.Context\) \(code int\)
@@ -180,6 +181,14 @@ func main() {
 }
 ```
 
+
+### func \(\*App\) Qoder
+
+```go
+func (a *App) Qoder() *qoder.Registrar
+```
+
+Qoder returns a registrar for Qoder plugin hook handlers.
 
 ### func \(\*App\) Run
 
