@@ -95,6 +95,7 @@ func TestQoderListRequiresUnambiguousNativeIdentity(t *testing.T) {
 		`[{"id":"demo@local","version":null}]`, `[{"id":"demo@local","version":2}]`,
 		`[{"id":"demo@local","ID":"demo@marketplace"}]`, `[{"ID":"demo@local"}]`,
 		`[{"id":"demo@local","version":"1","version":"2"}]`,
+		`[{"id":"demo@team@marketplace"}]`, `[{"id":"demo@@local"}]`, `[{"id":"demo@local@extra"}]`,
 	} {
 		if _, err := parseList([]byte(body)); !errors.Is(err, errUnknownList) {
 			t.Errorf("accepted ambiguous listing %s", body)
@@ -193,6 +194,57 @@ func TestQoderRejectsForeignAndAbsentRegistration(t *testing.T) {
 	}
 }
 
+func TestQoderMissingVersionCannotProveInstall(t *testing.T) {
+	r := qoderRequest(t)
+	r.VerifyOnly = true
+	f := &fakeQoder{entries: []pluginEntry{{ID: "demo@local"}}}
+	out, err := New().Activate(context.Background(), clients.Env{Runner: f}, r)
+	if err != nil || out.Activation != domain.ActivationManual || out.Verification == domain.VerificationInstalled || out.ActivationAttested {
+		t.Fatalf("missing version proved install: %+v %v", out, err)
+	}
+	if len(f.commands) != 1 {
+		t.Fatalf("unproven version mutated Qoder: %v", f.commands)
+	}
+	r.ActivationComplete = true
+	out, err = New().Activate(context.Background(), clients.Env{Runner: f}, r)
+	if err != nil || out.Activation != domain.ActivationActive || !out.ActivationAttested {
+		t.Fatalf("attested missing version: %+v %v", out, err)
+	}
+	r.ActivationComplete, r.VerifyOnly = false, false
+	before := len(f.commands)
+	out, err = New().Activate(context.Background(), clients.Env{Runner: f}, r)
+	if err != nil || out.Activation != domain.ActivationManual || out.Verification == domain.VerificationInstalled {
+		t.Fatalf("unproven version reinstall claim: %+v %v", out, err)
+	}
+	if len(f.commands) != before+1 {
+		t.Fatalf("unproven version mutated Qoder: %v", f.commands[before:])
+	}
+}
+
+func TestQoderRejectsAmbiguousPluginNames(t *testing.T) {
+	plan := domain.DeliveryPlan{ClientID: domain.ClientQoder, DeclaredName: "demo@team", Status: domain.PlanReady}
+	if err := New().CheckPlanPrecondition(clients.PlanInput{}, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.Status != domain.PlanUnsupported || plan.Activation != domain.ActivationFailed {
+		t.Fatalf("ambiguous name planned: %+v", plan)
+	}
+	r := qoderRequest(t)
+	r.DeclaredName, r.Plan.DeclaredName = "demo@team", "demo@team"
+	f := &fakeQoder{entries: []pluginEntry{{ID: "demo@team@local", Version: "2.0.0"}}}
+	if _, err := New().Activate(context.Background(), clients.Env{Runner: f}, r); err == nil || len(f.commands) != 0 {
+		t.Fatalf("ambiguous name activated: %v", f.commands)
+	}
+	request := domain.DeactivationRequest{Client: r.Client, DeclaredName: "demo@team", BackendExecutable: r.BackendExecutable, Confirmed: true}
+	if _, err := New().Deactivate(context.Background(), clients.Env{Runner: f}, request); err == nil || len(f.commands) != 0 {
+		t.Fatalf("ambiguous name uninstalled: %v", f.commands)
+	}
+	plan = domain.DeliveryPlan{ClientID: domain.ClientQoder, DeclaredName: "demo", Status: domain.PlanReady}
+	if err := New().CheckPlanPrecondition(clients.PlanInput{}, &plan); err != nil || plan.Status != domain.PlanReady {
+		t.Fatalf("qualified name rejected: %+v %v", plan, err)
+	}
+}
+
 func TestQoderDeactivation(t *testing.T) {
 	r := qoderRequest(t)
 	f := &fakeQoder{entries: []pluginEntry{{ID: "demo@local", Version: "2.0.0"}}}
@@ -248,6 +300,11 @@ func TestQoderInspectNativeRegistryFindings(t *testing.T) {
 	f := &fakeQoder{unknownList: true}
 	if finding, err := New().InspectNativeRegistry(context.Background(), clients.Env{Runner: f}, r.Client, r.Plan, managed); finding != clients.RegistryIndeterminate || !errors.Is(err, errUnknownList) {
 		t.Fatalf("unknown listing = %v, %v", finding, err)
+	}
+	r.Plan.DeclaredName = "demo@team"
+	f = &fakeQoder{}
+	if finding, err := New().InspectNativeRegistry(context.Background(), clients.Env{Runner: f}, r.Client, r.Plan, managed); finding != clients.RegistryIndeterminate || err == nil {
+		t.Fatalf("ambiguous name registry = %v, %v", finding, err)
 	}
 }
 

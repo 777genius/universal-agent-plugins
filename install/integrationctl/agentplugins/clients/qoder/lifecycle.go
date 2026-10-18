@@ -28,6 +28,11 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	// Stored bindings predate every plan gate, so refuse rather than address
+	// an id that could belong to a different plugin.
+	if !qualifiedPluginName(request.DeclaredName) {
+		return domain.ActivationOutcome{}, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
+	}
 	outcome := shared.StartedActivation(request)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		outcome.Activation = domain.ActivationManual
@@ -48,6 +53,12 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if found && !request.Replacing && versionMatches(entry, request.Plan.DeclaredVersion) {
 		outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
 		return outcome, nil
+	}
+	if found && !request.Replacing && entry.Version == "" {
+		// Registration is visible but the listed version is absent, so the
+		// delivered package is unproven. Like an unrecognized listing, this
+		// never claims success and never mutates Qoder on its own.
+		return unprovenVersion(outcome, request)
 	}
 	if found {
 		if _, err := shared.RunClientCommand(ctx, env.Runner, "Qoder CLI", request.BackendExecutable, "plugins", "uninstall", request.DeclaredName); err != nil {
@@ -76,13 +87,28 @@ func verifyActivation(ctx context.Context, env clients.Env, request domain.Activ
 		return activationError(outcome, request, err)
 	}
 	entry, found := findEntry(entries, request.DeclaredName)
-	if !found || !versionMatches(entry, request.Plan.DeclaredVersion) {
+	if !found || (entry.Version != "" && !versionMatches(entry, request.Plan.DeclaredVersion)) {
 		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is absent or has a different version", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
+	}
+	if !versionMatches(entry, request.Plan.DeclaredVersion) {
+		return unprovenVersion(outcome, request)
 	}
 	if findForeign(entries, request.DeclaredName) {
 		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is registered from a different source", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
+	return outcome, nil
+}
+
+// unprovenVersion reports a registered plugin whose listing carries no
+// version member: the CLI cannot prove the delivered version, so only the
+// operator's attestation can, and until then activation stays manual.
+func unprovenVersion(outcome domain.ActivationOutcome, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if attested, ok := shared.AttestedUnknownVerification(outcome, request); ok {
+		return attested, nil
+	}
+	outcome.Activation = domain.ActivationManual
+	outcome.UserActions = []string{"confirm the registered Qoder plugin is version " + request.Plan.DeclaredVersion + ", then run /plugins reload or restart Qoder"}
 	return outcome, nil
 }
 
@@ -114,6 +140,9 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if request.ExternalUninstalled {
 		outcome.ExternalRemovalComplete = true
 		return outcome, nil
+	}
+	if !qualifiedPluginName(request.DeclaredName) {
+		return outcome, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
 	}
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return shared.RequireExternalUninstall(outcome, false, "uninstall the managed plugin in Qoder, then rerun remove with --external-uninstalled"), nil

@@ -33,12 +33,24 @@ type pluginEntry struct {
 
 func localPluginID(name string) string { return name + "@local" }
 
+// pluginNameFromID accepts only an unambiguous "name@source" id: exactly one
+// '@' with non-empty, '@'-free parts on both sides. Any other shape cannot be
+// attributed to one plugin name, and misattribution must never become
+// evidence of availability, ownership, or removal.
 func pluginNameFromID(id string) (string, bool) {
-	split := strings.LastIndexByte(id, '@')
-	if split <= 0 || split == len(id)-1 {
+	split := strings.IndexByte(id, '@')
+	if split <= 0 || split == len(id)-1 || strings.IndexByte(id[split+1:], '@') >= 0 {
 		return "", false
 	}
 	return id[:split], true
+}
+
+// qualifiedPluginName reports whether name composes the unambiguous local id
+// the Qoder CLI addresses plugins by. Names that do not qualify cannot be
+// installed, verified, or uninstalled without risking a different plugin.
+func qualifiedPluginName(name string) bool {
+	parsed, ok := pluginNameFromID(localPluginID(name))
+	return ok && parsed == name
 }
 
 // parseList accepts only a complete, unambiguous list. A missing or changed
@@ -118,10 +130,11 @@ func findForeign(entries []pluginEntry, name string) bool {
 	return false
 }
 
-// versionMatches accepts a listing without a version member but never a
-// different one: only the exact declared version proves the delivered package.
+// versionMatches proves the delivered package only through an exact version
+// match. A listing without a version member proves registration but never the
+// delivered version, so it must not verify anything.
 func versionMatches(entry pluginEntry, declared string) bool {
-	return entry.Version == "" || entry.Version == declared
+	return entry.Version != "" && entry.Version == declared
 }
 
 func listPlugins(ctx context.Context, env clients.Env, executable string) ([]pluginEntry, error) {
@@ -158,6 +171,11 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 		// The managed package directory is inspected separately as the prepared
 		// registry; without a CLI there is no second Qoder registry to query.
 		return clients.RegistryClear, nil
+	}
+	// A name that cannot form an unambiguous local id makes every comparison
+	// guesswork, and a guess must never read as a clear registry.
+	if !qualifiedPluginName(plan.DeclaredName) {
+		return clients.RegistryIndeterminate, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", plan.DeclaredName)
 	}
 	entries, err := listPlugins(ctx, env, plan.NativeRegistryExecutable)
 	if err != nil {
