@@ -78,11 +78,15 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 }
 
 func validateDepsOptions(opts *options) error {
+	return validateEnvironmentOptions("deps", opts)
+}
+
+func validateEnvironmentOptions(command string, opts *options) error {
 	if opts.target != "" {
-		return errors.New("deps uses uap.toml targets only; inherited --target is not allowed")
+		return fmt.Errorf("%s uses uap.toml targets only; inherited --target is not allowed", command)
 	}
 	if opts.scope != "user" {
-		return errors.New("deps supports --scope user only")
+		return fmt.Errorf("%s supports --scope user only", command)
 	}
 	return validateCommonOptions(opts)
 }

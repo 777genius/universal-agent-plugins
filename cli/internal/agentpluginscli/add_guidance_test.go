@@ -13,29 +13,49 @@ import (
 
 func TestAddMissingSourceGuidance(t *testing.T) {
 	for _, terminal := range []bool{false, true} {
-		for _, name := range []string{"add", "install"} {
-			for _, format := range []string{"human", "json"} {
-				var output bytes.Buffer
-				cmd := NewRoot(App{Terminal: terminal, Input: strings.NewReader(""), Output: &output, ErrorOutput: &output})
-				cmd.SetArgs([]string{name, "--format", format})
-				err := cmd.Execute()
-				if err == nil {
-					t.Fatal("missing source accepted")
+		for _, format := range []string{"human", "json"} {
+			var output bytes.Buffer
+			cmd := NewRoot(App{Terminal: terminal, Input: strings.NewReader(""), Output: &output, ErrorOutput: &output})
+			cmd.SetArgs([]string{"add", "--format", format})
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("missing source accepted")
+			}
+			if format == "json" {
+				if err.Error() != "accepts 1 arg(s), received 0" {
+					t.Fatalf("JSON error changed: %v", err)
 				}
-				if format == "json" {
-					if err.Error() != "accepts 1 arg(s), received 0" {
-						t.Fatalf("JSON error changed: %v", err)
-					}
-				} else {
-					for _, want := range []string{"Provide a plugin name or source", "agentplugins add ./my-plugin", "agentplugins add --help"} {
-						if !strings.Contains(err.Error(), want) {
-							t.Fatalf("missing %q: %v", want, err)
-						}
+			} else {
+				for _, want := range []string{"Provide a plugin name or source", "agentplugins add ./my-plugin", "agentplugins add --help"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Fatalf("missing %q: %v", want, err)
 					}
 				}
-				if output.Len() != 0 {
-					t.Fatalf("argument validation wrote output: %q", output.String())
+			}
+			if output.Len() != 0 {
+				t.Fatalf("argument validation wrote output: %q", output.String())
+			}
+		}
+	}
+	// Bare install is the environment converge verb, not the add alias. It must
+	// never fall into add's missing-source guidance and must write no output
+	// before the environment inputs are validated.
+	for _, terminal := range []bool{false, true} {
+		for _, format := range []string{"human", "json"} {
+			var output bytes.Buffer
+			cmd := NewRoot(App{Terminal: terminal, Input: strings.NewReader(""), Output: &output, ErrorOutput: &output})
+			cmd.SetArgs([]string{"install", "--format", format})
+			err := cmd.Execute()
+			if err == nil {
+				t.Fatal("bare install on an unconfigured app accepted")
+			}
+			for _, stale := range []string{"Provide a plugin name or source", "accepts 1 arg(s)"} {
+				if strings.Contains(err.Error(), stale) {
+					t.Fatalf("install still resolves to the add alias: %v", err)
 				}
+			}
+			if output.Len() != 0 {
+				t.Fatalf("converge validation wrote output: %q", output.String())
 			}
 		}
 	}

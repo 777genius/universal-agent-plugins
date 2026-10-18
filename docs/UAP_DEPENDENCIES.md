@@ -47,6 +47,14 @@ is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
+`agentplugins install` is the everyday converge verb over the same machinery:
+a first run installs everything declared in `uap.toml`, a repeat run leaves
+matching state alone, and missing or drifted environment-owned projections are
+repaired from their recorded `uap.lock` pin before the machine converges to the
+locked state. It accepts `--locked`, `--yes` and `--external-uninstalled` with
+the same fail-closed meaning as `deps sync`, and with a positional source it
+behaves as `agentplugins add` for that one package.
+
 The saved dependency workflow supports the 11 qualified local clients: Codex, Claude,
 Cursor, Copilot, Kiro, Gemini, OpenCode, Cline, Windsurf, Grok Build and
 Kimi Code. `deps status` prints the scope, exact manifest/lock paths, supported

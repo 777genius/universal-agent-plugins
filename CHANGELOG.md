@@ -8,6 +8,15 @@ Changes after `v1.2.4` land here.
 
 ### Added
 
+- `agentplugins install` is the everyday environment converge verb, matching
+  how package managers are used: a first run installs everything declared in
+  `uap.toml` and `uap.lock`, a repeat run is a successful nothing-to-do, and
+  missing or drifted environment-owned projections are repaired from their
+  recorded lock pin before converging to the locked state. It accepts
+  `--locked`, `--yes` and `--external-uninstalled` with the same fail-closed
+  meaning as `deps sync`. `install <name-or-source>` keeps the historical
+  `add` alias contract, so the bare `install` command replaces the old alias;
+  `agentplugins add` remains the canonical single-package verb.
 - The `agentplugins` lifecycle commands now accept ordered, comma-separated
   targets such as `--target codex,cursor`, with versioned batch JSON output and
   explicit partial-failure reporting that preserves successful client changes.

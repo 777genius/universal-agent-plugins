@@ -46,6 +46,7 @@ func NewRoot(app App) *cobra.Command {
 	root.AddCommand(newValidateCommand(app, opts))
 	root.AddCommand(newOutdatedCommand(app, opts))
 	root.AddCommand(newDepsCommand(app, opts))
+	root.AddCommand(newInstallCommand(app, opts))
 	root.AddCommand(newDoctorCommand(app, opts))
 	root.AddCommand(newVersionCommand(app, opts))
 	return root
