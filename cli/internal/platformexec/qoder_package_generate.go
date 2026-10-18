@@ -47,12 +47,22 @@ func (qoderAdapter) Generate(root string, graph pluginmodel.PackageGraph, state 
 		return nil, err
 	}
 	artifacts = append(artifacts, skillArtifacts...)
+	native, err := qoderNativeArtifacts(root, state)
+	if err != nil {
+		return nil, err
+	}
+	artifacts = append(artifacts, native...)
+	return compactArtifacts(artifacts), nil
+}
+
+func qoderNativeArtifacts(root string, state pluginmodel.TargetState) ([]pluginmodel.Artifact, error) {
+	var out []pluginmodel.Artifact
 	if hookPaths := state.ComponentPaths("hooks"); len(hookPaths) > 0 {
 		copied, err := copyArtifacts(root, authoredComponentDir(state, "hooks", filepath.Join("targets", "qoder", "hooks")), "hooks")
 		if err != nil {
 			return nil, err
 		}
-		artifacts = append(artifacts, copied...)
+		out = append(out, copied...)
 	}
 	copied, err := copyArtifactDirs(root, artifactDir{
 		src: authoredComponentDir(state, "commands", filepath.Join("targets", "qoder", "commands")),
@@ -61,7 +71,7 @@ func (qoderAdapter) Generate(root string, graph pluginmodel.PackageGraph, state 
 	if err != nil {
 		return nil, err
 	}
-	artifacts = append(artifacts, copied...)
+	out = append(out, copied...)
 	if binPaths := state.ComponentPaths("bin"); len(binPaths) > 0 {
 		copied, err := copyArtifactDirs(root, artifactDir{
 			src: authoredComponentDir(state, "bin", filepath.Join("targets", "qoder", "bin")),
@@ -70,7 +80,7 @@ func (qoderAdapter) Generate(root string, graph pluginmodel.PackageGraph, state 
 		if err != nil {
 			return nil, err
 		}
-		artifacts = append(artifacts, copied...)
+		out = append(out, copied...)
 	}
-	return compactArtifacts(artifacts), nil
+	return out, nil
 }
