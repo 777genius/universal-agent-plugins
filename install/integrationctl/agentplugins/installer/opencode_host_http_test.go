@@ -13,7 +13,7 @@ import (
 // requiring observer support. This verifies config delivery, not a host call.
 func TestOpenCodeHTTPQualificationFlowsIntoNativeDelivery(t *testing.T) {
 	root := openCodeTestRoot(t)
-	executable := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.18.34", "ok")
+	executable := buildOpenCodeTarget(t, filepath.Join(root, "v1"), "1.19.0", "ok")
 	req := openCodeRequest(t, root, executable)
 	mcp := []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"sample-notify":{"type":"streamable-http","url":"https://fixture.invalid/mcp"}}}`)
 	if err := os.WriteFile(filepath.Join(req.PackageRoot, "mcp.json"), mcp, 0600); err != nil {

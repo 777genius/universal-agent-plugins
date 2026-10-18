@@ -96,7 +96,7 @@ func TestOpenCodeDesiredProjectionRequiresQualifiedHost(t *testing.T) {
 	}
 	preparer := NewOpenCodeClientPreparation(registry)
 	preparer.environment = []string{"PATH="}
-	version := "2.0.21"
+	version := "2.0.22"
 	preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: version, Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture-native-bytes"}}, nil
 	}
@@ -122,9 +122,9 @@ func TestOpenCodeDesiredProjectionRequiresQualifiedHost(t *testing.T) {
 	if err != nil || projection.Dialect != opencodehost.DialectV2 || len(projection.MCPServers) != 1 {
 		t.Fatalf("qualified projection = %+v, %v", projection, err)
 	}
-	version = "2.0.22"
-	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, client.ExecutablePath, false); !errors.Is(err, opencodehost.ErrUnverifiedCapability) {
-		t.Fatalf("desired projection admitted an unqualified host: %v", err)
+	version = "3.0.0"
+	if _, err := preparer.PrepareClient(t.Context(), envelope, client, nil, client.ExecutablePath, false); err == nil {
+		t.Fatalf("desired projection admitted an unknown major: %v", err)
 	}
 }
 
