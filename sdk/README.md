@@ -30,6 +30,7 @@ Root package:
 - `(*plugin-kit-ai.App).Claude()`
 - `(*plugin-kit-ai.App).Codex()`
 - `(*plugin-kit-ai.App).Gemini()`
+- `(*plugin-kit-ai.App).Qoder()`
 - `(*plugin-kit-ai.App).Cursor()` (`public-beta`, stop only)
 - `(*plugin-kit-ai.App).RunCursorObserver(ctx)` (`public-beta`)
 - `(*plugin-kit-ai.App).Run()`
@@ -41,6 +42,7 @@ Platform packages:
 - `github.com/777genius/plugin-kit-ai/sdk/claude`
 - `github.com/777genius/plugin-kit-ai/sdk/codex`
 - `github.com/777genius/plugin-kit-ai/sdk/gemini`
+- `github.com/777genius/plugin-kit-ai/sdk/qoder`
 - `github.com/777genius/plugin-kit-ai/sdk/cursor` (`public-beta`)
 
 ## Runtime Contract Boundary
@@ -59,6 +61,10 @@ Platform packages:
   - `gemini/AfterAgent`
   - `gemini/BeforeTool`
   - `gemini/AfterTool`
+  - `qoder/SessionStart`
+  - `qoder/UserPromptSubmit`
+  - `qoder/PostToolUse`
+  - `qoder/Stop`
 - Runtime-supported but not stable:
   - `claude/SessionStart` (`public-beta`)
   - `claude/SessionEnd` (`public-beta`)
@@ -88,6 +94,14 @@ success means empty stdout and exit 0. Note on the generated support matrix: the
 `codex_notify` live-test profile is a platform-level attribute — the live lane exercises the
 legacy notify path only, and these four lifecycle events are covered by unit/app-level tests,
 not by live execution.
+
+Qoder hooks receive snake_case stdin JSON and use the exact argv names
+`session-start`, `user-prompt-submit`, `post-tool-use`, and `stop`. Lowercase
+`stop` selects Qoder; use canonical `Stop` for Claude. Qoder runs the SDK binary
+from the installed bundle's `bin/` directory. `make test-qoder-live` exercises
+native installation and SDK hooks; completed-turn `Stop` and `PostToolUse` cases
+skip when the authenticated account has exhausted its chat quota. A passing run
+with those skips does not qualify their live execution.
 
 Host detection for multi-host binaries lives in
 `github.com/777genius/plugin-kit-ai/sdk/hostdetect` (`public-beta`): an explicit override always
