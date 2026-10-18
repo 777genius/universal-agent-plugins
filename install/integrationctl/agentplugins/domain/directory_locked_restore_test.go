@@ -38,10 +38,12 @@ func TestResolveDirectoryLockedRestoreKeepsExactSupersededRelease(t *testing.T) 
 // Misusing the purpose must fail before the historical-release exception can
 // run, especially if a caller tries a broader recorded-state operation.
 func TestResolveDirectoryLockedRestoreRejectsInvalidIntent(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name   string
 		mutate func(*DirectoryResolveRequest)
-	}{
+	}
+	tests := make([]testCase, 0, 13)
+	tests = append(tests, []testCase{
 		{"unknown purpose", func(q *DirectoryResolveRequest) { q.Purpose = "unrecognized_restore" }},
 		{"unselected release", func(q *DirectoryResolveRequest) { q.DesiredReleaseSequence = 0 }},
 		{"implicit scope", func(q *DirectoryResolveRequest) { q.Scope = "" }},
@@ -50,12 +52,9 @@ func TestResolveDirectoryLockedRestoreRejectsInvalidIntent(t *testing.T) {
 		{"recorded proof", func(q *DirectoryResolveRequest) {
 			q.Recorded = &RecordedDirectoryRelease{ProductID: "tool", DistributionID: "owner/tool", ReleaseSequence: 2, ResolvedRevision: testRelease(2, "").PackageSource.Revision}
 		}},
-	}
+	}...)
 	for _, operation := range []DirectoryOperation{DirectoryNewTarget, DirectoryUpdate, DirectoryRepair, DirectoryRematerialize, DirectoryReproduce, DirectoryRemove, "unknown"} {
-		tests = append(tests, struct {
-			name   string
-			mutate func(*DirectoryResolveRequest)
-		}{"operation " + string(operation), func(q *DirectoryResolveRequest) { q.Operation = operation }})
+		tests = append(tests, testCase{"operation " + string(operation), func(q *DirectoryResolveRequest) { q.Operation = operation }})
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -72,10 +71,12 @@ func TestResolveDirectoryLockedRestoreRejectsInvalidIntent(t *testing.T) {
 // current policy and target compatibility still block the exact locked release
 // even while a newer eligible release exists in the same distribution.
 func TestResolveDirectoryLockedRestoreRetainsCurrentPolicyGates(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name, reason string
 		mutate       func(*DirectorySnapshot, *DirectoryResolveRequest)
-	}{
+	}
+	tests := make([]testCase, 0, 17)
+	tests = append(tests, []testCase{
 		{"revoked policy", "revoked", func(s *DirectorySnapshot, _ *DirectoryResolveRequest) {
 			s.Distributions[2].ReleasePolicies[0].Status = ReleaseRevoked
 		}},
@@ -120,12 +121,9 @@ func TestResolveDirectoryLockedRestoreRetainsCurrentPolicyGates(t *testing.T) {
 		{"ambiguous publisher", "ambiguous", func(_ *DirectorySnapshot, q *DirectoryResolveRequest) {
 			q.Selector = "tool"
 		}},
-	}
+	}...)
 	for _, level := range []string{"schema", "materialization", "runtime"} {
-		tests = append(tests, struct {
-			name, reason string
-			mutate       func(*DirectorySnapshot, *DirectoryResolveRequest)
-		}{"current failed " + level, "current trusted " + level + " evidence failed", func(s *DirectorySnapshot, q *DirectoryResolveRequest) {
+		tests = append(tests, testCase{"current failed " + level, "current trusted " + level + " evidence failed", func(s *DirectorySnapshot, q *DirectoryResolveRequest) {
 			evidence := testTrustedEvidence(DirectoryEvidence{ID: "failed/" + level, DistributionID: "owner/tool", ReleaseSequence: 2,
 				PackageTreeDigest: s.Distributions[2].Releases[0].TreeDigest, Level: level, Outcome: "failed"})
 			if level != "schema" {

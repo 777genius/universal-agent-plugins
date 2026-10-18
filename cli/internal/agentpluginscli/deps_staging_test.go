@@ -70,7 +70,7 @@ func TestDependencyStagingRechecksAndCleansSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		loaded, err := materializeLockedPackage(context.Background(), app, pin, false, nil)
 		if err != nil {
 			t.Fatal(err)
