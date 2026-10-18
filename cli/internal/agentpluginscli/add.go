@@ -153,6 +153,10 @@ func runAddWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *o
 }
 
 func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+
 	targets, err := parseTargetOption(opts.target)
 	if err != nil {
 		return err

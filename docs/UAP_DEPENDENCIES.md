@@ -41,14 +41,25 @@ Caret lower bounds are inclusive and upper bounds exclusive: `^1.2` ends at
 `0.0.4`. Package versions differ from Directory release sequences; the lock
 records both. Existing exact Git/release pins may retain non-semver versions.
 
-Packages declare transitive dependencies in their existing `plugin.json`
-extension namespace, without client targets:
+Packages declare their mandatory dependencies in `uap.toml` at the package root,
+beside the standard `plugin.json`:
 
-```json
-{"extensions":{"io.github.777genius.agentplugins":{"dependencies":{"acme/docs":"^1.2"}}}}
+```toml
+schema_version = 1
+
+[dependencies]
+"acme/docs" = "^1.2"
 ```
 
-Only roots are assigned through `[targets]`. Each dependency inherits the union
+The same `[dependencies]` section always describes the manifest owner's direct
+requirements. Installing a plugin through the managed workflow installs its full
+dependency closure. Published package shortcuts must use canonical `owner/name`
+IDs; short Directory names are a convenience for the user's root manifest only.
+Git and exact registry-release tables use the same syntax in either context.
+An absent package TOML, or one containing only `schema_version = 1`, declares no
+dependencies. An invalid or unreadable TOML is an error.
+
+Only the selected root assigns `[targets]`. Each dependency inherits the union
 of its consumers' targets, including any direct assignments of its own. One
 canonical source has one version across the environment. A fresh lock chooses
 the lowest compatible stable version, then the lowest release sequence for equal
@@ -57,10 +68,25 @@ later candidates when an earlier candidate has incompatible dependencies;
 exhausted conflicts report the package, consumers and selectors without applying
 a partial graph. Existing compatible pins take priority over fresh minimums.
 
+Package-local targets are structurally checked and then ignored by consumers;
+they are neither a compatibility allowlist nor permission to install into the
+author's selected agents. Package-local locks do not select consumer pins.
+Both files still contribute to the immutable package tree digest when present.
+`plugin.json` remains authoritative for standard identity and components;
+`uap.toml` is a UAP manager contract, not an Agent Plugins 1.0 component.
+Project-scoped installation and `[dev-dependencies]` are not supported by this
+workflow yet; the latter is rejected as an unknown field.
+
 `uap.lock` remains version 1 and is the sole dependency lock. Each node records
 its exact `version` and immediate `required_by` consumers/selectors, with no
 synthetic root edge. Old flat locks remain usable when their pinned manifests
-have no dependencies; otherwise run `deps lock` to build the graph.
+have no dependencies. Pins declaring dependencies in the retired
+`extensions.io.github.777genius.agentplugins.dependencies` field are rejected
+with `dependency_declaration_moved`, even when TOML is also present. Move the
+declaration in the source package, publish a new revision, then explicitly change
+the corresponding requirement and rebuild the lock. Immutable old pins are never
+rewritten or silently treated as leaves. Removal of unneeded owned packages and
+recovery of already pending transactions retain their existing authority.
 
 ```sh
 agentplugins deps init
@@ -83,6 +109,10 @@ commit, release or semver selectors require an intent change instead.
 `tree` reads the saved graph offline, showing roots, versions and consumers;
 shared nodes and cycles are references. JSON contains sorted `roots` and
 `packages` arrays. It neither fetches sources nor changes environment files.
+Manifest declaration keys may differ from stable package aliases. CLI selectors
+accept the root key; ownership stays bound to the same canonical source when a
+transitive package becomes a direct root or remains needed after its direct
+declaration is removed. Ambiguous short names require explicit canonical intent.
 
 `sync --locked` and `install --locked` reject a missing or inconsistent lock
 before applying changes. Replay verifies pinned manifest declarations against
@@ -150,6 +180,10 @@ Dependency commands always use manifest targets. They reject inherited
 it does not write the lock, store, state, profiles or persistent scanner cache.
 Native-only/YAML packages and implicit compatibility fallbacks are not part of
 this dependency flow.
+Imperative paths such as `--no-save` reject packages with mandatory dependencies
+rather than installing only their parent. Use the managed manifest workflow for
+such packages. Dependency edges describe co-installation and version constraints;
+they do not define service startup order or runtime readiness.
 
 Remove a dependency or target assignment from `uap.toml`, then run `deps lock`
 and `deps sync --yes`. A shared package stays while a reachable consumer or

@@ -292,11 +292,18 @@ func Build(command, revision string, p project.Result, release bool) Report {
 			r.Loadability.FindingIDs = append(r.Loadability.FindingIDs, f.ID)
 		}
 	}
+	dependencies := assessment(Pass)
+	for _, diagnostic := range p.DependencyDiagnostics {
+		id := r.add(Finding{Code: diagnostic.Code, Layer: "package_management", Rule: "uap/package-dependencies", Location: diagnostic.Location, Severity: "error"})
+		dependencies.Status = Fail
+		dependencies.FindingIDs = append(dependencies.FindingIDs, id)
+	}
 	commands := r.commandsAssessment(f.Package)
-	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status, commands.Status)
+	r.Readiness.Status = combine(r.Loadability.Status, r.Conformance.Status, r.HostSafety.Status, commands.Status, dependencies.Status)
 	if r.Readiness.Status == Pass && (!c.Complete || !v.Coverage.TreeComplete) {
 		r.Readiness.Status = NotEvaluated
 	}
+	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, dependencies.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, commands.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Loadability.FindingIDs...)
 	r.Readiness.FindingIDs = append(r.Readiness.FindingIDs, r.Conformance.FindingIDs...)

@@ -211,7 +211,9 @@ func (app App) canonicalizeDependencySyncRequirements(ctx context.Context, requi
 	}
 	lock, err := readLock(lockPath, requirements)
 	if err == nil {
-		canonicalizeRequirementsFromLock(&requirements, lock)
+		if err := canonicalizeRequirementsFromLock(&requirements, lock); err != nil {
+			return environment.Requirements{}, err
+		}
 	} else if lockedOnly || !os.IsNotExist(err) {
 		return environment.Requirements{}, fmt.Errorf("read dependency lock: %w", err)
 	}
@@ -326,7 +328,9 @@ func prepareDependencySyncCandidate(cmd *cobra.Command, app App, opts *options, 
 		if err != nil {
 			return dependencySyncRequest{}, err
 		}
-		canonicalizeRequirementsFromLock(&requirements, previous)
+		if err := canonicalizeRequirementsFromLock(&requirements, previous); err != nil {
+			return dependencySyncRequest{}, err
+		}
 	}
 	requirements, lock, err := resolveDependencySyncCandidate(cmd.Context(), app, opts, requirements, previous, lockedOnly)
 	if err != nil {

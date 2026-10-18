@@ -15,7 +15,7 @@ var ErrSourceChange = errors.New("source_change")
 // Resolver performs one direct source decision. Previous pins are authoritative
 // for unchanged selectors; updateSelection is the only moving-ref refresh path.
 type Resolver interface {
-	Resolve(context.Context, Requirement, *LockedPackage, bool) (LockedPackage, error)
+	Resolve(context.Context, Requirement, []string, *LockedPackage, bool) (LockedPackage, error)
 }
 
 // BindingMutator is the single-target installer boundary. It owns environment
@@ -48,6 +48,11 @@ func (coordinator Coordinator) Resolve(ctx context.Context, requirements Require
 		moving = moving || selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange
 		if !moving {
 			return Lock{}, errors.New("exact commit/release/version pins must be changed in the manifest")
+		}
+	}
+	if len(requirements.Dependencies) > 0 {
+		if _, ok := coordinator.Resolver.(GraphResolver); !ok {
+			return Lock{}, ErrDependencyFactsUnavailable
 		}
 	}
 	return newGraphSolver(coordinator.Resolver, requirements, previous, updateAlias).resolve(ctx)
@@ -88,8 +93,15 @@ func (coordinator Coordinator) PrepareSyncFor(requirements Requirements, lock Lo
 	}
 	selected := map[string]bool{}
 	for _, alias := range aliases {
-		if !aliasPattern.MatchString(alias) {
+		if !validDeclarationKey(alias) {
 			return PreparedSync{}, errors.New("invalid selected alias")
+		}
+		if requirement, ok := requirements.Dependencies[alias]; ok {
+			pkg, found := lock.PackageForRequirement(requirement)
+			if !found {
+				return PreparedSync{}, fmt.Errorf("selected declaration %q has no locked source", alias)
+			}
+			alias = pkg.Alias
 		}
 		selected[alias] = true
 	}

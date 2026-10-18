@@ -1,16 +1,28 @@
-package agentpluginscli
+package dependencymanifest
 
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
+	"sort"
 
 	"github.com/pelletier/go-toml/v2"
 	"github.com/pelletier/go-toml/v2/unstable"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
+
+// Error reports a manifest failure with its original source and line.
+// Err retains the underlying validation or TOML decoding error.
+type Error struct {
+	Source string
+	Line   int
+	Err    error
+}
+
+func (err *Error) Error() string { return fmt.Sprintf("%s:%d: %v", err.Source, err.Line, err.Err) }
+
+func (err *Error) Unwrap() error { return err.Err }
 
 func manifestError(path string, body []byte, cause error, location ...string) error {
 	line := 1
@@ -20,7 +32,7 @@ func manifestError(path string, body []byte, cause error, location ...string) er
 	} else if len(location) != 0 {
 		line = manifestLocation(body, location)
 	}
-	return fmt.Errorf("%s:%d: %w", filepath.Base(path), line, cause)
+	return &Error{Source: path, Line: line, Err: cause}
 }
 
 // Use the decoder's syntax tree only for source locations, never rewriting TOML.
@@ -29,6 +41,7 @@ func manifestLocation(body []byte, wanted []string) int {
 	var parser unstable.Parser
 	parser.Reset(body)
 	var table []string
+	bestLine, bestDepth := 1, 0
 	for parser.NextExpression() {
 		node := parser.Expression()
 		if node.Kind != unstable.Table && node.Kind != unstable.KeyValue {
@@ -43,8 +56,11 @@ func manifestLocation(body []byte, wanted []string) int {
 		if slices.Equal(keys, wanted) {
 			return line
 		}
+		if len(keys) > bestDepth && len(keys) < len(wanted) && slices.Equal(keys, wanted[:len(keys)]) {
+			bestLine, bestDepth = line, len(keys)
+		}
 	}
-	return 1
+	return bestLine
 }
 
 func manifestNodeKey(parser *unstable.Parser, node *unstable.Node) ([]string, int) {
@@ -76,4 +92,13 @@ func requirementErrorLocation(requirements environment.Requirements, cause error
 		return []string{"dependencies", name}
 	}
 	return nil
+}
+
+func sortedKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
