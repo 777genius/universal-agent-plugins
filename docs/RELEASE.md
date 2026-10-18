@@ -66,6 +66,55 @@ For an owner-authorized release, after choosing and reporting the exact version:
 Do not reuse or move a stable tag, overwrite a published package version, use an
 unpinned `latest` binary, or treat a draft as a public release.
 
+## OpenCode event SDK
+
+`universal-agent-plugins-opencode-events` is an independently versioned npm
+library from `sdk/opencode-js`. Publishing the CLI does not publish this SDK.
+The owner may authorize an SDK-only release without releasing CLI binaries or
+runtime helpers. Preserve the published root factories when adding generation
+specific `/v1` and `/v2` entrypoints.
+
+For an owner-authorized SDK release:
+
+1. Choose an unused version and merge its reviewed candidate into `main` through
+   the required repository CI and security gates. Record the source commit and
+   exact tested OpenCode generations/versions. From `sdk/opencode-js`, run
+   `npm ci --ignore-scripts`, `npm run check`, and `npm run check:packed`.
+   From `sdk`, run `go test -count=1 ./opencode`.
+2. Qualify actual V1 and V2 host plugins against the packed SDK in disposable
+   projects and isolated profiles. Record positive completion and unanswered
+   question/permission behavior and cancellation/settlement fencing. Unit ports,
+   type declarations and loader-only checks do not establish native behavior.
+   Preserve the distinction between compatibility factories and strict native
+   reader/provenance qualification. Product-specific delivery, native installers,
+   and notification platform matrices remain separate product gates.
+3. Create an immutable `opencode-events-vX.Y.Z` tag at that qualified `main`
+   commit. Dispatch `opencode-sdk.yml` **from that tag** with `version=X.Y.Z`.
+   Its Linux/macOS/Windows package contracts and Go decoder must all pass before
+   the read-only release job packs and attests one tarball. This workflow does
+   not publish to npm or mutate GitHub releases.
+4. Download the `opencode-events-X.Y.Z` artifact from that exact run. Verify
+   `source-commit.txt`, `pack.json`, SHA256 and the GitHub attestation against
+   `.github/workflows/opencode-sdk.yml` and the tag's source digest. Stage the
+   exact tarball and checksums in a non-public SDK GitHub release with
+   `--latest=false`; never replace an existing release asset.
+5. After all gates pass, publish **that tarball**, without repacking, using the
+   maintainer's existing authorized npm session:
+   `npm publish /absolute/path/to/package.tgz --registry=https://registry.npmjs.org/ --access public --tag latest`.
+   Do not read or copy credentials. An authentication failure requires restoring
+   the supported session, never bypassing npm's controls. If publication outcome
+   is uncertain, inspect the exact version before attempting another mutation.
+6. Read back npm name/version, exports, peer range, integrity and shasum from
+   `https://registry.npmjs.org/`. Compare metadata to `package/package.json`
+   inside the attested tarball and integrity/shasum to `pack.json`.
+   Install that exact public registry version in clean V1 and
+   V2-only consumers and verify imports, public types and behavior. Preserve the
+   V2-only guarantee that the legacy V1 SDK is not installed. Promote the SDK
+   GitHub draft with `--latest=false` only after public verification succeeds.
+   Record tag, source SHA, workflow/review/native evidence and public artifact
+   identities. Do not equate this SDK release with full qualification of a
+   consuming notification product.
+
 ## Retired plugin-kit-ai CLI publication
 
 No new `plugin-kit-ai` CLI GitHub, npm, PyPI, Homebrew, or native release is supported. Do not run a release preflight for it and do not offer a pipx install

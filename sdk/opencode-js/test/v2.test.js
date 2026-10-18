@@ -23,12 +23,12 @@ class LiveSource {
 function service(overrides = {}) {
   const { native: nativeOverrides, checkpoints = false, holdMarkers = false, ...otherOverrides } = overrides;
   const markers = [], transport = { hold: holdMarkers, disposed: 0 };
-  const sources = [], out = [], diagnostics = [], pending = new Map(), turns = new Map();
+  const sources = [], out = [], diagnostics = [], pending = new Map(), turns = new Map(), users = new Map();
   const sequences = new Map(); let serial = 0;
   const context = { app: { version: '2.0.21' }, event: { subscribe({ signal }) {
     const source = new LiveSource(signal); sources.push(source); return source;
   } } };
-  const scope = (run) => ({ sessionID: run.sessionID, turnID: turns.get(run.sessionID), location: 'TEST-location', rootSession: true });
+  const scope = (run) => ({ sessionID: run.sessionID, turnID: turns.get(run.sessionID), userID: users.get(run.sessionID), location: 'TEST-location', rootSession: true });
   const checkpoint = checkpoints ? { async register(signal, namespace) {
     const type = `private.checkpoint-${namespace}`, source = sources.at(-1);
     return { type,
@@ -62,8 +62,9 @@ function service(overrides = {}) {
       sessionID: sid, location: 'TEST-location', ...data,
       ...(!type.startsWith('permission.') && !type.startsWith('form.') ? { sequence: data.sequence ?? { aggregate: sid, seq } } : {}),
     } };
+    if (type === 'session.inbox.delivered') users.set(sid, data.inboxID);
     if (type === 'permission.asked') pending.set(data.requestID, {
-      sessionID: sid, turnID: turns.get(sid), location: 'TEST-location', rootSession: true, pending: true,
+      sessionID: sid, turnID: turns.get(sid), userID: users.get(sid), location: 'TEST-location', rootSession: true, pending: true,
       requestID: data.requestID, messageID: data.messageID, callID: data.callID,
     });
     if (type === 'permission.replied') pending.delete(data.requestID);
@@ -74,7 +75,7 @@ function service(overrides = {}) {
     }
     return event;
   }
-  return { observer, sources, out, diagnostics, publish, pending, turns, markers, transport,
+  return { observer, sources, out, diagnostics, publish, pending, turns, users, markers, transport,
     consumeMarker(index = markers.length - 1) { const m = markers[index]; m.source.push(m.event); },
     async stop() { observer.dispose(); await observer.done(); } };
 }
@@ -176,6 +177,41 @@ test('root, child and observed location must agree independently of load locatio
   const s = service(); await start(s);
   s.publish('permission.asked', { ...permission, location: 'unrelated-project' }); await tick();
   await terminal(s); assert.deepEqual(s.out, []); await s.stop();
+});
+
+test('every native proof must match the independently observed delivered user', async () => {
+  for (const port of ['session', 'assistant', 'questionSource', 'currentPermission']) {
+    for (const userID of [undefined, 'different-user']) {
+      const proof = { sessionID: 'session', turnID: 'native-start', userID, location: 'TEST-location', rootSession: true,
+        messageID: 'assistant', role: 'assistant', summary: false, final: true, outcome: 'success',
+        requestID: port === 'questionSource' ? 'form' : 'permission', callID: port === 'questionSource' ? 'question-call' : 'call',
+        tool: 'question', pending: true };
+      const s = service({ checkpoints: true, native: { [port]: async () => proof } });
+      try {
+        await start(s);
+        if (port === 'questionSource') s.publish('form.created', { requestID: 'form', messageID: 'assistant', callID: 'question-call' });
+        else if (port === 'currentPermission') s.publish('permission.asked', permission);
+        else await terminal(s);
+        await tick();
+        assert.deepEqual(s.out, [], `${port}: ${userID ?? 'missing user'}`);
+      } finally { await s.stop(); }
+    }
+  }
+});
+
+test('contradictory duplicate failure discriminants fence paused terminal verification', async () => {
+  const entered = deferred(), pause = deferred();
+  const s = service({ native: { session: async (run) => { entered.resolve(); await pause.promise; return { ...run, rootSession: true }; },
+    assistant: async (run) => ({ ...run, rootSession: true, role: 'assistant', summary: false, final: true, outcome: 'error' }) } });
+  try {
+    await start(s); s.publish('session.step.failed', { messageID: 'assistant' });
+    const original = s.publish('session.execution.failed', { error: { name: 'ProviderError' } });
+    await entered.promise;
+    s.sources[0].push({ ...original, data: { ...original.data, error: { name: 'AbortError' } } });
+    await tick(); pause.resolve(); await tick();
+    assert.deepEqual(s.out, []);
+    assert.ok(s.diagnostics.includes('native_identity_contradiction'));
+  } finally { pause.resolve(); await s.stop(); }
 });
 
 test('missing public checkpoint binding stays closed despite observed live creation', async () => {
@@ -541,7 +577,7 @@ test('irrelevant global form fields and session-local malformed correlation pres
 
 // Regression: treating copied history's public seq0→11 prefix as transport loss silences a new root fork.
 test('a fresh root fork can start after the sparse copied-history prefix without receiving hidden events', async () => {
-  const s = service(); s.turns.set('session', 'fork-start');
+  const s = service(); s.turns.set('session', 'fork-start'); s.users.set('session', 'fork-user');
   for (const [seq, type, data, eventID] of [
     [0, 'session.created', {}, 'fork-created'],
     [11, 'session.inbox.enqueued', { inboxID: 'fork-user', item: { type: 'user' } }, 'fork-input'],

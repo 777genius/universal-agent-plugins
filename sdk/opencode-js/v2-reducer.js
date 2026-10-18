@@ -7,6 +7,10 @@ const location = (x) => object(x) && typeof x.directory === 'string' && x.direct
 const sameLocation = (a, b) => location(a) && location(b) && a.directory === b.directory && a.workspaceID === b.workspaceID;
 const bounded = (value, fallback, min, max) => Math.max(min, Math.min(max, Number.isInteger(value) ? value : fallback));
 const retainedAdd = (set, value, limit) => { set.add(value); if (set.size > limit) set.delete(set.values().next().value); };
+const interruptedFailure = (p) => {
+  const tag = p.error?._tag ?? p.error?.name ?? p.error?.type;
+  return typeof tag === 'string' && /abort|cancel|interrupt/i.test(tag);
+};
 const supported = new Set([
   'session.created', 'session.moved', 'session.deleted', 'session.inbox.enqueued', 'session.inbox.delivered',
   'session.inbox.cancelled', 'session.inbox.delivery.changed', 'session.execution.started', 'session.execution.succeeded',
@@ -167,7 +171,7 @@ export function createV2Reducer(options, strict = false, fence = () => {}) {
     }
   }
   function matches(proof, run) {
-    return object(proof) && proof.sessionID === run.sessionID && proof.turnID === run.turnID &&
+    return object(proof) && proof.sessionID === run.sessionID && proof.turnID === run.turnID && proof.userID === run.userID &&
       proof.location === own && proof.rootSession === true;
   }
   async function verifyStrict(s, candidate, handoff, final) {
@@ -301,7 +305,8 @@ export function createV2Reducer(options, strict = false, fence = () => {}) {
       }
       const fingerprint = JSON.stringify([type, event.created, sid, correlation.location, correlation.messageID,
         correlation.requestID, correlation.callID, correlation.compaction, nativeSequence, id(p.inboxID) ? p.inboxID : undefined,
-        id(p.item?.type) ? p.item.type : undefined, p.item?.delivery === 'queue', p.delivery === 'queue', p.finish === 'stop']);
+        id(p.item?.type) ? p.item.type : undefined, p.item?.delivery === 'queue', p.delivery === 'queue', p.finish === 'stop',
+        type === 'session.execution.failed' && interruptedFailure(p)]);
       if (eventIDs.has(event.id)) {
         if (eventIDs.get(event.id) === fingerprint) return;
         const original = sessions.get(JSON.parse(eventIDs.get(event.id))[2]);
@@ -394,8 +399,7 @@ export function createV2Reducer(options, strict = false, fence = () => {}) {
       if (strict && s.nativeTerminal) { s.blocked = true; s.revision++; diag('native_terminal_contradiction'); return; }
       if (!strict && !object(p.error)) { diag('invalid_failure'); return; }
       // Native interruption is distinct; still reject abort/cancel error discriminants.
-      const tag = p.error?._tag ?? p.error?.name ?? p.error?.type;
-      if (typeof tag === 'string' && /abort|cancel|interrupt/i.test(tag)) { s.interrupted = true; resetFinal(s); }
+      if (interruptedFailure(p)) { s.interrupted = true; resetFinal(s); }
       else s.terminal = 'failure';
     } else if (type === 'form.replied' || type === 'form.cancelled' || type === 'permission.replied') {
       const rid = strict ? correlation.requestID : type === 'permission.replied' ? p.requestID : p.id;
