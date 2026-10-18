@@ -156,7 +156,7 @@ function semanticFixture(f) {
       const manifest = snapshots[w.product].entries.find(x => x.path === `${w.lane}/plugin.json`);
       data.identity = { scope_algorithm: 'agentplugins-captured-input-sha256-v1', scope_digest: 'sha256:' + H(w.lane), tree_algorithm: 'agentplugins-tree-sha256-v1',
         tree_digest: a.generatedTreeIdentity(snapshots[w.product].entries, w.lane, j.cell), manifest_digest: 'sha256:' + manifest.sha256,
-        read_profile: `packageview-local-${a.matrix.find(c => c.key === j.cell).target.split('-')[0]}-v1`, tree_exclusions: ['root .git', 'root non-directory .plugin-kit-ai.lock'] };
+        read_profile: `packageview-local-${a.matrix.find(c => c.key === j.cell).target.split('-')[0]}-v1`, tree_exclusions: ['root .git', 'root non-directory .uap-integrations.lock'] };
       for (const k of ['loadability', 'normative_conformance', 'host_safety', 'authoring_readiness']) data[k] = assessment(malformed && ['normative_conformance', 'authoring_readiness'].includes(k) ? 'fail' : 'pass');
       data.inspection = { name: w.lane, version: '0.1.0', schema: a.PROFILES[2].id, components: data.components.map(x =>
         ({ id: x.id, type: x.type, name: x.id === 'sha256:' + H('skill:extra-skill') ? 'extra-skill' : w.lane })) };

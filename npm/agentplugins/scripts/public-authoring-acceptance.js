@@ -696,7 +696,7 @@ function authorResult(v, want, j) {
     agree(d.identity.scope_algorithm, 'agentplugins-captured-input-sha256-v1', 'scope algorithm');
     agree(d.identity.tree_algorithm, 'agentplugins-tree-sha256-v1', 'tree algorithm');
     agree(d.identity.read_profile, `packageview-local-${cell(j.cell).target.split('-')[0]}-v1`, 'recorded host read profile');
-    agree(d.identity.tree_exclusions, ['root .git', 'root non-directory .plugin-kit-ai.lock'], 'exact tree exclusions');
+    agree(d.identity.tree_exclusions, ['root .git', 'root non-directory .uap-integrations.lock'], 'exact tree exclusions');
     for (const k of ['scope_digest', 'tree_digest', 'manifest_digest']) digestID(d.identity[k]);
     agree(d.profiles, PROFILES, 'embedded profiles');
     agree(d.schema_ids, (want.lane === 'skill' ? [PLUGIN_SCHEMA] : [MCP_SCHEMA, PLUGIN_SCHEMA]).sort(), 'exact schema inventory');

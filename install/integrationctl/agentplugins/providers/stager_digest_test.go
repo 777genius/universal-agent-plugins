@@ -65,7 +65,7 @@ func TestStagerVerifyDigestErrorClasses(t *testing.T) {
 	if !errors.Is(verifyErr, context.Canceled) {
 		t.Fatalf("canceled error = %v", verifyErr)
 	}
-	for _, marker := range []string{".git", ".plugin-kit-ai.lock"} {
+	for _, marker := range []string{".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"} {
 		marked := t.TempDir()
 		writeTestFile(t, filepath.Join(marked, "nested", marker), "marker")
 		_ = requireVerificationKind(t, stager.Verify(context.Background(), marked, "sha256:expected"), ports.VerificationExcludedMarker)

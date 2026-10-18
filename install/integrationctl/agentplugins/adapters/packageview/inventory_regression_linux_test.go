@@ -18,7 +18,8 @@ func TestCapturedTraversalRepresentation(t *testing.T) {
 	}{
 		{"excluded", ".git/../data", []string{".git"}, nil, false},
 		{"retained", "kept/../data", []string{"kept"}, nil, true},
-		{"excluded-marker-intermediary", ".plugin-kit-ai.lock/../data", []string{"kept"}, map[string]string{".plugin-kit-ai.lock": "kept"}, false},
+		{"excluded-marker-intermediary", ".uap-integrations.lock/../data", []string{"kept"}, map[string]string{".uap-integrations.lock": "kept"}, false},
+		{"excluded-legacy-marker-intermediary", ".plugin-kit-ai.lock/../data", []string{"kept"}, map[string]string{".plugin-kit-ai.lock": "kept"}, false},
 		{"nested-excluded", "kept/nested/../../data", []string{"kept", ".git", "other/inner"}, map[string]string{"kept/nested": "../.git/../other/inner"}, false},
 		{"nested-retained", "kept/nested/../../data", []string{"kept", "other/inner"}, map[string]string{"kept/nested": "../other/inner"}, true},
 		{"expanded-excluded-intermediary", "kept/hop/../data", []string{"kept", ".git"}, map[string]string{"kept/hop": "../.git"}, false},

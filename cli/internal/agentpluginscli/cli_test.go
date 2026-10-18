@@ -1467,7 +1467,7 @@ func TestDoctorDiagnosesManagedDirectoryChangesWithRecovery(t *testing.T) {
 
 func TestDoctorBlocksRepairForExcludedOwnershipMarker(t *testing.T) {
 	t.Parallel()
-	for _, marker := range []string{".git", ".plugin-kit-ai.lock"} {
+	for _, marker := range []string{".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"} {
 		t.Run(marker, func(t *testing.T) {
 			fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
 			plugin := writeCLIPlugin(t)

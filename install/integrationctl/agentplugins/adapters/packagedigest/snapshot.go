@@ -20,6 +20,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	icdomain "github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
@@ -182,7 +183,7 @@ func inspect(ctx context.Context, sourceRoot string, limits domain.PackageLimits
 			}
 			return nil
 		}
-		if !dirEntry.IsDir() && rel == ".plugin-kit-ai.lock" {
+		if !dirEntry.IsDir() && icdomain.IsWorkspaceLockFile(rel) {
 			return nil
 		}
 		nodes++
@@ -276,7 +277,7 @@ func validatePath(rel string, maxDepth int, seen map[string]string) error {
 			return fmt.Errorf("package contains unsafe path %q: %w", rel, err)
 		}
 	}
-	if strings.EqualFold(rel, ".plugin-kit-ai.lock") {
+	if strings.EqualFold(rel, icdomain.WorkspaceLockFileName) || strings.EqualFold(rel, icdomain.LegacyWorkspaceLockFileName) {
 		return fmt.Errorf("package contains reserved ownership-marker path %q", rel)
 	}
 	canonical := cases.Fold().String(norm.NFC.String(rel))

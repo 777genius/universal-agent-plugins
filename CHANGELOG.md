@@ -81,6 +81,18 @@ The following `agentplugins` changes are breaking. They ship in the next minor
   findings without changing Conformance or HostSafety. Compatibility reports a
   withheld explicit-only command as the warning `target_command_withheld`, and
   as an error only when the client gets nothing else.
+- **Workspace lock renamed to `.uap-integrations.lock`.** The workspace desired
+  state file written by `plugin-kit-ai integrations sync` is now
+  `<repo>/.uap-integrations.lock`, so its name no longer collides with the
+  legacy `plugin-kit-ai` branding or with the dependency environment lock
+  `uap.lock`. `plugin-kit-ai integrations` commands read and write only the new
+  name: a repository whose lock still carries the legacy
+  `.plugin-kit-ai.lock` name fails with rename guidance instead of silently
+  adopting or rewriting it, so migrate with `mv .plugin-kit-ai.lock
+  .uap-integrations.lock`. The legacy name remains an accepted package-tree
+  exclusion everywhere digests are computed, so existing workspaces see no
+  digest drift. Authoring reports list the tree exclusion as
+  `root non-directory .uap-integrations.lock`.
 
 ### Fixed
 

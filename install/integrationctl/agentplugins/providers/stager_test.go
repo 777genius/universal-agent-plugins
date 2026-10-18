@@ -685,7 +685,7 @@ func TestStagerVerifiesAndSafelyDiscardsOnlyItsStagingDirectory(t *testing.T) {
 
 func TestStagerVerifyRejectsMarkersExcludedFromPortableSnapshotDigest(t *testing.T) {
 	t.Parallel()
-	for _, marker := range []string{filepath.Join(".git", "config"), filepath.Join("nested", ".plugin-kit-ai.lock")} {
+	for _, marker := range []string{filepath.Join(".git", "config"), filepath.Join("nested", ".uap-integrations.lock"), filepath.Join("nested", ".plugin-kit-ai.lock")} {
 		marker := marker
 		t.Run(marker, func(t *testing.T) {
 			envelope := stagingEnvelope(t)

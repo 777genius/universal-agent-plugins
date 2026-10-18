@@ -17,6 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	icdomain "github.com/777genius/plugin-kit-ai/install/integrationctl/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
@@ -119,7 +120,7 @@ func rejectExcludedOwnershipMarkers(root string) error {
 		if filepath.Clean(path) == filepath.Clean(root) {
 			return nil
 		}
-		if entry.Name() == ".git" || entry.Name() == ".plugin-kit-ai.lock" {
+		if entry.Name() == ".git" || icdomain.IsWorkspaceLockFile(entry.Name()) {
 			return &excludedOwnershipMarkerError{name: entry.Name()}
 		}
 		return nil
