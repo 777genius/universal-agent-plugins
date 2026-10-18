@@ -221,6 +221,20 @@ func TestQoderMissingVersionCannotProveInstall(t *testing.T) {
 	}
 }
 
+func TestQoderForeignRegistrationOutranksAttestedUnprovenVersion(t *testing.T) {
+	r := qoderRequest(t)
+	r.VerifyOnly = true
+	r.ActivationComplete = true
+	f := &fakeQoder{entries: []pluginEntry{{ID: "demo@local"}, {ID: "demo@marketplace"}}}
+	out, err := New().Activate(context.Background(), clients.Env{Runner: f}, r)
+	if err == nil || out.Activation == domain.ActivationActive || out.ActivationAttested {
+		t.Fatalf("attested unproven version overrode a foreign registration: %+v %v", out, err)
+	}
+	if len(f.commands) != 1 {
+		t.Fatalf("foreign pair mutated Qoder: %v", f.commands)
+	}
+}
+
 func TestQoderRejectsAmbiguousPluginNames(t *testing.T) {
 	plan := domain.DeliveryPlan{ClientID: domain.ClientQoder, DeclaredName: "demo@team", Status: domain.PlanReady}
 	if err := New().CheckPlanPrecondition(clients.PlanInput{}, &plan); err != nil {

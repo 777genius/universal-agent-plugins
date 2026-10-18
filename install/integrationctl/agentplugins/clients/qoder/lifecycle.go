@@ -86,15 +86,17 @@ func verifyActivation(ctx context.Context, env clients.Env, request domain.Activ
 	if err != nil {
 		return activationError(outcome, request, err)
 	}
+	// A foreign claim on the name outranks any version evidence: attestation
+	// must never accept a registration that is not ours to verify.
+	if findForeign(entries, request.DeclaredName) {
+		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is registered from a different source", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
+	}
 	entry, found := findEntry(entries, request.DeclaredName)
 	if !found || (entry.Version != "" && !versionMatches(entry, request.Plan.DeclaredVersion)) {
 		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is absent or has a different version", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	if !versionMatches(entry, request.Plan.DeclaredVersion) {
 		return unprovenVersion(outcome, request)
-	}
-	if findForeign(entries, request.DeclaredName) {
-		return activationError(outcome, request, fmt.Errorf("%w: Qoder plugin %q is registered from a different source", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
 	return outcome, nil
