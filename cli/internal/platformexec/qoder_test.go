@@ -365,7 +365,7 @@ func TestQoderPackagedValidateHooksShapeContract(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			root, _ := qoderManifestFixture(t)
+			root := qoderManifestFixture(t)
 			writeQoderTestFile(t, filepath.Join(root, "plugin", "targets", "qoder", "hooks", "hooks.json"), tc.body)
 			state := pluginmodel.NewTargetState("qoder")
 			state.AddComponent("hooks", filepath.ToSlash(filepath.Join("plugin", "targets", "qoder", "hooks", "hooks.json")))
@@ -407,7 +407,7 @@ func TestQoderPackagedValidateHooksMirrorContract(t *testing.T) {
 	})
 	t.Run("generated without authored", func(t *testing.T) {
 		t.Parallel()
-		root, _ := qoderManifestFixture(t)
+		root := qoderManifestFixture(t)
 		writeQoderTestFile(t, filepath.Join(root, "hooks", "hooks.json"), qoderHooksBody)
 		diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), pluginmodel.NewTargetState("qoder"))
 		if err != nil {
@@ -452,11 +452,11 @@ func qoderManifestGraph() pluginmodel.PackageGraph {
 	}
 }
 
-func qoderManifestFixture(t *testing.T) (string, pluginmodel.PackageGraph) {
+func qoderManifestFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	writeQoderTestFile(t, filepath.Join(root, ".qoder-plugin", "plugin.json"), `{"name":"qoder-demo","version":"0.1.0","description":"qoder demo"}`)
-	return root, qoderManifestGraph()
+	return root
 }
 
 func qoderHooksFixture(t *testing.T) (string, pluginmodel.PackageGraph, pluginmodel.TargetState) {
@@ -469,13 +469,13 @@ func qoderHooksFixture(t *testing.T) (string, pluginmodel.PackageGraph, pluginmo
 
 func qoderAuthoredHooksFixture(t *testing.T, hooksBody string) (string, pluginmodel.TargetState) {
 	t.Helper()
-	root, _ := qoderManifestFixture(t)
+	root := qoderManifestFixture(t)
 	return root, qoderAuthoredHooksState(t, root, hooksBody)
 }
 
 func qoderAuthoredCommandsFixture(t *testing.T, commandBody string) (string, pluginmodel.TargetState) {
 	t.Helper()
-	root, _ := qoderManifestFixture(t)
+	root := qoderManifestFixture(t)
 	state := pluginmodel.NewTargetState("qoder")
 	qoderAuthoredCommandsState(t, root, state, commandBody)
 	return root, state

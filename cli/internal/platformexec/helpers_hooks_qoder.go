@@ -18,10 +18,10 @@ func qoderHookNames() []string {
 	}
 }
 
-// qoderHookRootToken is the only path envelope a bundled hook command may use:
+// qoderHookRootPlaceholder is the only path envelope a bundled hook command may use:
 // the Qoder runtime resolves it to the installed plugin root, so an authored
 // command escaping the bundle cannot be projected safely.
-const qoderHookRootToken = "${QODER_PLUGIN_ROOT}"
+const qoderHookRootPlaceholder = "${QODER_PLUGIN_ROOT}"
 
 type qoderHooksDocument struct {
 	Description string                      `json:"description,omitempty"`
@@ -72,7 +72,7 @@ func qoderHookCommandBundled(command string) bool {
 		return false
 	}
 	if strings.ContainsAny(command, "/\\") {
-		return strings.HasPrefix(command, qoderHookRootToken+"/")
+		return strings.HasPrefix(command, qoderHookRootPlaceholder+"/")
 	}
 	return true
 }

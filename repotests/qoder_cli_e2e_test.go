@@ -1,6 +1,7 @@
 package pluginkitairepo_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -17,7 +18,7 @@ func TestQoderCLIPluginValidateInstallSmoke(t *testing.T) {
 	pluginKitAIBin := buildPluginKitAI(t)
 	proj := filepath.Join(t.TempDir(), "qoder-smoke")
 
-	initOut, err := exec.Command(pluginKitAIBin, "init", "qoder-smoke", "--platform", "qoder", "--extras", "-o", proj).CombinedOutput()
+	initOut, err := exec.CommandContext(context.Background(), pluginKitAIBin, "init", "qoder-smoke", "--platform", "qoder", "--extras", "-o", proj).CombinedOutput()
 	if err != nil {
 		t.Fatalf("init qoder starter: %v\n%s", err, initOut)
 	}
@@ -32,24 +33,24 @@ func TestQoderCLIPluginValidateInstallSmoke(t *testing.T) {
 		}
 	}
 
-	validateOut, err := exec.Command(qoderBin, "plugins", "validate", proj, "--strict").CombinedOutput()
+	validateOut, err := exec.CommandContext(context.Background(), qoderBin, "plugins", "validate", proj, "--strict").CombinedOutput()
 	if err != nil {
 		t.Fatalf("qoder plugins validate --strict: %v\n%s", err, validateOut)
 	}
 
-	installOut, err := exec.Command(qoderBin, "plugins", "install", proj, "--scope", "user", "--json").CombinedOutput()
+	installOut, err := exec.CommandContext(context.Background(), qoderBin, "plugins", "install", proj, "--scope", "user", "--json").CombinedOutput()
 	if err != nil {
 		t.Fatalf("qoder plugins install: %v\n%s", err, installOut)
 	}
 	pluginName := qoderInstalledPluginName(installOut, "qoder-smoke")
 	t.Cleanup(func() {
-		out, err := exec.Command(qoderBin, "plugins", "uninstall", pluginName, "--scope", "user", "--json").CombinedOutput()
+		out, err := exec.CommandContext(context.Background(), qoderBin, "plugins", "uninstall", pluginName, "--scope", "user", "--json").CombinedOutput()
 		if err != nil {
 			t.Logf("qoder plugins uninstall %s cleanup: %v\n%s", pluginName, err, out)
 		}
 	})
 
-	listOut, err := exec.Command(qoderBin, "plugins", "list", "--json").CombinedOutput()
+	listOut, err := exec.CommandContext(context.Background(), qoderBin, "plugins", "list", "--json").CombinedOutput()
 	if err != nil {
 		t.Fatalf("qoder plugins list: %v\n%s", err, listOut)
 	}
@@ -107,7 +108,7 @@ func qoderBinaryOrSkip(t *testing.T) string {
 			t.Skip("set PLUGIN_KIT_AI_E2E_QODER or install qoder in PATH to run Qoder CLI e2e")
 		}
 	}
-	if out, err := exec.Command(qoderBin, "--version").CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(context.Background(), qoderBin, "--version").CombinedOutput(); err != nil {
 		t.Skipf("Qoder CLI is not runnable in this environment: %v\n%s", err, out)
 	}
 	return qoderBin

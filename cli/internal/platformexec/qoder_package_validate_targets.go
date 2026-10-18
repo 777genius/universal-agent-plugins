@@ -48,7 +48,7 @@ func validateQoderHooksDocumentShape(source string, body []byte) []Diagnostic {
 					return []Diagnostic{qoderSourceDiagnostic(source, where+` must use type "command"`)}
 				}
 				if !qoderHookCommandBundled(hook.Command) {
-					return []Diagnostic{qoderSourceDiagnostic(source, where+" command must be a bare runtime or bundled under "+qoderHookRootToken)}
+					return []Diagnostic{qoderSourceDiagnostic(source, where+" command must be a bare runtime or bundled under "+qoderHookRootPlaceholder)}
 				}
 			}
 		}
