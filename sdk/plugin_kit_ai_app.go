@@ -12,6 +12,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/sdk/internal/descriptors/gen"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/runtime/process"
+	"github.com/777genius/plugin-kit-ai/sdk/qoder"
 	"github.com/777genius/plugin-kit-ai/sdk/vscodelocal"
 )
 
@@ -46,6 +47,11 @@ func (a *App) Gemini() *gemini.Registrar {
 // Cursor returns a registrar for the beta native stop observer.
 func (a *App) Cursor() *cursor.Registrar {
 	return cursor.NewRegistrar(registrarBackend{app: a})
+}
+
+// Qoder returns a registrar for Qoder plugin hook handlers.
+func (a *App) Qoder() *qoder.Registrar {
+	return qoder.NewRegistrar(registrarBackend{app: a})
 }
 
 // VSCodeLocal returns a registrar for beta Local Stop/SubagentStop observers.

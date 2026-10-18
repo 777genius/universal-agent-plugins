@@ -15,11 +15,12 @@ func Profiles() []PlatformProfile {
 }
 
 func Events() []EventDescriptor {
-	events := make([]EventDescriptor, 0, len(claudeEvents())+len(geminiEvents())+len(codexEvents())+len(cursorEvents())+len(vscodeLocalEvents()))
+	events := make([]EventDescriptor, 0, len(claudeEvents())+len(geminiEvents())+len(codexEvents())+len(cursorEvents())+len(vscodeLocalEvents())+len(qoderEvents()))
 	events = append(events, claudeEvents()...)
 	events = append(events, geminiEvents()...)
 	events = append(events, codexEvents()...)
 	events = append(events, cursorEvents()...)
 	events = append(events, vscodeLocalEvents()...)
+	events = append(events, qoderEvents()...)
 	return events
 }

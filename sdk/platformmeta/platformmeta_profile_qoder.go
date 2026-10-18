@@ -82,6 +82,7 @@ func qoderScaffold() ScaffoldMeta {
 			{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
 			{Path: authoredPath("targets/qoder/hooks/hooks.json"), Template: "targets.qoder.hooks.json.tmpl", Extra: true},
 			{Path: authoredPath("targets/qoder/commands/{{.ProjectName}}.md"), Template: "targets.qoder.command.md.tmpl", Extra: true},
+			{Path: "bin/{{.ProjectName}}-hook", Template: "targets.qoder.hook.sh.tmpl", Extra: true},
 			{Path: "CLAUDE.md", Template: "ROOT.CLAUDE.md.tmpl"},
 			{Path: "AGENTS.md", Template: "ROOT.AGENTS.md.tmpl"},
 		},

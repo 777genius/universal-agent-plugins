@@ -11,6 +11,18 @@ func ResolveInvocation(args []string, _ runtime.Env) (runtime.Invocation, error)
 		return runtime.Invocation{}, fmt.Errorf("usage: <binary> <hookName>")
 	}
 	raw := args[1]
+	if raw == "session-start" {
+		return runtime.Invocation{Platform: "qoder", Event: "session_start", RawName: raw}, nil
+	}
+	if raw == "user-prompt-submit" {
+		return runtime.Invocation{Platform: "qoder", Event: "user_prompt_submit", RawName: raw}, nil
+	}
+	if raw == "post-tool-use" {
+		return runtime.Invocation{Platform: "qoder", Event: "post_tool_use", RawName: raw}, nil
+	}
+	if raw == "stop" {
+		return runtime.Invocation{Platform: "qoder", Event: "stop", RawName: raw}, nil
+	}
 	if strings.EqualFold(raw, "Stop") {
 		return runtime.Invocation{Platform: "claude", Event: "Stop", RawName: raw}, nil
 	}
