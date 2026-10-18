@@ -51,7 +51,7 @@ func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, 
 	expandStdioArguments(config, expand)
 	command, _ := config["command"].(string)
 	cwd, _ := config["cwd"].(string)
-	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
+	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(expand(command), cwd, pluginRoot, dataPath, observationRoot...)
 	if err != nil {
 		return err
 	}
