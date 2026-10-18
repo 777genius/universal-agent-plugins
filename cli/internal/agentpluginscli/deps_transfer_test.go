@@ -65,6 +65,8 @@ func TestDependencyTransferReplacementAndNoop(t *testing.T) {
 					args = append(args, "--dry-run")
 				}
 				if scenario == "identical" {
+					// Keep the held lock outside snapshots: Windows denies reading its locked bytes.
+					fixture.app.EnvironmentLockPath = filepath.Join(t.TempDir(), "environment.lock")
 					release, err := (processlock.Lock{Path: fixture.app.EnvironmentLockPath}).Acquire(context.Background())
 					if err != nil {
 						t.Fatal(err)
