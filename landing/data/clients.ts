@@ -193,6 +193,20 @@ export const clientLandingPages: ClientLandingPage[] = [
       'Run /reload or /new in Kimi Code. Runtime MCP connections and provider authentication still need confirmation in Kimi.',
     vendorDocsUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/customization/plugins',
   },
+  {
+    id: 'qoder',
+    slug: 'qoder',
+    name: 'Qoder',
+    icon: 'qoder.svg',
+    note: 'Native skills and MCP plugin; CLI verification',
+    status: 'Supported',
+    intro:
+      'Install portable Agent Plugins 1.0 skills and MCP servers for Qoder from the same CLI used for other clients.',
+    delivery:
+      'The CLI writes a native .qoder-plugin manifest and registers the managed package through the Qoder CLI when available.',
+    activation:
+      'Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder.',
+  },
 ];
 
 export const clients: ClientTarget[] = clientLandingPages.map(

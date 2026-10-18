@@ -823,6 +823,13 @@
         "intro": "Installez des skills et serveurs MCP pour Kimi Code.",
         "delivery": "Le CLI enregistre un plugin natif sans modifier les autres plugins Kimi.",
         "activation": "Lancez /reload ou /new; vérifiez MCP et l’authentification dans Kimi Code."
+      },
+      "qoder": {
+        "note": "Plugin natif de skills et MCP ; vérification par CLI",
+        "status": "Pris en charge",
+        "intro": "Installez des skills et serveurs MCP pour Qoder.",
+        "delivery": "Le CLI écrit un manifeste .qoder-plugin natif et enregistre le paquet via le CLI Qoder.",
+        "activation": "Rechargez les plugins Qoder ou redémarrez Qoder ; vérifiez MCP et l’authentification dans Qoder."
       }
     },
     "directoryPage": {

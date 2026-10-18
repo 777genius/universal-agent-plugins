@@ -28,7 +28,8 @@ export type ClientID =
   | 'cline'
   | 'windsurf'
   | 'grok'
-  | 'kimi';
+  | 'kimi'
+  | 'qoder';
 export type ComponentID = 'extensions' | 'mcp' | 'skills';
 export type DistributionKind = 'upstream' | 'community_bridge' | 'community' | 'direct';
 export type EvidenceLevel = 'schema' | 'materialization' | 'discovery' | 'runtime' | 'oauth';

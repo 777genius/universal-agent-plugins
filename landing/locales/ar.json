@@ -823,6 +823,13 @@
         "intro": "ثبّت المهارات وخوادم MCP في Kimi Code.",
         "delivery": "يسجل CLI إضافة أصلية مع الحفاظ على إضافات Kimi الأخرى.",
         "activation": "شغّل /reload أو /new؛ تحقق من MCP وتسجيل الدخول في Kimi Code."
+      },
+      "qoder": {
+        "note": "إضافة أصلية للمهارات وMCP مع التحقق عبر CLI",
+        "status": "مدعوم",
+        "intro": "ثبّت المهارات وخوادم MCP في Qoder.",
+        "delivery": "يكتب CLI ملف .qoder-plugin أصلي ويسجّل الإضافة عبر Qoder CLI.",
+        "activation": "أعد تحميل إضافات Qoder أو أعد تشغيله؛ تحقق من MCP وتسجيل الدخول في Qoder."
       }
     },
     "directoryPage": {

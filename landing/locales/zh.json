@@ -823,6 +823,13 @@
         "intro": "为 Kimi Code 安装技能和 MCP 服务器。",
         "delivery": "CLI 注册原生插件，同时保留其他 Kimi 插件。",
         "activation": "运行 /reload 或 /new；在 Kimi Code 中确认 MCP 和身份验证。"
+      },
+      "qoder": {
+        "note": "原生技能与 MCP 插件；CLI 验证",
+        "status": "支持",
+        "intro": "为 Qoder 安装技能和 MCP 服务器。",
+        "delivery": "CLI 写入原生 .qoder-plugin 清单，并通过 Qoder CLI 注册插件。",
+        "activation": "重新加载 Qoder 插件或重启 Qoder；在 Qoder 中确认 MCP 和身份验证。"
       }
     },
     "directoryPage": {
