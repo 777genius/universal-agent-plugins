@@ -1,4 +1,4 @@
-# OpenCode event observer — unpublished 0.3.0 candidate
+# OpenCode event observer 0.3.0
 
 Published 0.2.0 remains immutable. Root `createObserver({client, emit})` and
 `createV2Observer({client: {get, context}, location: {directory, workspaceID?}, emit})`
@@ -11,8 +11,16 @@ are retained unchanged and do not qualify strict provenance or reader continuity
 `/v1` exports only V1. `/v2` exports the structural owned-reader V2 API with
 neutral declarations only. Root includes both published factories. Neither
 entrypoint imports a host package at runtime. The optional V1 peer is
-`>=1.18.33 <1.19.0`; development pins are V1 1.18.34, V2 2.0.21, TypeScript 7.0.2.
-No publication, release tag or install-time host inference is performed.
+`>=1.18.33 <1.20.0`; development pins are V1 1.19.3, V2 2.0.32, TypeScript 7.0.2.
+No install-time host inference is performed. The native V1 and V2 versions are
+separate host generations; the neutral emitted wire remains version 1.
+
+Install `universal-agent-plugins-opencode-events@0.3.0`. Use `createObserver`
+from `/v1` with the V1 plugin's actual client and live event callback. V2 owned
+readers use `createV2Observer` from `/v2`, with the actual plugin context and
+explicit native/checkpoint adapters described below. The optional legacy SDK
+is not installed by V2-only consumers. The root exports retain the published
+compatibility API; its push V2 factory differs from the strict `/v2` reader.
 
 V1 completion requires an observed user/final assistant, matching bounded native
 history, `stop`, and idle. Retry/resolution requires a later final update. Published
@@ -105,7 +113,9 @@ Private wire v1 provenance preserves V2 envelope.created/id or V1 assistant
 completion/assistant_created_lower_bound and stable canonical native observation
 keys. Strict V1 terminal errors additionally preserve the verified final assistant
 as typed private `provenance.nativeMessageID`; opaque observation IDs are not identity
-ports. Legacy missing provenance remains compatible and unqualified. A lower bound
+ports. Every V2 native proof must also match the observed delivered user ID;
+contradictory failure/interruption duplicates fence pending delivery. Legacy
+missing provenance remains compatible and unqualified. A lower bound
 is not request birth. Handoff retains original
 `ingressMonotonicMs` and `clockID` from the explicit `clock: {id, now}` port through
 all waits. The default `local-performance` coordinate is process-local, useful
@@ -118,8 +128,10 @@ validate provenance before strict admission. No wire v2 is needed.
 Run `npm run check` and `npm run check:packed` with the pinned bootstrap. The latter
 installs a real tarball in external floor/current/V2-only consumers, compiles both
 root API types and strict subpath types, exercises both factory behaviors, and
-requires V2-only consumers to contain no V1 SDK. Parent supplies dependencies and
-regenerates the stale baseline lockfile before npm ci can qualify this candidate.
+requires V2-only consumers to contain no V1 SDK. The package lock pins the same
+dependencies as the manifest. V1 external consumers cover 1.18.33, 1.18.34 and
+1.19.3. After publication, `npm run check:packed -- --registry-version=0.3.0`
+repeats those public API and behavior checks against the actual registry package.
 Unit/packed checks and supplied native source facts do not prove installed-host
 E2E. Exact native adapter compilation, BOTH-version unanswered questions,
 reply/cancel during metadata, reconnect/reload, root/child/fork/scope, duplicate

@@ -1,6 +1,12 @@
 name: OpenCode SDK
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Qualify an immutable opencode-events-vX.Y.Z tag, without publishing
+        required: true
+        type: string
   push:
     branches: [main]
     paths:
@@ -18,7 +24,12 @@ permissions:
 
 jobs:
   package-contract:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,3 +60,49 @@ jobs:
       - name: Check neutral wire decoder
         working-directory: sdk
         run: go test -count=1 ./opencode
+
+  release-artifact:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: [package-contract, go-contract]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Verify immutable SDK tag and pack exact source
+        env:
+          VERSION: ${{ inputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "${GITHUB_REF}" = "refs/tags/opencode-events-v${VERSION}"
+          test "$(git rev-list -n 1 "${GITHUB_REF}")" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor HEAD origin/main
+          cd sdk/opencode-js
+          test "$(node -p 'require("./package.json").version')" = "${VERSION}"
+          test "$(node -p 'require("./package.json").name')" = universal-agent-plugins-opencode-events
+          mkdir -p "${RUNNER_TEMP}/opencode-sdk"
+          npm pack --ignore-scripts --json --pack-destination "${RUNNER_TEMP}/opencode-sdk" > "${RUNNER_TEMP}/opencode-sdk/pack.json"
+          cd "${RUNNER_TEMP}/opencode-sdk"
+          sha256sum *.tgz > checksums.txt
+          printf '%s\n' "${GITHUB_SHA}" > source-commit.txt
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/opencode-sdk/*.tgz
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: opencode-events-${{ inputs.version }}
+          path: ${{ runner.temp }}/opencode-sdk/
+          if-no-files-found: error
+          retention-days: 30
