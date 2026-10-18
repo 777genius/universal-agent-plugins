@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -102,8 +103,11 @@ func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *test
 	locked := environment.LockedPackage{TreeDigest: release.TreeDigest, ManifestDigest: release.ManifestDigest, Targets: []string{"codex"}, Source: environment.LockedSource{Registry: &environment.LockedRegistrySource{
 		ProductID: distribution.ProductID, DistributionID: distribution.ID, Distribution: distribution.ID, ReleaseSequence: 1, Repository: release.PackageSource.Repository, Path: release.PackageSource.Path, Commit: release.PackageSource.Revision,
 	}}}
-	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, nil); err == nil {
-		t.Fatal("lock alone gained superseded-release eligibility")
+	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, nil); err != nil {
+		t.Fatalf("exact locked restore rejected a superseded non-revoked release: %v", err)
+	}
+	if _, err := fixture.cli.app.acquireDirectory(context.Background(), distribution.ID, packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, DesiredReleaseSequence: 1, Targets: []domain.ClientID{domain.ClientCodex}}); !errors.Is(err, domain.ErrDirectoryIneligible) {
+		t.Fatalf("ordinary fresh selection admitted a superseded release: %v", err)
 	}
 	recorded := &domain.RecordedDirectoryRelease{ProductID: distribution.ProductID, DistributionID: distribution.ID, ReleaseSequence: 1, Repository: release.PackageSource.Repository, Path: release.PackageSource.Path, ResolvedRevision: release.PackageSource.Revision, TreeDigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: release.TreeDigest, ManifestDigest: release.ManifestDigest}
 	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, recorded); err != nil {
@@ -112,7 +116,10 @@ func TestDependencyDirectoryRepairUsesInstalledReceiptNotLockEligibility(t *test
 	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, recorded, domain.DirectoryNewTarget); err != nil {
 		t.Fatalf("live installed new-target eligibility: %v", err)
 	}
-
+	distribution.ReleasePolicies[0].Status = domain.ReleaseRevoked
+	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, locked, nil); !errors.Is(err, domain.ErrDirectoryIneligible) {
+		t.Fatalf("exact lock bypassed revoked-release policy: %v", err)
+	}
 }
 
 func TestDependencyManifestErrorLocations(t *testing.T) {
@@ -190,14 +197,18 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 		t.Fatal("local pinned replay performed a Directory lookup or source acquisition")
 	}
 	fixture.cli.app.DirectoryClient = previousClient
-	// Canonicalization grants no fresh-install eligibility for that recorded identity.
+	// Exact locked restore permits supersession without claiming installed history.
 	loaded, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = loaded.cleanup() }()
-	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, lock.Packages[0], nil); err == nil {
-		t.Fatal("lock-based canonicalization admitted a superseded new install")
+	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, lock.Packages[0], nil); err != nil {
+		t.Fatalf("lock-based canonicalization lost exact superseded restore: %v", err)
+	}
+	distribution.ReleasePolicies[0].Status = domain.ReleaseRevoked
+	if _, err := verifyLockedDirectory(context.Background(), fixture.cli.app, loaded, lock.Packages[0], nil); !errors.Is(err, domain.ErrDirectoryIneligible) {
+		t.Fatalf("canonicalized lock bypassed revoked-release policy: %v", err)
 	}
 }
 

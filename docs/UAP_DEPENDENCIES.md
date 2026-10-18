@@ -88,7 +88,10 @@ shared nodes and cycles are references. JSON contains sorted `roots` and
 before applying changes. Replay verifies pinned manifest declarations against
 the saved edges before no-op or repair, so a deleted edge cannot hide behind an
 unchanged root-intent digest. Intact replay uses store bytes without enumerating
-new versions or downloading sources. `status`
+new versions or downloading sources. With an empty store, each missing immutable
+pin is fetched once per command and its verified bytes are staged for validation
+and preflight. Store publication follows confirmation. Dry runs, declined
+confirmation and cancellation remove temporary acquired bytes. `status`
 is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
@@ -143,7 +146,7 @@ on every sync. Failed/not-run verification and unmaterialized packages never
 qualify as ready. Persisted lifecycle convergence semantics are unchanged.
 
 Dependency commands always use manifest targets. They reject inherited
-`--target` and `--scope project`. Use `--dry-run` for an in-memory preview;
+`--target` and `--scope project`. Use `--dry-run` for a temporary preview;
 it does not write the lock, store, state, profiles or persistent scanner cache.
 Native-only/YAML packages and implicit compatibility fallbacks are not part of
 this dependency flow.
@@ -169,11 +172,13 @@ followed by `migrate-state`. Pending old-schema transactions must first be
 recovered with their corresponding previous binary. Migration retains a backup
 and leaves all historical installations unmanaged.
 
-A copied registry lock is identity, not proof of an installed release. On a fresh
-machine the signed Directory must still permit a new installation of that exact
-release. A superseded release requires a newer pin; a revoked release cannot be
-reproduced. Existing installed releases retain only their explicit signed-policy
-exceptions, using live state rather than the copied lock.
+A copied registry lock records exact publication identity and does not claim
+installed history. Exact locked restore on a fresh machine permits a superseded,
+non-revoked release when its signed publication still matches every locked
+source and digest field. Current target, host, compatibility and suspension
+checks still apply. Revoked releases cannot be restored. Ordinary fresh registry
+selection continues to require an eligible active release; installed-state
+repair keeps its existing signed-policy rules.
 
 ### Restore on another machine
 
@@ -187,9 +192,10 @@ agentplugins install --locked --yes
 ```
 
 An empty store is supported: the installer fetches the exact recorded commits
-and verifies their package and manifest digests. It does not select newer
-versions. Missing source bytes, mismatched digests or ineligible registry releases
-cause an error. Do not run `deps lock` to reproduce an existing lock; that command
+once per pin and verifies their package and manifest digests. It does not select
+newer versions, including when the recorded release has been superseded. Missing
+source bytes, changed publication identity, mismatched digests, revocations or
+other ineligible registry policy cause an error. Do not run `deps lock` to reproduce an existing lock; that command
 may resolve changed intent. Offline restoration requires the package bytes to
 already be available in the destination store.
 

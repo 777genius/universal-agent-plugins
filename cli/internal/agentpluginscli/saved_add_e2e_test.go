@@ -543,8 +543,17 @@ func TestSavedAddRegistryPinsEligibilityAndRestore(t *testing.T) {
 	if err := os.WriteFile(freshLP, oldLock, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := fresh.cli.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("copied lock reproduced superseded release as a fresh install")
+	fresh.run(t, "deps", "sync", "--locked", "--yes", "--format", "json")
+	_, freshLock := fresh.intent(t)
+	var copiedLock environment.Lock
+	if err := json.Unmarshal(oldLock, &copiedLock); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(freshLock, copiedLock) || !bytes.Equal(oldManifest, []byte(dependencyRead(t, freshMP))) || !bytes.Equal(oldLock, []byte(dependencyRead(t, freshLP))) {
+		t.Fatal("copied superseded lock restore moved pins or rewrote the portable agreement")
+	}
+	if len(fresh.state(t).EnvironmentReceipts) != len(copiedLock.Packages) || fresh.source.refs+fresh.source.selectors != 0 {
+		t.Fatal("copied superseded lock restore omitted bindings or resolved refs")
 	}
 	j.run(t, "update", "docs", "--format", "json")
 	requirements, lock = j.intent(t)
