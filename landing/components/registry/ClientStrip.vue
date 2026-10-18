@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { isKnownLocale } from '~/data/i18n';
 import { localizedPath } from '~/utils/localizedRoutes';
-import { clientLandingById } from '~/data/clients';
+import { clientLandingById, clients } from '~/data/clients';
 
 const { t, locale } = useI18n();
 const clientPath = (slug: string) =>
