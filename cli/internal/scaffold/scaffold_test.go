@@ -110,6 +110,21 @@ func TestBuildPlan_QoderHooksReferenceScaffoldedRuntime(t *testing.T) {
 	}
 }
 
+func TestSkillTemplateCarriesFrontmatter(t *testing.T) {
+	t.Parallel()
+	body, _, err := RenderTemplate("SKILL.md.tmpl", Data{ProjectName: "demo", Platform: "qoder"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	skill := string(body)
+	if !strings.HasPrefix(skill, "---\nname: demo\n") || !strings.Contains(skill, "description:") {
+		t.Fatalf("skill stub must start with YAML frontmatter:\n%s", skill)
+	}
+	if strings.Contains(skill, "# demoAgent") || strings.Contains(skill, "# demoCodex") {
+		t.Fatalf("skill stub body is glued to the heading:\n%s", skill)
+	}
+}
+
 func TestDefaultJobTemplateTargetsDoNotIncludeGemini(t *testing.T) {
 	t.Parallel()
 	for _, templateName := range []string{InitTemplateOnlineService, InitTemplateLocalTool} {
