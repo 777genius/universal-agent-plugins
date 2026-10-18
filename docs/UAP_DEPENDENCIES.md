@@ -182,22 +182,72 @@ repair keeps its existing signed-policy rules.
 
 ### Restore on another machine
 
-Install a compatible `agentplugins` CLI and the required target clients, then
-copy **both** `uap.toml` and `uap.lock` into the destination environment root.
-Set `AGENTPLUGINS_HOME` explicitly when moving between systems with different
-default config directories. Run:
+Use a compatible CLI built from current source; the transfer commands below
+remain unreleased. In the folder you want to carry to another machine, run:
 
 ```sh
-agentplugins install --locked --yes
+agentplugins deps export
 ```
 
-An empty store is supported: the installer fetches the exact recorded commits
-once per pin and verifies their package and manifest digests. It does not select
-newer versions, including when the recorded release has been superseded. Missing
-source bytes, changed publication identity, mismatched digests, revocations or
-other ineligible registry policy cause an error. Do not run `deps lock` to reproduce an existing lock; that command
-may resolve changed intent. Offline restoration requires the package bytes to
-already be available in the destination store.
+Copy that folder to the destination machine and open it there. Install the
+required target clients, then run:
+
+```sh
+agentplugins deps import
+agentplugins install --locked
+```
+
+Or import and restore together:
+
+```sh
+agentplugins deps import --install
+```
+
+The optional `[directory]` argument overrides the exchange folder, which defaults
+to the current working directory. Export always reads the global user environment;
+import always writes it. `AGENTPLUGINS_HOME` selects that environment as usual.
+A project manifest in the current folder does not become export's source.
+
+Plain export/import transfers only `uap.toml` and `uap.lock`, preserving their
+exact bytes, comments and formatting. It validates the complete source pair
+strictly and offline: missing or inconsistent files, stale locks, unknown schema
+fields, unsafe sources and excluded targets are refused. It does not fetch
+packages, detect clients or install anything. Store content, receipts, profiles,
+settings, secrets and plugin data are not transferred, and a valid pair is not
+proof that its sources remain available.
+
+Every actual copy shows a preview and needs a default-no terminal confirmation
+or `--yes`, including first creation and replacement of an incomplete or invalid
+destination pair. Non-interactive and JSON use require `--yes` for a copy.
+Use `--dry-run` to preview without writing; `--install --dry-run` also previews
+the locked installation. An identical pair is a successful no-op without a
+prompt; `--install` still checks and applies the locked environment.
+
+`import --install` prepares the transfer and completes strict locked-install
+preflight before one action confirmation. Current security prompts and target, host, ownership
+and recovery policy still apply; `--yes` does not bypass them. A preflight refusal
+leaves the destination agreement unchanged. If existing projection drift blocks
+the combined preflight, import the files alone, then run `install --locked` to
+review repair through its normal flow.
+
+An empty store is supported: installation fetches each exact recorded pin once
+and verifies its package and manifest digests. It does not select newer versions,
+including when the recorded release has been superseded. Missing source bytes,
+changed publication identity, mismatched digests, revocations or other ineligible
+registry policy cause an error. Offline file transfer does not promise offline
+installation; that requires the package bytes already in the destination store.
+
+File-write errors trigger best-effort restoration of the previous pair. The two
+files are not a crash-atomic transaction: an interruption can leave a mixed pair.
+To repair it, rerun the original export or import from the intact source and
+confirm replacement. Do not run `deps lock` to recreate transferred pins; moving
+selectors could resolve differently.
+
+After import successfully saves the agreement, an installation failure keeps it
+as the new desired state and reports any partial installation. Address the error
+and retry `agentplugins install --locked`; if pending recovery is reported, run
+`agentplugins deps recover` first. The installer never falls back to unlocked
+resolution.
 
 Configure client profiles, executable discovery and any required authentication
 on the destination. Do not copy local ownership receipts as installation proof.

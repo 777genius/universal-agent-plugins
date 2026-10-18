@@ -109,10 +109,16 @@ test('all current quickstarts expose Agent Plugins without a legacy product jour
     assert.doesNotMatch(publishedText, /(?:0\.1\.61|2\.0\.1|not released|release candidate)/i);
     const expectedCommands = ['npx universal-agent-plugins add context7'];
     if (locale === 'en') {
-      expectedCommands.push(
-        'npx universal-agent-plugins deps status',
-        'npx universal-agent-plugins deps sync --locked --yes',
-      );
+      expectedCommands.push('npx universal-agent-plugins deps status');
+    }
+    expectedCommands.push(
+      'agentplugins deps export',
+      'agentplugins deps import\nagentplugins install --locked',
+    );
+    if (locale !== 'en') {
+      expectedCommands.push('agentplugins deps import --install');
+    }
+    if (locale === 'en') {
       expectedCommands.push(`npm install --global universal-agent-plugins
 agentplugins author init ./my-plugin --template skill --name my-plugin \\
   --description 'Instructions for a repeatable agent task'

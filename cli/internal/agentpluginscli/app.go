@@ -63,6 +63,7 @@ type App struct {
 	Targets                    ports.DeliveryTargetResolver
 	DirectoryClient            DirectoryClient
 	DirectoryClientForDryRun   func(string) (DirectoryClient, error)
+	CommitDirectoryPreview     func(DirectoryClient) error
 	DiscoveryClient            DiscoveryClient
 	SourceAcquirer             SourceAcquirer
 	PackageLoader              ports.PackageLoader

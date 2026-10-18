@@ -73,6 +73,8 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	sync.Flags().BoolVar(&locked, "locked", false, "require an exact existing lock and never resolve refs")
 	sync.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted sync without an interactive prompt")
 	command.AddCommand(sync)
+	command.AddCommand(newDependencyTransferCommand(app, opts, "export"))
+	command.AddCommand(newDependencyTransferCommand(app, opts, "import"))
 	command.AddCommand(newDependencyTreeCommand(app, opts))
 	command.AddCommand(newDependencyRecoverCommand(app, opts, &yes))
 	return command

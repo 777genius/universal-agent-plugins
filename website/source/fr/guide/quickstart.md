@@ -32,6 +32,46 @@ La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’e
 
 [Compatibilité des clients (en anglais)](https://github.com/777genius/universal-agent-plugins#supported-clients)
 
+### Sauvegarder et restaurer vos plugins
+
+**Code source actuel, pas encore publié :** ces commandes de transfert nécessitent
+un CLI compilé à partir du code actuel ; elles ne sont pas encore qualifiées
+comme version publiée. Dans le dossier à emporter sur un autre ordinateur, lancez :
+
+```bash
+agentplugins deps export
+```
+
+Copiez le dossier sur l’autre ordinateur, ouvrez-le et installez les agents cibles.
+Puis lancez :
+
+```bash
+agentplugins deps import
+agentplugins install --locked
+```
+
+Ou combinez l’importation et l’installation :
+
+```bash
+agentplugins deps import --install
+```
+
+Le chemin est facultatif : le dossier courant est utilisé par défaut. L’exportation
+lit l’environnement global de l’utilisateur et l’importation écrit celui de
+l’ordinateur cible ; `AGENTPLUGINS_HOME` en choisit le répertoire. Seuls les octets
+exacts de `uap.toml` et `uap.lock`, strictement validés, sont copiés, sans paquets,
+paramètres ni secrets.
+
+Chaque copie effective nécessite une confirmation dans le terminal (refus par
+défaut) ou `--yes` ; `--dry-run` affiche un aperçu sans écrire. Des fichiers
+identiques ne nécessitent ni copie ni confirmation ; `--install` vérifie et
+applique toujours l’environnement verrouillé. Le transfert fonctionne hors ligne,
+mais l’installation nécessite les sources exactes disponibles ou les paquets en
+cache et reste soumise aux règles de sécurité actuelles. La connexion aux agents
+et l’activation manuelle restent des étapes séparées.
+
+[Détails du transfert, des erreurs et de la récupération (en anglais)](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+
 ## Créer des plugins {#build-plugins}
 
 Créez un paquet portable Agent Plugins 1.0 autour de plugin.json, avec skills/ et mcp.json facultatifs. La prise en charge dépend du paquet et de ses composants.
