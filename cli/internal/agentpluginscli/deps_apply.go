@@ -40,6 +40,15 @@ func dependencyActions(view installer.Inspection, requirements environment.Requi
 }
 
 func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, yes bool) error {
+	return runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, nil)
+}
+
+// dependencyConverge runs after the manifest and lock candidate is validated
+// but before any planned action is derived, so a fail-closed candidate refusal
+// can never race a converge-side repair write.
+type dependencyConverge func(app App) (bool, error)
+
+func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, lockedOnly, yes bool, converge dependencyConverge) error {
 	if err := requireDependencyMutationReady(app); err != nil {
 		return err
 	}
@@ -62,6 +71,12 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 	request, err := prepareDependencySyncCandidate(cmd, app, opts, lockedOnly)
 	if err != nil {
 		return err
+	}
+	if converge != nil {
+		proceed, convergeErr := converge(app)
+		if convergeErr != nil || !proceed {
+			return convergeErr
+		}
 	}
 	requirements, lock := request.requirements, request.lock
 	state, err := app.Installer.Inspect(cmd.Context())
