@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -217,6 +218,48 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		}
 	}
 	if err := os.Remove(independentEdit); err != nil {
+		t.Fatal(err)
+	}
+	// Pinned bytes are verified before intact replay or repair. A corrupt store
+	// must fail closed, even when the separate client projection is intact.
+	snapshotBytes := func() map[string]string {
+		t.Helper()
+		files := map[string]string{}
+		for _, root := range []string{mp, lp, f.store.Path, managed, stored.Root} {
+			if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				if !info.IsDir() {
+					body, err := os.ReadFile(path)
+					if err != nil {
+						return err
+					}
+					files[path] = string(body)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return files
+	}
+	beforeRefusal := snapshotBytes()
+	refusalLookups, refusalDownloads := source.lookups, source.downloads
+	if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
+		t.Fatal("sync accepted corrupted pinned store bytes")
+	}
+	afterRefusal := snapshotBytes()
+	if source.lookups != refusalLookups || source.downloads != refusalDownloads || len(afterRefusal) != len(beforeRefusal) {
+		t.Fatal("corrupt store refusal acquired source or changed files")
+	}
+	for path, before := range beforeRefusal {
+		if after, exists := afterRefusal[path]; !exists || after != before {
+			t.Fatalf("corrupt store refusal changed %s", path)
+		}
+	}
+	// Undo only this test's injected corruption before continuing the lifecycle.
+	if err := os.Remove(filepath.Join(stored.Root, "store-tamper.txt")); err != nil {
 		t.Fatal(err)
 	}
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
@@ -503,7 +546,7 @@ func (m *dependencyInterruptedMutator) Apply(ctx context.Context, prepared *inst
 // evidence. No external agent is launched by this integration test.
 type dependencyClaudeListing struct {
 	root             string
-	codexID          string
+	codexIDs         map[string]bool
 	failNextCodexAdd bool
 }
 
@@ -516,13 +559,21 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 					r.failNextCodexAdd = false
 					return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("injected activation failure")}, nil
 				}
-				r.codexID = args[2]
+				if r.codexIDs == nil {
+					r.codexIDs = map[string]bool{}
+				}
+				r.codexIDs[args[2]] = true
 			}
 			if len(args) >= 2 && args[0] == "plugin" && args[1] == "list" {
 				installed := []map[string]any{}
-				if r.codexID != "" {
-					name, market, _ := strings.Cut(r.codexID, "@")
-					installed = append(installed, map[string]any{"pluginId": r.codexID, "name": name, "marketplaceName": market, "installed": true, "enabled": true})
+				ids := make([]string, 0, len(r.codexIDs))
+				for id := range r.codexIDs {
+					ids = append(ids, id)
+				}
+				sort.Strings(ids)
+				for _, id := range ids {
+					name, market, _ := strings.Cut(id, "@")
+					installed = append(installed, map[string]any{"pluginId": id, "name": name, "marketplaceName": market, "installed": true, "enabled": true})
 				}
 				body, err := json.Marshal(map[string]any{"installed": installed})
 				return legacyports.CommandResult{Stdout: body}, err

@@ -8,6 +8,14 @@ Changes after `v1.2.4` land here.
 
 ### Added
 
+- Dependency environments now accept stable exact/caret registry versions and
+  transitive `plugin.json` dependencies, choosing one compatible minimum version
+  per source in the existing `uap.lock`. Compatible pins replay unchanged;
+  shared packages remain while required. Offline `deps tree` shows the graph,
+  and `deps update <alias>` refreshes registry ranges without changing intent.
+  Locked replay verifies pinned declarations and rejects incomplete graphs
+  before installation or repair. This remains an unreleased source workflow.
+
 - `agentplugins install` is the everyday environment converge verb, matching
   how package managers are used: a first run installs everything declared in
   `uap.toml` and `uap.lock`, a repeat run is a successful nothing-to-do, and

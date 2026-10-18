@@ -154,6 +154,19 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 	if err := writeDependencyLock(path, lock); err != nil {
 		t.Fatal(err)
 	}
+	// Replay verifies declarations from authentic pinned bytes in the store,
+	// independently of whether the Directory still admits a fresh install.
+	seed, err := fixture.cli.app.acquireLocal(context.Background(), fixture.v1.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seed.envelope.TreeDigest != release.TreeDigest || seed.envelope.ManifestDigest != release.ManifestDigest {
+		_ = seed.cleanup()
+		t.Fatal("fixture source does not match the recorded release digests")
+	}
+	if err := (dependencyResolver{app: fixture.cli.app}).finishLoaded(seed); err != nil {
+		t.Fatal(err)
+	}
 	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID
 	distribution.ReleasePolicies[0].Status = domain.ReleaseSuperseded
 	canonical, err := fixture.cli.app.canonicalizeDependencySyncRequirements(context.Background(), requirements, path, true)
@@ -164,12 +177,17 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 		t.Fatal(err)
 	}
 	// Resolving commands must reuse lock identity before Directory lookup.
+	directoryCalls := fixture.directory.calls
+	sourceCalls := fixture.acquirer.revisionCalls[release.PackageSource.Revision]
 	previousClient := fixture.cli.app.DirectoryClient
 	fixture.cli.app.DirectoryClient = nil
 	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID
 	resolved, _, next, err := resolveDependencyLock(context.Background(), fixture.cli.app, &options{dryRun: true}, requirements, path, "")
 	if err != nil || resolved.Dependencies["docs"].Registry.Distribution != "owner/rollout" || next.Packages[0].TreeDigest != lock.Packages[0].TreeDigest {
 		t.Fatalf("resolve lock-first identity: %+v %v", next, err)
+	}
+	if fixture.directory.calls != directoryCalls || fixture.acquirer.revisionCalls[release.PackageSource.Revision] != sourceCalls {
+		t.Fatal("local pinned replay performed a Directory lookup or source acquisition")
 	}
 	fixture.cli.app.DirectoryClient = previousClient
 	// Canonicalization grants no fresh-install eligibility for that recorded identity.
