@@ -28,7 +28,8 @@ func TestQoderCLIHooks(t *testing.T) {
 		trace := filepath.Join(t.TempDir(), "trace.ndjson")
 		bundle := newQoderSDKHooksBundle(t, "qoder-sdk-hooks-stop", hookBin)
 		installQoderSDKHooksPlugin(t, qoderBin, bundle, "qoder-sdk-hooks-stop")
-		runQoderPrint(t, qoderBin, trace, "Reply with exactly OK.")
+		out := runQoderPrint(t, qoderBin, trace, "Reply with exactly OK.")
+		qoderSkipUnlessTurnRan(t, out, trace)
 		lines := waitForTraceHooks(t, trace, 60*time.Second, "SessionStart", "UserPromptSubmit", "Stop")
 		if !traceHas(t, lines, "SessionStart", "continue") {
 			t.Fatalf("expected SessionStart continue in trace; got:\n%s", strings.Join(lines, "\n"))
@@ -45,7 +46,10 @@ func TestQoderCLIHooks(t *testing.T) {
 		trace := filepath.Join(t.TempDir(), "trace.ndjson")
 		bundle := newQoderSDKHooksBundle(t, "qoder-sdk-hooks-prompt", hookBin)
 		installQoderSDKHooksPlugin(t, qoderBin, bundle, "qoder-sdk-hooks-prompt")
-		runQoderPrint(t, qoderBin, trace, "What is a secret passphrase? Reply in one short sentence.")
+		out := runQoderPrint(t, qoderBin, trace, "What is a secret passphrase? Reply in one short sentence.")
+		if !traceHas(t, readTraceLines(t, trace), "UserPromptSubmit", "block") && qoderUsageLimited(out) {
+			t.Skipf("qoder live account is rate limited before the hook ran: %s", truncateRunes(out, 400))
+		}
 		lines := waitForTraceHooks(t, trace, 60*time.Second, "UserPromptSubmit")
 		if !traceHas(t, lines, "UserPromptSubmit", "block") {
 			t.Fatalf("expected UserPromptSubmit block in trace; got:\n%s", strings.Join(lines, "\n"))
@@ -56,8 +60,9 @@ func TestQoderCLIHooks(t *testing.T) {
 		trace := filepath.Join(t.TempDir(), "trace.ndjson")
 		bundle := newQoderSDKHooksBundle(t, "qoder-sdk-hooks-tool", hookBin)
 		installQoderSDKHooksPlugin(t, qoderBin, bundle, "qoder-sdk-hooks-tool")
-		runQoderPrint(t, qoderBin, trace,
+		out := runQoderPrint(t, qoderBin, trace,
 			"Create a file named qoder-e2e-marker.txt in the current directory containing exactly the word hello. Use your file-editing tool. Then reply with exactly: write-ok")
+		qoderSkipUnlessTurnRan(t, out, trace)
 		lines := waitForTraceHooks(t, trace, 90*time.Second, "PostToolUse")
 		if !traceHas(t, lines, "PostToolUse", "continue") {
 			t.Fatalf("expected PostToolUse continue in trace; got:\n%s", strings.Join(lines, "\n"))
@@ -149,7 +154,7 @@ func installQoderSDKHooksPlugin(t *testing.T, qoderBin, bundleDir, name string) 
 // bundle is exercised only through the installed plugin) and points the hooks
 // at the trace file. A blocked prompt can abort the CLI, so a non-zero exit is
 // logged rather than treated as a failure; the trace is the assertion surface.
-func runQoderPrint(t *testing.T, qoderBin, traceFile, prompt string) {
+func runQoderPrint(t *testing.T, qoderBin, traceFile, prompt string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
@@ -162,4 +167,25 @@ func runQoderPrint(t *testing.T, qoderBin, traceFile, prompt string) {
 	if err != nil {
 		t.Logf("qoder -p exited: %v", err)
 	}
+	return string(out)
+}
+
+// qoderSkipUnlessTurnRan keeps the live lane honest on machines where the
+// signed-in account is out of chat quota: the hooks still fire, but no turn
+// completes, so Stop/PostToolUse outcomes cannot exist yet.
+func qoderSkipUnlessTurnRan(t *testing.T, out, trace string) {
+	t.Helper()
+	if qoderUsageLimited(out) && !traceHas(t, readTraceLines(t, trace), "Stop", "allow") {
+		t.Skipf("qoder live account is rate limited; turn did not complete: %s", truncateRunes(out, 400))
+	}
+}
+
+func qoderUsageLimited(out string) bool {
+	lower := strings.ToLower(out)
+	for _, marker := range []string{"daily usage limit", "come back tomorrow", "rate limit", "429"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
 }
