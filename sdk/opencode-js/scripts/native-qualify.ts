@@ -206,4 +206,4 @@ try {
  await new Promise<void>((ok)=>{if(child.exitCode!==null||child.signalCode!==null)ok();else child.once('exit',()=>ok());});
  await new Promise<void>((ok)=>provider.close(()=>ok()));
  await record({phase:'owned-host-closed',pid:child.pid,exitCode:child.exitCode,signal:child.signalCode});
-} 
+}
