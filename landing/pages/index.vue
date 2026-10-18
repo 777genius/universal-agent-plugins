@@ -61,6 +61,7 @@ usePageSeo(() => t('shell.seo.indexTitle'), description, {
   <div class="registry-surface unified-home">
     <PageBackground />
     <RegistryHero :registry="registry" />
+    <RegistryRestore />
     <RegistryDirectory :registry="registry" />
     <RegistryWhy />
     <BuiltWithSection />

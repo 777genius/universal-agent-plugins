@@ -362,6 +362,20 @@
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
+    "restore": {
+      "eyebrow": "Reproducible plugin environments",
+      "title": "Same plugin versions on your next machine",
+      "intro": "Save your global plugin set and its dependencies, then restore the exact recorded versions on another computer.",
+      "availability": "Source only · unreleased",
+      "releaseNote": "Not yet included in npm, Homebrew or native releases.",
+      "guide": "Restore guide (English)",
+      "from": "On this computer",
+      "to": "On your next computer",
+      "transfer": "Copy {manifest} and {lockfile} to the other computer between these commands.",
+      "directory": "Both commands use the current directory when no directory is specified.",
+      "requirements": "Restoration requires the recorded sources to remain available and clients supported by dependency management.",
+      "excludes": "Sign-ins, secrets, settings and plugin data are not transferred."
+    },
     "docs": {
       "englishLabel": "{label} (documentation in English)"
     },

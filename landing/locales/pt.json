@@ -208,6 +208,20 @@
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
+    "restore": {
+      "eyebrow": "Ambientes de plugins reproduzíveis",
+      "title": "As mesmas versões de plugins no seu próximo computador",
+      "intro": "Salve seu conjunto global de plugins e suas dependências e restaure as versões exatas registradas em outro computador.",
+      "availability": "Somente no código-fonte · ainda não lançado",
+      "releaseNote": "Ainda não incluído nas versões npm, Homebrew ou nos binários nativos.",
+      "guide": "Guia de restauração (em inglês)",
+      "from": "Neste computador",
+      "to": "No próximo computador",
+      "transfer": "Copie {manifest} e {lockfile} para o outro computador entre estes comandos.",
+      "directory": "Sem um diretório especificado, ambos os comandos usam o diretório atual.",
+      "requirements": "A restauração exige que as fontes registradas continuem disponíveis e que os clientes sejam compatíveis com o gerenciamento de dependências.",
+      "excludes": "Logins, segredos, configurações e dados dos plugins não são transferidos."
+    },
     "docs": {
       "englishLabel": "{label} (documentação em inglês)"
     },

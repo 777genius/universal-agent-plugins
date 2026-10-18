@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { hydrated } from './i18n-state.helpers';
 import { publishedLocales, localeMetadata, type KnownLocale } from '../../data/i18n';
@@ -29,6 +30,34 @@ for (const locale of publishedLocales) {
       await page.goto(url);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('h1')).toBeVisible();
+      if (family === '/') {
+        const copy = JSON.parse(
+          readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
+        ).shell.restore as Record<string, string>;
+        const restore = page.locator('#restore-environment');
+        await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
+        await expect(restore.locator('.registry-restore__availability strong')).toHaveText(copy.availability!);
+        await expect(restore.locator('.registry-restore__availability span')).toHaveText(copy.releaseNote!);
+        await expect(restore.locator('.command-snippet pre code')).toHaveText([
+          'agentplugins deps export',
+          'agentplugins deps import --install',
+        ]);
+        await expect(restore.getByRole('link', { name: copy.guide! })).toHaveAttribute(
+          'href',
+          'https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine',
+        );
+        if (locale === 'en' || locale === 'ar') {
+          await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
+          await restore.scrollIntoViewIfNeeded();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          await expect(restore.locator('pre').first()).toHaveCSS('direction', 'ltr');
+          const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
+          if (screenshots) {
+            mkdirSync(screenshots, { recursive: true });
+            await restore.screenshot({ path: resolve(screenshots, `restore-${locale}.png`) });
+          }
+        }
+      }
       await page.reload();
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       expect(errors).toEqual([]);

@@ -9,6 +9,12 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+**Keep a reproducible set of plugins and dependencies, and carry it to another
+computer.** The manifest records what you need; the lockfile pins the exact
+packages to restore. This workflow is **SOURCE ONLY / UNRELEASED**; see
+[Restore your plugin setup](#restore-your-plugin-setup). For the published
+installer, start with the [Quick start](#quick-start).
+
 Our [installer automation principle](docs/INSTALLER_AUTOMATION_PRINCIPLE.md) is to complete every ownership-safe client step automatically and ask the user only for genuine external approvals, authentication, or reloads.
 
 [Read the documentation](https://777genius.github.io/universal-agent-plugins/docs/en/) ·
@@ -112,6 +118,36 @@ selected agent.
 - updates, repairs, and removes only files it manages;
 - converts the same Agent Plugins 1.0 package into each agent's native format;
 - keeps activation and OAuth prompts visible to you.
+
+## Restore your plugin setup
+
+**SOURCE ONLY / UNRELEASED:** these commands require a compatible CLI built from
+current source. The published CLI is not qualified for this workflow; the
+[Quick start](#quick-start) above covers released installation.
+
+On the source computer, open a folder to use for the transfer and run:
+
+```sh
+agentplugins deps export
+```
+
+Copy that folder to the new computer, install the required target clients,
+and open the copied folder. Then restore the recorded plugins and dependencies:
+
+```sh
+agentplugins deps import --install
+```
+
+The optional directory argument defaults to the current folder. Export reads
+the global user environment; import writes it. Only `uap.toml` and `uap.lock`
+are transferred. Restore verifies exact locked packages from still-available
+sources or the destination cache for supported dependency clients: Claude Code,
+Codex, OpenCode, Cursor and Gemini CLI.
+
+Authentication, client settings, secrets and plugin data need separate setup
+or backup. Transferring the files does not guarantee offline installation.
+See [Restore on another machine](docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+for confirmation prompts, supported restore behavior and recovery.
 
 ## Any Agent Plugins 1.0 package
 
