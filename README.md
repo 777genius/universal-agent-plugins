@@ -250,6 +250,18 @@ The CLI checks packages before installation and changes only files it manages.
 Use `--dry-run` to preview changes. OAuth and consent stay under your control.
 No install telemetry is sent.
 
+**Exact removal, verified end to end.** `remove` deletes exactly the files the
+CLI added and nothing else: every removed path is checked against installer
+ownership, and neighboring files that belong to you or to other tools are left
+byte-identical. If a foreign tool has taken over or modified one of the CLI's
+managed entries, the CLI refuses to touch it and stops with a clear instruction
+instead of overwriting or adopting someone else's configuration. This is
+enforced fail-closed, not best-effort: end-to-end tests install and remove a
+plugin in every supported agent and record the exact removal inventory
+(before/after file digests) as artifacts — across all 13 clients, including
+real Claude Code, Codex, and OpenCode runs on macOS and Windows CI runners.
+Details and the evidence are in [docs/REMOVAL_SAFETY.md](docs/REMOVAL_SAFETY.md).
+
 <details>
 <summary>Ownership and rollback</summary>
 
