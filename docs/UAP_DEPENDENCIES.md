@@ -175,6 +175,28 @@ release. A superseded release requires a newer pin; a revoked release cannot be
 reproduced. Existing installed releases retain only their explicit signed-policy
 exceptions, using live state rather than the copied lock.
 
+### Restore on another machine
+
+Install a compatible `agentplugins` CLI and the required target clients, then
+copy **both** `uap.toml` and `uap.lock` into the destination environment root.
+Set `AGENTPLUGINS_HOME` explicitly when moving between systems with different
+default config directories. Run:
+
+```sh
+agentplugins install --locked --yes
+```
+
+An empty store is supported: the installer fetches the exact recorded commits
+and verifies their package and manifest digests. It does not select newer
+versions. Missing source bytes, mismatched digests or ineligible registry releases
+cause an error. Do not run `deps lock` to reproduce an existing lock; that command
+may resolve changed intent. Offline restoration requires the package bytes to
+already be available in the destination store.
+
+Configure client profiles, executable discovery and any required authentication
+on the destination. Do not copy local ownership receipts as installation proof.
+User settings, secrets and `PLUGIN_DATA` contents require their own backup.
+
 Authentication is reported separately from retryable lifecycle work. An active,
 materialized, installation-verified binding with unchecked authentication shows
 `auth_unverified`; pending or failed authentication shows `auth_pending` or
