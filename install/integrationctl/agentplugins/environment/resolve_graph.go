@@ -18,6 +18,10 @@ type ResolvedPackage struct {
 	Dependencies map[string]string
 }
 
+// ErrCandidateIneligible rejects one candidate on source policy discovered
+// during acquisition. Other acquisition errors abort resolution.
+var ErrCandidateIneligible = errors.New("dependency candidate is ineligible")
+
 // GraphResolver supplies source facts while the coordinator owns graph policy.
 type GraphResolver interface {
 	Resolver
@@ -189,6 +193,9 @@ func (solver *graphSolver) chooseCandidates(ctx context.Context, key string, nod
 		}
 		selected, err := solver.graph.AcquireCandidate(ctx, node.requirement, candidate, node.targets)
 		if err != nil {
+			if errors.Is(err, ErrCandidateIneligible) {
+				continue
+			}
 			return nil, nil, err
 		}
 		found, nodes, err := solver.try(ctx, key, selected, choices)

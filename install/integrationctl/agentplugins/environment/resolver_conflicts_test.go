@@ -16,6 +16,7 @@ type conflictGraphResolver struct {
 	packages                 map[string][]ResolvedPackage
 	candidates, acquisitions int
 	failure                  error
+	candidateFailures        map[uint64]error
 }
 
 func conflictRequirement(alias, expression string) Requirement {
@@ -60,6 +61,9 @@ func (resolver *conflictGraphResolver) AcquireCandidate(_ context.Context, requi
 	resolver.acquisitions++
 	if resolver.failure != nil {
 		return ResolvedPackage{}, resolver.failure
+	}
+	if err := resolver.candidateFailures[candidate.ReleaseSequence]; err != nil {
+		return ResolvedPackage{}, err
 	}
 	for _, pkg := range resolver.packages[requirement.Registry.Distribution] {
 		if pkg.Package.Source.Registry.ReleaseSequence == candidate.ReleaseSequence {
@@ -282,5 +286,45 @@ func TestGraphDeterministicFailureAndAcquisitionAbort(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// Policy discovered after acquisition may reject a single candidate. Transport,
+// authenticity and manifest failures must not silently select another release.
+func TestGraphSkipsOnlyIneligibleCandidate(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		failure error
+		skips   bool
+	}{
+		{"late eligibility", fmt.Errorf("MCP policy: %w", ErrCandidateIneligible), true},
+		{"network", errors.New("network unavailable"), false},
+		{"digest", errors.New("immutable digest mismatch"), false},
+		{"manifest", errors.New("invalid manifest"), false},
+		{"version", errors.New("directory version differs from manifest"), false},
+		{"untyped eligibility text", errors.New(ErrCandidateIneligible.Error()), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{"acme/a": {conflictPackage("a", "1.1.0", 2, nil), conflictPackage("a", "1.0.0", 1, nil)}}, candidateFailures: map[uint64]error{1: tc.failure}}
+			lock, err := (Coordinator{Resolver: resolver}).Resolve(context.Background(), conflictRequirements(map[string]string{"a": "^1.0"}), Lock{}, "")
+			if !tc.skips {
+				if !errors.Is(err, tc.failure) || len(lock.Packages) != 0 || resolver.acquisitions != 1 {
+					t.Fatalf("fatal acquisition selected a fallback: %+v %v calls=%d", lock, err, resolver.acquisitions)
+				}
+				return
+			}
+			if err != nil || len(lock.Packages) != 1 || lock.Packages[0].Version != "1.1.0" || resolver.acquisitions != 2 {
+				t.Fatalf("late ineligibility blocked safe candidate: %+v %v calls=%d", lock, err, resolver.acquisitions)
+			}
+		})
+	}
+	// An exhausted child becomes a graph conflict so its parent can backtrack.
+	resolver := &conflictGraphResolver{packages: map[string][]ResolvedPackage{
+		"acme/a": {conflictPackage("a", "1.0.0", 1, map[string]string{"acme/b": "1.0.0"}), conflictPackage("a", "1.1.0", 2, nil)},
+		"acme/b": {conflictPackage("b", "1.0.0", 3, nil)},
+	}, candidateFailures: map[uint64]error{3: ErrCandidateIneligible}}
+	lock, err := (Coordinator{Resolver: resolver}).Resolve(context.Background(), conflictRequirements(map[string]string{"a": "^1.0"}), Lock{}, "")
+	if err != nil || len(lock.Packages) != 1 || lock.Packages[0].Version != "1.1.0" || resolver.acquisitions != 3 {
+		t.Fatalf("exhausted child failed to backtrack its parent: %+v %v calls=%d", lock, err, resolver.acquisitions)
 	}
 }

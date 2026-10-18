@@ -189,6 +189,11 @@ func verifyUnselectedPins(previous, locked environment.Lock, aliases []string) e
 		found := false
 		for _, pkg := range locked.Packages {
 			if old.Alias == pkg.Alias {
+				// The strict loader can hydrate metadata absent from a legacy flat
+				// pin. Every recorded source coordinate and digest must still match.
+				if old.Version == "" {
+					old.Version = pkg.Version
+				}
 				found = environment.SamePin(old, pkg)
 			}
 		}

@@ -327,11 +327,13 @@ func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot en
 		}
 		return requirements, snapshot.Lock, err
 	}
-	requirements, locked := savedRegistryCandidate(snapshot, alias, old, loaded)
+	requirements, _ = savedRegistryCandidate(snapshot, alias, old, loaded)
 	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded); err != nil {
 		return requirements, snapshot.Lock, err
 	}
-	locked, err = (environment.Coordinator{Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, locked, "")
+	// Validate the authoritative old graph before rebuilding edges from the new
+	// immutable manifests. Replacing a node inside old edges creates a false conflict.
+	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
 	return requirements, locked, err
 }
 

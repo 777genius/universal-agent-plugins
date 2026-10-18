@@ -53,6 +53,11 @@ func selectLockedLifecycle(app App, state domain.StateFileV2, requirements envir
 		return selection, nil
 	}
 	if err != nil {
+		// Unrelated imperative selectors do not depend on saved lock agreement.
+		// A matched live owner keeps its alias and must still fail closed.
+		if selection.alias == "" {
+			return selection, nil
+		}
 		return selection, err
 	}
 	alias := selection.alias

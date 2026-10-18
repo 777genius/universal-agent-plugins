@@ -87,7 +87,7 @@ func TestDependencyFreshRestoreFromPortableFiles(t *testing.T) {
 	originalDownloads, originalLookups, originalMutations := original.source.downloads, original.source.lookups, original.runner.mutations
 
 	fresh := newFreshRestoreEnvironment(t, repo, directory)
-	if fresh.root == original.root || fresh.client.ConfigRoot == original.client.ConfigRoot || fresh.app.EnvironmentStoreRoot == original.app.EnvironmentStoreRoot || fresh.store.Path == original.store.Path || fresh.runner == original.runner || fresh.source.Acquirer.TempRoot == original.source.Acquirer.TempRoot {
+	if fresh.root == original.root || fresh.client.ConfigRoot == original.client.ConfigRoot || fresh.app.EnvironmentStoreRoot == original.app.EnvironmentStoreRoot || fresh.store.Path == original.store.Path || fresh.runner == original.runner || fresh.source.TempRoot == original.source.TempRoot {
 		t.Fatal("restore reused the original environment, store, state or native fixture")
 	}
 	freshRestoreCopyAgreement(t, fresh, manifestBytes, lockBytes)
@@ -262,7 +262,7 @@ func freshRestoreCheckGraph(t *testing.T, locked environment.Lock, releases map[
 func freshRestoreCopyAgreement(t *testing.T, fixture freshRestoreEnvironment, manifest, lock string) {
 	t.Helper()
 	freshRestoreAssertNoLocalState(t, fixture)
-	entries, err := os.ReadDir(fixture.source.Acquirer.TempRoot)
+	entries, err := os.ReadDir(fixture.source.TempRoot)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("restore acquisition workspace is not empty: %v %v", entries, err)
 	}

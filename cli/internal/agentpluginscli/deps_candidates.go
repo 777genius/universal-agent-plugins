@@ -11,7 +11,8 @@ import (
 )
 
 func dependencyDirectoryRequest(app App, distribution string, sequence uint64, targets []string) domain.DirectoryResolveRequest {
-	request := domain.DirectoryResolveRequest{Selector: distribution, DesiredReleaseSequence: sequence, Scope: domain.ScopeUser, Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: app.Version}
+	host := directoryEnvironment(nil)
+	request := domain.DirectoryResolveRequest{Selector: distribution, DesiredReleaseSequence: sequence, Scope: domain.ScopeUser, Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: app.Version, OS: host.OS, Architecture: host.Architecture}
 	for _, target := range targets {
 		request.Targets = append(request.Targets, domain.ClientID(target))
 	}
@@ -52,14 +53,13 @@ func (resolver dependencyResolver) Eligible(ctx context.Context, pkg environment
 	if pkg.Source.Registry == nil {
 		return true, nil
 	}
-	if resolver.app.DirectoryClient == nil {
-		return false, errors.New("signed Directory client is required")
+	// Once bytes are known, late target unions must retain their executable
+	// identity as well as the host dimensions used during candidate filtering.
+	pkg.Targets = append([]string{}, targets...)
+	loaded, err := materializeLockedPackage(ctx, resolver.app, pkg, false, nil)
+	if loaded.cleanup != nil {
+		defer func() { _ = loaded.cleanup() }()
 	}
-	bundle, err := resolver.app.DirectoryClient.Load(ctx, 0)
-	if err != nil {
-		return false, err
-	}
-	_, err = domain.ResolveDirectory(bundle.Snapshot, dependencyDirectoryRequest(resolver.app, pkg.Source.Registry.Distribution, pkg.Source.Registry.ReleaseSequence, targets))
 	if errors.Is(err, domain.ErrDirectoryIneligible) {
 		return false, nil
 	}
@@ -73,6 +73,10 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 	}
 	loaded, err := resolver.app.acquireDirectory(ctx, requirement.Registry.Distribution, request)
 	if err != nil {
+		if errors.Is(err, domain.ErrDirectoryIneligible) {
+			// Immutable MCP metadata can establish ineligibility only after fetch.
+			return environment.ResolvedPackage{}, fmt.Errorf("%w: %w", environment.ErrCandidateIneligible, err)
+		}
 		return environment.ResolvedPackage{}, err
 	}
 	if loaded.envelope.Manifest.Version != candidate.Version {
