@@ -134,7 +134,13 @@ func TestOpenCodeTargetIdentityAndWrapperRestriction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(binary, body, 0700); err != nil {
+	// Replace the inode: rewriting an executed Mach-O in place can leave the
+	// kernel's code-signing cache bound to the old bytes on macOS.
+	next := binary + ".next"
+	if err := os.WriteFile(next, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(next, binary); err != nil {
 		t.Fatal(err)
 	}
 	after, err := ProbeOpenCodeTarget(context.Background(), target)
