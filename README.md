@@ -198,7 +198,9 @@ The CLI has adapters for:
 | <img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"> Kimi Code | native skills/MCP plugin and managed user registry; reload required |
 | <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> Qoder | native skills/MCP plugin; Qoder CLI install and verification when available |
 
-Grok Build, Kimi Code, and Qoder accept automatic user-scope installation of portable skills and stdio/HTTP MCP servers through `agentplugins add ./my-plugin --target grok,kimi,qoder`. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and remote MCP authentication/connectivity is verified in that client. Agent, hook, command, and LSP components are outside these three adapters' current supported scope.
+Grok Build, Kimi Code, and Qoder accept automatic user-scope installation of portable skills and MCP servers through `agentplugins add ./my-plugin --target grok,kimi,qoder`. Grok Build and Kimi Code support stdio/HTTP MCP; the Qoder adapter currently supports stdio MCP. The CLI verifies native registration and supports update and removal. A running client still needs a reload, and MCP authentication/connectivity is verified in that client.
+
+Qoder also preserves target-native `hooks/**`, `commands/**`, and bundled `bin/**` files for native discovery. Its Go SDK supports `SessionStart`, `UserPromptSubmit`, `PostToolUse`, and `Stop`. These native files are separate from portable hook and command conversion; portable agents, hooks, commands, and LSP components remain outside these three adapters' supported scope.
 
 Compatibility depends on the package and client. The CLI tells you what is
 installed, prepared, or still needs activation or sign-in.

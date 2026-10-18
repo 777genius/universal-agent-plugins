@@ -54,6 +54,9 @@ func TestQoderCLIHooks(t *testing.T) {
 		if !traceHas(t, lines, "UserPromptSubmit", "block") {
 			t.Fatalf("expected UserPromptSubmit block in trace; got:\n%s", strings.Join(lines, "\n"))
 		}
+		if !strings.Contains(out, "Agent execution blocked by hook") {
+			t.Fatalf("Qoder did not report honoring the SDK block decision; output:\n%s", out)
+		}
 	})
 
 	t.Run("PostToolUse_observes_write", func(t *testing.T) {

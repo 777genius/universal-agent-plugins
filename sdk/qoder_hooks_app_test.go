@@ -1,11 +1,74 @@
 package pluginkitai
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/sdk/claude"
 	"github.com/777genius/plugin-kit-ai/sdk/internal/descriptors/gen"
 	"github.com/777genius/plugin-kit-ai/sdk/qoder"
 )
+
+func TestApp_StopRoutingWithRegisteredPlatforms(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, raw, qoderEvent, want string
+		qoderFirst                  bool
+	}{
+		{name: "Claude-only lowercase compatibility", raw: "stop", want: "claude"},
+		{name: "mixed lowercase Claude first", raw: "stop", qoderEvent: "stop", want: "qoder"},
+		{name: "mixed lowercase Qoder first", raw: "stop", qoderEvent: "stop", qoderFirst: true, want: "qoder"},
+		{name: "mixed canonical Claude first", raw: "Stop", qoderEvent: "stop", want: "claude"},
+		{name: "mixed canonical Qoder first", raw: "Stop", qoderEvent: "stop", qoderFirst: true, want: "claude"},
+		{name: "missing Qoder Stop Claude first", raw: "stop", qoderEvent: "session-start"},
+		{name: "missing Qoder Stop Qoder first", raw: "stop", qoderEvent: "session-start", qoderFirst: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			iox := &testIO{in: []byte(qoderHooksStopPayload)}
+			app := New(Config{Name: "t", Args: []string{"plugin-kit-ai", tc.raw}, IO: iox, Env: testEnv{}})
+			called := ""
+			registerClaude := func() {
+				app.Claude().OnStop(func(*claude.StopEvent) *claude.Response {
+					called += "claude"
+					return claude.Allow()
+				})
+			}
+			registerQoder := func() {
+				switch tc.qoderEvent {
+				case "stop":
+					app.Qoder().OnStop(func(*qoder.StopEvent) *qoder.StopResponse {
+						called += "qoder"
+						return qoder.StopAllow()
+					})
+				case "session-start":
+					app.Qoder().OnSessionStart(func(*qoder.SessionStartEvent) *qoder.SessionStartResponse {
+						called += "qoder-session-start"
+						return nil
+					})
+				}
+			}
+			if tc.qoderFirst {
+				registerQoder()
+				registerClaude()
+			} else {
+				registerClaude()
+				registerQoder()
+			}
+			code := app.Run()
+			if called != tc.want {
+				t.Fatalf("handler calls = %q, want %q; exit=%d stderr=%q", called, tc.want, code, iox.err.String())
+			}
+			if tc.want == "" {
+				if code != 1 || !strings.Contains(iox.err.String(), "no handler registered for qoder/stop") || iox.out.Len() != 0 {
+					t.Fatalf("expected missing Qoder Stop failure; exit=%d stdout=%q stderr=%q", code, iox.out.String(), iox.err.String())
+				}
+			} else if code != 0 || iox.out.String() != "{}" || iox.err.Len() != 0 {
+				t.Fatalf("exit=%d stdout=%q stderr=%q", code, iox.out.String(), iox.err.String())
+			}
+		})
+	}
+}
 
 const qoderHooksStopPayload = `{"session_id":"sess-1","transcript_path":"/tmp/transcript.jsonl","cwd":"/tmp/proj","hook_event_name":"Stop","stop_hook_active":false,"last_assistant_message":"OK"}`
 
