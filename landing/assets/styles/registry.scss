@@ -762,7 +762,7 @@ img {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(13, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--client-strip-columns, 13), minmax(0, 1fr));
   gap: 4px;
   list-style: none;
 }

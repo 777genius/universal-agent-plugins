@@ -6,5 +6,6 @@ func toolingProfiles() []PlatformProfile {
 		cursorProfile(),
 		cursorWorkspaceProfile(),
 		opencodeProfile(),
+		qoderProfile(),
 	}
 }

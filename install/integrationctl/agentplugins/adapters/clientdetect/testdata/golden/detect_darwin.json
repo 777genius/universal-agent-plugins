@@ -304,6 +304,30 @@
     "Version": ""
   },
   {
+    "ClientID": "qoder",
+    "ConfigRoot": "\u003chome\u003e/.qoder",
+    "DetectionError": null,
+    "DisplayName": "Qoder",
+    "ExecutablePath": "",
+    "OpenCodeHost": null,
+    "ProfileAuthority": null,
+    "ProfileNamespace": "",
+    "Status": "not_detected",
+    "Surfaces": [
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "qoder_cli"
+      },
+      {
+        "Detected": false,
+        "Evidence": "",
+        "ID": "qoder_config"
+      }
+    ],
+    "Version": ""
+  },
+  {
     "ClientID": "vscode",
     "ConfigRoot": "\u003chome\u003e/Library/Application Support/Code/User",
     "DetectionError": null,

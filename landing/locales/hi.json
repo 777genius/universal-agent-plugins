@@ -823,6 +823,13 @@
         "intro": "Kimi Code के लिए skills और MCP सर्वर इंस्टॉल करें।",
         "delivery": "CLI अन्य Kimi प्लगइन सुरक्षित रखते हुए नेटिव प्लगइन रजिस्टर करता है।",
         "activation": "/reload या /new चलाएँ; Kimi Code में MCP और प्रमाणीकरण जाँचें।"
+      },
+      "qoder": {
+        "note": "नेटिव skills और MCP प्लगइन; CLI सत्यापन",
+        "status": "समर्थित",
+        "intro": "Qoder के लिए skills और MCP सर्वर इंस्टॉल करें।",
+        "delivery": "CLI नेटिव .qoder-plugin मैनिफेस्ट लिखकर Qoder CLI के ज़रिए प्लगइन रजिस्टर करता है।",
+        "activation": "Qoder प्लगइन रीलोड करें या Qoder पुनः आरंभ करें; Qoder में MCP और प्रमाणीकरण जाँचें।"
       }
     },
     "directoryPage": {

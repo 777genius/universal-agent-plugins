@@ -169,6 +169,36 @@
       "UserActions": null
     }
   },
+  "qoder": {
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      [
+        "\u003croot\u003e/bin/qoder",
+        "plugins",
+        "uninstall",
+        "demo"
+      ],
+      [
+        "\u003croot\u003e/bin/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "qoder plugin \"demo\" remains registered",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
   "vscode": {
     "Commands": [
       [

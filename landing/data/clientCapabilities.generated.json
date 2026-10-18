@@ -193,5 +193,20 @@
     "extension_support": "unsupported",
     "saved_dependency": true,
     "excluded_reason": ""
+  },
+  {
+    "id": "qoder",
+    "display_name": "Qoder",
+    "package_mode": "native",
+    "skill_support": "native",
+    "mcp_transports": {
+      "sse": "unsupported",
+      "stdio": "native",
+      "streamable-http": "unsupported"
+    },
+    "app_support": "unsupported",
+    "extension_support": "unsupported",
+    "saved_dependency": true,
+    "excluded_reason": ""
   }
 ]

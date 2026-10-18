@@ -505,6 +505,52 @@
       ]
     }
   },
+  "qoder": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/managed/clients/qoder/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "qoder",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/qoder",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/qoder",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/managed",
+      "TargetRoot": "\u003croot\u003e/managed/clients/qoder",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
   "vscode": {
     "Error": "",
     "Plan": {

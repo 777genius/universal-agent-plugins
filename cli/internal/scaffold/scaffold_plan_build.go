@@ -9,7 +9,7 @@ func normalizePlanPlatformData(d Data, platform string) (Data, error) {
 	d.Platform = platform
 	var err error
 	switch platform {
-	case "codex-package", "opencode", "cursor", "cursor-workspace":
+	case "codex-package", "opencode", "cursor", "cursor-workspace", "qoder":
 		d, err = normalizePackageOnlyPlatformData(d)
 	case "gemini":
 		d, err = normalizeGeminiPlatformData(d)

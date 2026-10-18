@@ -94,6 +94,7 @@ go build -o bin/plugin-kit-ai ./cli/cmd/plugin-kit-ai
 | Gemini extension package | `gemini` |
 | OpenCode workspace-config lane | `opencode` |
 | Cursor plugin package lane | `cursor` |
+| Qoder plugin package lane | `qoder` |
 
 Choose the lane that matches the delivery model you need today. Expand later from the same repo when the product needs more outputs.
 

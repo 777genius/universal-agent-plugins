@@ -353,3 +353,30 @@ func TestImportedPortableMCPYAMLCanonicalizesAPIVersionV1(t *testing.T) {
 		t.Fatalf("gemini import did not normalize protocol:\n%s", rendered)
 	}
 }
+
+func TestUnwrapNativeMCPServersAcceptsEnvelopeAndBareMaps(t *testing.T) {
+	t.Parallel()
+	envelope := map[string]any{
+		"mcpServers": map[string]any{
+			"docs": map[string]any{"command": "node", "args": []any{"server.mjs"}},
+		},
+	}
+	servers, err := UnwrapNativeMCPServers(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 || servers["docs"] == nil {
+		t.Fatalf("envelope servers = %#v", servers)
+	}
+	bare := map[string]any{"docs": map[string]any{"url": "https://example.com/mcp"}}
+	servers, err = UnwrapNativeMCPServers(bare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 || servers["docs"] == nil {
+		t.Fatalf("bare servers = %#v", servers)
+	}
+	if _, err := UnwrapNativeMCPServers(map[string]any{"mcpServers": "nope"}); err == nil {
+		t.Fatal("expected envelope type error")
+	}
+}

@@ -17,6 +17,7 @@ Their generated native outputs remain useful client-specific references:
 | `codex-basic-prod` | `.codex/config.toml`, launcher/notify runtime |
 | `codex-package-prod` | `.codex-plugin/plugin.json`, Skills, MCP and app metadata |
 | `cursor-basic` | `.cursor-plugin/plugin.json`, Skills and MCP |
+| `qoder-basic` | `.qoder-plugin/plugin.json`, Skills and MCP |
 | `gemini-extension-package` | `gemini-extension.json`, extension commands/settings/hooks |
 | `opencode-basic` | `opencode.json`, workspace configuration and mirrored Skills |
 
@@ -33,6 +34,7 @@ These examples are reference implementations for the historical v1 production pl
 - [codex-package-prod](./codex-package-prod): official Codex package lane with `plugin/plugin.yaml`, generated `.codex-plugin/plugin.json`, optional `.app.json`, shared `.mcp.json`, and skills-first bundle output
 - [gemini-extension-package](./gemini-extension-package): Gemini CLI extension repo with `plugin/plugin.yaml`, generated `gemini-extension.json`, shared MCP, and packaging-only validation coverage
 - [cursor-basic](./cursor-basic): Cursor packaged plugin repo with `plugin/plugin.yaml`, portable `plugin/skills/**`, generated `.cursor-plugin/plugin.json`, and shared `.mcp.json`
+- [qoder-basic](./qoder-basic): Qoder packaged plugin repo with `plugin/plugin.yaml`, portable `plugin/skills/**`, generated `.qoder-plugin/plugin.json`, and shared `.mcp.json`
 - [opencode-basic](./opencode-basic): OpenCode workspace-config repo with `plugin/plugin.yaml`, generated `opencode.json`, shared MCP, and mirrored portable skills
 
 Use them together with [../../docs/PRODUCTION.md](../../docs/PRODUCTION.md).

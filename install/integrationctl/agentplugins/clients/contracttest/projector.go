@@ -33,7 +33,7 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 	if !ok {
 		return []string{"adapter does not implement clients.Projector"}
 	}
-	root := t.TempDir()
+	root := canonicalTempRoot(t)
 	staging := filepath.Join(root, "staging")
 	if err := seedProjectorStaging(staging); err != nil {
 		return []string{fmt.Sprintf("seed staging tree: %v", err)}

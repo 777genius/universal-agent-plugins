@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "release-checks": {
+      "args": [
+        "${QODER_PLUGIN_ROOT}/bin/release-checks.mjs"
+      ],
+      "command": "node"
+    }
+  }
+}

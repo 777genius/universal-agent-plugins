@@ -25,6 +25,18 @@ type profileRunner struct {
 	tree     bool
 }
 
+// tempRoot returns a symlink-free temp directory: native root checks demand
+// canonical paths, which t.TempDir() does not guarantee on macOS (/var vs
+// /private/var).
+func tempRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func (r *profileRunner) Run(ctx context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
 	r.commands = append(r.commands, c)
 	if r.fail != "" && strings.Contains(strings.Join(c.Argv[1:], " "), r.fail) {
@@ -87,14 +99,14 @@ func TestEveryCommandUsesExplicitProfile(t *testing.T) {
 		{name: "registry", inspect: true, want: []string{"plugin list"}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			root, ambient := t.TempDir(), t.TempDir()
+			root, ambient := tempRoot(t), tempRoot(t)
 			t.Setenv("CODEX_HOME", ambient)
 			t.Setenv("NODE_OPTIONS", "--require=/untrusted")
 			runner := &profileRunner{fail: scenario.fail}
 			env := clients.Env{Runner: runner}
 			client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: root}
 			plan := domain.DeliveryPlan{ClientID: domain.ClientCodex, PhysicalArtifactID: "artifact", DeclaredName: "demo", NativeRegistryRoot: root, NativeRegistryExecutable: executable}
-			artifact := t.TempDir()
+			artifact := tempRoot(t)
 			marketplace := shared.ManagedMarketplaceName("artifact")
 			if scenario.remove {
 				config := fmt.Sprintf("[marketplaces.%s]\nsource = %q\nsource_type = \"local\"\n", marketplace, artifact)
@@ -164,7 +176,7 @@ func TestFreshCodexProfileIsReadOnlyUntilActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join(t.TempDir(), ".codex")
+	root := filepath.Join(tempRoot(t), ".codex")
 	runner := &profileRunner{}
 	env := clients.Env{Runner: runner}
 	client := domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: root}
@@ -178,7 +190,7 @@ func TestFreshCodexProfileIsReadOnlyUntilActivation(t *testing.T) {
 		t.Fatalf("preflight created profile: %v", err)
 	}
 	outcome, err := New().Activate(context.Background(), env, domain.ActivationRequest{
-		Client: client, Plan: plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: t.TempDir()},
+		Client: client, Plan: plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: tempRoot(t)},
 		DeclaredName: "demo", BackendExecutable: executable,
 	})
 	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
@@ -194,7 +206,7 @@ func TestExistingCodexProfileRejectsUnsupportedCLIWithoutMutation(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	root := filepath.Join(t.TempDir(), ".codex")
+	root := filepath.Join(tempRoot(t), ".codex")
 	if err := os.Mkdir(root, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +222,7 @@ func TestExistingCodexProfileRejectsUnsupportedCLIWithoutMutation(t *testing.T) 
 }
 
 func TestEnvironmentFailsClosed(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	for _, entries := range [][]string{{"CODEX_HOME=a", "CODEX_HOME=b"}, {"PATH=a", "Path=b"}, {"IGNORED=a", "IGNORED=b"}, {"broken"}, {"=value"}, {"BAD-NAME=x"}, {"X=a\x00b"}, {strings.Repeat("X", 128*1024+1) + "=v"}} {
 		if _, err := codexCommand(root, filepath.Join(root, "codex"), entries, "plugin", "list"); err == nil {
 			t.Fatalf("accepted malformed environment %q", entries)
@@ -227,7 +239,7 @@ func TestEnvironmentFailsClosed(t *testing.T) {
 }
 
 func TestWindowsInstallationMetadataIsValidatedButNotInherited(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	baseline, err := codexEnvironment(root, []string{"PATH=/bin"})
 	if err != nil {
 		t.Fatal(err)
@@ -250,7 +262,7 @@ func TestWindowsInstallationMetadataIsValidatedButNotInherited(t *testing.T) {
 }
 
 func TestInvalidProfilesNeverRun(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	file := filepath.Join(root, "file")
 	if err := os.WriteFile(file, nil, 0600); err != nil {
 		t.Fatal(err)
@@ -284,7 +296,7 @@ func TestInvalidProfilesNeverRun(t *testing.T) {
 }
 
 func TestCommandFailuresAreNotAbsence(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	r := &profileRunner{fail: "plugin", failText: "permission denied"}
 	env := clients.Env{Runner: r}
 	plan := domain.DeliveryPlan{NativeRegistryRoot: root, NativeRegistryExecutable: filepath.Join(root, "codex")}

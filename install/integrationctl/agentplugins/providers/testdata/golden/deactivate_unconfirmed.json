@@ -138,6 +138,19 @@
       ]
     }
   },
+  "qoder": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": false,
+      "LocalActions": null,
+      "UserActions": [
+        "agentplugins will uninstall the managed Qoder plugin automatically"
+      ]
+    }
+  },
   "vscode": {
     "Commands": [],
     "Error": "",

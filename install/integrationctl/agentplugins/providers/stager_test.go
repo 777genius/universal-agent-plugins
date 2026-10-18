@@ -762,7 +762,7 @@ func stagingEnvelope(t *testing.T) domain.PackageEnvelope {
 
 func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) domain.DeliveryPlan {
 	t.Helper()
-	anchor := filepath.Join(t.TempDir(), "managed")
+	anchor := filepath.Join(tempRoot(t), "managed")
 	target := filepath.Join(anchor, "clients", string(client))
 	if client == domain.ClientClaude {
 		target = filepath.Join(anchor, "skills")
@@ -785,7 +785,7 @@ func stagingPlan(t *testing.T, client domain.ClientID, mode domain.PackageMode) 
 			{Kind: domain.ComponentExtension, Name: "cursor", Support: domain.SupportUnsupported},
 		},
 	}
-	plan.NativeRegistryRoot = filepath.Join(t.TempDir(), "config")
+	plan.NativeRegistryRoot = filepath.Join(tempRoot(t), "config")
 	return plan
 }
 

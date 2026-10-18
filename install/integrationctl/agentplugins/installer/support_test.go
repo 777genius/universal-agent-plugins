@@ -79,7 +79,7 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 		t.Fatal("nil registry broadened")
 	}
 	metadata := engine.Discover()
-	if len(metadata) != 13 {
+	if len(metadata) != 14 {
 		t.Fatalf("Discover clients=%d", len(metadata))
 	}
 	for _, meta := range metadata {

@@ -50,6 +50,6 @@ Cursor generation now defaults to the packaged plugin lane: it produces .cursor-
 }
 
 func init() {
-	generateCmd.Flags().StringVar(&generateTarget, "target", "all", `generate target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", or "cursor-workspace")`)
+	generateCmd.Flags().StringVar(&generateTarget, "target", "all", `generate target ("all", "claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", or "qoder")`)
 	generateCmd.Flags().BoolVar(&generateCheck, "check", false, "fail if generated artifacts are out of date")
 }

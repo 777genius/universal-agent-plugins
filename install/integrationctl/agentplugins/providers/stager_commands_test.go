@@ -27,7 +27,7 @@ const takenSkill = "---\nname: demo-taken\ndescription: A real skill\n---\nKeep 
 // and an entry that is not a command at all.
 func commandPackage(t *testing.T) domain.PackageEnvelope {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), "snapshot")
+	root := filepath.Join(tempRoot(t), "snapshot")
 	writeTestFile(t, filepath.Join(root, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"demo","version":"1.0.0"}`)
 	writeTestFile(t, filepath.Join(root, "skills", "demo-taken", "SKILL.md"), takenSkill)
 	commands := filepath.Join(root, filepath.FromSlash(commandext.RelativeDirectory))
@@ -58,7 +58,7 @@ func TestStagerDeliversOnlyPlannedCommandSkills(t *testing.T) {
 	echo := domain.ComponentDecision{Kind: domain.ComponentSkill, Name: "demo-echo", Support: domain.SupportProjected, Source: domain.ComponentSourceCommand, SourceName: "echo"}
 	plans := map[domain.ClientID]func(*testing.T, domain.PackageEnvelope) domain.DeliveryPlan{
 		domain.ClientCursor: func(t *testing.T, envelope domain.PackageEnvelope) domain.DeliveryPlan {
-			root := t.TempDir()
+			root := tempRoot(t)
 			plan, err := plannertest.NewPlanner(planner.Planner{ManagedRoot: filepath.Join(root, "managed")}).Plan(context.Background(), domain.PlanRequest{
 				Envelope:           envelope,
 				Client:             domain.DetectedClient{ClientID: domain.ClientCursor, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(root, "config")},

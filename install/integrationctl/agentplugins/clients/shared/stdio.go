@@ -32,20 +32,30 @@ func DeliverManagedStdio(deliver func(root string) error, root string, envelope 
 // at the package's future active root and its plugin data directory.
 // PLUGIN_ROOT and PLUGIN_DATA are client-managed: an authored package that sets
 // either of them is rejected rather than overwritten, because the override
-// would silently redirect the server outside the managed tree.
+// would silently redirect the server outside the managed tree. The portable
+// authoring token ${package.root} resolves to the same managed package root;
+// leaving it literal would hand the client an unrunnable server path.
+//
+// The command keeps client-managed placeholders verbatim: the managed launcher
+// resolves command form itself and rejects rewritten commands, so only the
+// authoring token ${package.root} is resolved there.
 //
 // observationRoot is where the paths are checked to exist. During staging that
 // is the staging tree, while pluginRoot is the location the entry has to
 // encode; the two are deliberately different.
 func ApplyStdioDataContract(config map[string]any, pluginRoot, dataPath string, observationRoot ...string) error {
-	expand := strings.NewReplacer("${PLUGIN_ROOT}", pluginRoot, "${PLUGIN_DATA}", dataPath).Replace
+	expand := strings.NewReplacer(
+		"${PLUGIN_ROOT}", pluginRoot,
+		"${PLUGIN_DATA}", dataPath,
+		"${package.root}", pluginRoot,
+	).Replace
 	if err := applyStdioEnvironment(config, pluginRoot, dataPath, expand); err != nil {
 		return err
 	}
 	expandStdioArguments(config, expand)
 	command, _ := config["command"].(string)
 	cwd, _ := config["cwd"].(string)
-	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(command, cwd, pluginRoot, dataPath, observationRoot...)
+	resolvedCommand, resolvedCWD, err := ResolveStdioPaths(strings.ReplaceAll(command, "${package.root}", pluginRoot), cwd, pluginRoot, dataPath, observationRoot...)
 	if err != nil {
 		return err
 	}

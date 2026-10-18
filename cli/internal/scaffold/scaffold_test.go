@@ -27,7 +27,7 @@ func TestValidateProjectName(t *testing.T) {
 
 func TestLookupPlatform(t *testing.T) {
 	t.Parallel()
-	for _, name := range []string{"claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace"} {
+	for _, name := range []string{"claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", "qoder"} {
 		if _, ok := LookupPlatform(name); !ok {
 			t.Fatalf("LookupPlatform(%q) = missing", name)
 		}

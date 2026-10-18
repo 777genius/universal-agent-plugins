@@ -45,7 +45,7 @@ func TestInitHelpIncludesScenarioLanesAndDefaults(t *testing.T) {
 		"Already have native config",
 		"plugin-kit-ai import",
 		`--template   Recommended start: "online-service", "local-tool", or "custom-logic".`,
-		`--platform   Advanced override: "codex-runtime" (default), "codex-package", "claude", "gemini", "opencode", "cursor", or "cursor-workspace".`,
+		`--platform   Advanced override: "codex-runtime" (default), "codex-package", "claude", "gemini", "opencode", "cursor", "cursor-workspace", or "qoder".`,
 		`--runtime    Supported: "go" (default), "python", "node", "shell" for launcher-based targets only.`,
 		"--typescript Generate a TypeScript scaffold on top of the node runtime lane",
 		"--runtime-package",

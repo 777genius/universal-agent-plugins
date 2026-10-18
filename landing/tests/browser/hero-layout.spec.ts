@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
+import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
 const exactCommand = 'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
@@ -24,7 +25,7 @@ test.beforeEach(async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 });
 
-test('hero controls and 13 client links remain complete across four viewports', async ({
+test('hero controls and all client links remain complete across four viewports', async ({
   page,
 }) => {
   for (const width of [1440, 1024, 390, 320]) {
@@ -37,7 +38,7 @@ test('hero controls and 13 client links remain complete across four viewports', 
     ).toBe(true);
 
     const items = page.locator('.client-strip > li');
-    await expect(items).toHaveCount(13);
+    await expect(items).toHaveCount(clientLandingPages.length);
     const geometry = await items.evaluateAll((nodes) =>
       nodes.map((node) => {
         const rect = node.getBoundingClientRect();

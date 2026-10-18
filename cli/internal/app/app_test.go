@@ -722,6 +722,94 @@ func TestInitRunner_cursorRejectsRuntimeFlag(t *testing.T) {
 	}
 }
 
+func TestInitRunner_qoderStarter(t *testing.T) {
+	t.Parallel()
+	var r InitRunner
+	out := filepath.Join(t.TempDir(), "genplug")
+	got, err := r.Run(InitOptions{ProjectName: "genplug", Platform: "qoder", OutputDir: out, Extras: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != out {
+		t.Fatalf("out = %q, want %q", got, out)
+	}
+	for _, rel := range []string{
+		filepath.Join("plugin", "plugin.yaml"),
+		filepath.Join("plugin", "mcp", "servers.yaml"),
+		filepath.Join("plugin", "skills", "genplug", "SKILL.md"),
+		"CLAUDE.md",
+		"AGENTS.md",
+		"README.md",
+		filepath.Join(".qoder-plugin", "plugin.json"),
+		".mcp.json",
+		filepath.Join("skills", "genplug", "SKILL.md"),
+	} {
+		if _, err := os.Stat(filepath.Join(out, rel)); err != nil {
+			t.Fatalf("stat %s: %v", rel, err)
+		}
+	}
+	for _, rel := range []string{
+		filepath.Join("plugin", "launcher.yaml"),
+		"go.mod",
+		filepath.Join(".cursor-plugin", "plugin.json"),
+		filepath.Join("hooks", "hooks.json"),
+	} {
+		if _, err := os.Stat(filepath.Join(out, rel)); !os.IsNotExist(err) {
+			t.Fatalf("unexpected qoder starter file %s", rel)
+		}
+	}
+	assertRuntimeTestAssetsAbsent(t, out)
+	manifestBody, err := os.ReadFile(filepath.Join(out, ".qoder-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(manifestBody, &manifest); err != nil {
+		t.Fatalf("parse .qoder-plugin/plugin.json: %v\n%s", err, manifestBody)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(manifest["name"])); got != "genplug" {
+		t.Fatalf("qoder manifest name = %q want genplug\n%s", got, manifestBody)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(manifest["skills"])); got != "./skills/" {
+		t.Fatalf("qoder manifest skills = %q want ./skills/\n%s", got, manifestBody)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(manifest["mcpServers"])); got != "./.mcp.json" {
+		t.Fatalf("qoder manifest mcpServers = %q want ./.mcp.json\n%s", got, manifestBody)
+	}
+	mcpBody, err := os.ReadFile(filepath.Join(out, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]map[string]any
+	if err := json.Unmarshal(mcpBody, &doc); err != nil {
+		t.Fatalf("parse .mcp.json: %v\n%s", err, mcpBody)
+	}
+	wrapped, ok := doc["mcpServers"]
+	if !ok {
+		t.Fatalf("qoder .mcp.json missing mcpServers wrapper:\n%s", mcpBody)
+	}
+	server, ok := wrapped["docs"].(map[string]any)
+	if !ok {
+		t.Fatalf("qoder .mcp.json missing docs server:\n%s", mcpBody)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(server["type"])); got != "http" {
+		t.Fatalf("qoder example-http type = %q want http\n%s", got, mcpBody)
+	}
+}
+
+func TestInitRunner_qoderRejectsRuntimeFlag(t *testing.T) {
+	t.Parallel()
+	var r InitRunner
+	out := filepath.Join(t.TempDir(), "genplug")
+	_, err := r.Run(InitOptions{ProjectName: "genplug", Platform: "qoder", Runtime: "python", OutputDir: out})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "--runtime is not supported with --platform qoder") {
+		t.Fatalf("error = %q", err)
+	}
+}
+
 func TestInitRunner_codexRuntime(t *testing.T) {
 	t.Parallel()
 	var r InitRunner
