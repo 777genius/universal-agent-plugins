@@ -122,7 +122,7 @@ func TestQoderPackagedImportRoundTrip(t *testing.T) {
 	}
 }
 
-func TestQoderPackagedImportWarnsForUnsupportedAssets(t *testing.T) {
+func TestQoderPackagedImportCarriesHooksAndCommands(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	writeQoderTestFile(t, filepath.Join(root, ".qoder-plugin", "plugin.json"), `{"name":"qoder-demo","version":"0.1.0","description":"qoder demo"}`)
@@ -131,8 +131,8 @@ func TestQoderPackagedImportWarnsForUnsupportedAssets(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	writeQoderTestFile(t, filepath.Join(root, "hooks", "hooks.json"), "{}\n")
-	writeQoderTestFile(t, filepath.Join(root, "commands", "ship.md"), "# ship\n")
+	writeQoderTestFile(t, filepath.Join(root, "hooks", "hooks.json"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"${QODER_PLUGIN_ROOT}/bin/hook","args":["stop"]}]}]}}`+"\n")
+	writeQoderTestFile(t, filepath.Join(root, "commands", "ship.md"), "---\ndescription: ship it\n---\n\n# ship\n")
 
 	imported, err := (qoderAdapter{}).Import(root, ImportSeed{
 		Manifest: pluginmodel.Manifest{Name: "demo", Version: "0.1.0", Description: "demo", Targets: []string{"qoder"}},
@@ -140,14 +140,26 @@ func TestQoderPackagedImportWarnsForUnsupportedAssets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Import error = %v", err)
 	}
+	paths := map[string]bool{}
+	for _, artifact := range imported.Artifacts {
+		paths[artifact.RelPath] = true
+	}
+	for _, want := range []string{
+		filepath.ToSlash(filepath.Join("targets", "qoder", "hooks", "hooks.json")),
+		filepath.ToSlash(filepath.Join("targets", "qoder", "commands", "ship.md")),
+	} {
+		if !paths[want] {
+			t.Fatalf("imported artifacts missing %q: %+v", want, imported.Artifacts)
+		}
+	}
 	text := warningsText(imported.Warnings)
-	for _, asset := range []string{"commands", "agents", "hooks", "output-styles", "bin"} {
+	for _, asset := range []string{"agents", "output-styles", "bin"} {
 		if !strings.Contains(text, "ignored unsupported import asset: "+asset) {
 			t.Fatalf("warnings missing dropped kind %q: %s", asset, text)
 		}
 	}
 	for _, artifact := range imported.Artifacts {
-		if strings.HasPrefix(artifact.RelPath, "commands/") || strings.HasPrefix(artifact.RelPath, "agents/") || strings.HasPrefix(artifact.RelPath, "hooks/") {
+		if strings.HasPrefix(artifact.RelPath, "agents/") {
 			t.Fatalf("unsupported asset imported: %+v", artifact)
 		}
 	}
@@ -298,6 +310,189 @@ func TestQoderPackagedValidateRejectsMCPServersWithoutPortableMCP(t *testing.T) 
 	if len(diagnostics) == 0 || !strings.Contains(diagnostics[0].Message, "may not define mcpServers when portable MCP is absent") {
 		t.Fatalf("diagnostics = %+v", diagnostics)
 	}
+}
+
+const qoderHooksBody = `{"description":"demo hooks","hooks":{"Stop":[{"async":true,"hooks":[{"type":"command","command":"${QODER_PLUGIN_ROOT}/bin/demo-hook","args":["stop"],"name":"demo-stop","timeout":2}]}]}}` + "\n"
+
+const qoderCommandBody = "---\ndescription: Ship the demo\n---\nShip it.\n"
+
+func TestQoderPackagedGenerateMirrorsAuthoredHooksAndCommands(t *testing.T) {
+	t.Parallel()
+	root, graph, state := qoderHooksFixture(t)
+	artifacts, err := (qoderAdapter{}).Generate(root, graph, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]string{}
+	for _, artifact := range artifacts {
+		byPath[artifact.RelPath] = string(artifact.Content)
+	}
+	if byPath["hooks/hooks.json"] != qoderHooksBody {
+		t.Fatalf("hooks mirror = %q", byPath["hooks/hooks.json"])
+	}
+	if byPath["commands/ship.md"] != qoderCommandBody {
+		t.Fatalf("commands mirror = %q", byPath["commands/ship.md"])
+	}
+}
+
+func TestQoderPackagedGenerateValidateRoundTripWithHooksAndCommands(t *testing.T) {
+	t.Parallel()
+	root, graph, state := qoderHooksFixture(t)
+	artifacts, err := (qoderAdapter{}).Generate(root, graph, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeQoderArtifacts(t, root, artifacts)
+	diagnostics, err := (qoderAdapter{}).Validate(root, graph, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
+}
+
+func TestQoderPackagedValidateHooksShapeContract(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ name, body, want string }{
+		{"invalid document", `{"hooks":`, "Qoder hooks document is invalid"},
+		{"missing hooks key", `{"description":"demo"}`, "Qoder hooks document is invalid"},
+		{"unrecognized event", `{"hooks":{"NotAnEvent":[]}}`, `unrecognized hook event "NotAnEvent"`},
+		{"empty group", `{"hooks":{"Stop":[{}]}}`, "group 0 has no hook commands"},
+		{"wrong type", `{"hooks":{"Stop":[{"hooks":[{"type":"prompt","command":"demo-hook"}]}]}}`, `must use type "command"`},
+		{"unbundled command", `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/usr/bin/env demo"}]}]}}`, "command must be a bare runtime or bundled under"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			root, _ := qoderManifestFixture(t)
+			writeQoderTestFile(t, filepath.Join(root, "plugin", "targets", "qoder", "hooks", "hooks.json"), tc.body)
+			state := pluginmodel.NewTargetState("qoder")
+			state.AddComponent("hooks", filepath.ToSlash(filepath.Join("plugin", "targets", "qoder", "hooks", "hooks.json")))
+			diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(diagnosticsText(diagnostics), tc.want) {
+				t.Fatalf("diagnostics = %+v, want %q", diagnostics, tc.want)
+			}
+		})
+	}
+}
+
+func TestQoderPackagedValidateHooksMirrorContract(t *testing.T) {
+	t.Parallel()
+	t.Run("missing mirror", func(t *testing.T) {
+		t.Parallel()
+		root, state := qoderAuthoredHooksFixture(t, qoderHooksBody)
+		diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(diagnosticsText(diagnostics), "hooks/hooks.json is missing; run generate") {
+			t.Fatalf("diagnostics = %+v", diagnostics)
+		}
+	})
+	t.Run("drifted mirror", func(t *testing.T) {
+		t.Parallel()
+		root, state := qoderAuthoredHooksFixture(t, qoderHooksBody)
+		writeQoderTestFile(t, filepath.Join(root, "hooks", "hooks.json"), `{"hooks":{}}`+"\n")
+		diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(diagnosticsText(diagnostics), "does not match authored") {
+			t.Fatalf("diagnostics = %+v", diagnostics)
+		}
+	})
+	t.Run("generated without authored", func(t *testing.T) {
+		t.Parallel()
+		root, _ := qoderManifestFixture(t)
+		writeQoderTestFile(t, filepath.Join(root, "hooks", "hooks.json"), qoderHooksBody)
+		diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), pluginmodel.NewTargetState("qoder"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(diagnosticsText(diagnostics), "exists without authored targets/qoder/hooks sources") {
+			t.Fatalf("diagnostics = %+v", diagnostics)
+		}
+	})
+}
+
+func TestQoderPackagedValidateCommandsContract(t *testing.T) {
+	t.Parallel()
+	t.Run("missing description", func(t *testing.T) {
+		t.Parallel()
+		root, state := qoderAuthoredCommandsFixture(t, "---\nargument-hint: anything\n---\nBody.\n")
+		diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(diagnosticsText(diagnostics), "must begin with frontmatter defining a non-empty description") {
+			t.Fatalf("diagnostics = %+v", diagnostics)
+		}
+	})
+	t.Run("drifted mirror", func(t *testing.T) {
+		t.Parallel()
+		root, state := qoderAuthoredCommandsFixture(t, qoderCommandBody)
+		writeQoderTestFile(t, filepath.Join(root, "commands", "ship.md"), "---\ndescription: Ship the demo\n---\nDrifted.\n")
+		diagnostics, err := (qoderAdapter{}).Validate(root, qoderManifestGraph(), state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(diagnosticsText(diagnostics), "does not match authored") {
+			t.Fatalf("diagnostics = %+v", diagnostics)
+		}
+	})
+}
+
+func qoderManifestGraph() pluginmodel.PackageGraph {
+	return pluginmodel.PackageGraph{
+		Manifest: pluginmodel.Manifest{Name: "qoder-demo", Version: "0.1.0", Description: "qoder demo", Targets: []string{"qoder"}},
+	}
+}
+
+func qoderManifestFixture(t *testing.T) (string, pluginmodel.PackageGraph) {
+	t.Helper()
+	root := t.TempDir()
+	writeQoderTestFile(t, filepath.Join(root, ".qoder-plugin", "plugin.json"), `{"name":"qoder-demo","version":"0.1.0","description":"qoder demo"}`)
+	return root, qoderManifestGraph()
+}
+
+func qoderHooksFixture(t *testing.T) (string, pluginmodel.PackageGraph, pluginmodel.TargetState) {
+	t.Helper()
+	root, graph := qoderGenerateFixture(t)
+	state := qoderAuthoredHooksState(t, root, qoderHooksBody)
+	qoderAuthoredCommandsState(t, root, state, qoderCommandBody)
+	return root, graph, state
+}
+
+func qoderAuthoredHooksFixture(t *testing.T, hooksBody string) (string, pluginmodel.TargetState) {
+	t.Helper()
+	root, _ := qoderManifestFixture(t)
+	return root, qoderAuthoredHooksState(t, root, hooksBody)
+}
+
+func qoderAuthoredCommandsFixture(t *testing.T, commandBody string) (string, pluginmodel.TargetState) {
+	t.Helper()
+	root, _ := qoderManifestFixture(t)
+	state := pluginmodel.NewTargetState("qoder")
+	qoderAuthoredCommandsState(t, root, state, commandBody)
+	return root, state
+}
+
+func qoderAuthoredHooksState(t *testing.T, root, hooksBody string) pluginmodel.TargetState {
+	t.Helper()
+	writeQoderTestFile(t, filepath.Join(root, "plugin", "targets", "qoder", "hooks", "hooks.json"), hooksBody)
+	state := pluginmodel.NewTargetState("qoder")
+	state.AddComponent("hooks", filepath.ToSlash(filepath.Join("plugin", "targets", "qoder", "hooks", "hooks.json")))
+	return state
+}
+
+func qoderAuthoredCommandsState(t *testing.T, root string, state pluginmodel.TargetState, commandBody string) {
+	t.Helper()
+	writeQoderTestFile(t, filepath.Join(root, "plugin", "targets", "qoder", "commands", "ship.md"), commandBody)
+	state.AddComponent("commands", filepath.ToSlash(filepath.Join("plugin", "targets", "qoder", "commands", "ship.md")))
 }
 
 func qoderGenerateFixture(t *testing.T) (string, pluginmodel.PackageGraph) {

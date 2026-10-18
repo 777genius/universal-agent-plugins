@@ -1,6 +1,8 @@
 package platformexec
 
 import (
+	"path/filepath"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/pluginmodel"
 )
 
@@ -45,5 +47,20 @@ func (qoderAdapter) Generate(root string, graph pluginmodel.PackageGraph, state 
 		return nil, err
 	}
 	artifacts = append(artifacts, skillArtifacts...)
+	if hookPaths := state.ComponentPaths("hooks"); len(hookPaths) > 0 {
+		copied, err := copyArtifacts(root, authoredComponentDir(state, "hooks", filepath.Join("targets", "qoder", "hooks")), "hooks")
+		if err != nil {
+			return nil, err
+		}
+		artifacts = append(artifacts, copied...)
+	}
+	copied, err := copyArtifactDirs(root, artifactDir{
+		src: authoredComponentDir(state, "commands", filepath.Join("targets", "qoder", "commands")),
+		dst: "commands",
+	})
+	if err != nil {
+		return nil, err
+	}
+	artifacts = append(artifacts, copied...)
 	return compactArtifacts(artifacts), nil
 }

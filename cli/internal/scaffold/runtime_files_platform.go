@@ -136,5 +136,8 @@ func qoderPlatformFiles(extras bool) []TemplateFile {
 	return append(files,
 		TemplateFile{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
 		TemplateFile{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
+		TemplateFile{Path: authoredPath("targets/qoder/hooks/hooks.json"), Template: "targets.qoder.hooks.json.tmpl", Extra: true},
+		TemplateFile{Path: authoredPath("targets/qoder/commands/{{.ProjectName}}.md"), Template: "targets.qoder.command.md.tmpl", Extra: true},
+		TemplateFile{Path: "bin/{{.ProjectName}}-hook", Template: "targets.qoder.hook.sh.tmpl", Extra: true},
 	)
 }
