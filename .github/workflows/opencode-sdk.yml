@@ -61,9 +61,54 @@ jobs:
         working-directory: sdk
         run: go test -count=1 ./opencode
 
+  native-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Qualify packed SDK through both real native hosts
+        working-directory: sdk/opencode-js
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${RUNNER_TEMP}/TEST-opencode-sdk-native"
+          mkdir -p "${root}/tmp" "${root}/cache" "${root}/tools" "${root}/package" "${root}/evidence"
+          export TMPDIR="${root}/tmp" npm_config_cache="${root}/cache"
+          npm ci --ignore-scripts --no-audit --no-fund
+          node node_modules/typescript/bin/tsc -p scripts/native-tsconfig.json
+          npm pack --ignore-scripts --json --pack-destination "${root}/package" > "${root}/package/pack.json"
+          tarball="${root}/package/$(jq -er '.[0].filename' "${root}/package/pack.json")"
+          npm install --prefix "${root}/tools" --registry=https://registry.npmjs.org/ --legacy-peer-deps --ignore-scripts --no-audit --no-fund \
+            "${tarball}" opencode-ai@1.19.3 @opencode/cli@2.0.32 @opencode/plugin@2.0.32 @opencode/client@2.0.32
+          node "${root}/tools/node_modules/opencode-ai/postinstall.mjs"
+          node "${root}/tools/node_modules/@opencode/cli/postinstall.mjs"
+          node scripts/native-qualify.ts "${root}" v1 "${tarball}"
+          node scripts/native-qualify.ts "${root}" v2 "${tarball}"
+          v1_run="$(find "${root}" -maxdepth 1 -type d -name 'run-v1-*')"
+          v2_run="$(find "${root}" -maxdepth 1 -type d -name 'run-v2-*')"
+          node scripts/native-receipt.ts "${root}" "${GITHUB_SHA}" "${v1_run}" "${v2_run}" "${root}/package/pack.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        if: ${{ always() }}
+        with:
+          name: opencode-sdk-native-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/TEST-opencode-sdk-native/run-*/result.json
+            ${{ runner.temp }}/TEST-opencode-sdk-native/run-*/evidence.jsonl
+            ${{ runner.temp }}/TEST-opencode-sdk-native/run-*/host.log
+            ${{ runner.temp }}/TEST-opencode-sdk-native/package/pack.json
+            ${{ runner.temp }}/TEST-opencode-sdk-native/evidence/native-qualification.json
+          if-no-files-found: warn
+          retention-days: 30
+
   release-artifact:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: [package-contract, go-contract]
+    needs: [package-contract, go-contract, native-contract]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
