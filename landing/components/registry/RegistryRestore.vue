@@ -7,6 +7,7 @@ const { t } = useI18n();
     id="restore-environment"
     class="registry-restore container"
     aria-labelledby="restore-title"
+    dir="auto"
   >
     <div class="registry-restore__panel">
       <div class="registry-restore__copy">

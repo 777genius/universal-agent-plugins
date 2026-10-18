@@ -50,6 +50,7 @@ for (const locale of publishedLocales) {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
           await restore.scrollIntoViewIfNeeded();
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+          await expect(restore).toHaveCSS('direction', locale === 'ar' ? 'rtl' : 'ltr');
           await expect(restore.locator('pre').first()).toHaveCSS('direction', 'ltr');
           const screenshots = process.env.UAP_LANDING_SCREENSHOT_DIR;
           if (screenshots) {
