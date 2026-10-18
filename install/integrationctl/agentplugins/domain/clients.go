@@ -157,10 +157,10 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
 	}),
-	stdioOnlyMCP(withScopes(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	stdioOnlyMCP(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}), ScopeUser, ScopeProject, ScopeLocal)),
+	})),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
@@ -182,13 +182,6 @@ func withoutCommands(definition ClientDefinition) ClientDefinition {
 // plugin contract only carries local stdio servers.
 func stdioOnlyMCP(definition ClientDefinition) ClientDefinition {
 	definition.Capabilities.MCPTransports["streamable-http"] = SupportUnsupported
-	return definition
-}
-
-// withScopes replaces the default user-only scope list with the exact set the
-// client's native install contract accepts.
-func withScopes(definition ClientDefinition, scopes ...InstallScope) ClientDefinition {
-	definition.Capabilities.Scopes = append([]InstallScope(nil), scopes...)
 	return definition
 }
 

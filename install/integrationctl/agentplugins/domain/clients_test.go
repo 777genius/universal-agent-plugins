@@ -60,8 +60,9 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 }
 
 // TestQoderClientDefinition pins Qoder's single identity shared by Desktop and
-// CLI: native plugin bundles, stdio-only MCP, and the three install scopes the
-// `qoder plugins install --scope` contract accepts.
+// CLI: native plugin bundles, stdio-only MCP, and the single user install scope
+// the agentplugins lifecycle actually installs and verifies
+// (`qoder plugins install --scope user`).
 func TestQoderClientDefinition(t *testing.T) {
 	definition, ok := ClientDefinitionFor(ClientQoder)
 	if !ok {
@@ -80,7 +81,7 @@ func TestQoderClientDefinition(t *testing.T) {
 	if capabilities.AppSupport != SupportUnsupported || capabilities.ExtensionSupport != SupportUnsupported {
 		t.Fatalf("Qoder app/extension support = %+v", capabilities)
 	}
-	if want := []InstallScope{ScopeUser, ScopeProject, ScopeLocal}; !reflect.DeepEqual(capabilities.Scopes, want) {
+	if want := []InstallScope{ScopeUser}; !reflect.DeepEqual(capabilities.Scopes, want) {
 		t.Fatalf("Qoder scopes = %v, want %v", capabilities.Scopes, want)
 	}
 	if definition.Traits.LifecycleKind != LifecycleCLIRegistry || !definition.Traits.Allows(InstallIntentAutomatic) {

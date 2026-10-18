@@ -39,5 +39,8 @@ func (qoderAdapter) RefineDiscovery(root string, state *pluginmodel.TargetState)
 }
 
 func (qoderAdapter) ManagedPaths(root string, graph pluginmodel.PackageGraph, state pluginmodel.TargetState) ([]string, error) {
-	return nil, nil
+	// .mcp.json is adapter-generated whenever portable MCP exists and becomes
+	// stale (and must be removed) when portable MCP is dropped, otherwise a
+	// later import resurrects servers from the orphaned sidecar.
+	return []string{".mcp.json"}, nil
 }

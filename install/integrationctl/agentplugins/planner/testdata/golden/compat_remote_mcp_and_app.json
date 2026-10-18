@@ -704,9 +704,7 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user",
-        "project",
-        "local"
+        "user"
       ],
       "SkillSupport": "native"
     },
