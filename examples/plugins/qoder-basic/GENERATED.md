@@ -20,6 +20,8 @@ These committed root docs are guidance files with a managed block, not plain gen
 - `.qoder-plugin/plugin.json`
 - `GENERATED.md`
 - `README.md`
+- `commands/ship.md`
+- `hooks/hooks.json`
 - `skills/release-checks/SKILL.md`
 
 ## Refresh
