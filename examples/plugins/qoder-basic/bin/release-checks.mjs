@@ -5,6 +5,8 @@
 import { createInterface } from "node:readline";
 
 const SERVER_INFO = { name: "release-checks", version: "0.1.0" };
+const SUPPORTED_PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18"];
+const DEFAULT_PROTOCOL_VERSION = "2024-11-05";
 const CHECKLIST = [
   "generated outputs are in sync (plugin-kit-ai generate --check)",
   "skills load in the target client",
@@ -32,9 +34,12 @@ const tools = [
   },
 ];
 
-function callTool(name) {
+function callTool(name, args) {
   if (name !== "release-checks") {
     return null;
+  }
+  if (args !== undefined && !(args === null || (typeof args === "object" && !Array.isArray(args) && Object.keys(args).length === 0))) {
+    return { invalid: "tool accepts no arguments" };
   }
   return { content: [{ type: "text", text: CHECKLIST.map((line) => `- ${line}`).join("\n") }] };
 }
@@ -47,7 +52,9 @@ function handle(message) {
   switch (method) {
     case "initialize":
       result(id, {
-        protocolVersion: params?.protocolVersion ?? "2024-11-05",
+        protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(params?.protocolVersion)
+          ? params.protocolVersion
+          : DEFAULT_PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: SERVER_INFO,
       });
@@ -59,9 +66,13 @@ function handle(message) {
       result(id, { tools });
       return;
     case "tools/call": {
-      const output = callTool(params?.name);
+      const output = callTool(params?.name, params?.arguments);
       if (output === null) {
         error(id, -32602, `unknown tool: ${String(params?.name)}`);
+        return;
+      }
+      if (output.invalid) {
+        error(id, -32602, `invalid arguments for ${String(params?.name)}: ${output.invalid}`);
         return;
       }
       result(id, output);
