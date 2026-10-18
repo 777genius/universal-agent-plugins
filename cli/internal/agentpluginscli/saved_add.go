@@ -78,7 +78,7 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 		key := mustSourceKey(requirement)
 		for _, pkg := range snapshot.Lock.Packages {
 			if pkg.SourceKey == key {
-				alias = pkg.Alias
+				alias = dependencyRootKey(snapshot.Requirements, snapshot.Lock, pkg.Alias)
 				pin = pkg
 				break
 			}
@@ -89,7 +89,7 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 		if err != nil {
 			return environment.Requirement{}, environment.LockedPackage{}, err
 		}
-		alias = pin.Alias
+		alias = dependencyRootKey(snapshot.Requirements, snapshot.Lock, pin.Alias)
 		if alias != "" {
 			requirement = snapshot.Requirements.Dependencies[alias]
 			if requirement.Registry == nil && pin.Source.Registry != nil {
@@ -246,7 +246,7 @@ func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirem
 		return previous
 	}
 	for i, pkg := range previous.Packages {
-		if pkg.Alias == alias {
+		if pkg.SourceKey == pin.SourceKey {
 			previous.Packages[i] = pin
 			return previous
 		}
@@ -367,8 +367,8 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		if len(targets) != 1 {
 			return errors.New("explicit lifecycle attestation requires exactly one target")
 		}
-		attest = &environment.Attestation{Alias: alias, ClientID: string(targets[0]), ActivationComplete: activation, AuthComplete: auth}
+		attest = &environment.Attestation{Alias: dependencyNodeAlias(requirements, locked, alias), ClientID: string(targets[0]), ActivationComplete: activation, AuthComplete: auth}
 	}
 	opts.environmentOutput = map[string]any{"saved": true, "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
-	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{alias}, attest)
+	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{dependencyNodeAlias(requirements, locked, alias)}, attest)
 }

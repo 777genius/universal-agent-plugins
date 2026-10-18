@@ -96,6 +96,9 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 	if err != nil {
 		return loadedPackage{}, err
 	}
+	if _, err := packageDependencyFacts(envelope); err != nil {
+		return loadedPackage{}, err
+	}
 	if envelope.LoaderKind != domain.LoaderKindAgentPlugins || envelope.TreeDigest != locked.TreeDigest ||
 		envelope.ManifestDigest != locked.ManifestDigest {
 		return loadedPackage{}, errors.New("stored dependency failed strict standard-loader identity checks")

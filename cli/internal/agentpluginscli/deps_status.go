@@ -80,7 +80,9 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 		if lockErr != nil {
 			status.Facts = append(status.Facts, dependencyStatusFact{Facts: []string{"not_synced"}})
 		} else {
-			canonicalizeRequirementsFromLock(&requirements, lock)
+			if err := canonicalizeRequirementsFromLock(&requirements, lock); err != nil {
+				return err
+			}
 			status.ManifestDigest, _ = environment.ManifestDigest(requirements)
 			status.LockDigest = lock.ManifestDigest
 		}
@@ -98,19 +100,45 @@ func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	return renderDependencyStatus(cmd, opts, status)
 }
 
-func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lock environment.Lock) {
-	for alias, requirement := range requirements.Dependencies {
+func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lock environment.Lock) error {
+	for key, requirement := range requirements.Dependencies {
 		if requirement.Registry == nil || strings.Contains(requirement.Registry.Distribution, "/") {
 			continue
 		}
+		var candidates []environment.LockedPackage
 		for _, pkg := range lock.Packages {
-			if pkg.Alias == alias && pkg.Source.Registry != nil && (requirement.Registry.Distribution == pkg.Source.Registry.ProductID || requirement.Registry.Distribution == path.Base(pkg.Source.Registry.DistributionID)) {
-				requirement.Registry.Distribution = pkg.Source.Registry.DistributionID
-				requirements.Dependencies[alias] = requirement
+			source := pkg.Source.Registry
+			if source == nil {
+				continue
+			}
+			if strings.EqualFold(requirement.Registry.Distribution, source.ProductID) || strings.EqualFold(requirement.Registry.Distribution, path.Base(source.DistributionID)) {
+				candidates = append(candidates, pkg)
+			}
+		}
+		// Preserve an existing unambiguous alias association; otherwise require a
+		// unique source match. Full lock validation follows this offline lookup.
+		var selected *environment.LockedPackage
+		for i := range candidates {
+			if candidates[i].Alias == key {
+				selected = &candidates[i]
 				break
 			}
 		}
+		if selected == nil && len(candidates) == 1 {
+			selected = &candidates[0]
+		}
+		if len(candidates) == 0 {
+			continue
+		}
+		if selected == nil {
+			return fmt.Errorf("dependency %q cannot be mapped unambiguously to uap.lock registry facts; use its canonical distribution", key)
+		}
+		source := *requirement.Registry
+		source.Distribution = selected.Source.Registry.DistributionID
+		requirement.Registry = &source
+		requirements.Dependencies[key] = requirement
 	}
+	return nil
 }
 
 func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage) {

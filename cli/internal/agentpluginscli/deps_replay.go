@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
@@ -73,17 +72,27 @@ func readReplayDependency(ctx context.Context, app App, pin environment.LockedPa
 		defer func() { _ = loaded.cleanup() }()
 	}
 	pin.Version = loaded.envelope.Manifest.Version
-	return environment.ResolvedPackage{Package: pin, Dependencies: loaded.envelope.Manifest.Dependencies}, nil
+	facts, err := packageDependencyFacts(loaded.envelope)
+	if err != nil {
+		return environment.ResolvedPackage{}, err
+	}
+	return environment.ResolvedPackage{Package: pin, Dependencies: facts}, nil
 }
 
-func verifyDeclaredEdges(parent string, declarations map[string]string, bySource map[string]environment.LockedPackage) error {
+func verifyDeclaredEdges(parent string, declarations map[string]environment.Requirement, bySource map[string]environment.LockedPackage) error {
 	expected := make(map[string]environment.Selector, len(declarations))
-	for distribution, expression := range declarations {
-		kind := environment.SelectorVersion
-		if expression != "" && expression[0] == '^' {
-			kind = environment.SelectorRange
+	for _, requirement := range declarations {
+		key, err := requirement.SourceKey()
+		if err != nil {
+			return err
 		}
-		expected["directory:"+strings.ToLower(distribution)] = environment.Selector{Kind: kind, Value: expression}
+		var selector environment.Selector
+		if requirement.Git != nil {
+			selector = requirement.Git.Selector
+		} else {
+			selector = requirement.Registry.Selector
+		}
+		expected[key] = selector
 	}
 	for key, pin := range bySource {
 		for _, edge := range pin.RequiredBy {

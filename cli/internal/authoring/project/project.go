@@ -16,6 +16,8 @@ import (
 type Result struct {
 	Input packageview.Input
 	Facts conformance.Facts
+	// DependencyDiagnostics are UAP manager policy, outside standard facts.
+	DependencyDiagnostics []DependencyDiagnostic
 }
 
 // Service is immutable configuration. Each Read owns its reader, decoder and lease.
@@ -104,6 +106,7 @@ func (s Service) read(ctx context.Context, exactRoot string, generated packagevi
 	if err != nil || result.Facts.Package == nil {
 		return result, err
 	}
+	result.DependencyDiagnostics = dependencyDiagnostics(result.Facts.Package.Manifest.Extensions, input, lease)
 	return result, withCommands(ctx, &result.Facts, input, lease)
 }
 

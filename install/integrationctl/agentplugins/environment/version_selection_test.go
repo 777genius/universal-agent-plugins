@@ -42,7 +42,7 @@ type versionSelectionResolver struct {
 	enumerated, acquired int
 }
 
-func (r *versionSelectionResolver) Resolve(ctx context.Context, req Requirement, old *LockedPackage, update bool) (LockedPackage, error) {
+func (r *versionSelectionResolver) Resolve(ctx context.Context, req Requirement, _ []string, old *LockedPackage, update bool) (LockedPackage, error) {
 	return LockedPackage{}, fmt.Errorf("unexpected exact resolution")
 }
 func (r *versionSelectionResolver) Candidates(_ context.Context, req Requirement, _ []string) ([]Candidate, error) {
@@ -57,10 +57,10 @@ func (r *versionSelectionResolver) AcquireCandidate(_ context.Context, req Requi
 		alias = name
 	}
 	pkg := LockedPackage{Alias: alias, SourceKey: "directory:" + distribution, Version: c.Version, DigestAlgorithm: TreeDigestAlgorithm, TreeDigest: "sha256:" + strings.Repeat("a", 64), ManifestDigest: "sha256:" + strings.Repeat("b", 64), Targets: targets, Source: LockedSource{Registry: &LockedRegistrySource{Distribution: distribution, DistributionID: distribution, ProductID: distribution, ReleaseSequence: c.ReleaseSequence, Requested: req.Registry.Selector, Repository: "acme/source", Commit: strings.Repeat("1", 40)}}}
-	return ResolvedPackage{Package: pkg, Dependencies: r.dependencies[distribution+"@"+c.Version]}, nil
+	return ResolvedPackage{Package: pkg, Dependencies: fixtureRequirements(r.dependencies[distribution+"@"+c.Version])}, nil
 }
 func (r *versionSelectionResolver) DescribePinned(_ context.Context, pkg LockedPackage) (ResolvedPackage, error) {
-	return ResolvedPackage{Package: pkg, Dependencies: r.dependencies[pkg.Source.Registry.Distribution+"@"+pkg.Version]}, nil
+	return ResolvedPackage{Package: pkg, Dependencies: fixtureRequirements(r.dependencies[pkg.Source.Registry.Distribution+"@"+pkg.Version])}, nil
 }
 func (r *versionSelectionResolver) Eligible(_ context.Context, pkg LockedPackage, targets []string) (bool, error) {
 	for _, target := range targets {

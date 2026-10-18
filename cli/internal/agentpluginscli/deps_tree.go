@@ -11,9 +11,16 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
+type dependencyRootMapping struct {
+	Key       string `json:"key"`
+	SourceKey string `json:"source_key"`
+	Alias     string `json:"alias"`
+}
+
 type dependencyTree struct {
-	Roots    []string                    `json:"roots"`
-	Packages []environment.LockedPackage `json:"packages"`
+	RootMappings []dependencyRootMapping     `json:"root_mappings,omitempty"`
+	Roots        []string                    `json:"roots"`
+	Packages     []environment.LockedPackage `json:"packages"`
 }
 
 func newDependencyTreeCommand(app App, opts *options) *cobra.Command {
@@ -34,9 +41,17 @@ func newDependencyTreeCommand(app App, opts *options) *cobra.Command {
 			return fmt.Errorf("read dependency graph: %w; run deps lock", err)
 		}
 		tree := dependencyTree{Roots: make([]string, 0, len(requirements.Dependencies)), Packages: append([]environment.LockedPackage{}, locked.Packages...)}
-		for alias := range requirements.Dependencies {
-			tree.Roots = append(tree.Roots, alias)
+		if err := canonicalizeRequirementsFromLock(&requirements, locked); err != nil {
+			return err
 		}
+		for key, requirement := range requirements.Dependencies {
+			alias := dependencyNodeAlias(requirements, locked, key)
+			tree.Roots = append(tree.Roots, alias)
+			if key != alias {
+				tree.RootMappings = append(tree.RootMappings, dependencyRootMapping{Key: key, SourceKey: mustSourceKey(requirement), Alias: alias})
+			}
+		}
+		sort.Slice(tree.RootMappings, func(i, j int) bool { return tree.RootMappings[i].Key < tree.RootMappings[j].Key })
 		sort.Strings(tree.Roots)
 		sort.Slice(tree.Packages, func(i, j int) bool { return tree.Packages[i].Alias < tree.Packages[j].Alias })
 		if opts.format == "json" {
@@ -47,6 +62,11 @@ func newDependencyTreeCommand(app App, opts *options) *cobra.Command {
 }
 
 func renderDependencyTree(writer io.Writer, tree dependencyTree) error {
+	for _, root := range tree.RootMappings {
+		if _, err := fmt.Fprintf(writer, "%s → %s (%s)\n", root.Key, root.Alias, root.SourceKey); err != nil {
+			return err
+		}
+	}
 	packages := make(map[string]environment.LockedPackage, len(tree.Packages))
 	children := make(map[string][]string)
 	for _, pkg := range tree.Packages {

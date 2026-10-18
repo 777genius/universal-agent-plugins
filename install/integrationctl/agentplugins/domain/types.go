@@ -57,7 +57,6 @@ type Author struct {
 }
 
 type PluginManifest struct {
-	Dependencies  map[string]string          `json:"dependencies,omitempty"`
 	SchemaURI     string                     `json:"schema_uri"`
 	Name          string                     `json:"name"`
 	Version       string                     `json:"version,omitempty"`

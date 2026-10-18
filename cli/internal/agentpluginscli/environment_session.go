@@ -27,7 +27,7 @@ type environmentSnapshot struct {
 	ManifestBytes, LockBytes []byte
 }
 
-func snapshotEnvironment(cmd *cobra.Command, app App) (environmentSnapshot, error) {
+func snapshotEnvironment(cmd *cobra.Command, app App, verifyPrevious ...bool) (environmentSnapshot, error) {
 	s := environmentSnapshot{}
 	if err := requireDependencyMutationReady(app); err != nil {
 		return s, err
@@ -74,9 +74,13 @@ func snapshotEnvironment(cmd *cobra.Command, app App) (environmentSnapshot, erro
 	if err != nil {
 		return s, fmt.Errorf("%s: %w", dependencyMismatch, err)
 	}
-	canonicalizeRequirementsFromLock(&s.Requirements, s.Lock)
-	if err := verifyDependencyDeclarations(cmd.Context(), app, s.Lock); err != nil {
+	if err := canonicalizeRequirementsFromLock(&s.Requirements, s.Lock); err != nil {
 		return s, err
+	}
+	if len(verifyPrevious) == 0 || verifyPrevious[0] {
+		if err := verifyDependencyDeclarations(cmd.Context(), app, s.Lock); err != nil {
+			return s, err
+		}
 	}
 	return s, nil
 }
@@ -168,7 +172,9 @@ func editEnvironmentIntent(snapshot environmentSnapshot, wanted environment.Requ
 	if err != nil {
 		return nil, err
 	}
-	canonicalizeRequirementsFromLock(&actual, snapshot.Lock)
+	if err := canonicalizeRequirementsFromLock(&actual, snapshot.Lock); err != nil {
+		return nil, err
+	}
 	if !reflect.DeepEqual(actual, wanted) {
 		return nil, errors.New("edited manifest does not match intended requirements")
 	}

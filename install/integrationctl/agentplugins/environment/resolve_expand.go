@@ -3,15 +3,14 @@ package environment
 import (
 	"context"
 	"fmt"
-	"path"
 	"slices"
 	"sort"
-	"strings"
 )
 
 func (solver *graphSolver) expand(choices map[string]ResolvedPackage) (map[string]graphNode, error) {
 	nodes := map[string]graphNode{}
 	for key, node := range solver.roots {
+		node.requirement = solver.nodeRequirement(key, node.requirement, choices)
 		node.targets = append([]string{}, node.targets...)
 		node.demands = append([]graphDemand{}, node.demands...)
 		nodes[key] = node
@@ -48,10 +47,16 @@ func mergeGraphDemand(nodes map[string]graphNode, parent graphNode, req Requirem
 	}
 	demand := graphDemand{requirement: req, parent: parent.requirement.Alias}
 	if !slices.ContainsFunc(child.demands, func(item graphDemand) bool {
-		return item.parent == demand.parent && item.requirement.Registry != nil && item.requirement.Registry.Selector == req.Registry.Selector
+		return item.parent == demand.parent && requirementSelector(item.requirement) == requirementSelector(req)
 	}) {
 		child.demands = append(child.demands, demand)
 		changed = true
+	}
+	// An exact release fixes the candidate before intersecting SemVer demands.
+	if req.Registry != nil && req.Registry.Selector.Kind == SelectorRelease && child.requirement.Registry.Selector.Kind != SelectorRelease {
+		alias := child.requirement.Alias
+		child.requirement = req
+		child.requirement.Alias = alias
 	}
 	targets := unionTargets(child.targets, parent.targets)
 	if !slices.Equal(targets, child.targets) {
@@ -74,29 +79,51 @@ func validateGraphAliases(nodes map[string]graphNode) error {
 	return nil
 }
 
-func (solver *graphSolver) dependencyRequirement(distribution, value string, choices map[string]ResolvedPackage) (Requirement, error) {
-	if !strings.Contains(distribution, "/") {
-		return Requirement{}, fmt.Errorf("dependency distribution %q must be canonical owner/name", distribution)
+func requirementSelector(req Requirement) Selector {
+	if req.Git != nil {
+		return req.Git.Selector
 	}
-	selector := Selector{Kind: SelectorVersion, Value: value}
-	if strings.HasPrefix(value, "^") {
-		selector.Kind = SelectorRange
-	}
-	key := "directory:" + strings.ToLower(distribution)
-	alias := strings.ReplaceAll(strings.ToLower(path.Base(distribution)), ".", "-")
-	// This alias only carries unresolved source intent; acquisition supplies manifest.name.
-	if !aliasPattern.MatchString(alias) {
-		alias = "dependency"
-	}
-	if root, ok := solver.roots[key]; ok {
-		alias = root.requirement.Alias
-	} else if pin, ok := solver.pins[key]; ok {
-		alias = pin.Alias
+	return req.Registry.Selector
+}
+
+func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices map[string]ResolvedPackage) Requirement {
+	if pin, ok := solver.pins[key]; ok {
+		req.Alias = pin.Alias
+	} else if root, ok := solver.roots[key]; ok && aliasPattern.MatchString(solver.requirements.Dependencies[rootDeclaration(solver.requirements, key)].Alias) {
+		req.Alias = root.requirement.Alias
 	} else if chosen, ok := choices[key]; ok && chosen.Package.Alias != "" {
-		alias = chosen.Package.Alias
+		req.Alias = chosen.Package.Alias
+	} else {
+		// No owner identity exists yet. Let acquisition supply manifest.name;
+		// package-local declaration names do not name environment bindings.
+		if req.Registry != nil {
+			req.Alias = req.Registry.Distribution
+		} else {
+			req.Alias = req.Git.Repository
+		}
 	}
-	req := Requirement{Alias: alias, Registry: &RegistrySource{Distribution: distribution, Selector: selector}}
-	return req, req.Validate()
+	return req
+}
+
+func rootDeclaration(requirements Requirements, source string) string {
+	for declaration, req := range requirements.Dependencies {
+		key, _ := req.SourceKey()
+		if key == source {
+			return declaration
+		}
+	}
+	return ""
+}
+
+func (solver *graphSolver) dependencyRequirement(declaration string, req Requirement, choices map[string]ResolvedPackage) (Requirement, error) {
+	if declaration != req.Alias {
+		return Requirement{}, fmt.Errorf("dependency key %q does not match declaration %q", declaration, req.Alias)
+	}
+	key, err := req.SourceKey()
+	if err != nil {
+		return Requirement{}, fmt.Errorf("dependency %q: %w", declaration, err)
+	}
+	return solver.nodeRequirement(key, req, choices), nil
 }
 
 func unionTargets(a, b []string) []string {
@@ -115,21 +142,12 @@ func (solver *graphSolver) describe(ctx context.Context, pkg LockedPackage) (Res
 	if cached, ok := solver.descriptions[cacheKey]; ok {
 		return cached, nil
 	}
-	selected := ResolvedPackage{Package: pkg, Dependencies: map[string]string{}}
-	if solver.graph != nil {
-		var err error
-		selected, err = solver.graph.DescribePinned(ctx, pkg)
-		if err != nil {
-			return ResolvedPackage{}, err
-		}
-	} else {
-		for _, child := range solver.previous.Packages {
-			for _, edge := range child.RequiredBy {
-				if edge.Alias == pkg.Alias && child.Source.Registry != nil {
-					selected.Dependencies[child.Source.Registry.Distribution] = edge.Selector.Value
-				}
-			}
-		}
+	if solver.graph == nil {
+		return ResolvedPackage{}, ErrDependencyFactsUnavailable
+	}
+	selected, err := solver.graph.DescribePinned(ctx, pkg)
+	if err != nil {
+		return ResolvedPackage{}, err
 	}
 	solver.descriptions[cacheKey] = selected
 	return selected, nil
@@ -137,7 +155,7 @@ func (solver *graphSolver) describe(ctx context.Context, pkg LockedPackage) (Res
 
 func (solver *graphSolver) checkTargets(ctx context.Context, node graphNode, pkg LockedPackage) error {
 	if solver.graph == nil {
-		return nil
+		return ErrDependencyFactsUnavailable
 	}
 	if old, ok := solver.pins[pkg.SourceKey]; ok && sameEligibilityPin(old, pkg) && slices.Equal(unionTargets(old.Targets, node.targets), old.Targets) {
 		return nil

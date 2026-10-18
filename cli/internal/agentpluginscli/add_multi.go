@@ -107,6 +107,10 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 }
 
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+
 	applyLoadedGuidedIntents(opts, loaded, targets)
 	if err := revalidateLoadedTargetIntents(ctx, app, opts, loaded, targets, clients); err != nil {
 		return err

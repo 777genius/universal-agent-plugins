@@ -49,7 +49,9 @@ func decodeDependencyLockBytes(body []byte, requirements environment.Requirement
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return environment.Lock{}, errors.New("uap.lock contains trailing JSON values")
 	}
-	canonicalizeRequirementsFromLock(&requirements, lock)
+	if err := canonicalizeRequirementsFromLock(&requirements, lock); err != nil {
+		return environment.Lock{}, err
+	}
 	if compatible {
 		err = lock.ValidateCompatiblePins(requirements)
 	} else {
@@ -69,14 +71,14 @@ func writeDependencyLock(path string, lock environment.Lock) error {
 	return atomicfile.Write(path, append(body, '\n'), 0o600)
 }
 
-func (resolver dependencyResolver) Resolve(ctx context.Context, requirement environment.Requirement, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
+func (resolver dependencyResolver) Resolve(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	if previous != nil && !update && sameRequestedSelector(requirement, *previous) {
 		return *previous, nil
 	}
 	if requirement.Git != nil {
-		return resolver.resolveGit(ctx, requirement, previous, update)
+		return resolver.resolveGit(ctx, requirement, targets, previous, update)
 	}
-	return resolver.resolveRegistry(ctx, requirement)
+	return resolver.resolveRegistry(ctx, requirement, targets)
 }
 
 func sameRequestedSelector(requirement environment.Requirement, previous environment.LockedPackage) bool {
@@ -86,7 +88,7 @@ func sameRequestedSelector(requirement environment.Requirement, previous environ
 	return previous.Source.Registry != nil && previous.Source.Registry.Requested == requirement.Registry.Selector
 }
 
-func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
+func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	source := requirement.Git
 	commit := source.Selector.Value
 	resolvedRef, defaultBranch := "", ""
@@ -136,24 +138,23 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 		return environment.LockedPackage{}, err
 	}
 	locked := environment.LockedPackage{
-		Alias: requirement.Alias, SourceKey: mustSourceKey(requirement), Version: loaded.envelope.Manifest.Version,
+		Alias: requirement.Alias, Targets: append([]string{}, targets...), SourceKey: mustSourceKey(requirement), Version: loaded.envelope.Manifest.Version,
 		DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: loaded.envelope.TreeDigest,
 		ManifestDigest: loaded.envelope.ManifestDigest, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: source.Repository, Path: source.Path,
 			Requested: source.Selector, Commit: commit, ResolvedRef: resolvedRef, DefaultBranch: defaultBranch}},
 	}
+	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
+		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
+	}
 	return locked, resolver.finishLoaded(loaded)
 }
 
-func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement) (environment.LockedPackage, error) {
+func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
 	sequence, _ := parseReleaseSequence(requirement.Registry.Selector.Value)
 	request := packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, DesiredReleaseSequence: sequence}
-	for target, aliases := range resolver.requirements.Targets {
-		for _, alias := range aliases {
-			if alias == requirement.Alias {
-				request.Targets = append(request.Targets, domain.ClientID(target))
-			}
-		}
+	for _, target := range targets {
+		request.Targets = append(request.Targets, domain.ClientID(target))
 	}
 	loaded, err := resolver.app.acquireDirectory(ctx, requirement.Registry.Distribution, request)
 	if err != nil {
@@ -167,6 +168,9 @@ func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirem
 	if err != nil {
 		_ = loaded.cleanup()
 		return environment.LockedPackage{}, err
+	}
+	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
+		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
 	return locked, resolver.finishLoaded(loaded)
 }
@@ -190,6 +194,10 @@ func registryLockedPackage(requirement environment.Requirement, loaded loadedPac
 }
 
 func (resolver dependencyResolver) finishLoaded(loaded loadedPackage) error {
+	if _, err := packageDependencyFacts(loaded.envelope); err != nil {
+		_ = loaded.cleanup()
+		return err
+	}
 	if !resolver.dryRun {
 		snapshot := domain.PackageSnapshot{Root: loaded.envelope.SnapshotRoot, TreeDigest: loaded.envelope.TreeDigest,
 			DigestAlgorithm: domain.TreeDigestAlgorithm, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
@@ -232,7 +240,6 @@ func (app App) dependencyStore() environmentstore.Store {
 }
 
 func (app App) canonicalizeDependencyRequirements(ctx context.Context, requirements environment.Requirements) (environment.Requirements, error) {
-	changed := false
 	for alias, requirement := range requirements.Dependencies {
 		if requirement.Registry == nil || strings.Contains(requirement.Registry.Distribution, "/") {
 			continue
@@ -263,12 +270,9 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 		}
 		requirement.Registry.Distribution = selection.DistributionID
 		requirements.Dependencies[alias] = requirement
-		changed = true
 	}
-	if changed {
-		if err := requirements.Validate(); err != nil {
-			return environment.Requirements{}, err
-		}
+	if err := requirements.Validate(); err != nil {
+		return environment.Requirements{}, err
 	}
 	return requirements, nil
 }

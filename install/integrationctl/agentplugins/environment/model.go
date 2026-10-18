@@ -203,8 +203,13 @@ func validateSubpath(value string) error {
 	return nil
 }
 
+// Declaration keys are logical intent, never filesystem names or receipt aliases.
+func validDeclarationKey(value string) bool {
+	return aliasPattern.MatchString(value) || (strings.Count(value, "/") == 1 && distributionPattern.MatchString(value))
+}
+
 func (requirement Requirement) Validate() error {
-	if !aliasPattern.MatchString(requirement.Alias) {
+	if !validDeclarationKey(requirement.Alias) {
 		return fmt.Errorf("alias %q must match %s", requirement.Alias, aliasPattern)
 	}
 	if (requirement.Git == nil) == (requirement.Registry == nil) {
@@ -385,7 +390,7 @@ func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
 
 func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 	if requirement.Git != nil {
-		if pkg.Source.Git == nil || pkg.Source.Registry != nil || pkg.Source.Git.Repository != requirement.Git.Repository ||
+		if pkg.Source.Git == nil || pkg.Source.Registry != nil || !strings.EqualFold(pkg.Source.Git.Repository, requirement.Git.Repository) ||
 			pkg.Source.Git.Path != requirement.Git.Path || pkg.Source.Git.Requested != requirement.Git.Selector ||
 			!commitPattern.MatchString(pkg.Source.Git.Commit) {
 			return errors.New("locked Git identity does not match manifest")
@@ -400,12 +405,29 @@ func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 
 func validateLockedRegistrySelector(requirement Requirement, pkg LockedPackage) error {
 	source := pkg.Source.Registry
-	if source == nil || pkg.Source.Git != nil || source.Distribution != requirement.Registry.Distribution ||
+	if source == nil || pkg.Source.Git != nil || !strings.EqualFold(source.Distribution, requirement.Registry.Distribution) ||
 		source.Requested != requirement.Registry.Selector || source.ReleaseSequence == 0 || !registrySelectorMatches(requirement.Registry.Selector, pkg) ||
-		source.DistributionID != source.Distribution || !distributionPattern.MatchString(source.DistributionID) || !repositoryPattern.MatchString(source.Repository) || validateSubpath(source.Path) != nil || !commitPattern.MatchString(source.Commit) {
+		!strings.EqualFold(source.DistributionID, source.Distribution) || !distributionPattern.MatchString(source.DistributionID) || !repositoryPattern.MatchString(source.Repository) || validateSubpath(source.Path) != nil || !commitPattern.MatchString(source.Commit) {
 		return errors.New("locked registry identity does not match manifest")
 	}
 	return nil
+}
+
+// PackageForRequirement maps a declaration to its stable graph identity.
+func (lock Lock) PackageForRequirement(requirement Requirement) (LockedPackage, bool) {
+	key, err := requirement.SourceKey()
+	if err != nil {
+		return LockedPackage{}, false
+	}
+	var found LockedPackage
+	count := 0
+	for _, pkg := range lock.Packages {
+		if pkg.SourceKey == key {
+			found = pkg
+			count++
+		}
+	}
+	return found, count == 1
 }
 
 func (lock Lock) Package(alias string) (LockedPackage, bool) {
