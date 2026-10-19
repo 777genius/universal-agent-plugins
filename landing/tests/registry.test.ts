@@ -13,6 +13,7 @@ import {
   catalogQuery,
   restoreCatalogQuery,
 } from '../utils/filter.ts';
+import { clients } from '../data/clients.ts';
 import { mirroredIconPath, parseDirectoryData } from '../utils/registry.ts';
 import { projectRegistry } from '../utils/registryProjection.ts';
 import type { DiscoveryRecord, DiscoverySnapshot } from '../types/discovery.ts';
@@ -56,6 +57,40 @@ const discoveryRecord = {
 } satisfies DiscoveryRecord;
 
 describe('unified registry landing', () => {
+  it('accepts Directory target policies for newly advertised native clients without enabling undeclared targets', () => {
+    const fixture = structuredClone(snapshot) as {
+      distributions: {
+        id: string;
+        release_policies: {
+          targets: { client: string; authentication: string; delivery: string; scopes: string[] }[];
+        }[];
+      }[];
+    };
+    const nativeClients = clients.filter((client) => ['grok', 'kimi', 'qoder'].includes(client.id));
+    const distribution = fixture.distributions.find((item) => item.id === '777genius/context7')!;
+    for (const policy of distribution.release_policies) {
+      policy.targets = nativeClients.map((client) => ({
+        client: client.id,
+        authentication: 'not_required',
+        delivery: 'managed',
+        scopes: ['user'],
+      }));
+    }
+    const parsed = parseDirectoryData(fixture, 'published_snapshot');
+    const context7 = parsed.plugins.find((plugin) => plugin.name === 'context7')!;
+    const community = context7.distributions.find((item) => item.id === distribution.id)!;
+    assert.deepEqual(
+      community.releases[0]!.targets.map((target) => target.client),
+      nativeClients.map((client) => client.id),
+    );
+    assert.equal(
+      registry.plugins.find((plugin) => plugin.name === 'context7')!.client_support.clients.includes('qoder'),
+      false,
+    );
+    distribution.release_policies[0]!.targets[0]!.client = 'unknown-client';
+    assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'), /invalid or duplicate client/);
+  });
+
   it('projects only the registry data required by each static route', () => {
     const plugin = registry.plugins[0]!;
     const client = plugin.client_support.clients[0]!;

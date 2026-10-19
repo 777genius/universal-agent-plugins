@@ -35,6 +35,9 @@ const CLIENTS = new Set<ClientID>([
   'opencode',
   'cline',
   'windsurf',
+  'grok',
+  'kimi',
+  'qoder',
 ]);
 const KINDS = new Set<DistributionKind>(['upstream', 'community_bridge', 'community']);
 const RFC3339_INSTANT =
@@ -207,6 +210,9 @@ const legacyDelivery: RegistryPlugin['client_support']['delivery'] = {
   opencode: 'managed',
   cline: 'managed',
   windsurf: 'prepared',
+  grok: 'managed',
+  kimi: 'managed',
+  qoder: 'managed',
 };
 
 function legacyAuthentication(name: string): RegistryPlugin['authentication'] {
