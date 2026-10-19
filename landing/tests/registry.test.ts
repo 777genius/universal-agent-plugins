@@ -87,11 +87,18 @@ describe('unified registry landing', () => {
       policy.targets = policy.targets.filter((target) => target.client !== 'qoder');
     }
     const withoutQoder = parseDirectoryData(fixture, 'published_snapshot');
-    const unchanged = withoutQoder.plugins.find((plugin) => plugin.name === 'context7')!
+    const unchanged = withoutQoder.plugins
+      .find((plugin) => plugin.name === 'context7')!
       .distributions.find((item) => item.id === distribution.id)!;
-    assert.equal(unchanged.releases[0]!.targets.some((target) => target.client === 'qoder'), false);
+    assert.equal(
+      unchanged.releases[0]!.targets.some((target) => target.client === 'qoder'),
+      false,
+    );
     distribution.release_policies[0]!.targets[0]!.client = 'unknown-client';
-    assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'), /invalid or duplicate client/);
+    assert.throws(
+      () => parseDirectoryData(fixture, 'published_snapshot'),
+      /invalid or duplicate client/,
+    );
   });
 
   it('projects only the registry data required by each static route', () => {
