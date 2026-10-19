@@ -458,7 +458,7 @@
       "MCPTransports": {
         "sse": "unsupported",
         "stdio": "native",
-        "streamable-http": "unsupported"
+        "streamable-http": "native"
       },
       "PackageMode": "native",
       "Scopes": [

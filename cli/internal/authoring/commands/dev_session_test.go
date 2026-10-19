@@ -48,7 +48,14 @@ func TestDevSessionLockConflictsDeterministicallyAndReleases(t *testing.T) {
 	if err := releaseAgain(); err != nil {
 		t.Fatalf("release reacquired session: %v", err)
 	}
-	entries, err := os.ReadDir(filepath.Join(cache, "agentplugins", "author-dev-locks"))
+	// os.UserCacheDir resolves the platform cache root ($XDG_CACHE_HOME or
+	// $HOME/.cache on Linux, $HOME/Library/Caches on macOS), so assert against
+	// the resolved root rather than assuming one platform layout.
+	userCache, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(userCache, "agentplugins", "author-dev-locks"))
 	if err != nil || len(entries) != 1 {
 		t.Fatalf("expected one stable private lock file: %v %v", entries, err)
 	}

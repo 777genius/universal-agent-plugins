@@ -202,7 +202,7 @@
     "mcp_transports": {
       "sse": "unsupported",
       "stdio": "native",
-      "streamable-http": "unsupported"
+      "streamable-http": "native"
     },
     "app_support": "unsupported",
     "extension_support": "unsupported",

@@ -141,6 +141,8 @@ func mustDefaultRegistry() *Registry {
 		geminiAdapter{},
 		opencodeAdapter{},
 		qoderAdapter{},
+		newGrokPluginAdapter(),
+		newKimiPluginAdapter(),
 	} {
 		if err := registry.Register(adapter); err != nil {
 			panic(err)

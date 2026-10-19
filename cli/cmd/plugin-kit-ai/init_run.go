@@ -16,7 +16,9 @@ func runInit(cmd *cobra.Command, runner initCommandRunner, flags initFlagState, 
 		strings.EqualFold(strings.TrimSpace(flags.platform), "opencode") ||
 		strings.EqualFold(strings.TrimSpace(flags.platform), "cursor") ||
 		strings.EqualFold(strings.TrimSpace(flags.platform), "cursor-workspace") ||
-		strings.EqualFold(strings.TrimSpace(flags.platform), "qoder")) &&
+		strings.EqualFold(strings.TrimSpace(flags.platform), "qoder") ||
+		strings.EqualFold(strings.TrimSpace(flags.platform), "grok") ||
+		strings.EqualFold(strings.TrimSpace(flags.platform), "kimi")) &&
 		!cmd.Flags().Changed("runtime") {
 		runtime = ""
 	}

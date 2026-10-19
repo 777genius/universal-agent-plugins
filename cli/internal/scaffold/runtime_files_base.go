@@ -38,7 +38,7 @@ func baseRuntimeFiles(platform string) []TemplateFile {
 
 func platformRequiresLauncher(platform string) bool {
 	switch platform {
-	case "gemini", "codex-package", "opencode", "cursor", "cursor-workspace", "qoder":
+	case "gemini", "codex-package", "opencode", "cursor", "cursor-workspace", "qoder", "grok", "kimi":
 		return false
 	default:
 		return true

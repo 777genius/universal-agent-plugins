@@ -63,12 +63,22 @@ func TestProductionExamples_RenderValidateBuildAndSmoke(t *testing.T) {
 			dir:      filepath.Join(root, "examples", "plugins", "qoder-basic"),
 			platform: "qoder",
 		},
+		{
+			name:     "grok",
+			dir:      filepath.Join(root, "examples", "plugins", "grok-basic"),
+			platform: "grok",
+		},
+		{
+			name:     "kimi",
+			dir:      filepath.Join(root, "examples", "plugins", "kimi-basic"),
+			platform: "kimi",
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			workDir := tc.dir
-			if tc.buildGo || tc.platform == "codex-package" || tc.platform == "gemini" || tc.platform == "cursor" || tc.platform == "opencode" || tc.platform == "qoder" {
+			if tc.buildGo || tc.platform == "codex-package" || tc.platform == "gemini" || tc.platform == "cursor" || tc.platform == "opencode" || tc.platform == "qoder" || tc.platform == "grok" || tc.platform == "kimi" {
 				workDir = filepath.Join(t.TempDir(), filepath.Base(tc.dir))
 				copyTree(t, tc.dir, workDir)
 			}
@@ -97,6 +107,14 @@ func TestProductionExamples_RenderValidateBuildAndSmoke(t *testing.T) {
 			}
 			if tc.platform == "qoder" {
 				assertQoderConfig(t, workDir, "qoder-basic")
+				return
+			}
+			if tc.platform == "grok" {
+				assertGrokConfig(t, workDir, "grok-basic")
+				return
+			}
+			if tc.platform == "kimi" {
+				assertKimiConfig(t, workDir, "kimi-basic")
 				return
 			}
 			if !tc.buildGo {
@@ -319,6 +337,106 @@ func assertQoderConfig(t *testing.T, root, wantName string) {
 		t.Fatal(err)
 	}
 	if !bytes.Contains(generatedBody, []byte(".qoder-plugin/plugin.json")) {
+		t.Fatalf("unexpected GENERATED.md:\n%s", generatedBody)
+	}
+}
+
+func assertGrokConfig(t *testing.T, root, wantName string) {
+	t.Helper()
+	manifestBody, err := os.ReadFile(filepath.Join(root, ".grok-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(manifestBody, &manifest); err != nil {
+		t.Fatalf("parse grok plugin manifest: %v\n%s", err, manifestBody)
+	}
+	if manifest["name"] != wantName {
+		t.Fatalf(".grok-plugin/plugin.json name = %q want %q", manifest["name"], wantName)
+	}
+	if manifest["mcpServers"] != "./.mcp.json" {
+		t.Fatalf(".grok-plugin/plugin.json mcpServers = %+v", manifest["mcpServers"])
+	}
+	if manifest["skills"] != "./skills/" {
+		t.Fatalf(".grok-plugin/plugin.json skills = %+v", manifest["skills"])
+	}
+	body, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("parse .mcp.json: %v\n%s", err, body)
+	}
+	server, ok := doc.MCPServers["release-checks"]
+	if !ok {
+		t.Fatalf(".mcp.json missing release-checks server: %s", body)
+	}
+	if server.Command != "node" {
+		t.Fatalf("release-checks command = %q want %q", server.Command, "node")
+	}
+	if len(server.Args) != 1 || server.Args[0] != "./bin/release-checks.mjs" {
+		t.Fatalf("release-checks args = %v", server.Args)
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "release-checks", "SKILL.md")); err != nil {
+		t.Fatalf("stat generated grok skill: %v", err)
+	}
+	generatedBody, err := os.ReadFile(filepath.Join(root, "GENERATED.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(generatedBody, []byte(".grok-plugin/plugin.json")) {
+		t.Fatalf("unexpected GENERATED.md:\n%s", generatedBody)
+	}
+}
+
+func assertKimiConfig(t *testing.T, root, wantName string) {
+	t.Helper()
+	manifestBody, err := os.ReadFile(filepath.Join(root, ".kimi-plugin", "plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		Name       string `json:"name"`
+		Skills     string `json:"skills"`
+		MCPServers struct {
+			ReleaseChecks struct {
+				Command string   `json:"command"`
+				Args    []string `json:"args"`
+			} `json:"release-checks"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(manifestBody, &manifest); err != nil {
+		t.Fatalf("parse kimi plugin manifest: %v\n%s", err, manifestBody)
+	}
+	if manifest.Name != wantName {
+		t.Fatalf(".kimi-plugin/plugin.json name = %q want %q", manifest.Name, wantName)
+	}
+	if manifest.Skills != "./skills/" {
+		t.Fatalf(".kimi-plugin/plugin.json skills = %+v", manifest.Skills)
+	}
+	if manifest.MCPServers.ReleaseChecks.Command != "node" {
+		t.Fatalf(".kimi-plugin/plugin.json must inline the release-checks MCP server: %s", manifestBody)
+	}
+	if len(manifest.MCPServers.ReleaseChecks.Args) != 1 || manifest.MCPServers.ReleaseChecks.Args[0] != "./bin/release-checks.mjs" {
+		t.Fatalf("release-checks args = %v", manifest.MCPServers.ReleaseChecks.Args)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".mcp.json")); err == nil {
+		t.Fatal("Kimi must not generate an MCP sidecar; servers are inline in the manifest")
+	}
+	if _, err := os.Stat(filepath.Join(root, "skills", "release-checks", "SKILL.md")); err != nil {
+		t.Fatalf("stat generated kimi skill: %v", err)
+	}
+	generatedBody, err := os.ReadFile(filepath.Join(root, "GENERATED.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(generatedBody, []byte(".kimi-plugin/plugin.json")) {
 		t.Fatalf("unexpected GENERATED.md:\n%s", generatedBody)
 	}
 }

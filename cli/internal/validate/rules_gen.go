@@ -72,6 +72,28 @@ var generatedRules = map[string]Rule{
 		ForbiddenFiles: []string{},
 		BuildTargets:   []string{},
 	},
+	"grok": {
+		Platform: "grok",
+		RequiredFiles: []string{
+			"README.md",
+			".grok-plugin/plugin.json",
+		},
+		ForbiddenFiles: []string{
+			"launcher.yaml",
+		},
+		BuildTargets: []string{},
+	},
+	"kimi": {
+		Platform: "kimi",
+		RequiredFiles: []string{
+			"README.md",
+			".kimi-plugin/plugin.json",
+		},
+		ForbiddenFiles: []string{
+			"launcher.yaml",
+		},
+		BuildTargets: []string{},
+	},
 	"opencode": {
 		Platform: "opencode",
 		RequiredFiles: []string{

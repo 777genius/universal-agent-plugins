@@ -700,7 +700,7 @@
       "MCPTransports": {
         "sse": "unsupported",
         "stdio": "native",
-        "streamable-http": "unsupported"
+        "streamable-http": "native"
       },
       "PackageMode": "native",
       "Scopes": [
@@ -732,11 +732,9 @@
       {
         "Index": 1,
         "Kind": "mcp_server",
-        "Limitations": [
-          "component_not_supported_by_client"
-        ],
+        "Limitations": null,
         "Source": "",
-        "Support": "unsupported"
+        "Support": "native"
       },
       {
         "Index": 1,

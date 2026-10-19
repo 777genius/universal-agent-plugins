@@ -800,10 +800,10 @@
         {
           "Kind": "mcp_server",
           "Name": "remote",
-          "Reason": "component_not_supported_by_client",
+          "Reason": "",
           "Source": "",
           "SourceName": "",
-          "Support": "unsupported"
+          "Support": "native"
         },
         {
           "Kind": "app",

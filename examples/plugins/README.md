@@ -18,6 +18,8 @@ Their generated native outputs remain useful client-specific references:
 | `codex-package-prod` | `.codex-plugin/plugin.json`, Skills, MCP and app metadata |
 | `cursor-basic` | `.cursor-plugin/plugin.json`, Skills and MCP |
 | `qoder-basic` | `.qoder-plugin/plugin.json`, Skills, MCP and target-native hooks/commands |
+| `grok-basic` | `.grok-plugin/plugin.json`, Skills and wrapped `.mcp.json` sidecar |
+| `kimi-basic` | `.kimi-plugin/plugin.json`, Skills and inline MCP |
 | `gemini-extension-package` | `gemini-extension.json`, extension commands/settings/hooks |
 | `opencode-basic` | `opencode.json`, workspace configuration and mirrored Skills |
 
@@ -25,6 +27,12 @@ Native packages/configuration are not root Agent Plugins 1.0 manifests.
 Skills and MCP components may be reusable; hooks, app bindings, themes, and
 client settings retain their client-specific boundaries. The external Context7
 link below is a historical reference, not a locally verified standard package.
+
+MCP `headers` and `env` values from `plugin/mcp/servers.yaml` are projected
+verbatim into the generated client configs (`.mcp.json`, `kimi.plugin.json`,
+and similar), which these examples commit. Never put tokens or OAuth secrets
+in them: keep secrets out of the package and inject them at runtime (for
+example `${env.VAR}` style references resolved by the client).
 
 These examples are reference implementations for the historical v1 production plugin workflow.
 
@@ -35,6 +43,8 @@ These examples are reference implementations for the historical v1 production pl
 - [gemini-extension-package](./gemini-extension-package): Gemini CLI extension repo with `plugin/plugin.yaml`, generated `gemini-extension.json`, shared MCP, and packaging-only validation coverage
 - [cursor-basic](./cursor-basic): Cursor packaged plugin repo with `plugin/plugin.yaml`, portable `plugin/skills/**`, generated `.cursor-plugin/plugin.json`, and shared `.mcp.json`
 - [qoder-basic](./qoder-basic): Qoder packaged plugin repo with `plugin/plugin.yaml`, portable `plugin/skills/**`, generated `.qoder-plugin/plugin.json`, shared `.mcp.json`, and target-native hooks/commands authored under `plugin/targets/qoder/**` with generated `hooks/**` and `commands/**` mirrors
+- [grok-basic](./grok-basic): Grok Build packaged plugin repo with `plugin/plugin.yaml`, portable `plugin/skills/**`, generated `.grok-plugin/plugin.json`, and the wrapped `.mcp.json` sidecar referenced via `"mcpServers": "./.mcp.json"`
+- [kimi-basic](./kimi-basic): Kimi Code packaged plugin repo with `plugin/plugin.yaml`, portable `plugin/skills/**`, and generated `.kimi-plugin/plugin.json` with MCP inlined into `mcpServers` (Kimi resolves no MCP file refs)
 - [opencode-basic](./opencode-basic): OpenCode workspace-config repo with `plugin/plugin.yaml`, generated `opencode.json`, shared MCP, and mirrored portable skills
 
 Use them together with [../../docs/PRODUCTION.md](../../docs/PRODUCTION.md).
