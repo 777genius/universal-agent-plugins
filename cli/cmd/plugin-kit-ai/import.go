@@ -52,7 +52,7 @@ Use --source to import from a remote or external source reference such as github
 
 func init() {
 	importCmd.Flags().StringVar(&importSource, "source", "", "native source reference to import from (local path, github:owner/repo@ref//subdir, or git URL with optional #ref)")
-	importCmd.Flags().StringVar(&importFrom, "from", "", `source platform ("claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", or "qoder"; omit to auto-detect current native layouts)`)
+	importCmd.Flags().StringVar(&importFrom, "from", "", `source platform ("claude", "codex-package", "codex-runtime", "gemini", "opencode", "cursor", "cursor-workspace", "qoder", "grok", or "kimi"; omit to auto-detect current native layouts)`)
 	importCmd.Flags().BoolVarP(&importForce, "force", "f", false, "overwrite plugin/plugin.yaml if it already exists")
 	importCmd.Flags().BoolVar(&importIncludeUserScope, "include-user-scope", false, "include explicit user-scope native sources when supported by the import target")
 }

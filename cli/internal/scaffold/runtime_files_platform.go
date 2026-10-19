@@ -18,6 +18,10 @@ func filesForPlatform(platform string, extras bool) ([]TemplateFile, bool) {
 		return cursorWorkspacePlatformFiles(extras), true
 	case "qoder":
 		return qoderPlatformFiles(extras), true
+	case "grok":
+		return packagedPluginPlatformFiles("grok", extras), true
+	case "kimi":
+		return packagedPluginPlatformFiles("kimi", extras), true
 	default:
 		return nil, false
 	}
@@ -139,5 +143,18 @@ func qoderPlatformFiles(extras bool) []TemplateFile {
 		TemplateFile{Path: authoredPath("targets/qoder/hooks/hooks.json"), Template: "targets.qoder.hooks.json.tmpl", Extra: true},
 		TemplateFile{Path: authoredPath("targets/qoder/commands/{{.ProjectName}}.md"), Template: "targets.qoder.command.md.tmpl", Extra: true},
 		TemplateFile{Path: authoredPath("targets/qoder/bin/{{.ProjectName}}-hook"), Template: "targets.qoder.hook.sh.tmpl", Extra: true},
+	)
+}
+
+func packagedPluginPlatformFiles(platform string, extras bool) []TemplateFile {
+	files := []TemplateFile{
+		{Path: authoredPath("README.md"), Template: platform + ".README.md.tmpl", Extra: false},
+	}
+	if !extras {
+		return files
+	}
+	return append(files,
+		TemplateFile{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
+		TemplateFile{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
 	)
 }

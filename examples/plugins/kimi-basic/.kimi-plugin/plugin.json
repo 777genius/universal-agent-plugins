@@ -1,0 +1,14 @@
+{
+  "description": "Kimi packaged plugin example",
+  "mcpServers": {
+    "release-checks": {
+      "args": [
+        "./bin/release-checks.mjs"
+      ],
+      "command": "node"
+    }
+  },
+  "name": "kimi-basic",
+  "skills": "./skills/",
+  "version": "0.1.0"
+}
