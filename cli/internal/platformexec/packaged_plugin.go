@@ -26,6 +26,10 @@ type packagedPluginAdapter struct {
 	id          string
 	displayName string
 	manifestRel string
+	// manifestAlt lists native manifest paths consulted before manifestRel when
+	// reading: Kimi publishes kimi.plugin.json at the plugin root, and that copy
+	// wins when both exist.
+	manifestAlt []string
 	mcpLayout   packagedMCPLayout
 }
 
@@ -43,18 +47,35 @@ func newKimiPluginAdapter() packagedPluginAdapter {
 		id:          "kimi",
 		displayName: "Kimi",
 		manifestRel: ".kimi-plugin/plugin.json",
+		manifestAlt: []string{kimiRootManifestRel},
 		mcpLayout:   packagedMCPInline,
 	}
+}
+
+func (a packagedPluginAdapter) manifestCandidates() []string {
+	rels := make([]string, 0, len(a.manifestAlt)+1)
+	rels = append(rels, a.manifestAlt...)
+	return append(rels, a.manifestRel)
+}
+
+// manifestWriteRel returns the manifest path Generate must update so that
+// readManifest keeps resolving the same file after generation.
+func (a packagedPluginAdapter) manifestWriteRel(root string) string {
+	for _, rel := range a.manifestCandidates() {
+		if fileExists(filepath.Join(root, rel)) {
+			return rel
+		}
+	}
+	return a.manifestRel
 }
 
 func (a packagedPluginAdapter) ID() string { return a.id }
 
 func (a packagedPluginAdapter) DetectNative(root string) bool {
-	if fileExists(filepath.Join(root, a.manifestRel)) {
-		return true
-	}
-	if a.id == "kimi" {
-		return fileExists(filepath.Join(root, kimiRootManifestRel))
+	for _, rel := range a.manifestCandidates() {
+		if fileExists(filepath.Join(root, rel)) {
+			return true
+		}
 	}
 	return false
 }
@@ -114,7 +135,7 @@ func (a packagedPluginAdapter) Generate(root string, graph pluginmodel.PackageGr
 		return nil, err
 	}
 	artifacts = append(artifacts, pluginmodel.Artifact{
-		RelPath: a.manifestRel,
+		RelPath: a.manifestWriteRel(root),
 		Content: body,
 	})
 	skillArtifacts, err := renderPortableSkills(root, graph.Portable.Paths("skills"), "skills")
@@ -135,7 +156,7 @@ func (a packagedPluginAdapter) Import(root string, seed ImportSeed) (ImportResul
 		return ImportResult{}, err
 	}
 	if !ok {
-		return ImportResult{}, fmt.Errorf("%s plugin import requires %s", a.displayName, a.manifestRel)
+		return ImportResult{}, fmt.Errorf("%s plugin import requires %s", a.displayName, strings.Join(a.manifestCandidates(), " or "))
 	}
 	if name := stringMapField(manifest, "name"); name != "" {
 		result.Manifest.Name = name
@@ -165,10 +186,11 @@ func (a packagedPluginAdapter) Import(root string, seed ImportSeed) (ImportResul
 }
 
 func (a packagedPluginAdapter) Validate(root string, graph pluginmodel.PackageGraph, state pluginmodel.TargetState) ([]Diagnostic, error) {
-	manifest, diagnostics := a.validateManifestRead(root)
+	manifest, manifestRel, diagnostics := a.validateManifestRead(root)
 	if len(diagnostics) > 0 {
 		return diagnostics, nil
 	}
+	a.manifestRel = manifestRel // diagnostics must name the manifest actually read (Kimi root manifest wins)
 	diagnostics = append(diagnostics, a.validateIdentity(manifest, graph)...)
 	diagnostics = append(diagnostics, a.validateSkills(root, manifest, graph)...)
 	mcpDiagnostics, err := a.validateMCP(root, manifest, graph)
@@ -179,18 +201,10 @@ func (a packagedPluginAdapter) Validate(root string, graph pluginmodel.PackageGr
 }
 
 func (a packagedPluginAdapter) readManifest(root string) (map[string]any, string, bool, error) {
-	candidates := []string{a.manifestRel}
-	if a.id == "kimi" {
-		candidates = []string{kimiRootManifestRel, a.manifestRel}
-	}
-	var firstMissing error
-	for _, rel := range candidates {
+	for _, rel := range a.manifestCandidates() {
 		body, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {
 			if os.IsNotExist(err) {
-				if firstMissing == nil {
-					firstMissing = err
-				}
 				continue
 			}
 			return nil, "", false, err
@@ -206,17 +220,15 @@ func (a packagedPluginAdapter) readManifest(root string) (map[string]any, string
 
 func (a packagedPluginAdapter) importedMCP(root, manifestRel string, manifest map[string]any) (map[string]any, bool, error) {
 	value, ok := manifest["mcpServers"]
-	if !ok {
+	if !ok || value == nil {
 		return nil, false, nil
 	}
 	switch typed := value.(type) {
-	case nil:
-		return nil, false, nil
 	case map[string]any:
 		return typed, true, nil
 	case string:
 		if a.mcpLayout == packagedMCPInline {
-			return nil, false, fmt.Errorf("%s plugin field %q must be an inline object; Kimi does not resolve MCP file refs", a.displayName, "mcpServers")
+			return nil, false, fmt.Errorf("%s plugin manifest %s field %q must be an inline object; %s does not resolve MCP file refs", a.displayName, manifestRel, "mcpServers", a.displayName)
 		}
 		ref := strings.TrimSpace(typed)
 		if ref == "" {
@@ -224,18 +236,18 @@ func (a packagedPluginAdapter) importedMCP(root, manifestRel string, manifest ma
 		}
 		rel, err := containedPluginRel(ref)
 		if err != nil {
-			return nil, false, fmt.Errorf("unsupported %s plugin mcpServers ref %q: %w", a.displayName, ref, err)
+			return nil, false, fmt.Errorf("unsupported %s plugin manifest %s mcpServers ref %q: %w", a.displayName, manifestRel, ref, err)
 		}
 		return readWrappedMCPServers(filepath.Join(root, rel), rel)
 	default:
-		return nil, false, fmt.Errorf("%s plugin field %q must be a string ref or object", a.displayName, "mcpServers")
+		return nil, false, fmt.Errorf("%s plugin manifest %s field %q must be a string ref or object", a.displayName, manifestRel, "mcpServers")
 	}
 }
 
 func containedPluginRel(ref string) (string, error) {
 	cleaned := filepath.Clean(strings.TrimSpace(ref))
-	cleaned = strings.TrimPrefix(cleaned, "./")
-	if cleaned == "" || cleaned == "." || strings.HasPrefix(cleaned, "..") || filepath.IsAbs(cleaned) {
+	cleaned = strings.TrimPrefix(cleaned, "."+string(filepath.Separator))
+	if cleaned == "" || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) || filepath.IsAbs(cleaned) {
 		return "", fmt.Errorf("path must stay inside the plugin root")
 	}
 	return filepath.ToSlash(cleaned), nil
@@ -258,23 +270,20 @@ func readWrappedMCPServers(path, label string) (map[string]any, bool, error) {
 		if !ok {
 			return nil, false, fmt.Errorf("plugin MCP config %s field %q must be a JSON object", label, "mcpServers")
 		}
-		if servers == nil {
-			return map[string]any{}, true, nil
-		}
 		return servers, true, nil
 	}
 	return doc, true, nil
 }
 
-func (a packagedPluginAdapter) validateManifestRead(root string) (map[string]any, []Diagnostic) {
-	manifest, _, ok, err := a.readManifest(root)
+func (a packagedPluginAdapter) validateManifestRead(root string) (map[string]any, string, []Diagnostic) {
+	manifest, manifestRel, ok, err := a.readManifest(root)
 	if err != nil {
-		return nil, []Diagnostic{a.manifestDiagnostic(CodeManifestInvalid, fmt.Sprintf("%s plugin manifest %s is invalid: %v", a.displayName, a.manifestRel, err))}
+		return nil, a.manifestRel, []Diagnostic{a.manifestDiagnostic(CodeManifestInvalid, fmt.Sprintf("%s plugin manifest %s is invalid: %v", a.displayName, a.manifestRel, err))}
 	}
 	if !ok {
-		return nil, []Diagnostic{a.manifestDiagnostic(CodeGeneratedContractInvalid, fmt.Sprintf("%s plugin manifest %s is not readable", a.displayName, a.manifestRel))}
+		return nil, a.manifestRel, []Diagnostic{a.manifestDiagnostic(CodeGeneratedContractInvalid, fmt.Sprintf("%s plugin manifest %s is not readable", a.displayName, a.manifestRel))}
 	}
-	return manifest, nil
+	return manifest, manifestRel, nil
 }
 
 func (a packagedPluginAdapter) validateIdentity(manifest map[string]any, graph pluginmodel.PackageGraph) []Diagnostic {
@@ -301,7 +310,7 @@ func (a packagedPluginAdapter) validateIdentityField(manifest map[string]any, fi
 func (a packagedPluginAdapter) validateSkills(root string, manifest map[string]any, graph pluginmodel.PackageGraph) []Diagnostic {
 	paths := graph.Portable.Paths("skills")
 	if len(paths) == 0 {
-		if _, ok := manifest["skills"]; !ok {
+		if value, ok := manifest["skills"]; !ok || value == nil {
 			return nil
 		}
 		return []Diagnostic{a.manifestDiagnostic(
@@ -380,7 +389,7 @@ func (a packagedPluginAdapter) validateSkillProjection(root, rel string) []Diagn
 
 func (a packagedPluginAdapter) validateMCP(root string, manifest map[string]any, graph pluginmodel.PackageGraph) ([]Diagnostic, error) {
 	if graph.Portable.MCP == nil {
-		if _, ok := manifest["mcpServers"]; !ok {
+		if value, ok := manifest["mcpServers"]; !ok || value == nil {
 			return nil, nil
 		}
 		return []Diagnostic{a.manifestDiagnostic(

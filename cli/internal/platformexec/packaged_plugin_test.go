@@ -153,6 +153,102 @@ func TestKimiValidateRequiresInlineMCP(t *testing.T) {
 	}
 }
 
+func TestKimiGenerateUpdatesWinningManifest(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	graph := packagedPluginTestGraph(t, root, "kimi")
+	if err := os.WriteFile(filepath.Join(root, "kimi.plugin.json"), []byte(`{"name":"stale"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	artifacts, err := newKimiPluginAdapter().Generate(root, graph, pluginmodel.NewTargetState("kimi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range artifacts {
+		if artifact.RelPath == ".kimi-plugin/plugin.json" {
+			t.Fatalf("root kimi.plugin.json wins on read, so generate must update it in place: %+v", artifacts)
+		}
+		if artifact.RelPath == "kimi.plugin.json" {
+			if !strings.Contains(string(artifact.Content), `"name": "kimi-demo"`) {
+				t.Fatalf("generated manifest = %s", artifact.Content)
+			}
+			return
+		}
+	}
+	t.Fatalf("artifacts = %+v", artifacts)
+}
+
+func TestKimiValidateDiagnosticsNameResolvedManifest(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	parsed, err := pluginmodel.ParsePortableMCP("plugin/mcp/servers.yaml", []byte(`api_version: v1
+
+servers:
+  docs:
+    type: remote
+    remote:
+      protocol: streamable_http
+      url: "https://example.com/mcp"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	graph := pluginmodel.PackageGraph{
+		Manifest: pluginmodel.Manifest{Name: "kimi-demo", Version: "0.1.0", Description: "kimi demo", Targets: []string{"kimi"}},
+		Portable: pluginmodel.PortableComponents{
+			Items: map[string][]string{},
+			MCP:   &pluginmodel.PortableMCP{Path: "plugin/mcp/servers.yaml", Servers: parsed.Servers, File: parsed.File},
+		},
+	}
+	if err := os.WriteFile(filepath.Join(root, "kimi.plugin.json"), []byte(`{"name":"kimi-demo","version":"0.1.0","description":"kimi demo","mcpServers":{"docs":{"type":"http","url":"https://wrong.example/mcp"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := newKimiPluginAdapter().Validate(root, graph, pluginmodel.NewTargetState("kimi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 1 {
+		t.Fatalf("diagnostics = %+v", diagnostics)
+	}
+	if diagnostics[0].Path != "kimi.plugin.json" {
+		t.Fatalf("diagnostics must name the resolved manifest path: %+v", diagnostics[0])
+	}
+}
+
+func TestPackagedValidateTreatsNullMCPAsAbsent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "kimi.plugin.json"), []byte(`{"name":"kimi-demo","version":"0.1.0","description":"kimi demo","mcpServers":null}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := newKimiPluginAdapter().Validate(root, pluginmodel.PackageGraph{
+		Manifest: pluginmodel.Manifest{Name: "kimi-demo", Version: "0.1.0", Description: "kimi demo", Targets: []string{"kimi"}},
+		Portable: pluginmodel.PortableComponents{Items: map[string][]string{}},
+	}, pluginmodel.NewTargetState("kimi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("mcpServers null must validate as absent, got %+v", diagnostics)
+	}
+}
+
+func TestContainedPluginRelKeepsDottedNames(t *testing.T) {
+	t.Parallel()
+	rel, err := containedPluginRel("..mcp.json")
+	if err != nil {
+		t.Fatalf("dotted file names inside the plugin root must stay valid: %v", err)
+	}
+	if rel != "..mcp.json" {
+		t.Fatalf("rel = %q", rel)
+	}
+	for _, ref := range []string{"..", "../escape.json", "/abs.json", "."} {
+		if _, err := containedPluginRel(ref); err == nil {
+			t.Fatalf("ref %q must be rejected", ref)
+		}
+	}
+}
+
 func packagedPluginTestGraph(t *testing.T, root, target string) pluginmodel.PackageGraph {
 	t.Helper()
 	skillPath := filepath.Join(root, "plugin", "skills", "release-checks")
