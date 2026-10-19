@@ -348,14 +348,12 @@
     "restore": {
       "eyebrow": "Entornos de plugins reproducibles",
       "title": "Las mismas versiones de plugins en tu próximo equipo",
-      "intro": "Guarda tu conjunto global de plugins y sus dependencias, y restaura las versiones exactas registradas en otro equipo.",
       "availability": "Disponible en 0.1.86",
       "releaseNote": "Incluido en las versiones de npm, Homebrew y los binarios nativos a partir de la versión 0.1.86.",
       "guide": "Guía de restauración (en inglés)",
       "from": "En este equipo",
       "to": "En tu próximo equipo",
       "transfer": "Copia {manifest} y {lockfile} al otro equipo entre estos comandos.",
-      "directory": "Si no se especifica un directorio, ambos comandos usan el directorio actual.",
       "requirements": "La restauración requiere que las fuentes registradas sigan disponibles y que los clientes sean compatibles con la gestión de dependencias.",
       "excludes": "No se transfieren sesiones, secretos, ajustes ni datos de plugins."
     },

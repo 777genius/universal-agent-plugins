@@ -36,8 +36,11 @@ for (const locale of publishedLocales) {
         ).shell.restore as Record<string, string>;
         const restore = page.locator('#restore-environment');
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
-        await expect(restore.locator('.registry-restore__availability strong')).toHaveText(copy.availability!);
-        await expect(restore.locator('.registry-restore__availability span')).toHaveText(copy.releaseNote!);
+        const availability = restore.locator('.registry-restore__availability');
+        await expect(availability).toHaveText(copy.availability!);
+        await availability.hover();
+        await expect(page.locator('.app-tooltip')).toContainText(copy.releaseNote!);
+        await page.mouse.move(0, 0);
         await expect(restore.locator('.command-snippet pre code')).toHaveText([
           'agentplugins deps export',
           'agentplugins deps import --install',
