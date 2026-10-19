@@ -44,38 +44,54 @@ func normalizeCustomLogicDefaults(opts InitOptions, config *resolvedInitConfig) 
 func validateInitPlatformOptions(name string, opts InitOptions, config resolvedInitConfig) error {
 	switch config.Platform {
 	case "gemini":
-		if opts.TypeScript {
-			return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
-		}
-		if err := pluginmanifest.ValidateGeminiExtensionName(name); err != nil {
-			return err
-		}
-		if runtimeFlag := strings.ToLower(strings.TrimSpace(config.Runtime)); runtimeFlag != "" && runtimeFlag != scaffold.RuntimeGo {
-			return fmt.Errorf("--runtime is not supported with --platform %s", config.Platform)
-		}
-	case "opencode", "cursor", "cursor-workspace", "qoder", "grok", "kimi":
-		if opts.TypeScript {
-			return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
-		}
-		if strings.TrimSpace(config.Runtime) != "" {
-			return fmt.Errorf("--runtime is not supported with --platform %s", config.Platform)
-		}
-	case "codex-package":
-		if strings.TrimSpace(config.Runtime) != "" {
-			return fmt.Errorf("--runtime is not supported with --platform %s", config.Platform)
-		}
-		if opts.TypeScript {
-			return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
-		}
+		return validateGeminiInitOptions(name, opts, config)
+	case "codex-package", "opencode", "cursor", "cursor-workspace", "qoder", "grok", "kimi":
+		return validateLauncherlessInitOptions(opts, config)
 	}
-	if opts.RuntimePackage && (config.Platform == "gemini" || config.Platform == "codex-package" || config.Platform == "opencode" || config.Platform == "cursor" || config.Platform == "cursor-workspace" || config.Platform == "qoder" || config.Platform == "grok" || config.Platform == "kimi") {
+	return nil
+}
+
+func validateGeminiInitOptions(name string, opts InitOptions, config resolvedInitConfig) error {
+	if opts.TypeScript {
+		return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
+	}
+	if err := pluginmanifest.ValidateGeminiExtensionName(name); err != nil {
+		return err
+	}
+	if runtimeFlag := strings.ToLower(strings.TrimSpace(config.Runtime)); runtimeFlag != "" && runtimeFlag != scaffold.RuntimeGo {
+		return fmt.Errorf("--runtime is not supported with --platform %s", config.Platform)
+	}
+	if opts.RuntimePackage {
 		return fmt.Errorf("--runtime-package is not supported with --platform %s", config.Platform)
 	}
 	return nil
 }
 
+func validateLauncherlessInitOptions(opts InitOptions, config resolvedInitConfig) error {
+	if strings.TrimSpace(config.Runtime) != "" {
+		return fmt.Errorf("--runtime is not supported with --platform %s", config.Platform)
+	}
+	if opts.TypeScript {
+		return fmt.Errorf("--typescript is not supported with --platform %s", config.Platform)
+	}
+	if opts.RuntimePackage {
+		return fmt.Errorf("--runtime-package is not supported with --platform %s", config.Platform)
+	}
+	return nil
+}
+
+// platformAllowsNoRuntime marks launcher-less package platforms that never
+// scaffold a plugin runtime.
+func platformAllowsNoRuntime(platform string) bool {
+	switch platform {
+	case "codex-package", "opencode", "cursor", "cursor-workspace", "qoder", "grok", "kimi":
+		return true
+	}
+	return false
+}
+
 func validateInitRuntimeOptions(opts InitOptions, config *resolvedInitConfig) error {
-	if config.Platform != "codex-package" && config.Platform != "opencode" && config.Platform != "cursor" && config.Platform != "cursor-workspace" && config.Platform != "qoder" && config.Platform != "grok" && config.Platform != "kimi" {
+	if !platformAllowsNoRuntime(config.Platform) {
 		if _, ok := scaffold.LookupRuntime(config.Runtime); !ok {
 			return errUnknownRuntime(opts.Runtime)
 		}
