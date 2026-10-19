@@ -34,7 +34,9 @@ func fileAccessError(err error, label string) error {
 }
 
 // readRegularFile reads a bundle file only when it is a regular file: symlinks
-// and devices must never pull host file content into generated artifacts.
+// and devices must never pull host file content into generated artifacts. The
+// opened handle is re-checked against the earlier Lstat so a path swapped for a
+// symlink between the two calls is rejected instead of followed.
 func readRegularFile(path, label string) ([]byte, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -51,11 +53,52 @@ func readRegularFile(path, label string) ([]byte, error) {
 		return nil, fileAccessError(err, label)
 	}
 	defer func() { _ = f.Close() }()
+	opened, err := f.Stat()
+	if err != nil {
+		return nil, fileAccessError(err, label)
+	}
+	if !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return nil, fmt.Errorf("%s must be a regular file", label)
+	}
 	body, err := io.ReadAll(io.LimitReader(f, maxBundleFileBytes+1))
 	if err != nil {
 		return nil, fileAccessError(err, label)
 	}
+	if len(body) > maxBundleFileBytes {
+		return nil, fmt.Errorf("%s exceeds the %d-byte bundle file limit", label, maxBundleFileBytes)
+	}
 	return body, nil
+}
+
+// rejectSymlinkComponents fails when any path component under root is a
+// symlink: containment must hold on disk, not just lexically, or a bundle can
+// smuggle host file content in through a symlinked directory.
+func rejectSymlinkComponents(root, rel string) error {
+	current := root
+	for _, part := range strings.Split(filepath.FromSlash(rel), string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return fileAccessError(err, rel)
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("%s must not traverse symlinks", rel)
+		}
+	}
+	return nil
+}
+
+// readBundleFile reads root/rel after lexical containment and a symlink-free
+// component walk. Every untrusted bundle read must go through it.
+func readBundleFile(root, rel, label string) ([]byte, error) {
+	contained, err := resolveRelativeRef(root, rel)
+	if err != nil || contained == "" {
+		return nil, fmt.Errorf("%s must stay inside the plugin root", label)
+	}
+	if err := rejectSymlinkComponents(root, contained); err != nil {
+		return nil, err
+	}
+	return readRegularFile(filepath.Join(root, filepath.FromSlash(contained)), label)
 }
 
 func discoverFiles(root, dir string, allow func(string) bool) []string {

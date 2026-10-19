@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,6 +46,9 @@ func jsonDocumentsEqual(left, right any) bool {
 }
 
 func decodeJSONObject(body []byte, label string) (map[string]any, error) {
+	if err := rejectDuplicateJSONKeys(body, label); err != nil {
+		return nil, err
+	}
 	var doc map[string]any
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("%s is invalid JSON: %w", label, err)
@@ -53,6 +57,71 @@ func decodeJSONObject(body []byte, label string) (map[string]any, error) {
 		doc = map[string]any{}
 	}
 	return doc, nil
+}
+
+// rejectDuplicateJSONKeys rejects repeated object keys: json.Unmarshal silently
+// keeps the last one while client parsers may keep the first, so a duplicate is
+// a parser differential waiting to happen.
+func rejectDuplicateJSONKeys(body []byte, label string) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	type frame struct {
+		isObject  bool
+		expectKey bool
+		seen      map[string]bool
+	}
+	var stack []*frame
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("%s is invalid JSON: %w", label, err)
+		}
+		switch typed := token.(type) {
+		case json.Delim:
+			switch typed {
+			case '{':
+				if len(stack) > 0 {
+					stack[len(stack)-1].expectKey = true
+				}
+				stack = append(stack, &frame{isObject: true, expectKey: true, seen: map[string]bool{}})
+			case '[':
+				if len(stack) > 0 {
+					stack[len(stack)-1].expectKey = true
+				}
+				stack = append(stack, &frame{})
+			case '}', ']':
+				if len(stack) == 0 {
+					return fmt.Errorf("%s is invalid JSON: unbalanced delimiters", label)
+				}
+				stack = stack[:len(stack)-1]
+			}
+		case string:
+			if len(stack) == 0 {
+				continue
+			}
+			top := stack[len(stack)-1]
+			if top.isObject && top.expectKey {
+				if top.seen[typed] {
+					return fmt.Errorf("%s is invalid JSON: duplicate object key %q", label, typed)
+				}
+				top.seen[typed] = true
+				top.expectKey = false
+				continue
+			}
+			if top.isObject {
+				top.expectKey = true
+			}
+		default:
+			if len(stack) > 0 {
+				top := stack[len(stack)-1]
+				if top.isObject {
+					top.expectKey = true
+				}
+			}
+		}
+	}
 }
 
 func jsonStringArray(values []any) []string {

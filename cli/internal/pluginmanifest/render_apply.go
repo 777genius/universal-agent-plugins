@@ -23,10 +23,34 @@ func containedArtifactRel(rel string) (string, error) {
 	return cleaned, nil
 }
 
+// rejectSymlinkedDest fails when any existing path component under root is a
+// symlink, so generated artifacts can never be written or removed through a
+// link that points outside the plugin tree.
+func rejectSymlinkedDest(root, rel string) error {
+	current := root
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("artifact path %q must not traverse symlinks", rel)
+		}
+	}
+	return nil
+}
+
 func writeArtifacts(root string, artifacts []Artifact) error {
 	for _, artifact := range artifacts {
 		rel, err := containedArtifactRel(artifact.RelPath)
 		if err != nil {
+			return err
+		}
+		if err := rejectSymlinkedDest(root, rel); err != nil {
 			return err
 		}
 		full := filepath.Join(root, rel)
@@ -62,6 +86,9 @@ func removeArtifacts(root string, relPaths []string) error {
 	for _, relPath := range relPaths {
 		rel, err := containedArtifactRel(relPath)
 		if err != nil {
+			return err
+		}
+		if err := rejectSymlinkedDest(root, rel); err != nil {
 			return err
 		}
 		full := filepath.Join(root, rel)

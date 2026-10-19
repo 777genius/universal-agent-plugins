@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/pluginmodel"
@@ -197,6 +198,7 @@ func (a packagedPluginAdapter) Validate(root string, graph pluginmodel.PackageGr
 		return diagnostics, nil
 	}
 	a.manifestRel = manifestRel // diagnostics must name the manifest actually read (Kimi root manifest wins)
+	diagnostics = append(diagnostics, a.validateManifestKeys(manifest)...)
 	diagnostics = append(diagnostics, a.validateIdentity(manifest, graph)...)
 	diagnostics = append(diagnostics, a.validateSkills(root, manifest, graph)...)
 	mcpDiagnostics, err := a.validateMCP(root, manifest, graph)
@@ -208,7 +210,7 @@ func (a packagedPluginAdapter) Validate(root string, graph pluginmodel.PackageGr
 
 func (a packagedPluginAdapter) readManifest(root string) (map[string]any, string, bool, error) {
 	for _, rel := range a.manifestCandidates() {
-		body, err := readRegularFile(filepath.Join(root, rel), rel)
+		body, err := readBundleFile(root, rel, rel)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -229,9 +231,10 @@ func (a packagedPluginAdapter) importedMCP(root, manifestRel string, manifest ma
 	if !ok || value == nil {
 		return nil, false, nil
 	}
+	var servers map[string]any
 	switch typed := value.(type) {
 	case map[string]any:
-		return typed, true, nil
+		servers = typed
 	case string:
 		if a.mcpLayout == packagedMCPInline {
 			return nil, false, fmt.Errorf("%s plugin manifest %s field %q must be an inline object; %s does not resolve MCP file refs", a.displayName, manifestRel, "mcpServers", a.displayName)
@@ -244,17 +247,22 @@ func (a packagedPluginAdapter) importedMCP(root, manifestRel string, manifest ma
 		if err != nil {
 			return nil, false, fmt.Errorf("unsupported %s plugin manifest %s mcpServers ref %q: %w", a.displayName, manifestRel, ref, err)
 		}
-		servers, ok, err := readWrappedMCPServers(filepath.Join(root, rel), rel)
+		wrapped, ok, err := readWrappedMCPServers(root, rel, rel)
 		if err != nil {
 			return nil, false, err
 		}
 		if !ok {
 			return nil, false, fmt.Errorf("%s plugin manifest %s mcpServers ref %q does not exist", a.displayName, manifestRel, ref)
 		}
-		return servers, true, nil
+		servers = wrapped
 	default:
 		return nil, false, fmt.Errorf("%s plugin manifest %s field %q must be a string ref or object", a.displayName, manifestRel, "mcpServers")
 	}
+	if len(servers) == 0 {
+		// An empty projection round-trips as absence, matching the null case.
+		return nil, false, nil
+	}
+	return servers, true, nil
 }
 
 func containedPluginRel(ref string) (string, error) {
@@ -266,8 +274,8 @@ func containedPluginRel(ref string) (string, error) {
 	return filepath.ToSlash(cleaned), nil
 }
 
-func readWrappedMCPServers(path, label string) (map[string]any, bool, error) {
-	body, err := readRegularFile(path, label)
+func readWrappedMCPServers(root, rel, label string) (map[string]any, bool, error) {
+	body, err := readBundleFile(root, rel, label)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -294,12 +302,33 @@ func (a packagedPluginAdapter) validateManifestRead(root string) (map[string]any
 		if manifestRel == "" {
 			manifestRel = a.manifestRel
 		}
-		return nil, manifestRel, []Diagnostic{a.manifestDiagnostic(CodeManifestInvalid, fmt.Sprintf("%s plugin manifest %s is invalid: %v", a.displayName, manifestRel, err))}
+		return nil, manifestRel, []Diagnostic{a.manifestDiagnosticAt(manifestRel, CodeManifestInvalid, fmt.Sprintf("%s plugin manifest %s is invalid: %v", a.displayName, manifestRel, err))}
 	}
 	if !ok {
 		return nil, a.manifestRel, []Diagnostic{a.manifestDiagnostic(CodeGeneratedContractInvalid, fmt.Sprintf("%s plugin manifest %s is not readable", a.displayName, a.manifestRel))}
 	}
 	return manifest, manifestRel, nil
+}
+
+// packagedManifestFields are the only managed-manifest fields this lane reads
+// and rewrites; anything else would be silently dropped by generate.
+var packagedManifestFields = []string{"name", "version", "description", "skills", "mcpServers"}
+
+func (a packagedPluginAdapter) validateManifestKeys(manifest map[string]any) []Diagnostic {
+	var unknown []string
+	for key := range manifest {
+		if !slices.Contains(packagedManifestFields, key) {
+			unknown = append(unknown, key)
+		}
+	}
+	if len(unknown) == 0 {
+		return nil
+	}
+	slices.Sort(unknown)
+	return []Diagnostic{a.manifestDiagnostic(
+		CodeManifestInvalid,
+		fmt.Sprintf("%s plugin manifest %s defines unsupported fields: %s", a.displayName, a.manifestRel, strings.Join(unknown, ", ")),
+	)}
 }
 
 func (a packagedPluginAdapter) validateIdentity(manifest map[string]any, graph pluginmodel.PackageGraph) []Diagnostic {
@@ -371,7 +400,7 @@ func (a packagedPluginAdapter) validateSkillProjection(root, rel string) []Diagn
 		}}
 	}
 	renderedRel := filepath.ToSlash(filepath.Join("skills", child))
-	sourceBody, err := readRegularFile(filepath.Join(root, rel), filepath.ToSlash(rel))
+	sourceBody, err := readBundleFile(root, rel, filepath.ToSlash(rel))
 	if err != nil {
 		return []Diagnostic{{
 			Severity: SeverityFailure,
@@ -381,7 +410,7 @@ func (a packagedPluginAdapter) validateSkillProjection(root, rel string) []Diagn
 			Message:  fmt.Sprintf("%s portable skill source %s is not readable: %v", a.displayName, rel, err),
 		}}
 	}
-	renderedBody, err := readRegularFile(filepath.Join(root, renderedRel), renderedRel)
+	renderedBody, err := readBundleFile(root, renderedRel, renderedRel)
 	if err != nil {
 		return []Diagnostic{{
 			Severity: SeverityFailure,
@@ -457,13 +486,19 @@ func (a packagedPluginAdapter) readGeneratedMCP(root string, manifest map[string
 		return servers, nil
 	default:
 		refText, ok := value.(string)
-		if !ok || strings.TrimSpace(refText) != packagedPluginMCPRef {
+		if !ok {
 			return nil, []Diagnostic{a.manifestDiagnostic(
 				CodeGeneratedContractInvalid,
 				fmt.Sprintf("%s plugin manifest %s must use %q for mcpServers when portable MCP is authored", a.displayName, a.manifestRel, packagedPluginMCPRef),
 			)}
 		}
-		servers, readable, err := readWrappedMCPServers(filepath.Join(root, ".mcp.json"), ".mcp.json")
+		if ref, err := containedPluginRel(refText); err != nil || ref != strings.TrimPrefix(packagedPluginMCPRef, "./") {
+			return nil, []Diagnostic{a.manifestDiagnostic(
+				CodeGeneratedContractInvalid,
+				fmt.Sprintf("%s plugin manifest %s must use %q for mcpServers when portable MCP is authored", a.displayName, a.manifestRel, packagedPluginMCPRef),
+			)}
+		}
+		servers, readable, err := readWrappedMCPServers(root, ".mcp.json", ".mcp.json")
 		if err != nil {
 			return nil, []Diagnostic{{
 				Severity: SeverityFailure,
@@ -487,10 +522,14 @@ func (a packagedPluginAdapter) readGeneratedMCP(root string, manifest map[string
 }
 
 func (a packagedPluginAdapter) manifestDiagnostic(code, message string) Diagnostic {
+	return a.manifestDiagnosticAt(a.manifestRel, code, message)
+}
+
+func (a packagedPluginAdapter) manifestDiagnosticAt(path, code, message string) Diagnostic {
 	return Diagnostic{
 		Severity: SeverityFailure,
 		Code:     code,
-		Path:     a.manifestRel,
+		Path:     path,
 		Target:   a.id,
 		Message:  message,
 	}

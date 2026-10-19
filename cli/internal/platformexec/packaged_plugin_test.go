@@ -1,6 +1,7 @@
 package platformexec
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,6 +34,9 @@ func TestGrokGenerateWritesWrappedMCPSidecar(t *testing.T) {
 			sawMCP = true
 			if !strings.Contains(string(artifact.Content), `"mcpServers"`) || !strings.Contains(string(artifact.Content), `"docs"`) {
 				t.Fatalf("Grok MCP sidecar should wrap servers:\n%s", artifact.Content)
+			}
+			if !strings.Contains(string(artifact.Content), `"type": "http"`) || !strings.Contains(string(artifact.Content), `"url": "https://example.com/mcp"`) {
+				t.Fatalf("Grok MCP sidecar must project the remote transport:\n%s", artifact.Content)
 			}
 		case filepath.ToSlash(filepath.Join("skills", "release-checks", "SKILL.md")):
 			sawSkill = true
@@ -273,6 +277,13 @@ func TestGrokManagedPathsClaimMCPSidecar(t *testing.T) {
 	}
 }
 
+func symlinkOrSkip(t *testing.T, oldname, newname string) {
+	t.Helper()
+	if err := os.Symlink(oldname, newname); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+}
+
 func TestImportRejectsSymlinkedBundleFiles(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
@@ -286,13 +297,11 @@ func TestImportRejectsSymlinkedBundleFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo","mcpServers":"./.mcp.json"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(root, ".mcp.json")); err != nil {
-		t.Fatal(err)
-	}
+	symlinkOrSkip(t, outside, filepath.Join(root, ".mcp.json"))
 	_, err := newGrokPluginAdapter().Import(root, ImportSeed{
 		Manifest: pluginmodel.Manifest{Name: "demo", Targets: []string{"grok"}},
 	})
-	if err == nil || !strings.Contains(err.Error(), "regular file") {
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("symlinked MCP sidecar must be rejected, err = %v", err)
 	}
 
@@ -300,9 +309,7 @@ func TestImportRejectsSymlinkedBundleFiles(t *testing.T) {
 	if err := os.MkdirAll(skillDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(outside, filepath.Join(skillDir, "SKILL.md")); err != nil {
-		t.Fatal(err)
-	}
+	symlinkOrSkip(t, outside, filepath.Join(skillDir, "SKILL.md"))
 	if err := os.Remove(filepath.Join(root, ".mcp.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -314,6 +321,118 @@ func TestImportRejectsSymlinkedBundleFiles(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("symlinked skill file must be rejected, err = %v", err)
+	}
+	if strings.Contains(err.Error(), root) {
+		t.Fatalf("bundle read errors must not leak host paths, err = %v", err)
+	}
+}
+
+func TestImportRejectsSymlinkedBundleDirectory(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	outsideDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideDir, "config.json"), []byte(`{"mcpServers":{"leak":{"command":"host"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".grok-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo","mcpServers":"./evil/config.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlinkOrSkip(t, outsideDir, filepath.Join(root, "evil"))
+	_, err := newGrokPluginAdapter().Import(root, ImportSeed{
+		Manifest: pluginmodel.Manifest{Name: "demo", Targets: []string{"grok"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("mcpServers ref through a symlinked directory must be rejected, err = %v", err)
+	}
+	if strings.Contains(err.Error(), outsideDir) {
+		t.Fatalf("bundle read errors must not leak host paths, err = %v", err)
+	}
+}
+
+func TestGenerateRejectsSymlinkedSkillSource(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.md")
+	if err := os.WriteFile(outside, []byte("host secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(root, "plugin", "skills", "release-checks")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	symlinkOrSkip(t, outside, filepath.Join(skillDir, "SKILL.md"))
+	_, err := portableSkillArtifact(root, filepath.Join("plugin", "skills", "release-checks", "SKILL.md"), "skills")
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("generate must not read symlinked skill sources, err = %v", err)
+	}
+}
+
+func TestReadBundleFileEnforcesSizeLimit(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "big.json"), bytes.Repeat([]byte("a"), maxBundleFileBytes+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readBundleFile(root, "big.json", "big.json"); err == nil || !strings.Contains(err.Error(), "bundle file limit") {
+		t.Fatalf("oversized bundle file must be rejected, err = %v", err)
+	}
+}
+
+func TestValidateRejectsUnsupportedManifestFields(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".grok-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"grok-demo","version":"0.1.0","description":"grok demo","hooks":{"cmd":"x"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics, err := newGrokPluginAdapter().Validate(root, packagedPluginTestGraph(t, root, "grok"), pluginmodel.NewTargetState("grok"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := diagnosticsText(diagnostics)
+	if !strings.Contains(joined, "unsupported fields: hooks") {
+		t.Fatalf("unknown managed-manifest fields must fail validate, diagnostics = %s", joined)
+	}
+}
+
+func TestDecodeJSONObjectRejectsDuplicateKeys(t *testing.T) {
+	t.Parallel()
+	if _, err := decodeJSONObject([]byte(`{"name":"a","name":"b"}`), "doc"); err == nil || !strings.Contains(err.Error(), "duplicate object key") {
+		t.Fatalf("duplicate JSON keys must be rejected, err = %v", err)
+	}
+	if _, err := decodeJSONObject([]byte(`{"servers":[{"x":1,"x":2}]}`), "doc"); err == nil {
+		t.Fatal("duplicate nested keys must be rejected")
+	}
+	if _, err := decodeJSONObject([]byte(`{"servers":[{"x":1},{"x":2}],"y":"a"}`), "doc"); err != nil {
+		t.Fatalf("distinct keys must stay valid: %v", err)
+	}
+}
+
+func TestGrokImportTreatsEmptyMCPProjectionAsAbsent(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".grok-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo","mcpServers":"./.mcp.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(`{"mcpServers":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := newGrokPluginAdapter().Import(root, ImportSeed{
+		Manifest: pluginmodel.Manifest{Name: "demo", Targets: []string{"grok"}},
+	})
+	if err != nil {
+		t.Fatalf("empty projection must import as absence: %v", err)
+	}
+	if len(result.Artifacts) != 0 {
+		t.Fatalf("empty projection must not emit an MCP artifact, artifacts = %v", result.Artifacts)
 	}
 }
 

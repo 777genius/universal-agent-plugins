@@ -24,6 +24,12 @@ func copyArtifactDirs(root string, dirs ...artifactDir) ([]pluginmodel.Artifact,
 }
 
 func copyArtifacts(root, srcDir, dstRoot string) ([]pluginmodel.Artifact, error) {
+	if err := rejectSymlinkComponents(root, srcDir); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
 	full := filepath.Join(root, srcDir)
 	var artifacts []pluginmodel.Artifact
 	if _, err := os.Stat(full); err != nil {
@@ -43,7 +49,8 @@ func copyArtifacts(root, srcDir, dstRoot string) ([]pluginmodel.Artifact, error)
 		if d.IsDir() {
 			return nil
 		}
-		body, err := readRegularFile(path, filepath.ToSlash(filepath.Join(srcDir, rel)))
+		srcRel := filepath.ToSlash(filepath.Join(srcDir, rel))
+		body, err := readBundleFile(root, srcRel, srcRel)
 		if err != nil {
 			return err
 		}
@@ -64,7 +71,7 @@ func copySingleArtifactIfExists(root, srcRel, dstRel string) ([]pluginmodel.Arti
 	if strings.TrimSpace(srcRel) == "" {
 		return nil, nil
 	}
-	body, err := readRegularFile(filepath.Join(root, srcRel), srcRel)
+	body, err := readBundleFile(root, srcRel, srcRel)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

@@ -28,6 +28,12 @@ Skills and MCP components may be reusable; hooks, app bindings, themes, and
 client settings retain their client-specific boundaries. The external Context7
 link below is a historical reference, not a locally verified standard package.
 
+MCP `headers` and `env` values from `plugin/mcp/servers.yaml` are projected
+verbatim into the generated client configs (`.mcp.json`, `kimi.plugin.json`,
+and similar), which these examples commit. Never put tokens or OAuth secrets
+in them: keep secrets out of the package and inject them at runtime (for
+example `${env.VAR}` style references resolved by the client).
+
 These examples are reference implementations for the historical v1 production plugin workflow.
 
 - [`context7` in universal-plugins-for-ai-agents](https://github.com/777genius/universal-plugins-for-ai-agents/tree/main/plugins/context7): canonical multi-target MCP-first example with `plugin/` as the only authored root, package-only Claude, official Codex package output, Gemini extension packaging, and workspace-config output for OpenCode and Cursor
