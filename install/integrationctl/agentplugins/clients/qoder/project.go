@@ -32,9 +32,18 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 	if err := shared.WriteJSON(filepath.Join(in.StagingPath, ".qoder-plugin", "plugin.json"), manifest); err != nil {
 		return nil, fmt.Errorf("write Qoder plugin manifest: %w", err)
 	}
+	// Qoder's OpenAI-shaped .mcp.json carries the catalog OpenAI auth hints,
+	// but a declared generic compatibility entry for qoder makes those hints
+	// non-authoritative (the usecase openAIOAuthApplies gate): they are
+	// suppressed instead of projected.
+	hints := in.Hints
+	if _, declared := hints.Compatibility[string(domain.ClientQoder)]; declared {
+		hints.OpenAIMCPAuth = nil
+	}
 	if err := shared.ProjectMCPServers(shared.MCPProjection{
 		Root: in.StagingPath, Envelope: in.Envelope, Names: names,
 		Dialect: shared.MCPDialectOpenAI, PluginRoot: in.Plan.ActivePath, DataPath: in.PluginDataPath,
+		Hints: hints,
 	}); err != nil {
 		return nil, err
 	}
