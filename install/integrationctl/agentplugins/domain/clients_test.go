@@ -60,7 +60,8 @@ func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 }
 
 // TestQoderClientDefinition pins Qoder's single identity shared by Desktop and
-// CLI: native plugin bundles, stdio-only MCP, and the single user install scope
+// CLI: native plugin bundles, stdio and remote (streamable-http) MCP with
+// OpenAI-shaped auth hints, and the single user install scope
 // the agentplugins lifecycle actually installs and verifies
 // (`qoder plugins install --scope user`).
 func TestQoderClientDefinition(t *testing.T) {
@@ -75,7 +76,7 @@ func TestQoderClientDefinition(t *testing.T) {
 	if capabilities.PackageMode != PackageNative || capabilities.SkillSupport != SupportNative {
 		t.Fatalf("Qoder native skill capability = %+v", capabilities)
 	}
-	if capabilities.MCPTransports["stdio"] != SupportNative || capabilities.MCPTransports["streamable-http"] != SupportUnsupported || capabilities.MCPTransports["sse"] != SupportUnsupported {
+	if capabilities.MCPTransports["stdio"] != SupportNative || capabilities.MCPTransports["streamable-http"] != SupportNative || capabilities.MCPTransports["sse"] != SupportUnsupported {
 		t.Fatalf("Qoder MCP transports = %v", capabilities.MCPTransports)
 	}
 	if capabilities.AppSupport != SupportUnsupported || capabilities.ExtensionSupport != SupportUnsupported {
@@ -86,6 +87,9 @@ func TestQoderClientDefinition(t *testing.T) {
 	}
 	if definition.Traits.LifecycleKind != LifecycleCLIRegistry || !definition.Traits.Allows(InstallIntentAutomatic) {
 		t.Fatalf("Qoder traits = %+v", definition.Traits)
+	}
+	if !definition.Traits.HonorsOpenAIMCPAuthHints {
+		t.Fatal("Qoder must honor OpenAI MCP auth hints so remote OAuth servers can authenticate")
 	}
 }
 

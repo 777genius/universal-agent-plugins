@@ -157,11 +157,12 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
 	}),
-	stdioOnlyMCP(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
-		InstallIntents:       []InstallIntent{InstallIntentAutomatic},
-		LifecycleKind:        LifecycleCLIRegistry,
-		DiscoversNativeHooks: true,
-	})),
+	clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
+		LifecycleKind:            LifecycleCLIRegistry,
+		DiscoversNativeHooks:     true,
+		HonorsOpenAIMCPAuthHints: true,
+	}),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {
@@ -176,13 +177,6 @@ func withActivation(definition ClientDefinition, activation ActivationMode) Clie
 // from both entries delivers commands to the family again.
 func withoutCommands(definition ClientDefinition) ClientDefinition {
 	definition.CommandSupport = SupportUnsupported
-	return definition
-}
-
-// stdioOnlyMCP withholds remote MCP transports from a client whose native
-// plugin contract only carries local stdio servers.
-func stdioOnlyMCP(definition ClientDefinition) ClientDefinition {
-	definition.Capabilities.MCPTransports["streamable-http"] = SupportUnsupported
 	return definition
 }
 
