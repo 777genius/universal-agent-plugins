@@ -346,11 +346,8 @@
   },
   "shell": {
     "restore": {
-      "eyebrow": "可复现的插件环境",
       "title": "在下一台电脑上使用相同的插件版本",
-      "availability": "已在 0.1.86 中发布",
-      "releaseNote": "自 0.1.86 版本起，已包含在 npm、Homebrew 和原生发行版中。",
-      "guide": "恢复指南（英文）",
+      "guide": "指南",
       "from": "在当前电脑上",
       "to": "在下一台电脑上",
       "transfer": "在运行这两条命令之间，将 {manifest} 和 {lockfile} 复制到另一台电脑。",

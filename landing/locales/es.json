@@ -346,11 +346,8 @@
   },
   "shell": {
     "restore": {
-      "eyebrow": "Entornos de plugins reproducibles",
       "title": "Las mismas versiones de plugins en tu próximo equipo",
-      "availability": "Disponible en 0.1.86",
-      "releaseNote": "Incluido en las versiones de npm, Homebrew y los binarios nativos a partir de la versión 0.1.86.",
-      "guide": "Guía de restauración (en inglés)",
+      "guide": "Guía",
       "from": "En este equipo",
       "to": "En tu próximo equipo",
       "transfer": "Copia {manifest} y {lockfile} al otro equipo entre estos comandos.",

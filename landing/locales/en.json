@@ -363,11 +363,8 @@
   },
   "shell": {
     "restore": {
-      "eyebrow": "Reproducible plugin environments",
       "title": "Same plugin versions on your next machine",
-      "availability": "Available in 0.1.86",
-      "releaseNote": "Included in npm, Homebrew and native releases from version 0.1.86.",
-      "guide": "Restore guide (English)",
+      "guide": "Guide",
       "from": "On this computer",
       "to": "On your next computer",
       "transfer": "Copy {manifest} and {lockfile} to the other computer between these commands.",
