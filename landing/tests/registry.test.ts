@@ -83,10 +83,13 @@ describe('unified registry landing', () => {
       community.releases[0]!.targets.map((target) => target.client),
       nativeClients.map((client) => client.id),
     );
-    assert.equal(
-      registry.plugins.find((plugin) => plugin.name === 'context7')!.client_support.clients.includes('qoder'),
-      false,
-    );
+    for (const policy of distribution.release_policies) {
+      policy.targets = policy.targets.filter((target) => target.client !== 'qoder');
+    }
+    const withoutQoder = parseDirectoryData(fixture, 'published_snapshot');
+    const unchanged = withoutQoder.plugins.find((plugin) => plugin.name === 'context7')!
+      .distributions.find((item) => item.id === distribution.id)!;
+    assert.equal(unchanged.releases[0]!.targets.some((target) => target.client === 'qoder'), false);
     distribution.release_policies[0]!.targets[0]!.client = 'unknown-client';
     assert.throws(() => parseDirectoryData(fixture, 'published_snapshot'), /invalid or duplicate client/);
   });
