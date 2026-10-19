@@ -18,7 +18,7 @@ func kimiProfile() PlatformProfile {
 			ValidateSupport:        true,
 			PortableComponentKinds: []string{"skills", "mcp_servers"},
 			TargetComponentKinds:   []string{},
-			Summary:                "Kimi plugin packages compile portable skills and optional MCP into .kimi-plugin/plugin.json. Kimi requires MCP servers inline in the manifest and does not resolve external MCP file refs. Commands, hooks, agents, and systemPrompt stay unsupported until they have a first-class authoring surface.",
+			Summary:                "Kimi plugin packages compile portable skills and optional MCP into the Kimi plugin manifest (.kimi-plugin/plugin.json, or root kimi.plugin.json when present: the root copy wins and generate updates the winning file). Kimi requires MCP servers inline in the manifest and does not resolve external MCP file refs. Commands, hooks, agents, and systemPrompt stay unsupported until they have a first-class authoring surface.",
 		},
 		SDK: SDKMeta{
 			PublicPackage:   "kimi",

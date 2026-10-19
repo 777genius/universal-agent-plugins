@@ -3,6 +3,7 @@ package platformexec
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -246,6 +247,90 @@ func TestContainedPluginRelKeepsDottedNames(t *testing.T) {
 		if _, err := containedPluginRel(ref); err == nil {
 			t.Fatalf("ref %q must be rejected", ref)
 		}
+	}
+	if runtime.GOOS == "windows" {
+		if _, err := containedPluginRel("C:escape.json"); err == nil {
+			t.Fatal("drive-relative ref must be rejected")
+		}
+	}
+}
+
+func TestGrokManagedPathsClaimMCPSidecar(t *testing.T) {
+	t.Parallel()
+	paths, err := newGrokPluginAdapter().ManagedPaths("", pluginmodel.PackageGraph{}, pluginmodel.NewTargetState("grok"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 1 || paths[0] != ".mcp.json" {
+		t.Fatalf("grok managed paths = %v; orphaned .mcp.json must be prunable", paths)
+	}
+	paths, err = newKimiPluginAdapter().ManagedPaths("", pluginmodel.PackageGraph{}, pluginmodel.NewTargetState("kimi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 0 {
+		t.Fatalf("kimi managed paths = %v; inline layout never owns a sidecar", paths)
+	}
+}
+
+func TestImportRejectsSymlinkedBundleFiles(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(outside, []byte("host secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".grok-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo","mcpServers":"./.mcp.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, ".mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := newGrokPluginAdapter().Import(root, ImportSeed{
+		Manifest: pluginmodel.Manifest{Name: "demo", Targets: []string{"grok"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("symlinked MCP sidecar must be rejected, err = %v", err)
+	}
+
+	skillDir := filepath.Join(root, "skills", "release-checks")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(skillDir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, ".mcp.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = newGrokPluginAdapter().Import(root, ImportSeed{
+		Manifest: pluginmodel.Manifest{Name: "demo", Targets: []string{"grok"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("symlinked skill file must be rejected, err = %v", err)
+	}
+}
+
+func TestImportRejectsDanglingMCPSidecarRef(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".grok-plugin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".grok-plugin", "plugin.json"), []byte(`{"name":"demo","mcpServers":"./.mcp.json"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := newGrokPluginAdapter().Import(root, ImportSeed{
+		Manifest: pluginmodel.Manifest{Name: "demo", Targets: []string{"grok"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("dangling mcpServers ref must fail import, err = %v", err)
 	}
 }
 

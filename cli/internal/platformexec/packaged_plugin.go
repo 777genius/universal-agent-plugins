@@ -97,6 +97,12 @@ func (a packagedPluginAdapter) RefineDiscovery(root string, state *pluginmodel.T
 }
 
 func (a packagedPluginAdapter) ManagedPaths(root string, graph pluginmodel.PackageGraph, state pluginmodel.TargetState) ([]string, error) {
+	if a.mcpLayout == packagedMCPSidecarWrapped {
+		// The sidecar is managed even when portable MCP is absent: it becomes
+		// stale (and must be removed) when portable MCP is dropped, otherwise a
+		// later import resurrects servers from the orphaned sidecar.
+		return []string{".mcp.json"}, nil
+	}
 	return nil, nil
 }
 
@@ -202,16 +208,16 @@ func (a packagedPluginAdapter) Validate(root string, graph pluginmodel.PackageGr
 
 func (a packagedPluginAdapter) readManifest(root string) (map[string]any, string, bool, error) {
 	for _, rel := range a.manifestCandidates() {
-		body, err := os.ReadFile(filepath.Join(root, rel))
+		body, err := readRegularFile(filepath.Join(root, rel), rel)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return nil, "", false, err
+			return nil, rel, false, err
 		}
 		doc, err := decodeJSONObject(body, a.displayName+" plugin manifest "+rel)
 		if err != nil {
-			return nil, "", false, err
+			return nil, rel, false, err
 		}
 		return doc, rel, true, nil
 	}
@@ -238,7 +244,14 @@ func (a packagedPluginAdapter) importedMCP(root, manifestRel string, manifest ma
 		if err != nil {
 			return nil, false, fmt.Errorf("unsupported %s plugin manifest %s mcpServers ref %q: %w", a.displayName, manifestRel, ref, err)
 		}
-		return readWrappedMCPServers(filepath.Join(root, rel), rel)
+		servers, ok, err := readWrappedMCPServers(filepath.Join(root, rel), rel)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			return nil, false, fmt.Errorf("%s plugin manifest %s mcpServers ref %q does not exist", a.displayName, manifestRel, ref)
+		}
+		return servers, true, nil
 	default:
 		return nil, false, fmt.Errorf("%s plugin manifest %s field %q must be a string ref or object", a.displayName, manifestRel, "mcpServers")
 	}
@@ -247,14 +260,14 @@ func (a packagedPluginAdapter) importedMCP(root, manifestRel string, manifest ma
 func containedPluginRel(ref string) (string, error) {
 	cleaned := filepath.Clean(strings.TrimSpace(ref))
 	cleaned = strings.TrimPrefix(cleaned, "."+string(filepath.Separator))
-	if cleaned == "" || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) || filepath.IsAbs(cleaned) {
+	if cleaned == "" || cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) || filepath.IsAbs(cleaned) || filepath.VolumeName(cleaned) != "" {
 		return "", fmt.Errorf("path must stay inside the plugin root")
 	}
 	return filepath.ToSlash(cleaned), nil
 }
 
 func readWrappedMCPServers(path, label string) (map[string]any, bool, error) {
-	body, err := os.ReadFile(path)
+	body, err := readRegularFile(path, label)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
@@ -278,7 +291,10 @@ func readWrappedMCPServers(path, label string) (map[string]any, bool, error) {
 func (a packagedPluginAdapter) validateManifestRead(root string) (map[string]any, string, []Diagnostic) {
 	manifest, manifestRel, ok, err := a.readManifest(root)
 	if err != nil {
-		return nil, a.manifestRel, []Diagnostic{a.manifestDiagnostic(CodeManifestInvalid, fmt.Sprintf("%s plugin manifest %s is invalid: %v", a.displayName, a.manifestRel, err))}
+		if manifestRel == "" {
+			manifestRel = a.manifestRel
+		}
+		return nil, manifestRel, []Diagnostic{a.manifestDiagnostic(CodeManifestInvalid, fmt.Sprintf("%s plugin manifest %s is invalid: %v", a.displayName, manifestRel, err))}
 	}
 	if !ok {
 		return nil, a.manifestRel, []Diagnostic{a.manifestDiagnostic(CodeGeneratedContractInvalid, fmt.Sprintf("%s plugin manifest %s is not readable", a.displayName, a.manifestRel))}
@@ -355,7 +371,7 @@ func (a packagedPluginAdapter) validateSkillProjection(root, rel string) []Diagn
 		}}
 	}
 	renderedRel := filepath.ToSlash(filepath.Join("skills", child))
-	sourceBody, err := os.ReadFile(filepath.Join(root, rel))
+	sourceBody, err := readRegularFile(filepath.Join(root, rel), filepath.ToSlash(rel))
 	if err != nil {
 		return []Diagnostic{{
 			Severity: SeverityFailure,
@@ -365,7 +381,7 @@ func (a packagedPluginAdapter) validateSkillProjection(root, rel string) []Diagn
 			Message:  fmt.Sprintf("%s portable skill source %s is not readable: %v", a.displayName, rel, err),
 		}}
 	}
-	renderedBody, err := os.ReadFile(filepath.Join(root, renderedRel))
+	renderedBody, err := readRegularFile(filepath.Join(root, renderedRel), renderedRel)
 	if err != nil {
 		return []Diagnostic{{
 			Severity: SeverityFailure,
@@ -454,7 +470,7 @@ func (a packagedPluginAdapter) readGeneratedMCP(root string, manifest map[string
 				Code:     CodeGeneratedContractInvalid,
 				Path:     ".mcp.json",
 				Target:   a.id,
-				Message:  fmt.Sprintf("%s plugin MCP manifest .mcp.json is invalid: %v", a.displayName, err),
+				Message:  fmt.Sprintf("%s plugin MCP config .mcp.json is invalid: %v", a.displayName, err),
 			}}
 		}
 		if !readable {
@@ -463,7 +479,7 @@ func (a packagedPluginAdapter) readGeneratedMCP(root string, manifest map[string
 				Code:     CodeGeneratedContractInvalid,
 				Path:     ".mcp.json",
 				Target:   a.id,
-				Message:  fmt.Sprintf("%s plugin MCP manifest .mcp.json is not readable", a.displayName),
+				Message:  fmt.Sprintf("%s plugin MCP config .mcp.json is not readable", a.displayName),
 			}}
 		}
 		return servers, nil

@@ -147,14 +147,14 @@ func qoderPlatformFiles(extras bool) []TemplateFile {
 }
 
 func packagedPluginPlatformFiles(platform string, extras bool) []TemplateFile {
-	files := []TemplateFile{
-		{Path: authoredPath("README.md"), Template: platform + ".README.md.tmpl", Extra: false},
-	}
+	files := make([]TemplateFile, 0, 3)
+	files = append(files, TemplateFile{Path: authoredPath("README.md"), Template: platform + ".README.md.tmpl", Extra: false})
 	if !extras {
 		return files
 	}
-	return append(files,
+	files = append(files,
 		TemplateFile{Path: authoredPath("mcp/servers.yaml"), Template: "mcp.servers.yaml.tmpl", Extra: true},
 		TemplateFile{Path: authoredPath("skills/{{.ProjectName}}/SKILL.md"), Template: "SKILL.md.tmpl", Extra: true},
 	)
+	return files
 }

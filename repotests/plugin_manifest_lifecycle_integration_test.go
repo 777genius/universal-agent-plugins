@@ -1,6 +1,7 @@
 package pluginkitairepo_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -608,7 +609,7 @@ func TestPluginKitAIImportGrokPackagedLayoutRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importCmd := exec.Command(pluginKitAIBin, "import", plugRoot, "--from", "grok")
+	importCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "import", plugRoot, "--from", "grok")
 	importCmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := importCmd.CombinedOutput()
 	if err != nil {
@@ -626,19 +627,19 @@ func TestPluginKitAIImportGrokPackagedLayoutRoundTrip(t *testing.T) {
 		t.Fatalf("missing imported Grok portable skill: %v", err)
 	}
 
-	generateCmd := exec.Command(pluginKitAIBin, "generate", plugRoot)
+	generateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot)
 	generateCmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := generateCmd.CombinedOutput(); err != nil {
 		t.Fatalf("plugin-kit-ai generate after Grok import: %v\n%s", err, out)
 	}
 
-	generateCmd = exec.Command(pluginKitAIBin, "generate", plugRoot, "--check")
+	generateCmd = exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot, "--check")
 	generateCmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := generateCmd.CombinedOutput(); err != nil {
 		t.Fatalf("plugin-kit-ai generate --check after Grok import: %v\n%s", err, out)
 	}
 
-	validateCmd := exec.Command(pluginKitAIBin, "validate", plugRoot, "--platform", "grok", "--strict")
+	validateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "validate", plugRoot, "--platform", "grok", "--strict")
 	validateCmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := validateCmd.CombinedOutput(); err != nil {
 		t.Fatalf("plugin-kit-ai validate after Grok import: %v\n%s", err, out)
@@ -681,7 +682,7 @@ func TestPluginKitAIImportKimiPackagedLayoutRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	importCmd := exec.Command(pluginKitAIBin, "import", plugRoot, "--from", "kimi")
+	importCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "import", plugRoot, "--from", "kimi")
 	importCmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := importCmd.CombinedOutput()
 	if err != nil {
@@ -706,7 +707,7 @@ func TestPluginKitAIImportKimiPackagedLayoutRoundTrip(t *testing.T) {
 		t.Fatalf("missing imported Kimi portable skill: %v", err)
 	}
 
-	generateCmd := exec.Command(pluginKitAIBin, "generate", plugRoot)
+	generateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot)
 	generateCmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := generateCmd.CombinedOutput(); err != nil {
 		t.Fatalf("plugin-kit-ai generate after Kimi import: %v\n%s", err, out)
@@ -726,13 +727,13 @@ func TestPluginKitAIImportKimiPackagedLayoutRoundTrip(t *testing.T) {
 		t.Fatal("Kimi must not generate an MCP sidecar; servers are inline in the manifest")
 	}
 
-	generateCmd = exec.Command(pluginKitAIBin, "generate", plugRoot, "--check")
+	generateCmd = exec.CommandContext(context.Background(), pluginKitAIBin, "generate", plugRoot, "--check")
 	generateCmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := generateCmd.CombinedOutput(); err != nil {
 		t.Fatalf("plugin-kit-ai generate --check after Kimi import: %v\n%s", err, out)
 	}
 
-	validateCmd := exec.Command(pluginKitAIBin, "validate", plugRoot, "--platform", "kimi", "--strict")
+	validateCmd := exec.CommandContext(context.Background(), pluginKitAIBin, "validate", plugRoot, "--platform", "kimi", "--strict")
 	validateCmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := validateCmd.CombinedOutput(); err != nil {
 		t.Fatalf("plugin-kit-ai validate after Kimi import: %v\n%s", err, out)
