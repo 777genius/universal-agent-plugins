@@ -3,6 +3,7 @@ package platformexec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -64,12 +65,7 @@ func decodeJSONObject(body []byte, label string) (map[string]any, error) {
 // a parser differential waiting to happen.
 func rejectDuplicateJSONKeys(body []byte, label string) error {
 	decoder := json.NewDecoder(bytes.NewReader(body))
-	type frame struct {
-		isObject  bool
-		expectKey bool
-		seen      map[string]bool
-	}
-	var stack []*frame
+	var stack jsonKeyStack
 	for {
 		token, err := decoder.Token()
 		if err == io.EOF {
@@ -78,49 +74,78 @@ func rejectDuplicateJSONKeys(body []byte, label string) error {
 		if err != nil {
 			return fmt.Errorf("%s is invalid JSON: %w", label, err)
 		}
-		switch typed := token.(type) {
-		case json.Delim:
-			switch typed {
-			case '{':
-				if len(stack) > 0 {
-					stack[len(stack)-1].expectKey = true
-				}
-				stack = append(stack, &frame{isObject: true, expectKey: true, seen: map[string]bool{}})
-			case '[':
-				if len(stack) > 0 {
-					stack[len(stack)-1].expectKey = true
-				}
-				stack = append(stack, &frame{})
-			case '}', ']':
-				if len(stack) == 0 {
-					return fmt.Errorf("%s is invalid JSON: unbalanced delimiters", label)
-				}
-				stack = stack[:len(stack)-1]
-			}
-		case string:
-			if len(stack) == 0 {
-				continue
-			}
-			top := stack[len(stack)-1]
-			if top.isObject && top.expectKey {
-				if top.seen[typed] {
-					return fmt.Errorf("%s is invalid JSON: duplicate object key %q", label, typed)
-				}
-				top.seen[typed] = true
-				top.expectKey = false
-				continue
-			}
-			if top.isObject {
-				top.expectKey = true
-			}
-		default:
-			if len(stack) > 0 {
-				top := stack[len(stack)-1]
-				if top.isObject {
-					top.expectKey = true
-				}
-			}
+		if err := stack.observe(token); err != nil {
+			return fmt.Errorf("%s is invalid JSON: %w", label, err)
 		}
+	}
+}
+
+type jsonKeyFrame struct {
+	isObject  bool
+	expectKey bool
+	seen      map[string]bool
+}
+
+// jsonKeyStack walks decoded tokens frame by frame so each step stays small.
+type jsonKeyStack []*jsonKeyFrame
+
+func (s *jsonKeyStack) observe(token json.Token) error {
+	switch typed := token.(type) {
+	case json.Delim:
+		return s.observeDelim(typed)
+	case string:
+		return s.observeString(typed)
+	default:
+		s.markValue()
+		return nil
+	}
+}
+
+func (s *jsonKeyStack) observeDelim(delim json.Delim) error {
+	switch delim {
+	case '{':
+		s.push(&jsonKeyFrame{isObject: true, expectKey: true, seen: map[string]bool{}})
+	case '[':
+		s.push(&jsonKeyFrame{})
+	case '}', ']':
+		if len(*s) == 0 {
+			return errors.New("unbalanced delimiters")
+		}
+		*s = (*s)[:len(*s)-1]
+	}
+	return nil
+}
+
+func (s *jsonKeyStack) push(frame *jsonKeyFrame) {
+	if n := len(*s); n > 0 {
+		(*s)[n-1].expectKey = true
+	}
+	*s = append(*s, frame)
+}
+
+func (s *jsonKeyStack) observeString(value string) error {
+	if len(*s) == 0 {
+		return nil
+	}
+	top := (*s)[len(*s)-1]
+	if !top.isObject {
+		return nil
+	}
+	if !top.expectKey {
+		top.expectKey = true
+		return nil
+	}
+	if top.seen[value] {
+		return fmt.Errorf("duplicate object key %q", value)
+	}
+	top.seen[value] = true
+	top.expectKey = false
+	return nil
+}
+
+func (s *jsonKeyStack) markValue() {
+	if n := len(*s); n > 0 && (*s)[n-1].isObject {
+		(*s)[n-1].expectKey = true
 	}
 }
 
