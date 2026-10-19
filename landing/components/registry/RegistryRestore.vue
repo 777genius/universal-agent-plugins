@@ -22,23 +22,17 @@ const { t } = useI18n();
       </header>
 
       <div class="registry-restore__flow">
-        <div class="registry-restore__stage">
-          <p class="registry-restore__stage-label">
-            <span class="registry-restore__step" aria-hidden="true">01</span>
-            <svg
-              class="registry-restore__stage-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-            >
-              <rect x="3" y="4.5" width="18" height="12.5" rx="2.2" />
-              <path d="M9 21h6M12 17v4" />
-              <path d="M7 8.8l2.2 1.9-2.2 1.9" />
-              <path d="M8.8 12.6h4.8" />
-            </svg>
-            {{ t('shell.restore.from') }}
-          </p>
-          <CommandSnippet command="agentplugins deps export" inline />
+        <div class="registry-restore__machine">
+          <div class="registry-restore__screen">
+            <p class="registry-restore__stage-label">
+              <span class="registry-restore__step" aria-hidden="true">01</span>
+              {{ t('shell.restore.from') }}
+            </p>
+            <div class="registry-restore__screen-body">
+              <CommandSnippet command="agentplugins deps export" inline />
+            </div>
+          </div>
+          <div class="registry-restore__stand" aria-hidden="true" />
         </div>
 
         <div class="registry-restore__handoff">
@@ -58,9 +52,9 @@ const { t } = useI18n();
               <code dir="ltr">uap.lock</code>
             </span>
           </div>
-          <svg class="registry-restore__arrow" viewBox="0 0 96 32" fill="none" aria-hidden="true">
-            <path d="M5 27.5C18 26 27 10 48 8.5h27" stroke-dasharray="3 6" />
-            <path d="M78 2.5 92 8.5 78 14.5 80.5 8.5Z" fill="currentColor" stroke="none" />
+          <svg class="registry-restore__arrow" viewBox="0 0 160 36" fill="none" aria-hidden="true">
+            <path d="M4 26C36 26 46 12 84 12h52" stroke-dasharray="3.5 7" />
+            <path d="M138 5 157 12 138 19 141.5 12Z" fill="currentColor" stroke="none" />
           </svg>
           <i18n-t keypath="shell.restore.transfer" tag="p" class="sr-only">
             <template #manifest><code dir="ltr">uap.toml</code></template>
@@ -68,22 +62,17 @@ const { t } = useI18n();
           </i18n-t>
         </div>
 
-        <div class="registry-restore__stage">
-          <p class="registry-restore__stage-label">
-            <span class="registry-restore__step" aria-hidden="true">02</span>
-            <svg
-              class="registry-restore__stage-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-            >
-              <rect x="4.5" y="5" width="15" height="11.2" rx="1.8" />
-              <path d="M2.5 19.8h19l-1.7-3.6H4.2z" />
-              <path d="M8.6 10.8l2.2 2.2 4-4.4" />
-            </svg>
-            {{ t('shell.restore.to') }}
-          </p>
-          <CommandSnippet command="agentplugins deps import --install" inline />
+        <div class="registry-restore__machine">
+          <div class="registry-restore__screen">
+            <p class="registry-restore__stage-label">
+              <span class="registry-restore__step" aria-hidden="true">02</span>
+              {{ t('shell.restore.to') }}
+            </p>
+            <div class="registry-restore__screen-body">
+              <CommandSnippet command="agentplugins deps import --install" inline />
+            </div>
+          </div>
+          <div class="registry-restore__stand" aria-hidden="true" />
         </div>
       </div>
 
@@ -143,26 +132,65 @@ const { t } = useI18n();
 
   &__flow {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 200px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 250px) minmax(0, 1fr);
     align-items: stretch;
     gap: 16px;
+    padding-block-end: 30px;
   }
 
-  &__stage {
-    display: grid;
-    align-content: start;
-    gap: 12px;
+  &__machine {
+    position: relative;
     min-width: 0;
-    padding: 16px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    padding: 12px 12px 26px;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
     background: var(--surface-raised);
+    box-shadow: 0 12px 28px color-mix(in srgb, var(--text) 9%, transparent);
 
-    :deep(pre) {
-      direction: ltr;
-      text-align: left;
-      overflow-wrap: anywhere;
+    &::before {
+      content: '';
+      position: absolute;
+      top: 5px;
+      left: 50%;
+      translate: -50% 0;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--line-strong);
     }
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 9px;
+      left: 50%;
+      translate: -50% 0;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--cyan) 75%, transparent);
+    }
+  }
+
+  &__screen {
+    // A monitor screen keeps the dark display palette in every theme.
+    --surface-solid: #101522;
+    --surface-raised: #172033;
+    --text: #e0e6ff;
+    --muted: #9aa6c5;
+    --subtle: #7f8dac;
+    --line: rgba(203, 211, 255, 0.12);
+    --cyan: #00f0ff;
+
+    overflow: hidden;
+    border-radius: 10px;
+    background:
+      linear-gradient(155deg, color-mix(in srgb, var(--cyan) 7%, transparent), transparent 48%),
+      var(--surface-solid);
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 0 30px color-mix(in srgb, var(--cyan) 6%, transparent);
   }
 
   &__stage-label {
@@ -170,6 +198,9 @@ const { t } = useI18n();
     align-items: center;
     gap: 9px;
     margin: 0;
+    padding: 9px 13px;
+    border-block-end: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface-raised) 55%, transparent);
     color: var(--muted);
     font-size: 0.68rem;
     font-weight: 750;
@@ -186,30 +217,67 @@ const { t } = useI18n();
     font-variant-numeric: tabular-nums;
   }
 
-  &__stage-icon {
-    width: 18px;
+  &__screen-body {
+    padding: 15px 13px 17px;
+
+    // Flat on the screen: no card chrome, just the command row.
+    :deep(.command-snippet.command-snippet--inline) {
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    :deep(.command-snippet__header) {
+      min-height: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+
+    :deep(.command-snippet button) {
+      padding: 2px 4px;
+      color: var(--muted);
+    }
+
+    :deep(pre) {
+      direction: ltr;
+      text-align: left;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      padding: 0;
+    }
+  }
+
+  &__stand {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    translate: -50% 0;
+    width: 92px;
     height: 18px;
-    flex: 0 0 18px;
-    color: var(--cyan);
-    stroke: currentColor;
-    stroke-width: 1.7;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    background: var(--line-strong);
+    clip-path: polygon(38% 0, 62% 0, 66% 58%, 94% 58%, 100% 100%, 0 100%, 6% 58%, 34% 58%);
   }
 
   &__handoff {
+    position: relative;
     display: grid;
-    align-content: center;
+    grid-template-rows: 1fr auto 1fr;
     justify-items: center;
-    gap: 12px;
     min-width: 0;
   }
 
   &__files {
+    position: absolute;
+    left: 50%;
+    bottom: calc(50% + 27px);
+    translate: -50% 0;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
+    width: max-content;
+    max-width: 100%;
   }
 
   &__file {
@@ -239,8 +307,10 @@ const { t } = useI18n();
   }
 
   &__arrow {
-    width: min(100%, 150px);
-    height: 30px;
+    grid-row: 2;
+    width: calc(100% + 32px);
+    margin-inline: -16px;
+    height: 36px;
     color: var(--cyan);
     stroke: currentColor;
     stroke-width: 2;
@@ -265,24 +335,27 @@ const { t } = useI18n();
 @media (max-width: 980px) {
   .registry-restore__flow {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .registry-restore__stage :deep(.command-snippet--inline pre),
-  .registry-restore__stage :deep(.command-snippet--inline code) {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    padding-block-end: 26px;
   }
 
   .registry-restore__handoff {
-    gap: 10px;
-    padding-block: 2px;
+    grid-template-rows: auto auto;
+    gap: 12px;
+    padding-block: 4px;
+  }
+
+  .registry-restore__files {
+    position: static;
+    translate: none;
+    width: auto;
   }
 
   .registry-restore__arrow,
   :dir(rtl) .registry-restore__arrow {
     transform: rotate(90deg);
-    width: 56px;
-    height: 34px;
+    width: 92px;
+    height: 36px;
+    margin-inline: 0;
   }
 }
 </style>
