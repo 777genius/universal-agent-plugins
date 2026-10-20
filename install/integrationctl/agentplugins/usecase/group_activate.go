@@ -87,7 +87,10 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 		var err error
 		delivery, nativeComplete, err = session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
 		if err != nil {
-			return domain.ActivationOutcome{}, false, err
+			// A projection failure happens before the adapter can run. Keep the
+			// recorded lifecycle instead of persisting an empty outcome, so the
+			// failure reports the projection error rather than a state refusal.
+			return lifecycleOutcome(*target.managed), false, err
 		}
 	}
 	previous := []domain.NativeObjectOwnership(nil)

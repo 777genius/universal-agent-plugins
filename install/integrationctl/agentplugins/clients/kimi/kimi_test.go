@@ -320,3 +320,19 @@ func TestActivationReportsNativeEffectCompletion(t *testing.T) {
 		t.Fatalf("possible write failure lost uncertainty: %+v %v", out, err)
 	}
 }
+
+func TestProjectActiveNativeRevalidatesManifestIdentityWithoutWriting(t *testing.T) {
+	r := fixture(t)
+	root := r.Delivery.ActivePath
+	objects, err := New().ProjectActiveNative(context.Background(), root, domain.PackageEnvelope{}, r.Plan, "")
+	if err != nil {
+		t.Fatalf("read-only native projection: %v", err)
+	}
+	if len(objects) != 0 {
+		t.Fatalf("kimi owns nothing outside the managed package directory: %+v", objects)
+	}
+	write(t, filepath.Join(root, ".kimi-plugin", "plugin.json"), `{"name":"other"}`)
+	if _, err := New().ProjectActiveNative(context.Background(), root, domain.PackageEnvelope{}, r.Plan, ""); err == nil || !strings.Contains(err.Error(), "identity mismatch") {
+		t.Fatalf("manifest identity drift must fail the read-only projection: %v", err)
+	}
+}

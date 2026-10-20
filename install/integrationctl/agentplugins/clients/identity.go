@@ -45,6 +45,12 @@ type PreparedRegistryInspector interface {
 type SelectionLayout struct {
 	File   string
 	Nested bool
+	// ServersMemberOptional marks a selection document that declares its
+	// "mcpServers" member only when servers were selected: a projected plugin
+	// manifest. For those, a verified document without the member is a proven
+	// empty selection. Dedicated selection documents keep failing closed on a
+	// missing member, because unrecognizable shape is never evidence.
+	ServersMemberOptional bool
 }
 
 // DefaultSelectionLayout is the managed MCP selection document every client

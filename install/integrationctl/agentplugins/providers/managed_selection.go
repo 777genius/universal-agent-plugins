@@ -47,12 +47,14 @@ func (stager Stager) ManagedMCPNames(ctx context.Context, client domain.ClientID
 		servers := document
 		if layout.Nested {
 			raw, ok := document["mcpServers"]
-			if !ok {
+			if !ok && !layout.ServersMemberOptional {
 				return nil, fmt.Errorf("managed MCP selection lacks mcpServers")
 			}
 			servers = nil
-			if err := json.Unmarshal(raw, &servers); err != nil || servers == nil {
-				return nil, fmt.Errorf("managed MCP server selection is invalid: %v", err)
+			if ok {
+				if err := json.Unmarshal(raw, &servers); err != nil || servers == nil {
+					return nil, fmt.Errorf("managed MCP server selection is invalid: %v", err)
+				}
 			}
 		}
 		for name := range servers {
