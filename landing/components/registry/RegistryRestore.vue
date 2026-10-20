@@ -355,6 +355,8 @@ const { t } = useI18n();
     transform: rotate(90deg);
     width: 92px;
     height: 36px;
+    // Rotation does not affect layout: reserve the full 92px visual height.
+    margin-block: 28px;
     margin-inline: 0;
   }
 }
