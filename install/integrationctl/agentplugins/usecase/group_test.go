@@ -1384,9 +1384,9 @@ func (observer *countingNativeObserver) ObservePreparedIdentity(_ context.Contex
 	return domain.NativeIdentityObservation{State: domain.NativeIdentityManaged, Digest: managedDigest(*managed)}, nil
 }
 
-// hidesReadOnlyProjection wraps a stager so it no longer derives the installed
-// native projection read-only, modeling a client adapter without that
-// capability.
+// hidesReadOnlyProjection wraps a stager so it can no longer derive the
+// installed native projection read-only, modeling the capability gap that a
+// projection failure exercises before any adapter runs.
 type hidesReadOnlyProjection struct{ ports.PackageStager }
 
 func kimiGroupInput(t *testing.T) AddInput {
@@ -1451,7 +1451,7 @@ func TestGroupedProjectionFailurePreservesRecordedLifecycle(t *testing.T) {
 	result, err := service.UpdateGroup(context.Background(), GroupInput{
 		Targets: []AddInput{input}, CompatibilityChecks: []AddInput{input}, Confirmed: true, OperationGroupID: "kimi-projection-update",
 	})
-	if err == nil || !strings.Contains(err.Error(), "native projection") {
+	if err == nil || !strings.Contains(err.Error(), "stager cannot derive the installed native projection") {
 		t.Fatalf("projection failure must surface the projection error: %+v %v", result, err)
 	}
 	if strings.Contains(err.Error(), "refuse invalid state") {
@@ -1459,6 +1459,10 @@ func TestGroupedProjectionFailurePreservesRecordedLifecycle(t *testing.T) {
 	}
 	if len(result.Targets) != 1 || result.Targets[0].Failure == nil || result.Targets[0].Failure.Stage == "persist" {
 		t.Fatalf("projection failure stage = %+v", result.Targets)
+	}
+	// Nothing ran, so the failed no-change attempt must not claim a mutation.
+	if result.Mutated || result.Targets[0].Mutated || !result.Targets[0].NoChange {
+		t.Fatalf("failed projection claimed a mutation: %+v", result.Targets[0])
 	}
 	after, err := store.Load()
 	if err != nil {

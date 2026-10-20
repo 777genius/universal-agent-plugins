@@ -19,7 +19,10 @@ var _ clients.ActiveNativeProjector = (*Adapter)(nil)
 // writing. Everything Kimi owns — the projected manifest included — lives
 // inside the managed package directory the stager already digest-verified, so
 // after the manifest identity check there is no external ownership to rebuild.
-func (*Adapter) ProjectActiveNative(_ context.Context, root string, _ domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, _ domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if err := verifyManifest(root, plan.DeclaredName); err != nil {
 		return nil, err
 	}

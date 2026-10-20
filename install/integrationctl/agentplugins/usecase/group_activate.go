@@ -46,7 +46,10 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	if lifecycleChanged {
 		session.result.Mutated = true
 	}
-	if !nativeComplete {
+	if !nativeComplete && activationErr == nil {
+		// An incomplete projection that re-activated successfully changed the
+		// target. A failure before or during activation claims no mutation; the
+		// recorded lifecycle change, if any, is the evidence.
 		target.noChange = false
 	}
 	session.assignActivationOutcome(target, outcome, activationErr, persistErr, lifecycleChanged)
@@ -88,9 +91,12 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 		delivery, nativeComplete, err = session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
 		if err != nil {
 			// A projection failure happens before the adapter can run. Keep the
-			// recorded lifecycle instead of persisting an empty outcome, so the
-			// failure reports the projection error rather than a state refusal.
-			return lifecycleOutcome(*target.managed), false, err
+			// recorded lifecycle and acknowledged objects instead of persisting
+			// an empty outcome, so the failure reports the projection error
+			// rather than a state refusal.
+			outcome := lifecycleOutcome(*target.managed)
+			outcome.NativeEffect = domain.NativeEffectUnchanged
+			return outcome, false, err
 		}
 	}
 	previous := []domain.NativeObjectOwnership(nil)
