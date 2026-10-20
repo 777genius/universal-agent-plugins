@@ -13,6 +13,22 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+var _ clients.ActiveNativeProjector = (*Adapter)(nil)
+
+// ProjectActiveNative revalidates the committed Kimi projection without
+// writing. Everything Kimi owns — the projected manifest included — lives
+// inside the managed package directory the stager already digest-verified, so
+// after the manifest identity check there is no external ownership to rebuild.
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, _ domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := verifyManifest(root, plan.DeclaredName); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
 func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

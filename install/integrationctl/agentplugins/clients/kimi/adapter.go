@@ -53,7 +53,9 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 	return nil
 }
 func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
-	return clients.SelectionLayout{File: filepath.Join(".kimi-plugin", "plugin.json"), Nested: true}
+	// The projected manifest is the Kimi MCP selection document and declares
+	// "mcpServers" only when servers were selected.
+	return clients.SelectionLayout{File: filepath.Join(".kimi-plugin", "plugin.json"), Nested: true, ServersMemberOptional: true}
 }
 
 const reloadAction = "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
