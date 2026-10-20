@@ -36,8 +36,7 @@ for (const locale of publishedLocales) {
         ).shell.restore as Record<string, string>;
         const restore = page.locator('#restore-environment');
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
-        await expect(restore.locator('.registry-restore__availability strong')).toHaveText(copy.availability!);
-        await expect(restore.locator('.registry-restore__availability span')).toHaveText(copy.releaseNote!);
+        await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
         await expect(restore.locator('.command-snippet pre code')).toHaveText([
           'agentplugins deps export',
           'agentplugins deps import --install',

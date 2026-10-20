@@ -111,6 +111,7 @@ const reviewedCaptions = {
     'shell.header.faq': 'FAQ',
     'shell.navigation.plugins': 'Plugins',
     'shell.navigation.faq': 'FAQ',
+    'shell.restore.guide': 'Guide',
     'registryUi.catalog.source': 'Source',
     'registryUi.catalog.agent': 'Agent',
     'registryUi.card.installable': 'installable',
