@@ -2,7 +2,7 @@ module github.com/777genius/plugin-kit-ai/install/integrationctl
 
 go 1.25.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require gopkg.in/yaml.v3 v3.0.1
 
