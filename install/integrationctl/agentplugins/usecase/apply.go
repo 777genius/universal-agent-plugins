@@ -300,7 +300,7 @@ func (session *applySession) noChangeOrResume() (bool, AddResult, error) {
 		if err := session.service.observeNativeIdentity(session.ctx, session.input.Client, session.plan, session.managedBinding); err != nil {
 			return true, session.result, err
 		}
-		if !nativeDialectProjectionChanged(previousClient, session.plan) && !requiresComponentRemoval(session.plan) && packageRevisionMatches(previousClient.PackageRevision, session.input.Envelope) && previousClient.PackageRevision.ResolvedRevision == session.input.Envelope.Source.ResolvedRevision {
+		if !session.registrationMigration && !nativeDialectProjectionChanged(previousClient, session.plan) && !requiresComponentRemoval(session.plan) && packageRevisionMatches(previousClient.PackageRevision, session.input.Envelope) && previousClient.PackageRevision.ResolvedRevision == session.input.Envelope.Source.ResolvedRevision {
 			return session.finishExistingLifecycle(previousClient, "")
 		}
 	}
@@ -328,7 +328,7 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 		}
 	}
 	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
-		_, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
+		_, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.state.Installations[session.installationIndex], current)
 		if err != nil {
 			return true, session.result, err
 		}

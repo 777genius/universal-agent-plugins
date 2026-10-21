@@ -9,7 +9,7 @@ import (
 )
 
 func (session *repairSession) repairNative() (AddResult, error) {
-	delivery, complete, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.installation, session.client)
+	delivery, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.installation, session.client)
 	if err != nil {
 		return session.result, err
 	}

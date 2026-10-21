@@ -35,7 +35,7 @@ func (service Service) resume(
 		result.RequiresConfirmation = true
 		return result, nil
 	}
-	delivery, complete, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
+	delivery, complete, settled, err := service.resumeNativeDelivery(ctx, input, result.Plan, installationID, client)
 	if err != nil {
 		return result, err
 	}
@@ -75,7 +75,9 @@ func (service Service) resume(
 	if activationErr != nil {
 		return result, activationErr
 	}
-	result.NoChange = complete && !changed && service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome)
+	// A settled manual registration is a stable no-change outcome: this request
+	// cannot finish it, and a later one the adapter can act on will.
+	result.NoChange = complete && !changed && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled)
 	return result, nil
 }
 
@@ -89,10 +91,10 @@ func unresolvedNativeAttemptID(client domain.ClientBinding) string {
 	return ""
 }
 
-func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, error) {
+func (service Service) resumeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installationID string, client domain.ClientBinding) (domain.StagedDelivery, bool, bool, error) {
 	state, err := service.StateStore.Load()
 	if err != nil {
-		return domain.StagedDelivery{}, false, err
+		return domain.StagedDelivery{}, false, false, err
 	}
 	var installation domain.Installation
 	for _, item := range state.Installations {

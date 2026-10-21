@@ -13,36 +13,40 @@ import (
 // activeNativeDelivery contains the complete desired projection, derived from
 // the selected components and a verified installed package. Its native objects
 // are never ownership evidence until an adapter confirms the external effect.
-func (service Service) activeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, client domain.ClientBinding) (domain.StagedDelivery, bool, error) {
-	delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client)}
+// The settled result reports a complete projection that is only complete
+// because no adapter action could finish the pending manual registration.
+func (service Service) activeNativeDelivery(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, client domain.ClientBinding) (delivery domain.StagedDelivery, complete, settled bool, err error) {
+	delivery = domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client)}
 	if delivery.ArtifactDigest == "" {
-		return delivery, false, fmt.Errorf("managed package receipt is missing")
+		return delivery, false, false, fmt.Errorf("managed package receipt is missing")
 	}
 	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
-		return delivery, service.nonNativeRegistrationComplete(input, plan, client), nil
+		complete = service.nonNativeRegistrationComplete(input, plan, client, delivery)
+		settled = complete && service.manualRegistrationSettled(input, plan, client, delivery)
+		return delivery, complete, settled, nil
 	}
 	if !packageRevisionMatches(client.PackageRevision, input.Envelope) {
-		return delivery, false, fmt.Errorf("active package revision differs from the requested native projection")
+		return delivery, false, false, fmt.Errorf("active package revision differs from the requested native projection")
 	}
 	projector, ok := service.Stager.(ports.ActiveNativeProjector)
 	if !ok {
-		return delivery, false, fmt.Errorf("stager cannot derive the installed native projection read-only")
+		return delivery, false, false, fmt.Errorf("stager cannot derive the installed native projection read-only")
 	}
 	dataPath := ""
 	if packageNeedsPluginData(input.Envelope, plan) {
 		receipt, found := installation.DataReceipts[client.DataReceiptID]
 		if !found || receipt.DataReceiptID == "" || service.PluginData == nil {
-			return delivery, false, fmt.Errorf("native projection has no confirmed PLUGIN_DATA receipt")
+			return delivery, false, false, fmt.Errorf("native projection has no confirmed PLUGIN_DATA receipt")
 		}
 		if err := service.PluginData.ValidateData(ctx, receipt); err != nil {
-			return delivery, false, fmt.Errorf("validate native projection PLUGIN_DATA receipt: %w", err)
+			return delivery, false, false, fmt.Errorf("validate native projection PLUGIN_DATA receipt: %w", err)
 		}
 		dataPath = receipt.Locator
 	}
 	projected, err := projector.ProjectActiveNative(ctx, input.Envelope, cloneLocalObservationPlan(plan), delivery.ArtifactDigest, dataPath)
 	if err != nil {
-		return delivery, false, err
+		return delivery, false, false, err
 	}
 	for _, object := range client.NativeObjects {
 		if object.Kind == "managed_package_directory" {
@@ -50,37 +54,42 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		}
 	}
 	if len(delivery.NativeObjects) != 1 {
-		return delivery, false, fmt.Errorf("active package has no unique managed directory receipt")
+		return delivery, false, false, fmt.Errorf("active package has no unique managed directory receipt")
 	}
 	seen := map[string]bool{delivery.NativeObjects[0].ObjectID: true}
 	for _, object := range projected {
 		if object.ObjectID == "" || object.Kind == "" || seen[object.ObjectID] || object.Kind == "managed_package_directory" {
-			return delivery, false, fmt.Errorf("native projection has incomplete or duplicate ownership identity")
+			return delivery, false, false, fmt.Errorf("native projection has incomplete or duplicate ownership identity")
 		}
 		seen[object.ObjectID] = true
 		delivery.NativeObjects = append(delivery.NativeObjects, object)
 	}
 	delivery.NativeObjects, err = retainRecordedLocalSelector(plan.SelectedDelivery, client, delivery.NativeObjects)
 	if err != nil {
-		return delivery, false, err
+		return delivery, false, false, err
 	}
 	if confirmedNativeProjection(client.NativeObjects, delivery.NativeObjects) {
-		return delivery, true, nil
+		return delivery, true, false, nil
 	}
-	if service.manualRegistrationSettled(input, plan, client) {
+	// Classify before replacing the projection: the acting request carries the
+	// full desired delivery, and adapters gate on its native objects.
+	settled = service.manualRegistrationSettled(input, plan, client, delivery)
+	if settled {
 		// A deliberately pending manual registration is a stable projection:
 		// no activation can finish it until the adapter can act again, so
 		// update verifies the recorded objects instead of churning an attempt.
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
-		return delivery, true, nil
+		return delivery, true, true, nil
 	}
-	return delivery, false, nil
+	return delivery, false, false, nil
 }
 
 // manualRegistrationSettled reports an incomplete projection that no adapter
-// action could complete for this exact request. A later request the adapter
-// can act on keeps the projection incomplete, so registration completes then.
-func (service Service) manualRegistrationSettled(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding) bool {
+// action could complete for this exact request. The classifier sees the same
+// request the acting adapter would, so a client whose adapter could act on
+// this delivery keeps the projection incomplete and registration completes
+// when its conditions arrive.
+func (service Service) manualRegistrationSettled(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery) bool {
 	if client.Activation != domain.ActivationManual || client.NativeActivationAttempt != "" || client.PendingNativeIntent != nil {
 		return false
 	}
@@ -88,7 +97,19 @@ func (service Service) manualRegistrationSettled(input AddInput, plan domain.Del
 	if !ok {
 		return false
 	}
-	return !classifier.AutomaticallyActivates(domain.ActivationRequest{Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable})
+	return !classifier.AutomaticallyActivates(activationClassifierRequest(input, plan, client, delivery))
+}
+
+// activationClassifierRequest mirrors the request the acting adapter would
+// receive, so classifiers gate on the same delivery and prior objects.
+func activationClassifierRequest(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery) domain.ActivationRequest {
+	return domain.ActivationRequest{
+		Client:                input.Client,
+		Plan:                  plan,
+		Delivery:              delivery,
+		BackendExecutable:     input.BackendExecutable,
+		PreviousNativeObjects: client.NativeObjects,
+	}
 }
 
 // requireCurrentCommandProjection derives the installed native projection of
@@ -99,7 +120,7 @@ func (service Service) requireCurrentCommandProjection(ctx context.Context, inpu
 	if !rendersCommands(input.Envelope, input.Client.ClientID) || !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
 		return nil
 	}
-	if _, _, err := service.activeNativeDelivery(ctx, input, plan, installation, client); errors.Is(err, ErrProjectionRefreshRequired) {
+	if _, _, _, err := service.activeNativeDelivery(ctx, input, plan, installation, client); errors.Is(err, ErrProjectionRefreshRequired) {
 		return err
 	}
 	return nil
@@ -108,9 +129,9 @@ func (service Service) requireCurrentCommandProjection(ctx context.Context, inpu
 // nonNativeRegistrationComplete separates CLI effects from package reuse.
 // Explicit attestation still runs the adapter's verifier; recognized negative
 // evidence cannot be overridden. Unattempted registration still needs effects.
-func (service Service) nonNativeRegistrationComplete(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding) bool {
+func (service Service) nonNativeRegistrationComplete(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery) bool {
 	classifier, ok := service.Activator.(ports.AutomaticActivationClassifier)
-	cliBacked := ok && classifier.AutomaticallyActivates(domain.ActivationRequest{Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable})
+	cliBacked := ok && classifier.AutomaticallyActivates(activationClassifierRequest(input, plan, client, delivery))
 	if plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && cliBacked {
 		return input.ActivationComplete || client.Activation == domain.ActivationActive && (client.Verification == domain.VerificationInstalled || client.Verification == domain.VerificationRuntime)
 	}
