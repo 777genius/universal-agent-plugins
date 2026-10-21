@@ -56,15 +56,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	if len(delivery.NativeObjects) != 1 {
 		return delivery, false, false, fmt.Errorf("active package has no unique managed directory receipt")
 	}
-	seen := map[string]bool{delivery.NativeObjects[0].ObjectID: true}
-	for _, object := range projected {
-		if object.ObjectID == "" || object.Kind == "" || seen[object.ObjectID] || object.Kind == "managed_package_directory" {
-			return delivery, false, false, fmt.Errorf("native projection has incomplete or duplicate ownership identity")
-		}
-		seen[object.ObjectID] = true
-		delivery.NativeObjects = append(delivery.NativeObjects, object)
-	}
-	delivery.NativeObjects, err = retainRecordedLocalSelector(plan.SelectedDelivery, client, delivery.NativeObjects)
+	delivery.NativeObjects, err = desiredNativeObjects(plan, client, delivery.NativeObjects[0], projected)
 	if err != nil {
 		return delivery, false, false, err
 	}
@@ -82,6 +74,23 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		return delivery, true, true, nil
 	}
 	return delivery, false, false, nil
+}
+
+// desiredNativeObjects assembles the unique owned identity of the desired
+// projection: the managed package directory receipt first, then each projected
+// object, then a reconciled recorded Local selector.
+func desiredNativeObjects(plan domain.DeliveryPlan, client domain.ClientBinding, managed domain.NativeObjectOwnership, projected []domain.NativeObjectOwnership) ([]domain.NativeObjectOwnership, error) {
+	objects := make([]domain.NativeObjectOwnership, 0, len(projected)+1)
+	objects = append(objects, managed)
+	seen := map[string]bool{managed.ObjectID: true}
+	for _, object := range projected {
+		if object.ObjectID == "" || object.Kind == "" || seen[object.ObjectID] || object.Kind == "managed_package_directory" {
+			return nil, fmt.Errorf("native projection has incomplete or duplicate ownership identity")
+		}
+		seen[object.ObjectID] = true
+		objects = append(objects, object)
+	}
+	return retainRecordedLocalSelector(plan.SelectedDelivery, client, objects)
 }
 
 // manualRegistrationSettled reports an incomplete projection that no adapter

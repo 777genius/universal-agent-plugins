@@ -336,7 +336,7 @@ func TestKiroMCPManualActivationNoChangeUpdateIsNoOp(t *testing.T) {
 	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 
-	add := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	add := kiroMCPInput(t, client)
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "kiro-mcp-add", Confirmed: true})
 	if err != nil {
 		t.Fatal(err)
@@ -349,7 +349,7 @@ func TestKiroMCPManualActivationNoChangeUpdateIsNoOp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	update := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	update := kiroMCPInput(t, client)
 	update.InstallationID = added.InstallationID
 	updated, err := service.UpdateGroup(context.Background(), GroupInput{Targets: []AddInput{update}, CompatibilityChecks: []AddInput{update}, OperationGroupID: "kiro-mcp-update", Confirmed: true})
 	if err != nil {
@@ -384,7 +384,7 @@ func TestKiroMCPManualActivationNoChangeSingleTargetUpdateIsNoOp(t *testing.T) {
 	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
 	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
 
-	add := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	add := kiroMCPInput(t, client)
 	add.Confirmed = true
 	added, err := service.Add(context.Background(), add)
 	if err != nil {
@@ -395,7 +395,7 @@ func TestKiroMCPManualActivationNoChangeSingleTargetUpdateIsNoOp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	update := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	update := kiroMCPInput(t, client)
 	update.Confirmed = true
 	update.InstallationID = added.InstallationID
 	updated, err := service.Update(context.Background(), update)
@@ -478,7 +478,7 @@ func TestManualRegistrationSettledClassifiesTheActingRequest(t *testing.T) {
 	t.Parallel()
 	service, _, _ := serviceFixture(t)
 	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
-	add := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	add := kiroMCPInput(t, client)
 	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "kiro-settled-plan", Confirmed: true})
 	if err != nil {
 		t.Fatal(err)
@@ -569,10 +569,10 @@ func kiroPowerInput(t *testing.T, client domain.DetectedClient, version, treeDig
 
 // kiroMCPInput mirrors the catalog's remote-MCP packages (like atlassian): an
 // MCP-only envelope whose Kiro registration needs a Kiro CLI to complete.
-func kiroMCPInput(t *testing.T, client domain.DetectedClient, version, treeDigest, manifestDigest string) AddInput {
+func kiroMCPInput(t *testing.T, client domain.DetectedClient) AddInput {
 	t.Helper()
 	input := addInput(t, client, "https://example.com/kiro")
-	setEnvelopeVersion(t, &input.Envelope, version, treeDigest, manifestDigest)
+	setEnvelopeVersion(t, &input.Envelope, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
 	mcpBody := []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://example.test/mcp"}}}`)
 	if err := os.WriteFile(filepath.Join(input.Envelope.SnapshotRoot, "mcp.json"), mcpBody, 0o644); err != nil {
 		t.Fatal(err)
