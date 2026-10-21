@@ -24,8 +24,8 @@ export async function generationPrerequisites() {
   if (!process.env.GOWORK || !path.isAbsolute(process.env.GOWORK)) errors.push("Explicit absolute GOWORK required");
   try {
     const version = await run("go", ["version"]);
-    if (!version.includes(" go1.26.9 ")) errors.push(`Go 1.26.9 required; found ${version.trim()}`);
-  } catch { errors.push("Missing Go 1.26.9 executable"); }
+    if (!version.includes(" go1.26.10 ")) errors.push(`Go 1.26.10 required; found ${version.trim()}`);
+  } catch { errors.push("Missing Go 1.26.10 executable"); }
   if (!process.env.GOMODCACHE) errors.push("Explicit existing GOMODCACHE required");
   else {
     try { await fs.access(process.env.GOMODCACHE); }

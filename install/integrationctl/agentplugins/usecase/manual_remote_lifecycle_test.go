@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
@@ -324,6 +327,140 @@ func TestClinePackageSupportsAutomaticAddUpdateRepairAndRemoveInIsolatedHome(t *
 	}
 }
 
+// A Kiro MCP registration without a Kiro CLI is deliberately left pending, so a
+// no-change update must not spin a native attempt and rewrite state: the same
+// command run twice has to report no_change and mutate nothing.
+func TestKiroMCPManualActivationNoChangeUpdateIsNoOp(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+
+	add := kiroMCPInput(t, client)
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "kiro-mcp-add", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.Targets[0].Activation.Activation != domain.ActivationManual {
+		t.Fatalf("kiro MCP add without a Kiro CLI must stay manual: %+v", added.Targets[0])
+	}
+	before, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	update := kiroMCPInput(t, client)
+	update.InstallationID = added.InstallationID
+	updated, err := service.UpdateGroup(context.Background(), GroupInput{Targets: []AddInput{update}, CompatibilityChecks: []AddInput{update}, OperationGroupID: "kiro-mcp-update", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Targets[0].NoChange || updated.Targets[0].Mutated {
+		t.Fatalf("no-change update of a pending manual Kiro MCP registration mutated: %+v", updated.Targets[0])
+	}
+	if updated.Targets[0].Activation.Activation != domain.ActivationManual {
+		t.Fatalf("no-change update claimed Kiro MCP registration: %+v", updated.Targets[0])
+	}
+	if updated.Targets[0].Activation.Verification == domain.VerificationInstalled {
+		t.Fatalf("no-change update verified an uninstalled Kiro MCP registration: %+v", updated.Targets[0])
+	}
+	if !containsAction(updated.Targets[0].Activation.UserActions, "install a current Kiro CLI") {
+		t.Fatalf("no-change update lost the Kiro CLI user action: %+v", updated.Targets[0])
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("no-change update rewrote installation state:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+// The single-target update path (installer's one-compatibility-check update)
+// must keep the same read-only guarantee as the group path.
+func TestKiroMCPManualActivationNoChangeSingleTargetUpdateIsNoOp(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+
+	add := kiroMCPInput(t, client)
+	add.Confirmed = true
+	added, err := service.Add(context.Background(), add)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	update := kiroMCPInput(t, client)
+	update.Confirmed = true
+	update.InstallationID = added.InstallationID
+	updated, err := service.Update(context.Background(), update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.NoChange || updated.Mutated {
+		t.Fatalf("single-target no-change update of a pending manual Kiro MCP registration mutated: %+v", updated)
+	}
+	if updated.Activation.Activation != domain.ActivationManual {
+		t.Fatalf("single-target no-change update claimed Kiro MCP registration: %+v", updated)
+	}
+	if !containsAction(updated.Activation.UserActions, "install a current Kiro CLI") {
+		t.Fatalf("single-target no-change update lost the Kiro CLI user action: %+v", updated)
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("single-target no-change update rewrote installation state:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+// A non-native manual registration (ChatGPT's remote activation) keeps the
+// same read-only guarantee on the single-target update path.
+func TestChatGPTManualNoChangeSingleTargetUpdateIsNoOp(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	client := domain.DetectedClient{ClientID: domain.ClientChatGPT, DisplayName: "ChatGPT", Status: domain.DetectionNotDetected}
+
+	add := signedChatGPTInput(t, client, "1.0.0", "sha256:chatgpt-v1", "sha256:chatgpt-manifest-v1")
+	add.Confirmed = true
+	added, err := service.Add(context.Background(), add)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	update := signedChatGPTInput(t, client, "1.0.0", "sha256:chatgpt-v1", "sha256:chatgpt-manifest-v1")
+	update.Confirmed = true
+	update.InstallationID = added.InstallationID
+	updated, err := service.Update(context.Background(), update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.NoChange || updated.Mutated {
+		t.Fatalf("single-target no-change update of a pending manual ChatGPT registration mutated: %+v", updated)
+	}
+	if updated.Activation.Activation != domain.ActivationManual {
+		t.Fatalf("single-target no-change update claimed ChatGPT remote activation: %+v", updated)
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("single-target no-change update rewrote installation state:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
 func containsAction(actions []string, fragment string) bool {
 	for _, action := range actions {
 		if strings.Contains(action, fragment) {
@@ -331,6 +468,56 @@ func containsAction(actions []string, fragment string) bool {
 		}
 	}
 	return false
+}
+
+// manualRegistrationSettled must classify the exact request the acting adapter
+// would receive: a Windsurf delivery whose native objects its adapter can act
+// on is never settled, and a Kiro registration stops being settled the moment a
+// Kiro CLI can complete it.
+func TestManualRegistrationSettledClassifiesTheActingRequest(t *testing.T) {
+	t.Parallel()
+	service, _, _ := serviceFixture(t)
+	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	add := kiroMCPInput(t, client)
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "kiro-settled-plan", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := added.Targets[0].Plan
+	binding := domain.ClientBinding{Activation: domain.ActivationManual}
+	delivery := domain.StagedDelivery{ClientID: domain.ClientKiro}
+	if !service.manualRegistrationSettled(add, plan, binding, delivery) {
+		t.Fatal("kiro registration without a Kiro CLI must settle")
+	}
+	withCLI := add
+	withCLI.BackendExecutable = "kiro-cli"
+	if service.manualRegistrationSettled(withCLI, plan, binding, delivery) {
+		t.Fatal("kiro registration with a usable Kiro CLI must stay unsettled")
+	}
+	attempted := binding
+	attempted.NativeActivationAttempt = "attempt-1"
+	if service.manualRegistrationSettled(add, plan, attempted, delivery) {
+		t.Fatal("an unresolved native attempt must keep the projection unsettled")
+	}
+	windsurfInput := add
+	windsurfInput.Client = domain.DetectedClient{ClientID: domain.ClientWindsurf, DisplayName: "Windsurf", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".codeium")}
+	windsurfDelivery := domain.StagedDelivery{ClientID: domain.ClientWindsurf, NativeObjects: []domain.NativeObjectOwnership{
+		{ObjectID: "windsurf:docs", Kind: string(windsurf.WindsurfMCPObjectKind)},
+	}}
+	windsurfPlan := domain.DeliveryPlan{InstallIntent: domain.InstallIntentAutomatic}
+	if service.manualRegistrationSettled(windsurfInput, windsurfPlan, binding, windsurfDelivery) {
+		t.Fatal("a windsurf delivery its adapter can act on must stay unsettled")
+	}
+	openCodeInput := add
+	openCodeInput.Client = domain.DetectedClient{ClientID: domain.ClientOpenCode, DisplayName: "OpenCode", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".opencode")}
+	openCodeBinding := domain.ClientBinding{Activation: domain.ActivationManual, NativeObjects: []domain.NativeObjectOwnership{
+		{ObjectID: "opencode:docs", Kind: string(opencode.OpenCodeV2MCPObjectKind)},
+	}}
+	openCodeDelivery := domain.StagedDelivery{ClientID: domain.ClientOpenCode}
+	openCodePlan := domain.DeliveryPlan{InstallIntent: domain.InstallIntentAutomatic}
+	if service.manualRegistrationSettled(openCodeInput, openCodePlan, openCodeBinding, openCodeDelivery) {
+		t.Fatal("an opencode final-removal request its adapter can act on must stay unsettled")
+	}
 }
 
 func signedChatGPTInput(t *testing.T, client domain.DetectedClient, version, treeDigest, manifestDigest string) AddInput {
@@ -377,6 +564,25 @@ func kiroPowerInput(t *testing.T, client domain.DetectedClient, version, treeDig
 	}
 	input.Envelope.Skills = map[string]domain.Skill{"docs": {Name: "docs", Description: "docs", RelativePath: "skills/docs/SKILL.md", Raw: []byte("---\nname: docs\ndescription: docs\n---\n")}}
 	input.Envelope.Inventory.Skills = []string{"docs"}
+	return input
+}
+
+// kiroMCPInput mirrors the catalog's remote-MCP packages (like atlassian): an
+// MCP-only envelope whose Kiro registration needs a Kiro CLI to complete.
+func kiroMCPInput(t *testing.T, client domain.DetectedClient) AddInput {
+	t.Helper()
+	input := addInput(t, client, "https://example.com/kiro")
+	setEnvelopeVersion(t, &input.Envelope, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	mcpBody := []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://example.test/mcp"}}}`)
+	if err := os.WriteFile(filepath.Join(input.Envelope.SnapshotRoot, "mcp.json"), mcpBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, SchemaURI: domain.MCPSchemaV1, Raw: mcpBody, Servers: map[string]domain.MCPServer{
+		"docs": {Name: "docs", Type: "streamable-http", Raw: []byte(`{"type":"streamable-http","url":"https://example.test/mcp"}`), Decoded: map[string]any{"type": "streamable-http", "url": "https://example.test/mcp"}},
+	}}
+	input.Envelope.Inventory.MCPPresent = true
+	input.Envelope.Inventory.MCPEnabled = true
+	input.Envelope.Inventory.MCPServers = []string{"docs"}
 	return input
 }
 

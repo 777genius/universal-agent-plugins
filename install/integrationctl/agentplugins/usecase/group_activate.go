@@ -88,7 +88,7 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 	nativeComplete := true
 	if target.noChange && target.managed != nil {
 		var err error
-		delivery, nativeComplete, err = session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
+		delivery, nativeComplete, _, err = session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
 		if err != nil {
 			// A projection failure happens before the adapter can run. Keep the
 			// recorded lifecycle and acknowledged objects instead of persisting
