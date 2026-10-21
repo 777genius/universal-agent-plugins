@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -324,6 +325,49 @@ func TestClinePackageSupportsAutomaticAddUpdateRepairAndRemoveInIsolatedHome(t *
 	}
 }
 
+// A Kiro MCP registration without a Kiro CLI is deliberately left pending, so a
+// no-change update must not spin a native attempt and rewrite state: the same
+// command run twice has to report no_change and mutate nothing.
+func TestKiroMCPManualActivationNoChangeUpdateIsNoOp(t *testing.T) {
+	t.Parallel()
+	service, store, _ := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	client := domain.DetectedClient{ClientID: domain.ClientKiro, DisplayName: "Kiro", Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+
+	add := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{add}, OperationGroupID: "kiro-mcp-add", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.Targets[0].Activation.Activation != domain.ActivationManual {
+		t.Fatalf("kiro MCP add without a Kiro CLI must stay manual: %+v", added.Targets[0])
+	}
+	before, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	update := kiroMCPInput(t, client, "1.0.0", "sha256:kiro-mcp-v1", "sha256:kiro-mcp-manifest-v1")
+	update.InstallationID = added.InstallationID
+	updated, err := service.UpdateGroup(context.Background(), GroupInput{Targets: []AddInput{update}, CompatibilityChecks: []AddInput{update}, OperationGroupID: "kiro-mcp-update", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.Targets[0].NoChange || updated.Targets[0].Mutated {
+		t.Fatalf("no-change update of a pending manual Kiro MCP registration mutated: %+v", updated.Targets[0])
+	}
+	if updated.Targets[0].Activation.Activation != domain.ActivationManual {
+		t.Fatalf("no-change update claimed Kiro MCP registration: %+v", updated.Targets[0])
+	}
+	after, err := os.ReadFile(store.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("no-change update rewrote installation state:\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
 func containsAction(actions []string, fragment string) bool {
 	for _, action := range actions {
 		if strings.Contains(action, fragment) {
@@ -377,6 +421,25 @@ func kiroPowerInput(t *testing.T, client domain.DetectedClient, version, treeDig
 	}
 	input.Envelope.Skills = map[string]domain.Skill{"docs": {Name: "docs", Description: "docs", RelativePath: "skills/docs/SKILL.md", Raw: []byte("---\nname: docs\ndescription: docs\n---\n")}}
 	input.Envelope.Inventory.Skills = []string{"docs"}
+	return input
+}
+
+// kiroMCPInput mirrors the catalog's remote-MCP packages (like atlassian): an
+// MCP-only envelope whose Kiro registration needs a Kiro CLI to complete.
+func kiroMCPInput(t *testing.T, client domain.DetectedClient, version, treeDigest, manifestDigest string) AddInput {
+	t.Helper()
+	input := addInput(t, client, "https://example.com/kiro")
+	setEnvelopeVersion(t, &input.Envelope, version, treeDigest, manifestDigest)
+	mcpBody := []byte(`{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"https://example.test/mcp"}}}`)
+	if err := os.WriteFile(filepath.Join(input.Envelope.SnapshotRoot, "mcp.json"), mcpBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	input.Envelope.MCP = domain.MCPComponent{Present: true, Enabled: true, SchemaURI: domain.MCPSchemaV1, Raw: mcpBody, Servers: map[string]domain.MCPServer{
+		"docs": {Name: "docs", Type: "streamable-http", Raw: []byte(`{"type":"streamable-http","url":"https://example.test/mcp"}`), Decoded: map[string]any{"type": "streamable-http", "url": "https://example.test/mcp"}},
+	}}
+	input.Envelope.Inventory.MCPPresent = true
+	input.Envelope.Inventory.MCPEnabled = true
+	input.Envelope.Inventory.MCPServers = []string{"docs"}
 	return input
 }
 

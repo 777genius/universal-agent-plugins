@@ -64,7 +64,31 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	if err != nil {
 		return delivery, false, err
 	}
-	return delivery, confirmedNativeProjection(client.NativeObjects, delivery.NativeObjects), nil
+	if confirmedNativeProjection(client.NativeObjects, delivery.NativeObjects) {
+		return delivery, true, nil
+	}
+	if service.manualRegistrationSettled(input, plan, client) {
+		// A deliberately pending manual registration is a stable projection:
+		// no activation can finish it until the adapter can act again, so
+		// update verifies the recorded objects instead of churning an attempt.
+		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
+		return delivery, true, nil
+	}
+	return delivery, false, nil
+}
+
+// manualRegistrationSettled reports an incomplete projection that no adapter
+// action could complete for this exact request. A later request the adapter
+// can act on keeps the projection incomplete, so registration completes then.
+func (service Service) manualRegistrationSettled(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding) bool {
+	if client.Activation != domain.ActivationManual || client.NativeActivationAttempt != "" || client.PendingNativeIntent != nil {
+		return false
+	}
+	classifier, ok := service.Activator.(ports.AutomaticActivationClassifier)
+	if !ok {
+		return false
+	}
+	return !classifier.AutomaticallyActivates(domain.ActivationRequest{Client: input.Client, Plan: plan, BackendExecutable: input.BackendExecutable})
 }
 
 // requireCurrentCommandProjection derives the installed native projection of
