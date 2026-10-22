@@ -15,10 +15,13 @@ authorize public publication.
 - `.github/workflows/agentplugins-release.yml` builds and attests the six native
   `agentplugins` binaries, stages a non-public draft, runs platform proof, and
   promotes only when `publish_release=true` after all dependencies succeed.
-- `.github/workflows/agentplugins-npm-publish.yml` is a separate manual trusted
-  publisher for the `universal-agent-plugins` npm facade. Its prepare job is
-  read-only; its publish job uses the protected `npm-agentplugins` environment;
-  its final job verifies the exact public package.
+- `.github/workflows/agentplugins-npm-publish.yml` is the trusted publisher for
+  the `universal-agent-plugins` npm facade. Promotion auto-dispatches it against
+  the exact public tag; its prepare job is read-only, its publish job uses the
+  protected `npm-agentplugins` environment, and its final job verifies the exact
+  public package. `.github/workflows/agentplugins-npm-drift.yml` is the
+  scheduled guard that fails when npm `dist-tags.latest` stops matching the
+  newest public release.
 - `.github/workflows/npm-runtime-publish.yml` and
   `.github/workflows/pypi-runtime-publish.yml` are manual-only publishers for
   the intentionally retained `plugin-kit-ai-runtime` helper libraries. These
@@ -58,8 +61,9 @@ For an owner-authorized release, after choosing and reporting the exact version:
 2. Create the approved `agentplugins-vX.Y.Z` tag at that exact commit.
 3. Follow `docs/agentplugins-release.md` to qualify the non-public GitHub draft.
 4. Promote only through the same workflow with explicit owner authorization.
-5. Run the separate agentplugins npm workflow against the exact public tag and
-   retain its prepare, protected publish, and public-readback evidence.
+5. Confirm the auto-dispatched agentplugins npm workflow run against the exact
+   public tag, approve its protected publish gate, and retain its prepare,
+   publish, and public-readback evidence.
 6. Record the native and npm artifact identities, attestations, checksums,
    workflow run IDs, commit SHA, approvals, and any truthful limitation.
 

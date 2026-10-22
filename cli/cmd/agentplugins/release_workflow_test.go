@@ -203,6 +203,9 @@ type releaseWorkflow struct {
 			Workflows []string `yaml:"workflows"`
 		} `yaml:"workflow_run"`
 		Dispatch any `yaml:"workflow_dispatch"`
+		Schedule []struct {
+			Cron string `yaml:"cron"`
+		} `yaml:"schedule"`
 	} `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions"`
 	Jobs        map[string]struct {
@@ -318,7 +321,7 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"platform-proof":       {"contents": "read", "attestations": "read"},
 		"verified-draft":       {"contents": "write", "attestations": "read"},
 		"reuse-verified-draft": {"contents": "write", "actions": "read", "attestations": "read"},
-		"promote-release":      {"contents": "write", "actions": "read", "attestations": "read"},
+		"promote-release":      {"contents": "write", "actions": "write", "attestations": "read"},
 	}
 	expectedConditions := map[string]string{
 		"validate":             "",
@@ -348,6 +351,23 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 	}
 	if workflow.Jobs["stage-draft"].Environment != "agentplugins-release" || workflow.Jobs["promote-release"].Environment != "agentplugins-release" || workflow.Jobs["reuse-verified-draft"].Environment != nil {
 		return fmt.Errorf("native protected environments")
+	}
+	promoteIndex, dispatchIndex := -1, -1
+	for i, step := range workflow.Jobs["promote-release"].Steps {
+		if step.Name == "Reverify exact draft and promote only after all native proofs" {
+			promoteIndex = i
+		}
+		if step.Name == "Dispatch trusted npm publish for the promoted release" {
+			dispatchIndex = i
+			if !strings.Contains(step.Run, "gh workflow run agentplugins-npm-publish.yml") ||
+				!strings.Contains(step.Run, `--ref "${TAG}"`) ||
+				!strings.Contains(step.Run, "-f publish=true") {
+				return fmt.Errorf("npm dispatch step must run agentplugins-npm-publish.yml from the exact tag with publish=true")
+			}
+		}
+	}
+	if promoteIndex < 0 || dispatchIndex <= promoteIndex {
+		return fmt.Errorf("promote-release must dispatch the trusted npm publish after the release goes public")
 	}
 	for _, step := range workflow.Jobs["validate"].Steps {
 		if strings.HasPrefix(step.Uses, "actions/setup-go@") || strings.HasPrefix(step.Uses, "actions/setup-node@") ||
@@ -423,6 +443,17 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 		"environment": func(w *releaseWorkflow) {
 			job := w.Jobs["promote-release"]
 			job.Environment = nil
+			w.Jobs["promote-release"] = job
+		},
+		"npm dispatch": func(w *releaseWorkflow) {
+			job := w.Jobs["promote-release"]
+			kept := job.Steps[:0:0]
+			for _, step := range job.Steps {
+				if step.Name != "Dispatch trusted npm publish for the promoted release" {
+					kept = append(kept, step)
+				}
+			}
+			job.Steps = kept
 			w.Jobs["promote-release"] = job
 		},
 		"artifact": func(w *releaseWorkflow) {
@@ -638,4 +669,43 @@ func evaluateReleaseCondition(t *testing.T, expression string, values map[string
 		return false
 	}
 	return eval(tree).(bool)
+}
+
+func TestNpmDriftGuardScheduledReadOnlyAndDetectsDrift(t *testing.T) {
+	workflow := parseReleaseWorkflow(t, "agentplugins-npm-drift.yml")
+	if len(workflow.On.Schedule) != 1 || workflow.On.Schedule[0].Cron == "" {
+		t.Fatal("npm drift guard must run on a schedule")
+	}
+	if !reflect.DeepEqual(workflow.Permissions, map[string]string{"contents": "read"}) {
+		t.Fatalf("npm drift guard must be read-only, got %v", workflow.Permissions)
+	}
+	for name, job := range workflow.Jobs {
+		if !reflect.DeepEqual(effectiveReleasePermissions(workflow, name), map[string]string{"contents": "read"}) {
+			t.Fatalf("npm drift guard job %s must be read-only", name)
+		}
+		for _, step := range job.Steps {
+			if step.Continue || strings.Contains(step.If, "always()") || strings.Contains(step.If, "failure()") {
+				t.Fatalf("npm drift guard job %s step bypass", name)
+			}
+		}
+	}
+	job, ok := workflow.Jobs["npm-drift"]
+	if !ok {
+		t.Fatal("npm drift guard lacks the npm-drift job")
+	}
+	found := false
+	for _, step := range job.Steps {
+		if !strings.Contains(step.Run, "dist-tags.latest") {
+			continue
+		}
+		found = true
+		for _, required := range []string{"exit 1", "npm view", ".published_at", "dist-tags.latest"} {
+			if !strings.Contains(step.Run, required) {
+				t.Fatalf("npm drift check lacks %q", required)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("npm drift guard lacks the registry parity check")
+	}
 }

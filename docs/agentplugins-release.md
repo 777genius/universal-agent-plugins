@@ -33,8 +33,10 @@ Existing immutable producer identity checks retain that historical slug.
   `main`. Dispatch it from the exact `main` commit referenced by the release
   tag; its source-commit guard rejects a newer or older workflow revision.
 - This workflow has one agentplugins-only dispatch contract. It qualifies a
-  draft by default and publishes only with `publish_release=true`; npm publication runs
-  separately through `agentplugins-npm-publish.yml` in this same repository.
+  draft by default and publishes only with `publish_release=true`; promotion
+  then auto-dispatches `agentplugins-npm-publish.yml` in this same repository
+  against the same tag, so the npm facade cannot be forgotten after the GitHub
+  release goes public.
 
 The checked-in npm version `0.0.0-development` is intentional. Staging derives
 the publishable version from the approved tag; do not manually bump it.
@@ -167,8 +169,12 @@ It promotes only with explicit `publish_release=true` after all existing gates.
 The npm facade is staged from
 that exact public release and never embeds the binaries in its tarball.
 
-`.github/workflows/agentplugins-npm-publish.yml` is the manual trusted publisher.
-Dispatch it from the exact `agentplugins-vX.Y.Z` tag with `publish=true`. The
+`.github/workflows/agentplugins-npm-publish.yml` is the trusted publisher. The
+promote job of `agentplugins-release.yml` dispatches it automatically from the
+exact `agentplugins-vX.Y.Z` tag with `publish=true`; dispatching it manually the
+same way is the documented recovery path when a publish run is cancelled or
+fails. The scheduled `agentplugins-npm-drift.yml` guard fails whenever npm
+`dist-tags.latest` stops matching the newest public release. The
 prepare job requires a public, immutable GitHub release, verifies every asset
 and GitHub attestation, stages the pinned historical evidence, and uploads one exact
 tarball. The publish job runs in the protected `npm-agentplugins` environment,
