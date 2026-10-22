@@ -20,8 +20,10 @@ authorize public publication.
   the exact public tag; its prepare job is read-only, its publish job uses the
   protected `npm-agentplugins` environment, and its final job verifies the exact
   public package. `.github/workflows/agentplugins-npm-drift.yml` is the
-  scheduled guard that fails when npm `dist-tags.latest` stops matching the
-  newest public release.
+  scheduled guard that warns on a mismatch inside a six-hour publication
+  window (long enough to cover the human `npm-agentplugins` approval) and
+  fails once npm `dist-tags.latest` stops matching the newest public
+  release beyond it.
 - `.github/workflows/npm-runtime-publish.yml` and
   `.github/workflows/pypi-runtime-publish.yml` are manual-only publishers for
   the intentionally retained `plugin-kit-ai-runtime` helper libraries. These

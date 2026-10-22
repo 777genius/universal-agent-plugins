@@ -173,8 +173,10 @@ that exact public release and never embeds the binaries in its tarball.
 promote job of `agentplugins-release.yml` dispatches it automatically from the
 exact `agentplugins-vX.Y.Z` tag with `publish=true`; dispatching it manually the
 same way is the documented recovery path when a publish run is cancelled or
-fails. The scheduled `agentplugins-npm-drift.yml` guard fails whenever npm
-`dist-tags.latest` stops matching the newest public release. The
+fails. The scheduled `agentplugins-npm-drift.yml` guard warns on a mismatch
+inside a six-hour publication window (long enough to cover the human
+`npm-agentplugins` approval) and fails once npm `dist-tags.latest` stops
+matching the newest public release beyond that window. The
 prepare job requires a public, immutable GitHub release, verifies every asset
 and GitHub attestation, stages the pinned historical evidence, and uploads one exact
 tarball. The publish job runs in the protected `npm-agentplugins` environment,

@@ -34,7 +34,8 @@ Use only for an owner-approved `agentplugins` version. The full procedure is in
 - [ ] confirm promotion auto-dispatched `agentplugins-npm-publish.yml` from the
       exact public tag and approve its `npm-agentplugins` environment gate
 - [ ] confirm the scheduled `agentplugins-npm-drift.yml` guard is green: npm
-      `dist-tags.latest` must match the newest public release
+      `dist-tags.latest` must match the newest public release (a six-hour
+      publication window only warns before the guard turns red)
 - [ ] prepare verifies the public release and uploads one immutable tarball
 - [ ] publish consumes that artifact in the protected `npm-agentplugins`
       environment using OIDC, with no npm token fallback
