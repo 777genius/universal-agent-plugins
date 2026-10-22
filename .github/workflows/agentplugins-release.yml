@@ -422,7 +422,7 @@ jobs:
     environment: agentplugins-release
     permissions:
       contents: write
-      actions: read
+      actions: write
       attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -452,3 +452,16 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" | \
             jq -e --arg tag "${TAG}" --argjson id "${release_id}" \
             '.id == $id and .tag_name == $tag and .draft == false and .prerelease == false'
+      - name: Dispatch trusted npm publish for the promoted release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # npm publication is not optional bookkeeping: the public npx
+          # entrypoint installs dist-tags.latest, so a skipped publish is
+          # user-visible drift. The npm-agentplugins environment approval
+          # remains the human gate before anything reaches the registry.
+          gh workflow run agentplugins-npm-publish.yml \
+            --repo "${GITHUB_REPOSITORY}" --ref "${TAG}" \
+            -f "tag=${TAG}" -f publish=true
