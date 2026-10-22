@@ -29,10 +29,14 @@ jobs:
         run: |
           set -euo pipefail
           # Newest stable public release wins; drafts and prereleases never do.
-          newest_line="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+          # Consume the full sorted list before reading: `head` would close the
+          # pipe early and `pipefail` turns the resulting SIGPIPE into a false
+          # failure once the release list outgrows the pipe buffer.
+          sorted_releases="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
             --jq '.[] | select(.draft == false and .prerelease == false and (.tag_name | test("^agentplugins-v[0-9]+\\.[0-9]+\\.[0-9]+$"))) | [.published_at, .tag_name] | @tsv' \
-            | sort -r | head -n 1)"
-          test -n "${newest_line}"
+            | sort -r)"
+          test -n "${sorted_releases}"
+          newest_line="${sorted_releases%%$'\n'*}"
           newest_at="${newest_line%%$'\t'*}"
           newest_tag="${newest_line#*$'\t'}"
           expected="${newest_tag#agentplugins-v}"
@@ -46,7 +50,10 @@ jobs:
           fi
           newest_epoch="$(node -e 'process.stdout.write(String(Math.floor(Date.parse(process.argv[1]) / 1000)))' "${newest_at}")"
           age_minutes=$(( ( $(date -u +%s) - newest_epoch ) / 60 ))
-          if (( age_minutes < 120 )); then
+          # The npm publish pauses for the human npm-agentplugins approval, so
+          # tolerate a release sitting unpublished for six hours before
+          # calling it drift.
+          if (( age_minutes < 360 )); then
             echo "::warning::npm latest ${actual} does not match ${expected} yet; release is only ${age_minutes} minutes old, inside the publication window"
             exit 0
           fi

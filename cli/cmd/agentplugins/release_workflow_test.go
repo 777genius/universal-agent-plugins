@@ -361,8 +361,12 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 			dispatchIndex = i
 			if !strings.Contains(step.Run, "gh workflow run agentplugins-npm-publish.yml") ||
 				!strings.Contains(step.Run, `--ref "${TAG}"`) ||
+				!strings.Contains(step.Run, `-f "tag=${TAG}"`) ||
 				!strings.Contains(step.Run, "-f publish=true") {
 				return fmt.Errorf("npm dispatch step must run agentplugins-npm-publish.yml from the exact tag with publish=true")
+			}
+			if step.Env["TAG"] != "${{ inputs.tag }}" {
+				return fmt.Errorf("npm dispatch step must bind TAG to the exact release tag input")
 			}
 		}
 	}
@@ -684,7 +688,7 @@ func TestNpmDriftGuardScheduledReadOnlyAndDetectsDrift(t *testing.T) {
 			t.Fatalf("npm drift guard job %s must be read-only", name)
 		}
 		for _, step := range job.Steps {
-			if step.Continue || strings.Contains(step.If, "always()") || strings.Contains(step.If, "failure()") {
+			if step.Continue || strings.Contains(step.If, "always()") || strings.Contains(step.If, "failure()") || strings.Contains(step.If, "cancelled()") {
 				t.Fatalf("npm drift guard job %s step bypass", name)
 			}
 		}
@@ -699,7 +703,10 @@ func TestNpmDriftGuardScheduledReadOnlyAndDetectsDrift(t *testing.T) {
 			continue
 		}
 		found = true
-		for _, required := range []string{"exit 1", "npm view", ".published_at", "dist-tags.latest"} {
+		for _, required := range []string{
+			"exit 1", "npm view", ".published_at", "dist-tags.latest",
+			".draft == false", ".prerelease == false", "^agentplugins-v", "age_minutes < 360",
+		} {
 			if !strings.Contains(step.Run, required) {
 				t.Fatalf("npm drift check lacks %q", required)
 			}
