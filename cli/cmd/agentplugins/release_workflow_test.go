@@ -688,6 +688,7 @@ func TestNpmDriftGuardScheduledReadOnlyAndDetectsDrift(t *testing.T) {
 			t.Fatalf("npm drift guard job %s must be read-only", name)
 		}
 		for _, step := range job.Steps {
+			//nolint:misspell // the GitHub context function uses the double-l spelling
 			if step.Continue || strings.Contains(step.If, "always()") || strings.Contains(step.If, "failure()") || strings.Contains(step.If, "cancelled()") {
 				t.Fatalf("npm drift guard job %s step bypass", name)
 			}
