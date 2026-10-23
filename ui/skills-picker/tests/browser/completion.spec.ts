@@ -53,7 +53,7 @@ test('late preview cannot reappear after catalog rescan', async ({ page }) => {
   await requested;
   await page.getByRole('button', { name: 'Change scan scope', exact: false }).click();
   await page.getByRole('button', { name: 'Scan folder', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'A closer look' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Skill preview' })).toHaveCount(0);
   release();
   await completed;
   await expect(page.getByRole('heading', { name: 'Obsolete preview' })).toHaveCount(0);
@@ -80,4 +80,92 @@ test('mobile, narrow tablet and 200 percent desktop reflow remain usable with re
     const probe = document.createElement('span'); probe.className = 'spin'; probe.id = 'motion-probe'; document.body.append(probe);
   });
   expect(await page.locator('#motion-probe').evaluate((element) => getComputedStyle(element).animationName)).toBe('none');
+});
+
+test('desktop preview, selection and targets share the viewport; delayed review restores its trigger', async ({ page }) => {
+  const state = await serveFixtures(page, { planDelayMs: 200, unavailableTargets: 10 });
+  // Real repositories expose long native paths; they must not enlarge the sidebar.
+  state.targets.targets.forEach((target) => { target.displayPath = '/isolated/test-profile/long-native-user-path/managed/client/skills'; });
+  await page.goto('/#capability=test-capability');
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Select engineering/review', exact: true }).check();
+  await page.locator('.skill-description').first().click();
+  await expect(page.getByRole('heading', { name: 'Read carefully' })).toBeVisible();
+  for (const [width, height] of [[1100, 900], [1280, 900], [1440, 900], [1920, 900], [1280, 720]]) {
+    await page.setViewportSize({ width, height });
+    await page.screenshot({ path: test.info().outputPath(`desktop-polish-${width}x${height}.png`) });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const footer = await page.locator('.bottom-bar').boundingBox();
+    for (const selector of ['.desktop-preview', '.basket', '.targets']) {
+      const box = await page.locator(selector).boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+      expect(box!.y + box!.height).toBeLessThan(footer!.y);
+    }
+  }
+  await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+  const trigger = page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' });
+  await trigger.click();
+  await expect(page.getByRole('dialog', { name: 'Review installation' })).toBeVisible();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await trigger.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Review installation' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await page.getByRole('button', { name: 'Close preview', exact: true }).click();
+  await expect(page.locator('.desktop-preview')).toHaveCount(0);
+});
+
+test('invalid metadata keeps a readable title, full path and useful validation reason', async ({ page }) => {
+  const state = await serveFixtures(page);
+  const candidate = state.catalog.candidates.find((item) => item.path === 'docs/review')!;
+  Object.assign(candidate, { name: '', description: '', status: 'invalid', diagnosticCodes: ['skill_name_mismatch'] });
+  await page.goto('/#capability=test-capability');
+  const card = page.locator('.skill-card').filter({ hasText: 'docs/review' });
+  await expect(card.locator('strong')).toHaveText('review');
+  await expect(card).toContainText('The declared skill name does not match its folder name.');
+  await expect(card.getByRole('checkbox')).toBeDisabled();
+  await expect(card.locator('.unavailable')).toHaveAttribute('title', 'skill_name_mismatch');
+});
+
+test('1000 candidate folder expansion records input to rendered frame without a timing gate', async ({ page }) => {
+  await serveFixtures(page, { count: 1000 });
+  await page.goto('/#capability=test-capability');
+  const category = page.getByRole('treeitem', { name: 'category-0', exact: true });
+  await category.focus();
+  await page.evaluate(() => {
+    document.querySelector('.tree-scroll')!.addEventListener('keydown', () => {
+      performance.mark('picker-expand-start');
+      const renderedFrame = () => {
+        if (document.querySelector('[aria-label="Collapse category-0"]')) performance.mark('picker-expand-visible');
+        else requestAnimationFrame(renderedFrame);
+      };
+      requestAnimationFrame(renderedFrame);
+    }, { once: true, capture: true });
+  });
+  await category.press('ArrowRight');
+  await expect(page.getByRole('button', { name: 'Collapse category-0', exact: true })).toBeVisible();
+  await page.waitForFunction(() => performance.getEntriesByName('picker-expand-visible').length > 0);
+  const duration = await page.evaluate(() => performance.measure('picker-expand', 'picker-expand-start', 'picker-expand-visible').duration);
+  console.info(`Folder expansion:1000 candidates, ${duration.toFixed(1)} ms input-to-frame.`);
+  await test.info().attach('folder-expansion-timing.json', { body: JSON.stringify({ candidates: 1000, inputToFrameMs: duration }), contentType: 'application/json' });
+  await expect(category).toBeFocused();
+  expect(await page.getByRole('treeitem').count()).toBeLessThan(30);
+});
+
+test('an idle open review expires visibly and cannot apply', async ({ page }) => {
+  const state = await serveFixtures(page);
+  const plan = await fixture<Plan>('plan');
+  await page.clock.install();
+  await page.route('**/api/v1/plans', (route) => route.fulfill({ json: { ...plan, expiresAt: new Date(Date.now() + 2000).toISOString() } }));
+  await page.goto('/#capability=test-capability');
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+  await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+  await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+  const confirm = page.getByRole('button', { name: 'Confirm installation', exact: true });
+  await expect(confirm).toBeEnabled();
+  await page.clock.runFor(2500);
+  await expect(confirm).toBeDisabled();
+  await expect(page.getByRole('dialog')).toContainText('This plan expired. Close and review again.');
+  expect(state.counts().applyCount).toBe(0);
 });

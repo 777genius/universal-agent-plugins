@@ -287,7 +287,7 @@ func TestPreviewSeparatesMarkdownBodyFromExactRawDocument(t *testing.T) {
 		t.Fatalf("preview=%+v %v", preview, e)
 	}
 	link := preview.Resources[1]
-	if link.Path != "scripts/alias" || link.Size != 3 || link.Executable {
+	if link.Path != "scripts/alias" || link.Size != nil || link.Executable {
 		t.Fatal("symlink resource was followed or omitted", link)
 	}
 }

@@ -8,7 +8,7 @@ export async function fixture<T>(name: string): Promise<T> {
   const path = fileURLToPath(new URL(`../../../../cli/internal/agentpluginscli/skillspicker/testdata/api-v1/${name}.json`, import.meta.url));
   return JSON.parse(await readFile(path, 'utf8')) as T;
 }
-export async function serveFixtures(page: Page, options: { loseApply?: boolean; stale?: boolean; count?: number; unavailableTargets?: number } = {}) {
+export async function serveFixtures(page: Page, options: { loseApply?: boolean; stale?: boolean; count?: number; unavailableTargets?: number; planDelayMs?: number } = {}) {
   const catalog = await fixture<components['schemas']['Catalog']>('catalog');
   const session = await fixture<components['schemas']['Session']>('session');
   const targets = await fixture<components['schemas']['Targets']>('targets');
@@ -43,6 +43,7 @@ export async function serveFixtures(page: Page, options: { loseApply?: boolean; 
     }
     if (path.endsWith('/plans')) {
       planCount++;
+      if (options.planDelayMs) await new Promise((resolve) => setTimeout(resolve, options.planDelayMs));
       const input = route.request().postDataJSON() as components['schemas']['PlanRequest'];
       const actions = input.selectedIds.flatMap((id) => input.targetIds.map((targetId) => ({ ...plan.actions[0], candidateId: id, targetId, alias: catalog.candidates.find((c) => c.id === id)?.name ?? id })));
       return json({ ...plan, actions, expiresAt: new Date(Date.now() + 600_000).toISOString() });

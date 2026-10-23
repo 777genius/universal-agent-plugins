@@ -183,7 +183,8 @@ export interface components {
         };
         Resource: {
             path: string;
-            size: number;
+            /** @description Known resource size in bytes. Omitted when the blob is not cached; preview does not download resource bodies to determine their sizes. */
+            size?: number;
             executable: boolean;
         };
         Preview: {

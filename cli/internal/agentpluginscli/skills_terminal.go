@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
@@ -17,20 +16,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-type skillsSelectionError struct {
-	Code       string                   `json:"code"`
-	Message    string                   `json:"message"`
-	Candidates []skillspicker.Candidate `json:"candidates"`
-}
-
-func (e skillsSelectionError) Error() string { return e.Message }
-func skillsMissingSelection(cmd *cobra.Command, opts *options, code, message string, candidates []skillspicker.Candidate) error {
-	err := skillsSelectionError{Code: code, Message: message, Candidates: candidates}
-	if opts.format == "json" {
-		_ = json.NewEncoder(cmd.OutOrStdout()).Encode(err)
-	}
-	return err
-}
 func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCatalogSession, names []string, interactive, yes bool) error {
 	candidates, err := selectSkillsTerminal(cmd, opts, s, names, interactive)
 	if err != nil {
@@ -50,8 +35,22 @@ func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCata
 	for _, target := range targets {
 		request.TargetIDs = append(request.TargetIDs, string(target))
 	}
+	s.rememberTerminalCandidates(candidates)
+	if interactive {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Preparing installation review…"); err != nil {
+			return err
+		}
+	}
 	prepared, err := app.PrepareSkills(cmd.Context(), request)
 	if err != nil {
+		if cmd.Context().Err() != nil {
+			return cmd.Context().Err()
+		}
+		refusal := s.reviewRefusal(err)
+		var issue *skillspicker.ReviewRefusal
+		if errors.As(refusal, &issue) {
+			return skillsMissingSelection(cmd, opts, issue.Code, issue.Message, []skillspicker.Candidate{})
+		}
 		return err
 	}
 	defer prepared.Close()
@@ -63,26 +62,38 @@ func (s *skillsCatalogSession) exactTerminalCandidate(ctx context.Context, names
 	}
 	candidate, err := s.session.CandidateAt(ctx, s.source.RequestedPath)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		if s.source.ExactPath {
-			return nil, fmt.Errorf("selected Skill folder is unavailable: %w", err)
+			return nil, exactSkillIssue(s.source.RequestedPath, nil)
 		}
 		return nil, nil
 	}
 	if candidate.Status != "available" {
-		return nil, errors.New("selected Skill metadata is invalid or unavailable")
+		return nil, exactSkillIssue(candidate.Path, &candidate)
 	}
 	if len(names) > 0 && (len(names) != 1 || names[0] != candidate.Name) {
-		return nil, errors.New("--skill does not match the exact selected Skill folder")
+		return nil, skillsSelectionError{Code: "SKILL_MISMATCH", Message: fmt.Sprintf("The selected folder contains Skill %q; --skill must match that exact name", prompt.SafeText(candidate.Name)), Candidates: []skillspicker.Candidate{wireSkillCandidate(candidate)}}
 	}
 	return &candidate, nil
 }
 func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSession, names []string, interactive bool) ([]skillsource.Candidate, error) {
 	candidate, err := s.exactTerminalCandidate(cmd.Context(), names)
 	if err != nil {
+		var issue skillsSelectionError
+		if errors.As(err, &issue) {
+			return nil, emitSkillsSelectionIssue(cmd, opts, issue)
+		}
 		return nil, err
 	}
 	if candidate != nil {
 		return []skillsource.Candidate{*candidate}, nil
+	}
+	if interactive {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Scanning Skills catalog…"); err != nil {
+			return nil, err
+		}
 	}
 	catalog, err := s.scan(cmd.Context(), s.source.RequestedPath)
 	if err != nil {
@@ -104,40 +115,21 @@ func selectNamedSkills(cmd *cobra.Command, opts *options, s *skillsCatalogSessio
 	seen := map[string]bool{}
 	for _, name := range names {
 		if name == "" || seen[name] {
-			return nil, errors.New("--skill requires unique non-empty exact names")
+			return nil, skillsMissingSelection(cmd, opts, "INVALID_SELECTION", "--skill requires unique non-empty exact names", []skillspicker.Candidate{})
 		}
 		seen[name] = true
 		matches := []skillsource.Candidate{}
 		for _, candidate := range s.candidates {
-			if candidate.Name == name && candidate.Status == "available" {
+			if candidate.Name == name {
 				matches = append(matches, candidate)
 			}
 		}
-		if len(matches) != 1 {
-			return nil, skillsMissingSelection(cmd, opts, "SKILL_AMBIGUOUS", "Skill name is missing or ambiguous; choose its exact --path", catalog.Candidates)
+		if issue := namedSkillIssue(name, matches, catalog.Candidates); issue != nil {
+			return nil, emitSkillsSelectionIssue(cmd, opts, *issue)
 		}
 		candidates = append(candidates, matches[0])
 	}
 	return candidates, nil
-}
-func promptSkillsCatalog(cmd *cobra.Command, s *skillsCatalogSession, catalog skillspicker.Catalog) ([]skillsource.Candidate, error) {
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Available Skills:")
-	available := []skillsource.Candidate{}
-	for _, candidate := range catalog.Candidates {
-		if candidate.Status == skillspicker.Available {
-			available = append(available, s.candidates[candidate.Id])
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %d. %s (%s)\n", len(available), prompt.SafeText(candidate.Name), prompt.SafeText(candidate.Path))
-		}
-	}
-	if len(available) == 0 {
-		return nil, errors.New("no available Skills in this catalog")
-	}
-	_, _ = fmt.Fprint(cmd.OutOrStdout(), "Choose Skill numbers, comma-separated: ")
-	line, err := readInputLine(cmd.Context(), cmd.InOrStdin())
-	if err != nil && !errors.Is(err, io.EOF) {
-		return nil, err
-	}
-	return numberedSkillSelection(line, available)
 }
 func numberedSkillSelection(line string, available []skillsource.Candidate) ([]skillsource.Candidate, error) {
 	result := []skillsource.Candidate{}
@@ -185,11 +177,11 @@ func skillsTerminalTargets(cmd *cobra.Command, app App, opts *options, interacti
 func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch, confirm bool) error {
 	review := skillsPickerPrepared{prepared}.Review()
 	if opts.format == "json" && opts.dryRun {
-		return json.NewEncoder(cmd.OutOrStdout()).Encode(review)
+		return renderSkillsDryRun(cmd, review)
 	}
 	if opts.format != "json" {
-		for _, action := range review.Actions {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s %s → %s (%s)\n", action.Action, prompt.SafeText(action.Alias), prompt.SafeText(action.TargetId), prompt.SafeText(action.DestinationPath))
+		if err := renderHumanSkillsReview(cmd, review); err != nil {
+			return err
 		}
 	}
 	if opts.dryRun {
@@ -201,7 +193,11 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 		answer, err := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true})
-		if err != nil || !answer.Accepted {
+		if err != nil {
+			return err
+		}
+		if !answer.Accepted {
+			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation canceled. No changes applied.")
 			return err
 		}
 	}

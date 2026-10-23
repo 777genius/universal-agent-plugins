@@ -10,6 +10,7 @@ export function useInstallation(session: Session, request: PlanRequest, scanPend
   const [reviewIdentity, setReviewIdentity] = useState('');
   const [uncertain, setUncertain] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewTrigger = useRef<HTMLElement | null>(null);
   const targets = useQuery({ queryKey: ['targets', session.sessionId], queryFn: ({ signal }) => api.targets(signal) });
   const prepare = useMutation({ mutationFn: api.plan, retry: false,
     onSuccess: (_plan, input) => { if (current.current === JSON.stringify(input)) { setReviewIdentity(current.current); setReviewOpen(true); } },
@@ -46,7 +47,8 @@ export function useInstallation(session: Session, request: PlanRequest, scanPend
   return { targets, prepare, plan, operation, apply, uncertain, active, locked, reviewOpen,
     invalidateReview: () => { setReviewIdentity(''); setReviewOpen(false); prepare.reset(); },
     closeReview: () => setReviewOpen(false),
-    prepareReview: () => { if (!locked && !scanPending) { apply.reset(); setReviewIdentity(''); prepare.mutate(request); } },
+    reviewTrigger,
+    prepareReview: (trigger?: HTMLElement) => { if (!locked && !scanPending) { reviewTrigger.current = trigger ?? null; apply.reset(); setReviewIdentity(''); prepare.mutate(request); } },
     confirm: () => { if (plan && !apply.isPending && !active) apply.mutate(plan.planId); },
     reconnect: () => { void cache.invalidateQueries({ queryKey: ['session'] }); void operation.refetch(); },
   };

@@ -25,6 +25,8 @@ test('cross-folder selection, safe preview, explicit review and completed result
   expect(fixture.counts()).toMatchObject({ applyCount: 1, planCount: 1, scanCount: 0 });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Installation complete' })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Select engineering/review', exact: true }).check();
+  await expect(page.getByRole('region', { name: 'Installation progress' })).toContainText('Previous installation result');
 });
 
 test('lost apply response recovers the fast terminal operation without another apply', async ({ page }) => {
@@ -113,7 +115,7 @@ test('an explicit rescan clears old snapshot selection and preview', async ({ pa
   await page.getByRole('textbox', { name: 'Repository folder' }).fill('docs');
   await page.getByRole('button', { name: 'Scan folder', exact: true }).click();
   await expect(page.getByLabel('Selection basket')).not.toContainText('docs/review');
-  await expect(page.getByRole('heading', { name: 'A closer look' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Skill preview' })).toHaveCount(0);
   expect(fixture.counts().scanCount).toBe(1);
 });
 

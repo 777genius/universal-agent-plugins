@@ -3,6 +3,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowUpRight, FileText, FolderSearch } from '../../../shared/ui/icons';
 import type { Candidate } from '../../../shared/api/types';
 import { Tick } from '../../../shared/ui/primitives';
+import { candidateTitle, diagnosticDescription } from '../model/catalog';
 
 export function Results({ candidates, selected, activeId, query, locked, choose, preview, reveal }: {
   candidates: Candidate[]; selected: string[]; activeId?: string; query: string; locked: boolean;
@@ -23,9 +24,10 @@ export function Results({ candidates, selected, activeId, query, locked, choose,
           return <article key={candidate.id} className={`skill-card ${activeId === candidate.id ? 'active' : ''} ${selected.includes(candidate.id) ? 'is-checked' : ''}`}
             data-index={row.index} ref={virtual.measureElement} style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${row.start}px)` }}>
             <Tick label={`Select ${candidate.path || candidate.name}`} checked={selected.includes(candidate.id)} disabled={locked || candidate.status !== 'available'} onChange={(checked) => choose([candidate.id], checked)}/>
-            <button className="skill-description" onClick={() => preview(candidate.id)}><strong><FileText size={16}/>{candidate.name}</strong><span>{candidate.description || 'No description provided.'}</span><small>{candidate.path || '/ (repository root)'}</small></button>
+            <button className="skill-description" onClick={() => preview(candidate.id)}><strong><FileText size={16}/>{candidateTitle(candidate)}</strong><span>{candidate.description || 'No description provided.'}</span><small>{candidate.path || '/ (repository root)'}</small>
+              {candidate.status !== 'available' && <span className="unavailable" title={candidate.diagnosticCodes.join(', ')}>{candidate.status === 'invalid' ? 'Cannot install' : 'Unavailable'}: {candidate.diagnosticCodes.length ? candidate.diagnosticCodes.map(diagnosticDescription).join(' ') : 'This skill is not available for installation.'}</span>}
+            </button>
             <button className="icon-button reveal" title="Show in tree" aria-label={`Show ${candidate.path} in tree`} onClick={() => reveal(candidate)}><ArrowUpRight size={16}/></button>
-            {candidate.status !== 'available' && <span className="unavailable">{candidate.status} · {candidate.diagnosticCodes.join(', ')}</span>}
           </article>;
         })}
       </div></div>}

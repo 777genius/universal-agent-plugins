@@ -21,6 +21,10 @@ export function Preview({ sessionId, catalogId, candidateId, close }: { sessionI
             a: ({ href, children }) => href ? <a href={href} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">{children}</a> : <span>{children}</span>,
           }}>{preview.data.content}</Markdown>}</div>
           <details className="raw"><summary>View raw instructions</summary><pre>{preview.data.rawContent ?? preview.data.content}</pre></details>
+          {preview.data.resources.length > 0 && <details className="resources raw"><summary>Included files ({preview.data.resources.length})</summary><ul>
+            {preview.data.resources.map((resource) => <li key={resource.path}><code>{resource.path}</code><small>{resource.executable ? 'Executable file · ' : ''}{resource.size === undefined ? 'Size unknown' : `${resource.size.toLocaleString()} bytes`}</small></li>)}
+          </ul></details>}
+          {preview.data.diagnostics.length > 0 && <details className="raw"><summary>Preview notes ({preview.data.diagnostics.length})</summary>{preview.data.diagnostics.map((item, index) => <p key={index}>{item.message} <small>{item.code}</small></p>)}</details>}
         </>}
   </section>;
 }

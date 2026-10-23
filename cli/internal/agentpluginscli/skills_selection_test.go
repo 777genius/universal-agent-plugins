@@ -40,6 +40,9 @@ func TestSkillsCLIRequiresUnambiguousExplicitSelectionBeforeEffects(t *testing.T
 	if err != nil || !strings.Contains(out, `"actions"`) {
 		t.Fatalf("noninteractive dry-run requires no confirmation: %v %s", err, out)
 	}
+	if strings.Contains(out, "planId") || strings.Contains(out, "expiresAt") || !strings.Contains(out, `"dryRun":true`) || !strings.Contains(out, `"status":"planned"`) {
+		t.Fatalf("CLI dry-run exposed a fictitious HTTP review: %s", out)
+	}
 	if !reflect.DeepEqual(before, savedJourneyTree(t, journey.cli.app.DependenciesRoot)) {
 		t.Fatal("dry-run changed persistent environment")
 	}
