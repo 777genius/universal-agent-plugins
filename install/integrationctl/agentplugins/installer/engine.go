@@ -42,7 +42,7 @@ func New(cfg Config) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile}}
+	engine := &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile, ProjectRoot: resolved.ProjectRoot}}
 	if err := engine.CheckProjectNamespace(); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}

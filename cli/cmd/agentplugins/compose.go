@@ -100,9 +100,17 @@ func newProductionFeedClients(dataRoot string) (*directoryv1.Client, *discoveryv
 }
 
 func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, registry *specregistry.Registry) (agentpluginscli.App, error) {
+	return newScopedAgentpluginsCLIApp(home, dataRoot, "", directoryClient, discoveryClient, securityClient, registry)
+}
+
+func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, registry *specregistry.Registry) (agentpluginscli.App, error) {
+	dataRoot := cacheRoot
+	if projectRoot != "" {
+		dataRoot = filepath.Join(projectRoot, ".uap")
+	}
 	packageLoader := loader.Loader{Registry: registry}
 	runner := processadapter.OS{}
-	v2Store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json")}
+	v2Store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json"), ProjectRoot: projectRoot}
 	directoryManager := dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations-v2")}
 	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
 	clientRegistry := clientregistry.Default()
@@ -113,10 +121,10 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 		return agentpluginscli.App{}, err
 	}
 	stager := newManagedStager(clientRegistry, paths, helperExecutable)
-	planner := clientplanner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
+	planner := clientplanner.Planner{ProjectRoot: projectRoot, ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: clientRegistry}
 	lifecycle := newAgentpluginsLifecycle(dataRoot, v2Store, paths, clientRegistry, stager, runner, planner, directoryManager, mutationLock, nativeKernel)
 	facade, err := installer.New(installer.Config{
-		StateRoot: dataRoot, StateFile: v2Store.Path, LockFile: filepath.Join(dataRoot, "mutation.lock"),
+		ProjectRoot: projectRoot, StateRoot: dataRoot, StateFile: v2Store.Path, LockFile: filepath.Join(dataRoot, "mutation.lock"),
 		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
 		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
 		HelperExecutable: helperExecutable, HelperVersion: version, Registry: clientRegistry, Runner: runner,
@@ -125,8 +133,30 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 	if err != nil {
 		return agentpluginscli.App{}, err
 	}
-	app := assembleAgentpluginsApp(home, dataRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
+	lifecycle.ProjectRoot = projectRoot
+	lifecycle.CheckNamespace = facade.CheckProjectNamespace
+	if projectRoot != "" {
+		lifecycle.Kernel.Namespace = dataRoot
+		lifecycle.Kernel.PhysicalAuthority = planner
+		lifecycle.Kernel.Directory.Namespace = dataRoot
+	}
+	app := assembleAgentpluginsApp(home, dataRoot, cacheRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
 	app.Installer = facade
+	app.Scope = domain.ScopeUser
+	app.ProjectRoot = projectRoot
+	if projectRoot != "" {
+		app.Scope = domain.ScopeProject
+		app.DependenciesRoot = projectRoot
+		app.StateMigrator = nil
+		app.LegacyLifecycle = nil
+		app.LegacyStateLock = nil
+	}
+	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
+		if scope != domain.ScopeProject {
+			root = ""
+		}
+		return newScopedAgentpluginsCLIApp(home, cacheRoot, root, directoryClient, discoveryClient, securityClient, registry)
+	}
 	return app, nil
 }
 
@@ -151,7 +181,7 @@ func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths path
 	}
 }
 
-func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutationLock processlock.Lock, lifecycle usecase.Service, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, packageLoader loader.Loader, clientRegistry *clients.Registry, planner clientplanner.Planner) agentpluginscli.App {
+func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.Store, mutationLock processlock.Lock, lifecycle usecase.Service, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, packageLoader loader.Loader, clientRegistry *clients.Registry, planner clientplanner.Planner) agentpluginscli.App {
 	detector := clientdetect.NewOS(home)
 	detector.Registry = clientRegistry
 	legacyStatePath := filepath.Join(home, ".plugin-kit-ai", "state.json")
@@ -168,7 +198,7 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 		UserHome:             home,
 		ManagedRoot:          filepath.Join(dataRoot, "managed"),
 		DependenciesRoot:     dataRoot,
-		EnvironmentStoreRoot: filepath.Join(dataRoot, "store"),
+		EnvironmentStoreRoot: filepath.Join(cacheRoot, "store"),
 		EnvironmentLockPath:  filepath.Join(dataRoot, "environment.lock"),
 		StateStore:           v2Store,
 		StateMigrator:        &migrator,
@@ -186,13 +216,13 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 			return commitDependencyDirectoryPreview(directoryClient, preview)
 		},
 		DiscoveryClient:     discoveryClient,
-		SourceAcquirer:      lazySourceAcquirer{dataRoot: dataRoot, acquirer: sourceacquisition.Acquirer{TempRoot: dataRoot}},
+		SourceAcquirer:      lazySourceAcquirer{dataRoot: cacheRoot, acquirer: sourceacquisition.Acquirer{TempRoot: cacheRoot}},
 		PackageLoader:       packageLoader,
 		NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 		SecurityIndex:       securityClient,
 		SecurityEvaluator: securityscan.Evaluator{
-			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(dataRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
-			Cache:   securityscan.FileCache{Root: filepath.Join(dataRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
+			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(cacheRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
+			Cache:   securityscan.FileCache{Root: filepath.Join(cacheRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
 		},
 		SourceAcquirerForDryRun: func(root string) agentpluginscli.SourceAcquirer { return sourceacquisition.Acquirer{TempRoot: root} },
 		SecurityEvaluatorForDryRun: func(root string) ports.PackageSecurityEvaluator {

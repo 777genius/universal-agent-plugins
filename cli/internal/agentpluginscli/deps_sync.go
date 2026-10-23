@@ -213,8 +213,8 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	if err != nil {
 		return nil, err
 	}
-	request := installer.Request{OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
-		ClientExecutable: backendExecutable(client, adapter.detected), InstallationID: action.InstallationID,
+	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+		ClientExecutable: backendExecutable(client, adapter.detected, adapter.app.scope()), InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
@@ -260,7 +260,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	evidenceEnv.InstallerVersion = app.Version
 	evidenceEnv.DependencyIdentity = deterministicDependencyIdentity(loaded.envelope, targets)
 	request := domain.DirectoryResolveRequest{Selector: source.DistributionID, DesiredReleaseSequence: source.ReleaseSequence,
-		Operation: domain.DirectoryInstall, Scope: domain.ScopeUser, Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
+		Operation: domain.DirectoryInstall, Scope: app.scope(), Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
 		OS: evidenceEnv.OS, Architecture: evidenceEnv.Architecture, DependencyIdentity: evidenceEnv.DependencyIdentity}
 	if recorded == nil {
 		request.Purpose = domain.DirectoryResolveLockedRestore
@@ -315,7 +315,7 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 	if !owned {
 		return false, nil
 	}
-	if opts.scope != "" && opts.scope != "user" {
+	if opts.scope != "" && opts.scope != "user" && opts.scope != "project" {
 		return true, errors.New("environment repair supports user scope only")
 	}
 	if app.Installer == nil {
@@ -344,7 +344,7 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 
 func resolveDependencyBindingIdentity(view installer.Inspection, action *environment.PreparedBinding) error {
 	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.Alias == action.Alias {
+		if receipt.EnvironmentID == action.Authority.EnvironmentID && receipt.Alias == action.Alias {
 			if action.InstallationID == "" {
 				action.InstallationID = receipt.InstallationID
 				action.Authority.InstallationID = receipt.InstallationID
@@ -367,7 +367,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
 			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected)})
+			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope())})
 		}
 	}
 	return nil
@@ -453,7 +453,7 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 		if authority == nil {
 			return nil, errors.New("mixed owned and unmanaged repair requires separate selections")
 		}
-		binding, err := selectedRepairBinding(installation, target, domain.ScopeUser)
+		binding, err := selectedRepairBinding(installation, target, app.scope())
 		if err != nil {
 			return nil, err
 		}
@@ -498,7 +498,7 @@ func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions 
 		return renderDependencySync(cmd, opts, actions, true)
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
-	results, err := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, Bindings: actions}, true)
+	results, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: actions}, true)
 	if renderErr := renderDependencyResults(cmd, opts, actions, results, err); err == nil {
 		err = renderErr
 	}

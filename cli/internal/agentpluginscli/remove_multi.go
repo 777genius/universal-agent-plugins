@@ -132,9 +132,9 @@ func (session *removeManySession) buildInputs() error {
 			session.detected[target] = client
 		}
 		inputs = append(inputs, usecase.RemoveInput{
-			Selector: session.installationSelector, Client: client, Scope: domain.ScopeUser,
+			Selector: session.installationSelector, Client: client, Scope: session.app.scope(),
 			DryRun: true, Interactive: false, ExternalUninstalled: session.opts.externalUninstalled,
-			BackendExecutable:    backendExecutable(client, session.detected),
+			BackendExecutable:    backendExecutable(client, session.detected, session.app.scope()),
 			EnvironmentAuthority: authority,
 		})
 		selected = append(selected, client)

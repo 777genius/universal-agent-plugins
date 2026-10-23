@@ -25,6 +25,10 @@ type dependencyTree struct {
 
 func newDependencyTreeCommand(app App, opts *options) *cobra.Command {
 	return &cobra.Command{Use: "tree", Short: "Show the recorded dependency graph", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		app, scopeErr := app.forOptions(opts)
+		if scopeErr != nil {
+			return scopeErr
+		}
 		if err := validateDepsOptions(opts); err != nil {
 			return err
 		}

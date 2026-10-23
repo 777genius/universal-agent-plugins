@@ -12,7 +12,7 @@ import (
 
 func dependencyDirectoryRequest(app App, distribution string, sequence uint64, targets []string) domain.DirectoryResolveRequest {
 	host := directoryEnvironment(nil)
-	request := domain.DirectoryResolveRequest{Selector: distribution, DesiredReleaseSequence: sequence, Scope: domain.ScopeUser, Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: app.Version, OS: host.OS, Architecture: host.Architecture}
+	request := domain.DirectoryResolveRequest{Selector: distribution, DesiredReleaseSequence: sequence, Scope: app.scope(), Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: app.Version, OS: host.OS, Architecture: host.Architecture}
 	for _, target := range targets {
 		request.Targets = append(request.Targets, domain.ClientID(target))
 	}
