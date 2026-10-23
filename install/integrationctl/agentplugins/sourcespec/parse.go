@@ -4,16 +4,23 @@ import (
 	"errors"
 	"net/url"
 	"strings"
+	"unicode"
 )
 
 // Parse recognizes direct inputs only. Directory names and local directories
 // remain the caller's grammar; no filesystem existence probe is performed.
 func Parse(raw string) (Spec, error) {
+	if explicitArchivePath(raw) {
+		if len(raw) > 8192 || strings.TrimSpace(raw) != raw || strings.ContainsFunc(raw, unicode.IsControl) {
+			return Spec{}, errors.New("invalid local archive path")
+		}
+		return Spec{Requested: raw, Kind: KindLocalArchive, Archive: &Archive{URL: raw}}, nil
+	}
 	if !safeText(raw) {
 		return Spec{}, errors.New("invalid source input")
 	}
 	out := Spec{Requested: raw}
-	if !strings.Contains(raw, "://") && !strings.HasPrefix(raw, "github:") && !looksLikeSCP(raw) && HasArchiveSuffix(raw) {
+	if !strings.ContainsAny(raw, "/\\:") && HasArchiveSuffix(raw) {
 		out.Kind, out.Archive = KindLocalArchive, &Archive{URL: raw}
 		return out, nil
 	}
@@ -36,6 +43,13 @@ func Parse(raw string) (Spec, error) {
 		return Spec{}, errors.New("not a direct remote or archive source")
 	}
 	return parseHTTPS(raw, out)
+}
+
+func explicitArchivePath(raw string) bool {
+	if strings.Contains(raw, "://") || !HasArchiveSuffix(raw) {
+		return false
+	}
+	return strings.HasPrefix(raw, "./") || strings.HasPrefix(raw, "../") || strings.HasPrefix(raw, "/") || strings.ContainsRune(raw, '\\') || (len(raw) >= 3 && raw[1] == ':' && raw[2] == '/')
 }
 
 func looksLikeSCP(raw string) bool {

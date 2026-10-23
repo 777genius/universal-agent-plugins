@@ -693,6 +693,9 @@ func environmentAuthorityForBinding(state domain.StateFileV2, installationID str
 }
 
 func updateSource(installation domain.Installation) string {
+	if installation.Source.SourceKind != "" && installation.Source.RequestedSource == "" {
+		return directSourceRequested(installation.Source)
+	}
 	if installation.Source.Repository == "" && filepath.IsAbs(installation.Source.CanonicalSource) {
 		return installation.Source.CanonicalSource
 	}

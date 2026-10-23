@@ -42,15 +42,7 @@ func newPreparedInstallation(input AddInput, installationID, sourceBindingID, ti
 	return domain.Installation{
 		InstallationID: installationID,
 		DeclaredName:   input.Envelope.Manifest.Name,
-		Source: domain.SourceBinding{
-			SourceBindingID:  sourceBindingID,
-			RequestedSource:  input.Envelope.Source.RequestedSource,
-			CanonicalSource:  input.Envelope.Source.CanonicalSource,
-			Repository:       input.Envelope.Source.Repository,
-			PackageSubpath:   input.Envelope.Source.PackageSubpath,
-			ResolvedRevision: input.Envelope.Source.ResolvedRevision,
-			TreeDigest:       input.Envelope.TreeDigest,
-		},
+		Source:         sourceBindingFromEnvelope(input.Envelope, sourceBindingID),
 		Package: domain.PackageBinding{
 			LoaderKind: input.Envelope.LoaderKind, FormatID: input.Envelope.FormatID,
 			SchemaURI: input.Envelope.SchemaURI, DeclaredName: input.Envelope.Manifest.Name,
@@ -69,10 +61,9 @@ func overlayExistingInstallation(installation domain.Installation, input AddInpu
 	installation.DeclaredName = input.Envelope.Manifest.Name
 	installation.Source.ResolvedRevision = input.Envelope.Source.ResolvedRevision
 	installation.Source.TreeDigest = input.Envelope.TreeDigest
+	installation.Source.ArchiveSHA256 = input.Envelope.Source.ArchiveSHA256
 	if installation.OriginMode == domain.OriginModeDirectory || input.EnvironmentAuthority != nil {
-		installation.Source = domain.SourceBinding{SourceBindingID: sourceBindingID, RequestedSource: input.Envelope.Source.RequestedSource,
-			CanonicalSource: input.Envelope.Source.CanonicalSource, Repository: input.Envelope.Source.Repository, PackageSubpath: input.Envelope.Source.PackageSubpath,
-			ResolvedRevision: input.Envelope.Source.ResolvedRevision, TreeDigest: input.Envelope.TreeDigest}
+		installation.Source = sourceBindingFromEnvelope(input.Envelope, sourceBindingID)
 	}
 	installation.Package = domain.PackageBinding{
 		LoaderKind: input.Envelope.LoaderKind, FormatID: input.Envelope.FormatID,

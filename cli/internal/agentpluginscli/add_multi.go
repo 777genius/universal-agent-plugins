@@ -438,7 +438,7 @@ func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {
 		ManifestDigest:   loaded.envelope.ManifestDigest,
 		ClosureDigest:    groupedAcquisitionClosureDigest(sourceKind, loaded.envelope.Source, loaded.envelope.TreeDigest, loaded.envelope.ManifestDigest),
 		SourceKind:       sourceKind,
-		Fetched:          loaded.envelope.Source.Repository != "",
+		Fetched:          loaded.envelope.Source.Repository != "" || loaded.envelope.Source.SourceKind != "",
 		Validated:        true,
 	}, nil
 }
@@ -446,6 +446,9 @@ func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {
 func acquisitionSourceKind(loaded loadedPackage) string {
 	if loaded.origin == domain.OriginModeDirectory {
 		return "directory"
+	}
+	if loaded.envelope.Source.SourceKind != "" {
+		return loaded.envelope.Source.SourceKind
 	}
 	if loaded.envelope.Source.Repository != "" {
 		return "github"

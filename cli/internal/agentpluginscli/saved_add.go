@@ -15,6 +15,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, activation, auth bool) (bool, error) {
@@ -22,7 +23,7 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	switch {
 	case opts.noSave:
 		reason = "no_save_requested"
-	case explicitLocalPath(source):
+	case localArchiveInput(source) || explicitLocalPath(source):
 		reason = "local_source_not_portable"
 	case strings.HasPrefix(source, "discovery:"):
 		reason = "discovery_source_not_saved"
@@ -46,7 +47,9 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	}
 	matches := exactGitPattern.FindStringSubmatch(source)
 	if matches == nil && !isDirectorySelector(source) {
-		return true, errors.New("saved add requires an exact GitHub commit or Directory selector; use --no-save")
+		if _, err := sourcespec.Parse(source); err != nil {
+			return true, err
+		}
 	}
 	targets, err = savedAddTargets(cmd, app, opts, source, targets)
 	if err != nil {
@@ -70,6 +73,9 @@ func cloneSavedRequirements(value environment.Requirements) environment.Requirem
 }
 
 func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, matches []string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
+	if matches == nil && !isDirectorySelector(source) {
+		return resolveDirectSavedAdd(cmd, app, opts, source, snapshot)
+	}
 	var requirement environment.Requirement
 	alias := ""
 	var pin environment.LockedPackage
@@ -161,7 +167,7 @@ func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	pin.ManifestDigest = loaded.envelope.ManifestDigest
 	pin.Version = loaded.envelope.Manifest.Version
 	pin.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded, pin); err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
 	return requirement, pin, nil
@@ -176,7 +182,7 @@ func rejectKnownOwnedAdd(app App, source string) error {
 	if err != nil {
 		return err
 	}
-	key := ""
+	key := savedDirectSourceKey(source)
 	if matches := exactGitPattern.FindStringSubmatch(source); matches != nil {
 		key = "github:" + strings.ToLower(matches[1]) + ":" + matches[3]
 	}
@@ -242,7 +248,7 @@ func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirem
 	if pin.TreeDigest == "" {
 		return previous
 	}
-	if !reflect.DeepEqual(snapshot.Requirements.Dependencies[alias], requirement) && pin.Source.Git != nil && requirement.Git != nil && pin.Source.Git.Commit != requirement.Git.Selector.Value {
+	if !reflect.DeepEqual(snapshot.Requirements.Dependencies[alias], requirement) && pin.Source.Git != nil && requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit && pin.Source.Git.Commit != requirement.Git.Selector.Value {
 		return previous
 	}
 	for i, pkg := range previous.Packages {
@@ -260,7 +266,7 @@ func loadSavedAddPackage(cmd *cobra.Command, app App, source string, targets []d
 	var err error
 	var loaded loadedPackage
 	if matches != nil {
-		snapshot, e := app.SourceAcquirer.AcquireGitHub(cmd.Context(), requirement.Git.Repository, requirement.Git.Selector.Value, requirement.Git.Path)
+		snapshot, e := app.acquireDependencyGit(cmd.Context(), *requirement.Git, requirement.Git.Selector.Value, "")
 		if e != nil {
 			return loadedPackage{}, e
 		}

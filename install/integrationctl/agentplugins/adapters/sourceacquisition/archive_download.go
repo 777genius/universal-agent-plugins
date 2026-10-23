@@ -164,13 +164,13 @@ func archiveSave(ctx context.Context, reader io.Reader, destination string) (str
 	hash := sha256.New()
 	n, copyErr := io.Copy(io.MultiWriter(file, hash), io.LimitReader(reader, archiveMaxBytes+1))
 	closeErr := file.Close()
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if n > archiveMaxBytes {
 		return "", errors.New("archive download exceeds 256 MiB")
 	}
 	if copyErr != nil || closeErr != nil {
-		if ctx.Err() != nil {
-			return "", ctx.Err()
-		}
 		return "", errors.New("archive download was incomplete")
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil

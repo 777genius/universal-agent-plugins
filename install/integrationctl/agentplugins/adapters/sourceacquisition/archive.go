@@ -118,6 +118,9 @@ func (acquirer Acquirer) archiveRetain(ctx context.Context, coordinates archiveC
 }
 
 func archiveUnpack(ctx context.Context, filename, extractionRoot string, format archiveFormat) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, errors.New("open retained archive stream")

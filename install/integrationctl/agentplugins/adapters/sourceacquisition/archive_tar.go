@@ -34,8 +34,11 @@ func archiveGunzip(ctx context.Context, compressed, destination string) error {
 	if err != nil {
 		return err
 	}
-	n, copyErr := io.Copy(output, io.LimitReader(reader, archiveMaxBytes+1))
+	n, copyErr := io.Copy(output, io.LimitReader(&archiveContextReader{ctx: ctx, reader: reader}, archiveMaxBytes+1))
 	closeErr := output.Close()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if n > archiveMaxBytes {
 		return errors.New("gzip archive exceeds 256 MiB expanded stream limit")
 	}

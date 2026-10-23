@@ -151,6 +151,9 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 		if readErr != nil || string(manifestAfter) != string(manifestBefore) {
 			return dependencyLockResult{}, errors.New("uap.toml changed during lock resolution; rerun deps lock")
 		}
+		if err := ensureDependencyStore(ctx, app, locked); err != nil {
+			return dependencyLockResult{}, err
+		}
 		if err := writeDependencyLock(lockPath, locked); err != nil {
 			return dependencyLockResult{}, err
 		}

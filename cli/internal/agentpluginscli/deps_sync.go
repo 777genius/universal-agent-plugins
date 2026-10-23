@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 func materializeLockedPackage(ctx context.Context, app App, locked environment.LockedPackage, publish bool, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
@@ -21,17 +23,11 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	} else if !errors.Is(err, environmentstore.ErrMissing) {
 		return loadedPackage{}, err
 	}
-	repository, commit, packagePath, err := lockedDependencyCoordinates(locked)
-	if err != nil {
-		return loadedPackage{}, err
-	}
 	snapshot, err := app.acquireLockedSnapshot(ctx, locked)
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	identity := githubIdentity(repository, commit, packagePath)
-	snapshot.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository,
-		PackageSubpath: packagePath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}
+	snapshot.Source = identityFromLocked(locked)
 	origin, directory := domain.OriginModeDirect, (*domain.DirectoryOrigin)(nil)
 	if locked.Source.Registry != nil {
 		origin = domain.OriginModeDirectory
@@ -82,14 +78,7 @@ func dependencySourceHint(locked environment.LockedPackage) string {
 }
 
 func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
-	var repository, commit, subpath string
-	if locked.Source.Git != nil {
-		repository, commit, subpath = locked.Source.Git.Repository, locked.Source.Git.Commit, locked.Source.Git.Path
-	} else {
-		repository, commit, subpath = locked.Source.Registry.Repository, locked.Source.Registry.Commit, locked.Source.Registry.Path
-	}
-	identity := githubIdentity(repository, commit, subpath)
-	pkg.Metadata.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository, PackageSubpath: subpath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}
+	pkg.Metadata.Source = identityFromLocked(locked)
 	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest,
 		ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: pkg.Metadata.Source}
 	envelope, err := app.loadStandardEnvelope(ctx, input)
@@ -462,7 +451,15 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 			return nil, errors.New("recorded package revision is missing")
 		}
 		pkg := environment.LockedPackage{Alias: authority.Alias, SourceKey: authority.SourceKey, DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: rev.TreeDigest, ManifestDigest: rev.ManifestDigest, Targets: []string{string(target)}}
-		pkg.Source.Git = &environment.LockedGitSource{Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}}
+		pkg.Source.Git = &environment.LockedGitSource{Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision, URL: installation.Source.SourceURL, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}}
+		if installation.Source.SourceKind == "archive" {
+			digest := strings.TrimPrefix(rev.ResolvedRevision, "sha256:")
+			if !sourcespec.ValidSHA256(digest) {
+				return nil, errors.New("recorded archive revision is invalid")
+			}
+			pkg.Source.Git = nil
+			pkg.Source.Archive = &environment.LockedArchiveSource{URL: installation.Source.SourceURL, Path: installation.Source.PackageSubpath, SHA256: digest, RequestedSHA256: digest}
+		}
 		if installation.Directory != nil {
 			pkg.Source.Git = nil
 			pkg.Source.Registry = &environment.LockedRegistrySource{Distribution: installation.Directory.DistributionID, DistributionID: installation.Directory.DistributionID, ProductID: installation.Directory.ProductID, ReleaseSequence: rev.ReleaseSequence, Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision}

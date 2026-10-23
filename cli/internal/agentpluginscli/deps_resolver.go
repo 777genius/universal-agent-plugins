@@ -11,11 +11,11 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 type dependencyResolver struct {
@@ -78,14 +78,14 @@ func (resolver dependencyResolver) Resolve(ctx context.Context, requirement envi
 	if requirement.Git != nil {
 		return resolver.resolveGit(ctx, requirement, targets, previous, update)
 	}
+	if requirement.Archive != nil {
+		return resolver.resolveArchive(ctx, requirement, targets)
+	}
 	return resolver.resolveRegistry(ctx, requirement, targets)
 }
 
 func sameRequestedSelector(requirement environment.Requirement, previous environment.LockedPackage) bool {
-	if requirement.Git != nil {
-		return previous.Source.Git != nil && previous.Source.Git.Requested == requirement.Git.Selector
-	}
-	return previous.Source.Registry != nil && previous.Source.Registry.Requested == requirement.Registry.Selector
+	return requirement.RequestedSelector() == previous.Requirement().RequestedSelector() && mustSourceKey(requirement) == previous.SourceKey
 }
 
 func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
@@ -93,61 +93,59 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 	commit := source.Selector.Value
 	resolvedRef, defaultBranch := "", ""
 	if source.Selector.Kind != environment.SelectorCommit {
-		var resolution sourceacquisition.RefResolution
-		var err error
-		if named, ok := resolver.app.SourceAcquirer.(interface {
-			ResolveGitHubSelector(context.Context, string, string) (sourceacquisition.RefResolution, error)
-			ResolveGitHubRef(context.Context, string, string) (sourceacquisition.RefResolution, error)
-		}); ok {
-			selector := source.Selector.Value
-			if source.Selector.Kind == environment.SelectorDefault {
-				selector = "default"
-			}
-			if source.Selector.Kind == environment.SelectorDefault {
-				resolution, err = named.ResolveGitHubSelector(ctx, source.Repository, selector)
-			} else {
-				resolution, err = named.ResolveGitHubRef(ctx, source.Repository, selector)
-			}
-		} else {
-			return environment.LockedPackage{}, errors.New("source acquirer cannot resolve Git refs")
-		}
+		resolution, err := resolver.app.resolveDependencyGit(ctx, *source)
 		if err != nil {
 			return environment.LockedPackage{}, err
 		}
 		commit, resolvedRef, defaultBranch = resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
 	}
-	identity := githubIdentity(source.Repository, commit, source.Path)
-	var snapshot domain.PackageSnapshot
-	var err error
-	if previous != nil && previous.Source.Git != nil && previous.TreeDigest != "" && !update && sameRequestedSelector(requirement, *previous) {
-		snapshot, err = resolver.app.SourceAcquirer.AcquireGitHubVerified(ctx, source.Repository, commit, source.Path, previous.TreeDigest)
-	} else {
-		snapshot, err = resolver.app.SourceAcquirer.AcquireGitHub(ctx, source.Repository, commit, source.Path)
-	}
+	snapshot, err := resolver.app.acquireDependencyGit(ctx, *source, commit, "")
 	if err != nil {
 		return environment.LockedPackage{}, err
 	}
-	snapshot.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: source.Repository,
-		PackageSubpath: source.Path, ResolvedRevision: commit, SourceBindingHint: "uap-dependency-git"}
+	sourcePin := environment.LockedPackage{Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: source.Repository, URL: source.URL, Path: source.Path, Commit: commit}}}
+	snapshot.Source = identityFromLocked(sourcePin)
 	loaded, err := resolver.app.loadStandardSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
 	if err != nil {
-		return environment.LockedPackage{}, err
-	}
-	if _, err := directoryv1.ResolveDirectExact(loaded.envelope.Source); err != nil {
-		_ = loaded.cleanup()
 		return environment.LockedPackage{}, err
 	}
 	locked := environment.LockedPackage{
 		Alias: requirement.Alias, Targets: append([]string{}, targets...), SourceKey: mustSourceKey(requirement), Version: loaded.envelope.Manifest.Version,
 		DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: loaded.envelope.TreeDigest,
 		ManifestDigest: loaded.envelope.ManifestDigest, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
-		Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: source.Repository, Path: source.Path,
+		Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: source.Repository, URL: source.URL, Path: source.Path,
 			Requested: source.Selector, Commit: commit, ResolvedRef: resolvedRef, DefaultBranch: defaultBranch}},
 	}
 	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
 		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
-	return locked, resolver.finishLoaded(loaded)
+	return locked, resolver.finishLoaded(loaded, locked)
+}
+
+func (resolver dependencyResolver) resolveArchive(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
+	source := requirement.Archive
+	direct, err := resolver.app.directAcquirer()
+	if err != nil {
+		return environment.LockedPackage{}, err
+	}
+	snapshot, err := direct.AcquireArchive(ctx, sourcespec.Archive{URL: source.URL, Path: source.Path}, source.SHA256, "")
+	if err != nil {
+		return environment.LockedPackage{}, err
+	}
+	loaded, err := resolver.app.loadStandardSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
+	if err != nil {
+		return environment.LockedPackage{}, err
+	}
+	locked := environment.LockedPackage{Alias: requirement.Alias, Targets: append([]string{}, targets...),
+		SourceKey: mustSourceKey(requirement), Version: loaded.envelope.Manifest.Version, DigestAlgorithm: domain.TreeDigestAlgorithm,
+		TreeDigest: loaded.envelope.TreeDigest, ManifestDigest: loaded.envelope.ManifestDigest, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
+		Source: environment.LockedSource{Archive: &environment.LockedArchiveSource{URL: source.URL, Path: loaded.envelope.Source.PackageSubpath,
+			RequestedSHA256: source.SHA256, SHA256: loaded.envelope.Source.ArchiveSHA256}}}
+	if locked.Source.Archive.Path != source.Path {
+		_ = loaded.cleanup()
+		return environment.LockedPackage{}, errors.New("archive requirement must explicitly select its logical package path")
+	}
+	return locked, resolver.finishLoaded(loaded, locked)
 }
 
 func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
@@ -172,7 +170,7 @@ func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirem
 	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
 		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
-	return locked, resolver.finishLoaded(loaded)
+	return locked, resolver.finishLoaded(loaded, locked)
 }
 
 func registryLockedPackage(requirement environment.Requirement, loaded loadedPackage) (environment.LockedPackage, error) {
@@ -193,10 +191,25 @@ func registryLockedPackage(requirement environment.Requirement, loaded loadedPac
 	return locked, nil
 }
 
-func (resolver dependencyResolver) finishLoaded(loaded loadedPackage) error {
+func (resolver dependencyResolver) finishLoaded(loaded loadedPackage, pins ...environment.LockedPackage) error {
 	if _, err := packageDependencyFacts(loaded.envelope); err != nil {
 		_ = loaded.cleanup()
 		return err
+	}
+	if len(pins) > 0 && resolver.app.dependencySnapshots != nil {
+		pin := pins[0]
+		snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(context.Background(), loaded.envelope.SnapshotRoot, identityFromLocked(pin), loaded.envelope.ExecutableFiles)
+		if err != nil {
+			_ = loaded.cleanup()
+			return err
+		}
+		key := dependencySnapshotKey{sourceKey: pin.SourceKey, revision: pin.Revision(), algorithm: pin.DigestAlgorithm, digest: pin.TreeDigest}
+		cache := resolver.app.dependencySnapshots
+		if old, ok := cache.snapshots[key]; ok {
+			_ = packagedigest.Remove(old)
+		}
+		cache.snapshots[key] = snapshot
+		return loaded.cleanup()
 	}
 	if !resolver.dryRun {
 		snapshot := domain.PackageSnapshot{Root: loaded.envelope.SnapshotRoot, TreeDigest: loaded.envelope.TreeDigest,

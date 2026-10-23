@@ -34,6 +34,9 @@ func TestParseDirectSources(t *testing.T) {
 		{"https://downloads.test/package#sha256=" + strings.Repeat("b", 64) + "&path=plugins%2Fdemo", KindArchive, nil, &Archive{URL: "https://downloads.test/package", SHA256: strings.Repeat("b", 64), Path: "plugins/demo"}},
 		{"https://example.test/package", KindHTTPSAuto, nil, &Archive{URL: "https://example.test/package"}},
 		{"./plugin.tgz", KindLocalArchive, nil, &Archive{URL: "./plugin.tgz"}},
+		{"owner/repo@release.zip", KindGit, &Git{URL: "https://github.com/owner/repo.git", Repository: "owner/repo", Ref: "release.zip"}, nil},
+		{`C:\tmp\package.zip`, KindLocalArchive, nil, &Archive{URL: `C:\tmp\package.zip`}},
+		{"/tmp/package@1.0.zip", KindLocalArchive, nil, &Archive{URL: "/tmp/package@1.0.zip"}},
 		{"./package@1.0.zip", KindLocalArchive, nil, &Archive{URL: "./package@1.0.zip"}},
 		{"plugin.zip", KindLocalArchive, nil, &Archive{URL: "plugin.zip"}},
 	}
