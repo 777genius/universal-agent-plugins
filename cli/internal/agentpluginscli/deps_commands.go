@@ -49,6 +49,9 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	if err := requireDependencyMutationReady(app); err != nil {
 		return dependencyLockResult{}, err
 	}
+	if err := app.preflightProjectDependencyTargets(); err != nil {
+		return dependencyLockResult{}, err
+	}
 	if allowWrite && !opts.dryRun {
 		release, lockErr := processlock.Lock{Path: app.EnvironmentLockPath}.Acquire(ctx)
 		if lockErr != nil {
@@ -56,14 +59,8 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 		}
 		defer func() { _ = release() }()
 	}
-	if app.Installer != nil {
-		view, err := app.Installer.Inspect(ctx)
-		if err != nil {
-			return dependencyLockResult{}, err
-		}
-		if view.Recovery.Required {
-			return dependencyLockResult{}, installer.ErrRecoveryRequired
-		}
+	if err := requireDependencyLockRecoveryClear(ctx, app); err != nil {
+		return dependencyLockResult{}, err
 	}
 	manifestPath, lockPath := app.dependencyPaths()
 	manifestBefore, manifestReadErr := os.ReadFile(manifestPath)
@@ -99,6 +96,20 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 		}
 	}
 	return dependencyLockResult{Manifest: requirements, Lock: locked, LockPath: lockPath, Changed: changed, DryRun: opts.dryRun}, nil
+}
+
+func requireDependencyLockRecoveryClear(ctx context.Context, app App) error {
+	if app.Installer == nil {
+		return nil
+	}
+	view, err := app.Installer.Inspect(ctx)
+	if err != nil {
+		return err
+	}
+	if view.Recovery.Required {
+		return installer.ErrRecoveryRequired
+	}
+	return nil
 }
 
 func derefLock(lock *environment.Lock) environment.Lock {
@@ -228,6 +239,9 @@ func initializeDependencies(cmd *cobra.Command, app App, opts *options) error {
 
 func validateDependencyTargets(app App, requirements environment.Requirements) error {
 	for target := range requirements.Targets {
+		if app.scope() == domain.ScopeProject && !supportsDependencyTarget(app, target) {
+			return fmt.Errorf("%s does not support project scope", target)
+		}
 		if definition, ok := domain.ClientDefinitionFor(domain.ClientID(target)); ok && (definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare) {
 			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, target)
 		}
