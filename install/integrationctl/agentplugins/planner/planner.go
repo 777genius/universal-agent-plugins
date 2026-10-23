@@ -14,6 +14,7 @@ import (
 )
 
 type Planner struct {
+	ProjectRoot string `json:"-"`
 	ManagedRoot string
 	Paths       ports.PathPolicy
 	// Registry supplies the client adapters that decide where a package lands
@@ -58,6 +59,16 @@ func (planner Planner) Plan(ctx context.Context, request domain.PlanRequest) (do
 	if planner.Registry == nil {
 		return domain.DeliveryPlan{}, clients.ErrRegistryRequired
 	}
+	if request.Scope == domain.ScopeProject && !clients.SupportsScope(planner.Registry, request.Client.ClientID, request.Scope) {
+		plan := domain.DeliveryPlan{ClientID: request.Client.ClientID, Scope: request.Scope, PhysicalArtifactID: request.PhysicalArtifactID}
+		rejectPlan(&plan, "scope_not_supported")
+		return plan, nil
+	}
+	targetContext, err := planner.requestContext(request)
+	if err != nil {
+		return domain.DeliveryPlan{}, err
+	}
+	request.Scope = targetContext.Scope
 	plan, err := planner.plan(ctx, request)
 	if err != nil {
 		return plan, err
@@ -79,7 +90,8 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 		return domain.DeliveryPlan{}, err
 	}
 	input := clients.PlanInput{
-		Envelope: request.Envelope, Client: request.Client,
+		TargetContext: plan.TargetContext,
+		Envelope:      request.Envelope, Client: request.Client,
 		Detected: request.Detected, Intent: request.InstallIntent,
 		LocalEntryObservation: request.LocalEntryObservation.Clone(),
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
@@ -87,6 +99,13 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	planner.setNativeRegistry(&plan, input)
 	if !admissible(definition, request, &plan) {
 		return plan, nil
+	}
+	if !clients.SupportsScope(planner.Registry, request.Client.ClientID, request.Scope) {
+		rejectPlan(&plan, "scope_not_supported")
+		return plan, nil
+	}
+	if err := planner.validateProjectRegistry(plan); err != nil {
+		return plan, err
 	}
 	if precondition, ok := clients.As[clients.PlanPrecondition](planner.Registry, plan.ClientID); ok {
 		if err := precondition.CheckPlanPrecondition(input, &plan); err != nil {
@@ -134,7 +153,12 @@ func (planner Planner) startPlan(ctx context.Context, request domain.PlanRequest
 		return domain.ClientDefinition{}, domain.DeliveryPlan{}, fmt.Errorf("unsupported client %q", request.Client.ClientID)
 	}
 	capabilities := definition.Capabilities
+	targetContext, err := planner.requestContext(request)
+	if err != nil {
+		return definition, domain.DeliveryPlan{}, err
+	}
 	return definition, domain.DeliveryPlan{
+		TargetContext:         targetContext,
 		LocalEntryObservation: request.LocalEntryObservation.Clone(),
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
 		ClientID:              request.Client.ClientID,
@@ -353,7 +377,13 @@ func (planner Planner) ResolveTarget(
 	if !supportsScope(capabilities.Scopes, scope) {
 		return domain.DeliveryTarget{}, fmt.Errorf("scope %q is unsupported for %s", scope, client.ClientID)
 	}
-	targetAnchor, targetRoot, err := planner.targetRoot(client, capabilities.PackageMode)
+	if !clients.SupportsScope(planner.Registry, client.ClientID, scope) {
+		return domain.DeliveryTarget{}, fmt.Errorf("scope %q has no qualified adapter layout for %s", scope, client.ClientID)
+	}
+	if _, err := domain.NewTargetContext(scope, planner.ProjectRoot, client.ConfigRoot); err != nil {
+		return domain.DeliveryTarget{}, err
+	}
+	targetAnchor, targetRoot, err := planner.targetRootForScope(client, capabilities.PackageMode, scope)
 	if err != nil {
 		return domain.DeliveryTarget{}, err
 	}
@@ -374,10 +404,28 @@ func Capabilities(clientID domain.ClientID) (domain.ClientCapabilities, bool) {
 // containment check afterwards applies to both answers alike: an adapter
 // chooses a location, it does not get to escape one.
 func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.PackageMode) (string, string, error) {
+	return planner.targetRootForScope(client, mode, domain.ScopeUser)
+}
+
+func (planner Planner) targetRootForScope(client domain.DetectedClient, mode domain.PackageMode, scope domain.InstallScope) (string, string, error) {
 	if planner.Paths == nil {
 		return "", "", errPathPolicyRequired
 	}
-	anchor, root, err := planner.clientTargetRoot(client, mode)
+	var anchor, root string
+	var err error
+	if scope == domain.ScopeProject {
+		targetContext, contextErr := domain.NewTargetContext(scope, planner.ProjectRoot, client.ConfigRoot)
+		if contextErr != nil {
+			return "", "", contextErr
+		}
+		layout, ok := clients.As[clients.ProjectTargetLayout](planner.Registry, client.ClientID)
+		if !ok {
+			return "", "", fmt.Errorf("project target layout is required for %s", client.ClientID)
+		}
+		anchor, root, err = layout.ProjectTargetRoot(client, mode, planner.ManagedRoot, targetContext)
+	} else {
+		anchor, root, err = planner.clientTargetRoot(client, mode)
+	}
 	if err != nil {
 		return "", "", err
 	}
@@ -390,6 +438,11 @@ func (planner Planner) targetRoot(client domain.DetectedClient, mode domain.Pack
 		return "", "", err
 	}
 	absoluteAnchor, absolute = filepath.Clean(absoluteAnchor), filepath.Clean(absolute)
+	if scope == domain.ScopeProject && absoluteAnchor != planner.ProjectRoot {
+		if err := planner.Paths.RequireContainedChild(planner.ProjectRoot, absoluteAnchor); err != nil {
+			return "", "", fmt.Errorf("unsafe project target anchor: %w", err)
+		}
+	}
 	if err := planner.Paths.RequireContainedChild(absoluteAnchor, absolute); err != nil {
 		return "", "", fmt.Errorf("unsafe client target root: %w", err)
 	}

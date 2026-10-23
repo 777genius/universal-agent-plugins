@@ -50,6 +50,23 @@ func ClientSupported(registry *clients.Registry, clientID string) bool {
 	return ClientSupportExclusionReason(registry, clientID) == ""
 }
 
+// ClientScopeSupported is the read-only saved-admission gate before source
+// acquisition. A qualified project declaration does not reopen deferred user
+// dependency support or admit remote/manual-only clients.
+func ClientScopeSupported(registry *clients.Registry, clientID string, scope domain.InstallScope) bool {
+	if scope == "" {
+		scope = domain.ScopeUser
+	}
+	if !clients.SupportsScope(registry, domain.ClientID(clientID), scope) {
+		return false
+	}
+	if scope != domain.ScopeProject {
+		return ClientSupported(registry, clientID)
+	}
+	definition, _ := domain.ClientDefinitionFor(domain.ClientID(clientID))
+	return !definition.PlansWithoutHostPresence && !definition.Traits.RequiresPersonalMappingForPrepare
+}
+
 // ClientSupportExclusionReason is the shared qualification policy for the SDK,
 // CLI and generated public metadata. It never removes a registered adapter.
 func ClientSupportExclusionReason(registry *clients.Registry, clientID string) string {
@@ -129,6 +146,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 
 func (e *Engine) planner() planner.Planner {
 	return planner.Planner{
+		ProjectRoot: e.cfg.ProjectRoot,
 		ManagedRoot: e.cfg.ManagedRoot,
 		Paths:       pathpolicy.Policy{},
 		Registry:    e.cfg.Registry,

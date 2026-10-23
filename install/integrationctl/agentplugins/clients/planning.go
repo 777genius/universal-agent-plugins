@@ -29,6 +29,12 @@ type TargetLayout interface {
 	TargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string) (anchor, root string, err error)
 }
 
+// ProjectTargetLayout is an explicit project admission and layout contract.
+// There is no fallback to user TargetLayout for project requests.
+type ProjectTargetLayout interface {
+	ProjectTargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string, target domain.TargetContext) (anchor, root string, err error)
+}
+
 // NativeRegistryLayout overrides which native client registry a delivery is
 // recorded against. VS Code is installed through the Copilot CLI it shares a
 // backend with, so its plan points at the sibling's locators rather than its
@@ -83,6 +89,7 @@ type PreparationRefiner interface {
 
 // PlanInput is everything a refiner is allowed to see.
 type PlanInput struct {
+	TargetContext         domain.TargetContext           `json:"-"`
 	PreviousNativeObjects []domain.NativeObjectOwnership `json:"-"`
 	LocalEntryObservation *domain.LocalEntryObservation  `json:"-"`
 	Envelope              domain.PackageEnvelope

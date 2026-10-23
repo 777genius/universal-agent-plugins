@@ -64,6 +64,7 @@ const (
 // mutation remains in client-specific adapters and is intentionally not part
 // of this registry.
 type ClientDefinition struct {
+	ProjectPolicy         ProjectPolicy
 	ID                    ClientID
 	DisplayName           string
 	BackendFamily         string
@@ -356,6 +357,7 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
 	profileNamespace           string                  `json:"-"`
 	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
@@ -475,6 +477,8 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
+	TargetContext         TargetContext           `json:"-"`
+	NativeRegistryRoot    string                  `json:"-"`
 	LocalEntryObservation *LocalEntryObservation  `json:"-"`
 	RemoveOwnedEntry      bool                    `json:"-"`
 	SelectedDelivery      SelectedDelivery        `json:"-"`
