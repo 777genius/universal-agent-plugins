@@ -142,15 +142,7 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 	}
 	app := assembleAgentpluginsApp(home, dataRoot, cacheRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
 	app.Installer = facade
-	app.Scope = domain.ScopeUser
-	app.ProjectRoot = projectRoot
-	if projectRoot != "" {
-		app.Scope = domain.ScopeProject
-		app.DependenciesRoot = projectRoot
-		app.StateMigrator = nil
-		app.LegacyLifecycle = nil
-		app.LegacyStateLock = nil
-	}
+	setAgentpluginsProjectContext(&app, projectRoot)
 	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
 		if scope != domain.ScopeProject {
 			root = ""
@@ -269,4 +261,16 @@ func commitDependencyDirectoryPreview(original *directoryv1.Client, preview agen
 	}
 	_, err = original.Cache.Reconcile(bundle, original.Trust)
 	return err
+}
+
+func setAgentpluginsProjectContext(app *agentpluginscli.App, projectRoot string) {
+	app.Scope, app.ProjectRoot = domain.ScopeUser, projectRoot
+	if projectRoot == "" {
+		return
+	}
+	app.Scope = domain.ScopeProject
+	app.DependenciesRoot = projectRoot
+	app.StateMigrator = nil
+	app.LegacyLifecycle = nil
+	app.LegacyStateLock = nil
 }

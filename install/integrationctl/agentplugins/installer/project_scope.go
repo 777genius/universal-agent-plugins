@@ -13,10 +13,6 @@ func (e *Engine) scope() domain.InstallScope {
 	return domain.ScopeUser
 }
 
-func (e *Engine) targetContext(client domain.DetectedClient) domain.TargetContext {
-	return domain.TargetContext{Scope: e.scope(), ProjectRoot: e.cfg.ProjectRoot, UserConfigRoot: client.ConfigRoot}
-}
-
 func (e *Engine) nativeRegistryRoot(client domain.DetectedClient) (string, error) {
 	if e.scope() != domain.ScopeProject {
 		return client.ConfigRoot, nil

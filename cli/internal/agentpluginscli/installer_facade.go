@@ -113,7 +113,7 @@ func facadePlanAddResult(plan installer.Plan, envelope domain.PackageEnvelope) u
 	out := usecase.AddResult{
 		InstallationID: plan.InstallationID,
 		Plan: domain.DeliveryPlan{
-			ClientID: clientID, Scope: domain.InstallScope(plan.Scope), TargetContext: plan.TargetContext, Status: domain.PlanStatus(delivery.Status),
+			ClientID: clientID, Scope: plan.Scope, TargetContext: plan.TargetContext, Status: domain.PlanStatus(delivery.Status),
 			PackageMode: domain.PackageMode(delivery.PackageMode), DeclaredName: envelope.Manifest.Name,
 			DeclaredVersion: envelope.Manifest.Version, ActivePath: plan.TargetPath,
 			InstallIntent: domain.InstallIntent(delivery.InstallIntent), PhysicalArtifactID: delivery.PhysicalArtifactID,
