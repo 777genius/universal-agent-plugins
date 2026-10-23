@@ -946,6 +946,18 @@
       "nonEmptyOptions": "Les options {component} \"{label}\" doivent utiliser des valeurs non vides.",
       "unknownValue": "{component} \"{label}\" a reçu une valeur inconnue",
       "selectionRequired": "{component} \"{label}\" nécessite au moins une valeur sélectionnée"
+    },
+    "authenticationIndicator": {
+      "required": "Authentification requise",
+      "not_required": "Aucune authentification requise",
+      "unknown": "Exigences d’authentification inconnues",
+      "varies": "L’authentification varie selon l’agent",
+      "automatic": "Les agents installés sont détectés au lancement de la commande. Sélectionnez des agents dans Installer pour voir leurs exigences.",
+      "unresolved": "Aucune option d’installation n’est résolue pour ces agents. Sélectionnez un agent compatible pour vérifier ses exigences.",
+      "release": "{id} · version {sequence}",
+      "requiredDetail": "Le paquet peut nécessiter un compte, un jeton ou une connexion ; cela ne précise pas OAuth et ne confirme pas votre connexion.",
+      "not_requiredDetail": "Aucune authentification n’est déclarée pour ces agents. Des limites de service et d’autres exigences peuvent s’appliquer.",
+      "unknownDetail": "Vérifiez les exigences du paquet avant la connexion."
     }
   }
 }

@@ -946,6 +946,18 @@
       "nonEmptyOptions": "{component} Las opciones \"{label}\" deben usar valores que no estén vacíos",
       "unknownValue": "{component} \"{label}\" recibió un valor desconocido",
       "selectionRequired": "{component} \"{label}\" requiere al menos un valor seleccionado"
+    },
+    "authenticationIndicator": {
+      "required": "Autenticación requerida",
+      "not_required": "No requiere autenticación",
+      "unknown": "Requisitos de autenticación desconocidos",
+      "varies": "La autenticación varía según el agente",
+      "automatic": "Los agentes instalados se detectan al ejecutar el comando. Selecciona agentes en Instalar para ver sus requisitos.",
+      "unresolved": "No se ha resuelto una opción de instalación para estos agentes. Selecciona un agente compatible para comprobar sus requisitos.",
+      "release": "{id} · versión {sequence}",
+      "requiredDetail": "El paquete puede requerir una cuenta, token o inicio de sesión; esto no especifica OAuth ni confirma que hayas iniciado sesión.",
+      "not_requiredDetail": "No se declara autenticación para estos agentes. Pueden aplicarse límites del servicio y otros requisitos de configuración.",
+      "unknownDetail": "Comprueba los requisitos del paquete antes de conectar."
     }
   }
 }
