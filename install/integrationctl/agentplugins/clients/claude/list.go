@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // ListStatus is the recognized shape of a Claude Code plugin listing.
@@ -23,6 +24,15 @@ const (
 // PluginStatusFromList classifies a `plugin list --json` document for the
 // exact managed @skills-dir identity.
 func PluginStatusFromList(body []byte, name, activePath string) ListStatus {
+	return PluginStatusFromListForScope(body, name, activePath, domain.ScopeUser)
+}
+
+// PluginStatusFromListForScope admits only the selected user/project listing;
+// the existing user-only entry point retains its strict original contract.
+func PluginStatusFromListForScope(body []byte, name, activePath string, scope domain.InstallScope) ListStatus {
+	if scope != domain.ScopeUser && scope != domain.ScopeProject {
+		return StatusUnknown
+	}
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
 	parsed, err := shared.DecodeUniqueJSONValue(decoder)
@@ -36,14 +46,14 @@ func PluginStatusFromList(body []byte, name, activePath string) ListStatus {
 	if !ok {
 		return StatusUnknown
 	}
-	return classifyClaudeEntries(entries, name+"@skills-dir", filepath.Clean(activePath))
+	return classifyClaudeEntries(entries, name+"@skills-dir", filepath.Clean(activePath), string(scope))
 }
 
-func classifyClaudeEntries(entries []any, expectedID, expectedPath string) ListStatus {
+func classifyClaudeEntries(entries []any, expectedID, expectedPath, expectedScope string) ListStatus {
 	seen := map[string]struct{}{}
 	found := false
 	for _, value := range entries {
-		status, matched, ok := classifyClaudeEntry(value, expectedID, expectedPath, seen)
+		status, matched, ok := classifyClaudeEntry(value, expectedID, expectedPath, expectedScope, seen)
 		if !ok {
 			return status
 		}
@@ -61,7 +71,7 @@ func classifyClaudeEntries(entries []any, expectedID, expectedPath string) ListS
 	return StatusAbsent
 }
 
-func classifyClaudeEntry(value any, expectedID, expectedPath string, seen map[string]struct{}) (ListStatus, bool, bool) {
+func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope string, seen map[string]struct{}) (ListStatus, bool, bool) {
 	entry, ok := value.(map[string]any)
 	if !ok {
 		return StatusUnknown, false, false
@@ -81,8 +91,28 @@ func classifyClaudeEntry(value any, expectedID, expectedPath string, seen map[st
 	if id != expectedID {
 		return StatusUnknown, false, true
 	}
-	if filepath.Clean(installPath) != expectedPath || scope != "user" {
+	if filepath.Clean(installPath) != expectedPath || scope != expectedScope {
 		return StatusCollision, false, false
 	}
+	if expectedScope == "project" && !claudeProjectEntryLoaded(entry, expectedPath) {
+		return StatusUnknown, false, false
+	}
 	return StatusUnknown, enabled, true
+}
+
+func claudeProjectEntryLoaded(entry map[string]any, expectedPath string) bool {
+	if installPath, _ := entry["installPath"].(string); installPath != expectedPath {
+		return false
+	}
+	if project, exists := entry["projectPath"]; exists {
+		path, ok := project.(string)
+		if !ok || !filepath.IsAbs(path) || path != filepath.Dir(filepath.Dir(filepath.Dir(expectedPath))) {
+			return false
+		}
+	}
+	if reported, exists := entry["errors"]; exists {
+		loadErrors, ok := reported.([]any)
+		return ok && len(loadErrors) == 0
+	}
+	return true
 }

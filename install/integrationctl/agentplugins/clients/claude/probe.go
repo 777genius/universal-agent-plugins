@@ -33,6 +33,9 @@ type ClaudeActivationProbe struct {
 }
 
 func PrepareClaudeActivationProbe(request domain.ActivationRequest) (ClaudeActivationProbe, error) {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return prepareClaudeProjectActivationProbe(request)
+	}
 	configRoot := filepath.Clean(strings.TrimSpace(request.Client.ConfigRoot))
 	if !filepath.IsAbs(configRoot) {
 		return ClaudeActivationProbe{}, fmt.Errorf("absolute Claude Code config root is required")
@@ -72,6 +75,10 @@ func RunClaudeListCommand(ctx context.Context, runner ports.CommandRunner, comma
 }
 
 func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.Command, error) {
+	return claudeListCommand(executable, configRoot, activePath, filepath.Join(filepath.Clean(configRoot), "skills"), "")
+}
+
+func claudeListCommand(executable, configRoot, activePath, skillsRoot, workingDir string) (legacyports.Command, error) {
 	executable = strings.TrimSpace(executable)
 	if executable == "" {
 		return legacyports.Command{}, fmt.Errorf("Claude Code executable is required")
@@ -82,7 +89,7 @@ func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	}
 	configRoot = filepath.Clean(configRoot)
 	activePath = filepath.Clean(strings.TrimSpace(activePath))
-	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != filepath.Join(configRoot, "skills") {
+	if !filepath.IsAbs(activePath) || filepath.Dir(activePath) != skillsRoot {
 		return legacyports.Command{}, fmt.Errorf("the Claude Code managed plugin path is not an exact child of the configured skills root")
 	}
 	environment, home, err := boundedClaudeProbeEnvironment()
@@ -97,10 +104,13 @@ func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.C
 	if environmentSize(environment) > claudeProbeMaxEnvironmentTotal {
 		return legacyports.Command{}, fmt.Errorf("Claude Code probe environment exceeds the bounded size")
 	}
+	if workingDir == "" {
+		workingDir = home
+	}
 	return legacyports.Command{
 		Argv: []string{executable, "plugin", "list", "--json"},
 		Env:  environment,
-		Dir:  home,
+		Dir:  workingDir,
 	}, nil
 }
 
