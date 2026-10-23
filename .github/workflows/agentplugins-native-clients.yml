@@ -69,10 +69,15 @@ jobs:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
         shell: bash
         run: |
+          project_args=()
+          if [[ '${{ matrix.client }}' == 'codex' ]]; then
+            project_args+=(--project-components)
+          fi
           python scripts/run-native-client-matrix.py \
             --client '${{ matrix.client }}' \
             --target '${{ matrix.platform.target }}' \
-            --output '${{ runner.temp }}/native-client-proof'
+            --output '${{ runner.temp }}/native-client-proof' \
+            "${project_args[@]}"
       - name: Upload native evidence including failed stages
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

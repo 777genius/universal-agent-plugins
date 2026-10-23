@@ -66,3 +66,83 @@ Current official pages were opened before implementation:
   separately. Hosted native guard remains unchanged; no local model task, trust
   mutation, credential creation or package payload execution is authorized by
   this evidence record.
+
+
+## Initial implementation checkpoint
+
+The scoped adapter now selects the exact project root, `.agents/skills` and
+`.codex/config.toml` while retaining the original detected user profile. It
+consumes the reviewed shared ProjectComponents transaction with a distinct
+Codex codec and explicit skill/MCP ownership kinds. The existing OpenAI MCP
+projector materializes stdio package/data/cwd values and nonsecret auth
+references once; active reprojection verifies the bound data locator without
+rewriting digest-covered package bytes. Project operations do not invoke a
+user marketplace command or change `CODEX_HOME`.
+
+Native file success remains prepared plus installed. User/project disabled
+selectors and MCP entries are preserved and reported; system/managed/session
+precedence and native trust remain unobserved. Existing explicit-only command
+withholding policy is retained, while accepted commands use the existing skill
+renderer. No global user trait is enabled to manufacture project support.
+
+Author contract checks on the initial adapter checkpoint: full Codex **PASS
+0.161s**, full domain **PASS 0.029s**, full planner **PASS 0.033s**; composed
+providers `^TestProjectCodex` **PASS 0.170s**. Those provider contracts include
+standard loading/planning/staging, rendered commands, remote and managed stdio
+MCP, auth references, exact data-bound active reprojection, add/repeat/missing-pin
+repair/update/removal, user/cache/project-B isolation, malformed TOML, foreign
+disabled collision, writer failure rollback, context/root refusal and generic
+attestation rejection. They execute no package payload, native Codex process,
+configured MCP command or model request. Independent full-adapter reviews and
+hosted native discovery qualification remain separate gates.
+
+## Source-only native discovery gate
+
+The source matrix now accepts an explicit `--project-components` selection for
+Codex. It retains the existing disposable-host checks, immutable native artifact
+pins, fresh environment, exact required-test accounting and refusal of any skip.
+The option is rejected for released, draft and prepared installer inputs; those
+historical evidence contracts remain unchanged. The source Codex jobs select
+both existing user tests and the project component lifecycle test.
+
+The new test runs production UAP `add --scope project`, `update`, `repair` and
+`remove`. Fresh pinned Codex app-server processes call only `skills/list` and
+must return the exact enabled repository skill paths under the selected
+`.agents/skills`, with exact rendered command bytes. A command-rule update must
+withdraw the old command skill, a deleted owned directory must disappear from
+native discovery before repair and return afterwards, and removal must leave no
+fixture skill. Separate project-B discovery and exact foreign user/cache/A/B
+byte checks fence the scope. UAP outcomes must remain prepared plus installed;
+this test does not change the product's activation admission.
+
+The exact-tag repository-root implementation independently resolves
+`.agents/skills` from cwd to the detected project boundary:
+https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/ext/skills/src/host_roots.rs
+The native app-server contract is also exercised upstream at:
+https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/app-server/tests/suite/v2/skills_list.rs
+The fixture supplies distinct existing project roots and native `.git` markers;
+it neither writes trust nor changes `CODEX_HOME` to a project path.
+
+The discovery gate has been authored but has not yet supplied a hosted runtime
+result at this checkpoint. No native process was launched on the task host.
+Project MCP initialization, effective trust/policy, model use and real task
+completion remain unqualified. The dedicated
+`codex-project-components-evidence.json` records those limits and stage outcomes
+separately from existing released lifecycle evidence.
+
+## Independent review correction: visible skill selectors
+
+Exact-tag native source at
+https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/config/src/skills_config.rs
+(blob `cc944d817c1a65c8424e069b5a7cd466646f84bf`) establishes that skill
+enablement selectors come from user/session layers, not project layers. Path
+selectors identify the canonical skill document; names are trimmed, entries
+with both selectors are ignored, and later matching rules may reenable a skill.
+The adapter's bounded warnings now honor these semantics for the observed user
+file only, including canonical document aliases. They do not interpret project
+skill selectors as native restrictions or infer a native session's final policy.
+Composed provider regressions cover both override orders, ignored project/both
+selectors, document-versus-directory identity and canonical aliases. The whole
+project provider selection passed after this correction (0.228s); exact changed
+code and full-file size/architecture lint retain the existing gates without new
+suppression rules.

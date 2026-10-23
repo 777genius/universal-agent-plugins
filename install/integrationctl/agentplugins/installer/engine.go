@@ -27,7 +27,7 @@ import (
 
 // Engine is the process-local installer. It does not export Store or Kernel.
 type Engine struct {
-	projectGuard projectNamespaceGuard
+	projectGuard *projectNamespaceGuard
 	cfg          Config
 	store        transaction.StateStore
 	// persistObservations enables the §5.4 PersistAuthoritativeObservations
@@ -42,7 +42,7 @@ func New(cfg Config) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	engine := &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile, ProjectRoot: resolved.ProjectRoot}}
+	engine := &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile, ProjectRoot: resolved.ProjectRoot}, projectGuard: &projectNamespaceGuard{}}
 	if err := engine.CheckProjectNamespace(); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}
@@ -387,6 +387,12 @@ func (e *Engine) WithTemporaryRoot(root string) (*Engine, error) {
 	cfg.temporaryRoot = true
 	derived, err := New(cfg)
 	if err != nil {
+		return nil, err
+	}
+	// Derived preparation observes the same selected physical namespace. A new
+	// staging directory must not reset the original engine's identity pin.
+	derived.projectGuard = e.projectGuard
+	if err := derived.CheckProjectNamespace(); err != nil {
 		return nil, err
 	}
 	// Prepare always uses DryRun; preserve the observation policy for an

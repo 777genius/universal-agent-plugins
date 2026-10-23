@@ -72,6 +72,19 @@ REQUIRED_TESTS = {
     "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle"},
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
+PROJECT_TESTS = {
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle"},
+}
+
+
+def select_native_tests(client, project_components=False, released=False):
+    """Keep current-source project proof separate from released user evidence."""
+    if not project_components:
+        return PATTERNS[client], REQUIRED_TESTS[client]
+    if released or client not in PROJECT_TESTS:
+        raise ValueError("project component proof requires current-source Codex, not a released/draft installer")
+    required = REQUIRED_TESTS[client] | PROJECT_TESTS[client]
+    return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
 
 
 def require_verified_pin(pin):
@@ -321,6 +334,7 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--prepared-input", type=Path)
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
+    parser.add_argument("--project-components", action="store_true", help="also require current-source project component discovery; never released/draft proof")
     args = parser.parse_args()
     draft.validate(args)
     if args.release_state == "draft" and args.producer_source is None:
@@ -329,6 +343,11 @@ def main():
         parser.error("public mode must not receive --producer-source")
     if bool(args.release_tag) != bool(args.release_commit):
         parser.error("--release-tag and --release-commit must be supplied together")
+    try:
+        pattern, required_tests = select_native_tests(args.client, args.project_components,
+            bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only)
+    except ValueError as error:
+        parser.error(str(error))
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
     if args.prepare_only:
@@ -430,11 +449,15 @@ def main():
                 raise RuntimeError(f"released installer version mismatch: {measured!r}")
         prefix = "AGENTPLUGINS_" + args.client.upper()
         env[prefix + "_NATIVE_E2E"] = "1"
+        if args.project_components:
+            env[prefix + "_PROJECT_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
         env[prefix + "_VERSION"] = {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
-        command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + PATTERNS[args.client]]
+        command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + pattern]
         identity["test_command"] = command
+        identity["required_tests"] = sorted(required_tests)
+        identity["project_components"] = args.project_components
         with (output / "native-tests.log").open("w", encoding="utf-8") as transcript:
             result = subprocess.run(command, cwd=project, env=env, stdout=transcript, stderr=subprocess.STDOUT, timeout=930)
         identity["exit_code"] = result.returncode
@@ -444,7 +467,7 @@ def main():
         skipped = re.findall(r"^\s*--- SKIP: ([^\s]+)", log, re.M)
         identity["passed_tests"] = sorted(passed)
         identity["skipped_tests"] = skipped
-        if result.returncode or skipped or not REQUIRED_TESTS[args.client].issubset(passed):
+        if result.returncode or skipped or not required_tests.issubset(passed):
             raise RuntimeError("native suite failed, skipped, or omitted a required test; inspect transcript")
         identity["status"] = "passed"
     finally:
