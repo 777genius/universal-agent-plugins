@@ -57,7 +57,7 @@ func priorManagedBinding(installation *domain.Installation, plan *domain.Deliver
 		return nil
 	}
 	for _, binding := range installation.Clients {
-		if binding.Materialization != domain.MaterializationAbsent && binding.Scope == string(plan.Scope) && binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), plan.ClientID) {
+		if binding.Materialization != domain.MaterializationAbsent && binding.Scope == string(plan.Scope) && binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), plan.ClientID, plan.Scope) {
 			cloned := binding
 			return &cloned
 		}

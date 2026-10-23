@@ -380,7 +380,8 @@ func (planner Planner) ResolveTarget(
 	if !clients.SupportsScope(planner.Registry, client.ClientID, scope) {
 		return domain.DeliveryTarget{}, fmt.Errorf("scope %q has no qualified adapter layout for %s", scope, client.ClientID)
 	}
-	if _, err := domain.NewTargetContext(scope, planner.ProjectRoot, client.ConfigRoot); err != nil {
+	targetContext, err := domain.NewTargetContext(scope, planner.ProjectRoot, client.ConfigRoot)
+	if err != nil {
 		return domain.DeliveryTarget{}, err
 	}
 	targetAnchor, targetRoot, err := planner.targetRootForScope(client, capabilities.PackageMode, scope)
@@ -391,7 +392,15 @@ func (planner Planner) ResolveTarget(
 	if err := planner.Paths.RequireContainedChild(targetRoot, activePath); err != nil {
 		return domain.DeliveryTarget{}, fmt.Errorf("unsafe client target path: %w", err)
 	}
-	return domain.DeliveryTarget{TargetAnchor: targetAnchor, TargetRoot: targetRoot, ActivePath: activePath}, nil
+	nativeRoot := client.ConfigRoot
+	if scope == domain.ScopeProject {
+		layout, _ := clients.As[clients.NativeRegistryLayout](planner.Registry, client.ClientID)
+		nativeRoot, _ = layout.NativeRegistry(clients.PlanInput{Client: client, TargetContext: targetContext})
+		if err := planner.validateProjectRegistry(domain.DeliveryPlan{Scope: scope, ClientID: client.ClientID, TargetContext: targetContext, NativeRegistryRoot: nativeRoot}); err != nil {
+			return domain.DeliveryTarget{}, err
+		}
+	}
+	return domain.DeliveryTarget{TargetContext: targetContext, NativeRegistryRoot: nativeRoot, TargetAnchor: targetAnchor, TargetRoot: targetRoot, ActivePath: activePath}, nil
 }
 
 func Capabilities(clientID domain.ClientID) (domain.ClientCapabilities, bool) {

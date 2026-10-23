@@ -43,6 +43,7 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 		input.Client.OpenCodeHost = host
 	}
 	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
+		ProjectRoot:           service.ProjectRoot,
 		LocalEntryObservation: observation.Clone(),
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), objects...),
 		Envelope:              input.Envelope,
@@ -98,7 +99,7 @@ func resolvePersistedIntent(input *AddInput, installation *domain.Installation) 
 }
 
 func validatePersonalMapping(input *AddInput, installation *domain.Installation) error {
-	traits := domain.ClientTraitsFor(input.Client.ClientID)
+	traits := (domain.SelectedDelivery{}).EffectiveTraitsForScope(input.Client.ClientID, input.Scope)
 	if traits.RequiresPersonalMappingForPrepare && input.InstallIntent == domain.InstallIntentPrepare && input.Envelope.LocalChatGPTMapping == nil {
 		return fmt.Errorf("%s preparation requires a personal Context7 registration receipt", clientDisplayName(input.Client.ClientID))
 	}

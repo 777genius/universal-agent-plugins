@@ -17,7 +17,8 @@ import (
 
 // Config is copied by New. Later mutation of the caller's value is ignored.
 type Config struct {
-	ProjectRoot string `json:"-"`
+	temporaryRoot bool
+	ProjectRoot   string `json:"-"`
 	// OpenCodeProbe defaults to the explicit-target facade. New captures and pins
 	// the allowlisted environment once; it never executes a probe.
 	OpenCodeProbe            OpenCodeProbe

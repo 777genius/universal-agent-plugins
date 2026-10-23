@@ -63,14 +63,17 @@ func (e *Engine) validateRemovalBinding(client domain.DetectedClient, binding do
 	if err := binding.ValidateLocalEntryObservation(); err != nil {
 		return err
 	}
-	if binding.ClientID != string(client.ClientID) || binding.Scope != string(domain.ScopeUser) || binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
+	if binding.ClientID != string(client.ClientID) || binding.Scope != string(e.scope()) || binding.NativeActivationAttempt != "" || binding.PendingNativeIntent != nil {
 		return fmt.Errorf("%w: removal binding scope or native attempt differs", ErrInvalidRequest)
 	}
 	if err := binding.SelectedDelivery.Validate(); err != nil {
 		return err
 	}
-	if binding.SelectedDelivery.EffectiveTraits(client.ClientID).BindsNativeProfileRoot && (client.ConfigRoot == "" || client.ConfigRoot != binding.NativeProfileRoot) {
-		return fmt.Errorf("%w: removal profile differs from persisted native root", ErrInvalidRequest)
+	if binding.SelectedDelivery.EffectiveTraitsForScope(client.ClientID, e.scope()).BindsNativeProfileRoot {
+		root, err := e.nativeRegistryRoot(client)
+		if err != nil || root == "" || root != binding.NativeProfileRoot {
+			return fmt.Errorf("%w: removal profile differs from persisted native root", ErrInvalidRequest)
+		}
 	}
 	if binding.SelectedDelivery.IsZero() {
 		return nil
@@ -308,7 +311,7 @@ func (e *Engine) confirmSelectedNativeEntry(ctx context.Context, client domain.D
 	if !ok || adapter.UsesNativeRegistryExecutable() {
 		return fmt.Errorf("%w: selected client has no read-only profile inspection", ErrUnsupported)
 	}
-	plan := domain.DeliveryPlan{ClientID: client.ClientID, Scope: domain.ScopeUser, ActivePath: binding.TargetLocator,
+	plan := domain.DeliveryPlan{ClientID: client.ClientID, Scope: e.scope(), ActivePath: binding.TargetLocator,
 		LocalEntryObservation: binding.LocalEntryObservation.Clone(), PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
 		PhysicalArtifactID: binding.PhysicalArtifact, SelectedDelivery: binding.SelectedDelivery, NativeRegistryRoot: binding.SelectedDelivery.ProfileRoot()}
 	finding, err := adapter.InspectNativeRegistry(ctx, clients.Env{NativeConfig: nativeconfig.New()}, client, plan, &binding)

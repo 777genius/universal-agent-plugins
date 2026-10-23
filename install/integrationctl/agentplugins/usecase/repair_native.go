@@ -26,7 +26,7 @@ func (session *repairSession) repairNative() (AddResult, error) {
 		if session.recordedAbsenceRepairable(verified, clientVerifyErr) {
 			return session.reapplyIntactNative(delivery)
 		}
-		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) || session.client.LocalEntryObservation != nil || verified.LocalEntryObservation != nil || session.ctx.Err() != nil {
+		if !nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) || session.client.LocalEntryObservation != nil || verified.LocalEntryObservation != nil || session.ctx.Err() != nil {
 			return session.result, clientVerifyErr
 		}
 		return session.reapplyIntactNative(delivery)

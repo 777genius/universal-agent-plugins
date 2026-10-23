@@ -23,6 +23,9 @@ func TestPrepareRejectsCrossEnvironmentContextBeforePackageRead(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			stateRoot := filepath.Join(root, test.name, ".uap")
+			if test.engineRoot != "" {
+				stateRoot = filepath.Join(test.engineRoot, ".uap")
+			}
 			engine, err := New(testConfig(t, Config{StateRoot: stateRoot, ProjectRoot: test.engineRoot}))
 			if err != nil {
 				t.Fatal(err)

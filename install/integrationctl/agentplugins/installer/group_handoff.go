@@ -33,6 +33,7 @@ func (e *Engine) reconcileGroupHostHandoff(ctx context.Context, prepared *Prepar
 			continue
 		}
 		facts := BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(binding.ProfileAuthority),
+			TargetContext:    preparedTargetContext(prepared, binding.ClientID),
 			InstallationID:   firstNonEmpty(installation.InstallationID, installationID),
 			ClientID:         binding.ClientID,
 			BindingID:        binding.ClientBindingID,
@@ -146,7 +147,7 @@ func (e *Engine) confirmMutatingGroupTarget(ctx context.Context, prepared *Prepa
 	}
 	if i == 0 && prepared.artifact != "" && plan.Operation == OpInstall {
 		client := prepared.clients[i]
-		resolved, resolveErr := e.planner().ResolveTarget(ctx, client, domain.ScopeUser, prepared.artifact)
+		resolved, resolveErr := e.planner().ResolveTarget(ctx, client, e.scope(), prepared.artifact)
 		if resolveErr != nil {
 			return fmt.Errorf("%w: %w", ErrPlanChanged, resolveErr)
 		}

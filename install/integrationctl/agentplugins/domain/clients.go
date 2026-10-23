@@ -406,11 +406,13 @@ type DeliveryPlan struct {
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
 type DeliveryTarget struct {
-	profileAuthority *ProfileAuthority `json:"-"`
-	profileNamespace string            `json:"-"`
-	TargetAnchor     string            `json:"-"`
-	TargetRoot       string            `json:"-"`
-	ActivePath       string            `json:"-"`
+	TargetContext      TargetContext     `json:"-"`
+	NativeRegistryRoot string            `json:"-"`
+	profileAuthority   *ProfileAuthority `json:"-"`
+	profileNamespace   string            `json:"-"`
+	TargetAnchor       string            `json:"-"`
+	TargetRoot         string            `json:"-"`
+	ActivePath         string            `json:"-"`
 }
 
 type OpenAIMCPAuthHint struct {

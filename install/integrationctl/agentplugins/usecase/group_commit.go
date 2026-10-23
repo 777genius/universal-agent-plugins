@@ -32,9 +32,9 @@ func (session *groupSession) upsertGroupTargetState(target plannedGroupTarget) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.AffectedSurfaces...)
 		client.AffectedSurfaces = append(client.AffectedSurfaces, target.managed.ClientID)
 	}
-	if sharesPhysicalBackend(target.input.Client.ClientID, target.plan.SelectedDelivery) {
+	if sharesPhysicalBackend(target.input.Client.ClientID, target.plan.SelectedDelivery, target.input.Scope) {
 		client.AffectedSurfaces = append(client.AffectedSurfaces, string(target.input.Client.ClientID))
-		for _, sibling := range domain.BackendSiblings(target.input.Client.ClientID) {
+		for _, sibling := range domain.BackendSiblingsForScope(target.input.Client.ClientID, target.input.Scope) {
 			client.AffectedSurfaces = append(client.AffectedSurfaces, string(sibling))
 		}
 	}

@@ -52,7 +52,7 @@ func (e *Engine) confirmInstallTarget(ctx context.Context, prepared *PreparedOpe
 			return err
 		}
 		if prepared.artifact != "" {
-			target, err := e.planner().ResolveTarget(ctx, prepared.client, domain.ScopeUser, prepared.artifact)
+			target, err := e.planner().ResolveTarget(ctx, prepared.client, e.scope(), prepared.artifact)
 			if err != nil {
 				return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 			}

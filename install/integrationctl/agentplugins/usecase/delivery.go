@@ -36,13 +36,13 @@ func openAIOAuthApplies(clientID domain.ClientID, envelope domain.PackageEnvelop
 // plan so activation and user-facing results still describe what the caller
 // selected.
 func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.StagedDelivery, error) {
-	if !sharesPhysicalBackend(plan.ClientID, plan.SelectedDelivery) {
+	if !sharesPhysicalBackend(plan.ClientID, plan.SelectedDelivery, plan.Scope) {
 		return delivery, nil
 	}
 	owner := plan.ClientID
 	if managed != nil {
 		owner = domain.ClientID(managed.ClientID)
-		if !sameNativeBackend(owner, plan.ClientID) || managed.PhysicalArtifact != plan.PhysicalArtifactID {
+		if !sameNativeBackend(owner, plan.ClientID, plan.Scope) || managed.PhysicalArtifact != plan.PhysicalArtifactID {
 			return delivery, fmt.Errorf("shared physical binding identity does not match the staged delivery")
 		}
 	}
@@ -69,7 +69,7 @@ func bindStagedDeliveryToPhysicalOwner(delivery domain.StagedDelivery, plan doma
 func initialLifecycle(plan domain.DeliveryPlan) (domain.ActivationState, domain.VerificationState) {
 	// The plan describes the intended external result. A package transaction
 	// cannot establish CLI registration before the activator verifies it.
-	if plan.SelectedDelivery.EffectiveTraits(plan.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && plan.Activation == domain.ActivationActive {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).LifecycleKind == domain.LifecycleCLIRegistry && plan.Activation == domain.ActivationActive {
 		return domain.ActivationPrepared, domain.VerificationPackageValid
 	}
 	return plan.Activation, plan.Verification

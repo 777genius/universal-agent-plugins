@@ -46,6 +46,9 @@ func (e *Engine) Inspect(ctx context.Context) (Inspection, error) {
 
 func (e *Engine) observe() (Inspection, error) {
 	out := Inspection{StateRoot: e.cfg.StateRoot}
+	if err := e.CheckProjectNamespace(); err != nil {
+		return out, err
+	}
 	state, err := e.store.Load()
 	if err != nil {
 		out.Recovery.Required = true

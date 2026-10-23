@@ -34,6 +34,7 @@ func (delivery SelectedDelivery) EffectiveTraitsForScope(id ClientID, scope Inst
 	traits := definition.Traits
 	traits.LifecycleKind = definition.ProjectPolicy.LifecycleKind
 	traits.SavedDependenciesDeferred = false
+	traits.BindsNativeProfileRoot = true
 	if traits.LifecycleKind == LifecycleNativeConfig {
 		traits.TracksNativeEffects = true
 		traits.BindsNativeProfileRoot = true

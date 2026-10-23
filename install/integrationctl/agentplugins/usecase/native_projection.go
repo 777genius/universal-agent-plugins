@@ -20,7 +20,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 	if delivery.ArtifactDigest == "" {
 		return delivery, false, false, fmt.Errorf("managed package receipt is missing")
 	}
-	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
+	if !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) {
 		delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), client.NativeObjects...)
 		complete = service.nonNativeRegistrationComplete(input, plan, client, delivery)
 		settled = complete && service.manualRegistrationSettled(input, plan, client, delivery)
@@ -126,7 +126,7 @@ func activationClassifierRequest(input AddInput, plan domain.DeliveryPlan, clien
 // rules stops a preview or a group with ErrProjectionRefreshRequired before
 // any effect. Other projection failures stay with the step that uses it.
 func (service Service) requireCurrentCommandProjection(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, client domain.ClientBinding) error {
-	if !rendersCommands(input.Envelope, input.Client.ClientID) || !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery) {
+	if !rendersCommands(input.Envelope, input.Client.ClientID) || !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) {
 		return nil
 	}
 	if _, _, _, err := service.activeNativeDelivery(ctx, input, plan, installation, client); errors.Is(err, ErrProjectionRefreshRequired) {
@@ -141,7 +141,7 @@ func (service Service) requireCurrentCommandProjection(ctx context.Context, inpu
 func (service Service) nonNativeRegistrationComplete(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery) bool {
 	classifier, ok := service.Activator.(ports.AutomaticActivationClassifier)
 	cliBacked := ok && classifier.AutomaticallyActivates(activationClassifierRequest(input, plan, client, delivery))
-	if plan.SelectedDelivery.EffectiveTraits(input.Client.ClientID).LifecycleKind == domain.LifecycleCLIRegistry && cliBacked {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).LifecycleKind == domain.LifecycleCLIRegistry && cliBacked {
 		return input.ActivationComplete || client.Activation == domain.ActivationActive && (client.Verification == domain.VerificationInstalled || client.Verification == domain.VerificationRuntime)
 	}
 	return true
