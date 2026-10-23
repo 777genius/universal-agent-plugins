@@ -54,3 +54,25 @@ Reviewed corrective `d35d28633bd939eaee85e6dc3d4b42125cbe5f53` and final frozen 
 - Independently ran the frozen tree's `TestDependencyRetentionHonorsOperationCancellation`, `TestDirectImperativeRepairUsesRecordedBytes`, `TestSavedRepairRetainsOldPinAfterSourceAdvance`, `TestDirectSourceSavedLifecycleRealSSH`, `TestDirectSourcesWithIdenticalBytesKeepSelectedLockProvenance`, `TestDirectSavedPreviewDoesNotPublishStoreOrIntent`, `TestLegacyGitHubLockIdentitySurvivesNativeTransport`, `TestDirectArchiveSelectionUsesOneDownloadAndLogicalPath`, and `TestDirectRecognizedInvalidPackagesNeverInstallOrFallback` with `-count=1 -p=2 -timeout=2m`: **PASS, 7.936s**.
 
 The focused run covers real SSH/SCP Git and TLS archive transport with inert agent fixtures, exact old-pin repairs and changed-byte refusal, same-bytes distinct provenance, private preview, legacy identity, cancellation cleanup, one-download logical selection and no-fallback malformed package handling. No confirmed review finding remains open.
+
+## Narrow Unix SSH fixture correction verification
+
+Independently reviewed `37a459db6f7606d3696350fe4480934f2e9cd9f9`: only the two
+loopback SSH fixtures and their evidence documentation change. Their sshd
+accounts, POSIX forced command and repository URL spellings require a Unix
+server host. Windows now explicitly skips this unsupported fixture platform
+only when the required-fixture flag is absent. With `UAP_REQUIRE_NATIVE_SSH=1`,
+unsupported platform or unavailable SSH tooling remains a hard failure. No
+production URL grammar, SSH admission, authentication policy or host trust is
+changed.
+
+The separate Ubuntu24.04 required source workflow still provisions openssh-server,
+checks sshd/ssh/ssh-keygen/git/jq, sets the required flag and requires exact pass
+events with zero skip events for native acquisition and both SSH URL/SCP CLI
+journeys. It cannot satisfy the gate by skipping the fixture.
+
+Independent frozen Linux execution with `UAP_REQUIRE_NATIVE_SSH=1`, `-count=1`,
+`-p=2` and `-timeout=3m`: native SSH acquisition/host verification **PASS1.570s**;
+full CLI SSH URL/SCP lifecycle **PASS4.775s** (both subtests pass, no skips).
+**GO** for this narrow correction. Windows SSH runtime certification remains
+explicitly unclaimed; separate grammar and real TLS lifecycle coverage remains.
