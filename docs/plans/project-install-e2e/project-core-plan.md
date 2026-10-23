@@ -23,8 +23,10 @@ installer-only `--project-root` flag before authoring execution. It also splits
 the touched core and CLI functions to meet the existing whole-file size and
 architecture gates, without expanding their baseline. Focused public-help,
 attestation, scoped state and installer checks pass. Independent implementation
-R2 and the cohesive project/source lifecycle proof follow the first qualified
-client stack. Client qualification and native hosted certification remain
+R2 is now GO after the root-native registry correction `08b1604a` and shared
+preview namespace guard correction `caa27b4f`; its evidence is preserved in
+`project-core-code-review-r2.md`. The cohesive project/source lifecycle proof
+follows the first qualified client stack. Client qualification and native hosted certification remain
 separate gates; this checkpoint does not claim those are complete.
 
 ## Governing scope
