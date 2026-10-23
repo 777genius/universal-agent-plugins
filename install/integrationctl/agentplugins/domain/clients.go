@@ -107,10 +107,10 @@ var clientDefinitions = []ClientDefinition{
 			RequiresPersonalMappingForPrepare: true,
 		}),
 		DirectoryResolveContext7ChatGPTPreparation)),
-	clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectScope(clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}),
+	}), LifecycleNativeConfig),
 	withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
@@ -131,11 +131,11 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
 	}), ActivationAutomatic),
-	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:          LifecycleNativeConfig,
 		BindsNativeProfileRoot: true,
-	}),
+	}), LifecycleNativeConfig),
 	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                    LifecycleNativeConfig,

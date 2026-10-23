@@ -136,7 +136,12 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		return err
 	}
 	writeProgress(app, opts.format, "Resolving and validating the exact installed Agent Plugin revision...")
-	loaded, err := app.loadPackage(ctx, source)
+	var loaded loadedPackage
+	if installation.Source.SourceKind != "" {
+		loaded, err = app.loadRecordedDirect(ctx, installation, binding)
+	} else {
+		loaded, err = app.loadPackage(ctx, source)
+	}
 	if err != nil {
 		return err
 	}
@@ -705,6 +710,12 @@ func environmentAuthorityForBinding(state domain.StateFileV2, installationID str
 }
 
 func updateSource(installation domain.Installation) string {
+	if installation.Source.SourceKind == "archive" && filepath.IsAbs(installation.Source.SourceURL) {
+		return localArchiveUpdateSource(installation.Source)
+	}
+	if installation.Source.SourceKind != "" && installation.Source.RequestedSource == "" {
+		return directSourceRequested(installation.Source)
+	}
 	if installation.Source.Repository == "" && filepath.IsAbs(installation.Source.CanonicalSource) {
 		return installation.Source.CanonicalSource
 	}
@@ -745,6 +756,14 @@ func repairSource(installation domain.Installation, binding domain.ClientBinding
 	}
 	if revision == "" {
 		return "", fmt.Errorf("the selected client binding has no exact resolved revision; refusing repair from a moving source")
+	}
+	if installation.Source.SourceKind != "" {
+		source := installation.Source
+		source.ResolvedRevision = revision
+		if source.SourceKind == "archive" {
+			source.ArchiveSHA256 = strings.TrimPrefix(revision, "sha256:")
+		}
+		return directSourceRequested(source), nil
 	}
 	if repository := strings.TrimSpace(installation.Source.Repository); repository != "" {
 		value := "github:" + repository + "@" + revision

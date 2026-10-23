@@ -294,7 +294,7 @@ func (selection savedLifecycleSelection) update(cmd *cobra.Command, app App, opt
 		return updateSavedRegistry(cmd, app, opts, snapshot, selection.alias, selection.installation)
 	}
 	updateAlias := key
-	if requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit {
+	if (requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit) || (requirement.Archive != nil && requirement.Archive.SHA256 != "") {
 		updateAlias = ""
 	}
 	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{requirements: requirements, app: app, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, updateAlias)
@@ -317,6 +317,10 @@ func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, op
 	}
 	if operation == "update" && requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit {
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Exact commit pin retained; choose a new pin with agentplugins add <repo>@<sha>//path")
+		return err
+	}
+	if operation == "update" && requirement.Archive != nil && requirement.Archive.SHA256 != "" {
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Exact archive checksum retained; choose a new checksum in uap.toml")
 		return err
 	}
 	if operation == "remove" && selection.installation != nil && len(savedAliasTargets(requirements, domain.StateFileV2{}, selection.alias, environmentIDs...)) == 0 {
@@ -350,8 +354,9 @@ func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot en
 		}
 		return requirements, snapshot.Lock, err
 	}
-	requirements, _ = savedRegistryCandidate(snapshot, alias, old, loaded)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded); err != nil {
+	requirements, candidate := savedRegistryCandidate(snapshot, alias, old, loaded)
+	next, _ := candidate.Package(alias)
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), loaded, next); err != nil {
 		return requirements, snapshot.Lock, err
 	}
 	// Validate the authoritative old graph before rebuilding edges from the new

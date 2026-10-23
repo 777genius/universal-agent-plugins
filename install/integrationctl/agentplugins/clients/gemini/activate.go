@@ -22,33 +22,41 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 
 // Activate installs or verifies managed Gemini CLI skills and MCP servers
 // through the native config kernel.
-func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if err := validateProfile(request.Client.ConfigRoot, request.Plan.NativeRegistryRoot); err != nil {
+	root, err := geminiPlanRoot(request.Client, request.Plan)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := adapter.PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	automatic := request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
-	return shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
 		Automatic:         automatic,
 		UnavailableAction: "install Gemini CLI and rerun add with an isolated writable Gemini config root",
 		RepairAction:      "repair the managed Gemini CLI skills and MCP configuration",
 		RetryAction:       "retry the managed Gemini CLI native installation",
 		CompletedAction:   "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI",
 		Verify: func() error {
-			return VerifyGeminiNativeObjects(request.Client.ConfigRoot, request.Delivery.NativeObjects, false, env.NativeConfig)
+			return VerifyGeminiNativeObjects(root, request.Delivery.NativeObjects, false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			return ActivateGeminiNativeWithKernel(ctx, request, env.NativeConfig)
 		},
 	})
+	if err != nil {
+		return outcome, err
+	}
+	return geminiProjectStatus(env, request, outcome)
 }
 
 // Deactivate removes managed Gemini native objects.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
-	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
+	if _, err := geminiNativeRoot(request.Client, request.TargetContext, request.NativeRegistryRoot); err != nil {
 		return outcome, err
 	}
 	if !request.Confirmed {

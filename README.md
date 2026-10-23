@@ -189,6 +189,12 @@ You can also install a local package or a pinned GitHub package without adding
 it to the registry. Direct-install examples are collected near the end of this
 README.
 
+**SOURCE ONLY / UNRELEASED:** direct source support now includes arbitrary HTTPS
+and SSH Git, GitHub/GitLab/Azure browser URLs, and complete HTTPS/local
+ZIP/TAR/TAR.GZ/TGZ packages. See [Direct complete package sources](docs/DIRECT_PACKAGE_SOURCES.md)
+for syntax, native credentials, immutable archive byte pins and supported limits.
+Standalone skill files are not imported as plugins.
+
 Other manifest formats are ignored and cannot override `plugin.json`.
 
 </details>

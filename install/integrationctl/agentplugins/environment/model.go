@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 const (
@@ -35,6 +36,7 @@ var (
 type SelectorKind string
 
 const (
+	SelectorArchive SelectorKind = "archive"
 	SelectorCommit  SelectorKind = "commit"
 	SelectorRef     SelectorKind = "ref"
 	SelectorDefault SelectorKind = "default"
@@ -49,7 +51,8 @@ type Selector struct {
 }
 
 type GitSource struct {
-	Repository string   `json:"repository"`
+	URL        string   `json:"url,omitempty"`
+	Repository string   `json:"repository,omitempty"`
 	Path       string   `json:"path,omitempty"`
 	Selector   Selector `json:"selector"`
 }
@@ -59,7 +62,21 @@ type RegistrySource struct {
 	Selector     Selector `json:"selector"`
 }
 
+type ArchiveSource struct {
+	URL    string `json:"url"`
+	Path   string `json:"path,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+}
+
+type LockedArchiveSource struct {
+	URL             string `json:"url"`
+	Path            string `json:"path,omitempty"`
+	RequestedSHA256 string `json:"requested_sha256,omitempty"`
+	SHA256          string `json:"sha256"`
+}
+
 type Requirement struct {
+	Archive  *ArchiveSource  `json:"archive,omitempty"`
 	Alias    string          `json:"alias"`
 	Git      *GitSource      `json:"git,omitempty"`
 	Registry *RegistrySource `json:"registry,omitempty"`
@@ -72,12 +89,14 @@ type Requirements struct {
 }
 
 type LockedSource struct {
+	Archive  *LockedArchiveSource  `json:"archive,omitempty"`
 	Git      *LockedGitSource      `json:"git,omitempty"`
 	Registry *LockedRegistrySource `json:"registry,omitempty"`
 }
 
 type LockedGitSource struct {
-	Repository    string   `json:"repository"`
+	URL           string   `json:"url,omitempty"`
+	Repository    string   `json:"repository,omitempty"`
 	Path          string   `json:"path,omitempty"`
 	Requested     Selector `json:"requested"`
 	Commit        string   `json:"commit"`
@@ -160,15 +179,16 @@ type PreparedSync struct {
 
 func (selector Selector) Validate() error {
 	switch selector.Kind {
+	case SelectorArchive:
+		if selector.Value != "" && !sourcespec.ValidSHA256(selector.Value) {
+			return errors.New("archive selector requires a lowercase SHA256 or a moving URL")
+		}
 	case SelectorCommit:
 		if !commitPattern.MatchString(selector.Value) {
 			return errors.New("commit selector requires one full lowercase 40-character SHA")
 		}
 	case SelectorRef:
-		value := strings.TrimSpace(selector.Value)
-		if value == "" || value != selector.Value || strings.ContainsAny(value, " \t\r\n~^:?*[\\") || strings.HasPrefix(value, "-") || path.Clean(value) != value {
-			return errors.New("ref selector is not a safe exact Git ref")
-		}
+		return validateRefSelector(selector.Value)
 	case SelectorDefault:
 		if selector.Value != "" {
 			return errors.New("default selector must have an empty value")
@@ -176,15 +196,26 @@ func (selector Selector) Validate() error {
 	case SelectorVersion, SelectorRange:
 		return validateVersionSelector(selector)
 	case SelectorRelease:
-		if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value {
-			return errors.New("release selector must be a canonical nonzero sequence")
-		}
-		var sequence uint64
-		if _, err := fmt.Sscanf(selector.Value, "%d", &sequence); err != nil || sequence == 0 || fmt.Sprint(sequence) != selector.Value {
-			return errors.New("release selector must be a canonical nonzero sequence")
-		}
+		return validateReleaseSelector(selector.Value)
 	default:
 		return fmt.Errorf("unsupported selector kind %q", selector.Kind)
+	}
+	return nil
+}
+
+func validateRefSelector(value string) error {
+	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, " \t\r\n~^:?*[\\") || strings.HasPrefix(value, "-") || path.Clean(value) != value {
+		return errors.New("ref selector is not a safe exact Git ref")
+	}
+	return nil
+}
+func validateReleaseSelector(value string) error {
+	if value == "" || strings.TrimSpace(value) != value {
+		return errors.New("release selector must be a canonical nonzero sequence")
+	}
+	var sequence uint64
+	if _, err := fmt.Sscanf(value, "%d", &sequence); err != nil || sequence == 0 || fmt.Sprint(sequence) != value {
+		return errors.New("release selector must be a canonical nonzero sequence")
 	}
 	return nil
 }
@@ -213,12 +244,15 @@ func (requirement Requirement) Validate() error {
 	if !validDeclarationKey(requirement.Alias) {
 		return fmt.Errorf("alias %q must match %s", requirement.Alias, aliasPattern)
 	}
-	if (requirement.Git == nil) == (requirement.Registry == nil) {
-		return errors.New("dependency must contain exactly one git or registry source")
+	if sourceCount(requirement.Git != nil, requirement.Registry != nil, requirement.Archive != nil) != 1 {
+		return errors.New("dependency must contain exactly one git, archive or registry source")
+	}
+	if requirement.Archive != nil {
+		return requirement.Archive.Validate()
 	}
 	if requirement.Git != nil {
-		if !repositoryPattern.MatchString(requirement.Git.Repository) {
-			return errors.New("git repository must be owner/repo")
+		if err := requirement.Git.ValidateEndpoint(); err != nil {
+			return err
 		}
 		if err := validateSubpath(requirement.Git.Path); err != nil {
 			return err
@@ -297,7 +331,13 @@ func (requirement Requirement) SourceKey() (string, error) {
 		return "", err
 	}
 	if requirement.Git != nil {
+		if requirement.Git.URL != "" {
+			return sourcespec.Key(sourcespec.KindGit, requirement.Git.URL, requirement.Git.Path), nil
+		}
 		return "github:" + strings.ToLower(requirement.Git.Repository) + ":" + requirement.Git.Path, nil
+	}
+	if requirement.Archive != nil {
+		return sourcespec.Key(sourcespec.KindArchive, requirement.Archive.URL, requirement.Archive.Path), nil
 	}
 	return "directory:" + strings.ToLower(requirement.Registry.Distribution), nil
 }
@@ -335,6 +375,9 @@ func ManifestDigest(requirements Requirements) (string, error) {
 		if requirement.Git != nil {
 			item.Path = requirement.Git.Path
 			item.Selector = requirement.Git.Selector
+		} else if requirement.Archive != nil {
+			item.Path = requirement.Archive.Path
+			item.Selector = requirement.RequestedSelector()
 		} else {
 			item.Selector = requirement.Registry.Selector
 		}
@@ -391,7 +434,7 @@ func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
 
 func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 	if requirement.Git != nil {
-		if pkg.Source.Git == nil || pkg.Source.Registry != nil || !strings.EqualFold(pkg.Source.Git.Repository, requirement.Git.Repository) ||
+		if pkg.Source.Git == nil || pkg.Source.Registry != nil || pkg.Source.Archive != nil || pkg.Source.Git.URL != requirement.Git.URL || !strings.EqualFold(pkg.Source.Git.Repository, requirement.Git.Repository) ||
 			pkg.Source.Git.Path != requirement.Git.Path || pkg.Source.Git.Requested != requirement.Git.Selector ||
 			!commitPattern.MatchString(pkg.Source.Git.Commit) {
 			return errors.New("locked Git identity does not match manifest")
@@ -401,12 +444,15 @@ func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 		}
 		return nil
 	}
+	if requirement.Archive != nil {
+		return validateLockedArchive(requirement, pkg)
+	}
 	return validateLockedRegistrySelector(requirement, pkg)
 }
 
 func validateLockedRegistrySelector(requirement Requirement, pkg LockedPackage) error {
 	source := pkg.Source.Registry
-	if source == nil || pkg.Source.Git != nil || !strings.EqualFold(source.Distribution, requirement.Registry.Distribution) ||
+	if source == nil || pkg.Source.Git != nil || pkg.Source.Archive != nil || !strings.EqualFold(source.Distribution, requirement.Registry.Distribution) ||
 		source.Requested != requirement.Registry.Selector || source.ReleaseSequence == 0 || !registrySelectorMatches(requirement.Registry.Selector, pkg) ||
 		!strings.EqualFold(source.DistributionID, source.Distribution) || !distributionPattern.MatchString(source.DistributionID) || !repositoryPattern.MatchString(source.Repository) || validateSubpath(source.Path) != nil || !commitPattern.MatchString(source.Commit) {
 		return errors.New("locked registry identity does not match manifest")
