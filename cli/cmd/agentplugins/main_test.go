@@ -196,11 +196,11 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 	}
 	defer stderr.Close()
 	os.Stdout, os.Stderr = stdout, stderr
-	argv := []string{"add", source, "--target=codex", "--scope=project", "--dry-run", "--format=json"}
+	argv := []string{"add", source, "--target=chatgpt", "--scope=project", "--dry-run", "--format=json"}
 	os.Args = append([]string{"agentplugins"}, argv...)
 	var out, errout bytes.Buffer
 	err = executeRelease(context.Background(), argv, authoringcli.Streams{Out: &out, Err: &errout}, run)
-	if err == nil || out.Len() != 0 || errout.String() != "agentplugins: codex does not support project scope\n" || len(transport.urls) != 0 {
+	if err == nil || out.Len() != 0 || errout.String() != "agentplugins: chatgpt does not support project scope\n" || len(transport.urls) != 0 {
 		t.Fatalf("preflight boundary: %v %q %q requests=%v", err, out.String(), errout.String(), transport.urls)
 	}
 	if !reflect.DeepEqual(beforeState, securityFixtureTree(t, state)) || !reflect.DeepEqual(beforeSource, securityFixtureTree(t, source)) || !reflect.DeepEqual(beforeHome, securityFixtureTree(t, home)) {
