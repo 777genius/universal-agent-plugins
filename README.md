@@ -9,6 +9,22 @@
 
 Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
+## Table of contents
+
+- [Use plugins](#use-plugins)
+  - [Quick start](#quick-start)
+- [What the CLI does](#what-the-cli-does)
+- [Restore your plugin setup](#restore-your-plugin-setup)
+- [Any Agent Plugins 1.0 package](#any-agent-plugins-10-package)
+- [Supported clients](#supported-clients)
+- [Already built with UAP SDK](#already-built-with-uap-sdk)
+- [Find and verify plugins](#find-and-verify-plugins)
+- [Lifecycle safety](#lifecycle-safety)
+- [More commands](#more-commands)
+- [Build plugins](#build-plugins)
+- [Contributing](#contributing)
+- [License](#license)
+
 **Keep a reproducible set of plugins and dependencies, and carry it to another
 computer.** The manifest records what you need; the lockfile pins the exact
 packages to restore. This workflow is **SOURCE ONLY / UNRELEASED**; see
