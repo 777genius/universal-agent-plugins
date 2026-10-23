@@ -4,7 +4,7 @@ Independent reviewer: project_core, 2026-10-23. Frozen starting tree `501d7f5610
 
 ## Decision
 
-**Changes required: R2-1 P1 and R2-2 P2 below.** The source lead confirmed both and is implementing narrow fixes and regressions. The architecture, typed source/lock model, native credential boundary and cache-provenance direction are approved. Final GO requires independent fix verification on a frozen follow-up tree and the focused lifecycle tests.
+**R2 GO at `236c331983d9356345a6654776e1b30a995aabc5`.** Both findings below are closed after independent code and focused execution verification. Their original findings are retained as review history. The architecture, typed source/lock model, native credential boundary and cache-provenance direction are approved. Cohesive source/project execution remains an integration gate after the qualified adapter stack; it is not a blocker in this source-only review.
 
 ## R2-1 — P1: imperative generic Git/archive repair uses a source hash as a URL
 
@@ -43,25 +43,14 @@ The reviewer initially questioned encoded repository separator validation based 
 - Read native transport policy, pure parser/provider handling, additive source/lock/coordinator variants, lock-derived provenance, all new S5 dispatch/cache/acquired-request helpers and their lifecycle projections.
 - Independently inspected the archive suffix fix and ran focused real TLS suffix/redirect tests during archive R1 (0.139s); full acquisition suite passed earlier (2.005s). No redundant large archive expansion run in this cumulative review.
 - Independent pure parser probe on the frozen source tree rejects the two encoded-separator inputs above.
-- Await frozen fix commit and focused native/direct lifecycle/provenance/cancellation verification before final R2 GO. Agent process behavior in these source transport journeys is fixture-backed and does not certify native agent products.
+- Agent process behavior in these source transport journeys is fixture-backed and does not certify native agent products.
 
-## Corrective implementation evidence (author; independent verification pending)
+## Independent fix verification
 
-The follow-up implementation adds a recorded typed-source repair loader shared by
-grouped and legacy single-target imperative repair. It uses each selected binding's
-immutable revision, tree and manifest, and archive original-byte SHA256, together
-with the persisted endpoint/logical path. Local archive transport stays local.
-A changed unavailable archive refuses before target/state effects; restoring its
-exact original stream permits repair. All finishLoaded production callers now
-pass the operation context through retained resealing and store Put.
+Reviewed corrective `d35d28633bd939eaee85e6dc3d4b42125cbe5f53` and final frozen `236c331983d9356345a6654776e1b30a995aabc5` read-only. The final follow-up preserves those runtime fixes while splitting helpers to satisfy the existing whole-file gates and isolating native Git test credential/CA configuration.
 
-The focused completion suite passed in13.847s: actual HTTPS/private Git and
-native SSH/SCP CLI saved lifecycle; imperative Git/remote archive/local archive
-repair after source advance; saved old-pin drift repair and cold changed-archive
-refusal; selected-lock shared-store provenance in both population orders; declined
-and dry-run no publication; mid-retention cancellation cleanup; single-download
-archive selection, wrapper-independent logical paths, malformed-root precedence,
-corrupt archive refusal and no raw SKILL import. Parser/model checks passed too.
-Agent process responses remain inert fixtures, and no package code runs.
+- **R2-1 closed.** Both grouped and single imperative repair dispatch recorded typed sources through `loadRecordedDirect`. Git acquisition uses the selected binding's exact revision; archive acquisition uses its tagged original-byte SHA256. Recorded logical path, tree and manifest digests are checked. The acquisition endpoint comes from SourceURL, never the canonical hash key. Explicit local archives retain local coordinates. Saved drift repair retains its installed lock pin after the remote advances; unavailable changed archive bytes fail before target/state/intent/lock writes.
+- **R2-2 closed.** `finishLoaded` and all production callers, including content-store Put and executable snapshot retention, receive the operation context. Cancellation cleans the original and failed retained snapshot; the regression asserts no command cache or durable content publication.
+- Independently ran the frozen tree's `TestDependencyRetentionHonorsOperationCancellation`, `TestDirectImperativeRepairUsesRecordedBytes`, `TestSavedRepairRetainsOldPinAfterSourceAdvance`, `TestDirectSourceSavedLifecycleRealSSH`, `TestDirectSourcesWithIdenticalBytesKeepSelectedLockProvenance`, `TestDirectSavedPreviewDoesNotPublishStoreOrIntent`, `TestLegacyGitHubLockIdentitySurvivesNativeTransport`, `TestDirectArchiveSelectionUsesOneDownloadAndLogicalPath`, and `TestDirectRecognizedInvalidPackagesNeverInstallOrFallback` with `-count=1 -p=2 -timeout=2m`: **PASS, 7.936s**.
 
-Independent reviewer verification and GO follow on this frozen corrective commit.
+The focused run covers real SSH/SCP Git and TLS archive transport with inert agent fixtures, exact old-pin repairs and changed-byte refusal, same-bytes distinct provenance, private preview, legacy identity, cancellation cleanup, one-download logical selection and no-fallback malformed package handling. No confirmed review finding remains open.

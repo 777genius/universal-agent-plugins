@@ -19,6 +19,9 @@ import (
 func TestNativeSSHGitWithIsolatedKeysAndHostVerification(t *testing.T) {
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
+		if os.Getenv("UAP_REQUIRE_NATIVE_SSH") == "1" {
+			t.Fatal("required native SSH fixture needs openssh-server")
+		}
 		t.Skip("native SSH fixture requires openssh-server")
 	}
 	root, _, commit := nativeFixtureRepository(t)

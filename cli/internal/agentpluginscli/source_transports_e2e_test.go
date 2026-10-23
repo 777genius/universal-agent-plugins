@@ -29,6 +29,9 @@ type directTransportFixture struct {
 	mu           sync.Mutex
 	payload      []byte
 	downloads    int
+	cloneProbes  int
+	probeSecrets bool
+	gitAuth      int
 }
 
 func newDirectTransportFixture(t *testing.T, format string, private bool) *directTransportFixture {
@@ -43,25 +46,7 @@ func newDirectTransportFixture(t *testing.T, format string, private bool) *direc
 	}
 	backend := &cgi.Handler{Path: git, Args: []string{"http-backend"}, Env: []string{"GIT_PROJECT_ROOT=" + project, "GIT_HTTP_EXPORT_ALL=1"}}
 	fixture.payload = directArchiveBytes(t, fixture.work, format, "provider-v1/")
-	fixture.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/repo.git/") {
-			if private {
-				user, password, ok := r.BasicAuth()
-				if !ok || user != "fixture" || password != "disposable-fixture-token" {
-					w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-			}
-			backend.ServeHTTP(w, r)
-			return
-		}
-		fixture.mu.Lock()
-		defer fixture.mu.Unlock()
-		fixture.downloads++
-		w.Header().Set("Content-Type", "application/octet-stream")
-		_, _ = w.Write(fixture.payload)
-	}))
+	fixture.server = httptest.NewTLSServer(fixture.handler(backend, private))
 	t.Cleanup(fixture.server.Close)
 	caPath := filepath.Join(t.TempDir(), "ca.pem")
 	dependencyWrite(t, caPath, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: fixture.server.Certificate().Raw})))
@@ -79,6 +64,43 @@ func newDirectTransportFixture(t *testing.T, format string, private bool) *direc
 	dependencyWrite(t, filepath.Join(home, ".gitconfig"), config)
 
 	return fixture
+}
+
+func (fixture *directTransportFixture) handler(backend http.Handler, private bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/clone" {
+			fixture.mu.Lock()
+			fixture.cloneProbes++
+			fixture.probeSecrets = fixture.probeSecrets || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != ""
+			fixture.mu.Unlock()
+			w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/clone/") {
+			r.URL.Path = strings.Replace(r.URL.Path, "/clone/", "/repo.git/", 1)
+		}
+		if strings.HasPrefix(r.URL.Path, "/repo.git/") {
+			if private {
+				user, password, ok := r.BasicAuth()
+				if !ok || user != "fixture" || password != "disposable-fixture-token" {
+					w.Header().Set("WWW-Authenticate", `Basic realm="fixture"`)
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				fixture.mu.Lock()
+				fixture.gitAuth++
+				fixture.mu.Unlock()
+			}
+			backend.ServeHTTP(w, r)
+			return
+		}
+		fixture.mu.Lock()
+		defer fixture.mu.Unlock()
+		fixture.downloads++
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write(fixture.payload)
+	})
 }
 
 func directArchiveBytes(t *testing.T, root, format, wrapper string) []byte {
@@ -182,14 +204,14 @@ func directLockedPin(t *testing.T, fixture cliFixture) environment.LockedPackage
 // responses are inert fixtures; the standard loader, store, ownership and CLI
 // transactions are production implementations.
 func TestDirectSourceSavedLifecycleRealHTTPS(t *testing.T) {
-	for _, format := range []string{"git", "private-git", "zip", "tar", "tar.gz", "tgz", "extensionless"} {
+	for _, format := range []string{"git", "private-git", "private-extensionless-git", "zip", "tar", "tar.gz", "tgz", "extensionless"} {
 		t.Run(format, func(t *testing.T) { directSavedLifecycleCase(t, format) })
 	}
 }
 
 func directSavedLifecycleCase(t *testing.T, format string) {
 	t.Helper()
-	transport := newDirectTransportFixture(t, format, format == "private-git")
+	transport := newDirectTransportFixture(t, format, strings.HasPrefix(format, "private-"))
 	fixture := directCLIEnvironment(t, transport)
 	endpoint := transport.server.URL + "/package." + format
 	if format == "git" || format == "private-git" {
@@ -198,7 +220,17 @@ func directSavedLifecycleCase(t *testing.T, format string) {
 	if format == "extensionless" {
 		endpoint = transport.server.URL + "/download"
 	}
+	if format == "private-extensionless-git" {
+		endpoint = transport.server.URL + "/clone"
+	}
 	directSavedLifecycleEndpoint(t, fixture, transport, format, endpoint)
+	if format == "private-extensionless-git" {
+		transport.mu.Lock()
+		defer transport.mu.Unlock()
+		if transport.cloneProbes != 1 || transport.probeSecrets || transport.gitAuth == 0 {
+			t.Fatalf("private extensionless classification/auth boundary: probes=%d secrets=%v native-auth=%d", transport.cloneProbes, transport.probeSecrets, transport.gitAuth)
+		}
+	}
 }
 
 func directSavedLifecycleEndpoint(t *testing.T, fixture cliFixture, transport *directTransportFixture, format, endpoint string) {

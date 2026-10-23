@@ -1,5 +1,9 @@
 # Direct source implementation review R1
 
+**Current status: R1 GO after corrective verification at `236c3319`**, limited
+to the original S1/S2/S4 findings. The original findings below are retained as
+the review history; cumulative S5 integration has its own independent review.
+
 Reviewer: `client_plans`, independent of source implementation. Date: 2026-10-23.
 Reviewed committed S1/S2/S4 changes from `1a9b25de` through `ec7cc19b` in
 `work/uap-sources`, using `git show` to exclude the concurrently edited CLI
@@ -155,25 +159,22 @@ the corrective commit before R1 GO. Parent owns independent R2 routing,
 publication and the later cumulative S5 review. Do not interpret this review as
 an executable release or native agent-client runtime qualification.
 
-## Corrective implementation evidence (author; reviewer verification pending)
+## Corrective verification — 2026-10-23
 
-- `c1f8d232` privately enumerates configured URL-scoped TLS verification key names
-  in the same Git repository context and overrides each true for the command.
-  Trusted native includes/auth/SSH/CA semantics remain available. A nonempty
-  `GIT_SSL_NO_VERIFY=false` was tested and rejected as an unsafe solution for the
-  actual Git binary; that variable is stripped instead.
-- The authoritative `GIT_ALLOW_PROTOCOL=https:ssh` limits actual transport despite
-  protocol-specific user config or URL rewrites. Only an explicitly injected
-  `URLForRepo` local fixture mapping can add file transport.
-- Actual native regressions reject untrusted TLS under scoped user config, reject
-  the same setting at an insteadOf-rewritten HTTPS endpoint, reject an HTTPS to
-  local-file rewrite, and reject HTTPS downgrade redirects. Native HTTPS/private
-  credential-helper/SSH/host-verification tests passed in4.156s.
-- Shared parser/model fixes reject decoded SSH username controls and nonportable
-  paths on new URL Git intent while preserving historical Repository admission.
-  `16d58ac7` distinguishes explicit local/Windows archive paths containing `@`
-  from genuine `owner/repo@release.zip` shorthand. Dotted userless SCP has an
-  explicit regression. All changed source/model/acquisition lint gates passed.
+Reviewed fixes `c1f8d232` and `16d58ac7` in frozen cumulative source tree
+`236c331983d9356345a6654776e1b30a995aabc5`. All five findings are closed:
 
-This section records the author's evidence; independent reviewer GO is recorded
-only after the reviewer performs fix verification.
+| Finding | Verified correction |
+| --- | --- |
+| R1-1 TLS verification | Native commands enumerate configured `http.*.sslVerify` key names in the same private repository context and override each at its own specificity, plus the generic key. Values are never read or logged. Actual regressions cover both direct and `insteadOf`-rewritten untrusted TLS endpoints with no HTTP request received. `GIT_SSL_NO_VERIFY=false` was correctly **not** adopted: Git treats a nonempty value as a bypass. |
+| R1-2 actual protocol restriction | `GIT_ALLOW_PROTOCOL=https:ssh` independently fences user `protocol.file.allow` and URL rewrites. Local file access is confined to the explicit private `URLForRepo` fixture mapping. Actual native tests reject the configured file rewrite and an HTTPS-to-HTTP redirect. |
+| R1-3 local archive precedence | Explicit relative/absolute/Windows archive paths are classified before shorthand `@`; the follow-up preserves `owner/repo@release.zip` as Git and native backslash archive paths as local. |
+| R1-4 matching path grammar | New URL Git intent/locked variants validate through shared `NormalizeSubpath`; historical Repository coordinates retain their previous admission grammar. |
+| R1-5 decoded SSH controls | Decoded user names reject Unicode controls before endpoint normalization. Valid SSH routing remains separate from credentials. |
+
+Independent exact-toolchain verification on the frozen tree passed:
+`sourcespec` full suite 0.003s; `environment` full suite 0.016s; the four actual
+native Git TLS/rewrite/protocol/downgrade regressions 0.547s. Tests used
+disposable native configuration/repositories and loopback TLS only. No package
+code or external service was executed. The existing native credential/config
+stability assumption during an individual command remains unchanged.

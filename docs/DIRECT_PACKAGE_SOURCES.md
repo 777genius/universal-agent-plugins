@@ -109,7 +109,8 @@ nested package may be selected automatically. Multiple candidates produce a
 bounded diagnostic requiring an explicit path. A malformed root manifest does
 not fall back to a nested package. Archive selection reuses one retained download.
 
-Different endpoints remain distinct sources even when their package bytes match.
+Different endpoints remain distinct sources even when their package trees match.
+Original archive bytes retain their own checksum when wrappers or framing differ.
 The shared content store holds bytes; selected lock provenance supplies ownership
 and immutable source identity on every load. Historical GitHub and signed
 Directory identities remain unchanged. Copy only `uap.toml` and `uap.lock` for a
@@ -151,3 +152,18 @@ Acquisition never executes package code. The unchanged standard loader, existing
 security assessment and each target client's supported-component checks still run
 before installation. A successful transport fixture is not native agent runtime
 certification or release qualification.
+
+
+## Transport verification boundary
+
+The `Source transports / native-ssh-linux` workflow provisions OpenSSH on
+Ubuntu 24.04 and requires the real native Git SSH fixture and saved CLI SSH URL
+and SCP lifecycles to execute. Missing SSH tooling, skipped fixtures or missing
+expected test pass events fail the job. Disposable keys use exact known-host
+verification; the fixture also refuses an untrusted host.
+
+Real loopback TLS contracts exercise anonymous extensionless archive recognition,
+private extensionless Git fallback through native credentials, and archives with
+identical package trees but distinct original-byte checksums in both content-store
+population orders. Agent responses in these source tests remain inert fixtures;
+native agent runtime and project-scope qualification are separate gates.

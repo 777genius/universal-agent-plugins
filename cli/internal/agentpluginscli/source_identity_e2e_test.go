@@ -12,23 +12,25 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
-func TestDirectSourcesWithIdenticalBytesKeepSelectedLockProvenance(t *testing.T) {
+func TestDirectSourcesWithSameTreeKeepSelectedLockProvenance(t *testing.T) {
 	for _, order := range [][]string{{"a", "b"}, {"b", "a"}} {
 		t.Run(strings.Join(order, "-"), func(t *testing.T) {
 			transport := newDirectTransportFixture(t, "zip", false)
 			sharedStore := filepath.Join(t.TempDir(), "shared-store")
 			coldStore := filepath.Join(t.TempDir(), "shared-cold-store")
-			var previousDigest, previousKey string
+			var previousDigest, previousKey, previousSHA string
 			for _, name := range order {
+				transport.payload = directArchiveBytes(t, transport.work, "zip", "provider-"+name+"/")
 				fixture := directCLIEnvironment(t, transport)
 				fixture.app.EnvironmentStoreRoot = sharedStore
 				endpoint := transport.server.URL + "/" + name + ".zip"
 				dependencyRun(t, fixture, "add", endpoint, "--alias", name, "--target", "gemini", "--format", "json")
 				pin := directLockedPin(t, fixture)
-				if previousDigest != "" && (previousDigest != pin.TreeDigest || previousKey == pin.SourceKey) {
-					t.Fatal("same-byte source facts collapsed")
+				if previousDigest != "" && (previousDigest != pin.TreeDigest || previousKey == pin.SourceKey || previousSHA == pin.Source.Archive.SHA256) {
+					t.Fatal("byte-distinct, same-tree archive source facts collapsed")
 				}
 				previousDigest, previousKey = pin.TreeDigest, pin.SourceKey
+				previousSHA = pin.Source.Archive.SHA256
 				loaded, err := materializeLockedPackage(context.Background(), fixture.app, pin, false, nil)
 				if err != nil {
 					t.Fatal(err)

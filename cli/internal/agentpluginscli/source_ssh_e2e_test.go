@@ -15,6 +15,9 @@ import (
 func TestDirectSourceSavedLifecycleRealSSH(t *testing.T) {
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
+		if os.Getenv("UAP_REQUIRE_NATIVE_SSH") == "1" {
+			t.Fatal("required real SSH CLI fixture needs openssh-server")
+		}
 		t.Skip("real SSH CLI fixture requires openssh-server")
 	}
 	current, err := user.Current()
