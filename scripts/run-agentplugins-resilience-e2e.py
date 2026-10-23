@@ -57,6 +57,11 @@ COVERAGE = {
                      "terminal-pty", "selection-matrix"],
     "fuzzing": ["fuzz-state", "fuzz-manifest", "fuzz-targets",
                 "fuzz-diagnostics", "fuzz-sources"],
+    "cold_first_probe": [
+        "transaction-state-clients",
+        "black-box-resilience:locked-runtime-first-probe",
+        "black-box-resilience:locked-runtime-preparation-recovery",
+    ],
 }
 
 
