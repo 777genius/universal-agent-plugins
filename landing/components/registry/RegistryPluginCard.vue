@@ -5,7 +5,12 @@
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
-import { expectedDistribution, githubSourceUrl, resolveDistribution, vendorInstallSource } from '~/utils/registry';
+import {
+  expectedDistribution,
+  githubSourceUrl,
+  resolveDistribution,
+  vendorInstallSource,
+} from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
 const { t, locale, n } = useI18n();
@@ -352,7 +357,6 @@ function updateAutoDetect(value: boolean) {
           >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
         >
       </template>
-
       <Transition name="plugin-install">
         <div
           v-if="installExpanded && canInstall"
