@@ -414,3 +414,15 @@ function updateAutoDetect(value: boolean) {
     </div>
   </article>
 </template>
+
+<style scoped lang="scss">
+.plugin-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugin-card__actions > .plugin-card__install-toggle {
+  flex: 1;
+  width: auto;
+}
+</style>

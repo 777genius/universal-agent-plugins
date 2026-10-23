@@ -19,7 +19,7 @@ for (const mobile of [false, true]) {
       });
       test('always shows accurate state and supports hover, keyboard, Escape and first tap', async ({
         page,
-      }) => {
+      }, testInfo) => {
         const errors = await offline(page);
         await projections(page, registryFixture());
         await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
@@ -38,6 +38,23 @@ for (const mobile of [false, true]) {
           await expect(dialog).toBeFocused();
         }
         await expect(dialog).toContainText('Select agents in Install');
+        const style = await dialog.evaluate((element) => {
+          const computed = getComputedStyle(element);
+          return {
+            border: computed.borderTopStyle,
+            padding: parseFloat(computed.paddingTop),
+            background: computed.backgroundColor,
+          };
+        });
+        expect(style.border).toBe('solid');
+        expect(style.padding).toBeGreaterThan(0);
+        expect(style.background).not.toBe('rgba(0, 0, 0, 0)');
+        const bounds = await dialog.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.width).toBeGreaterThan(0);
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+        await page.screenshot({ path: testInfo.outputPath('unknown.png') });
         await page.keyboard.press('Escape');
         await expect(dialog).toHaveCount(0);
         await page.waitForTimeout(200);
