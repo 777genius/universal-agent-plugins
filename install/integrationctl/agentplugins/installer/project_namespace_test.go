@@ -58,6 +58,30 @@ func TestProjectNamespacePinsExistingDirectoryIdentity(t *testing.T) {
 	}
 }
 
+func TestProjectNamespacePinsSelectedProjectIdentity(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "project")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	engine, err := New(testConfig(t, Config{ProjectRoot: root, StateRoot: filepath.Join(root, ".uap")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(root, filepath.Join(base, "original")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.CheckProjectNamespace(); !errors.Is(err, ErrPlanChanged) {
+		t.Fatalf("replaced selected project identity was accepted: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".uap")); !os.IsNotExist(err) {
+		t.Fatalf("refused project replacement created mutable namespace: %v", err)
+	}
+}
+
 func TestProjectNamespacePreviewViewsSharePhysicalAuthority(t *testing.T) {
 	for _, kind := range []string{"projected engine", "temporary root"} {
 		t.Run(kind, func(t *testing.T) {
