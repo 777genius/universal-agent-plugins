@@ -56,6 +56,8 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     expectedDistribution: () => undefined,
     deliveryLabel: () => '',
     pluginCommands,
+    isFullyRetired: () => false,
+    vendorInstallSource: () => undefined,
     watch: () => {},
   });
 }

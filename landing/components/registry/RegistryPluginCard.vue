@@ -5,7 +5,7 @@
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
-import { expectedDistribution, githubSourceUrl, resolveDistribution } from '~/utils/registry';
+import { expectedDistribution, githubSourceUrl, resolveDistribution, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
 const { t, locale, n } = useI18n();
@@ -113,6 +113,8 @@ const command = computed(() =>
     ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value).add
     : '',
 );
+const vendorInstall = computed(() => vendorInstallSource(props.plugin));
+const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
 const autoOption = computed(() => ({
   label: t('registryUi.card.allInstalledAgentsRecommended'),
@@ -211,9 +213,9 @@ function updateAutoDetect(value: boolean) {
     <span
       v-if="!isDiscovered"
       class="plugin-card__ribbon"
-      :class="{ 'plugin-card__ribbon--muted': !canInstall }"
+      :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
       >{{
-        canInstall
+        canInstall || vendorAvailable
           ? t('registryUi.card.reviewedListing')
           : expired
             ? t('registryUi.card.temporarilyPaused')
@@ -328,7 +330,7 @@ function updateAutoDetect(value: boolean) {
         >
           {{ t('registryUi.card.install') }}
         </button>
-        <span v-else class="plugin-card__unavailable">{{
+        <span v-else-if="!vendorInstall" class="plugin-card__unavailable">{{
           isDiscovered
             ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
             : expired
@@ -338,6 +340,19 @@ function updateAutoDetect(value: boolean) {
                 : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
         }}</span>
       </div>
+      <template v-if="!canInstall && vendorInstall">
+        <p class="plugin-card__unavailable">
+          {{ t('registryUi.install.vendorInstallerHeading') }}
+        </p>
+        <a
+          class="plugin-card__vendor-install"
+          :href="vendorInstall.url"
+          target="_blank"
+          rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+      </template>
+
       <Transition name="plugin-install">
         <div
           v-if="installExpanded && canInstall"
