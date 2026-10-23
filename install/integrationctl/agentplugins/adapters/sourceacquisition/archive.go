@@ -21,23 +21,69 @@ import (
 // the original stream and extraction tree never outlive this call.
 func (acquirer Acquirer) AcquireArchive(ctx context.Context, source sourcespec.Archive, expectedArchiveSHA256, expectedTreeDigest string) (domain.PackageSnapshot, error) {
 	var empty domain.PackageSnapshot
+	coordinates, err := archiveCoordinatesFor(source, expectedArchiveSHA256, expectedTreeDigest)
+	if err != nil {
+		return empty, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, archiveTimeout)
+	defer cancel()
+	workspace, err := os.MkdirTemp(acquirer.TempRoot, "agentplugins-archive-*")
+	if err != nil {
+		return empty, errors.New("create private archive workspace")
+	}
+	defer func() { _ = os.RemoveAll(workspace) }()
+	filename, format, checksum, err := acquirer.archiveRetain(ctx, coordinates, workspace)
+	if err != nil {
+		return empty, err
+	}
+	extractionRoot := filepath.Join(workspace, "extracted")
+	executables, err := archiveUnpack(ctx, filename, extractionRoot, format)
+	if err != nil {
+		return empty, err
+	}
+	selected, logicalPath, err := archiveSelectPackage(extractionRoot, coordinates.packagePath)
+	if err != nil {
+		return empty, err
+	}
+	return acquirer.archiveSeal(ctx, coordinates, checksum, extractionRoot, selected, logicalPath, executables)
+}
+
+type archiveCoordinates struct {
+	endpoint, packagePath, bytePin, treePin string
+	explicit                                bool
+}
+
+func archiveCoordinatesFor(source sourcespec.Archive, bytePin, treePin string) (archiveCoordinates, error) {
+	var empty archiveCoordinates
 	packagePath, err := sourcespec.NormalizeSubpath(source.Path)
 	if err != nil {
 		return empty, err
 	}
-	for _, checksum := range []string{source.SHA256, expectedArchiveSHA256} {
+	for _, checksum := range []string{source.SHA256, bytePin} {
 		if checksum != "" && !sourcespec.ValidSHA256(checksum) {
 			return empty, errors.New("archive checksum requires 64 lowercase hex characters")
 		}
 	}
-	if source.SHA256 != "" && expectedArchiveSHA256 != "" && source.SHA256 != expectedArchiveSHA256 {
+	if source.SHA256 != "" && bytePin != "" && source.SHA256 != bytePin {
 		return empty, errors.New("requested and locked archive checksums disagree")
 	}
-	if expectedTreeDigest != "" && (!strings.HasPrefix(expectedTreeDigest, "sha256:") || !sourcespec.ValidSHA256(strings.TrimPrefix(expectedTreeDigest, "sha256:"))) {
+	if bytePin == "" {
+		bytePin = source.SHA256
+	}
+	if treePin != "" && (!strings.HasPrefix(treePin, "sha256:") || !sourcespec.ValidSHA256(strings.TrimPrefix(treePin, "sha256:"))) {
 		return empty, errors.New("archive tree pin requires a sha256 digest")
 	}
-	endpoint := source.URL
+	endpoint, remote, err := archiveEndpoint(source.URL)
+	if err != nil {
+		return empty, err
+	}
+	return archiveCoordinates{endpoint: endpoint, packagePath: packagePath, bytePin: bytePin, treePin: treePin,
+		explicit: !remote || archiveExplicit(endpoint) || bytePin != ""}, nil
+}
+
+func archiveEndpoint(endpoint string) (string, bool, error) {
 	remote := strings.Contains(endpoint, "://")
+	var err error
 	if remote {
 		endpoint, err = sourcespec.NormalizeArchiveURL(endpoint)
 	} else if endpoint != "" {
@@ -47,49 +93,48 @@ func (acquirer Acquirer) AcquireArchive(ctx context.Context, source sourcespec.A
 		err = errors.New("archive source is empty")
 	}
 	if err != nil {
-		return empty, errors.New("archive source requires a public HTTPS endpoint or explicit local file")
+		return "", false, errors.New("archive source requires a public HTTPS endpoint or explicit local file")
 	}
-	ctx, cancel := context.WithTimeout(ctx, archiveTimeout)
-	defer cancel()
-	workspace, err := os.MkdirTemp(acquirer.TempRoot, "agentplugins-archive-*")
-	if err != nil {
-		return empty, errors.New("create private archive workspace")
-	}
-	defer os.RemoveAll(workspace)
+	return endpoint, remote, nil
+}
+
+func (acquirer Acquirer) archiveRetain(ctx context.Context, coordinates archiveCoordinates, workspace string) (string, archiveFormat, string, error) {
 	filename := filepath.Join(workspace, "download")
-	explicit := !remote || archiveExplicit(endpoint) || source.SHA256 != "" || expectedArchiveSHA256 != ""
-	format, checksum, err := acquirer.archiveDownload(ctx, endpoint, filename, explicit)
+	format, checksum, err := acquirer.archiveDownload(ctx, coordinates.endpoint, filename, coordinates.explicit)
 	if err != nil {
-		return empty, err
+		return "", format, "", err
 	}
-	if source.SHA256 != "" && checksum != source.SHA256 || expectedArchiveSHA256 != "" && checksum != expectedArchiveSHA256 {
-		return empty, errors.New("archive original-byte SHA256 does not match the requested or locked checksum")
+	if coordinates.bytePin != "" && checksum != coordinates.bytePin {
+		return "", format, "", errors.New("archive original-byte SHA256 does not match the requested or locked checksum")
 	}
 	if format == archiveGzip {
 		tarFilename := filepath.Join(workspace, "stream.tar")
 		if err := archiveGunzip(ctx, filename, tarFilename); err != nil {
-			return empty, err
+			return "", format, "", err
 		}
 		filename, format = tarFilename, archiveTAR
 	}
+	return filename, format, checksum, nil
+}
+
+func archiveUnpack(ctx context.Context, filename, extractionRoot string, format archiveFormat) ([]string, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return empty, errors.New("open retained archive stream")
+		return nil, errors.New("open retained archive stream")
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
-		return empty, errors.New("inspect retained archive stream")
+		return nil, errors.New("inspect retained archive stream")
 	}
-	extractionRoot := filepath.Join(workspace, "extracted")
 	if err := os.Mkdir(extractionRoot, 0o700); err != nil {
-		return empty, errors.New("create private archive extraction root")
+		return nil, errors.New("create private archive extraction root")
 	}
 	root, err := os.OpenRoot(extractionRoot)
 	if err != nil {
-		return empty, errors.New("open contained archive extraction root")
+		return nil, errors.New("open contained archive extraction root")
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	output := &archiveExtraction{root: root, policy: newArchivePolicy()}
 	switch format {
 	case archiveZIP:
@@ -99,21 +144,18 @@ func (acquirer Acquirer) AcquireArchive(ctx context.Context, source sourcespec.A
 	default:
 		err = errors.New("unsupported archive format")
 	}
-	if err != nil {
-		return empty, err
-	}
-	selected, logicalPath, err := archiveSelectPackage(extractionRoot, packagePath)
-	if err != nil {
-		return empty, err
-	}
-	sourceIdentity := domain.SourceIdentity{
-		SourceKind: "archive", SourceURL: endpoint, ArchiveSHA256: checksum,
-		RequestedSource: endpoint, CanonicalSource: sourcespec.Key(sourcespec.KindArchive, endpoint, logicalPath),
+	return output.executables, err
+}
+
+func (acquirer Acquirer) archiveSeal(ctx context.Context, coordinates archiveCoordinates, checksum, extractionRoot, selected, logicalPath string, executablePaths []string) (domain.PackageSnapshot, error) {
+	source := domain.SourceIdentity{
+		SourceKind: "archive", SourceURL: coordinates.endpoint, ArchiveSHA256: checksum,
+		RequestedSource: coordinates.endpoint, CanonicalSource: sourcespec.Key(sourcespec.KindArchive, coordinates.endpoint, logicalPath),
 		PackageSubpath: logicalPath, ResolvedRevision: "sha256:" + checksum, SourceBindingHint: "direct-archive",
 	}
 	prefix, err := filepath.Rel(extractionRoot, selected)
 	if err != nil {
-		return empty, errors.New("resolve selected archive package")
+		return domain.PackageSnapshot{}, errors.New("resolve selected archive package")
 	}
 	prefix = filepath.ToSlash(prefix)
 	if prefix == "." {
@@ -122,18 +164,18 @@ func (acquirer Acquirer) AcquireArchive(ctx context.Context, source sourcespec.A
 		prefix += "/"
 	}
 	executables := make([]string, 0)
-	for _, executable := range output.executables {
+	for _, executable := range executablePaths {
 		if strings.HasPrefix(executable, prefix) {
 			executables = append(executables, strings.TrimPrefix(executable, prefix))
 		}
 	}
-	snapshot, err := acquirer.digester().SnapshotWithExecutables(ctx, selected, sourceIdentity, executables)
+	snapshot, err := acquirer.digester().SnapshotWithExecutables(ctx, selected, source, executables)
 	if err != nil {
-		return empty, fmt.Errorf("seal acquired archive package: %w", err)
+		return domain.PackageSnapshot{}, fmt.Errorf("seal acquired archive package: %w", err)
 	}
-	if expectedTreeDigest != "" && snapshot.TreeDigest != expectedTreeDigest {
+	if coordinates.treePin != "" && snapshot.TreeDigest != coordinates.treePin {
 		_ = packagedigest.Remove(snapshot)
-		return empty, errors.New("archive package tree digest does not match the locked digest")
+		return domain.PackageSnapshot{}, errors.New("archive package tree digest does not match the locked digest")
 	}
 	snapshot.AcquiredAt = acquirer.now()
 	return snapshot, nil
@@ -190,7 +232,7 @@ func (output *archiveExtraction) write(ctx context.Context, raw string, director
 
 func archiveSelectPackage(extracted, requested string) (string, string, error) {
 	logicalRoot := extracted
-	if !archiveManifestAt(logicalRoot) {
+	if !archiveManifestPresent(logicalRoot) {
 		entries, err := os.ReadDir(extracted)
 		if err != nil {
 			return "", "", errors.New("inspect archive package roots")
@@ -206,9 +248,23 @@ func archiveSelectPackage(extracted, requested string) (string, string, error) {
 		}
 		return selected, requested, nil
 	}
-	if archiveManifestAt(logicalRoot) {
+	if archiveManifestPresent(logicalRoot) {
 		return logicalRoot, "", nil
 	}
+	candidates, err := archiveDiscoverPackages(logicalRoot)
+	if err != nil {
+		return "", "", err
+	}
+	if len(candidates) == 1 {
+		return filepath.Join(logicalRoot, filepath.FromSlash(candidates[0])), candidates[0], nil
+	}
+	if len(candidates) == 0 {
+		return "", "", errors.New("archive contains no complete standard Agent Plugins package")
+	}
+	return "", "", fmt.Errorf("archive contains multiple packages; choose an explicit path: %s", strings.Join(candidates, ", "))
+}
+
+func archiveDiscoverPackages(logicalRoot string) ([]string, error) {
 	var candidates []string
 	err := filepath.WalkDir(logicalRoot, func(filename string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -218,9 +274,7 @@ func archiveSelectPackage(extracted, requested string) (string, string, error) {
 			return nil
 		}
 		parent := filepath.Dir(filename)
-		_, mcpErr := os.Stat(filepath.Join(parent, "mcp.json"))
-		skills, skillsErr := os.Stat(filepath.Join(parent, "skills"))
-		if mcpErr != nil && (skillsErr != nil || !skills.IsDir()) {
+		if !archivePackageShaped(parent) {
 			return nil
 		}
 		relative, err := filepath.Rel(logicalRoot, parent)
@@ -233,20 +287,22 @@ func archiveSelectPackage(extracted, requested string) (string, string, error) {
 		}
 		return nil
 	})
-	if err != nil {
-		return "", "", err
-	}
 	sort.Strings(candidates)
-	if len(candidates) == 1 {
-		return filepath.Join(logicalRoot, filepath.FromSlash(candidates[0])), candidates[0], nil
-	}
-	if len(candidates) == 0 {
-		return "", "", errors.New("archive contains no complete standard Agent Plugins package")
-	}
-	return "", "", fmt.Errorf("archive contains multiple packages; choose an explicit path: %s", strings.Join(candidates, ", "))
+	return candidates, err
 }
 
 func archiveManifestAt(root string) bool {
 	info, err := os.Stat(filepath.Join(root, "plugin.json"))
 	return err == nil && info.Mode().IsRegular()
+}
+
+func archiveManifestPresent(root string) bool {
+	_, err := os.Lstat(filepath.Join(root, "plugin.json"))
+	return err == nil
+}
+
+func archivePackageShaped(parent string) bool {
+	mcp, mcpErr := os.Stat(filepath.Join(parent, "mcp.json"))
+	skills, skillsErr := os.Stat(filepath.Join(parent, "skills"))
+	return mcpErr == nil && mcp.Mode().IsRegular() || skillsErr == nil && skills.IsDir()
 }

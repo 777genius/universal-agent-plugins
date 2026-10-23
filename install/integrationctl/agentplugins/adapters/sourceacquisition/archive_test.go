@@ -237,7 +237,7 @@ func TestArchiveRootManifestNeverFallsBackToNestedPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer packagedigest.Remove(snapshot)
+	defer func() { _ = packagedigest.Remove(snapshot) }()
 	if snapshot.Source.PackageSubpath != "" {
 		t.Fatal("malformed root silently selected nested package")
 	}

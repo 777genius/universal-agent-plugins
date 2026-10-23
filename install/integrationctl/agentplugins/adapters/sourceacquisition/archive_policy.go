@@ -8,10 +8,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 type archivePath struct {
@@ -42,11 +43,24 @@ func (policy *archivePolicy) entry(raw string, directory bool, size int64) (stri
 		return "", errors.New("archive directory has nonzero size")
 	}
 	policy.bytes += size
-	// A conventional root directory marker is the sole normalization allowance.
+	// Conventional root markers still count toward entry and stream limits.
 	if directory && (raw == "./" || raw == ".") {
 		return "", nil
 	}
-	name := raw
+	name, err := archiveNormalizePath(raw, directory)
+	if err != nil {
+		return "", err
+	}
+	if err := policy.registerPath(name, directory); err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+func archiveNormalizePath(raw string, directory bool) (string, error) {
+	// Strip exactly one conventional prefix; residual dot/empty segments fail
+	// the unchanged portable-path checks rather than being path.Clean'ed away.
+	name := strings.TrimPrefix(raw, "./")
 	if directory {
 		name = strings.TrimSuffix(name, "/")
 	}
@@ -62,24 +76,41 @@ func (policy *archivePolicy) entry(raw string, directory bool, size int64) (stri
 			return "", fmt.Errorf("archive contains unsafe path %q", raw)
 		}
 	}
+	return name, nil
+}
+
+func (policy *archivePolicy) registerPath(name string, directory bool) error {
+	parts := strings.Split(name, "/")
 	for index := range parts {
 		current := strings.Join(parts[:index+1], "/")
-		key := cases.Fold().String(current)
-		prior, found := policy.paths[key]
-		leaf := index == len(parts)-1
-		if found && prior.name != current {
-			return "", fmt.Errorf("archive paths %q and %q collide by case or Unicode", prior.name, current)
+		if err := policy.registerNode(current, index == len(parts)-1, directory); err != nil {
+			return err
 		}
-		if found && !prior.directory && (!leaf || directory) || leaf && found && (prior.explicit || prior.directory && !directory) {
-			return "", fmt.Errorf("archive has duplicate or file/directory conflict at %q", current)
-		}
-		if leaf {
-			policy.paths[key] = archivePath{name: current, directory: directory, explicit: true}
-		} else if !found {
-			policy.paths[key] = archivePath{name: current, directory: true}
+		if len(policy.paths) > domain.DefaultMaxFiles {
+			return errors.New("archive exceeds 10000 paths including implicit directories")
 		}
 	}
-	return name, nil
+	return nil
+}
+
+func (policy *archivePolicy) registerNode(current string, leaf, directory bool) error {
+	key := cases.Fold().String(current)
+	prior, found := policy.paths[key]
+	if found && prior.name != current {
+		return fmt.Errorf("archive paths %q and %q collide by case or Unicode", prior.name, current)
+	}
+	if found && !prior.directory && (!leaf || directory) {
+		return fmt.Errorf("archive has file/directory conflict at %q", current)
+	}
+	if leaf && found && (prior.explicit || prior.directory && !directory) {
+		return fmt.Errorf("archive has duplicate or file/directory conflict at %q", current)
+	}
+	if leaf {
+		policy.paths[key] = archivePath{name: current, directory: directory, explicit: true}
+	} else if !found {
+		policy.paths[key] = archivePath{name: current, directory: true}
+	}
+	return nil
 }
 
 func archiveZero(body []byte) bool {

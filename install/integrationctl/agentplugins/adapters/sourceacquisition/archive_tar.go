@@ -22,13 +22,13 @@ func archiveGunzip(ctx context.Context, compressed, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() { _ = input.Close() }()
 	buffer := bufio.NewReader(&archiveContextReader{ctx: ctx, reader: input})
 	reader, err := gzip.NewReader(buffer)
 	if err != nil {
 		return errors.New("invalid gzip archive header")
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	reader.Multistream(false)
 	output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -55,74 +55,101 @@ func archiveValidateTAR(ctx context.Context, file *os.File, size int64) error {
 	if size > archiveMaxBytes || size%512 != 0 {
 		return errors.New("TAR stream exceeds its byte limit or has an unaligned ending")
 	}
-	var offset, expanded int64
-	paxSize := int64(-1)
-	for entries := 0; ; entries++ {
+	state := archiveTARState{paxSize: -1}
+	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		var block [512]byte
-		if _, err := file.ReadAt(block[:], offset); err != nil {
+		if _, err := file.ReadAt(block[:], state.offset); err != nil {
 			return errors.New("TAR requires two zero end blocks")
 		}
 		if archiveZero(block[:]) {
-			if offset+1024 > size {
-				return errors.New("TAR requires two zero end blocks")
+			if state.offset+1024 > size || state.pendingMetadata {
+				return errors.New("TAR requires two zero end blocks after a complete entry")
 			}
-			return archiveZeroTail(ctx, io.NewSectionReader(file, offset, size-offset))
+			return archiveZeroTail(ctx, io.NewSectionReader(file, state.offset, size-state.offset))
 		}
-		if entries >= 10000 {
-			return errors.New("TAR exceeds 10000 entries including metadata")
+		if err := state.entry(file, block[:], size); err != nil {
+			return err
 		}
-		declared, err := archiveTarNumber(block[124:136])
-		if err != nil || declared > 64<<20 {
-			return errors.New("TAR has invalid or oversized declared entry size")
-		}
-		typeflag := block[156]
-		entrySize := declared
-		metadata := typeflag == tar.TypeXHeader || typeflag == tar.TypeGNULongName
-		if !metadata {
-			if paxSize >= 0 {
-				entrySize = paxSize
-			}
-			paxSize = -1
-			switch typeflag {
-			case tar.TypeReg, tar.TypeRegA:
-			case tar.TypeDir:
-				if entrySize != 0 {
-					return errors.New("TAR directory has nonzero size")
-				}
-			default:
-				return errors.New("TAR refuses links, sparse files, global metadata and special entries")
-			}
-		}
-		if entrySize < 0 || entrySize > 64<<20 || entrySize > archiveMaxBytes-expanded {
-			return errors.New("TAR exceeds file or expanded byte limits")
-		}
-		expanded += entrySize
-		padded := (entrySize + 511) / 512 * 512
-		if offset+512+padded > size {
-			return errors.New("truncated TAR entry")
-		}
-		if metadata {
-			// Go's TAR parser has the same metadata bound. Enforce it before
-			// allocation and account for every hidden metadata entry above.
-			if entrySize > 1<<20 {
-				return errors.New("TAR metadata exceeds 1 MiB")
-			}
-			if typeflag == tar.TypeXHeader {
-				body := make([]byte, entrySize)
-				if _, err := file.ReadAt(body, offset+512); err != nil {
-					return errors.New("truncated TAR metadata")
-				}
-				paxSize, err = archivePAXSize(string(body))
-				if err != nil {
-					return err
-				}
-			}
-		}
-		offset += 512 + padded
 	}
+}
+
+type archiveTARState struct {
+	offset, expanded, paxSize int64
+	entries                   int
+	pendingMetadata           bool
+}
+
+func (state *archiveTARState) entry(file *os.File, block []byte, size int64) error {
+	state.entries++
+	if state.entries > 10000 {
+		return errors.New("TAR exceeds 10000 entries including metadata")
+	}
+	declared, err := archiveTarNumber(block[124:136])
+	if err != nil || declared > 64<<20 {
+		return errors.New("TAR has invalid or oversized declared entry size")
+	}
+	typeflag := block[156]
+	metadata := typeflag == tar.TypeXHeader || typeflag == tar.TypeGNULongName
+	entrySize := declared
+	if !metadata {
+		if state.paxSize >= 0 {
+			entrySize = state.paxSize
+		}
+		state.paxSize = -1
+		if err := archiveTARType(typeflag, entrySize); err != nil {
+			return err
+		}
+	}
+	if entrySize < 0 || entrySize > 64<<20 || entrySize > archiveMaxBytes-state.expanded {
+		return errors.New("TAR exceeds file or expanded byte limits")
+	}
+	state.expanded += entrySize
+	padded := (entrySize + 511) / 512 * 512
+	if state.offset+512+padded > size {
+		return errors.New("truncated TAR entry")
+	}
+	if metadata {
+		if err := state.metadata(file, typeflag, entrySize); err != nil {
+			return err
+		}
+	}
+	state.pendingMetadata = metadata
+	state.offset += 512 + padded
+	return nil
+}
+
+func archiveTARType(typeflag byte, size int64) error {
+	switch typeflag {
+	case tar.TypeReg, 0:
+		return nil
+	case tar.TypeDir:
+		if size == 0 {
+			return nil
+		}
+		return errors.New("TAR directory has nonzero size")
+	default:
+		return errors.New("TAR refuses links, sparse files, global metadata and special entries")
+	}
+}
+
+func (state *archiveTARState) metadata(file *os.File, typeflag byte, size int64) error {
+	// Go's TAR parser has the same metadata bound. Enforce it before allocation.
+	if size > 1<<20 {
+		return errors.New("TAR metadata exceeds 1 MiB")
+	}
+	if typeflag != tar.TypeXHeader {
+		return nil
+	}
+	body := make([]byte, size)
+	if _, err := file.ReadAt(body, state.offset+512); err != nil {
+		return errors.New("truncated TAR metadata")
+	}
+	var err error
+	state.paxSize, err = archivePAXSize(string(body))
+	return err
 }
 
 func archivePAXSize(body string) (int64, error) {
