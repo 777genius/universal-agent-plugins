@@ -120,11 +120,11 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:             LifecycleCLIRegistry,
 	})),
-	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectScope(clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
 		LifecycleKind:       LifecycleCLIRegistry,
 		TracksNativeEffects: true,
-	}),
+	}), LifecycleNativeConfig),
 	withProjectScope(withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
