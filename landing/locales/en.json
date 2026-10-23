@@ -400,7 +400,8 @@
     "builtWith": {
       "title": "Already built with UAP",
       "agentNotificationsDescription": "Desktop notifications, sounds, and click-to-focus for AI coding agents.",
-      "viewRepository": "View on GitHub"
+      "viewRepository": "View on GitHub",
+      "buildWithSdk": "Build with the SDK"
     },
     "faq": {
       "eyebrow": "FAQ",

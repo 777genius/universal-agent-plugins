@@ -383,7 +383,8 @@
     "builtWith": {
       "title": "已使用 UAP 构建",
       "agentNotificationsDescription": "为 AI 编程代理提供桌面通知、声音提醒和点击切换到对应窗口。",
-      "viewRepository": "在 GitHub 上查看"
+      "viewRepository": "在 GitHub 上查看",
+      "buildWithSdk": "使用 SDK 构建"
     },
     "faq": {
       "eyebrow": "常见问题解答",

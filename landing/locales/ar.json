@@ -246,7 +246,8 @@
     "builtWith": {
       "title": "مشاريع بُنيت بالفعل باستخدام UAP",
       "agentNotificationsDescription": "إشعارات سطح المكتب والأصوات والانتقال إلى النافذة بنقرة لوكلاء البرمجة بالذكاء الاصطناعي.",
-      "viewRepository": "عرض على GitHub"
+      "viewRepository": "عرض على GitHub",
+      "buildWithSdk": "ابنِ باستخدام SDK"
     },
     "faq": {
       "eyebrow": "الأسئلة الشائعة",

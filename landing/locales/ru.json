@@ -383,7 +383,8 @@
     "builtWith": {
       "title": "Уже создано с UAP",
       "agentNotificationsDescription": "Уведомления на рабочем столе, звуки и переход к нужному окну по клику для ИИ-агентов разработки.",
-      "viewRepository": "Открыть на GitHub"
+      "viewRepository": "Открыть на GitHub",
+      "buildWithSdk": "Как строить с SDK"
     },
     "faq": {
       "eyebrow": "Частые вопросы",

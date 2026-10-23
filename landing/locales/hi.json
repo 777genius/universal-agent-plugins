@@ -383,7 +383,8 @@
     "builtWith": {
       "title": "UAP से पहले ही बनाए गए प्रोजेक्ट",
       "agentNotificationsDescription": "AI कोडिंग एजेंटों के लिए डेस्कटॉप सूचनाएँ, ध्वनियाँ और एक क्लिक से संबंधित विंडो पर जाने की सुविधा।",
-      "viewRepository": "GitHub पर देखें"
+      "viewRepository": "GitHub पर देखें",
+      "buildWithSdk": "SDK के साथ बनाएं"
     },
     "faq": {
       "eyebrow": "अक्सर पूछे जाने वाले प्रश्न",
