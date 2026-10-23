@@ -21,6 +21,7 @@ func TestGenericGitAndArchiveDeclarations(t *testing.T) {
 	for _, change := range []string{
 		"git = 'https://user:TOKEN@example.test/repo.git'\nref='main'",
 		"archive = 'https://example.test/pkg.zip'\nref='main'",
+		"archive = 'https://example.test/pkg.zip'\nversion='1.2.3'",
 		"archive = 'https://example.test/pkg.zip'\ngit='acme/repo'",
 		"git='acme/repo'\nsha256='" + strings.Repeat("a", 64) + "'",
 		"archive='https://example.test/pkg.zip?token=TOKEN'",

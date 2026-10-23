@@ -193,6 +193,9 @@ func decodeRawDependency(value any) (rawDependency, error) {
 
 func requirementFromRaw(alias string, raw rawDependency) (environment.Requirement, error) {
 	if raw.Version != "" {
+		if raw.Git != "" || raw.Archive != "" || raw.SHA256 != "" || raw.Path != "" || raw.Ref != "" || raw.Commit != "" || raw.Registry != "" || raw.Distribution != "" || raw.Release != nil {
+			return environment.Requirement{}, errors.New("version shortcut cannot contain source table fields")
+		}
 		selector, err := rawSelector(raw)
 		return environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{Distribution: alias, Selector: selector}}, err
 	}
