@@ -4,6 +4,7 @@ import type { KnownLocale } from '~/data/i18n';
 import { mdiArrowLeft, mdiDownload, mdiOpenInNew } from '@mdi/js';
 import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
+import { isFullyRetired } from '~/utils/filter';
 import type { ClientID } from '~/types/registry';
 const { t, locale } = useI18n();
 const localePath = useLocalePath();
@@ -180,7 +181,12 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
             </p>
 
             <div class="plugin-detail__actions">
-              <v-btn size="x-large" class="plugin-detail__install-cta" @click="openInstallSection">
+              <v-btn
+                v-if="!isFullyRetired(plugin)"
+                size="x-large"
+                class="plugin-detail__install-cta"
+                @click="openInstallSection"
+              >
                 {{ t('registryUi.detail.installPlugin') }}
                 <v-icon :icon="mdiDownload" end size="20" />
               </v-btn>

@@ -10,6 +10,7 @@ import {
   expectedDistribution,
   githubSourceUrl,
   resolveDistribution,
+  vendorInstallSource,
 } from '~/utils/registry';
 import { pluginCommands } from '~/utils/commands';
 const { t, locale, n } = useI18n();
@@ -117,6 +118,8 @@ const command = computed(() =>
     ? pluginCommands(props.plugin, autoDetect.value ? undefined : targets.value).add
     : '',
 );
+const vendorInstall = computed(() => vendorInstallSource(props.plugin));
+const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
 const iconURL = computed(() => pluginIcon(props.plugin));
 const autoOption = computed(() => ({
   label: t('registryUi.card.allInstalledAgentsRecommended'),
@@ -223,9 +226,9 @@ function updateAutoDetect(value: boolean) {
     <span
       v-if="!isDiscovered"
       class="plugin-card__ribbon"
-      :class="{ 'plugin-card__ribbon--muted': !canInstall }"
+      :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
       >{{
-        canInstall
+        canInstall || vendorAvailable
           ? t('registryUi.card.reviewedListing')
           : expired
             ? t('registryUi.card.temporarilyPaused')
@@ -338,6 +341,18 @@ function updateAutoDetect(value: boolean) {
       >
         {{ t('registryUi.card.install') }}
       </button>
+      <template v-else-if="vendorInstall">
+        <p class="plugin-card__unavailable">
+          {{ t('registryUi.install.vendorInstallerHeading') }}
+        </p>
+        <a
+          class="plugin-card__vendor-install"
+          :href="vendorInstall.url"
+          target="_blank"
+          rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+      </template>
       <span v-else class="plugin-card__unavailable">{{
         isDiscovered
           ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')

@@ -2,7 +2,8 @@
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { RegistryDiagnostic, ClientID, RegistryPlugin } from '~/types/registry';
 import { pluginCommands } from '~/utils/commands';
-import { expectedDistribution, resolveDistribution } from '~/utils/registry';
+import { isFullyRetired } from '~/utils/filter';
+import { expectedDistribution, resolveDistribution, vendorInstallSource } from '~/utils/registry';
 const { t } = useI18n();
 
 const props = defineProps<{ plugin: RegistryPlugin }>();
@@ -132,6 +133,10 @@ const chatgptSelected = computed(
 const unavailableDiscoveryReason = computed(() => {
   if (props.plugin.discovery?.availability === 'unavailable')
     return t('registryUi.install.thisPackageIsNoLongerAvailableFromItsSource');
+  if (isFullyRetired(props.plugin))
+    return t(
+      'registryUi.install.thisProductIsRetiredNewInstallsAreUnavailableAndExistingInstallsCanOnlyBeRemoved',
+    );
   if (props.plugin.installable) return '';
   if (!props.plugin.components.length)
     return t(
@@ -139,6 +144,9 @@ const unavailableDiscoveryReason = computed(() => {
     );
   return t('registryUi.install.thisPackageDoesNotSupportAnyOfTheAgentsAvailableInTheInstallerYet');
 });
+const vendorInstall = computed(() =>
+  unavailableDiscoveryReason.value ? vendorInstallSource(props.plugin) : undefined,
+);
 
 function updateTargets(values: string[]) {
   const allowed = new Set(availableClients.value.map((client) => client.id));
@@ -175,9 +183,11 @@ watch(availableClients, (next) => {
         <p class="eyebrow">{{ t('registryUi.install.installer') }}</p>
         <h2 id="install-title">
           {{
-            unavailableDiscoveryReason
-              ? t('registryUi.install.notReadyToInstall')
-              : t('registryUi.install.useWithYourAgent')
+            vendorInstall
+              ? t('registryUi.install.vendorInstallerHeading')
+              : unavailableDiscoveryReason
+                ? t('registryUi.install.notReadyToInstall')
+                : t('registryUi.install.useWithYourAgent')
           }}
         </h2>
       </div>
@@ -190,7 +200,21 @@ watch(availableClients, (next) => {
         >{{ t('registryUi.install.runWithNpx') }}</a
       >
     </div>
-    <div v-if="unavailableDiscoveryReason" class="install-panel__empty" role="status">
+    <div v-if="vendorInstall" class="install-panel__empty" role="status">
+      <span class="install-panel__empty-icon" aria-hidden="true">i</span>
+      <div>
+        <p>{{ t('registryUi.install.vendorInstallerBody') }}</p>
+        <CommandSnippet
+          :label="t('registryUi.install.vendorCommandLabel')"
+          kind="add"
+          :command="vendorInstall.command"
+        />
+        <a :href="vendorInstall.url" target="_blank" rel="noreferrer"
+          >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
+        >
+      </div>
+    </div>
+    <div v-else-if="unavailableDiscoveryReason" class="install-panel__empty" role="status">
       <span class="install-panel__empty-icon" aria-hidden="true">i</span>
       <div>
         <h3>{{ t('registryUi.install.thisPluginIsNotInstallableYet') }}</h3>
