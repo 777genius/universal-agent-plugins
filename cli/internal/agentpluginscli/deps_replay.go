@@ -86,12 +86,7 @@ func verifyDeclaredEdges(parent string, declarations map[string]environment.Requ
 		if err != nil {
 			return err
 		}
-		var selector environment.Selector
-		if requirement.Git != nil {
-			selector = requirement.Git.Selector
-		} else {
-			selector = requirement.Registry.Selector
-		}
+		selector := requirement.RequestedSelector()
 		expected[key] = selector
 	}
 	for key, pin := range bySource {

@@ -21,7 +21,7 @@ var ErrUnsupportedLayout = errors.New("unsupported TOML layout; edit uap.toml ma
 // Empty fields are omitted. Release is an exact sequence represented as a TOML
 // string; semantic acceptance remains the strict manifest reader's job.
 type Dependency struct {
-	Git, Path, Ref, Commit, Registry, Distribution, Release, Version string
+	Git, Path, Ref, Commit, Registry, Distribution, Release, Version, Archive, SHA256 string
 }
 
 type DependencyEdit struct {
@@ -116,7 +116,7 @@ func editDependency(doc *tomledit.Document, edit DependencyEdit) error {
 		section = appendSection(doc, name)
 	}
 	fields := []struct{ name, value string }{
-		{"git", edit.Value.Git}, {"path", edit.Value.Path}, {"ref", edit.Value.Ref},
+		{"git", edit.Value.Git}, {"archive", edit.Value.Archive}, {"sha256", edit.Value.SHA256}, {"path", edit.Value.Path}, {"ref", edit.Value.Ref},
 		{"commit", edit.Value.Commit}, {"registry", edit.Value.Registry},
 		{"distribution", edit.Value.Distribution}, {"release", edit.Value.Release},
 	}

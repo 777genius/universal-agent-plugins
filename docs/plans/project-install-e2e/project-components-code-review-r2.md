@@ -88,3 +88,14 @@ is retained.
 No production or test file was edited by this reviewer. No real native client,
 model, MCP process or hosted certification was executed. Architecture/whole-file
 lint and consumer-specific end-to-end qualification remain applicable gates.
+
+## Whole-file gate follow-up
+
+Independently inspected `cc40930d866cf050c2036da3ceb0c70b8efb2b35`. The new
+validateObjectPath function is an unchanged extraction of the existing
+kind-specific exact path/source checks followed by clean-path and no-follow
+containment checks. ValidateObjects still performs layout, unpadded/leaf name,
+exact/unique ID and nonempty digest checks before that call, in the same order.
+No policy, public API, error classification or mutation code changed.
+**R2 GO remains valid through cc40930d.** Author's final exact changed-code and
+whole-file gates report zero issues; no baseline was expanded.

@@ -237,11 +237,7 @@ func Validate(state domain.StateFileV2) error {
 		if !ok || binding.ClientID != receipt.ClientID || installation.Clients[binding.ClientBindingID].ClientBindingID != binding.ClientBindingID {
 			return fmt.Errorf("%s references unknown client binding", prefix)
 		}
-		sourceKey := "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
-		if installation.Directory != nil {
-			sourceKey = "directory:" + strings.ToLower(installation.Directory.DistributionID)
-		}
-		if receipt.SourceKey != sourceKey {
+		if receipt.SourceKey != installedSourceKey(installation) {
 			return fmt.Errorf("%s source key does not match installed identity", prefix)
 		}
 		if receipt.PackageDigest != installation.Source.TreeDigest && receipt.PackageDigest != managedBindingDigest(binding) {

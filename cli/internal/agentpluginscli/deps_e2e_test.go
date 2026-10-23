@@ -18,6 +18,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -46,6 +47,15 @@ func (s *dependencyTestSource) AcquireGitHubVerified(ctx context.Context, repo, 
 func (s *dependencyTestSource) ResolveGitHubSelector(ctx context.Context, repo, selector string) (sourceacquisition.RefResolution, error) {
 	s.lookups++
 	return s.Acquirer.ResolveGitHubSelector(ctx, repo, selector)
+}
+
+func (s *dependencyTestSource) AcquireGit(ctx context.Context, source sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	s.downloads++
+	return s.Acquirer.AcquireGit(ctx, source, commit, digest)
+}
+func (s *dependencyTestSource) ResolveGit(ctx context.Context, source sourcespec.Git, selector string, exact bool) (sourceacquisition.RefResolution, error) {
+	s.lookups++
+	return s.Acquirer.ResolveGit(ctx, source, selector, exact)
 }
 
 // Real Git acquisition, standard loader, digest store, public SDK transaction,
