@@ -30,6 +30,9 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan
 // PreflightActivation rejects a request whose Claude path layout cannot be
 // probed through the trusted CLI.
 func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
+	if (request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject) && request.ActivationComplete {
+		return fmt.Errorf("claude project native discovery cannot be established by activation attestation; retry exact project listing")
+	}
 	_, err := PrepareClaudeActivationProbe(request)
 	return err
 }
@@ -66,7 +69,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return outcome, fmt.Errorf("trusted Claude Code CLI is required for exact removal verification")
 	}
-	listed, err := runClaudeList(ctx, env, request.BackendExecutable, request.Client.ConfigRoot, request.ManagedArtifactPath)
+	listed, err := listClaudeDeactivation(ctx, env, request)
 	if err != nil {
 		return outcome, fmt.Errorf("verify Claude Code plugin before removal: %w", err)
 	}
@@ -74,7 +77,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 }
 
 func finishClaudeDeactivation(outcome domain.DeactivationOutcome, stdout []byte, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
-	switch PluginStatusFromList(stdout, request.DeclaredName, request.ManagedArtifactPath) {
+	switch PluginStatusFromListForScope(stdout, request.DeclaredName, request.ManagedArtifactPath, claudeListingScope(request.TargetContext.Scope)) {
 	case StatusInstalled:
 	case StatusAbsent:
 		if request.CurrentActivation == domain.ActivationActive {
@@ -96,7 +99,7 @@ func verifyClaudePlugin(ctx context.Context, env clients.Env, request domain.Act
 	if err != nil {
 		return fmt.Errorf("verify Claude Code plugin listing: %w", err)
 	}
-	switch PluginStatusFromList(listed.Stdout, request.DeclaredName, probe.ActivePath) {
+	switch PluginStatusFromListForScope(listed.Stdout, request.DeclaredName, probe.ActivePath, claudeListingScope(request.Plan.Scope)) {
 	case StatusInstalled:
 		return nil
 	case StatusAbsent, StatusCollision:
