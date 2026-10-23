@@ -701,11 +701,13 @@ components:
       additionalProperties: false
       required:
       - path
-      - size
       - executable
       properties:
         path: *id003
-        size: *id002
+        size:
+          type: integer
+          minimum: 0
+          description: Known resource size in bytes. Omitted when the blob is not cached; preview does not download resource bodies to determine their sizes.
         executable:
           type: boolean
     Preview:

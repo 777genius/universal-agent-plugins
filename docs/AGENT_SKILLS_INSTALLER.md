@@ -32,6 +32,12 @@ targets; applying also requires `--yes`. `--dry-run` prepares a review without
 applying it. Use `--ref` to disambiguate a GitHub URL whose branch name contains
 slashes. Browser and terminal operate on the same resolved commit.
 
+In the interactive `--no-ui` catalog, enter numbers to toggle selections.
+Use `/query` to search names, paths and descriptions; your basket stays selected
+between searches. `/` clears the filter, `clear` empties the basket, and `done`
+continues to target selection and review. `q`, Escape or an empty line cancels.
+The terminal shows at most 50 matches at once; narrow the query to find more.
+
 Keep the CLI running while using its temporary local page. The capability URL
 is private to this session. The page renders safe Markdown and offers the raw
 instructions as text; it does not load remote images or execute source HTML.
@@ -39,6 +45,25 @@ Closing the tab after confirmation does not cancel an accepted installation.
 Reloading the live session recovers its operation result. A lost apply response
 never implies success: the page recovers the existing operation or offers an
 explicit retry of the same confirmation.
+
+## Discovery and validation
+
+Search in the picker matches skill names, descriptions and repository paths.
+Selection stays in the basket when you search or browse another folder. Open a
+skill's title to preview it; its checkbox changes selection independently.
+The review shows the exact destination before installation changes files.
+
+A complete scan can include disabled skills. Discovery does not silently omit
+invalid metadata: for example, the declared name must match the containing
+folder, and descriptions must fit the standard's length limit. A popular
+repository can contain templates or skills that fail these rules. The installer
+does not rewrite their documents to make them pass; choose another valid skill
+or a corrected source revision. A partial scan is labelled separately and does
+not prove the repository contains no other matches.
+
+Preview lists resources without downloading their contents. A resource size may
+be unknown until full acquisition for review/install; an unknown size is not an
+empty file. Resource files and scripts are not executed by preview or install.
 
 ## Saved source and updates
 

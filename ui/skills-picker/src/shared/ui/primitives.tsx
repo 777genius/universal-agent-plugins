@@ -12,8 +12,8 @@ export function Tick({ checked, mixed = false, disabled, label, onChange }: {
   </Checkbox.Root>;
 }
 
-export function Modal({ open, onOpenChange, title, children }: {
-  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode;
+export function Modal({ open, onOpenChange, title, children, returnFocus }: {
+  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode; returnFocus?: () => HTMLElement | null;
 }) {
   const origin = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
@@ -21,7 +21,11 @@ export function Modal({ open, onOpenChange, title, children }: {
   wasOpen.current = open;
   return <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal><Dialog.Backdrop className="backdrop"/><Dialog.Popup className="modal"
-      finalFocus={() => origin.current?.isConnected ? origin.current : document.querySelector<HTMLInputElement>('#skill-search')}>
+      finalFocus={() => {
+        const trigger = returnFocus ? returnFocus() : origin.current;
+        if (trigger?.isConnected && !trigger.matches(':disabled, [aria-disabled="true"]') && trigger.getClientRects().length > 0 && getComputedStyle(trigger).visibility === 'visible') return trigger;
+        return document.querySelector<HTMLInputElement>('#skill-search');
+      }}>
       <div className="panel-heading"><Dialog.Title>{title}</Dialog.Title>
         <Dialog.Close className="icon-button" aria-label="Close"><X size={18}/></Dialog.Close></div>
       {children}

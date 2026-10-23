@@ -51,8 +51,10 @@ type Catalog struct {
 	Bytes                                 int64
 }
 type Resource struct {
-	Path       string
-	Size       int64
+	Path string
+	// Size is absent unless its object metadata is already cached. Asking Git
+	// for the size of a promised resource would download the entire resource.
+	Size       *int64
 	Executable bool
 }
 type Preview struct {
@@ -98,12 +100,18 @@ func (s *Session) name(p string) string {
 	}
 	return path.Base(s.source.Repository)
 }
-func (s *Session) blobSize(ctx context.Context, oid string) (int64, error) {
+func (s *Session) cachedBlobSize(oid string) *int64 {
 	s.mu.Lock()
-	n, ok := s.sizes[oid]
-	s.mu.Unlock()
-	if ok {
-		return n, ctx.Err()
+	defer s.mu.Unlock()
+	size, known := s.sizes[oid]
+	if !known {
+		return nil
+	}
+	return &size
+}
+func (s *Session) blobSize(ctx context.Context, oid string) (int64, error) {
+	if cached := s.cachedBlobSize(oid); cached != nil {
+		return *cached, ctx.Err()
 	}
 	n, e := s.tree.BlobSize(ctx, oid)
 	if e == nil {
@@ -370,6 +378,9 @@ func (s *Session) Preview(ctx context.Context, p string) (Preview, error) {
 		return preview, fmt.Errorf("resource inventory exceeds tree entry limit")
 	}
 	for _, e := range entries {
+		if err := ctx.Err(); err != nil {
+			return preview, err
+		}
 		if e.Type != "blob" || (e.Mode != "100644" && e.Mode != "100755" && e.Mode != "120000") {
 			continue
 		}
@@ -380,11 +391,7 @@ func (s *Session) Preview(ctx context.Context, p string) (Preview, error) {
 		if rel == "SKILL.md" {
 			continue
 		}
-		size, err := s.blobSize(ctx, e.Object)
-		if err != nil {
-			return preview, err
-		}
-		preview.Resources = append(preview.Resources, Resource{Path: rel, Size: size, Executable: e.Mode == "100755"})
+		preview.Resources = append(preview.Resources, Resource{Path: rel, Size: s.cachedBlobSize(e.Object), Executable: e.Mode == "100755"})
 	}
 	sort.Slice(preview.Resources, func(i, j int) bool { return preview.Resources[i].Path < preview.Resources[j].Path })
 	return preview, nil

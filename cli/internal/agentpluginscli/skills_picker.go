@@ -193,7 +193,7 @@ func (s *skillsCatalogSession) preview(ctx context.Context, id string) (skillspi
 	}
 	preview := skillspicker.Preview{CatalogId: catalogID, CandidateId: id, Path: result.Path, Content: result.Markdown, RawContent: &result.RawContent, Format: skillspicker.Markdown, Resources: []skillspicker.Resource{}, Diagnostics: []skillspicker.Diagnostic{}}
 	for _, resource := range result.Resources {
-		preview.Resources = append(preview.Resources, skillspicker.Resource{Path: resource.Path, Size: int(resource.Size), Executable: resource.Executable})
+		preview.Resources = append(preview.Resources, wireSkillResource(resource))
 	}
 	return preview, nil
 }
@@ -319,4 +319,13 @@ func (s *skillsCatalogSession) scanProgress() skillspicker.ScanProgress {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.progress
+}
+
+func wireSkillResource(resource skillsource.Resource) skillspicker.Resource {
+	wire := skillspicker.Resource{Path: resource.Path, Executable: resource.Executable}
+	if resource.Size != nil {
+		size := int(*resource.Size)
+		wire.Size = &size
+	}
+	return wire
 }

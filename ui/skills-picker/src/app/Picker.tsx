@@ -23,8 +23,9 @@ export function Picker() {
   const catalog = useCatalog(session.data?.sessionId, session.data?.catalogId);
   if (expired) return <main className="startup"><h1>This picker session has ended</h1><p>Return to your terminal and start a new Skills command.</p></main>;
   if (session.isError) return <main className="startup"><h1>Connect to your CLI</h1><Problem error={session.error} retry={() => void session.refetch()}/><p>Open the complete URL printed by your running CLI.</p></main>;
+  if (session.data?.state === 'failed' && !session.data.catalogId) return <main className="startup"><h1>The repository scan failed</h1><p>Return to your terminal for details and run the Skills command again.</p></main>;
   if (!session.data || !session.data.catalogId || ['resolving', 'scanning'].includes(session.data.state)) return <main className="startup"><div className="brand-mark">u</div><h1>Finding your next skills</h1><Busy>{session.data?.state === 'resolving' ? 'Resolving repository…' : 'Scanning skills…'}</Busy><p>{session.data?.scan.validated ?? 0} validated / {session.data?.scan.discovered ?? 0} discovered</p>
-    {session.data?.state === 'failed' && <Problem error={new Error('The repository scan failed. Return to the CLI for details.')}/>}</main>;
+    </main>;
   if (catalog.isError) return <main className="startup"><Problem error={catalog.error} retry={() => void catalog.refetch()}/></main>;
   if (!catalog.data || catalog.data.catalogId !== session.data.catalogId) return <main className="startup"><Busy>Loading catalog…</Busy></main>;
   return <Workspace key={`${session.data.sessionId}:${catalog.data.catalogId}`} session={session.data} catalog={catalog.data}/>;
@@ -71,16 +72,17 @@ function Workspace({ session, catalog }: { session: Session; catalog: Catalog })
     <div className="search-row"><Search size={19}/><input id="skill-search" aria-label="Search skills" placeholder="Search skills, descriptions, or paths…" maxLength={512} value={search.q} onChange={(event) => updateSearch({ q: event.target.value }, true)}/>{search.q && <button className="icon-button" aria-label="Clear search" onClick={() => updateSearch({ q: '' }, true)}><X size={16}/></button>}<span className="search-hint">{catalog.counts.total} skills</span></div>
     <div className="breadcrumb"><span>Scan scope: {catalog.scope || 'Entire repository'}</span>{search.path && <><ChevronRight size={13}/><button className="filter-chip" onClick={() => updateSearch({ path: '' })}>Inside {search.path} <X size={12}/></button></>}</div>
     <div className="mobile-tabs" role="tablist" aria-label="Picker panels">{(['skills', 'folders', 'selection'] as const).map((panel) => <button role="tab" aria-selected={mobilePanel === panel} key={panel} onClick={() => setMobilePanel(panel)}>{panel === 'selection' ? `Selection (${selected.length})` : panel}</button>)}</div>
-    <div className="workspace" data-mobile-panel={mobilePanel}>
+    <div className={`workspace ${activeId ? 'with-preview' : ''}`} data-mobile-panel={mobilePanel}>
       <div className="tree-column"><Tree key={catalog.catalogId} candidates={catalog.candidates} selected={selected} locked={locked} path={search.path} choose={choose} browse={(path) => { updateSearch({ path, q: '', view: 'tree' }); setMobilePanel('skills'); }} preview={preview}/></div>
       <Results candidates={results} selected={selected} activeId={activeId} query={search.q} locked={locked} choose={choose} preview={preview} reveal={reveal}/>
-      <aside className="sidebar"><div className="desktop-preview"><Preview sessionId={session.sessionId} catalogId={catalog.catalogId} candidateId={activeId} close={() => updateSearch({ skill: undefined })}/></div>
+      {activeId && <div className="desktop-preview"><Preview sessionId={session.sessionId} catalogId={catalog.catalogId} candidateId={activeId} close={() => updateSearch({ skill: undefined })}/></div>}
+      <aside className="sidebar">
         <Basket candidates={chosen} locked={locked} remove={(id) => choose([id], false)} clear={() => choose(selected, false)}/>
         <Targets controller={install} selected={targetIds} setSelected={setTargetIds} locked={locked}/>
         <InstallActions controller={install} request={request}/>
       </aside>
     </div>
-    <footer className="bottom-bar"><span><ShoppingBag size={16}/><strong>{selected.length} selected</strong><span className="muted">across this repository</span></span><span className="security-note"><ShieldCheck size={15}/> Installed locally. Reviewed before changes.</span><button className="primary" disabled={locked || !selected.length || !targetIds.length} onClick={install.prepareReview}>Review installation <ArrowRightIcon/></button></footer>
+    <footer className="bottom-bar"><span><ShoppingBag size={16}/><strong>{selected.length} selected</strong><span className="muted">across this repository</span></span><span className="security-note"><ShieldCheck size={15}/> Installed locally. Reviewed before changes.</span><button className="primary" disabled={locked || !selected.length || !targetIds.length} onClick={(event) => install.prepareReview(event.currentTarget)}>{install.prepare.isPending ? <Busy>Checking installation…</Busy> : <>Review installation <ArrowRightIcon/></>}</button></footer>
     {narrow && <Modal open={!!activeId} title="Skill preview" onOpenChange={(open) => { if (!open) updateSearch({ skill: undefined }); }}><Preview sessionId={session.sessionId} catalogId={catalog.catalogId} candidateId={activeId} close={() => updateSearch({ skill: undefined })}/></Modal>}
     <Modal open={scopeOpen} title="Change scan scope" onOpenChange={(open) => { if (!scan.isPending) setScopeOpen(open); }}>
       <p>Scan another folder on the same commit. Leave empty to scan the whole repository.</p><label className="field-label">Repository folder<input value={scopePath} onChange={(event) => setScopePath(event.target.value)} maxLength={4096} placeholder="e.g. skills/design"/></label>

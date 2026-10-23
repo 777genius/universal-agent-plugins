@@ -338,7 +338,9 @@ type PreviewFormat string
 type Resource struct {
 	Executable bool   `json:"executable"`
 	Path       string `json:"path"`
-	Size       int    `json:"size"`
+
+	// Size Known resource size in bytes. Omitted when the blob is not cached; preview does not download resource bodies to determine their sizes.
+	Size *int `json:"size,omitempty"`
 }
 
 // ScanProgress defines model for ScanProgress.

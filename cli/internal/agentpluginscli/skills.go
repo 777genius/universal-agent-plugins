@@ -11,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 )
 
 type skillsAddOptions struct {
@@ -22,7 +23,7 @@ type skillsAddOptions struct {
 func newSkillsCommand(app App, opts *options) *cobra.Command {
 	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from public GitHub sources"}
 	selection := &skillsAddOptions{}
-	add := &cobra.Command{Use: "add <owner/repository or GitHub URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
+	add := &cobra.Command{Use: "add <owner/repository or GitHub URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: numbers toggle Skills, /query searches, / clears the filter,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
 	add.Flags().StringSliceVar(&selection.names, "skill", nil, "exact Skill name (repeatable; ambiguity requires --path)")
 	add.Flags().StringVar(&selection.folder, "path", "", "exact repository-relative Skill folder (empty selects repository root)")
 	add.Flags().StringVar(&selection.ref, "ref", "", "exact Git ref when a URL boundary is ambiguous")
@@ -45,14 +46,34 @@ func (selection *skillsAddOptions) validate(opts *options, interactive bool) err
 	if selection.ui && !interactive {
 		return errors.New("--ui requires an interactive terminal; use --no-ui with explicit selections and --target")
 	}
+	seen := map[string]bool{}
+	for _, name := range selection.names {
+		if name == "" || seen[name] {
+			return skillsSelectionError{Code: "INVALID_SELECTION", Message: "--skill requires unique non-empty exact names", Candidates: []skillspicker.Candidate{}}
+		}
+		seen[name] = true
+	}
 	return nil
 }
 func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *options, input string) error {
 	interactive := app.Terminal && opts.format != "json"
 	if err := selection.validate(opts, interactive); err != nil {
+		return renderSkillsCommandIssue(cmd, opts, err)
+	}
+	if err := cmd.Context().Err(); err != nil {
 		return err
 	}
 	request := SkillsPickerRequest{Input: input, Ref: selection.ref, Path: selection.folder, PathSet: cmd.Flags().Changed("path")}
+	if request.PathSet {
+		if err := sourceacquisition.ValidateSkillPath(request.Path); err != nil {
+			return skillsMissingSelection(cmd, opts, "INVALID_PATH", "--path must be an exact repository-relative Skill folder", []skillspicker.Candidate{})
+		}
+	}
+	if interactive {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Resolving Skills source…"); err != nil {
+			return err
+		}
+	}
 	session, err := app.openSkillsCatalog(cmd.Context(), request)
 	if err != nil {
 		return err
