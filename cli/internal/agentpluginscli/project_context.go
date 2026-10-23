@@ -113,6 +113,20 @@ func (app App) checkProjectTargets(targetOption string) error {
 	return nil
 }
 
+// Reject unsupported project declarations before a lock creates mutable state.
+// The locked operation still reads and validates the authoritative manifest.
+func (app App) preflightProjectDependencyTargets() error {
+	if app.scope() != domain.ScopeProject {
+		return nil
+	}
+	manifest, _ := app.dependencyPaths()
+	requirements, err := readDependencyManifest(manifest)
+	if err != nil {
+		return err
+	}
+	return validateDependencyTargets(app, requirements)
+}
+
 func rejectProjectCommand(app App, command string) error {
 	if app.scope() == domain.ScopeProject {
 		return fmt.Errorf("%s is not supported for project scope", command)

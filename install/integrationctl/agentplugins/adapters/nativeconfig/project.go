@@ -37,11 +37,17 @@ func DesiredReceipt(resolvedPath string, codec Codec, name string, server Server
 }
 
 func projectServer(codec Codec, server Server, placeholders Placeholders) (map[string]any, error) {
+	if codec != CodecCodex && server.CodexAuth != nil {
+		return nil, fmt.Errorf("%s does not accept Codex authentication options", codec)
+	}
 	if !supportedCodec(codec) {
 		return nil, fmt.Errorf("unsupported native config codec %q", codec)
 	}
 	if codec == CodecOpenCodeV2 {
 		return projectOpenCodeV2Server(server, placeholders)
+	}
+	if codec == CodecCodex {
+		return projectCodexServer(server, placeholders)
 	}
 	if server.OpenCodeV2 != nil {
 		return nil, fmt.Errorf("%s does not accept OpenCode V2 options", codec)

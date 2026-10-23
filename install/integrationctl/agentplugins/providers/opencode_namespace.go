@@ -24,7 +24,10 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 	if !domain.ClientTraitsFor(client.ClientID).ReportsMCPToolNamespaceCollision || len(domain.SelectedMCPNames(plan)) == 0 {
 		return nil
 	}
-	root := strings.TrimSpace(client.ConfigRoot)
+	root, err := openCodeNamespaceRoot(client, plan)
+	if err != nil {
+		return err
+	}
 	if !filepath.IsAbs(root) {
 		return fmt.Errorf("OpenCode user config root is unavailable")
 	}
@@ -51,6 +54,23 @@ func (guard OpenCodeNamespacePreflight) CheckMCPNamespace(ctx context.Context, c
 		return errors.Join(nativeconfig.ErrNativeMigrationRequired, err)
 	}
 	return err
+}
+
+func openCodeNamespaceRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (string, error) {
+	if plan.Scope != domain.ScopeProject && plan.TargetContext.Scope != domain.ScopeProject {
+		return strings.TrimSpace(client.ConfigRoot), nil
+	}
+	if plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject {
+		return "", fmt.Errorf("OpenCode namespace scope differs from its target context")
+	}
+	target, err := domain.NewTargetContext(plan.TargetContext.Scope, plan.TargetContext.ProjectRoot, plan.TargetContext.UserConfigRoot)
+	if err != nil {
+		return "", err
+	}
+	if plan.NativeRegistryRoot != target.ProjectRoot || target.UserConfigRoot != "" && target.UserConfigRoot != client.ConfigRoot {
+		return "", fmt.Errorf("OpenCode namespace differs from the selected project and user context")
+	}
+	return target.ProjectRoot, nil
 }
 
 func (guard OpenCodeNamespacePreflight) inspectOwnedOpenCodeMCP(paths nativeconfig.Paths, managed *domain.ClientBinding) ([]string, nativeconfig.Codec, []nativeconfig.Receipt, error) {

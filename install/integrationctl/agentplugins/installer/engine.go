@@ -131,7 +131,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		projectArgs:  e.cfg.ProjectArgs,
 		facts:        facts,
 	}
-	transitions := opencode.NativeTransitions{PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
+	transitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
 	inner := providers.Activator{OpenCodeTransitions: transitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver
 	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {

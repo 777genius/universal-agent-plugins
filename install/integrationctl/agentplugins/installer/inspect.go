@@ -508,7 +508,7 @@ func populateInspectedBinding(inspected *InspectedBinding, binding domain.Client
 }
 
 func (e *Engine) appendPendingTransitions(out *Inspection) error {
-	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: e.store}}).Pending()
+	pending, err := (opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, State: transaction.Kernel{StateStore: e.store}}).Pending()
 	if err != nil {
 		return err
 	}
