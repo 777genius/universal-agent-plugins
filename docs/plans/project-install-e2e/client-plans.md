@@ -260,6 +260,17 @@ malformed/commented settings, conflicting user server and trust gating. A
 settings-file receipt proves configuration, not initialized MCP/tools or
 authentication. No extension install/global profile redirection is needed.
 
+**Implemented checkpoint (2026-10-23).** `65b8f17a` qualifies the native
+project component lane with independent implementation
+[R1](gemini-code-review-r1.md) and [R2](gemini-code-review-r2.md) GO. Project
+configuration success remains prepared with installed exact objects. Native
+session discovery, workspace trust, system policy and MCP initialization remain
+unobserved; activation attestation cannot upgrade that status. Bounded
+user/workspace restriction and alias warnings preserve policy and foreign
+files. [Pinned evidence and verification](gemini-implementation-evidence.md)
+separate actual version/help research, production composition contracts and
+remaining hosted native runtime qualification.
+
 ## 5. OpenCode — project config at repository root
 
 **Evidence/choice.** Native project MCP uses `<project>/opencode.json` or
@@ -590,7 +601,7 @@ is replaced by explicit unsupported. R2 fixes independently verified GO in
 | claude | GO | Verified | GO | Root assignment required |
 | codex | GO | Verified | GO | Root assignment required |
 | cursor | GO | Verified | GO | Root assignment required |
-| gemini | GO | Verified | GO | Root assignment required |
+| gemini | GO | Verified | GO | Implemented at65b8f17a; independent implementation R1/R2 GO; native discovery pending |
 | opencode | GO | Verified | GO | Root assignment required |
 | copilot | GO | Verified | GO | Root assignment required |
 | kiro | GO | Verified | GO | Root assignment required |

@@ -92,9 +92,9 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 	if err != nil {
 		return nil, err
 	}
-	doc, err := newDocument(file.jsonc)
+	doc, err := newDocument(file.jsonc, requests[0].Codec)
 	if file.exists {
-		doc, err = parseDocument(file.body, file.jsonc)
+		doc, err = parseCodecDocument(file.body, file.jsonc, requests[0].Codec)
 	}
 	if err != nil {
 		return nil, err
@@ -251,7 +251,7 @@ func (kernel Kernel) Inspect(paths Paths, codec Codec, name string, owned *Recei
 	if err != nil || !file.exists {
 		return false, false, err
 	}
-	doc, err := parseDocument(file.body, file.jsonc)
+	doc, err := parseCodecDocument(file.body, file.jsonc, codec)
 	if err != nil {
 		return false, false, err
 	}
