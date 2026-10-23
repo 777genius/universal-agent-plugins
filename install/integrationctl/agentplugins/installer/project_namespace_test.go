@@ -53,4 +53,53 @@ func TestProjectNamespacePinsExistingDirectoryIdentity(t *testing.T) {
 	if err := engine.CheckProjectNamespace(); !errors.Is(err, ErrPlanChanged) {
 		t.Fatalf("replaced namespace identity was accepted: %v", err)
 	}
+	if _, err := engine.WithTemporaryRoot(t.TempDir()); !errors.Is(err, ErrPlanChanged) {
+		t.Fatalf("temporary preview rebound a replaced namespace: %v", err)
+	}
+}
+
+func TestProjectNamespacePreviewViewsSharePhysicalAuthority(t *testing.T) {
+	for _, kind := range []string{"projected engine", "temporary root"} {
+		t.Run(kind, func(t *testing.T) {
+			root := t.TempDir()
+			namespace := filepath.Join(root, ".uap")
+			engine, err := New(testConfig(t, Config{ProjectRoot: root, StateRoot: namespace}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			projected := *engine // PreviewInstallAfterUpdate retains this authority.
+			view := &projected
+			if kind == "temporary root" {
+				view, err = engine.WithTemporaryRoot(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Mkdir(namespace, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := view.CheckProjectNamespace(); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(namespace, filepath.Join(root, ".uap-original")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(namespace, 0700); err != nil {
+				t.Fatal(err)
+			}
+			for _, observer := range []*Engine{engine, view} {
+				if err := observer.CheckProjectNamespace(); !errors.Is(err, ErrPlanChanged) {
+					t.Fatalf("preview view reset selected namespace authority: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectNamespaceRejectsUninitializedGuard(t *testing.T) {
+	for _, engine := range []*Engine{nil, {cfg: Config{ProjectRoot: t.TempDir()}}} {
+		if err := engine.CheckProjectNamespace(); !errors.Is(err, ErrInvalidConfig) {
+			t.Fatalf("invalid project engine accepted: %v", err)
+		}
+	}
 }

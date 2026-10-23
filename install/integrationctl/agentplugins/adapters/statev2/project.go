@@ -51,10 +51,21 @@ func (store Store) validateProjectBinding(binding domain.ClientBinding) error {
 	if binding.Scope != string(domain.ScopeProject) {
 		return fmt.Errorf("project state contains a non-project binding")
 	}
-	for _, path := range []string{binding.TargetLocator, binding.NativeProfileRoot} {
-		if err := checkProjectLocator(store.ProjectRoot, path); err != nil {
+	if err := checkProjectLocator(store.ProjectRoot, binding.TargetLocator); err != nil {
+		return err
+	}
+	nativeBase := store.ProjectRoot
+	if binding.NativeProfileRoot == store.ProjectRoot {
+		// Root-native registries (for example a workspace opencode.json) use
+		// the project directory itself. Only this field permits exact equality;
+		// validate its spelling and no-follow authority through its parent.
+		if _, err := domain.NewTargetContext(domain.ScopeProject, store.ProjectRoot, ""); err != nil {
 			return err
 		}
+		nativeBase = filepath.Dir(store.ProjectRoot)
+	}
+	if err := checkProjectLocator(nativeBase, binding.NativeProfileRoot); err != nil {
+		return err
 	}
 	if binding.ProfileNamespace != "" && binding.ProfileNamespace != filepath.Join(store.ProjectRoot, ".uap") {
 		return fmt.Errorf("project binding belongs to a different namespace")

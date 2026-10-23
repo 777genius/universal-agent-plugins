@@ -18,11 +18,21 @@ type projectNamespaceGuard struct {
 // creating it. The CLI reuses this guard before environment locks and writes.
 // Existing roots are pinned in memory and revalidated before apply/recovery.
 func (e *Engine) CheckProjectNamespace() error {
+	if e == nil {
+		return fmt.Errorf("%w: installer engine is required", ErrInvalidConfig)
+	}
 	if e.cfg.ProjectRoot == "" {
 		return nil
 	}
+	if e.projectGuard == nil {
+		return fmt.Errorf("%w: project namespace guard is not configured", ErrInvalidConfig)
+	}
 	e.projectGuard.mu.Lock()
 	defer e.projectGuard.mu.Unlock()
+	return e.checkProjectNamespaceLocked()
+}
+
+func (e *Engine) checkProjectNamespaceLocked() error {
 	root := e.cfg.ProjectRoot
 	if e.cfg.StateRoot != filepath.Join(root, ".uap") {
 		return fmt.Errorf("project mutable namespace must be the selected project's .uap directory")
