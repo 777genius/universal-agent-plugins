@@ -11,7 +11,9 @@ matched the requested cwd and exact repository skill paths, enabled flags and
 absence/presence through add, invocation-rule update, missing-skill repair and
 remove. Project B remained free of the installed fixture. The foreign repository
 marker was present in every response. [Checked observations](checked-discovery-observations.json)
-record these assertions without replacing the raw transcripts.
+record these assertions without replacing the raw transcripts. A second reviewer
+independently verified the archive, all 28 hashes and exact responses; see the
+[independent evidence review](independent-review.md).
 
 This Windows response did not list the separately seeded user .agents skill,
 unlike the macOS artifact. Its native discovery/precedence is therefore not
