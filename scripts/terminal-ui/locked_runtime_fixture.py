@@ -391,9 +391,16 @@ class LockedRuntimeFixture:
         results = [None] * len(servers)
 
         def run(index):
-            results[index] = probe_server(
-                servers[index], dict(self.fixture.env, **servers[index]['env']),
-                bound)
+            # A thread that dies before recording leaves a silent None; keep the
+            # failure reason visible in the probe evidence instead.
+            try:
+                results[index] = probe_server(
+                    servers[index],
+                    dict(self.fixture.env, **servers[index]['env']), bound)
+            except Exception as error:
+                results[index] = {
+                    'label': servers[index]['label'], 'ok': False,
+                    'probe_error': f'{type(error).__name__}: {error}'}
 
         started = time.monotonic()
         threads = [threading.Thread(target=run, args=(index,))
@@ -480,15 +487,18 @@ def probe_server(server, env, bound):
                             info.get('name') == PACKAGE)
             result['serverInfo'] = info
         result['elapsed_seconds'] = round(time.monotonic() - started, 3)
+        # communicate() after an explicit stdin close raises ValueError on
+        # newer CPython; close the request stream, wait, then drain stderr.
         try:
             process.stdin.close()
         except OSError:
             pass
         try:
-            _, result['stderr'] = process.communicate(timeout=2)
+            process.wait(timeout=2)
         except subprocess.TimeoutExpired:
             process.kill()
-            _, result['stderr'] = process.communicate(timeout=2)
+            process.wait(timeout=2)
+        result['stderr'] = process.stderr.read()
         result['exit'] = process.returncode
     finally:
         if process.poll() is None:
