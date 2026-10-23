@@ -1,6 +1,26 @@
 <script setup lang="ts">
-const { t } = useI18n();
+import type { DocsLocale } from '~/utils/docsLinks';
+import { replaceDocsLocale } from '~/utils/docsLinks';
+
+const { t, locale } = useI18n();
 const { asset } = useSite();
+const config = useRuntimeConfig();
+
+const currentLocale = computed<DocsLocale>(() => {
+  const supported = new Set<DocsLocale>(['en', 'ru', 'es', 'fr', 'zh']);
+  return supported.has(locale.value as DocsLocale) ? (locale.value as DocsLocale) : 'en';
+});
+
+const docsRoot = computed(() => {
+  const url = String(
+    config.public.docsUrl || 'https://777genius.github.io/universal-agent-plugins/docs/en/',
+  );
+  return url.replace(/\/+$/, '') + '/';
+});
+
+const buildGuideUrl = computed(() =>
+  replaceDocsLocale(`${docsRoot.value}build/`, currentLocale.value, 'build'),
+);
 </script>
 
 <template>
@@ -49,6 +69,24 @@ const { asset } = useSite();
         </svg>
       </span>
     </a>
+    <p class="built-with__footer">
+      <a class="built-with__docs" :href="buildGuideUrl" target="_blank" rel="noopener noreferrer">
+        {{ t('shell.builtWith.buildWithSdk') }}
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.75"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M7 17 17 7M7 7h10v10" />
+        </svg>
+      </a>
+    </p>
   </section>
 </template>
 
@@ -107,6 +145,30 @@ const { asset } = useSite();
 }
 
 .built-with__link svg {
+  flex-shrink: 0;
+}
+
+.built-with__footer {
+  margin: 24px 0 0;
+  text-align: center;
+}
+
+.built-with__docs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cyan);
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.built-with__docs:hover,
+.built-with__docs:focus-visible {
+  text-decoration: underline;
+}
+
+.built-with__docs svg {
   flex-shrink: 0;
 }
 
