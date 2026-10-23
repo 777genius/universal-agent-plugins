@@ -308,17 +308,20 @@ class Matrix:
 
     @staticmethod
     def assert_client_state_untouched(fixture, allow_abandoned_staging=False):
-        # A graceful preparation failure must leave nothing behind. A hard-killed
-        # process cannot clean its own staging tree; the installer reserves
-        # those prefixes and ignores them in identity, so after a kill only that
-        # scaffolding may remain. Every client surface stays identical either
-        # way, and any managed file outside a reserved prefix is a partial commit.
+        # A graceful preparation failure must leave nothing behind. A
+        # hard-killed process cannot clean its own abandoned swap scaffolding;
+        # the installer marks those directories with reserved prefixes and
+        # never treats them as a committed surface, so after a kill only that
+        # scaffolding may appear. Every client surface stays identical either
+        # way, and any new managed file outside a reserved prefix is a partial
+        # commit.
         after = fixture.mutations()
         for key in ("home", "project", "state"):
             check(after[key] == fixture.before[key],
                   f"failed preparation changed {key}")
+        before_managed = fixture.before.get("managed", {})
         for name, digest in after["managed"].items():
-            if digest == "directory":
+            if digest == "directory" or digest == before_managed.get(name):
                 continue
             reserved = any(part.startswith((".agentplugins-staging-",
                                             ".agentplugins-backup-"))
@@ -1002,12 +1005,18 @@ class Matrix:
             cwd=fixture.project, env=dict(fixture.env, NO_COLOR="1"),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
             start_new_session=True)
+        # Kill only once the stub is inside its delay window, so the kill
+        # cannot land between the START and SLEEP log lines.
         deadline = time.monotonic() + self.timeout
-        while time.monotonic() < deadline and "START" not in runtime.npm_log():
+        while time.monotonic() < deadline and "SLEEP" not in runtime.npm_log():
             time.sleep(0.02)
-        check("START" in runtime.npm_log(),
-              "npm preparation never started before the kill window")
-        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        check("SLEEP" in runtime.npm_log(),
+              "npm preparation never reached its delay window before the kill")
+        try:
+            group = os.getpgid(process.pid)
+        except ProcessLookupError:
+            raise AssertionError("prepared process exited before the kill landed")
+        os.killpg(group, signal.SIGKILL)
         out, err = process.communicate(timeout=5)
         (evidence / "killed-add.stdout").write_text(out, encoding="utf-8")
         (evidence / "killed-add.stderr").write_text(err, encoding="utf-8")

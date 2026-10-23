@@ -208,7 +208,7 @@ func TestLockedRuntimeRejectsForeignCommandWithLauncher(t *testing.T) {
 		manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
 		envelope.MCP.Servers["mcp"].Decoded["command"] = command
 		err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath)
-		if err == nil || !strings.Contains(err.Error(), "node command") {
+		if err == nil || !strings.Contains(err.Error(), "is not node") {
 			t.Fatalf("command %v: PrepareRuntime error = %v, want node-command refusal", command, err)
 		}
 		if got := *runs; got != 0 {
@@ -217,6 +217,41 @@ func TestLockedRuntimeRejectsForeignCommandWithLauncher(t *testing.T) {
 		if _, statErr := os.Lstat(filepath.Join(dataPath, "npm-runtime")); statErr == nil {
 			t.Fatalf("command %v: refusal created the npm runtime store", command)
 		}
+	}
+}
+
+func TestLockedRuntimePreparesLauncherAtAnyArgumentIndex(t *testing.T) {
+	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+	server := envelope.MCP.Servers["mcp"]
+	server.Decoded["args"] = []any{"--no-warnings", lockedLauncherArg}
+	envelope.MCP.Servers["mcp"] = server
+	if err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath); err != nil {
+		t.Fatalf("PrepareRuntime: %v", err)
+	}
+	if got := *runs; got != 1 {
+		t.Fatalf("npm runs = %d, want 1", got)
+	}
+}
+
+func TestLockedRuntimeRejectsMixedServerPairingForeignCommandWithLauncher(t *testing.T) {
+	manager, envelope, plan, dataPath, runs := lockedRuntimeFixture(t)
+	locked := envelope.MCP.Servers["mcp"]
+	locked.Name = "locked"
+	locked.Decoded["args"] = []any{lockedLauncherArg}
+	foreign := locked
+	foreign.Name = "foreign"
+	foreign.Decoded = map[string]any{"command": "python3", "args": []any{lockedLauncherArg}}
+	envelope.MCP.Servers = map[string]domain.MCPServer{"locked": locked, "foreign": foreign}
+	plan.Components = []domain.ComponentDecision{
+		{Kind: domain.ComponentMCPServer, Name: "locked", Support: domain.SupportNative},
+		{Kind: domain.ComponentMCPServer, Name: "foreign", Support: domain.SupportNative},
+	}
+	err := manager.PrepareRuntime(context.Background(), envelope, plan, dataPath)
+	if err == nil || !strings.Contains(err.Error(), "is not node") {
+		t.Fatalf("PrepareRuntime error = %v, want refusal naming the foreign server", err)
+	}
+	if got := *runs; got != 0 {
+		t.Fatalf("npm runs = %d, want 0 before refusal", got)
 	}
 }
 

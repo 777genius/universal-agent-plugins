@@ -301,7 +301,10 @@ class LockedRuntimeFixture:
         values = {server['env'].get('PLUGIN_DATA') for server in servers}
         check(len(values) == 1 and None not in values,
               f'projected PLUGIN_DATA is not one owned locator: {values}')
-        self.data_path = Path(values.pop())
+        captured = Path(values.pop())
+        check(captured.resolve().is_relative_to(self.fixture.root.resolve()),
+              f'captured PLUGIN_DATA escapes the fixture root: {captured}')
+        self.data_path = captured
         return self.data_path
 
     def store(self):
@@ -339,11 +342,18 @@ class LockedRuntimeFixture:
     # --- launcher execution evidence ---------------------------------------
 
     def launcher_runs(self):
-        if self.data_path is None:
-            return 0
-        path = self.data_path / 'launcher-executed.log'
-        return len(path.read_text(encoding='utf-8').splitlines()) \
-            if path.exists() else 0
+        if self.data_path is not None:
+            path = self.data_path / 'launcher-executed.log'
+            return len(path.read_text(encoding='utf-8').splitlines()) \
+                if path.exists() else 0
+        # Without a committed PLUGIN_DATA locator, count any execution the
+        # installer could have written anywhere in its data root; returning
+        # zero here would make the failure-lane negatives vacuous.
+        total = 0
+        for path in (self.fixture.data / 'plugin-data').glob(
+                '**/launcher-executed.log'):
+            total += len(path.read_text(encoding='utf-8').splitlines())
+        return total
 
     def assert_launcher_runs(self, expected):
         check(self.launcher_runs() == expected,
@@ -417,7 +427,9 @@ class LockedRuntimeFixture:
             encoding='utf-8')
         check(not any(thread.is_alive() for thread in threads),
               'cold probe batch outlived its deadline')
-        check(elapsed <= bound,
+        # Each probe enforces the real per-server deadline; the batch check
+        # only guards against serialization and allows thread-spawn overhead.
+        check(elapsed <= bound + 1.0,
               f'cold probe batch took {elapsed:.2f}s, beyond the '
               f'{bound}s diagnostic budget')
         for result in results:

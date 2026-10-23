@@ -120,7 +120,7 @@ func selectedLockedRuntime(envelope domain.PackageEnvelope, plan domain.Delivery
 		}
 		command, ok := server.Decoded["command"].(string)
 		if !ok || !isNodeCommand(command) {
-			return false, fmt.Errorf("locked npm runtime launcher requires a node command, got %v", server.Decoded["command"])
+			return false, fmt.Errorf("MCP server %q runs the locked npm runtime launcher but its command %v is not node", name, server.Decoded["command"])
 		}
 		found = true
 	}
@@ -135,15 +135,25 @@ func isNodeCommand(command string) bool {
 	return strings.EqualFold(base, "node") || strings.EqualFold(base, "node.exe")
 }
 
+// hasLockedLauncherArg reports whether any argument is the reserved launcher
+// path. The launcher can execute from any argument position, so a non-zero
+// index must not silently escape preparation.
 func hasLockedLauncherArg(value any) bool {
 	switch args := value.(type) {
 	case []any:
-		return len(args) > 0 && args[0] == lockedLauncherArg
+		for _, arg := range args {
+			if arg == lockedLauncherArg {
+				return true
+			}
+		}
 	case []string:
-		return len(args) > 0 && args[0] == lockedLauncherArg
-	default:
-		return false
+		for _, arg := range args {
+			if arg == lockedLauncherArg {
+				return true
+			}
+		}
 	}
+	return false
 }
 
 func requireRealDirectory(name string) error {
