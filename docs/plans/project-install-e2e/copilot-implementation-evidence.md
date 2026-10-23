@@ -155,3 +155,47 @@ CLI whole-file size/architecture gate passed with **0 issues**. Two independent 
 checkpoint. Genuine pinned pre-code observations above remain distinct from
 the new production project contract. No native-suite guard, hosted environment,
 authentication, trust, vendor model, release or publication operation changed.
+
+## Independent R1 correction: exact physical artifact
+
+R1 found that initial project admission checked project containment but did not
+require `ActivePath` to be the selected Copilot physical artifact. The corrected
+plan admission validates the artifact leaf and literal
+`.uap/managed/clients/copilot/<PhysicalArtifactID>` path before projection,
+activation, inspection and active reuse. The generic precondition still checks
+scope/root before the planner resolves its physical artifact; subsequent
+refinement and lifecycle use the complete exact validation.
+
+New regressions change either the package to another existing in-project child
+or only the selected artifact ID. Composed activation, direct activation,
+direct projection and read-only reuse all refuse with identical complete
+filesystem inventories. Focused providers **PASS 0.073s**, client **PASS
+0.006s**, domain **PASS 0.006s**, compatibility **PASS 0.014s**. The independent
+reviewers must close the correction before final publication/merge approval.
+Public saved lifecycle recheck **PASS 5.614s**; exact changed-code and full-file
+size/architecture correction lint gates both **0 issues**.
+
+R1 additionally required the direct adapter to enforce delivered-path equality,
+which the composed provider already checks. Project preflight now rejects any
+nonempty delivery path different from the selected plan; pre-staging empty
+delivery remains admissible. Direct activation requires exact nonempty equality.
+The new delivery-only mismatch regression verifies the existing foreign child
+and empty direct delivery both refuse without any base inventory changes.
+Full project provider suite **PASS 0.072s** at this follow-up.
+
+## Final independent implementation reviews
+
+Both independent implementation reviewers closed **GO** at
+`b98f0c57983433e5c7f2cde76255f94f4da1a079`. R1 independently reran final project
+providers **PASS 0.079s** and complete public saved CLI **PASS 5.378s**; R2
+independently reran exact artifact/direct delivery refusal contracts **PASS
+0.033s**, retaining earlier full project/provider/codec/domain/client/public
+saved CLI checks. The reports are committed beside this evidence. No blocking
+implementation finding remains.
+
+This is a reviewed production configuration/ownership checkpoint. Genuine
+Copilot project native discovery, trust, MCP initialization/tool use and restart
+qualification remain pending; neither source tests nor the pinned pre-code
+untrusted listing is promoted to those claims. The extracted vendor executable
+was hash-checked against the recorded binary pin and reclaimed to restore task
+disk headroom; its original archive, provenance and all research logs remain.

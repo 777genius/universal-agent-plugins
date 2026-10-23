@@ -36,7 +36,11 @@ func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.Pack
 
 func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if in.TargetContext.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject {
-		_, err := copilotPlanRoot(in.Client, *plan)
+		if plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject {
+			return fmt.Errorf("copilot project plan requires matching project scope")
+		}
+		// The generic planner resolves the physical artifact after this check.
+		_, err := copilotProjectRoot(in.Client, plan.TargetContext, plan.NativeRegistryRoot)
 		return err
 	}
 	return nil
@@ -46,7 +50,18 @@ func copilotPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (st
 	if plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject {
 		return "", fmt.Errorf("copilot project plan requires matching project scope")
 	}
-	return copilotProjectRoot(client, plan.TargetContext, plan.NativeRegistryRoot)
+	root, err := copilotProjectRoot(client, plan.TargetContext, plan.NativeRegistryRoot)
+	if err != nil {
+		return "", err
+	}
+	if err := pathpolicy.ValidateLeafID(plan.PhysicalArtifactID); err != nil {
+		return "", err
+	}
+	expected := filepath.Join(root, ".uap", "managed", "clients", "copilot", plan.PhysicalArtifactID)
+	if plan.ActivePath != expected {
+		return "", fmt.Errorf("copilot managed package differs from selected physical artifact")
+	}
+	return root, pathpolicy.RequireContainedChild(root, expected)
 }
 
 func copilotProjectRoot(client domain.DetectedClient, target domain.TargetContext, planned string) (string, error) {

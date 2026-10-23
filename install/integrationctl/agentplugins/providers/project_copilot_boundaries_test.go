@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
@@ -145,5 +147,70 @@ func TestProjectCopilotStaleOwnedNativeMemberCannotBeRemovedOrOverwritten(t *tes
 	}
 	if !reflect.DeepEqual(before, projectGeminiInventory(t, f.base)) {
 		t.Fatal("stale receipt refusal changed native or package bytes")
+	}
+}
+
+func TestProjectCopilotRejectsReboundPhysicalArtifactBeforeEffects(t *testing.T) {
+	for _, mismatch := range []string{"in-project-package", "physical-artifact"} {
+		t.Run(mismatch, func(t *testing.T) {
+			f := newCopilotProjectFixture(t, false, false)
+			request := f.request
+			if mismatch == "in-project-package" {
+				request.Plan.ActivePath = filepath.Join(f.project, "other-package")
+				request.Delivery.ActivePath = request.Plan.ActivePath
+				projectGeminiWrite(t, filepath.Join(request.Plan.ActivePath, "keep.txt"), "other project child\n")
+			} else {
+				request.Plan.PhysicalArtifactID = "another-artifact"
+			}
+			before := projectGeminiInventory(t, f.base)
+			adapter := copilot.New()
+			operations := map[string]func() error{
+				"composed activation": func() error {
+					_, err := f.activator(nativeconfig.New()).Activate(context.Background(), request)
+					return err
+				},
+				"direct activation": func() error {
+					_, err := adapter.Activate(context.Background(), clientsCopilotEnv(), request)
+					return err
+				},
+				"direct projection": func() error {
+					_, err := adapter.Project(context.Background(), clients.ProjectionInput{StagingPath: request.Delivery.ActivePath, Plan: request.Plan, Envelope: f.envelope})
+					return err
+				},
+				"direct active reuse": func() error {
+					_, err := adapter.ProjectActiveNative(context.Background(), request.Plan.ActivePath, f.envelope, request.Plan, "")
+					return err
+				},
+			}
+			for name, operation := range operations {
+				if err := operation(); err == nil || !strings.Contains(err.Error(), "managed package differs") {
+					t.Fatalf("%s accepted rebound %s: %v", name, mismatch, err)
+				}
+				if !reflect.DeepEqual(before, projectGeminiInventory(t, f.base)) {
+					t.Fatalf("%s changed native/package/user/B bytes", name)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectCopilotDirectActivationRequiresExactDeliveredArtifact(t *testing.T) {
+	f := newCopilotProjectFixture(t, false, false)
+	other := filepath.Join(f.project, "other-delivered-package")
+	projectGeminiWrite(t, filepath.Join(other, "keep.txt"), "foreign in-project package\n")
+	before := projectGeminiInventory(t, f.base)
+	adapter := copilot.New()
+	for _, path := range []string{other, ""} {
+		request := f.request
+		request.Delivery.ActivePath = path
+		if err := adapter.PreflightActivation(clientsCopilotEnv(), request); (path == "") != (err == nil) {
+			t.Fatalf("pre-staging empty delivery/project mismatch admission %q = %v", path, err)
+		}
+		if _, err := adapter.Activate(context.Background(), clientsCopilotEnv(), request); err == nil || !strings.Contains(err.Error(), "delivered package differs") {
+			t.Fatalf("direct activation accepted delivery-only mismatch %q: %v", path, err)
+		}
+		if !reflect.DeepEqual(before, projectGeminiInventory(t, f.base)) {
+			t.Fatal("delivery-only mismatch changed project/native/user/B bytes")
+		}
 	}
 }

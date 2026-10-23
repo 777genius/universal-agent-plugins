@@ -47,6 +47,9 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return nil, err
 	}
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		if _, err := copilotPlanRoot(domain.DetectedClient{ConfigRoot: plan.TargetContext.UserConfigRoot}, plan); err != nil {
+			return nil, err
+		}
 		if err := validateCopilotProjectStdio(root, envelope, plan, dataPath); err != nil {
 			return nil, err
 		}

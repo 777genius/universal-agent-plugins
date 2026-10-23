@@ -20,6 +20,9 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err != nil {
 		return err
 	}
+	if request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath {
+		return fmt.Errorf("copilot delivered package differs from selected project artifact")
+	}
 	if request.ActivationComplete {
 		return fmt.Errorf("copilot project native discovery cannot be established by activation attestation; inspect the selected trusted project")
 	}
@@ -40,6 +43,9 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	root, err := copilotPlanRoot(request.Client, request.Plan)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if request.Delivery.ActivePath != request.Plan.ActivePath {
+		return domain.ActivationOutcome{}, fmt.Errorf("copilot delivered package differs from selected project artifact")
 	}
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
