@@ -187,10 +187,7 @@ func (selector Selector) Validate() error {
 			return errors.New("commit selector requires one full lowercase 40-character SHA")
 		}
 	case SelectorRef:
-		value := strings.TrimSpace(selector.Value)
-		if value == "" || value != selector.Value || strings.ContainsAny(value, " \t\r\n~^:?*[\\") || strings.HasPrefix(value, "-") || path.Clean(value) != value {
-			return errors.New("ref selector is not a safe exact Git ref")
-		}
+		return validateRefSelector(selector.Value)
 	case SelectorDefault:
 		if selector.Value != "" {
 			return errors.New("default selector must have an empty value")
@@ -198,15 +195,26 @@ func (selector Selector) Validate() error {
 	case SelectorVersion, SelectorRange:
 		return validateVersionSelector(selector)
 	case SelectorRelease:
-		if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value {
-			return errors.New("release selector must be a canonical nonzero sequence")
-		}
-		var sequence uint64
-		if _, err := fmt.Sscanf(selector.Value, "%d", &sequence); err != nil || sequence == 0 || fmt.Sprint(sequence) != selector.Value {
-			return errors.New("release selector must be a canonical nonzero sequence")
-		}
+		return validateReleaseSelector(selector.Value)
 	default:
 		return fmt.Errorf("unsupported selector kind %q", selector.Kind)
+	}
+	return nil
+}
+
+func validateRefSelector(value string) error {
+	if value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, " \t\r\n~^:?*[\\") || strings.HasPrefix(value, "-") || path.Clean(value) != value {
+		return errors.New("ref selector is not a safe exact Git ref")
+	}
+	return nil
+}
+func validateReleaseSelector(value string) error {
+	if value == "" || strings.TrimSpace(value) != value {
+		return errors.New("release selector must be a canonical nonzero sequence")
+	}
+	var sequence uint64
+	if _, err := fmt.Sscanf(value, "%d", &sequence); err != nil || sequence == 0 || fmt.Sprint(sequence) != value {
+		return errors.New("release selector must be a canonical nonzero sequence")
 	}
 	return nil
 }

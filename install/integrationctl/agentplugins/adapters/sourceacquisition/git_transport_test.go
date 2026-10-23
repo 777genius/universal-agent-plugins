@@ -111,6 +111,7 @@ func TestNativeHTTPSGitPublicAndPrivateCredentialHelper(t *testing.T) {
 			endpoint := server.URL + "/repo.git"
 			source := sourcespec.Git{URL: endpoint}
 			acquirer := Acquirer{TempRoot: t.TempDir()}
+			configureNativeFixtureCredentials(t, home, server.URL, false)
 			if private {
 				_, err := acquirer.ResolveGit(t.Context(), source, "default", false)
 				if err == nil || strings.Contains(err.Error(), "fixture-token-never-log") {
@@ -149,14 +150,16 @@ func TestNativeHTTPSGitPublicAndPrivateCredentialHelper(t *testing.T) {
 func configureNativeFixtureCredentials(t *testing.T, home, origin string, private bool) {
 	t.Helper()
 	hooks := filepath.Join(home, "hooks")
-	if err := os.Mkdir(hooks, 0o700); err != nil {
+	if err := os.MkdirAll(hooks, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	hook := "#!/bin/sh\ntouch '" + filepath.Join(home, "hook-ran") + "'\n"
 	if err := os.WriteFile(filepath.Join(hooks, "reference-transaction"), []byte(hook), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	config := "[core]\n hooksPath = " + hooks + "\n[filter \"trap\"]\n smudge = touch '" + filepath.Join(home, "filter-ran") + "'; cat\n required = true\n"
+	// Reset inherited helpers and opt the fixture CA into Windows Schannel; see
+	// https://git-scm.com/docs/gitcredentials and git-config#httpschannelUseSSLCAInfo.
+	config := "[credential]\n helper =\n[http]\n schannelUseSSLCAInfo = true\n[core]\n hooksPath = " + hooks + "\n[filter \"trap\"]\n smudge = touch '" + filepath.Join(home, "filter-ran") + "'; cat\n required = true\n"
 	if private {
 		config += "[credential \"" + origin + "\"]\n helper = \"!f() { printf 'username=fixture\\npassword=fixture-token-never-log\\n'; }; f\"\n useHttpPath = true\n"
 	}
@@ -170,7 +173,10 @@ func TestNativeGitBrowserSlashRefAndAmbiguity(t *testing.T) {
 	nativeFixtureGit(t, work, "branch", "feature/a")
 	nativeFixtureGit(t, work, "push", "--quiet", filepath.Join(root, "repo.git"), "feature/a")
 	server := nativeHTTPSFixture(t, root, false)
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	configureNativeFixtureCredentials(t, home, server.URL, false)
 	acquirer := Acquirer{TempRoot: t.TempDir()}
 	source := sourcespec.Git{URL: server.URL + "/repo.git", Browser: &sourcespec.BrowserTree{Provider: "gitlab", Suffix: "feature/a/pkg"}}
 	resolved, err := acquirer.ResolveGitSource(context.Background(), source)

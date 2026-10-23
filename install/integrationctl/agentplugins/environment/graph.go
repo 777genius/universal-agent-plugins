@@ -159,20 +159,28 @@ func validateEdges(packages map[string]LockedPackage) error {
 			if err := edge.Selector.Validate(); err != nil {
 				return fmt.Errorf("%s: invalid required_by selector: %w", pkg.Alias, err)
 			}
-			if pkg.Source.Git != nil {
-				if edge.Selector != pkg.Source.Git.Requested {
-					return fmt.Errorf("%s: Git selector differs from consumer %s", pkg.Alias, edge.Alias)
-				}
-			} else if pkg.Source.Archive != nil {
-				if edge.Selector != (Selector{Kind: SelectorArchive, Value: pkg.Source.Archive.RequestedSHA256}) {
-					return fmt.Errorf("%s: archive selector differs from consumer %s", pkg.Alias, edge.Alias)
-				}
-			} else if edge.Selector.Kind != SelectorRelease && edge.Selector.Kind != SelectorVersion && edge.Selector.Kind != SelectorRange {
-				return fmt.Errorf("%s: invalid registry dependency selector", pkg.Alias)
-			} else if !registrySelectorMatches(edge.Selector, pkg) {
-				return fmt.Errorf("%s: version %q does not satisfy consumer %s selector %s", pkg.Alias, pkg.Version, edge.Alias, edge.Selector.Value)
+			if err := validateRequiredBySource(pkg, edge); err != nil {
+				return err
 			}
+
 		}
+	}
+	return nil
+}
+
+func validateRequiredBySource(pkg LockedPackage, edge RequiredBy) error {
+	if pkg.Source.Git != nil {
+		if edge.Selector != pkg.Source.Git.Requested {
+			return fmt.Errorf("%s: Git selector differs from consumer %s", pkg.Alias, edge.Alias)
+		}
+	} else if pkg.Source.Archive != nil {
+		if edge.Selector != (Selector{Kind: SelectorArchive, Value: pkg.Source.Archive.RequestedSHA256}) {
+			return fmt.Errorf("%s: archive selector differs from consumer %s", pkg.Alias, edge.Alias)
+		}
+	} else if edge.Selector.Kind != SelectorRelease && edge.Selector.Kind != SelectorVersion && edge.Selector.Kind != SelectorRange {
+		return fmt.Errorf("%s: invalid registry dependency selector", pkg.Alias)
+	} else if !registrySelectorMatches(edge.Selector, pkg) {
+		return fmt.Errorf("%s: version %q does not satisfy consumer %s selector %s", pkg.Alias, pkg.Version, edge.Alias, edge.Selector.Value)
 	}
 	return nil
 }

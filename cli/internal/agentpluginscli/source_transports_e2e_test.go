@@ -69,9 +69,15 @@ func newDirectTransportFixture(t *testing.T, format string, private bool) *direc
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
+	// Empty helper resets inherited osxkeychain/GCM; Schannel otherwise ignores
+	// an injected CA bundle. These affect disposable fixture HOME only. See
+	// https://git-scm.com/docs/gitcredentials and https://git-scm.com/docs/git-config.
+	config := "[credential]\n helper =\n[http]\n schannelUseSSLCAInfo = true\n"
 	if private {
-		dependencyWrite(t, filepath.Join(home, ".gitconfig"), "[credential \""+fixture.server.URL+"\"]\n helper = \"!f() { printf 'username=fixture\\npassword=disposable-fixture-token\\n'; }; f\"\n")
+		config += "[credential \"" + fixture.server.URL + "\"]\n helper = \"!f() { printf 'username=fixture\\npassword=disposable-fixture-token\\n'; }; f\"\n"
 	}
+	dependencyWrite(t, filepath.Join(home, ".gitconfig"), config)
+
 	return fixture
 }
 

@@ -193,57 +193,73 @@ func decodeRawDependency(value any) (rawDependency, error) {
 
 func requirementFromRaw(alias string, raw rawDependency) (environment.Requirement, error) {
 	if raw.Version != "" {
-		if raw.Git != "" || raw.Archive != "" || raw.SHA256 != "" || raw.Path != "" || raw.Ref != "" || raw.Commit != "" || raw.Registry != "" || raw.Distribution != "" || raw.Release != nil {
-			return environment.Requirement{}, errors.New("version shortcut cannot contain source table fields")
-		}
-		selector, err := rawSelector(raw)
-		return environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{Distribution: alias, Selector: selector}}, err
+		return versionRequirement(alias, raw)
 	}
 	selector, err := rawSelector(raw)
 	if err != nil {
 		return environment.Requirement{}, err
 	}
-	gitSource, registrySource := raw.Git != "", raw.Registry != "" || raw.Distribution != "" || raw.Release != nil
-	count := 0
-	for _, yes := range []bool{gitSource, registrySource, raw.Archive != ""} {
-		if yes {
-			count++
-		}
-	}
-	if count != 1 {
+	if rawSourceCount(raw) != 1 {
 		return environment.Requirement{}, errors.New("dependency must contain exactly one git, archive or registry source")
 	}
 	if raw.Archive != "" {
-		if raw.Ref != "" || raw.Commit != "" {
-			return environment.Requirement{}, errors.New("archive source cannot contain Git selectors")
-		}
-		endpoint, err := sourcespec.NormalizeArchiveURL(raw.Archive)
-		if err != nil {
-			return environment.Requirement{}, err
-		}
-		return environment.Requirement{Alias: alias, Archive: &environment.ArchiveSource{URL: endpoint, Path: raw.Path, SHA256: raw.SHA256}}, nil
+		return archiveRequirement(alias, raw)
 	}
 	if raw.SHA256 != "" {
 		return environment.Requirement{}, errors.New("sha256 is only valid for archive sources")
 	}
-	if gitSource {
-		if raw.Registry != "" || raw.Distribution != "" || raw.Release != nil {
-			return environment.Requirement{}, errors.New("git source cannot contain registry fields")
-		}
-		endpoint := raw.Git
-		if !strings.Contains(endpoint, ":") {
-			endpoint = "https://github.com/" + endpoint + ".git"
-		}
-		normalized, repository, err := sourcespec.NormalizeGitURL(endpoint)
-		if err != nil {
-			return environment.Requirement{}, err
-		}
-		source := &environment.GitSource{Repository: repository, Path: raw.Path, Selector: selector}
-		if repository == "" {
-			source.URL = normalized
-		}
-		return environment.Requirement{Alias: alias, Git: source}, nil
+	if raw.Git != "" {
+		return gitRequirement(alias, raw, selector)
 	}
+	return registryRequirement(alias, raw, selector)
+}
+
+func rawSourceCount(raw rawDependency) int {
+	count := 0
+	for _, source := range []bool{raw.Git != "", raw.Registry != "" || raw.Distribution != "" || raw.Release != nil, raw.Archive != ""} {
+		if source {
+			count++
+		}
+	}
+	return count
+}
+
+func versionRequirement(alias string, raw rawDependency) (environment.Requirement, error) {
+	if rawSourceCount(raw) != 0 || raw.SHA256 != "" || raw.Path != "" || raw.Ref != "" || raw.Commit != "" {
+		return environment.Requirement{}, errors.New("version shortcut cannot contain source table fields")
+	}
+	selector, err := rawSelector(raw)
+	return environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{Distribution: alias, Selector: selector}}, err
+}
+
+func archiveRequirement(alias string, raw rawDependency) (environment.Requirement, error) {
+	if raw.Ref != "" || raw.Commit != "" {
+		return environment.Requirement{}, errors.New("archive source cannot contain Git selectors")
+	}
+	endpoint, err := sourcespec.NormalizeArchiveURL(raw.Archive)
+	if err != nil {
+		return environment.Requirement{}, err
+	}
+	return environment.Requirement{Alias: alias, Archive: &environment.ArchiveSource{URL: endpoint, Path: raw.Path, SHA256: raw.SHA256}}, nil
+}
+
+func gitRequirement(alias string, raw rawDependency, selector environment.Selector) (environment.Requirement, error) {
+	endpoint := raw.Git
+	if !strings.Contains(endpoint, ":") {
+		endpoint = "https://github.com/" + endpoint + ".git"
+	}
+	normalized, repository, err := sourcespec.NormalizeGitURL(endpoint)
+	if err != nil {
+		return environment.Requirement{}, err
+	}
+	source := &environment.GitSource{Repository: repository, Path: raw.Path, Selector: selector}
+	if repository == "" {
+		source.URL = normalized
+	}
+	return environment.Requirement{Alias: alias, Git: source}, nil
+}
+
+func registryRequirement(alias string, raw rawDependency, selector environment.Selector) (environment.Requirement, error) {
 	if raw.Ref != "" || raw.Commit != "" {
 		return environment.Requirement{}, errors.New("registry source cannot contain git selectors")
 	}
