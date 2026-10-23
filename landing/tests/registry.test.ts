@@ -14,7 +14,7 @@ import {
   restoreCatalogQuery,
 } from '../utils/filter.ts';
 import { clients } from '../data/clients.ts';
-import { mirroredIconPath, parseDirectoryData } from '../utils/registry.ts';
+import { mirroredIconPath, parseDirectoryData, vendorInstallSource } from '../utils/registry.ts';
 import { projectRegistry } from '../utils/registryProjection.ts';
 import type { DiscoveryRecord, DiscoverySnapshot } from '../types/discovery.ts';
 
@@ -463,5 +463,42 @@ describe('unified registry landing', () => {
     };
 
     assert.deepEqual(catalogVisiblePlugins([retired, current, reviewed]), [current, reviewed]);
+  });
+
+  it('hides only fully retired products; suspended ones stay in the list', () => {
+    const reviewed = registry.plugins[0]!;
+    const retired = {
+      ...reviewed,
+      name: 'retired-product',
+      distributions: reviewed.distributions.map((distribution) => ({
+        ...distribution,
+        releases: distribution.releases.map((release) => ({
+          ...release,
+          release_status: 'revoked' as const,
+        })),
+      })),
+    };
+    const paused = {
+      ...reviewed,
+      name: 'paused-product',
+      distributions: reviewed.distributions.map((distribution) => ({
+        ...distribution,
+        releases: distribution.releases.map((release, index) => ({
+          ...release,
+          release_status: (index === 0 ? 'active' : 'revoked') as 'active' | 'revoked',
+        })),
+      })),
+    };
+
+    assert.deepEqual(catalogVisiblePlugins([retired, paused, reviewed]), [paused, reviewed]);
+  });
+
+  it('offers the vendor installer override for agent-notifications only', () => {
+    const reviewed = registry.plugins[0]!;
+    assert.deepEqual(vendorInstallSource({ ...reviewed, name: 'agent-notifications' }), {
+      url: 'https://agent-notifications.com/#install',
+      command: '(set -o pipefail; curl -fsSL https://agent-notifications.com/install.sh | bash)',
+    });
+    assert.equal(vendorInstallSource(reviewed), undefined);
   });
 });

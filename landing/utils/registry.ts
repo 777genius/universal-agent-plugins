@@ -1185,6 +1185,25 @@ export function githubSourceUrl(
   return `https://github.com/${distribution.source.repository}/tree/${distribution.source.revision}/${path}`;
 }
 
+export interface VendorInstallSource {
+  url: string;
+  command: string;
+}
+
+// Products that install through their own vendor installer instead of the
+// universal-agent-plugins CLI. The command is the vendor's own published one;
+// the UI must present it as vendor-supplied, never as vouched for by UAP.
+const vendorInstallSources: Record<string, VendorInstallSource> = {
+  'agent-notifications': {
+    url: 'https://agent-notifications.com/#install',
+    command: '(set -o pipefail; curl -fsSL https://agent-notifications.com/install.sh | bash)',
+  },
+};
+
+export function vendorInstallSource(plugin: RegistryPlugin): VendorInstallSource | undefined {
+  return vendorInstallSources[plugin.name];
+}
+
 export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
   if (!plugin.built_in) return undefined;
   // Local presentation assets are owned explicitly; package metadata cannot
