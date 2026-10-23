@@ -94,3 +94,21 @@ client run remains recorded above. No blocker remains in this correction.
 Neither review execution launched Cursor, its launcher or an MCP process, and
 the genuine hosted native boundary is unchanged. The independent R2 author
 has separately recorded GO for the same corrective checkpoint.
+
+## Scoped hosted test-selection closure: GO at 32c33c6f
+
+Independently reviewed `32c33c6fa96d790396a6fc1be3f1a36537ef4c9c`
+after the reviewed project-stack CI baseline merge `935e3e08`. The complete
+source file is byte-identical after replacing only the function symbol
+TestCursorProjectComposedSourceLifecycle with
+TestProjectCursorComposedSourceLifecycle; no fixture or assertion changed.
+The adjacent evidence accurately updates its test name and records pending
+hosted/native results.
+
+Extracted the actual project-contracts workflow regex
+`Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext)` and checked
+that it selects the corrected name while excluding the previous spelling.
+That job includes the public CLI package on Linux/macOS/Windows. No broad
+compile or rerun is needed for this literal symbol-only correction, and none
+was represented as fresh execution. The bounded selection correction is GO;
+real cross-platform/native outcomes remain their separate hosted gates.

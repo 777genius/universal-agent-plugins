@@ -120,7 +120,7 @@ implementations. Only host detection and package security assessment are inert
 fixture boundaries. Remote MCP entries avoid executing configured commands or
 copying the test executable as a managed launcher.
 
-`TestCursorProjectComposedSourceLifecycle` covers both Git and ZIP sources:
+`TestProjectCursorComposedSourceLifecycle` covers both Git and ZIP sources:
 saved project add in A and B, exact native skill/MCP paths, locked no-op sync,
 list/info/doctor/outdated/dependency status/tree reads without native/state
 changes, missing native skill repair, pin-advancing update that retains binding
@@ -164,3 +164,11 @@ the positive read-only case, then requires wrong/empty data locators to fail
 with unchanged immutable package bytes. Full project Cursor provider selection
 passes at this correction: **PASS 0.180s**. The independent R2 reviewer must
 recheck this correction before closing the adapter review.
+
+## Cross-platform source journey selection
+
+The composed Git/ZIP source lifecycle test now starts with `TestProjectCursor`
+so the existing project-contracts selector includes it on Linux, macOS and
+Windows. Only the test name changes; its assertions and inert source/runtime
+boundaries remain identical. This corrects hosted test selection and does not
+claim that any pending native or cross-platform run has passed.

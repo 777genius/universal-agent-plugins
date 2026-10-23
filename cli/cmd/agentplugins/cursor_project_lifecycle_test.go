@@ -11,7 +11,7 @@ import (
 // This is the production CLI/dependency/installer/native-filesystem composition
 // with real loopback TLS Git and ZIP acquisition. Native Cursor discovery,
 // enablement, MCP initialization, model use and runtime are not certified.
-func TestCursorProjectComposedSourceLifecycle(t *testing.T) {
+func TestProjectCursorComposedSourceLifecycle(t *testing.T) {
 	for _, kind := range []string{"git", "zip"} {
 		t.Run(kind, func(t *testing.T) {
 			transport := newProjectJourneyTransport(t, kind)

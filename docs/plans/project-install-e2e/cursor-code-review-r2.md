@@ -79,3 +79,7 @@ trust/approval/login change or hosted native proof was executed. Author's
 corrective lint gates and the other independent review remain applicable to
 the final checkpoint. Actual native discovery, fresh native restarts, editor
 behavior, MCP handshake/tool invocation and release qualification remain pending.
+# Hosted selector closure — 2026-10-23
+
+Independent R2 rechecked isolated `32c33c6f` against its parent: the only test-code change renames `TestCursorProjectComposedSourceLifecycle` to `TestProjectCursorComposedSourceLifecycle`. The entire Git/ZIP lifecycle body and assertions are unchanged. The existing cross-platform project-contract selector `Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext)` now includes the composed test through its `TestProject` prefix. The accompanying evidence note correctly leaves pending hosted/native runs pending. **GO for this symbol-only selection correction.** No additional compilation was needed to establish this exact rename preservation; previously reviewed composed behavior retains its prior evidence.
+
