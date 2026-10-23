@@ -25,6 +25,10 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely update a tracked Agent Plugin across selected or installed clients",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -69,6 +73,10 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -152,7 +160,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	input := usecase.AddInput{Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope), DryRun: opts.dryRun,
 		InstallationID: installation.InstallationID, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable: backendExecutable(selected, detectedMap), EnvironmentAuthority: authority}
+		BackendExecutable: backendExecutable(selected, detectedMap, app.scope()), EnvironmentAuthority: authority}
 	planned, err := service.Repair(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {
@@ -299,7 +307,7 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	input := usecase.AddInput{
 		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable:                backendExecutable(selected, detectedMap),
+		BackendExecutable:                backendExecutable(selected, detectedMap, app.scope()),
 		PersistAuthoritativeObservations: true,
 		EnvironmentAuthority:             authority,
 	}
@@ -354,6 +362,10 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely remove selected targets while retaining plugin data by default",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -526,7 +538,7 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		Selector: installation.InstallationID, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal,
 		ExternalUninstalled:  opts.externalUninstalled,
-		BackendExecutable:    backendExecutable(selected, detectedMap),
+		BackendExecutable:    backendExecutable(selected, detectedMap, app.scope()),
 		EnvironmentAuthority: authority,
 	}
 	planned, err := service.Remove(ctx, input)

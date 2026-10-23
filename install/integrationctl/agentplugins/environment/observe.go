@@ -47,9 +47,7 @@ func Observe(view installer.Inspection) ([]BindingObservation, error) {
 // ObserveForEnvironment uses the selected namespace's explicit receipt owner.
 // Other ownership stays visible as foreign and cannot be adopted by alias.
 func ObserveForEnvironment(view installer.Inspection, environmentID string) ([]BindingObservation, error) {
-	if environmentID == "" {
-		environmentID = EnvironmentUserDefault
-	}
+	environmentID = (Coordinator{EnvironmentID: environmentID}).environmentID()
 	if view.Recovery.Required {
 		return nil, installer.ErrRecoveryRequired
 	}

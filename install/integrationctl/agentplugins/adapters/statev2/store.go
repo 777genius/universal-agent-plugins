@@ -24,10 +24,15 @@ const (
 var fullLowercaseSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type Store struct {
-	Path string
+	// ProjectRoot is operational context; machine state copied across projects is rejected.
+	ProjectRoot string `json:"-"`
+	Path        string
 }
 
 func (store Store) SchemaVersion() (int, error) {
+	if err := store.validateProjectPaths(); err != nil {
+		return 0, err
+	}
 	body, err := os.ReadFile(store.Path)
 	if os.IsNotExist(err) {
 		return domain.StateSchemaVersion, nil
@@ -71,6 +76,9 @@ func managedBindingDigest(binding domain.ClientBinding) string {
 }
 
 func (store Store) Load() (domain.StateFileV2, error) {
+	if err := store.validateProjectPaths(); err != nil {
+		return domain.StateFileV2{}, err
+	}
 	if strings.TrimSpace(store.Path) == "" {
 		return domain.StateFileV2{}, fmt.Errorf("state v2 path is required")
 	}
@@ -113,10 +121,16 @@ func (store Store) Load() (domain.StateFileV2, error) {
 	if err := Validate(state); err != nil {
 		return domain.StateFileV2{}, fmt.Errorf("validate state: %w", err)
 	}
+	if err := store.validateProject(state); err != nil {
+		return domain.StateFileV2{}, err
+	}
 	return state, nil
 }
 
 func (store Store) Save(state domain.StateFileV2) error {
+	if err := store.validateProjectPaths(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(store.Path) == "" {
 		return fmt.Errorf("state v2 path is required")
 	}
@@ -126,6 +140,9 @@ func (store Store) Save(state domain.StateFileV2) error {
 	normalizeCurrentState(&state)
 	if err := Validate(state); err != nil {
 		return fmt.Errorf("refuse invalid state: %w", err)
+	}
+	if err := store.validateProject(state); err != nil {
+		return err
 	}
 	state.Installations = append([]domain.Installation(nil), state.Installations...)
 	sort.Slice(state.Installations, func(i, j int) bool {
@@ -347,7 +364,9 @@ func Validate(state domain.StateFileV2) error {
 			}
 			clientBindingIDs[client.ClientBindingID] = struct{}{}
 			if client.InstallIntent == domain.InstallIntentPrepare && client.Scope != string(domain.ScopeUser) {
-				return fmt.Errorf("prepare binding requires user scope")
+				if client.Scope != string(domain.ScopeProject) || !(domain.SelectedDelivery{}).EffectiveTraitsForScope(domain.ClientID(client.ClientID), domain.ScopeProject).Allows(domain.InstallIntentPrepare) {
+					return fmt.Errorf("prepare binding requires a supported scope")
+				}
 			}
 			if err := client.InstallIntent.Validate(domain.ClientID(client.ClientID)); err != nil {
 				return err

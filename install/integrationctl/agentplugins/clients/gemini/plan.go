@@ -14,11 +14,16 @@ var (
 )
 
 func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	return validateProfile(in.Client.ConfigRoot, plan.NativeRegistryRoot)
+	_, err := geminiNativeRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot)
+	return err
 }
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
+	root := in.Client.ConfigRoot
+	if in.TargetContext.Scope == domain.ScopeProject {
+		root = plan.NativeRegistryRoot
+	}
+	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI")
 	return nil
 }

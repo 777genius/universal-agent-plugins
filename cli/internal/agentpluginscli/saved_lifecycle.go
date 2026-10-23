@@ -17,8 +17,8 @@ import (
 
 // resolveSavedAlias resolves intent and live ownership together. A name never
 // silently selects an alias when an unrelated installation has the same name.
-func resolveSavedAlias(state domain.StateFileV2, requirements environment.Requirements, selector string) (string, *domain.Installation, error) {
-	aliases := matchingSavedAliases(state, requirements, selector)
+func resolveSavedAlias(state domain.StateFileV2, requirements environment.Requirements, selector string, environmentIDs ...string) (string, *domain.Installation, error) {
+	aliases := matchingSavedAliases(state, requirements, selector, environmentIDs...)
 	if len(aliases) == 0 {
 		return "", nil, nil
 	}
@@ -29,7 +29,7 @@ func resolveSavedAlias(state domain.StateFileV2, requirements environment.Requir
 	for key := range aliases {
 		alias = key
 	}
-	installation, err := savedAliasInstallation(state, alias, selector)
+	installation, err := savedAliasInstallation(state, alias, selector, environmentIDs...)
 	return alias, installation, err
 }
 
@@ -37,12 +37,12 @@ func ambiguousSavedSelector(selector string) error {
 	return fmt.Errorf("ambiguous dependency %q; specify an installation ID", selector)
 }
 
-func matchingSavedAliases(state domain.StateFileV2, requirements environment.Requirements, selector string) map[string]bool {
+func matchingSavedAliases(state domain.StateFileV2, requirements environment.Requirements, selector string, environmentIDs ...string) map[string]bool {
 	aliases := map[string]bool{}
 	if requirement, ok := requirements.Dependencies[selector]; ok {
 		source := mustSourceKey(requirement)
 		for _, receipt := range state.EnvironmentReceipts {
-			if source != "" && receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.SourceKey == source {
+			if source != "" && receipt.EnvironmentID == selectedEnvironmentID(environmentIDs) && receipt.SourceKey == source {
 				aliases[receipt.Alias] = true
 			}
 		}
@@ -55,7 +55,7 @@ func matchingSavedAliases(state domain.StateFileV2, requirements environment.Req
 		names[installation.InstallationID] = installation.DeclaredName
 	}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
+		if receipt.EnvironmentID != selectedEnvironmentID(environmentIDs) {
 			continue
 		}
 		if receipt.Alias == selector || receipt.InstallationID == selector || names[receipt.InstallationID] == selector {
@@ -65,20 +65,20 @@ func matchingSavedAliases(state domain.StateFileV2, requirements environment.Req
 	return aliases
 }
 
-func ownsSavedAlias(state domain.StateFileV2, installationID, alias string) bool {
+func ownsSavedAlias(state domain.StateFileV2, installationID, alias string, environmentIDs ...string) bool {
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.InstallationID == installationID && receipt.Alias == alias {
+		if receipt.EnvironmentID == selectedEnvironmentID(environmentIDs) && receipt.InstallationID == installationID && receipt.Alias == alias {
 			return true
 		}
 	}
 	return false
 }
 
-func savedAliasInstallation(state domain.StateFileV2, alias, selector string) (*domain.Installation, error) {
+func savedAliasInstallation(state domain.StateFileV2, alias, selector string, environmentIDs ...string) (*domain.Installation, error) {
 	var selected *domain.Installation
 	for index := range state.Installations {
 		installation := &state.Installations[index]
-		owned := ownsSavedAlias(state, installation.InstallationID, alias)
+		owned := ownsSavedAlias(state, installation.InstallationID, alias, environmentIDs...)
 		if (installation.InstallationID == selector || installation.DeclaredName == selector) && !owned {
 			return nil, ambiguousSavedSelector(selector)
 		}
@@ -93,10 +93,10 @@ func savedAliasInstallation(state domain.StateFileV2, alias, selector string) (*
 	return selected, nil
 }
 
-func savedAliasTargets(requirements environment.Requirements, state domain.StateFileV2, alias string) []string {
+func savedAliasTargets(requirements environment.Requirements, state domain.StateFileV2, alias string, environmentIDs ...string) []string {
 	declaration := alias
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.Alias == alias {
+		if receipt.EnvironmentID == selectedEnvironmentID(environmentIDs) && receipt.Alias == alias {
 			for key, requirement := range requirements.Dependencies {
 				if receipt.SourceKey != "" && mustSourceKey(requirement) == receipt.SourceKey {
 					declaration = key
@@ -111,7 +111,7 @@ func savedAliasTargets(requirements environment.Requirements, state domain.State
 		}
 	}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.Alias == alias {
+		if receipt.EnvironmentID == selectedEnvironmentID(environmentIDs) && receipt.Alias == alias {
 			targets[receipt.ClientID] = true
 		}
 	}
@@ -190,7 +190,7 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	if err := runSavedEnvironment(cmd, preview, opts, snapshot, requirements, locked, manifest, []string{selection.alias}, nil); err != nil {
 		return true, err
 	}
-	return true, selection.renderNextAction(cmd, opts, requirements, locked, operation)
+	return true, selection.renderNextAction(cmd, opts, requirements, locked, operation, app.environmentID())
 }
 
 func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecycleSelection, error) {
@@ -204,7 +204,7 @@ func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecyc
 	if err != nil && !os.IsNotExist(err) {
 		return selection, err
 	}
-	selection.alias, selection.installation, err = resolveSavedAlias(state, requirements, selector)
+	selection.alias, selection.installation, err = resolveSavedAlias(state, requirements, selector, app.environmentID())
 	if err != nil {
 		return selection, err
 	}
@@ -212,12 +212,12 @@ func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecyc
 	if err != nil || selection.alias == "" {
 		return selection, err
 	}
-	if opts.scope != "" && opts.scope != "user" {
+	if opts.scope != "" && opts.scope != "user" && opts.scope != "project" {
 		return selection, errors.New("saved dependencies support user scope only")
 	}
-	targets := savedAliasTargets(requirements, state, selection.alias)
+	targets := savedAliasTargets(requirements, state, selection.alias, app.environmentID())
 	if selection.declaration != "" {
-		targets = savedAliasTargets(requirements, state, selection.declaration)
+		targets = savedAliasTargets(requirements, state, selection.declaration, app.environmentID())
 	}
 	if selection.retained != nil {
 		targets = selection.retained.Targets
@@ -263,7 +263,7 @@ func (selection savedLifecycleSelection) candidate(cmd *cobra.Command, app App, 
 	switch operation {
 	case "remove":
 		requirements = removeSavedTargets(requirements, dependencyRootKey(requirements, snapshot.Lock, selection.alias), selection.targets)
-		locked, err = (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
+		locked, err = (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
 	case "update":
 		requirements, locked, err = selection.update(cmd, app, opts, snapshot)
 	default:
@@ -279,7 +279,7 @@ func (selection savedLifecycleSelection) candidate(cmd *cobra.Command, app App, 
 func (selection savedLifecycleSelection) update(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot) (environment.Requirements, environment.Lock, error) {
 	requirements := snapshot.Requirements
 	key := dependencyRootKey(requirements, snapshot.Lock, selection.alias)
-	desired := savedAliasTargets(requirements, domain.StateFileV2{}, key)
+	desired := savedAliasTargets(requirements, domain.StateFileV2{}, key, app.environmentID())
 	if strings.TrimSpace(opts.target) != "" && !slices.Equal(selection.targets, desired) {
 		return requirements, snapshot.Lock, fmt.Errorf("update %s must select every target of the alias", selection.alias)
 	}
@@ -297,11 +297,11 @@ func (selection savedLifecycleSelection) update(cmd *cobra.Command, app App, opt
 	if requirement.Git != nil && requirement.Git.Selector.Kind == environment.SelectorCommit {
 		updateAlias = ""
 	}
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{requirements: requirements, app: app, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, updateAlias)
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{requirements: requirements, app: app, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, updateAlias)
 	return requirements, locked, err
 }
 
-func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, opts *options, requirements environment.Requirements, locked environment.Lock, operation string) error {
+func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, opts *options, requirements environment.Requirements, locked environment.Lock, operation string, environmentIDs ...string) error {
 	if opts.format == "json" {
 		return nil
 	}
@@ -319,7 +319,7 @@ func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, op
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Exact commit pin retained; choose a new pin with agentplugins add <repo>@<sha>//path")
 		return err
 	}
-	if operation == "remove" && selection.installation != nil && len(savedAliasTargets(requirements, domain.StateFileV2{}, selection.alias)) == 0 {
+	if operation == "remove" && selection.installation != nil && len(savedAliasTargets(requirements, domain.StateFileV2{}, selection.alias, environmentIDs...)) == 0 {
 		_, err := fmt.Fprintf(cmd.OutOrStdout(), "PLUGIN_DATA preserved; after removal completes, run agentplugins remove %s --purge-data to delete retained data\n", selection.installation.InstallationID)
 		return err
 	}
@@ -356,7 +356,7 @@ func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot en
 	}
 	// Validate the authoritative old graph before rebuilding edges from the new
 	// immutable manifests. Replacing a node inside old edges creates a false conflict.
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
 	return requirements, locked, err
 }
 

@@ -12,9 +12,10 @@ import (
 )
 
 type document struct {
-	ast   hujson.Value
-	root  *hujson.Object
-	jsonc bool
+	ast          hujson.Value
+	root         *hujson.Object
+	jsonc        bool
+	commentsOnly bool
 }
 
 func parseDocument(body []byte, jsonc bool) (*document, error) {
@@ -35,7 +36,9 @@ func parseDocument(body []byte, jsonc bool) (*document, error) {
 	return &document{ast: ast, root: root, jsonc: jsonc}, nil
 }
 
-func newDocument(jsonc bool) (*document, error) { return parseDocument([]byte("{}\n"), jsonc) }
+func newDocument(jsonc bool, codec Codec) (*document, error) {
+	return parseCodecDocument([]byte("{}\n"), jsonc, codec)
+}
 
 func rejectDuplicateKeys(value *hujson.Value, path string) error {
 	switch node := value.Value.(type) {
@@ -150,7 +153,13 @@ func (doc *document) render() ([]byte, error) {
 	if !doc.jsonc && !json.Valid(body) {
 		return nil, fmt.Errorf("rendered native config is not strict JSON")
 	}
-	if _, err := parseDocument(body, doc.jsonc); err != nil {
+	var err error
+	if doc.commentsOnly {
+		_, err = parseCodecDocument(body, false, CodecGemini)
+	} else {
+		_, err = parseDocument(body, doc.jsonc)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("validate rendered native config: %w", err)
 	}
 	return body, nil

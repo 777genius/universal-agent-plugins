@@ -56,6 +56,10 @@ func newOutdatedCommand(app App, opts *options) *cobra.Command {
 		Short: "Check immutable release identities without changing installations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -340,7 +344,7 @@ func inspectDirectoryOutdated(
 		}
 		return item
 	}
-	return resolveDirectoryOutdated(bundle, detected, installerVersion, installation, origin, item)
+	return resolveDirectoryOutdated(bundle, detected, installerVersion, installation, origin, item, domain.InstallScope(scope))
 }
 
 func directoryOutdatedPreflight(item outdatedInstallation, detectionErr error, installation domain.Installation, scope string) (status, reason string, cloneInstalled, stop bool) {
@@ -363,6 +367,7 @@ func resolveDirectoryOutdated(
 	installation domain.Installation,
 	origin *domain.DirectoryOrigin,
 	item outdatedInstallation,
+	scopes ...domain.InstallScope,
 ) outdatedInstallation {
 	_, clientMap, err := preflightSelectedTargets(context.Background(), App{Detector: staticDetectedClientSource(detected)}, item.Targets, detectedClientValues(detected), false)
 	if err != nil {
@@ -372,7 +377,7 @@ func resolveDirectoryOutdated(
 	environment := directoryEnvironment(clientMap)
 	environment.InstallerVersion = installerVersion
 	selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
-		Selector: origin.ProductID, Targets: expandAffectedSurfaceTargets(item.Targets), Scope: domain.ScopeUser,
+		Selector: origin.ProductID, Targets: expandAffectedSurfaceTargets(item.Targets, selectedScope(scopes)), Scope: selectedScope(scopes),
 		InstallerVersion: installerVersion, ClientVersions: environment.ClientVersions, OS: environment.OS,
 		Architecture: environment.Architecture, DependencyIdentity: environment.DependencyIdentity,
 		SchemaVersion: "1.0.0", Operation: domain.DirectoryUpdate,

@@ -24,6 +24,10 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 		Long:  "Install/repair the declared environment from uap.toml and uap.lock: install everything declared on a first run, leave already-matching items alone, and converge missing or drifted state to the exact locked pins. With a source argument, install behaves as agentplugins add for that one package.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if len(args) == 1 {
 				return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 			}
@@ -137,7 +141,7 @@ func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options,
 		return err
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
-	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, Bindings: prepared}, true)
+	results, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: prepared}, true)
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}

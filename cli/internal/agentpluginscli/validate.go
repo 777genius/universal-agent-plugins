@@ -49,6 +49,10 @@ func newValidateCommand(app App, opts *options) *cobra.Command {
 		Short: "Validate one Agent Plugins package without installing it",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}

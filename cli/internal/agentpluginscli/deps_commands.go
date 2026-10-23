@@ -19,10 +19,14 @@ import (
 )
 
 func newDepsCommand(app App, opts *options) *cobra.Command {
-	command := &cobra.Command{Use: "deps", Short: "Manage the portable user dependency environment"}
+	command := &cobra.Command{Use: "deps", Short: "Manage the portable dependency environment"}
 	var locked, yes bool
 	command.AddCommand(&cobra.Command{
 		Use: "init", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -31,6 +35,10 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	})
 	command.AddCommand(&cobra.Command{
 		Use: "lock", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -43,6 +51,10 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	})
 	command.AddCommand(&cobra.Command{
 		Use: "update <alias>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -55,6 +67,10 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	})
 	command.AddCommand(&cobra.Command{
 		Use: "status", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -63,6 +79,10 @@ func newDepsCommand(app App, opts *options) *cobra.Command {
 	})
 	sync := &cobra.Command{
 		Use: "sync", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -87,9 +107,6 @@ func validateDepsOptions(opts *options) error {
 func validateEnvironmentOptions(command string, opts *options) error {
 	if opts.target != "" {
 		return fmt.Errorf("%s uses uap.toml targets only; inherited --target is not allowed", command)
-	}
-	if opts.scope != "user" {
-		return fmt.Errorf("%s supports --scope user only", command)
 	}
 	return validateCommonOptions(opts)
 }
@@ -320,7 +337,7 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 	if hadPrevious {
 		previousPin = &previous
 	}
-	locked, err := (environment.Coordinator{Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
 	if err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err
 	}
@@ -335,6 +352,10 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 func newDependencyRecoverCommand(app App, opts *options, yes *bool) *cobra.Command {
 	recovery := &cobra.Command{
 		Use: "recover", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -359,5 +380,5 @@ func supportedDependencyTargets(app App) []string {
 // all explicitly registered legacy capabilities; this flow admits only the
 // owner's qualified dependency targets.
 func supportsDependencyTarget(app App, target string) bool {
-	return app.Installer != nil && app.Installer.SupportsClient(target) && installer.ClientSupported(app.ClientRegistry, target)
+	return app.Installer != nil && installer.ClientScopeSupported(app.ClientRegistry, target, app.scope())
 }

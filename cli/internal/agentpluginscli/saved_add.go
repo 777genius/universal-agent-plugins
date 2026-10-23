@@ -181,7 +181,7 @@ func rejectKnownOwnedAdd(app App, source string) error {
 		key = "github:" + strings.ToLower(matches[1]) + ":" + matches[3]
 	}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
+		if receipt.EnvironmentID != app.environmentID() {
 			continue
 		}
 		if key != "" && receipt.SourceKey == key || isDirectorySelector(source) && receipt.SourceKey == "directory:"+strings.ToLower(source) {
@@ -228,7 +228,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 			return nil, fmt.Errorf("target %s cannot be saved; retry agentplugins add %s --target %s --no-save", target, source, opts.target)
 		}
 	}
-	if opts.scope != "user" {
+	if opts.scope != "user" && opts.scope != "project" {
 		return nil, errors.New("saved dependencies support user scope only")
 	}
 
@@ -354,7 +354,7 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		}
 	}
 	previous := seedSavedAdd(snapshot, requirement, pin)
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, previous, "")
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, previous, "")
 	if err != nil {
 		return err
 	}

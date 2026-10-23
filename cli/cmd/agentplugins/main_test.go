@@ -111,7 +111,7 @@ func TestInvalidScopeAndTargetDoNotCreateDataRoot(t *testing.T) {
 			t.Setenv("AGENTPLUGINS_HOME", dataRoot)
 			os.Args = args
 			err := run()
-			if err == nil || (name == "project-scope" && !strings.Contains(err.Error(), "user scope")) {
+			if err == nil || (name == "project-scope" && !strings.Contains(err.Error(), "requires --target")) {
 				t.Fatalf("invalid invocation error = %v", err)
 			}
 			if _, statErr := os.Lstat(dataRoot); !os.IsNotExist(statErr) {
@@ -200,7 +200,7 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 	os.Args = append([]string{"agentplugins"}, argv...)
 	var out, errout bytes.Buffer
 	err = executeRelease(context.Background(), argv, authoringcli.Streams{Out: &out, Err: &errout}, run)
-	if err == nil || out.Len() != 0 || errout.String() != "agentplugins: --scope project is not supported by the current client adapters; the public CLI supports user scope only\n" || len(transport.urls) != 0 {
+	if err == nil || out.Len() != 0 || errout.String() != "agentplugins: codex does not support project scope\n" || len(transport.urls) != 0 {
 		t.Fatalf("preflight boundary: %v %q %q requests=%v", err, out.String(), errout.String(), transport.urls)
 	}
 	if !reflect.DeepEqual(beforeState, securityFixtureTree(t, state)) || !reflect.DeepEqual(beforeSource, securityFixtureTree(t, source)) || !reflect.DeepEqual(beforeHome, securityFixtureTree(t, home)) {

@@ -96,7 +96,7 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 		return err
 	}
 	writeProgress(app, opts.format, "Resolving and validating one Agent Plugin package for every selected target...")
-	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, expandAffectedSurfaceTargets(targets)), detected))
+	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, expandAffectedSurfaceTargets(targets, app.scope())), detected))
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
 		}
 		if state, err := app.StateStore.Load(); err == nil {
-			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, executionTargets[0], string(domain.ScopeUser)) {
+			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, executionTargets[0], string(app.scope())) {
 				return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
 			}
 		}
@@ -177,9 +177,9 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		input := usecase.AddInput{
 			InstallIntent: opts.installIntents[client.ClientID],
-			Envelope:      clientPackage.envelope, Client: client, Scope: domain.ScopeUser,
+			Envelope:      clientPackage.envelope, Client: client, Scope: app.scope(),
 			DryRun: true, Interactive: app.Terminal, Hints: clientPackage.hints,
-			BackendExecutable:  backendExecutable(client, detected),
+			BackendExecutable:  backendExecutable(client, detected, app.scope()),
 			ActivationComplete: activationComplete, AuthComplete: authComplete,
 			PersistAuthoritativeObservations: false,
 			OriginMode:                       loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
