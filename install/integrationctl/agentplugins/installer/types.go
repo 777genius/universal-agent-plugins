@@ -56,10 +56,13 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
-	InstallationID       string
-	OperationID          string
-	Selector             string
-	RequiredComponents   []string
+	// ClientVersion is host-observed evidence for the selected executable.
+	// It is operational input, never portable package or diagnostic metadata.
+	ClientVersion      string `json:"-"`
+	InstallationID     string
+	OperationID        string
+	Selector           string
+	RequiredComponents []string
 	// Assessment is a host decision for these exact local bytes. It is copied
 	// and digest-checked by Prepare. Confirmation of the filesystem plan does
 	// not create or alter this security decision.
