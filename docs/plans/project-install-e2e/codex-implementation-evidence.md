@@ -146,3 +146,26 @@ selectors, document-versus-directory identity and canonical aliases. The whole
 project provider selection passed after this correction (0.228s); exact changed
 code and full-file size/architecture lint retain the existing gates without new
 suppression rules.
+
+## Actual hosted project discovery result
+
+The source-only macOS arm64 run now supplies a genuine **PASS** for
+`TestAgentpluginsCodexNativeProjectComponentsLifecycle` (2.25s) with pinned Codex
+0.153.4. The exact source was remote commit
+`0d1319f947c7f4403691b3a60b1193baa0074ee9`, tree
+`4b8935ef80c3834f7145dd01289772a48379ba3f`. The runner selected and passed this
+test plus both existing user suites, with no skipped required test.
+
+The [preserved project artifact and independent interpretation](../../evidence/project-scope-native/codex-0.153.4-darwin-arm64-40011489662/README.md)
+record fresh exact project-A/project-B native skill discovery after add, command
+update, an absent owned skill, repair and removal. All 28 declared project
+sub-artifact hashes were verified against the downloaded ZIP; the ZIP digest,
+official client pin, installer digest and run/job links are recorded there.
+
+The client explicitly warned that untrusted project configuration was disabled
+while skills remained discoverable. No trust was added. The product therefore
+still reports prepared plus installed, and this result does not qualify project
+MCP initialization, model use, authentication, another OS or a release. Windows
+native qualification is a separate running workflow. The raw removal result also
+exposed a missing project context in its retained-data follow-up command; a
+separate reviewed correction preserves this original artifact unchanged.
