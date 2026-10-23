@@ -15,9 +15,9 @@ func TestSkillSourceIntentAndRelocatedPin(t *testing.T) {
 		t.Fatal(key)
 	}
 	plain := req
-	copy := *req.Git
-	copy.Kind, copy.Skill = "", ""
-	plain.Git = &copy
+	sourceCopy := *req.Git
+	sourceCopy.Kind, sourceCopy.Skill = "", ""
+	plain.Git = &sourceCopy
 	old, _ := plain.SourceKey()
 	if old != "github:acme/tools:skills/pdf" {
 		t.Fatal(old)

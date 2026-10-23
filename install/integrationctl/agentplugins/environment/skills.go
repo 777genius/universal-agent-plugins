@@ -32,7 +32,7 @@ func validateSkillSource(source *GitSource) error {
 func validateLockedSkill(source *LockedGitSource) error {
 	if source.Kind == "" {
 		if source.Skill != "" || source.ResolvedSkillPath != "" || source.RawTreeDigest != "" || source.Normalizer != "" {
-			return errors.New("Skill lock fields require kind=skill")
+			return errors.New("skill lock fields require kind=skill")
 		}
 		return nil
 	}
