@@ -76,3 +76,31 @@ Other client leaves and their public lifecycle coverage are in progress. This
 document is an integration checkpoint, not an all-client completion or release
 claim. Client PRs merge only into the project feature; the two deliverable
 feature PRs remain unmerged into main until separately authorized.
+
+## Reviewed eight-client integration
+
+Production checkpoint `e18b94a68ea280414e199a286142dd335fdfdf7d` adds the
+independently reviewed Kiro and Copilot project adapters to the earlier
+composition. Both final leaf reviews and both root merge reviews are GO.
+The merge preserves the union of Codex/Copilot native codecs, every earlier
+project capability, and all non-scope compatibility golden fields. Client
+implementation and E2E files match their reviewed leaves byte for byte.
+
+A bounded combined run on that exact production checkpoint used Go 1.26.10,
+GOMAXPROCS=3 and `-p=2 -count=1 -timeout=3m` with
+`-run 'Test(Project|Compatibility|Copilot|Codex)'`. Observed results:
+nativeconfig **0.039s**, domain **0.003s**, planner **0.018s**, production public
+CLI project journeys **29.299s**, all PASS. This is configuration/installer
+execution, not native client discovery, trust or MCP runtime qualification.
+
+The source-only project guide and updated dependency/README instructions at
+`bbc0473a` plus `d194b7f0` also received two independent GO reviews. The latter
+clarifies that only local directories/local archives use imperative source
+intent; eligible remote HTTPS archives retain saved dependency support.
+
+Gemini leaf commit `938bcb8fa00da3fa402430de058d27df472a3bab` now has actual
+project-contracts PASS on Ubuntu 24.04, macOS 15 and Windows 2025 in Core run
+[40008798665](https://github.com/777genius/universal-agent-plugins/actions/runs/40008798665).
+Windows job 120603490211 passed the corrected namespace identity and complete
+selected scoped lifecycle checks. This does not relabel the still-pending
+other-client/native jobs or claim all-client completion.

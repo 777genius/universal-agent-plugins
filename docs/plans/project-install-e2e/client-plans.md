@@ -614,7 +614,7 @@ is replaced by explicit unsupported. R2 fixes independently verified GO in
 | cursor | GO | Verified | GO | Root assignment required |
 | gemini | GO | Verified | GO | Implemented at65b8f17a; independent implementation R1/R2 GO; native discovery pending |
 | opencode | GO | Verified | GO | Implemented locally; implementation R1/R2 pending; public CLI/native discovery pending |
-| copilot | GO | Verified | GO | Root assignment required |
+| copilot | GO | Verified | GO | Implementation 2 GO; native project evidence pending |
 | kiro | GO | Verified | GO | Root assignment required |
 | grok | GO | Verified | GO | Root assignment required |
 | qoder | GO | Verified | GO | Root assignment required |

@@ -111,20 +111,20 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
 	}), LifecycleNativeConfig),
-	withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	})),
+	})), LifecycleNativeConfig),
 	withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
 		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:             LifecycleCLIRegistry,
 	})),
-	clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectScope(clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
 		LifecycleKind:       LifecycleCLIRegistry,
 		TracksNativeEffects: true,
-	}),
+	}), LifecycleNativeConfig),
 	withProjectScope(withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
