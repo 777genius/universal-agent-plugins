@@ -13,7 +13,7 @@ import resilience_matrix as lane
 
 class ResilienceMatrixContract(unittest.TestCase):
     def test_case_contract(self):
-        self.assertEqual(len(lane.CASES), 27)
+        self.assertEqual(len(lane.CASES), 29)
         self.assertEqual(len(set(lane.CASES)), len(lane.CASES))
         for required in (
                 'corrupt-state', 'future-state', 'unselected-client-detection-failure',
@@ -26,7 +26,9 @@ class ResilienceMatrixContract(unittest.TestCase):
                 'file-size-limit', 'foreign-collision', 'dangling-symlink',
                 'source-path-traversal', 'fresh-multi-client-install',
                 'per-client-lifecycle', 'unicode-normalization',
-                'sigint-during-activation', 'unicode-long-path'):
+                'sigint-during-activation', 'unicode-long-path',
+                'locked-runtime-first-probe',
+                'locked-runtime-preparation-recovery'):
             self.assertIn(required, lane.CASES)
 
     def test_json_envelope_contract(self):

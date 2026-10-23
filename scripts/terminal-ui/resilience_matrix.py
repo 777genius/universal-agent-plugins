@@ -23,6 +23,7 @@ import unicodedata
 
 from harness import Fixture, check, hashes, prepare_scanner, scanner_options, prepare_opencode_fixture
 from selection_matrix import prepare_codex_registry
+from locked_runtime_fixture import LockedRuntimeFixture
 
 if os.name == "posix":
     import fcntl
@@ -58,6 +59,8 @@ CASES = (
     "sigint-during-activation",
     "unicode-normalization",
     "unicode-long-path",
+    "locked-runtime-first-probe",
+    "locked-runtime-preparation-recovery",
 )
 
 POSIX_ONLY = frozenset({
@@ -67,7 +70,8 @@ POSIX_ONLY = frozenset({
     "sigint-during-activation",
 })
 UNIX_PROFILE_ONLY = frozenset({
-    "fresh-multi-client-install", "per-client-lifecycle"})
+    "fresh-multi-client-install", "per-client-lifecycle",
+    "locked-runtime-first-probe", "locked-runtime-preparation-recovery"})
 
 ALL_CLIENTS = (
     "codex", "chatgpt", "cursor", "copilot", "vscode", "kiro", "claude",
@@ -301,6 +305,26 @@ class Matrix:
         check(data["open_operation_count"] == 0,
               "doctor reports an open operation")
         self.assert_no_open_operations(fixture)
+
+    @staticmethod
+    def assert_client_state_untouched(fixture, allow_abandoned_staging=False):
+        # A graceful preparation failure must leave nothing behind. A hard-killed
+        # process cannot clean its own staging tree; the installer reserves
+        # those prefixes and ignores them in identity, so after a kill only that
+        # scaffolding may remain. Every client surface stays identical either
+        # way, and any managed file outside a reserved prefix is a partial commit.
+        after = fixture.mutations()
+        for key in ("home", "project", "state"):
+            check(after[key] == fixture.before[key],
+                  f"failed preparation changed {key}")
+        for name, digest in after["managed"].items():
+            if digest == "directory":
+                continue
+            reserved = any(part.startswith((".agentplugins-staging-",
+                                            ".agentplugins-backup-"))
+                           for part in name.split("/"))
+            check(allow_abandoned_staging and reserved,
+                  f"failed preparation committed managed content: {name}")
 
     def invalid_state(self, fixture, evidence, body, reason):
         state = self.state_path(fixture)
@@ -924,6 +948,123 @@ class Matrix:
                 client_fixture, target_evidence / "after-remove", 0)
             if target not in ("codex", "copilot", "vscode", "claude"):
                 client_fixture.validate_stubs()
+
+    def case_locked_runtime_first_probe(self, fixture, evidence):
+        runtime = LockedRuntimeFixture(fixture)
+        seed_ten_clients(fixture)
+        fixture.before = fixture.mutations()
+        _, envelope = self.command(
+            fixture, evidence, "add", "add", str(fixture.package),
+            "--target=gemini,opencode", expect=True)
+        rows = envelope["data"]["targets"]
+        check({row["target"] for row in rows} == {"gemini", "opencode"},
+              f"add lost a locked-runtime target: {rows}")
+        runtime.check_npm_contract()
+        check(runtime.ci_runs() == 1,
+              f"group add ran npm {runtime.ci_runs()} times, want one prewarm")
+        runtime.assert_store_ready()
+        runtime.assert_launcher_runs(0)
+        before = runtime.npm_log()
+        runtime.probe(evidence / "cold-probe")
+        check(runtime.npm_log() == before,
+              "the first client probe triggered npm work")
+        runtime.assert_launcher_runs(2)
+        self.assert_healthy(fixture, evidence / "health", 1)
+        self.command(
+            fixture, evidence, "remove", "remove", "pty-synthetic",
+            "--target=gemini,opencode", "--external-uninstalled",
+            "--purge-data", expect=True)
+        runtime.assert_store_purged()
+        self.assert_healthy(fixture, evidence / "clean", 0)
+
+    def case_locked_runtime_preparation_recovery(self, fixture, evidence):
+        runtime = LockedRuntimeFixture(fixture)
+        seed_ten_clients(fixture)
+        fixture.before = fixture.mutations()
+        runtime.fail_next()
+        result, _ = self.command(
+            fixture, evidence, "add-npm-fail", "add", str(fixture.package),
+            "--target=gemini,opencode", expect=False)
+        diagnostic = (result.stdout + result.stderr).lower()
+        check(any(word in diagnostic for word in ("runtime", "npm", "prepar")),
+              "failed preparation diagnostic missing")
+        self.assert_client_state_untouched(fixture)
+        self.assert_no_open_operations(fixture)
+        check("DONE" not in runtime.npm_log(),
+              "failed preparation reported success at the npm seam")
+        runtime.assert_launcher_runs(0)
+
+        runtime.clear_controls()
+        runtime.set_delay(60)
+        process = subprocess.Popen(
+            [str(self.binary), "add", str(fixture.package),
+             "--target=gemini,opencode", "--format=json"],
+            cwd=fixture.project, env=dict(fixture.env, NO_COLOR="1"),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            start_new_session=True)
+        deadline = time.monotonic() + self.timeout
+        while time.monotonic() < deadline and "START" not in runtime.npm_log():
+            time.sleep(0.02)
+        check("START" in runtime.npm_log(),
+              "npm preparation never started before the kill window")
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        out, err = process.communicate(timeout=5)
+        (evidence / "killed-add.stdout").write_text(out, encoding="utf-8")
+        (evidence / "killed-add.stderr").write_text(err, encoding="utf-8")
+        log = runtime.npm_log()
+        check("SLEEP 60" in log and "DONE" not in log,
+              f"kill did not land mid-preparation: {log!r}")
+        runtime.assert_store_absent()
+        self.assert_client_state_untouched(fixture, allow_abandoned_staging=True)
+        self.assert_no_open_operations(fixture)
+        runtime.assert_launcher_runs(0)
+
+        runtime.clear_controls()
+        self.command(
+            fixture, evidence, "add-retry", "add", str(fixture.package),
+            "--target=gemini,opencode", expect=True)
+        runtime.check_npm_contract()
+        runtime.assert_store_ready()
+        self.assert_healthy(fixture, evidence / "health", 1)
+        before = runtime.npm_log()
+        runtime.probe(evidence / "cold-probe")
+        check(runtime.npm_log() == before,
+              "the first client probe after retry triggered npm work")
+        runtime.assert_launcher_runs(2)
+
+        calls_before = runtime.ci_runs()
+        runtime.rewrite_version("2.0.0")
+        self.command(
+            fixture, evidence, "update", "update", "pty-synthetic",
+            "--target=gemini,opencode", expect=True)
+        runtime.check_npm_contract()
+        check(runtime.ci_runs() == calls_before + 1,
+              "update did not prewarm exactly the new lock digest once")
+        runtime.assert_store_ready()
+        before = runtime.npm_log()
+        runtime.probe(evidence / "probe-after-update")
+        check(runtime.npm_log() == before,
+              "the first probe after update triggered npm work")
+        runtime.assert_launcher_runs(4)
+
+        runtime.delete_entrypoint()
+        calls_before = runtime.ci_runs()
+        self.command(
+            fixture, evidence, "repair", "repair", "pty-synthetic",
+            "--target=gemini,opencode", expect=True)
+        runtime.check_npm_contract()
+        check(runtime.ci_runs() == calls_before + 1,
+              "repair did not re-prewarm the damaged runtime")
+        runtime.assert_store_ready()
+        runtime.assert_launcher_runs(4)
+        self.assert_healthy(fixture, evidence / "health", 1)
+
+        self.command(
+            fixture, evidence, "remove", "remove", "pty-synthetic",
+            "--target=gemini,opencode", "--external-uninstalled",
+            "--purge-data", expect=True)
+        runtime.assert_store_purged()
+        self.assert_healthy(fixture, evidence / "clean", 0)
 
     def case_unicode_normalization(self, fixture, evidence):
         nfc = unicodedata.normalize("NFC", "cafe\u0301-package")

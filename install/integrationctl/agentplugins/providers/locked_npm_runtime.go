@@ -54,7 +54,11 @@ type lockedRuntimeMarker struct {
 // client activation. It never runs the plugin's launcher or npm lifecycle scripts.
 // Unselected/non-runtime MCP packages remain inert.
 func (manager PluginDataManager) PrepareRuntime(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
-	if !selectedLockedRuntime(envelope, plan) {
+	selected, err := selectedLockedRuntime(envelope, plan)
+	if err != nil {
+		return err
+	}
+	if !selected {
 		return nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -102,17 +106,33 @@ func (manager PluginDataManager) PrepareRuntime(ctx context.Context, envelope do
 	return prepareLockedRuntime(ctx, dataPath, config, digest, packageBody, lockBody, runner)
 }
 
-func selectedLockedRuntime(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) bool {
+// selectedLockedRuntime reports whether the plan selects a stdio server that
+// runs the reserved locked-runtime launcher. Any selected server carrying that
+// launcher must run under node: an unrecognized command would silently skip
+// preparation and defer npm work to the client's first probe, recreating the
+// cold-start diagnostic race the contract exists to prevent.
+func selectedLockedRuntime(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) (bool, error) {
+	found := false
 	for _, name := range domain.SelectedMCPNames(plan) {
 		server := envelope.MCP.Servers[name]
-		if server.Type != "stdio" || server.Decoded["command"] != "node" {
+		if server.Type != "stdio" || !hasLockedLauncherArg(server.Decoded["args"]) {
 			continue
 		}
-		if hasLockedLauncherArg(server.Decoded["args"]) {
-			return true
+		command, ok := server.Decoded["command"].(string)
+		if !ok || !isNodeCommand(command) {
+			return false, fmt.Errorf("locked npm runtime launcher requires a node command, got %v", server.Decoded["command"])
 		}
+		found = true
 	}
-	return false
+	return found, nil
+}
+
+func isNodeCommand(command string) bool {
+	base := command
+	if index := strings.LastIndexAny(base, `/\`); index >= 0 {
+		base = base[index+1:]
+	}
+	return strings.EqualFold(base, "node") || strings.EqualFold(base, "node.exe")
 }
 
 func hasLockedLauncherArg(value any) bool {
