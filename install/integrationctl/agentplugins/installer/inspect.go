@@ -116,6 +116,9 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 			TreeDigest:     installation.Source.TreeDigest,
 		}
 		item.SourceKey = "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
+		if installation.Source.StableSourceKey != "" {
+			item.SourceKey = installation.Source.StableSourceKey
+		}
 		if installation.Directory != nil {
 			item.SourceKey = "directory:" + strings.ToLower(installation.Directory.DistributionID)
 		}

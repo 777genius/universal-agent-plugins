@@ -41,13 +41,33 @@ type Diagnostic struct {
 	Message  string          `json:"message"`
 }
 
+// SkillSourceFacts records the exact raw source behind a normalized artifact.
+// It is provenance, not a mutable update selector or installation identity.
+type SkillSourceFacts struct {
+	Name          string `json:"name"`
+	RequestedPath string `json:"requested_path"`
+	ResolvedPath  string `json:"resolved_path"`
+	RawTreeDigest string `json:"raw_tree_digest"`
+	Normalizer    string `json:"normalizer"`
+}
+
+func CloneSkillSourceFacts(f *SkillSourceFacts) *SkillSourceFacts {
+	if f == nil {
+		return nil
+	}
+	cloned := *f
+	return &cloned
+}
+
 type SourceIdentity struct {
-	RequestedSource   string `json:"requested_source,omitempty"`
-	CanonicalSource   string `json:"canonical_source,omitempty"`
-	Repository        string `json:"repository,omitempty"`
-	PackageSubpath    string `json:"package_subpath,omitempty"`
-	ResolvedRevision  string `json:"resolved_revision,omitempty"`
-	SourceBindingHint string `json:"source_binding_hint,omitempty"`
+	Skill             *SkillSourceFacts `json:"skill,omitempty"`
+	StableSourceKey   string            `json:"stable_source_key,omitempty"`
+	RequestedSource   string            `json:"requested_source,omitempty"`
+	CanonicalSource   string            `json:"canonical_source,omitempty"`
+	Repository        string            `json:"repository,omitempty"`
+	PackageSubpath    string            `json:"package_subpath,omitempty"`
+	ResolvedRevision  string            `json:"resolved_revision,omitempty"`
+	SourceBindingHint string            `json:"source_binding_hint,omitempty"`
 }
 
 type Author struct {

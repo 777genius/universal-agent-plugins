@@ -165,6 +165,10 @@ or backup. Transferring the files does not guarantee offline installation.
 See [Restore on another machine](docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
 for confirmation prompts, supported restore behavior and recovery.
 
+Source-build development: [install raw Agent Skills from GitHub](docs/AGENT_SKILLS_INSTALLER.md),
+including the local browser picker and versioned saved dependencies. This does not
+claim availability in an already published installer release.
+
 ## Any Agent Plugins 1.0 package
 
 Install from the registry, a local folder, or a GitHub repository pinned to an

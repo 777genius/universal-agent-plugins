@@ -221,6 +221,9 @@ func Validate(state domain.StateFileV2) error {
 			return fmt.Errorf("%s references unknown client binding", prefix)
 		}
 		sourceKey := "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
+		if installation.Source.StableSourceKey != "" {
+			sourceKey = installation.Source.StableSourceKey
+		}
 		if installation.Directory != nil {
 			sourceKey = "directory:" + strings.ToLower(installation.Directory.DistributionID)
 		}

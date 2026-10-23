@@ -83,6 +83,7 @@ func (session *groupSession) restoreGroupOrigin() {
 		installation := session.desired.Installations[session.installationIndex]
 		first := session.first
 		installation.Source = domain.SourceBinding{
+			StableSourceKey: first.Envelope.Source.StableSourceKey,
 			SourceBindingID: session.sourceID, RequestedSource: first.Envelope.Source.RequestedSource,
 			CanonicalSource: first.Envelope.Source.CanonicalSource, Repository: first.Envelope.Source.Repository,
 			PackageSubpath: first.Envelope.Source.PackageSubpath, ResolvedRevision: first.Envelope.Source.ResolvedRevision,

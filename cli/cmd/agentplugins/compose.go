@@ -22,6 +22,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityscan"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/securityv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
@@ -194,7 +195,9 @@ func assembleAgentpluginsApp(home, dataRoot string, v2Store statev2.Store, mutat
 			Scanner: securityscan.ReleaseScanner{Root: filepath.Join(dataRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
 			Cache:   securityscan.FileCache{Root: filepath.Join(dataRoot, "security", "assessments")}, Requirement: securityscan.DefaultRequirement(),
 		},
-		SourceAcquirerForDryRun: func(root string) agentpluginscli.SourceAcquirer { return sourceacquisition.Acquirer{TempRoot: root} },
+		SourceAcquirerForDryRun: func(root string) agentpluginscli.SourceAcquirer {
+			return skillsource.Acquirer{Acquirer: sourceacquisition.Acquirer{TempRoot: root}}
+		},
 		SecurityEvaluatorForDryRun: func(root string) ports.PackageSecurityEvaluator {
 			return securityscan.Evaluator{
 				Scanner: securityscan.ReleaseScanner{Root: filepath.Join(root, "lintai"), HTTPClient: lintaiReleaseHTTPClient()},

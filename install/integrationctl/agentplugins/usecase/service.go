@@ -387,6 +387,7 @@ func immutableDirectGit(source domain.SourceBinding) bool {
 
 func packageRevisionFromEnvelope(envelope domain.PackageEnvelope) *domain.ClientPackageRevision {
 	return &domain.ClientPackageRevision{
+		Skill:   domain.CloneSkillSourceFacts(envelope.Source.Skill),
 		Version: envelope.Manifest.Version, ResolvedRevision: envelope.Source.ResolvedRevision,
 		TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
 		CatalogEvidence: cloneCatalogEvidence(envelope.CatalogEvidence),

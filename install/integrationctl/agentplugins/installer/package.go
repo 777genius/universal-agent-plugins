@@ -384,6 +384,9 @@ func validateAcquiredRequest(req Request) error {
 	}
 	if req.EnvironmentAuthority != nil {
 		key := "github:" + strings.ToLower(acquired.Source.Repository) + ":" + acquired.Source.PackageSubpath
+		if source.SourceBindingHint == "uap-dependency-skill" {
+			key = source.StableSourceKey
+		}
 		if acquired.OriginMode == domain.OriginModeDirectory {
 			if acquired.Directory == nil {
 				return fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)

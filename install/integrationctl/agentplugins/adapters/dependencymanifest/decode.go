@@ -14,6 +14,8 @@ import (
 )
 
 type rawDependency struct {
+	Kind         string `toml:"kind"`
+	Skill        string `toml:"skill"`
 	Version      string `toml:"-"`
 	Git          string `toml:"git"`
 	Path         string `toml:"path"`
@@ -201,7 +203,10 @@ func requirementFromRaw(alias string, raw rawDependency) (environment.Requiremen
 		if raw.Registry != "" || raw.Distribution != "" || raw.Release != nil {
 			return environment.Requirement{}, errors.New("git source cannot contain registry fields")
 		}
-		return environment.Requirement{Alias: alias, Git: &environment.GitSource{Repository: strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(raw.Git, "https://github.com/"), ".git")), Path: raw.Path, Selector: selector}}, nil
+		return environment.Requirement{Alias: alias, Git: &environment.GitSource{Kind: raw.Kind, Skill: raw.Skill, Repository: strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(raw.Git, "https://github.com/"), ".git")), Path: raw.Path, Selector: selector}}, nil
+	}
+	if raw.Kind != "" || raw.Skill != "" {
+		return environment.Requirement{}, errors.New("kind and skill require a git source")
 	}
 	if raw.Ref != "" || raw.Commit != "" {
 		return environment.Requirement{}, errors.New("registry source cannot contain git selectors")
@@ -280,7 +285,7 @@ func validateDependencyFields(path string, body []byte, alias string, value any)
 	}
 	for _, key := range sortedKeys(fields) {
 		switch key {
-		case "git", "path", "ref", "commit", "registry", "distribution":
+		case "git", "path", "ref", "commit", "registry", "distribution", "kind", "skill":
 			if _, ok := fields[key].(string); !ok {
 				return manifestError(path, body, fmt.Errorf("dependencies.%s.%s must be a string", alias, key), "dependencies", alias, key)
 			}
