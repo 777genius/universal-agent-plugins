@@ -56,14 +56,33 @@ func validateTransitionEnvelope(record transitionRecord, root string) error {
 			return err
 		}
 	}
-	return validateTransitionRoot(record.Identity.NativeRoot, root)
+	layout, err := recordOpenCodeLayout(record)
+	if err != nil {
+		return err
+	}
+	return validateTransitionLayoutRoot(layout, root)
 }
 
-func validateTransitionRoot(nativeRoot, root string) error {
-	if !filepath.IsAbs(nativeRoot) || filepath.Clean(nativeRoot) != nativeRoot || filepath.Dir(root) != filepath.Join(nativeRoot, "skills") || !strings.HasPrefix(filepath.Base(root), ".agentplugins-native-") {
+func validateTransitionLayoutRoot(layout openCodeNativeLayout, root string) error {
+	if !filepath.IsAbs(layout.Root) || filepath.Clean(layout.Root) != layout.Root || filepath.Dir(root) != layout.Skills {
 		return fmt.Errorf("invalid transition root")
 	}
-	if err := pathpolicy.RequireContainedChild(nativeRoot, root); err != nil {
+	if err := layout.validate(); err != nil {
+		return err
+	}
+	if err := pathpolicy.RequireContainedChild(layout.Root, root); err != nil {
+		return err
+	}
+	return validatePrivateTransitionRoot(root)
+}
+
+// Before decoding the bounded private record, validate only its local container.
+// The decoded binding subsequently supplies the exact user/project native layout.
+func validatePrivateTransitionRoot(root string) error {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || !strings.HasPrefix(filepath.Base(root), ".agentplugins-native-") {
+		return fmt.Errorf("invalid transition root")
+	}
+	if err := pathpolicy.RequireContainedChild(filepath.Dir(root), root); err != nil {
 		return err
 	}
 	info, err := os.Lstat(root)
@@ -145,6 +164,10 @@ func validateTransitionReceipts(record transitionRecord, old, target domain.Clie
 }
 
 func validateTransitionReceiptSide(record transitionRecord, side transitionReceiptSide) error {
+	layout, err := recordOpenCodeLayout(record)
+	if err != nil {
+		return err
+	}
 	objects := shared.ObjectMap(OpenCodeObjects(side.objects))
 	mcpCount := 0
 	for _, object := range objects {
@@ -152,7 +175,7 @@ func validateTransitionReceiptSide(record transitionRecord, side transitionRecei
 		if err != nil {
 			return err
 		}
-		if err := validateOpenCodeObject(record.Identity.NativeRoot, OpenCodeProjection{}, object); err != nil {
+		if err := validateOpenCodeObject(layout, OpenCodeProjection{}, object); err != nil {
 			return err
 		}
 		if mcp {
@@ -220,10 +243,14 @@ func transitionSkillIntentCount(old, next map[string]domain.NativeObjectOwnershi
 }
 
 func validateTransitionSkillIntent(record transitionRecord, index int, skill transitionSkill) error {
+	layout, err := recordOpenCodeLayout(record)
+	if err != nil {
+		return err
+	}
 	if err := pathpolicy.ValidateLeafID(skill.Name); err != nil {
 		return err
 	}
-	if skill.ID != "opencode-skill:"+skill.Name || index > 0 && record.Skills[index-1].ID >= skill.ID || skill.Target != filepath.Join(record.Identity.NativeRoot, "skills", skill.Name) || skill.Backup != filepath.Join(record.Root, "old-"+skill.Name) || skill.Old == nil && skill.New == nil || skill.Old == nil && skill.OldExists {
+	if skill.ID != "opencode-skill:"+skill.Name || index > 0 && record.Skills[index-1].ID >= skill.ID || skill.Target != filepath.Join(layout.Skills, skill.Name) || skill.Backup != filepath.Join(record.Root, "old-"+skill.Name) || skill.Old == nil && skill.New == nil || skill.Old == nil && skill.OldExists {
 		return fmt.Errorf("invalid skill intent")
 	}
 	return nil

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 
@@ -135,7 +134,11 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 	if recorder == nil || request.NativeAttempt.OperationID == "" {
 		return unchanged(fmt.Errorf("durable native transition authority is required"))
 	}
-	p, err := prepareOpenCodeNativeApply(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel, shared.RenameDirectoryExclusive, os.RemoveAll)
+	layout, err := openCodeActivationLayout(request)
+	if err != nil {
+		return unchanged(err)
+	}
+	p, err := prepareOpenCodeNativeApplyLayout(layout, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel, shared.RenameDirectoryExclusive, os.RemoveAll)
 	if err != nil {
 		return unchanged(err)
 	}
@@ -155,7 +158,7 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 		if err := recorder.PersistPrepared(ctx, request.NativeAttempt, txn.root, transitionDTO(prepared), request.PreviousNativeObjects, request.Delivery.NativeObjects); err != nil {
 			return err
 		}
-		return commitOpenCodeTransitionSkills(request.Client.ConfigRoot, txn, p, staged)
+		return commitOpenCodeTransitionSkillsLayout(p.layout, txn, p, staged)
 	}
 	receipts, applyErr := kernel.ApplyDialectTransition(req)
 	if !persisted {
@@ -170,7 +173,7 @@ func applyOpenCodeTransition(ctx context.Context, request domain.ActivationReque
 
 func stageOpenCodeTransitionSkills(request domain.ActivationRequest, p *openCodeNativeApply) (*openCodeSkillTxn, map[string]string, error) {
 	txn := &openCodeSkillTxn{durable: true, backups: map[string]openCodeBackup{}, installed: map[string]domain.NativeObjectOwnership{}, rename: p.rename, removeAll: p.removeAll}
-	if err := txn.createRoot(request.Client.ConfigRoot); err != nil {
+	if err := txn.createLayoutRoot(p.layout); err != nil {
 		return nil, nil, err
 	}
 	staged, err := txn.stageDesired(request.Delivery.ActivePath, shared.ObjectMap(p.desired))
@@ -185,10 +188,14 @@ func stageOpenCodeTransitionSkills(request domain.ActivationRequest, p *openCode
 }
 
 func commitOpenCodeTransitionSkills(configRoot string, txn *openCodeSkillTxn, p *openCodeNativeApply, staged map[string]string) error {
+	return commitOpenCodeTransitionSkillsLayout(userOpenCodeLayout(configRoot), txn, p, staged)
+}
+
+func commitOpenCodeTransitionSkillsLayout(layout openCodeNativeLayout, txn *openCodeSkillTxn, p *openCodeNativeApply, staged map[string]string) error {
 	if err := txn.backupPrevious(shared.ObjectMap(p.previous)); err != nil {
 		return err
 	}
-	if err := atomicfile.SyncDirectory(filepath.Join(configRoot, "skills")); err != nil {
+	if err := atomicfile.SyncDirectory(layout.Skills); err != nil {
 		return err
 	}
 	if err := atomicfile.SyncDirectory(txn.root); err != nil {
@@ -197,7 +204,7 @@ func commitOpenCodeTransitionSkills(configRoot string, txn *openCodeSkillTxn, p 
 	if err := txn.installStaged(staged, shared.ObjectMap(p.desired)); err != nil {
 		return err
 	}
-	if err := atomicfile.SyncDirectory(filepath.Join(configRoot, "skills")); err != nil {
+	if err := atomicfile.SyncDirectory(layout.Skills); err != nil {
 		return err
 	}
 	return atomicfile.SyncDirectory(txn.root)

@@ -602,7 +602,7 @@ is replaced by explicit unsupported. R2 fixes independently verified GO in
 | codex | GO | Verified | GO | Root assignment required |
 | cursor | GO | Verified | GO | Root assignment required |
 | gemini | GO | Verified | GO | Implemented at65b8f17a; independent implementation R1/R2 GO; native discovery pending |
-| opencode | GO | Verified | GO | Root assignment required |
+| opencode | GO | Verified | GO | Implemented locally; implementation R1/R2 pending; public CLI/native discovery pending |
 | copilot | GO | Verified | GO | Root assignment required |
 | kiro | GO | Verified | GO | Root assignment required |
 | grok | GO | Verified | GO | Root assignment required |
