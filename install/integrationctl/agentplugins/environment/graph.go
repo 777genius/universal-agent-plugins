@@ -56,6 +56,7 @@ func pinSourceIdentity(source LockedSource) LockedSource {
 func validateGraph(lock Lock, requirements Requirements) error {
 	byAlias := map[string]LockedPackage{}
 	sources := map[string]string{}
+	resolvedSkills := map[string]string{}
 	for _, pkg := range lock.Packages {
 		if _, exists := byAlias[pkg.Alias]; exists {
 			return fmt.Errorf("duplicate locked alias %q", pkg.Alias)
@@ -65,6 +66,13 @@ func validateGraph(lock Lock, requirements Requirements) error {
 		}
 		if err := validatePin(pkg); err != nil {
 			return fmt.Errorf("%s: %w", pkg.Alias, err)
+		}
+		if source := pkg.Source.Git; source != nil && source.Kind == SkillKind {
+			identity := strings.ToLower(source.Repository) + "\x00" + source.Commit + "\x00" + source.ResolvedSkillPath
+			if previous := resolvedSkills[identity]; previous != "" {
+				return fmt.Errorf("aliases %s and %s select the same Skill", previous, pkg.Alias)
+			}
+			resolvedSkills[identity] = pkg.Alias
 		}
 		byAlias[pkg.Alias], sources[pkg.SourceKey] = pkg, pkg.Alias
 	}
@@ -102,7 +110,7 @@ func validatePin(pkg LockedPackage) error {
 	req := Requirement{Alias: pkg.Alias}
 	if pkg.Source.Git != nil {
 		source := pkg.Source.Git
-		req.Git = &GitSource{Repository: source.Repository, Path: source.Path, Selector: source.Requested}
+		req.Git = &GitSource{Repository: source.Repository, Path: source.Path, Selector: source.Requested, Kind: source.Kind, Skill: source.Skill}
 	}
 	if pkg.Source.Registry != nil {
 		source := pkg.Source.Registry

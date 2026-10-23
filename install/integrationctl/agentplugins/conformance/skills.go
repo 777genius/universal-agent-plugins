@@ -2,17 +2,19 @@ package conformance
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"gopkg.in/yaml.v3"
 	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// MaxSkillNameBytes and MaxSkillDescriptionRunes are the Agent Skills limits
-// for a skill's name and its description.
+// MaxSkillNameBytes retains its historical exported name; the normative Skill
+// name limit counts Unicode characters. Generated ASCII names also use it.
 const (
 	MaxSkillNameBytes        = 64
 	MaxSkillDescriptionRunes = 1024
@@ -20,9 +22,8 @@ const (
 
 var skillNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$`)
 
-// PortableSkillNameForm reports whether name has the form of a portable skill
-// name, length aside: lowercase ASCII letters and digits with single inner
-// hyphens. Together with MaxSkillNameBytes it is the installer's name rule.
+// PortableSkillNameForm is the ASCII subset used for generated command names.
+// Normative Skill admission uses the Unicode-aware shared ParseSkill grammar.
 func PortableSkillNameForm(name string) bool {
 	return skillNamePattern.MatchString(name) && !strings.Contains(name, "--")
 }
@@ -32,8 +33,24 @@ var skillFields = map[string]struct{}{
 }
 
 func ParseInstallerSkill(directoryName string, body []byte) (domain.Skill, error) {
-	return parseSkill(directoryName, body, skillFrontmatter, false)
+	return ParseSkill(context.Background(), directoryName, body)
 }
+
+// ParseSkill shares the bounded normative grammar with authoring. Unknown fields
+// are opaque and Raw retains the complete original document bytes.
+func ParseSkill(ctx context.Context, directoryName string, body []byte) (domain.Skill, error) {
+	if err := ctx.Err(); err != nil {
+		return domain.Skill{}, err
+	}
+	if len(body) > DefaultLimits().SkillBytes {
+		return domain.Skill{}, &parseFailure{Code: "document_bytes_limit"}
+	}
+	if !utf8.Valid(body) {
+		return domain.Skill{}, &parseFailure{Code: "document_utf8_invalid"}
+	}
+	return parseSkill(directoryName, body, func(b []byte) (map[string]any, error) { return skillFrontmatter(ctx, b) }, true)
+}
+
 func parseSkill(directoryName string, body []byte, front func([]byte) (map[string]any, error), author bool) (domain.Skill, error) {
 	if (!author && (len(directoryName) > MaxSkillNameBytes || !PortableSkillNameForm(directoryName))) || (author && !normativeSkillName(directoryName)) {
 		return domain.Skill{}, skillError("skill_name_invalid", "directory name %q is not a portable Agent Skill name", directoryName)
@@ -123,20 +140,8 @@ func splitFrontmatter(body []byte) ([]byte, []byte, error) {
 	}
 	return remainder[:end], remainder[end+len("\n---\n"):], nil
 }
-func skillFrontmatter(body []byte) (map[string]any, error) {
-	data, err := frontmatterBytes(body)
-	if err != nil {
-		return nil, err
-	}
-	var frontmatter map[string]any
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	if err := decoder.Decode(&frontmatter); err != nil {
-		return nil, skillError("skill_yaml_invalid", "parse skill frontmatter: %v", err)
-	}
-	if frontmatter == nil {
-		return nil, skillError("skill_frontmatter_type", "skill frontmatter must be an object")
-	}
-	return frontmatter, nil
+func skillFrontmatter(ctx context.Context, body []byte) (map[string]any, error) {
+	return boundedFrontmatter(ctx, body, DefaultLimits())
 }
 
 func requiredString(values map[string]any, key string) (string, error) {
@@ -180,4 +185,18 @@ func normativeSkillName(name string) bool {
 		}
 	}
 	return true
+}
+
+// SkillErrorCode distinguishes normative invalidity from incomplete host-safety
+// evidence without exposing raw parser errors in discovery responses.
+func SkillErrorCode(err error) (code string, unavailable bool) {
+	var safety *parseFailure
+	if errors.As(err, &safety) {
+		return safety.Code, true
+	}
+	var invalid *skillFailure
+	if errors.As(err, &invalid) {
+		return invalid.Code, false
+	}
+	return "skill_metadata_unavailable", true
 }

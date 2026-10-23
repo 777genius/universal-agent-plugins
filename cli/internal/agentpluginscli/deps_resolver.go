@@ -90,35 +90,16 @@ func sameRequestedSelector(requirement environment.Requirement, previous environ
 
 func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	source := requirement.Git
-	commit := source.Selector.Value
-	resolvedRef, defaultBranch := "", ""
-	if source.Selector.Kind != environment.SelectorCommit {
-		var resolution sourceacquisition.RefResolution
-		var err error
-		if named, ok := resolver.app.SourceAcquirer.(interface {
-			ResolveGitHubSelector(context.Context, string, string) (sourceacquisition.RefResolution, error)
-			ResolveGitHubRef(context.Context, string, string) (sourceacquisition.RefResolution, error)
-		}); ok {
-			selector := source.Selector.Value
-			if source.Selector.Kind == environment.SelectorDefault {
-				selector = "default"
-			}
-			if source.Selector.Kind == environment.SelectorDefault {
-				resolution, err = named.ResolveGitHubSelector(ctx, source.Repository, selector)
-			} else {
-				resolution, err = named.ResolveGitHubRef(ctx, source.Repository, selector)
-			}
-		} else {
-			return environment.LockedPackage{}, errors.New("source acquirer cannot resolve Git refs")
-		}
-		if err != nil {
-			return environment.LockedPackage{}, err
-		}
-		commit, resolvedRef, defaultBranch = resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
+	resolution, err := resolver.resolveGitSelector(ctx, source)
+	if err != nil {
+		return environment.LockedPackage{}, err
+	}
+	commit, resolvedRef, defaultBranch := resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
+	if source.Kind == environment.SkillKind {
+		return resolver.resolveSkill(ctx, requirement, targets, previous, commit, resolvedRef, defaultBranch)
 	}
 	identity := githubIdentity(source.Repository, commit, source.Path)
 	var snapshot domain.PackageSnapshot
-	var err error
 	if previous != nil && previous.Source.Git != nil && previous.TreeDigest != "" && !update && sameRequestedSelector(requirement, *previous) {
 		snapshot, err = resolver.app.SourceAcquirer.AcquireGitHubVerified(ctx, source.Repository, commit, source.Path, previous.TreeDigest)
 	} else {
@@ -148,6 +129,23 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
 	return locked, resolver.finishLoaded(loaded)
+}
+
+func (resolver dependencyResolver) resolveGitSelector(ctx context.Context, source *environment.GitSource) (sourceacquisition.RefResolution, error) {
+	if source.Selector.Kind == environment.SelectorCommit {
+		return sourceacquisition.RefResolution{Commit: source.Selector.Value}, nil
+	}
+	named, ok := resolver.app.SourceAcquirer.(interface {
+		ResolveGitHubSelector(context.Context, string, string) (sourceacquisition.RefResolution, error)
+		ResolveGitHubRef(context.Context, string, string) (sourceacquisition.RefResolution, error)
+	})
+	if !ok {
+		return sourceacquisition.RefResolution{}, errors.New("source acquirer cannot resolve Git refs")
+	}
+	if source.Selector.Kind == environment.SelectorDefault {
+		return named.ResolveGitHubSelector(ctx, source.Repository, "default")
+	}
+	return named.ResolveGitHubRef(ctx, source.Repository, source.Selector.Value)
 }
 
 func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {

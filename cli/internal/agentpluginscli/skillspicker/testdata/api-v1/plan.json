@@ -1,0 +1,25 @@
+{
+  "planId": "plan-fixture",
+  "expiresAt": "2030-01-01T00:05:00Z",
+  "actions": [
+    {
+      "candidateId": "skill-review-a",
+      "targetId": "codex",
+      "alias": "review",
+      "action": "install",
+      "destinationPath": "/sandbox/codex/review",
+      "reasonCodes": []
+    },
+    {
+      "candidateId": "skill-review-b",
+      "targetId": "codex",
+      "alias": "review-docs",
+      "action": "install",
+      "destinationPath": "/sandbox/codex/review-docs",
+      "reasonCodes": []
+    }
+  ],
+  "conflicts": [],
+  "warnings": [],
+  "confirmable": true
+}

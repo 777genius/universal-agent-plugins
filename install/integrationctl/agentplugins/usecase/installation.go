@@ -43,6 +43,7 @@ func newPreparedInstallation(input AddInput, installationID, sourceBindingID, ti
 		InstallationID: installationID,
 		DeclaredName:   input.Envelope.Manifest.Name,
 		Source: domain.SourceBinding{
+			StableSourceKey:  input.Envelope.Source.StableSourceKey,
 			SourceBindingID:  sourceBindingID,
 			RequestedSource:  input.Envelope.Source.RequestedSource,
 			CanonicalSource:  input.Envelope.Source.CanonicalSource,
@@ -70,7 +71,8 @@ func overlayExistingInstallation(installation domain.Installation, input AddInpu
 	installation.Source.ResolvedRevision = input.Envelope.Source.ResolvedRevision
 	installation.Source.TreeDigest = input.Envelope.TreeDigest
 	if installation.OriginMode == domain.OriginModeDirectory || input.EnvironmentAuthority != nil {
-		installation.Source = domain.SourceBinding{SourceBindingID: sourceBindingID, RequestedSource: input.Envelope.Source.RequestedSource,
+		installation.Source = domain.SourceBinding{
+			StableSourceKey: input.Envelope.Source.StableSourceKey, SourceBindingID: sourceBindingID, RequestedSource: input.Envelope.Source.RequestedSource,
 			CanonicalSource: input.Envelope.Source.CanonicalSource, Repository: input.Envelope.Source.Repository, PackageSubpath: input.Envelope.Source.PackageSubpath,
 			ResolvedRevision: input.Envelope.Source.ResolvedRevision, TreeDigest: input.Envelope.TreeDigest}
 	}
@@ -368,4 +370,16 @@ func (service Service) freezeProfile(ctx context.Context, state domain.StateFile
 	}
 	c.ProfileAuthority = domain.CloneProfileAuthority(c.ProfileAuthority)
 	return c, nil
+}
+
+// A moved Skill retains the environment's explicit stable source authority;
+// ordinary direct packages keep their historical repository/path rule.
+func managedDirectSource(installation domain.Installation, input AddInput) bool {
+	if input.EnvironmentAuthority == nil || normalizedOriginMode(input.OriginMode) != domain.OriginModeDirect || installation.Source.Repository != input.Envelope.Source.Repository {
+		return false
+	}
+	if installation.Source.StableSourceKey != "" {
+		return input.Envelope.Source.SourceBindingHint == "uap-dependency-skill" && installation.Source.StableSourceKey == input.Envelope.Source.StableSourceKey && input.EnvironmentAuthority.SourceKey == installation.Source.StableSourceKey
+	}
+	return installation.Source.PackageSubpath == input.Envelope.Source.PackageSubpath
 }

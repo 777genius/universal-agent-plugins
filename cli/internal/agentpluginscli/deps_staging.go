@@ -10,11 +10,15 @@ import (
 )
 
 type dependencySnapshotKey struct {
-	repository, commit, path, algorithm, digest string
+	repository, commit, path, algorithm, digest                  string
+	kind, skill, requestedPath, sourceKey, rawDigest, normalizer string
 }
 
 func lockedDependencyCoordinates(locked environment.LockedPackage) (string, string, string, error) {
 	if source := locked.Source.Git; source != nil {
+		if source.Kind == environment.SkillKind {
+			return source.Repository, source.Commit, source.ResolvedSkillPath, nil
+		}
 		return source.Repository, source.Commit, source.Path, nil
 	}
 	if source := locked.Source.Registry; source != nil {
@@ -37,12 +41,24 @@ func (cache *dependencySnapshotCache) close() {
 	}
 }
 
-func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.LockedPackage) (domain.PackageSnapshot, error) {
+func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySnapshotKey, error) {
 	repository, commit, path, err := lockedDependencyCoordinates(locked)
+	if err != nil {
+		return dependencySnapshotKey{}, err
+	}
+	key := dependencySnapshotKey{repository: repository, commit: commit, path: path, algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
+	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind {
+		key.kind, key.skill, key.requestedPath = source.Kind, source.Skill, source.Path
+		key.sourceKey, key.rawDigest, key.normalizer = locked.SourceKey, source.RawTreeDigest, source.Normalizer
+	}
+	return key, nil
+}
+
+func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.LockedPackage) (domain.PackageSnapshot, error) {
+	key, err := lockedDependencySnapshotKey(locked)
 	if err != nil {
 		return domain.PackageSnapshot{}, err
 	}
-	key := dependencySnapshotKey{repository: repository, commit: commit, path: path, algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
 	cache := app.dependencySnapshots
 	var acquired domain.PackageSnapshot
 	var ok bool
@@ -51,7 +67,11 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 	}
 	if !ok {
 		var err error
-		acquired, err = app.SourceAcquirer.AcquireGitHubVerified(ctx, key.repository, key.commit, key.path, key.digest)
+		if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
+			acquired, err = app.acquireLockedSkill(ctx, locked)
+		} else {
+			acquired, err = app.SourceAcquirer.AcquireGitHubVerified(ctx, key.repository, key.commit, key.path, key.digest)
+		}
 		if err != nil {
 			return domain.PackageSnapshot{}, err
 		}
@@ -75,4 +95,16 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 		return domain.PackageSnapshot{}, errors.New("staged dependency no longer matches uap.lock")
 	}
 	return snapshot, nil
+}
+
+func lockedDependencySource(locked environment.LockedPackage) (domain.SourceIdentity, error) {
+	repository, commit, subpath, err := lockedDependencyCoordinates(locked)
+	if err != nil {
+		return domain.SourceIdentity{}, err
+	}
+	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
+		return skillSnapshotSource(locked), nil
+	}
+	identity := githubIdentity(repository, commit, subpath)
+	return domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository, PackageSubpath: subpath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}, nil
 }

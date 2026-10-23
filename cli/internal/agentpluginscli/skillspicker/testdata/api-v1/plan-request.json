@@ -1,0 +1,11 @@
+{
+  "catalogId": "catalog-fixture",
+  "catalogDigest": "catalog-digest-fixture",
+  "selectedIds": [
+    "skill-review-a",
+    "skill-review-b"
+  ],
+  "targetIds": [
+    "codex"
+  ]
+}
