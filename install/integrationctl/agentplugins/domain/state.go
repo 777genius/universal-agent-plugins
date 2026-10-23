@@ -133,6 +133,9 @@ const (
 )
 
 type SourceBinding struct {
+	SourceKind       string `json:"source_kind,omitempty"`
+	SourceURL        string `json:"source_url,omitempty"`
+	ArchiveSHA256    string `json:"archive_sha256,omitempty"`
 	SourceBindingID  string `json:"source_binding_id"`
 	RequestedSource  string `json:"requested_source"`
 	CanonicalSource  string `json:"canonical_source"`

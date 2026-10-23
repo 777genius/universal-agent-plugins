@@ -29,6 +29,27 @@ codex = ["review", "docs", "context7"]
 claude = ["review"]
 ```
 
+Git sources may use a canonical GitHub repository, any public/private HTTPS clone
+endpoint, an `ssh://` endpoint or native SCP syntax. Direct Git uses existing
+native credential helpers/SSH trust and pins an immutable commit. Ready HTTPS
+archives use a separate source table:
+
+```toml
+[dependencies.release]
+archive = "https://downloads.example.com/plugin.tar.gz"
+path = "plugins/demo"
+# Optional exact original-byte pin: sha256 = "<64 lowercase hex characters>"
+```
+
+ZIP, TAR, TAR.GZ/TGZ and extensionless HTTPS downloads use bounded format
+recognition and strict extraction. The lock records original-byte SHA256 in
+addition to selected package tree/manifest digests; moving endpoints cannot
+replace those bytes during locked restore or repair. Local archives are usable
+through imperative add, and are not portable dependency requirements. See
+[Direct complete package sources](DIRECT_PACKAGE_SOURCES.md) for source grammar,
+provider browser URLs, native credentials, selection and exact archive limits.
+The standard `plugin.json` format is unchanged; raw skill files are not imported.
+
 Git dependencies use exactly one of `commit` and `ref`; omitting both records
 the repository default branch intent. Registry tables retain exact directory
 `release` selection. A string under `[dependencies]` selects a Directory package
@@ -55,7 +76,7 @@ The same `[dependencies]` section always describes the manifest owner's direct
 requirements. Installing a plugin through the managed workflow installs its full
 dependency closure. Published package shortcuts must use canonical `owner/name`
 IDs; short Directory names are a convenience for the user's root manifest only.
-Git and exact registry-release tables use the same syntax in either context.
+Git, archive and exact registry-release tables use the same syntax in either context.
 An absent package TOML, or one containing only `schema_version = 1`, declares no
 dependencies. An invalid or unreadable TOML is an error.
 
@@ -101,10 +122,10 @@ agentplugins deps recover
 ```
 
 `lock` resolves changed selectors and preserves compatible pins. `update
-<alias>` rechecks a moving Git ref or a registry range, updating the selected
+<alias>` rechecks a moving Git ref, unpinned archive endpoint or registry range, updating the selected
 root and related dependency pins while preserving independent pins. Registry
 ranges stay unchanged in `uap.toml`; apply the new lock with install/sync. Exact
-commit, release or semver selectors require an intent change instead.
+commit, archive checksum, release or semver selectors require an intent change instead.
 
 `tree` reads the saved graph offline, showing roots, versions and consumers;
 shared nodes and cycles are references. JSON contains sorted `roots` and
