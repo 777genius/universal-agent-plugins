@@ -14,12 +14,18 @@ import (
 )
 
 func (*Adapter) AutomaticallyActivates(_ clients.Env, r domain.ActivationRequest) bool {
+	if r.Plan.Scope == domain.ScopeProject {
+		return r.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(r.Plan.Components)
+	}
 	return r.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(r)
 }
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, p domain.DeliveryPlan, _ string) bool {
 	return p.NativeRegistryRoot != ""
 }
-func (*Adapter) PreflightActivation(_ clients.Env, r domain.ActivationRequest) error {
+func (*Adapter) PreflightActivation(env clients.Env, r domain.ActivationRequest) error {
+	if r.Plan.Scope == domain.ScopeProject || r.Plan.TargetContext.Scope == domain.ScopeProject {
+		return preflightKimiProject(env, r)
+	}
 	// Generic preflight runs before staging, so Delivery and DeclaredName are
 	// still empty there. Validate those fields only once they are supplied.
 	if r.Client.ClientID != domain.ClientKimi || r.Plan.ClientID != domain.ClientKimi ||
@@ -45,6 +51,9 @@ func (*Adapter) PreflightActivation(_ clients.Env, r domain.ActivationRequest) e
 	return err
 }
 func (a *Adapter) Activate(ctx context.Context, env clients.Env, r domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if r.Plan.Scope == domain.ScopeProject || r.Plan.TargetContext.Scope == domain.ScopeProject {
+		return activateKimiProject(ctx, env, r)
+	}
 	out := shared.StartedActivation(r)
 	// Native-config lifecycle persists an attempt before dispatch. Report its
 	// effect explicitly so verified success can clear that marker; failures
@@ -94,7 +103,10 @@ func (a *Adapter) Activate(ctx context.Context, env clients.Env, r domain.Activa
 	out.UserActions = []string{reloadAction}
 	return out, nil
 }
-func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, r domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (*Adapter) Deactivate(ctx context.Context, env clients.Env, r domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if r.TargetContext.Scope == domain.ScopeProject {
+		return deactivateKimiProject(ctx, env, r)
+	}
 	out := shared.StartedDeactivation()
 	if err := ctx.Err(); err != nil {
 		return out, err
