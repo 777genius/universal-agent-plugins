@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOWORK: "off"
       GOTOOLCHAIN: local
@@ -154,7 +154,7 @@ jobs:
   build:
     if: ${{ inputs.publish_release != true }}
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOWORK: "off"
       GOTOOLCHAIN: local
@@ -221,7 +221,7 @@ jobs:
   stage-draft:
     if: ${{ inputs.publish_release != true }}
     needs: [validate, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: agentplugins-release
     outputs:
       release_id: ${{ steps.release-identity.outputs.release_id }}
@@ -359,7 +359,7 @@ jobs:
   verified-draft:
     if: ${{ inputs.publish_release != true }}
     needs: [validate, stage-draft, platform-proof]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # GitHub draft visibility requires push capability; contents: read can return null.
       # This trusted producer verifier still only reads APIs/assets and verifies attestations.
@@ -398,7 +398,7 @@ jobs:
   reuse-verified-draft:
     if: ${{ inputs.publish_release == true }}
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # Draft release API visibility requires write capability; this job only reads.
       contents: write
@@ -429,7 +429,7 @@ jobs:
   promote-release:
     if: ${{ inputs.publish_release == true }}
     needs: [validate, reuse-verified-draft]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: agentplugins-release
     permissions:
       contents: write
