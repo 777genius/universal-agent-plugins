@@ -22,6 +22,9 @@ func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationR
 }
 
 func automaticallyActivates(request domain.ActivationRequest) bool {
+	if request.Plan.Scope == domain.ScopeProject {
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+	}
 	if request.Plan.InstallIntent != domain.InstallIntentAutomatic {
 		return false
 	}
@@ -36,6 +39,9 @@ func automaticallyActivates(request domain.ActivationRequest) bool {
 // made for this plan. The executable name is part of the evidence: a backend
 // that does not look like Kiro cannot prove Kiro state.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+	if plan.Scope == domain.ScopeProject {
+		return shared.OnlyNativeComponents(plan.Components)
+	}
 	if strings.TrimSpace(backendExecutable) == "" {
 		return false
 	}
@@ -56,6 +62,9 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 // PreflightActivation rejects a prepare request that cannot own native objects,
 // and rejects automatic MCP activation whose runner cannot speak ACP duplex.
 func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRequest) error {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return preflightKiroProject(env, request)
+	}
 	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
 		if request.Plan.Scope != domain.ScopeUser || strings.TrimSpace(request.Client.ConfigRoot) == "" || !shared.OnlyNativeComponents(request.Plan.Components) {
 			return kiroErrorf("Kiro preparation requires native configuration and supported components")
@@ -78,6 +87,9 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 // Activate prepares, verifies or installs managed Kiro native objects, then
 // observes MCP through ACP when the package selected any.
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
+		return activateKiroProject(ctx, env, request)
+	}
 	outcome := shared.StartedActivation(request)
 	outcome.NativeEffect = domain.NativeEffectUnchanged
 	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
@@ -184,6 +196,9 @@ func manualKiroVerification(outcome domain.ActivationOutcome, request domain.Act
 // Deactivate removes managed Kiro native objects, or asks the operator to
 // finish a leftover custom Power first.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return deactivateKiroProject(ctx, env, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if len(NativeObjects(request.NativeObjects)) == 0 {
 		return shared.RequireExternalUninstall(outcome, request.ExternalUninstalled, "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"), nil
