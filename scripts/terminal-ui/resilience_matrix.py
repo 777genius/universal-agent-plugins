@@ -329,6 +329,28 @@ class Matrix:
             check(allow_abandoned_staging and reserved,
                   f"failed preparation committed managed content: {name}")
 
+    @staticmethod
+    def assert_config_delivery_claims(envelope):
+        # AUTO means automated config delivery only: the plan validates the
+        # package and the installer verifies its managed installation. Neither
+        # is a live MCP connection, and until one exists the results must keep
+        # saying so.
+        for row in envelope["data"]["targets"]:
+            plan = row["output"]["result"]["plan"]
+            check(plan["verification"] == "package_validated",
+                  f"{row['target']}: plan overstates verification: "
+                  f"{plan['verification']}")
+            check(plan["authentication"] == "not_checked",
+                  f"{row['target']}: plan overstates authentication: "
+                  f"{plan['authentication']}")
+            activation = row["output"]["result"]["activation"]
+            check(activation["verification"] == "installation_verified",
+                  f"{row['target']}: result overstates verification: "
+                  f"{activation['verification']}")
+            check(activation["authentication"] == "not_checked",
+                  f"{row['target']}: result overstates authentication: "
+                  f"{activation['authentication']}")
+
     def invalid_state(self, fixture, evidence, body, reason):
         state = self.state_path(fixture)
         state.parent.mkdir(parents=True, exist_ok=True)
@@ -962,6 +984,7 @@ class Matrix:
         rows = envelope["data"]["targets"]
         check({row["target"] for row in rows} == {"gemini", "opencode"},
               f"add lost a locked-runtime target: {rows}")
+        self.assert_config_delivery_claims(envelope)
         runtime.check_npm_contract()
         check(runtime.ci_runs() == 1,
               f"group add ran npm {runtime.ci_runs()} times, want one prewarm")
@@ -1029,9 +1052,10 @@ class Matrix:
         runtime.assert_launcher_runs(0)
 
         runtime.clear_controls()
-        self.command(
+        _, envelope = self.command(
             fixture, evidence, "add-retry", "add", str(fixture.package),
             "--target=gemini,opencode", expect=True)
+        self.assert_config_delivery_claims(envelope)
         runtime.check_npm_contract()
         runtime.assert_store_ready()
         self.assert_healthy(fixture, evidence / "health", 1)
