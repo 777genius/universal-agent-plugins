@@ -95,7 +95,7 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 		return environment.ResolvedPackage{}, err
 	}
 	result := environment.ResolvedPackage{Package: pkg, Dependencies: facts}
-	return result, resolver.finishLoaded(loaded, pkg)
+	return result, resolver.finishLoaded(ctx, loaded, pkg)
 }
 
 func dependencyManifestAlias(name string) string {

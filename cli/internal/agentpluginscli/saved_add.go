@@ -167,7 +167,7 @@ func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	pin.ManifestDigest = loaded.envelope.ManifestDigest
 	pin.Version = loaded.envelope.Manifest.Version
 	pin.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded, pin); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), loaded, pin); err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
 	return requirement, pin, nil

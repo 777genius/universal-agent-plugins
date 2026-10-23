@@ -95,7 +95,7 @@ func resolveDirectSavedAdd(cmd *cobra.Command, app App, opts *options, source st
 	}
 	result.requirement = requirement
 	pin = completeDirectPin(result, alias)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(result.loaded, pin); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), result.loaded, pin); err != nil {
 		return requirement, pin, err
 	}
 	return requirement, pin, nil
@@ -139,4 +139,12 @@ func archivePathSelector(packagePath string) string {
 	}
 	// Archive paths are already portable; the parser decodes fragment values.
 	return "&path=" + url.QueryEscape(packagePath)
+}
+
+func localArchiveUpdateSource(source domain.SourceBinding) string {
+	spec, err := sourcespec.Parse(source.RequestedSource)
+	if err == nil && spec.Archive != nil && spec.Archive.SHA256 != "" {
+		return source.SourceURL + "#sha256=" + spec.Archive.SHA256 + archivePathSelector(source.PackageSubpath)
+	}
+	return source.SourceURL
 }

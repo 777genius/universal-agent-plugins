@@ -158,3 +158,16 @@ func encodedSeparator(raw string) bool {
 	value := strings.ToLower(raw)
 	return strings.Contains(value, "%2f") || strings.Contains(value, "%5c")
 }
+
+// IsProviderArchiveURL recognizes provider download endpoints before browser
+// repository parsing. An asset need not advertise its format in its filename.
+func IsProviderArchiveURL(u *url.URL) bool {
+	if strings.Contains(u.Path, "/-/archive/") {
+		return true
+	}
+	if !strings.EqualFold(u.Hostname(), "github.com") {
+		return false
+	}
+	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+	return len(parts) >= 6 && parts[2] == "releases" && parts[3] == "download"
+}

@@ -10,6 +10,9 @@ import (
 // Parse recognizes direct inputs only. Directory names and local directories
 // remain the caller's grammar; no filesystem existence probe is performed.
 func Parse(raw string) (Spec, error) {
+	if spec, recognized, err := parseLocalArchiveSelector(raw); recognized {
+		return spec, err
+	}
 	if explicitArchivePath(raw) {
 		if len(raw) > 8192 || strings.TrimSpace(raw) != raw || strings.ContainsFunc(raw, unicode.IsControl) {
 			return Spec{}, errors.New("invalid local archive path")
@@ -65,7 +68,7 @@ func parseHTTPS(raw string, out Spec) (Spec, error) {
 	if err != nil {
 		return Spec{}, errors.New("invalid HTTPS source")
 	}
-	if strings.HasPrefix(u.Fragment, "sha256=") || HasArchiveSuffix(u.Path) {
+	if strings.HasPrefix(u.Fragment, "sha256=") || HasArchiveSuffix(u.Path) || IsProviderArchiveURL(u) {
 		a, err := parseArchive(u)
 		out.Kind, out.Archive = KindArchive, &a
 		return out, err
@@ -98,7 +101,10 @@ func parseArchive(u *url.URL) (Archive, error) {
 	if err != nil {
 		return Archive{}, err
 	}
-	a := Archive{URL: endpoint}
+	return parseArchiveFragment(Archive{URL: endpoint}, fragment)
+}
+
+func parseArchiveFragment(a Archive, fragment string) (Archive, error) {
 	if fragment != "" {
 		values, err := url.ParseQuery(fragment)
 		if err != nil || len(values["sha256"]) != 1 || !ValidSHA256(values.Get("sha256")) {
@@ -116,4 +122,16 @@ func parseArchive(u *url.URL) (Archive, error) {
 		}
 	}
 	return a, nil
+}
+
+func parseLocalArchiveSelector(raw string) (Spec, bool, error) {
+	base, fragment, selected := strings.Cut(raw, "#")
+	if !selected || !strings.HasPrefix(fragment, "sha256=") || !HasArchiveSuffix(base) || strings.Contains(base, "://") || looksLikeSCP(base) || strings.HasPrefix(base, "github:") {
+		return Spec{}, false, nil
+	}
+	if len(raw) > 8192 || strings.TrimSpace(raw) != raw || strings.ContainsFunc(raw, unicode.IsControl) {
+		return Spec{}, true, errors.New("invalid local archive selector")
+	}
+	archive, err := parseArchiveFragment(Archive{URL: base}, fragment)
+	return Spec{Requested: raw, Kind: KindLocalArchive, Archive: &archive}, true, err
 }

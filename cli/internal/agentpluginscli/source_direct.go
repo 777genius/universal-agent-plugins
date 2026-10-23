@@ -25,7 +25,7 @@ func localArchiveInput(raw string) bool {
 	if err != nil || spec.Kind != sourcespec.KindLocalArchive {
 		return false
 	}
-	info, err := os.Stat(raw)
+	info, err := os.Stat(spec.Archive.URL)
 	return err != nil || !info.IsDir()
 }
 

@@ -112,7 +112,7 @@ func nativeVerificationOptions(ctx context.Context, environ []string, command Co
 		if key == "" {
 			continue
 		}
-		if len(key) > 8192 || strings.ContainsAny(key, "\r\n") {
+		if len(key) > 8192 || strings.ContainsAny(key, "=\r\n") {
 			return nil, errors.New("native Git TLS configuration key is invalid")
 		}
 		options = append(options, "-c", key+"=true")

@@ -119,7 +119,7 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
 		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
-	return locked, resolver.finishLoaded(loaded, locked)
+	return locked, resolver.finishLoaded(ctx, loaded, locked)
 }
 
 func (resolver dependencyResolver) resolveArchive(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
@@ -145,7 +145,7 @@ func (resolver dependencyResolver) resolveArchive(ctx context.Context, requireme
 		_ = loaded.cleanup()
 		return environment.LockedPackage{}, errors.New("archive requirement must explicitly select its logical package path")
 	}
-	return locked, resolver.finishLoaded(loaded, locked)
+	return locked, resolver.finishLoaded(ctx, loaded, locked)
 }
 
 func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
@@ -170,7 +170,7 @@ func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirem
 	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
 		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
-	return locked, resolver.finishLoaded(loaded, locked)
+	return locked, resolver.finishLoaded(ctx, loaded, locked)
 }
 
 func registryLockedPackage(requirement environment.Requirement, loaded loadedPackage) (environment.LockedPackage, error) {
@@ -191,14 +191,18 @@ func registryLockedPackage(requirement environment.Requirement, loaded loadedPac
 	return locked, nil
 }
 
-func (resolver dependencyResolver) finishLoaded(loaded loadedPackage, pins ...environment.LockedPackage) error {
+func (resolver dependencyResolver) finishLoaded(ctx context.Context, loaded loadedPackage, pins ...environment.LockedPackage) error {
+	if err := ctx.Err(); err != nil {
+		_ = loaded.cleanup()
+		return err
+	}
 	if _, err := packageDependencyFacts(loaded.envelope); err != nil {
 		_ = loaded.cleanup()
 		return err
 	}
 	if len(pins) > 0 && resolver.app.dependencySnapshots != nil {
 		pin := pins[0]
-		snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(context.Background(), loaded.envelope.SnapshotRoot, identityFromLocked(pin), loaded.envelope.ExecutableFiles)
+		snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(ctx, loaded.envelope.SnapshotRoot, identityFromLocked(pin), loaded.envelope.ExecutableFiles)
 		if err != nil {
 			_ = loaded.cleanup()
 			return err
@@ -215,7 +219,7 @@ func (resolver dependencyResolver) finishLoaded(loaded loadedPackage, pins ...en
 		snapshot := domain.PackageSnapshot{Root: loaded.envelope.SnapshotRoot, TreeDigest: loaded.envelope.TreeDigest,
 			DigestAlgorithm: domain.TreeDigestAlgorithm, ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 			Source: loaded.envelope.Source}
-		if _, err := resolver.app.dependencyStore().Put(context.Background(), snapshot); err != nil {
+		if _, err := resolver.app.dependencyStore().Put(ctx, snapshot); err != nil {
 			_ = loaded.cleanup()
 			return err
 		}

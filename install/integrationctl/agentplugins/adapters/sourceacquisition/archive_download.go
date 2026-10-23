@@ -235,7 +235,7 @@ func (reader *archiveContextReader) Read(body []byte) (int, error) {
 
 func archiveExplicit(endpoint string) bool {
 	u, err := url.Parse(endpoint)
-	return err == nil && sourcespec.HasArchiveSuffix(u.Path)
+	return err == nil && (sourcespec.HasArchiveSuffix(u.Path) || sourcespec.IsProviderArchiveURL(u))
 }
 
 func archiveFilenameFormat(endpoint string) archiveFormat {

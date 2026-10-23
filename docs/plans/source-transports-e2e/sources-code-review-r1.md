@@ -154,3 +154,26 @@ Focused source model/parser tests and the new native regressions must pass on
 the corrective commit before R1 GO. Parent owns independent R2 routing,
 publication and the later cumulative S5 review. Do not interpret this review as
 an executable release or native agent-client runtime qualification.
+
+## Corrective implementation evidence (author; reviewer verification pending)
+
+- `c1f8d232` privately enumerates configured URL-scoped TLS verification key names
+  in the same Git repository context and overrides each true for the command.
+  Trusted native includes/auth/SSH/CA semantics remain available. A nonempty
+  `GIT_SSL_NO_VERIFY=false` was tested and rejected as an unsafe solution for the
+  actual Git binary; that variable is stripped instead.
+- The authoritative `GIT_ALLOW_PROTOCOL=https:ssh` limits actual transport despite
+  protocol-specific user config or URL rewrites. Only an explicitly injected
+  `URLForRepo` local fixture mapping can add file transport.
+- Actual native regressions reject untrusted TLS under scoped user config, reject
+  the same setting at an insteadOf-rewritten HTTPS endpoint, reject an HTTPS to
+  local-file rewrite, and reject HTTPS downgrade redirects. Native HTTPS/private
+  credential-helper/SSH/host-verification tests passed in4.156s.
+- Shared parser/model fixes reject decoded SSH username controls and nonportable
+  paths on new URL Git intent while preserving historical Repository admission.
+  `16d58ac7` distinguishes explicit local/Windows archive paths containing `@`
+  from genuine `owner/repo@release.zip` shorthand. Dotted userless SCP has an
+  explicit regression. All changed source/model/acquisition lint gates passed.
+
+This section records the author's evidence; independent reviewer GO is recorded
+only after the reviewer performs fix verification.

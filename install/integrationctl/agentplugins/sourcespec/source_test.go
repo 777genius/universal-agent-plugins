@@ -29,10 +29,13 @@ func TestParseDirectSources(t *testing.T) {
 		{"https://org@dev.azure.com/org/project/_git/repo?version=GBfeature%2Fa&path=%2Fplugins%2Fdemo&_a=contents", KindGit, &Git{URL: "https://dev.azure.com/org/project/_git/repo", Ref: "refs/heads/feature/a", Path: "plugins/demo"}, nil},
 		{"https://org.visualstudio.com/project/_git/repo?version=GC" + sha, KindGit, &Git{URL: "https://org.visualstudio.com/project/_git/repo", Commit: sha}, nil},
 		{"https://dev.azure.com/org/project/_git/repo.git?version=GBmain", KindGit, &Git{URL: "https://dev.azure.com/org/project/_git/repo.git", Ref: "refs/heads/main"}, nil},
+		{"https://github.com/owner/repo/releases/download/v1/plugin", KindArchive, nil, &Archive{URL: "https://github.com/owner/repo/releases/download/v1/plugin"}},
+		{"https://gitlab.example/g/r/-/archive/main/download", KindArchive, nil, &Archive{URL: "https://gitlab.example/g/r/-/archive/main/download"}},
 		{"https://github.com/owner/repo/releases/download/v1/plugin.zip", KindArchive, nil, &Archive{URL: "https://github.com/owner/repo/releases/download/v1/plugin.zip"}},
 		{"https://gitlab.com/g/r/-/archive/main/r.tar.gz", KindArchive, nil, &Archive{URL: "https://gitlab.com/g/r/-/archive/main/r.tar.gz"}},
 		{"https://downloads.test/package#sha256=" + strings.Repeat("b", 64) + "&path=plugins%2Fdemo", KindArchive, nil, &Archive{URL: "https://downloads.test/package", SHA256: strings.Repeat("b", 64), Path: "plugins/demo"}},
 		{"https://example.test/package", KindHTTPSAuto, nil, &Archive{URL: "https://example.test/package"}},
+		{"./plugins.zip#sha256=" + strings.Repeat("b", 64) + "&path=plugins%2Fdemo", KindLocalArchive, nil, &Archive{URL: "./plugins.zip", SHA256: strings.Repeat("b", 64), Path: "plugins/demo"}},
 		{"./plugin.tgz", KindLocalArchive, nil, &Archive{URL: "./plugin.tgz"}},
 		{"owner/repo@release.zip", KindGit, &Git{URL: "https://github.com/owner/repo.git", Repository: "owner/repo", Ref: "release.zip"}, nil},
 		{`C:\tmp\package.zip`, KindLocalArchive, nil, &Archive{URL: `C:\tmp\package.zip`}},
@@ -63,6 +66,7 @@ func TestUnsafeSourcesFailWithoutEchoingInput(t *testing.T) {
 		"https://github.com/o/r/blob/main/SKILL.md", "https://gitlab.com/g/r/-/blob/main/SKILL.md",
 		"https://dev.azure.com/o/p/_git/r?token=TOKEN", "https://dev.azure.com/o/p/_git/r?version=GBa&version=GBb",
 		"https://example.test/r.git#main\nTOKEN", "https://example.test/../r.git", "ssh://git@example.test/repo#main//CON",
+		"git+https://github.com/acme%2Fdemo.git",
 		"https://github.com/owner%2Frepo.git", "https://gitlab.com/g/r/-/tree/feature%2Fa/pkg", "https://example.test/r%01.git",
 	} {
 		t.Run(raw, func(t *testing.T) {

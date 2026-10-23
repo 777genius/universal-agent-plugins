@@ -356,7 +356,7 @@ func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot en
 	}
 	requirements, candidate := savedRegistryCandidate(snapshot, alias, old, loaded)
 	next, _ := candidate.Package(alias)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(loaded, next); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), loaded, next); err != nil {
 		return requirements, snapshot.Lock, err
 	}
 	// Validate the authoritative old graph before rebuilding edges from the new
