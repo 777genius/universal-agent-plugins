@@ -52,6 +52,9 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 	if server.OpenCodeV2 != nil {
 		return nil, fmt.Errorf("%s does not accept OpenCode V2 options", codec)
 	}
+	if codec == CodecKimi {
+		return projectKimiServer(server, placeholders)
+	}
 	if codec == CodecCopilot {
 		return projectCopilotServer(server, placeholders)
 	}

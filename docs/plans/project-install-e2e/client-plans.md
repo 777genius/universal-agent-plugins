@@ -620,6 +620,6 @@ is replaced by explicit unsupported. R2 fixes independently verified GO in
 | qoder | GO | Verified | GO | Root assignment required |
 | cline | GO | Verified | GO | Root assignment required |
 | windsurf | GO | Verified | GO | Root assignment required |
-| kimi | GO (current docs) | Verified | GO | Root assignment required |
+| kimi | GO (current docs) | Verified | GO | Authored project components; final implementation R1/R2 pending; native project discovery pending |
 | chatgpt | GO | Verified | GO | Explicit project refusal implemented; independent implementation review pending |
 | vscode | GO | Verified | GO | Root assignment required |
