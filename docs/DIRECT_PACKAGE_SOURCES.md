@@ -162,6 +162,13 @@ and SCP lifecycles to execute. Missing SSH tooling, skipped fixtures or missing
 expected test pass events fail the job. Disposable keys use exact known-host
 verification; the fixture also refuses an untrusted host.
 
+These loopback server fixtures require a Unix host: they provision Unix sshd
+accounts, POSIX forced commands and Unix repository paths. They do not qualify
+a Windows-hosted OpenSSH server or a Windows SSH client runtime. The required
+Linux job fails on unsupported platform/tooling and cannot turn into a skip.
+Windows source grammar and real TLS Git/archive lifecycle contracts remain
+separate coverage; production SSH source admission is unchanged.
+
 Real loopback TLS contracts exercise anonymous extensionless archive recognition,
 private extensionless Git fallback through native credentials, and archives with
 identical package trees but distinct original-byte checksums in both content-store
