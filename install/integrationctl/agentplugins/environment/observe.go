@@ -41,6 +41,15 @@ func LifecycleFacts(binding installer.InspectedBinding) (retry bool, facts []str
 // receipts. Unmanaged siblings remain visible so planning cannot adopt their
 // shared installation through a different target.
 func Observe(view installer.Inspection) ([]BindingObservation, error) {
+	return ObserveForEnvironment(view, EnvironmentUserDefault)
+}
+
+// ObserveForEnvironment uses the selected namespace's explicit receipt owner.
+// Other ownership stays visible as foreign and cannot be adopted by alias.
+func ObserveForEnvironment(view installer.Inspection, environmentID string) ([]BindingObservation, error) {
+	if environmentID == "" {
+		environmentID = EnvironmentUserDefault
+	}
 	if view.Recovery.Required {
 		return nil, installer.ErrRecoveryRequired
 	}
@@ -54,7 +63,7 @@ func Observe(view installer.Inspection) ([]BindingObservation, error) {
 					continue
 				}
 				live[receipt.ReceiptID] = true
-				if receipt.EnvironmentID != EnvironmentUserDefault {
+				if receipt.EnvironmentID != environmentID {
 					continue
 				}
 				if receipt.SourceKey != installation.SourceKey || receipt.PackageDigest != binding.TreeDigest {
@@ -70,7 +79,7 @@ func Observe(view installer.Inspection) ([]BindingObservation, error) {
 		}
 	}
 	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == EnvironmentUserDefault && !live[receipt.ReceiptID] {
+		if receipt.EnvironmentID == environmentID && !live[receipt.ReceiptID] {
 			return nil, errors.New("partial: environment receipt has no live binding")
 		}
 	}

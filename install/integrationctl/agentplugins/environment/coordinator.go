@@ -26,8 +26,16 @@ type BindingMutator interface {
 }
 
 type Coordinator struct {
-	Resolver Resolver
-	Mutator  BindingMutator
+	EnvironmentID string
+	Resolver      Resolver
+	Mutator       BindingMutator
+}
+
+func (coordinator Coordinator) environmentID() string {
+	if coordinator.EnvironmentID == "" {
+		return EnvironmentUserDefault
+	}
+	return coordinator.EnvironmentID
 }
 
 func (coordinator Coordinator) Resolve(ctx context.Context, requirements Requirements, previous Lock, updateAlias string) (Lock, error) {
@@ -115,7 +123,7 @@ func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock,
 	if err := lock.Validate(requirements); err != nil {
 		return PreparedSync{}, err
 	}
-	plan := PreparedSync{EnvironmentID: EnvironmentUserDefault, ManifestDigest: lock.ManifestDigest}
+	plan := PreparedSync{EnvironmentID: coordinator.environmentID(), ManifestDigest: lock.ManifestDigest}
 	byAliasTarget := map[string]BindingObservation{}
 	for _, item := range observed {
 		byAliasTarget[item.Alias+"\x00"+item.ClientID] = item
@@ -141,7 +149,7 @@ func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock,
 			if current.Pending {
 				return PreparedSync{}, installer.ErrRecoveryRequired
 			}
-			plan.Bindings = append(plan.Bindings, PreparedBinding{Alias: current.Alias, ClientID: current.ClientID, InstallationID: current.InstallationID, BindingID: current.BindingID, Action: ActionRemove, Authority: bindingAuthority(current.Alias, current.ClientID, current.SourceKey, ActionRemove, current)})
+			plan.Bindings = append(plan.Bindings, PreparedBinding{Alias: current.Alias, ClientID: current.ClientID, InstallationID: current.InstallationID, BindingID: current.BindingID, Action: ActionRemove, Authority: bindingAuthority(plan.EnvironmentID, current.Alias, current.ClientID, current.SourceKey, ActionRemove, current)})
 		}
 	}
 	if err := validatePlannedAttestation(plan, attestation); err != nil {
@@ -202,8 +210,8 @@ func (coordinator Coordinator) ApplySync(ctx context.Context, plan PreparedSync,
 	return results, nil
 }
 
-func bindingAuthority(alias, target, source string, action DesiredAction, observed BindingObservation) *domain.EnvironmentAuthority {
-	out := &domain.EnvironmentAuthority{EnvironmentID: EnvironmentUserDefault, Alias: alias, ClientID: target, InstallationID: observed.InstallationID, ClientBindingID: observed.BindingID, SourceKey: source, ExpectedAction: string(action)}
+func bindingAuthority(environmentID, alias, target, source string, action DesiredAction, observed BindingObservation) *domain.EnvironmentAuthority {
+	out := &domain.EnvironmentAuthority{EnvironmentID: environmentID, Alias: alias, ClientID: target, InstallationID: observed.InstallationID, ClientBindingID: observed.BindingID, SourceKey: source, ExpectedAction: string(action)}
 	if observed.Receipt != nil {
 		out.ReceiptID = observed.Receipt.ReceiptID
 	}
@@ -285,7 +293,7 @@ func appendDesiredBindings(plan *PreparedSync, lock Lock, observed []BindingObse
 				ActivationComplete: activation, AuthComplete: auth,
 				Alias: pkg.Alias, ClientID: target, InstallationID: current.InstallationID,
 				BindingID: current.BindingID, Action: action, Package: &pkg, Reason: reason,
-				Authority: bindingAuthority(pkg.Alias, target, pkg.SourceKey, action, current),
+				Authority: bindingAuthority(plan.EnvironmentID, pkg.Alias, target, pkg.SourceKey, action, current),
 			})
 		}
 	}

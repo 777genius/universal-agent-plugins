@@ -64,7 +64,7 @@ const (
 // mutation remains in client-specific adapters and is intentionally not part
 // of this registry.
 type ClientDefinition struct {
-	ProjectPolicy         ProjectPolicy
+	ProjectPolicy         ProjectPolicy `json:"-"`
 	ID                    ClientID
 	DisplayName           string
 	BackendFamily         string

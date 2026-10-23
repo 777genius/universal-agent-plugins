@@ -18,10 +18,11 @@ import (
 )
 
 const (
-	ManifestSchemaVersion  = 1
-	LockVersion            = 1
-	EnvironmentUserDefault = "user-default"
-	TreeDigestAlgorithm    = "agentplugins-tree-sha256-v1"
+	ManifestSchemaVersion     = 1
+	LockVersion               = 1
+	EnvironmentUserDefault    = "user-default"
+	EnvironmentProjectDefault = "project-default"
+	TreeDigestAlgorithm       = "agentplugins-tree-sha256-v1"
 )
 
 var (
