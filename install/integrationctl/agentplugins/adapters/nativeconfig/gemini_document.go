@@ -36,3 +36,25 @@ func geminiWithoutTrailingComma(value *hujson.Value) bool {
 		return true
 	}
 }
+
+// Deleting a last member can turn the preceding member's comma into a trailing
+// comma. Input validation already rejected native-invalid commas; keep the
+// surviving foreign trivia while removing only commas created by mutation.
+func geminiRemoveTrailingCommas(ast *hujson.Value) {
+	for value := range ast.All() {
+		switch node := value.Value.(type) {
+		case *hujson.Object:
+			if len(node.Members) > 0 {
+				last := &node.Members[len(node.Members)-1].Value
+				node.AfterExtra = append(last.AfterExtra, node.AfterExtra...)
+				last.AfterExtra = nil
+			}
+		case *hujson.Array:
+			if len(node.Elements) > 0 {
+				last := &node.Elements[len(node.Elements)-1]
+				node.AfterExtra = append(last.AfterExtra, node.AfterExtra...)
+				last.AfterExtra = nil
+			}
+		}
+	}
+}

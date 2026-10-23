@@ -24,6 +24,11 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		root = plan.NativeRegistryRoot
 	}
 	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
+	if in.TargetContext.Scope == domain.ScopeProject {
+		plan.Activation = domain.ActivationPrepared
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "project skills and MCP settings can be configured automatically; native discovery, workspace trust and system policy require observation in Gemini CLI")
+		return nil
+	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI")
 	return nil
 }

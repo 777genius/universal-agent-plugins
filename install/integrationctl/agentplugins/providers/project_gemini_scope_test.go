@@ -1,4 +1,4 @@
-package gemini_test
+package providers_test
 
 import (
 	"context"
@@ -17,11 +17,11 @@ import (
 
 func projectGeminiRequest(t *testing.T) (domain.ActivationRequest, string, string) {
 	t.Helper()
-	base := testDirectory(t)
+	base := projectGeminiTemp(t)
 	user, projectA, projectB := filepath.Join(base, "user", ".gemini"), filepath.Join(base, "A"), filepath.Join(base, "B")
 	for _, root := range []string{user, filepath.Join(projectA, ".gemini"), filepath.Join(projectB, ".gemini")} {
-		writeTestFile(t, filepath.Join(root, "settings.json"), "{\n // preserve foreign settings\n \"mcpServers\": {\"foreign\": {\"url\":\"https://foreign.test/mcp\"}}, \"theme\":\"foreign\"\n}\n")
-		writeTestFile(t, filepath.Join(root, "skills", "foreign", "SKILL.md"), "foreign skill\n")
+		projectGeminiWrite(t, filepath.Join(root, "settings.json"), "{\n // preserve foreign settings\n \"mcpServers\": {\"foreign\": {\"url\":\"https://foreign.test/mcp\"}}, \"theme\":\"foreign\"\n}\n")
+		projectGeminiWrite(t, filepath.Join(root, "skills", "foreign", "SKILL.md"), "foreign skill\n")
 	}
 	client := domain.DetectedClient{ClientID: domain.ClientGemini, ConfigRoot: user, Status: domain.DetectionDetected}
 	target, err := domain.NewTargetContext(domain.ScopeProject, projectA, user)
@@ -29,8 +29,8 @@ func projectGeminiRequest(t *testing.T) (domain.ActivationRequest, string, strin
 		t.Fatal(err)
 	}
 	active := filepath.Join(projectA, ".uap", "managed", "clients", "gemini", "archive-demo")
-	writeTestFile(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Project fixture\n---\nInert fixture.\n")
-	writeTestFile(t, filepath.Join(active, "mcp.json"), `{"mcpServers":{"docs":{"type":"sse","url":"https://managed.test/mcp"}}}`)
+	projectGeminiWrite(t, filepath.Join(active, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Project fixture\n---\nInert fixture.\n")
+	projectGeminiWrite(t, filepath.Join(active, "mcp.json"), `{"mcpServers":{"docs":{"type":"sse","url":"https://managed.test/mcp"}}}`)
 	plan := domain.DeliveryPlan{ClientID: domain.ClientGemini, Scope: domain.ScopeProject, TargetContext: target, InstallIntent: domain.InstallIntentAutomatic,
 		NativeRegistryRoot: filepath.Join(projectA, ".gemini"), ActivePath: active, Components: []domain.ComponentDecision{
 			{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}, {Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative},
@@ -47,7 +47,7 @@ func projectGeminiRequest(t *testing.T) (domain.ActivationRequest, string, strin
 
 func TestProjectGeminiNativeLifecycleKeepsUserAndOtherProject(t *testing.T) {
 	request, projectB, user := projectGeminiRequest(t)
-	userBefore, bBefore := geminiFileInventory(t, user), geminiFileInventory(t, projectB)
+	userBefore, bBefore := projectGeminiInventory(t, user), projectGeminiInventory(t, projectB)
 	registry, err := clients.NewRegistry(gemini.New())
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func TestProjectGeminiNativeLifecycleKeepsUserAndOtherProject(t *testing.T) {
 		t.Fatalf("project config activation = %+v, %v", outcome, err)
 	}
 	root := request.Plan.NativeRegistryRoot
-	assertTestBytes(t, filepath.Join(root, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Project fixture\n---\nInert fixture.\n")
+	projectGeminiAssert(t, filepath.Join(root, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Project fixture\n---\nInert fixture.\n")
 	settings, err := os.ReadFile(filepath.Join(root, "settings.json"))
 	if err != nil || !strings.Contains(string(settings), "preserve foreign settings") || !strings.Contains(string(settings), "managed.test") || !strings.Contains(string(settings), "foreign.test") {
 		t.Fatalf("project MCP merge lost entries/comments: %s, %v", settings, err)
@@ -78,7 +78,7 @@ func TestProjectGeminiNativeLifecycleKeepsUserAndOtherProject(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "skills", "docs")); !os.IsNotExist(err) {
 		t.Fatalf("managed project skill survived removal: %v", err)
 	}
-	if !reflect.DeepEqual(userBefore, geminiFileInventory(t, user)) || !reflect.DeepEqual(bBefore, geminiFileInventory(t, projectB)) {
+	if !reflect.DeepEqual(userBefore, projectGeminiInventory(t, user)) || !reflect.DeepEqual(bBefore, projectGeminiInventory(t, projectB)) {
 		t.Fatal("project lifecycle mutated user profile or project B")
 	}
 }

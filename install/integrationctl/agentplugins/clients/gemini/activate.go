@@ -22,7 +22,7 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 
 // Activate installs or verifies managed Gemini CLI skills and MCP servers
 // through the native config kernel.
-func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -30,8 +30,11 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if err := adapter.PreflightActivation(env, request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
 	automatic := request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
-	return shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
 		Automatic:         automatic,
 		UnavailableAction: "install Gemini CLI and rerun add with an isolated writable Gemini config root",
 		RepairAction:      "repair the managed Gemini CLI skills and MCP configuration",
@@ -44,6 +47,10 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 			return ActivateGeminiNativeWithKernel(ctx, request, env.NativeConfig)
 		},
 	})
+	if err != nil {
+		return outcome, err
+	}
+	return geminiProjectStatus(env, request, outcome)
 }
 
 // Deactivate removes managed Gemini native objects.

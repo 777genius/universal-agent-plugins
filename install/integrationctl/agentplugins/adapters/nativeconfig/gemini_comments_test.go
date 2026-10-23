@@ -27,6 +27,14 @@ func TestProjectGeminiCommentedSettingsExactLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A foreign writer may add trivia before the preceding member's comma.
+	// Removing our last entry must not create a native-invalid trailing comma.
+	updated, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := `"foreign":{"url":"https://foreign.test/mcp"}`
+	mustWrite(t, path, strings.Replace(string(updated), foreign, foreign+" /* keep new foreign trivia */", 1))
 	request.Action, request.Owned = ActionRemove, &receipt
 	if _, err := kernel.Apply(request); err != nil {
 		t.Fatal(err)
@@ -35,7 +43,7 @@ func TestProjectGeminiCommentedSettingsExactLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, preserved := range []string{"// retain policy comment", "/* retain foreign entry */", `"disabled":["foreign"]`, `"foreign":{"url":"https://foreign.test/mcp"}`} {
+	for _, preserved := range []string{"// retain policy comment", "/* retain foreign entry */", "/* keep new foreign trivia */", `"disabled":["foreign"]`, `"foreign":{"url":"https://foreign.test/mcp"}`} {
 		if !strings.Contains(string(body), preserved) {
 			t.Fatalf("lost %q in %s", preserved, body)
 		}

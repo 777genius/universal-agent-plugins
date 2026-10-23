@@ -149,6 +149,9 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 func (doc *document) render() ([]byte, error) {
+	if doc.commentsOnly {
+		geminiRemoveTrailingCommas(&doc.ast)
+	}
 	body := doc.ast.Pack()
 	if !doc.jsonc && !json.Valid(body) {
 		return nil, fmt.Errorf("rendered native config is not strict JSON")

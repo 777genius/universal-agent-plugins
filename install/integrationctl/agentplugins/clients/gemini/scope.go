@@ -26,20 +26,20 @@ func (*Adapter) NativeRegistry(in clients.PlanInput) (string, string) {
 
 func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.PackageMode, managedRoot string, target domain.TargetContext) (string, string, error) {
 	if target.Scope != domain.ScopeProject {
-		return "", "", fmt.Errorf("Gemini project layout requires project scope")
+		return "", "", fmt.Errorf("gemini project layout requires project scope")
 	}
 	if _, err := geminiNativeRoot(client, target, ""); err != nil {
 		return "", "", err
 	}
 	if err := pathpolicy.RequireContainedChild(target.ProjectRoot, managedRoot); err != nil {
-		return "", "", fmt.Errorf("Gemini prepared package must stay in the selected project: %w", err)
+		return "", "", fmt.Errorf("gemini prepared package must stay in the selected project: %w", err)
 	}
 	return shared.ManagedTargetRoot(client, mode, managedRoot)
 }
 
 func geminiPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (string, error) {
 	if (plan.Scope == domain.ScopeProject) != (plan.TargetContext.Scope == domain.ScopeProject) {
-		return "", fmt.Errorf("Gemini plan scope differs from its target context")
+		return "", fmt.Errorf("gemini plan scope differs from its target context")
 	}
 	return geminiNativeRoot(client, plan.TargetContext, plan.NativeRegistryRoot)
 }
@@ -50,7 +50,7 @@ func geminiNativeRoot(client domain.DetectedClient, target domain.TargetContext,
 		return "", err
 	}
 	if validated.UserConfigRoot != "" && validated.UserConfigRoot != client.ConfigRoot {
-		return "", fmt.Errorf("Gemini detected user profile differs from the selected target context")
+		return "", fmt.Errorf("gemini detected user profile differs from the selected target context")
 	}
 	root := client.ConfigRoot
 	if validated.Scope == domain.ScopeProject {
