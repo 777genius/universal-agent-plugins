@@ -91,6 +91,9 @@ func (acquirer Acquirer) archiveDownload(ctx context.Context, endpoint, destinat
 	if length > archiveMaxBytes {
 		return format, "", errors.New("archive download exceeds 256 MiB")
 	}
+	if declared := archiveFilenameFormat(endpoint); declared != archiveUnknown && declared != format {
+		return format, "", errors.New("archive format is incompatible with the initial filename suffix")
+	}
 	checksum, err := archiveSave(ctx, reader, destination)
 	return format, checksum, err
 }
@@ -233,4 +236,26 @@ func (reader *archiveContextReader) Read(body []byte) (int, error) {
 func archiveExplicit(endpoint string) bool {
 	u, err := url.Parse(endpoint)
 	return err == nil && sourcespec.HasArchiveSuffix(u.Path)
+}
+
+func archiveFilenameFormat(endpoint string) archiveFormat {
+	filename := endpoint
+	if strings.HasPrefix(endpoint, "https://") {
+		parsed, err := url.Parse(endpoint)
+		if err != nil {
+			return archiveUnknown
+		}
+		filename = parsed.Path
+	}
+	filename = strings.ToLower(filename)
+	switch {
+	case strings.HasSuffix(filename, ".tar.gz"), strings.HasSuffix(filename, ".tgz"):
+		return archiveGzip
+	case strings.HasSuffix(filename, ".zip"):
+		return archiveZIP
+	case strings.HasSuffix(filename, ".tar"):
+		return archiveTAR
+	default:
+		return archiveUnknown
+	}
 }

@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -88,7 +90,7 @@ func TestArchiveSignedRedirectIsTransientAndSanitized(t *testing.T) {
 		_, _ = writer.Write(payload)
 	}))
 	defer cdn.Close()
-	location := cdn.URL + "/asset?" + signedQuery
+	location := cdn.URL + "/asset.tar?" + signedQuery // Redirect suffix is nonauthoritative.
 	stable := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		http.Redirect(writer, request, location, http.StatusFound)
 	}))
@@ -169,5 +171,37 @@ func TestArchiveNeverAcceptsTLSBypass(t *testing.T) {
 	_, err := (Acquirer{TempRoot: t.TempDir(), HTTPClient: client}).AcquireArchive(context.Background(), sourcespec.Archive{URL: server.URL + "/package.zip"}, "", "")
 	if err == nil {
 		t.Fatal("host-supplied TLS bypass was inherited")
+	}
+}
+
+func TestArchiveInitialSuffixMustMatchRecognizedFormat(t *testing.T) {
+	entries := archivePackageEntries("")
+	tarBytes := archiveFixtureTAR(t, entries)
+	payloads := map[string][]byte{".zip": archiveFixtureZIP(t, entries, ""), ".tar": tarBytes, ".tar.gz": archiveFixtureGzip(t, tarBytes), ".tgz": archiveFixtureGzip(t, tarBytes)}
+	var payload []byte
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) { _, _ = writer.Write(payload) }))
+	defer server.Close()
+	for suffix := range payloads {
+		for actual, bytes := range payloads {
+			if suffix == actual || (suffix == ".tgz" && actual == ".tar.gz") || (suffix == ".tar.gz" && actual == ".tgz") {
+				continue
+			}
+			t.Run(suffix+"-contains-"+actual, func(t *testing.T) {
+				payload = bytes
+				temporary := t.TempDir()
+				acquirer := Acquirer{TempRoot: temporary, HTTPClient: server.Client()}
+				local := filepath.Join(t.TempDir(), "package"+suffix)
+				if err := os.WriteFile(local, payload, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				for _, endpoint := range []string{local, server.URL + "/package" + suffix} {
+					_, err := acquirer.AcquireArchive(context.Background(), sourcespec.Archive{URL: endpoint}, "", "")
+					if err == nil || errors.Is(err, ErrNotArchive) || !strings.Contains(err.Error(), "incompatible") {
+						t.Fatalf("initial suffix mismatch accepted or allowed fallback: %v", err)
+					}
+					archiveAssertEmpty(t, temporary)
+				}
+			})
+		}
 	}
 }
