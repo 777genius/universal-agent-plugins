@@ -21,6 +21,7 @@ func TestParseDirectSources(t *testing.T) {
 		{"git+https://example.test/Team/Repo", KindGit, &Git{URL: "https://example.test/Team/Repo"}, nil},
 		{"ssh://git@example.test:2222/Team/Repo#main", KindGit, &Git{URL: "ssh://git@example.test:2222/Team/Repo", Ref: "main"}, nil},
 		{"git@ssh.dev.azure.com:v3/org/project/repo", KindGit, &Git{URL: "git@ssh.dev.azure.com:v3/org/project/repo"}, nil},
+		{"git.example.test:team/repo.git", KindGit, &Git{URL: "git.example.test:team/repo.git"}, nil},
 		{"git@example.test:/srv/repo.git", KindGit, &Git{URL: "git@example.test:/srv/repo.git"}, nil},
 		{"https://github.com/owner/repo/tree/feature/a/pkg", KindGit, &Git{URL: "https://github.com/owner/repo.git", Repository: "owner/repo", Browser: &BrowserTree{Provider: "github", Suffix: "feature/a/pkg"}}, nil},
 		{"https://gitlab.com/group/sub/repo/-/tree/main/pkg", KindGit, &Git{URL: "https://gitlab.com/group/sub/repo.git", Browser: &BrowserTree{Provider: "gitlab", Suffix: "main/pkg"}}, nil},
@@ -33,6 +34,7 @@ func TestParseDirectSources(t *testing.T) {
 		{"https://downloads.test/package#sha256=" + strings.Repeat("b", 64) + "&path=plugins%2Fdemo", KindArchive, nil, &Archive{URL: "https://downloads.test/package", SHA256: strings.Repeat("b", 64), Path: "plugins/demo"}},
 		{"https://example.test/package", KindHTTPSAuto, nil, &Archive{URL: "https://example.test/package"}},
 		{"./plugin.tgz", KindLocalArchive, nil, &Archive{URL: "./plugin.tgz"}},
+		{"./package@1.0.zip", KindLocalArchive, nil, &Archive{URL: "./package@1.0.zip"}},
 		{"plugin.zip", KindLocalArchive, nil, &Archive{URL: "plugin.zip"}},
 	}
 	for _, tt := range tests {
@@ -50,6 +52,8 @@ func TestParseDirectSources(t *testing.T) {
 
 func TestUnsafeSourcesFailWithoutEchoingInput(t *testing.T) {
 	for _, raw := range []string{
+		"ssh://user%0Aname@example.test/repo", "ssh://user%01name@example.test/repo",
+		"C:/repo.git", "C:\\repo.git",
 		"https://secret:TOKEN@example.test/r.git", "ssh://secret:TOKEN@example.test/r.git",
 		"https://example.test/a.zip?token=TOKEN", "https://example.test/r.git#--upload-pack=TOKEN",
 		"https://example.test/r.git#main//../escape", "git+file:///tmp/repo",

@@ -39,6 +39,8 @@ type Command struct {
 	MaxOutputBytes int
 	// NativeCredentials is restricted to direct user-selected Git transport commands.
 	NativeCredentials bool
+	// mappedLocal is restricted to the explicit URLForRepo test fixture seam.
+	mappedLocal bool
 }
 
 type Runner interface {
@@ -59,7 +61,15 @@ func (OSRunner) Run(ctx context.Context, command Command) ([]byte, error) {
 		defer cancel()
 		environment = nativeGitEnvironment(os.Environ())
 		environment = withBatchSSH(ctx, environment, command.Dir)
-		args = append(nativeGitOptions(command.Dir), args...)
+		options, policyErr := nativeVerificationOptions(ctx, environment, command)
+		if policyErr != nil {
+			return nil, policyErr
+		}
+		if command.mappedLocal {
+			options = append(options, "-c", "protocol.file.allow=always")
+			environment = append(environment, "GIT_ALLOW_PROTOCOL=https:ssh:file")
+		}
+		args = append(options, args...)
 	}
 	result, err := (processadapter.OS{}).RunWithTreeExitGrace(ctx, legacyports.Command{
 		Argv: append([]string{"git"}, args...), Dir: command.Dir,
@@ -152,7 +162,7 @@ func (acquirer Acquirer) discoverGitPackages(ctx context.Context, url, repositor
 	repoRoot := filepath.Join(tempRoot, "repository")
 	run := func(args ...string) ([]byte, error) {
 		transport := native && len(args) > 2 && args[2] == "fetch"
-		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args, NativeCredentials: transport})
+		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args, NativeCredentials: transport, mappedLocal: transport && acquirer.mappedLocalEndpoint(url)})
 	}
 	if _, err := run("init", "--quiet", repoRoot); err != nil {
 		return nil, gitAcquisitionFailure(repository, revision, "initialize discovery repository")
@@ -262,7 +272,7 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 	repoRoot := filepath.Join(tempRoot, "repository")
 	run := func(args ...string) ([]byte, error) {
 		transport := native && len(args) > 2 && args[2] == "fetch"
-		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args, NativeCredentials: transport})
+		return acquirer.runner().Run(ctx, Command{Dir: tempRoot, Args: args, NativeCredentials: transport, mappedLocal: transport && acquirer.mappedLocalEndpoint(url)})
 	}
 	if _, err := run("init", "--quiet", repoRoot); err != nil {
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "initialize repository")

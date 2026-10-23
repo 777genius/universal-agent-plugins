@@ -2,7 +2,6 @@ package environment
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
@@ -26,6 +25,9 @@ func (source GitSource) ValidateEndpoint() error {
 			return errors.New("git repository must be owner/repo")
 		}
 		return nil
+	}
+	if _, err := sourcespec.NormalizeSubpath(source.Path); err != nil {
+		return err
 	}
 	endpoint, repository, err := sourcespec.NormalizeGitURL(source.URL)
 	if err != nil || endpoint != source.URL || repository != "" {
@@ -102,5 +104,5 @@ func (requirement Requirement) SameSource(other Requirement) bool {
 		return false
 	}
 	b, err := other.SourceKey()
-	return err == nil && strings.Compare(a, b) == 0
+	return err == nil && a == b
 }

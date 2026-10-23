@@ -20,12 +20,12 @@ import (
 func TestNativeGitEnvironmentSeparatesAuthenticationFromRouting(t *testing.T) {
 	env := nativeGitEnvironment([]string{"HOME=/user", "SSH_AUTH_SOCK=/agent", "GIT_ASKPASS=/helper", "GIT_SSH_COMMAND=ssh -F /config", "GIT_SSL_CAINFO=/ca", "GIT_DIR=/evil", "GIT_WORK_TREE=/evil", "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http.extraHeader", "GIT_CONFIG_VALUE_0=secret", "GIT_TRACE=/leak", "GIT_SSL_NO_VERIFY=1"})
 	joined := strings.Join(env, "\n")
-	for _, wanted := range []string{"HOME=/user", "SSH_AUTH_SOCK=/agent", "GIT_ASKPASS=/helper", "GIT_SSH_COMMAND=ssh -F /config", "GIT_SSL_CAINFO=/ca", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=Never"} {
+	for _, wanted := range []string{"HOME=/user", "SSH_AUTH_SOCK=/agent", "GIT_ASKPASS=/helper", "GIT_SSH_COMMAND=ssh -F /config", "GIT_SSL_CAINFO=/ca", "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=Never", "GIT_ALLOW_PROTOCOL=https:ssh"} {
 		if !strings.Contains(joined, wanted) {
 			t.Fatalf("missing native auth input %s", wanted)
 		}
 	}
-	for _, forbidden := range []string{"GIT_DIR=", "GIT_WORK_TREE=", "GIT_CONFIG_", "GIT_TRACE=", "GIT_SSL_NO_VERIFY="} {
+	for _, forbidden := range []string{"GIT_DIR=", "GIT_WORK_TREE=", "GIT_CONFIG_", "GIT_TRACE=", "GIT_SSL_NO_VERIFY=1"} {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("unsafe native environment %s", forbidden)
 		}

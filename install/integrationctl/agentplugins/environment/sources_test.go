@@ -46,13 +46,13 @@ func TestRemoteSourceLockIdentityAndOldReaderRefusal(t *testing.T) {
 		}
 		changed := lock.Packages[0]
 		if changed.Source.Git != nil {
-			copy := *changed.Source.Git
-			copy.URL = "ssh://git@other.test/Team/Repo"
-			changed.Source.Git = &copy
+			cloned := *changed.Source.Git
+			cloned.URL = "ssh://git@other.test/Team/Repo"
+			changed.Source.Git = &cloned
 		} else {
-			copy := *changed.Source.Archive
-			copy.SHA256 = "bad"
-			changed.Source.Archive = &copy
+			cloned := *changed.Source.Archive
+			cloned.SHA256 = "bad"
+			changed.Source.Archive = &cloned
 		}
 		lock.Packages[0] = changed
 		if lock.Validate(reqs) == nil {
@@ -117,5 +117,19 @@ func TestArchiveMovingUpdateAndSyncRevision(t *testing.T) {
 	reqs.Dependencies["demo"] = req
 	if _, err := coordinator.Resolve(t.Context(), reqs, Lock{}, "demo"); err == nil {
 		t.Fatal("explicit checksum updated without intent change")
+	}
+}
+
+func TestNewURLGitRequiresSharedPortablePathGrammar(t *testing.T) {
+	for _, packagePath := range []string{"CON", "a\x01b", "a/../b", "a\\b"} {
+		requirement := Requirement{Alias: "demo", Git: &GitSource{URL: "https://example.test/repo.git", Path: packagePath, Selector: Selector{Kind: SelectorDefault}}}
+		if requirement.Validate() == nil {
+			t.Fatalf("new URL Git accepted nonportable package path %q", packagePath)
+		}
+	}
+	// Existing repository intent uses the historical path admission contract.
+	old := Requirement{Alias: "demo", Git: &GitSource{Repository: "acme/repo", Path: "CON", Selector: Selector{Kind: SelectorDefault}}}
+	if err := old.Validate(); err != nil {
+		t.Fatalf("historical repository path contract changed: %v", err)
 	}
 }

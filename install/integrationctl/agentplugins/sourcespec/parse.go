@@ -13,12 +13,16 @@ func Parse(raw string) (Spec, error) {
 		return Spec{}, errors.New("invalid source input")
 	}
 	out := Spec{Requested: raw}
+	if !strings.Contains(raw, "://") && !strings.HasPrefix(raw, "github:") && !looksLikeSCP(raw) && HasArchiveSuffix(raw) {
+		out.Kind, out.Archive = KindLocalArchive, &Archive{URL: raw}
+		return out, nil
+	}
 	if strings.HasPrefix(raw, "github:") || (!strings.Contains(raw, ":") && strings.Contains(raw, "@")) {
 		g, err := parseShorthand(raw)
 		out.Kind, out.Git = KindGit, &g
 		return out, err
 	}
-	if strings.HasPrefix(raw, "git+https://") || strings.HasPrefix(raw, "ssh://") || (!strings.Contains(raw, "://") && strings.Contains(raw, "@") && strings.Contains(raw, ":")) {
+	if strings.HasPrefix(raw, "git+https://") || strings.HasPrefix(raw, "ssh://") || looksLikeSCP(raw) {
 		g, err := parseGit(raw)
 		out.Kind, out.Git = KindGit, &g
 		return out, err
@@ -31,6 +35,18 @@ func Parse(raw string) (Spec, error) {
 		}
 		return Spec{}, errors.New("not a direct remote or archive source")
 	}
+	return parseHTTPS(raw, out)
+}
+
+func looksLikeSCP(raw string) bool {
+	if strings.Contains(raw, "://") {
+		return false
+	}
+	host, _, ok := strings.Cut(raw, ":")
+	return ok && !strings.ContainsAny(host, "/\\") && (strings.Contains(host, "@") || strings.Contains(host, "."))
+}
+
+func parseHTTPS(raw string, out Spec) (Spec, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return Spec{}, errors.New("invalid HTTPS source")
@@ -62,9 +78,9 @@ func Parse(raw string) (Spec, error) {
 
 func parseArchive(u *url.URL) (Archive, error) {
 	fragment := u.Fragment
-	copy := *u
-	copy.Fragment = ""
-	endpoint, err := NormalizeArchiveURL(copy.String())
+	base := *u
+	base.Fragment = ""
+	endpoint, err := NormalizeArchiveURL(base.String())
 	if err != nil {
 		return Archive{}, err
 	}

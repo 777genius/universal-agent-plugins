@@ -15,85 +15,68 @@ func parseProvider(u *url.URL) (Git, bool, error) {
 		g, err := parseAzure(u)
 		return g, true, err
 	}
-	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
 	if host == "github.com" {
-		if len(segments) < 2 {
-			return Git{}, true, errors.New("GitHub source requires owner/repo")
-		}
-		base := *u
-		base.Path = "/" + strings.Join(segments[:2], "/")
-		base.RawQuery = ""
-		base.RawPath = ""
-		endpoint, repo, err := NormalizeGitURL(base.String())
-		if err != nil {
-			return Git{}, true, err
-		}
-		g := Git{URL: endpoint, Repository: repo}
-		if u.RawQuery != "" || u.ForceQuery {
-			return Git{}, true, errors.New("GitHub source cannot contain query parameters")
-		}
-		if len(segments) == 2 {
-			return g, true, nil
-		}
-		if len(segments) < 4 || segments[2] != "tree" {
-			return Git{}, true, errors.New("choose a repository or tree package root URL")
-		}
-		g.Browser = &BrowserTree{Provider: "github", Suffix: strings.Join(segments[3:], "/")}
-		return g, true, nil
+		g, err := parseGitHubBrowser(u)
+		return g, true, err
 	}
-	marker := "/-/tree/"
-	if index := strings.Index(u.Path, marker); index >= 0 {
-		base := *u
-		base.Path = u.Path[:index]
-		base.RawPath = ""
-		base.RawQuery = ""
-		endpoint, repo, err := NormalizeGitURL(base.String() + ".git")
-		if err != nil {
-			return Git{}, true, err
-		}
-		if u.RawQuery != "" || u.ForceQuery {
-			return Git{}, true, errors.New("GitLab tree source cannot contain query parameters")
-		}
-		return Git{URL: endpoint, Repository: repo, Browser: &BrowserTree{Provider: "gitlab", Suffix: u.Path[index+len(marker):]}}, true, nil
-	}
-	if host == "gitlab.com" {
-		if len(segments) < 2 || strings.Contains(u.Path, "/-/") {
-			return Git{}, true, errors.New("choose a GitLab repository or tree package root URL")
-		}
-		copy := *u
-		copy.Path = strings.TrimSuffix(copy.Path, "/") + ".git"
-		copy.RawPath = ""
-		endpoint, repo, err := NormalizeGitURL(copy.String())
-		return Git{URL: endpoint, Repository: repo}, true, err
+	if strings.Contains(u.Path, "/-/tree/") || host == "gitlab.com" {
+		g, err := parseGitLabBrowser(u)
+		return g, true, err
 	}
 	return Git{}, false, nil
 }
 
-func parseAzure(u *url.URL) (Git, error) {
+func parseGitHubBrowser(u *url.URL) (Git, error) {
 	segments := strings.Split(strings.Trim(u.Path, "/"), "/")
-	index := -1
-	for i, s := range segments {
-		if s == "_git" {
-			if index >= 0 {
-				return Git{}, errors.New("invalid Azure repository URL")
-			}
-			index = i
-		}
+	if len(segments) < 2 {
+		return Git{}, errors.New("GitHub source requires owner/repo")
 	}
-	if index < 1 || index+2 != len(segments) {
-		return Git{}, errors.New("Azure source requires an _git repository URL")
+	if u.RawQuery != "" || u.ForceQuery {
+		return Git{}, errors.New("GitHub source cannot contain query parameters")
 	}
-	q, err := url.ParseQuery(u.RawQuery)
+	base := *u
+	base.Path, base.RawPath, base.RawQuery = "/"+strings.Join(segments[:2], "/"), "", ""
+	endpoint, repo, err := NormalizeGitURL(base.String())
 	if err != nil {
-		return Git{}, errors.New("invalid Azure source query")
+		return Git{}, err
 	}
-	for key, values := range q {
-		if len(values) != 1 || (key != "path" && key != "version" && key != "_a") {
-			return Git{}, errors.New("unsupported Azure source query")
-		}
+	g := Git{URL: endpoint, Repository: repo}
+	if len(segments) == 2 {
+		return g, nil
 	}
-	if q.Get("_a") != "" && q.Get("_a") != "contents" {
-		return Git{}, errors.New("choose Azure repository contents")
+	if len(segments) < 4 || segments[2] != "tree" {
+		return Git{}, errors.New("choose a repository or tree package root URL")
+	}
+	g.Browser = &BrowserTree{Provider: "github", Suffix: strings.Join(segments[3:], "/")}
+	return g, nil
+}
+
+func parseGitLabBrowser(u *url.URL) (Git, error) {
+	if u.RawQuery != "" || u.ForceQuery {
+		return Git{}, errors.New("GitLab source cannot contain query parameters")
+	}
+	marker := "/-/tree/"
+	base := *u
+	var browser *BrowserTree
+	if index := strings.Index(u.Path, marker); index >= 0 {
+		base.Path = u.Path[:index]
+		browser = &BrowserTree{Provider: "gitlab", Suffix: u.Path[index+len(marker):]}
+	} else if len(strings.Split(strings.Trim(u.Path, "/"), "/")) < 2 || strings.Contains(u.Path, "/-/") {
+		return Git{}, errors.New("choose a GitLab repository or tree package root URL")
+	}
+	base.Path = strings.TrimSuffix(base.Path, "/") + ".git"
+	base.RawPath, base.RawQuery = "", ""
+	endpoint, repo, err := NormalizeGitURL(base.String())
+	return Git{URL: endpoint, Repository: repo, Browser: browser}, err
+}
+
+func parseAzure(u *url.URL) (Git, error) {
+	if err := validateAzurePath(u.Path); err != nil {
+		return Git{}, err
+	}
+	q, err := azureQuery(u.RawQuery)
+	if err != nil {
+		return Git{}, err
 	}
 	base := *u
 	base.RawQuery = ""
@@ -108,7 +91,43 @@ func parseAzure(u *url.URL) (Git, error) {
 	if err != nil {
 		return Git{}, err
 	}
-	version := q.Get("version")
+	return azureVersion(g, q.Get("version"))
+}
+
+func validateAzurePath(value string) error {
+	segments := strings.Split(strings.Trim(value, "/"), "/")
+	index := -1
+	for i, s := range segments {
+		if s == "_git" {
+			if index >= 0 {
+				return errors.New("invalid Azure repository URL")
+			}
+			index = i
+		}
+	}
+	if index < 1 || index+2 != len(segments) {
+		return errors.New("azure source requires an _git repository URL")
+	}
+	return nil
+}
+
+func azureQuery(raw string) (url.Values, error) {
+	q, err := url.ParseQuery(raw)
+	if err != nil {
+		return nil, errors.New("invalid Azure source query")
+	}
+	for key, values := range q {
+		if len(values) != 1 || (key != "path" && key != "version" && key != "_a") {
+			return nil, errors.New("unsupported Azure source query")
+		}
+	}
+	if q.Get("_a") != "" && q.Get("_a") != "contents" {
+		return nil, errors.New("choose Azure repository contents")
+	}
+	return q, nil
+}
+
+func azureVersion(g Git, version string) (Git, error) {
 	if version != "" {
 		if len(version) < 3 {
 			return Git{}, errors.New("invalid Azure source version")
@@ -120,7 +139,7 @@ func parseAzure(u *url.URL) (Git, error) {
 			g.Ref = "refs/tags/" + version[2:]
 		case "GC":
 			if !ValidCommit(version[2:]) {
-				return Git{}, errors.New("Azure commit requires a full lowercase SHA")
+				return Git{}, errors.New("azure commit requires a full lowercase SHA")
 			}
 			g.Commit = version[2:]
 		default:

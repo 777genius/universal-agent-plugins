@@ -23,7 +23,7 @@ func (acquirer Acquirer) gitEndpoint(source sourcespec.Git) (string, string, err
 		return "", "", err
 	}
 	if source.Repository != "" && !strings.EqualFold(repository, source.Repository) {
-		return "", "", errors.New("Git source repository disagrees with its endpoint")
+		return "", "", errors.New("git source repository disagrees with its endpoint")
 	}
 	return normalized, repository, nil
 }
@@ -124,7 +124,7 @@ func (acquirer Acquirer) newDirectWorkspace(ctx context.Context) (directGitWorks
 	return workspace, nil
 }
 func (workspace directGitWorkspace) run(ctx context.Context, native bool, args ...string) ([]byte, error) {
-	return workspace.acquirer.runner().Run(ctx, Command{Dir: workspace.root, Args: args, NativeCredentials: native, MaxOutputBytes: maxGitHubDiscoveryMetadataBytes})
+	return workspace.acquirer.runner().Run(ctx, Command{Dir: workspace.root, Args: args, NativeCredentials: native, mappedLocal: native && workspace.acquirer.mappedLocalArgs(args), MaxOutputBytes: maxGitHubDiscoveryMetadataBytes})
 }
 func (workspace directGitWorkspace) remote(ctx context.Context, args ...string) ([]byte, error) {
 	return workspace.run(ctx, true, append([]string{"-C", workspace.repository}, args...)...)
@@ -195,7 +195,7 @@ func (workspace directGitWorkspace) commit(ctx context.Context, endpoint string,
 	}
 	output, err := workspace.run(ctx, false, "-C", workspace.repository, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 	if err != nil || !sourcespec.ValidCommit(strings.TrimSpace(string(output))) {
-		return "", errors.New("Git tag did not resolve to a commit")
+		return "", errors.New("git tag did not resolve to a commit")
 	}
 	return strings.TrimSpace(string(output)), nil
 }
@@ -258,4 +258,21 @@ func directRefError(ctx context.Context) error {
 		return ctx.Err()
 	}
 	return errors.New("resolve direct Git ref failed; verify native Git credentials and repository access")
+}
+
+// URLForRepo is an explicit dependency-injection seam used by local Git fixtures;
+// accepted user endpoints still pass strict HTTPS/SSH parsing before mapping.
+func (acquirer Acquirer) mappedLocalEndpoint(endpoint string) bool {
+	return acquirer.URLForRepo != nil && (filepath.IsAbs(endpoint) || strings.HasPrefix(endpoint, "file://"))
+}
+func (acquirer Acquirer) mappedLocalArgs(args []string) bool {
+	for index, argument := range args {
+		if index > 0 && args[index-1] == "-C" {
+			continue
+		}
+		if acquirer.mappedLocalEndpoint(argument) {
+			return true
+		}
+	}
+	return false
 }

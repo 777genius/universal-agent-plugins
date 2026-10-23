@@ -2,6 +2,7 @@ package sourceacquisition
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,7 +31,7 @@ func nativeGitEnvironment(environ []string) []string {
 		}
 		clean = append(clean, item)
 	}
-	return append(clean, "GIT_TERMINAL_PROMPT=0", "GIT_LFS_SKIP_SMUDGE=1", "GCM_INTERACTIVE=Never", "SSH_ASKPASS_REQUIRE=never")
+	return append(clean, "GIT_TERMINAL_PROMPT=0", "GIT_LFS_SKIP_SMUDGE=1", "GCM_INTERACTIVE=Never", "SSH_ASKPASS_REQUIRE=never", "GIT_ALLOW_PROTOCOL=https:ssh")
 }
 
 func nativeGitOptions(workspace string) []string {
@@ -90,4 +91,31 @@ func ctxOrError(ctx context.Context, err error) error {
 		return ctx.Err()
 	}
 	return err
+}
+
+// URL-specific Git configuration outranks http.sslVerify. Override every
+// configured spelling at its own specificity, using the same private repository
+// context as the fetch. Values (which may contain credentials) are never read.
+// Trusted user configuration is assumed stable during this native command.
+func nativeVerificationOptions(ctx context.Context, environ []string, command Command) ([]string, error) {
+	options := nativeGitOptions(command.Dir)
+	args := []string{"git"}
+	if len(command.Args) >= 2 && command.Args[0] == "-C" {
+		args = append(args, command.Args[:2]...)
+	}
+	args = append(args, "config", "--null", "--name-only", "--get-regexp", `^http(\..*)?\.sslverify$`)
+	result, err := (processadapter.OS{}).RunWithTreeExitGrace(ctx, legacyports.Command{Argv: args, Dir: command.Dir, Env: environ, StdoutLimitBytes: 1 << 20}, time.Second)
+	if err != nil || (result.ExitCode != 0 && result.ExitCode != 1) {
+		return nil, errors.New("cannot enforce native Git TLS verification")
+	}
+	for _, key := range strings.Split(string(result.Stdout), "\x00") {
+		if key == "" {
+			continue
+		}
+		if len(key) > 8192 || strings.ContainsAny(key, "\r\n") {
+			return nil, errors.New("native Git TLS configuration key is invalid")
+		}
+		options = append(options, "-c", key+"=true")
+	}
+	return options, nil
 }

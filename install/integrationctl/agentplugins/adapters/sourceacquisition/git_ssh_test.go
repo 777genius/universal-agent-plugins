@@ -1,7 +1,7 @@
 package sourceacquisition
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -69,7 +69,7 @@ func newNativeSSHFixture(t *testing.T, sshd, repositoryRoot, username string) na
 	dir := t.TempDir()
 	sshFixtureKey(t, filepath.Join(dir, "host"))
 	sshFixtureKey(t, filepath.Join(dir, "identity"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,15 +90,19 @@ func newNativeSSHFixture(t *testing.T, sshd, repositoryRoot, username string) na
 	config := fmt.Sprintf("Port %d\nListenAddress 127.0.0.1\nHostKey %s\nPidFile %s\nAuthorizedKeysFile %s\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nUsePAM no\nPermitRootLogin forced-commands-only\nAllowUsers %s\nLogLevel ERROR\n", port, filepath.Join(dir, "host"), filepath.Join(dir, "pid"), filepath.Join(dir, "authorized_keys"), username)
 	serverConfig := filepath.Join(dir, "sshd_config")
 	sshFixtureWrite(t, serverConfig, config)
-	var logs bytes.Buffer
-	command := exec.Command(sshd, "-D", "-e", "-f", serverConfig)
-	command.Stdout = &logs
-	command.Stderr = &logs
+	logs, err := os.Create(filepath.Join(dir, "sshd.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logs.Close() })
+	command := exec.CommandContext(t.Context(), sshd, "-D", "-e", "-f", serverConfig)
+	command.Stdout = logs
+	command.Stderr = logs
 	if err := command.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = command.Process.Kill(); _ = command.Wait() })
-	waitSSHFixture(t, port, &logs)
+	waitSSHFixture(t, port, logs.Name())
 	hostKey, err := os.ReadFile(filepath.Join(dir, "host.pub"))
 	if err != nil {
 		t.Fatal(err)
@@ -124,16 +128,17 @@ func sshFixtureWrite(t *testing.T, path, value string) {
 		t.Fatal(err)
 	}
 }
-func waitSSHFixture(t *testing.T, port int, logs *bytes.Buffer) {
+func waitSSHFixture(t *testing.T, port int, logs string) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		connection, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 100*time.Millisecond)
+		connection, err := (&net.Dialer{Timeout: 100 * time.Millisecond}).DialContext(context.Background(), "tcp", fmt.Sprintf("127.0.0.1:%d", port))
 		if err == nil {
 			_ = connection.Close()
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	t.Fatalf("disposable sshd did not start: %s", logs.String())
+	body, _ := os.ReadFile(logs)
+	t.Fatalf("disposable sshd did not start: %s", body)
 }
