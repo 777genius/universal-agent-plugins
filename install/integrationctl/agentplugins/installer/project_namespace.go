@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,9 +38,9 @@ func (e *Engine) checkProjectNamespaceLocked() error {
 	if e.cfg.StateRoot != filepath.Join(root, ".uap") {
 		return fmt.Errorf("project mutable namespace must be the selected project's .uap directory")
 	}
-	project, err := os.Lstat(root)
-	if err != nil || !project.IsDir() || project.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("project root must remain an existing real directory")
+	project, err := projectDirectoryIdentity(root)
+	if err != nil {
+		return fmt.Errorf("project root must remain an existing real directory: %w", err)
 	}
 	if previous := e.projectGuard.project; previous != nil && !os.SameFile(previous, project) {
 		return fmt.Errorf("%w: selected project directory identity changed", ErrPlanChanged)
@@ -57,7 +58,7 @@ func (e *Engine) checkProjectNamespaceLocked() error {
 			return fmt.Errorf("unsafe project temporary path: %w", err)
 		}
 	}
-	namespace, err := os.Lstat(e.cfg.StateRoot)
+	namespace, err := projectDirectoryIdentity(e.cfg.StateRoot)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -70,4 +71,29 @@ func (e *Engine) checkProjectNamespaceLocked() error {
 	}
 	e.projectGuard.project, e.projectGuard.namespace = project, namespace
 	return nil
+}
+
+// Windows Lstat defers file-ID lookup until SameFile and reopens its old path.
+// Capture the identity from an open handle before retaining it across renames.
+func projectDirectoryIdentity(path string) (os.FileInfo, error) {
+	before, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("project directory is not an exact real directory")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	identity, statErr := file.Stat()
+	closeErr := file.Close()
+	if err := errors.Join(statErr, closeErr); err != nil {
+		return nil, err
+	}
+	if !identity.IsDir() || !os.SameFile(before, identity) {
+		return nil, fmt.Errorf("%w: project directory changed while capturing identity", ErrPlanChanged)
+	}
+	return identity, nil
 }
