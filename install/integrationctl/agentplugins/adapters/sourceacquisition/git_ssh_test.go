@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +18,15 @@ import (
 )
 
 func TestNativeSSHGitWithIsolatedKeysAndHostVerification(t *testing.T) {
+	// The disposable server uses POSIX forced-command quoting, Unix account
+	// identity and Unix absolute repository paths. Do not feed Windows native
+	// filesystem spellings into a production remote URL to emulate that server.
+	if runtime.GOOS == "windows" {
+		if os.Getenv("UAP_REQUIRE_NATIVE_SSH") == "1" {
+			t.Fatal("required native SSH fixture needs a Unix OpenSSH server host")
+		}
+		t.Skip("native SSH fixture provisions a Unix OpenSSH server; Windows SSH runtime proof is separate")
+	}
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
 		if os.Getenv("UAP_REQUIRE_NATIVE_SSH") == "1" {

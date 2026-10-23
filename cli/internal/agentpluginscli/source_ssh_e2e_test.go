@@ -7,12 +7,22 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
 func TestDirectSourceSavedLifecycleRealSSH(t *testing.T) {
+	// This provisions a Unix sshd, POSIX forced upload-pack command and Unix
+	// repository address. A Windows-hosted OpenSSH server is a distinct fixture;
+	// its account/path/shell rules are not valid remote source grammar input.
+	if runtime.GOOS == "windows" {
+		if os.Getenv("UAP_REQUIRE_NATIVE_SSH") == "1" {
+			t.Fatal("required real SSH CLI fixture needs a Unix OpenSSH server host")
+		}
+		t.Skip("real SSH CLI fixture provisions a Unix OpenSSH server; Windows SSH runtime proof is separate")
+	}
 	sshd, err := exec.LookPath("sshd")
 	if err != nil {
 		if os.Getenv("UAP_REQUIRE_NATIVE_SSH") == "1" {
