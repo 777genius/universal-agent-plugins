@@ -21,7 +21,11 @@ export function Modal({ open, onOpenChange, title, children, returnFocus }: {
   wasOpen.current = open;
   return <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal><Dialog.Backdrop className="backdrop"/><Dialog.Popup className="modal"
-      finalFocus={() => { const trigger = returnFocus?.() ?? origin.current; return trigger?.isConnected ? trigger : document.querySelector<HTMLInputElement>('#skill-search'); }}>
+      finalFocus={() => {
+        const trigger = returnFocus ? returnFocus() : origin.current;
+        if (trigger?.isConnected && !trigger.matches(':disabled, [aria-disabled="true"]') && trigger.getClientRects().length > 0 && getComputedStyle(trigger).visibility === 'visible') return trigger;
+        return document.querySelector<HTMLInputElement>('#skill-search');
+      }}>
       <div className="panel-heading"><Dialog.Title>{title}</Dialog.Title>
         <Dialog.Close className="icon-button" aria-label="Close"><X size={18}/></Dialog.Close></div>
       {children}

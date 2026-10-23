@@ -49,7 +49,14 @@ export function useInstallation(session: Session, request: PlanRequest, scanPend
     closeReview: () => setReviewOpen(false),
     reviewTrigger,
     prepareReview: (trigger?: HTMLElement) => { if (!locked && !scanPending) { reviewTrigger.current = trigger ?? null; apply.reset(); setReviewIdentity(''); prepare.mutate(request); } },
-    confirm: () => { if (plan && !apply.isPending && !active) apply.mutate(plan.planId); },
+    confirm: () => {
+      if (plan && !apply.isPending && !active) {
+        // Confirmation locks Review. Invalidate its return target before DOM
+        // disabling and Base UI's close cleanup can race with one another.
+        reviewTrigger.current = null;
+        apply.mutate(plan.planId);
+      }
+    },
     reconnect: () => { void cache.invalidateQueries({ queryKey: ['session'] }); void operation.refetch(); },
   };
 }

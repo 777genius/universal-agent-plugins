@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { serveFixtures } from './fixtures';
+import { fixture, serveFixtures } from './fixtures';
+import type { Operation } from '../../src/shared/api/types';
 
 test('cross-folder selection, safe preview, explicit review and completed result', async ({ page }) => {
   const fixture = await serveFixtures(page);
@@ -39,6 +40,23 @@ test('lost apply response recovers the fast terminal operation without another a
   await expect(page.getByRole('heading', { name: 'Installation complete' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(fixture.counts().applyCount).toBe(1);
+});
+
+test('accepted running operation returns modal focus to search when its review trigger is disabled', async ({ page }) => {
+  const state = await serveFixtures(page);
+  const operation = await fixture<Operation>('operation');
+  await page.route('**/api/v1/operations/*', (route) => route.fulfill({ json: { ...operation, state: 'running', completed: 0, phase: 'Installing skills', items: [], result: undefined } }));
+  await page.goto('/#capability=test-capability');
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+  await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+  const trigger = page.locator('.bottom-bar').getByRole('button', { name: 'Review installation', exact: true });
+  await trigger.click();
+  await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installing skills', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(trigger).toBeDisabled();
+  await expect(page.getByRole('textbox', { name: 'Search skills', exact: true })).toBeFocused();
+  expect(state.counts().applyCount).toBe(1);
 });
 
 test('stale apply refuses confirmation and preserves basket', async ({ page }) => {
