@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -96,6 +97,8 @@ func isolatedGitEnvironment(environ []string, isolatedHome string) []string {
 }
 
 type Acquirer struct {
+	// HTTPClient is optional test/host transport configuration; redirects still obey archive policy.
+	HTTPClient *http.Client
 	TempRoot   string
 	Runner     Runner
 	Digester   packagedigest.Builder
