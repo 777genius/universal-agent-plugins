@@ -383,7 +383,8 @@
     "builtWith": {
       "title": "Déjà créé avec UAP",
       "agentNotificationsDescription": "Notifications de bureau, sons et accès à la fenêtre en un clic pour les agents de programmation IA.",
-      "viewRepository": "Voir sur GitHub"
+      "viewRepository": "Voir sur GitHub",
+      "buildWithSdk": "Créez avec le SDK"
     },
     "faq": {
       "eyebrow": "FAQ",

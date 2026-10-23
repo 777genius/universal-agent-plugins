@@ -264,7 +264,7 @@ behavior](docs/CODEX_TRANSPORT_EVIDENCE.md).
 
 ## Already built with UAP SDK
 
-One SDK, many agents (reusable intaller, typed hooks and more)
+One SDK, many agents (reusable installer, typed hooks and more)
 
 <table>
   <tr>
@@ -277,6 +277,8 @@ One SDK, many agents (reusable intaller, typed hooks and more)
     </td>
   </tr>
 </table>
+
+Build the next one yourself: [how to build with the SDK](https://777genius.github.io/universal-agent-plugins/docs/en/build/).
 
 ## Find and verify plugins
 
