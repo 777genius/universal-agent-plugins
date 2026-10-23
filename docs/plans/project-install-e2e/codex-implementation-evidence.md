@@ -165,7 +165,16 @@ official client pin, installer digest and run/job links are recorded there.
 The client explicitly warned that untrusted project configuration was disabled
 while skills remained discoverable. No trust was added. The product therefore
 still reports prepared plus installed, and this result does not qualify project
-MCP initialization, model use, authentication, another OS or a release. Windows
-native qualification is a separate running workflow. The raw removal result also
+MCP initialization, model use, authentication, another OS or a release. The raw removal result also
 exposed a missing project context in its retained-data follow-up command; a
 separate reviewed correction preserves this original artifact unchanged.
+
+The same pinned source tree subsequently passed the actual Windows amd64
+project-skills subtest in **3.94s**. All three required Codex tests passed with
+no skips. Its [preserved Windows artifact](../../evidence/project-scope-native/codex-0.153.4-windows-amd64-40011489662/README.md)
+contains 28 verified original project sub-artifacts and independent checks of
+all nine native replies, including exact A/B paths and the owned command swap,
+missing-directory observation, repair and removal. The native Windows replies
+did not list the separately seeded user `.agents` marker; user-byte preservation
+passed, but native Windows user-marker discovery/precedence remains unqualified.
+Trust, project MCP, model/authentication and release limits remain unchanged.
