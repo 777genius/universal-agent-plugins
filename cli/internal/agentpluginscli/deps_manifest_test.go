@@ -171,7 +171,7 @@ func TestDependencyLockedShortNameDoesNotRecheckInstallEligibility(t *testing.T)
 		_ = seed.cleanup()
 		t.Fatal("fixture source does not match the recorded release digests")
 	}
-	if err := (dependencyResolver{app: fixture.cli.app}).finishLoaded(seed); err != nil {
+	if err := (dependencyResolver{app: fixture.cli.app}).finishLoaded(context.Background(), seed); err != nil {
 		t.Fatal(err)
 	}
 	requirements.Dependencies["docs"].Registry.Distribution = distribution.ProductID

@@ -87,15 +87,26 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	hadPrevious := previous.LockVersion != 0
 	changed := !hadPrevious || !equalDependencyLock(previous, locked)
 	if allowWrite && changed && !opts.dryRun {
-		manifestAfter, readErr := os.ReadFile(manifestPath)
-		if readErr != nil || string(manifestAfter) != string(manifestBefore) {
-			return dependencyLockResult{}, errors.New("uap.toml changed during lock resolution; rerun deps lock")
-		}
-		if err := writeDependencyLock(lockPath, locked); err != nil {
+		if err := publishResolvedDependencyLock(ctx, app, manifestPath, lockPath, manifestBefore, locked); err != nil {
 			return dependencyLockResult{}, err
 		}
+
 	}
 	return dependencyLockResult{Manifest: requirements, Lock: locked, LockPath: lockPath, Changed: changed, DryRun: opts.dryRun}, nil
+}
+
+func publishResolvedDependencyLock(ctx context.Context, app App, manifestPath, lockPath string, manifestBefore []byte, locked environment.Lock) error {
+	manifestAfter, readErr := os.ReadFile(manifestPath)
+	if readErr != nil || string(manifestAfter) != string(manifestBefore) {
+		return errors.New("uap.toml changed during lock resolution; rerun deps lock")
+	}
+	if err := ensureDependencyStore(ctx, app, locked); err != nil {
+		return err
+	}
+	if err := writeDependencyLock(lockPath, locked); err != nil {
+		return err
+	}
+	return nil
 }
 
 func requireDependencyLockRecoveryClear(ctx context.Context, app App) error {

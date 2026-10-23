@@ -29,6 +29,7 @@ import (
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 var (
@@ -294,4 +295,35 @@ func (acquirer lazySourceAcquirer) ResolveGitHubRef(ctx context.Context, reposit
 		return sourceacquisition.RefResolution{}, err
 	}
 	return acquirer.acquirer.ResolveGitHubRef(ctx, repository, ref)
+}
+
+func (acquirer lazySourceAcquirer) ResolveGitSource(ctx context.Context, source sourcespec.Git) (sourceacquisition.ResolvedGit, error) {
+	if err := acquirer.prepare(); err != nil {
+		return sourceacquisition.ResolvedGit{}, err
+	}
+	return acquirer.acquirer.ResolveGitSource(ctx, source)
+}
+func (acquirer lazySourceAcquirer) ResolveGit(ctx context.Context, source sourcespec.Git, selector string, exact bool) (sourceacquisition.RefResolution, error) {
+	if err := acquirer.prepare(); err != nil {
+		return sourceacquisition.RefResolution{}, err
+	}
+	return acquirer.acquirer.ResolveGit(ctx, source, selector, exact)
+}
+func (acquirer lazySourceAcquirer) DiscoverGitPackages(ctx context.Context, source sourcespec.Git, commit string) ([]string, error) {
+	if err := acquirer.prepare(); err != nil {
+		return nil, err
+	}
+	return acquirer.acquirer.DiscoverGitPackages(ctx, source, commit)
+}
+func (acquirer lazySourceAcquirer) AcquireGit(ctx context.Context, source sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	if err := acquirer.prepare(); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	return acquirer.acquirer.AcquireGit(ctx, source, commit, digest)
+}
+func (acquirer lazySourceAcquirer) AcquireArchive(ctx context.Context, source sourcespec.Archive, archiveSHA, tree string) (domain.PackageSnapshot, error) {
+	if err := acquirer.prepare(); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	return acquirer.acquirer.AcquireArchive(ctx, source, archiveSHA, tree)
 }

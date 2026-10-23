@@ -177,13 +177,7 @@ func findInspectedEnvironmentBinding(view installer.Inspection, receipt domain.E
 }
 
 func lockedCommit(pkg environment.LockedPackage) string {
-	if pkg.Source.Git != nil {
-		return pkg.Source.Git.Commit
-	}
-	if pkg.Source.Registry != nil {
-		return pkg.Source.Registry.Commit
-	}
-	return ""
+	return pkg.Revision()
 }
 
 func joinUnique(values []string) string {

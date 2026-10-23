@@ -10,7 +10,7 @@ import (
 )
 
 type dependencySnapshotKey struct {
-	repository, commit, path, algorithm, digest string
+	sourceKey, revision, algorithm, digest string
 }
 
 func lockedDependencyCoordinates(locked environment.LockedPackage) (string, string, string, error) {
@@ -38,11 +38,11 @@ func (cache *dependencySnapshotCache) close() {
 }
 
 func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.LockedPackage) (domain.PackageSnapshot, error) {
-	repository, commit, path, err := lockedDependencyCoordinates(locked)
-	if err != nil {
-		return domain.PackageSnapshot{}, err
+	sourceKey := locked.SourceKey
+	if sourceKey == "" {
+		sourceKey = identityFromLocked(locked).CanonicalSource
 	}
-	key := dependencySnapshotKey{repository: repository, commit: commit, path: path, algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
+	key := dependencySnapshotKey{sourceKey: sourceKey, revision: locked.Revision(), algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
 	cache := app.dependencySnapshots
 	var acquired domain.PackageSnapshot
 	var ok bool
@@ -51,10 +51,11 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 	}
 	if !ok {
 		var err error
-		acquired, err = app.SourceAcquirer.AcquireGitHubVerified(ctx, key.repository, key.commit, key.path, key.digest)
+		acquired, err = app.acquirePinnedSource(ctx, locked)
 		if err != nil {
 			return domain.PackageSnapshot{}, err
 		}
+		acquired.Source = identityFromLocked(locked)
 		if cache == nil {
 			return acquired, nil
 		}
@@ -66,7 +67,7 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 	}
 	// A consumer may release its snapshot, while the command retains the raw
 	// acquisition. Recompute the digest rather than trusting retained metadata.
-	snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(ctx, acquired.Root, acquired.Source, acquired.ExecutableFiles)
+	snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(ctx, acquired.Root, identityFromLocked(locked), acquired.ExecutableFiles)
 	if err != nil {
 		return domain.PackageSnapshot{}, err
 	}

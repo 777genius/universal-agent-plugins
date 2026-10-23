@@ -42,6 +42,9 @@ type Diagnostic struct {
 }
 
 type SourceIdentity struct {
+	SourceKind        string `json:"source_kind,omitempty"`
+	SourceURL         string `json:"source_url,omitempty"`
+	ArchiveSHA256     string `json:"archive_sha256,omitempty"`
 	RequestedSource   string `json:"requested_source,omitempty"`
 	CanonicalSource   string `json:"canonical_source,omitempty"`
 	Repository        string `json:"repository,omitempty"`
