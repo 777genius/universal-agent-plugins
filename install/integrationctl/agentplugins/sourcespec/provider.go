@@ -8,6 +8,9 @@ import (
 
 func parseProvider(u *url.URL) (Git, bool, error) {
 	host := strings.ToLower(u.Hostname())
+	if encodedSeparator(u.RawPath) && (host == "github.com" || host == "gitlab.com" || isAzureHost(host) || strings.Contains(u.Path, "/-/tree/")) {
+		return Git{}, true, errors.New("encoded browser path separators are ambiguous; use the clone URL with an explicit ref and package path")
+	}
 	if isAzureHost(host) {
 		g, err := parseAzure(u)
 		return g, true, err
@@ -130,4 +133,9 @@ func parseAzure(u *url.URL) (Git, error) {
 		}
 	}
 	return g, nil
+}
+
+func encodedSeparator(raw string) bool {
+	value := strings.ToLower(raw)
+	return strings.Contains(value, "%2f") || strings.Contains(value, "%5c")
 }

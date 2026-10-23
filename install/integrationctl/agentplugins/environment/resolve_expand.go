@@ -80,10 +80,7 @@ func validateGraphAliases(nodes map[string]graphNode) error {
 }
 
 func requirementSelector(req Requirement) Selector {
-	if req.Git != nil {
-		return req.Git.Selector
-	}
-	return req.Registry.Selector
+	return req.RequestedSelector()
 }
 
 func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices map[string]ResolvedPackage) Requirement {
@@ -98,8 +95,10 @@ func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices 
 		// package-local declaration names do not name environment bindings.
 		if req.Registry != nil {
 			req.Alias = req.Registry.Distribution
-		} else {
+		} else if req.Git != nil && req.Git.Repository != "" {
 			req.Alias = req.Git.Repository
+		} else {
+			req.Alias = "candidate"
 		}
 	}
 	return req

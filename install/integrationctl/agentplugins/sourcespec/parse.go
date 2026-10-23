@@ -24,7 +24,7 @@ func Parse(raw string) (Spec, error) {
 		return out, err
 	}
 	if !strings.HasPrefix(raw, "https://") {
-		if HasArchiveSuffix(raw) && (strings.HasPrefix(raw, ".") || strings.HasPrefix(raw, "/") || strings.ContainsAny(raw, "/\\")) {
+		if HasArchiveSuffix(raw) {
 			out.Kind = KindLocalArchive
 			out.Archive = &Archive{URL: raw}
 			return out, nil
@@ -38,6 +38,11 @@ func Parse(raw string) (Spec, error) {
 	if strings.HasPrefix(u.Fragment, "sha256=") || HasArchiveSuffix(u.Path) {
 		a, err := parseArchive(u)
 		out.Kind, out.Archive = KindArchive, &a
+		return out, err
+	}
+	if isAzureHost(strings.ToLower(u.Hostname())) && (u.RawQuery != "" || u.ForceQuery) {
+		g, _, err := parseProvider(u)
+		out.Kind, out.Git = KindGit, &g
 		return out, err
 	}
 	if u.Fragment != "" || strings.HasSuffix(u.Path, ".git") || strings.Contains(u.Path, ".git//") {

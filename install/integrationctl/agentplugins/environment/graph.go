@@ -50,6 +50,11 @@ func pinSourceIdentity(source LockedSource) LockedSource {
 		cloned.Requested = Selector{}
 		source.Registry = &cloned
 	}
+	if source.Archive != nil {
+		cloned := *source.Archive
+		cloned.RequestedSHA256 = ""
+		source.Archive = &cloned
+	}
 	return source
 }
 
@@ -102,11 +107,15 @@ func validatePin(pkg LockedPackage) error {
 	req := Requirement{Alias: pkg.Alias}
 	if pkg.Source.Git != nil {
 		source := pkg.Source.Git
-		req.Git = &GitSource{Repository: source.Repository, Path: source.Path, Selector: source.Requested}
+		req.Git = &GitSource{Repository: source.Repository, URL: source.URL, Path: source.Path, Selector: source.Requested}
 	}
 	if pkg.Source.Registry != nil {
 		source := pkg.Source.Registry
 		req.Registry = &RegistrySource{Distribution: source.Distribution, Selector: source.Requested}
+	}
+	if pkg.Source.Archive != nil {
+		source := pkg.Source.Archive
+		req.Archive = &ArchiveSource{URL: source.URL, Path: source.Path, SHA256: source.RequestedSHA256}
 	}
 	key, err := req.SourceKey()
 	if err != nil {
@@ -153,6 +162,10 @@ func validateEdges(packages map[string]LockedPackage) error {
 			if pkg.Source.Git != nil {
 				if edge.Selector != pkg.Source.Git.Requested {
 					return fmt.Errorf("%s: Git selector differs from consumer %s", pkg.Alias, edge.Alias)
+				}
+			} else if pkg.Source.Archive != nil {
+				if edge.Selector != (Selector{Kind: SelectorArchive, Value: pkg.Source.Archive.RequestedSHA256}) {
+					return fmt.Errorf("%s: archive selector differs from consumer %s", pkg.Alias, edge.Alias)
 				}
 			} else if edge.Selector.Kind != SelectorRelease && edge.Selector.Kind != SelectorVersion && edge.Selector.Kind != SelectorRange {
 				return fmt.Errorf("%s: invalid registry dependency selector", pkg.Alias)

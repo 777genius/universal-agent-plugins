@@ -121,7 +121,7 @@ func normalizedURL(value, scheme string) (*url.URL, error) {
 		return nil, errors.New("unsafe source URL")
 	}
 	u, err := url.Parse(value)
-	if err != nil || u.Scheme != scheme || u.Hostname() == "" || u.Opaque != "" || u.Host != strings.TrimSpace(u.Host) || u.Path == "" || strings.HasPrefix(u.Path, "//") || strings.ContainsAny(u.Path, "\\\x00\r\n\t") {
+	if err != nil || u.Scheme != scheme || u.Hostname() == "" || u.Opaque != "" || u.Host != strings.TrimSpace(u.Host) || u.Path == "" || strings.HasPrefix(u.Path, "//") || strings.ContainsAny(u.Path, "\\\x00\r\n\t") || strings.ContainsFunc(u.Path, unicode.IsControl) {
 		return nil, errors.New("invalid source URL")
 	}
 	if u.Port() != "" {
@@ -143,6 +143,6 @@ func normalizedURL(value, scheme string) (*url.URL, error) {
 	if u.Path == "" {
 		return nil, errors.New("source URL requires a repository or package path")
 	}
-	u.RawPath = ""
+	u.RawPath = strings.TrimSuffix(u.RawPath, "/")
 	return u, nil
 }
