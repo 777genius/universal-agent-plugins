@@ -158,3 +158,31 @@ suite (56 PASS), while R2 reran the selected native matrix contracts (17 PASS).
 These implementation reviews close the earlier pending adapter-review gate.
 Genuine hosted project observations remain pending and must be reported apart
 from fixture execution, authored gate code and historical user evidence.
+
+## Genuine project failure and diagnostic-only checkpoint
+
+The actual macOS arm64 Claude2.1.263 hosted run40011624952 failed project add
+with unrecognized native plugin-list output; user suites passed independently.
+Artifact12528049546 ZIP SHA256 is
+`c45098c244379dd4e0b62f2dfb7e235b415959428e19cd235cf083652fb5caf7`.
+The project prefix has installer failure/version records but no raw list,
+because add failed before its later read-only probe. Project qualification is
+therefore failed/pending, not implied by prior fixture or user-suite success.
+
+The supplemental diagnostic plan423d912f and both independent plan GO reports
+were committed before source atc53e030e. This test-only change captures at most
+two fixed A/B `plugin list --json` commands after the first installer error,
+with the same verified binary and fresh explicit original profile. Each has
+live1MiB-per-stream caps/cancellation,10s context deadline, empty stdin, no shell
+and250ms WaitDelay; raw separate streams plus bounded exit/error/hash metadata
+remain artifact evidence. The original installer error and failed stage remain
+unchanged. Production parser, client success criteria, opt-in/hosted guard,
+acquisition and successful lifecycle paths are unchanged. No diagnostic output
+can become an installed/active result.
+
+Two inert diagnostic contracts PASS0.007s without a Claude process; exact
+changed-code lint reports zero issues after routine naming/preallocation fixes.
+Genuine hosted replay and independent raw-output interpretation are required
+before proposing any parser correction. The direct-child timeout/pipe bounds
+are not OS isolation or general descendant sandboxing, and no model/trust/MCP
+initialization or project success is claimed.
