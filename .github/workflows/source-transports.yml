@@ -10,7 +10,7 @@ on:
       - '**/go.sum'
       - '.github/workflows/source-transports.yml'
   push:
-    branches: [main, 'feat/source-transports-e2e']
+    branches: [main]
     paths:
       - 'install/integrationctl/agentplugins/**'
       - 'cli/internal/agentpluginscli/**'
