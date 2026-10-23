@@ -5,7 +5,7 @@ name: Core fast
 # fast enough to keep a part from waiting 10-27 minutes.
 on:
   pull_request:
-    branches: [main, 'refactor/**', feat/project-install-e2e, feat/source-transports-e2e]
+    branches: [main, 'refactor/**', 'feat/project-*', feat/source-transports-e2e]
     paths:
       - 'install/integrationctl/agentplugins/**'
       # The only ports.PathPolicy implementation lives here.
