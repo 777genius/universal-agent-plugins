@@ -49,7 +49,7 @@ func kiroProjectRoot(client domain.DetectedClient, target domain.TargetContext, 
 	if validated.Scope != domain.ScopeProject {
 		return "", fmt.Errorf("kiro workspace configuration requires project scope")
 	}
-	if validated.UserConfigRoot != "" && validated.UserConfigRoot != client.ConfigRoot {
+	if validated.UserConfigRoot != client.ConfigRoot {
 		return "", fmt.Errorf("kiro detected user profile differs from selected target")
 	}
 	root := filepath.Join(validated.ProjectRoot, ".kiro")

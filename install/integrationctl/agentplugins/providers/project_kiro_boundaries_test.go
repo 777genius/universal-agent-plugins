@@ -66,7 +66,7 @@ func TestProjectKiroForeignDisabledMalformedAndWriterFailurePreserveNativeFiles(
 }
 
 func TestProjectKiroScopeRootAndBindingAuthorityRefuse(t *testing.T) {
-	for _, mismatch := range []string{"user-registry", "user-context", "other-user", "copied-project"} {
+	for _, mismatch := range []string{"user-registry", "user-context", "other-user", "omitted-user", "copied-project"} {
 		t.Run(mismatch, func(t *testing.T) {
 			fixture := newKiroProjectFixture(t, false)
 			root := fixture.request.Plan.NativeRegistryRoot
@@ -76,6 +76,8 @@ func TestProjectKiroScopeRootAndBindingAuthorityRefuse(t *testing.T) {
 				fixture.request.Plan.NativeRegistryRoot = fixture.user
 			case "user-context":
 				fixture.request.Plan.TargetContext.Scope = domain.ScopeUser
+			case "omitted-user":
+				fixture.request.Plan.TargetContext.UserConfigRoot = ""
 			case "other-user":
 				fixture.request.Plan.TargetContext.UserConfigRoot = fixture.other
 			case "copied-project":

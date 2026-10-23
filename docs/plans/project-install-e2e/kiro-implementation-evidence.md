@@ -170,3 +170,12 @@ The existing hosted native guard is untouched, no account/trust migration is
 performed, and CLI evidence cannot qualify the IDE. Native source qualification
 must still observe the selected actual workspace/agent and interpret permissions,
 includeMcpJson and resources rather than infer effective policy from these files.
+
+## Independent review correction: retained user context
+
+R1 identified that project root validation accepted an omitted user context
+when the detected original profile was nonempty. The project lane now requires
+exact equality, including empty/nonempty mismatches; both empty remains valid.
+An omitted-user regression verifies refusal before native effects alongside
+the existing wrong-user/scope/root/copied-project cases. This retains user
+profile authority explicitly even though the file-only lane never mutates it.
