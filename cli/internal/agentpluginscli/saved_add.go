@@ -217,6 +217,10 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 			return nil, err
 		}
 	}
+	return validateSavedAddTargets(app, opts, source, targets)
+}
+
+func validateSavedAddTargets(app App, opts *options, source string, targets []domain.ClientID) ([]domain.ClientID, error) {
 	if len(targets) == 0 {
 		return nil, errors.New("automated installation requires --target")
 	}

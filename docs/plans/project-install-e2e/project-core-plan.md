@@ -1,12 +1,31 @@
 # Project-scope core: research and implementation plan
 
-Status: two independent plan review/fix rounds complete; awaiting parent
-implementation authorization. Initial research base
+Status: two independent plan review/fix rounds complete; parent implementation
+authorization granted and the shared core contracts, scoped lifecycle and CLI
+composition implemented. Initial research base
 `2bf6c3d703640ffbecc14346996709b4aec36ddc`; contracts and hardcoded scope paths
 rechecked at implementation base `3ea24e3014ddf6679ca86729c56f1069112b0d3a`.
 Assigned worktree: `/workspace/scratch/2819fbb48645/work/uap-project`, branch
 `feat/project-install-e2e`. This plan requires two independent
 plan review/fix rounds and parent authorization before code changes.
+
+## Implementation checkpoint
+
+The original plan reviews remain recorded in `project-core-review-r1.md` and
+`project-core-review-r2.md`. Shared contracts landed at `57bc1367`, project
+receipt identity and CI at `3fc822da`, scoped lifecycle and namespace guards at
+`f7267e03`, scoped CLI composition at `85da71ab`, and the verified compiling
+checkpoint at `3f421660`. Independent implementation review R1 is GO for that
+checkpoint; its evidence is in `project-core-code-review-r1.md`.
+
+The current correction preserves authoring command help and rejects the
+installer-only `--project-root` flag before authoring execution. It also splits
+the touched core and CLI functions to meet the existing whole-file size and
+architecture gates, without expanding their baseline. Focused public-help,
+attestation, scoped state and installer checks pass. Independent implementation
+R2 and the cohesive project/source lifecycle proof follow the first qualified
+client stack. Client qualification and native hosted certification remain
+separate gates; this checkpoint does not claim those are complete.
 
 ## Governing scope
 
