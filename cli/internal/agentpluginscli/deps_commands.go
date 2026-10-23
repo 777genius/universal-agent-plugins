@@ -21,82 +21,8 @@ import (
 func newDepsCommand(app App, opts *options) *cobra.Command {
 	command := &cobra.Command{Use: "deps", Short: "Manage the portable dependency environment"}
 	var locked, yes bool
-	command.AddCommand(&cobra.Command{
-		Use: "init", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return initializeDependencies(cmd, app, opts)
-		},
-	})
-	command.AddCommand(&cobra.Command{
-		Use: "lock", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			result, err := runDependencyLock(cmd.Context(), app, opts, "", true)
-			if err != nil {
-				return err
-			}
-			return renderDependencyLock(cmd, opts, result)
-		},
-	})
-	command.AddCommand(&cobra.Command{
-		Use: "update <alias>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			result, err := runDependencyLock(cmd.Context(), app, opts, args[0], true)
-			if err != nil {
-				return err
-			}
-			return renderDependencyLock(cmd, opts, result)
-		},
-	})
-	command.AddCommand(&cobra.Command{
-		Use: "status", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return runDependencyStatus(cmd, app, opts)
-		},
-	})
-	sync := &cobra.Command{
-		Use: "sync", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return runDependencySync(cmd, app, opts, locked, yes)
-		},
-	}
-	sync.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "attest removed targets were uninstalled manually or never imported")
-	sync.Flags().BoolVar(&locked, "locked", false, "require an exact existing lock and never resolve refs")
-	sync.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted sync without an interactive prompt")
-	command.AddCommand(sync)
-	command.AddCommand(newDependencyTransferCommand(app, opts, "export"))
-	command.AddCommand(newDependencyTransferCommand(app, opts, "import"))
-	command.AddCommand(newDependencyTreeCommand(app, opts))
-	command.AddCommand(newDependencyRecoverCommand(app, opts, &yes))
+	command.AddCommand(newDependencyInitCommand(app, opts), newDependencyLockCommand(app, opts, false), newDependencyLockCommand(app, opts, true), newDependencyStatusCommand(app, opts), newDependencySyncCommand(app, opts, &locked, &yes))
+	command.AddCommand(newDependencyTransferCommand(app, opts, "export"), newDependencyTransferCommand(app, opts, "import"), newDependencyTreeCommand(app, opts), newDependencyRecoverCommand(app, opts, &yes))
 	return command
 }
 

@@ -59,3 +59,34 @@ func TestProjectStateRejectsUserReceiptsOnLoad(t *testing.T) {
 		t.Fatal("user receipts were adopted as project state")
 	}
 }
+
+func TestProjectStateRejectsCwdDependentLocators(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	for _, relativeField := range []string{"target", "native-profile"} {
+		t.Run(relativeField, func(t *testing.T) {
+			installation := validInstallation("00000000-0000-4000-8000-000000000001", "src_project", "demo-000000000001")
+			for key, binding := range installation.Clients {
+				delete(installation.Clients, key)
+				binding.Scope = string(domain.ScopeProject)
+				binding.TargetLocator = filepath.Join(root, ".uap", "managed", binding.PhysicalArtifact)
+				binding.NativeProfileRoot = filepath.Join(root, ".codex")
+				if relativeField == "target" {
+					binding.TargetLocator = filepath.Join(".uap", "managed", binding.PhysicalArtifact)
+				} else {
+					binding.NativeProfileRoot = ".codex"
+				}
+				binding.ClientBindingID = domain.ComputeClientBindingID(installation.InstallationID, binding.ClientID, binding.Scope, binding.TargetLocator)
+				installation.Clients[binding.ClientBindingID] = binding
+			}
+			store := Store{ProjectRoot: root, Path: filepath.Join(root, ".uap", "state-v2.json")}
+			state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{installation}}
+			if err := store.Save(state); err == nil {
+				t.Fatal("project receipt gained authority from invocation cwd")
+			}
+			if _, err := os.Stat(filepath.Dir(store.Path)); !os.IsNotExist(err) {
+				t.Fatalf("refused state created mutable namespace: %v", err)
+			}
+		})
+	}
+}

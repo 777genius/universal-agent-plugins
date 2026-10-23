@@ -89,18 +89,10 @@ func (e *Engine) observe() (Inspection, error) {
 		})
 	}
 	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
-	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: e.store}}).Pending()
-	if err != nil {
+	if err := e.appendPendingTransitions(&out); err != nil {
 		out.Recovery.Required = true
 		out.Recovery.Reason = err.Error()
 		return out, err
-	}
-	for _, p := range pending {
-		if p.Root == "" {
-			out.Recovery.Receipts = append(out.Recovery.Receipts, PendingReceipt{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase})
-		} else {
-			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
-		}
 	}
 	sort.Slice(out.Recovery.Journals, func(i, j int) bool {
 		return out.Recovery.Journals[i].OperationID < out.Recovery.Journals[j].OperationID
@@ -509,4 +501,19 @@ func populateInspectedBinding(inspected *InspectedBinding, binding domain.Client
 			inspected.Owner = &cloned
 		}
 	}
+}
+
+func (e *Engine) appendPendingTransitions(out *Inspection) error {
+	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: e.store}}).Pending()
+	if err != nil {
+		return err
+	}
+	for _, p := range pending {
+		if p.Root == "" {
+			out.Recovery.Receipts = append(out.Recovery.Receipts, PendingReceipt{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase})
+		} else {
+			out.Recovery.Journals = append(out.Recovery.Journals, PendingJournal{OperationID: p.OperationID, InstallationID: p.InstallationID, BindingID: p.BindingID, TargetPath: p.TargetPath, Phase: p.Phase, Digest: p.Digest})
+		}
+	}
+	return nil
 }

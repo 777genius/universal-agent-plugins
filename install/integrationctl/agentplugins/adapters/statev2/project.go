@@ -90,6 +90,9 @@ func checkProjectLocator(base, path string) error {
 	if path == "" {
 		return nil
 	}
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
+		return fmt.Errorf("project machine receipt locator must be absolute and clean")
+	}
 	if err := pathpolicy.RequireContainedChild(base, path); err != nil {
 		return fmt.Errorf("project machine receipt points outside selected namespace: %w", err)
 	}

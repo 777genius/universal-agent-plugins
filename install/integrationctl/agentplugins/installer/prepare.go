@@ -97,39 +97,13 @@ func (p *PreparedOperation) closeLocked() error {
 // Prepare captures a sealed snapshot for install or inspects owned state for remove.
 // It does not mutate installed client config or the Notifications runtime ledger.
 func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, error) {
-	if (req.ActivationComplete || req.AuthComplete) && (req.Operation == OpRemove || len(req.Targets) > 0) {
-		return nil, fmt.Errorf("%w: completion attestation requires a single mutating target", ErrInvalidRequest)
-	}
-	if ctx == nil {
-		return nil, fmt.Errorf("%w: context is required", ErrInvalidRequest)
-	}
-	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
-		return nil, fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
+	if err := validatePrepareInput(ctx, req); err != nil {
+		return nil, err
 	}
 	if req.Scope == "" {
 		req.Scope = domain.ScopeUser
 	}
-	if req.ProjectRoot != e.cfg.ProjectRoot || (req.Scope == domain.ScopeProject) != (e.cfg.ProjectRoot != "") {
-		return nil, fmt.Errorf("%w: request scope/project root differs from configured engine", ErrInvalidRequest)
-	}
-	if req.Scope != domain.ScopeUser && req.Scope != domain.ScopeProject {
-		return nil, fmt.Errorf("%w: unsupported request scope %q", ErrInvalidRequest, req.Scope)
-	}
-	if req.Scope == domain.ScopeProject {
-		ids := []string{req.ClientID}
-		if len(req.Targets) != 0 {
-			ids = nil
-			for _, target := range req.Targets {
-				ids = append(ids, target.ClientID)
-			}
-		}
-		for _, id := range ids {
-			if !ClientScopeSupported(e.cfg.Registry, id, req.Scope) {
-				return nil, fmt.Errorf("%w: project scope is not qualified for %s", ErrInvalidRequest, id)
-			}
-		}
-	}
-	if err := e.CheckProjectNamespace(); err != nil {
+	if err := e.validatePrepareContext(req); err != nil {
 		return nil, err
 	}
 	copied := clonePrepareRequest(req)
@@ -512,4 +486,18 @@ func clonePrepareRequest(req Request) Request {
 		copied.AcquiredSnapshot = &acquired
 	}
 	return copied
+}
+
+func validatePrepareInput(ctx context.Context, req Request) error {
+	if (req.ActivationComplete || req.AuthComplete) && (req.Operation == OpRemove || len(req.Targets) > 0) {
+		return fmt.Errorf("%w: completion attestation requires a single mutating target", ErrInvalidRequest)
+	}
+	if ctx == nil {
+		return fmt.Errorf("%w: context is required", ErrInvalidRequest)
+	}
+	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
+		return fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
+	}
+
+	return nil
 }
