@@ -16,9 +16,12 @@ var _ clients.RegistryInspector = (*Adapter)(nil)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
+	}
+	if clineProjectSelected(plan) {
+		return inspectClineProject(client, plan, managed, env.NativeConfig)
 	}
 	return InspectClineRegistry(plan, managed, env.NativeConfig)
 }

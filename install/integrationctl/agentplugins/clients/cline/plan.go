@@ -11,6 +11,9 @@ import (
 var _ clients.PlanRefiner = (*Adapter)(nil)
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if clineProjectSelected(*plan) || in.TargetContext.ProjectRoot != "" {
+		return refineClineProjectPlan(in, plan)
+	}
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install and verify Cline skills and MCP servers automatically; VS Code reloads MCP settings, while Cline CLI reads them on its next process")
 	return nil
