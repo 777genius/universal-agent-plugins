@@ -96,7 +96,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect
     .poll(
       async () => {
-        const intro = await page.locator('.catalog .section-heading > p').last().innerText();
+        const intro = await page.locator('.unified-catalog__heading > p').innerText();
         return [...intro.matchAll(/([\d,]+) (?:reviewed plugins?|community packages?)/g)]
           .map((match) => Number(match[1].replaceAll(',', '')))
           .reduce((sum, count) => sum + count, 0);
@@ -338,7 +338,7 @@ test.describe('mobile navigation and catalog', () => {
       const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
       return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
     });
-    await page.locator('.catalog .section-heading').scrollIntoViewIfNeeded();
+    await page.locator('#unified-catalog-title').scrollIntoViewIfNeeded();
 
     const toggle = page.locator('.catalog-filter-toggle');
     await expect(toggle).toBeVisible();

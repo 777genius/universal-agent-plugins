@@ -4,7 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
-const exactCommand = 'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
+const exactCommand =
+  'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
@@ -25,10 +26,8 @@ test.beforeEach(async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
 });
 
-test('hero controls and all client links remain complete across four viewports', async ({
-  page,
-}) => {
-  for (const width of [1440, 1024, 390, 320]) {
+for (const width of [1440, 1024, 390, 320]) {
+  test(`hero controls and all client links remain complete at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: width >= 1024 ? 1000 : 844 });
     await page.goto('./');
     await waitForCommand(page);
@@ -95,8 +94,8 @@ test('hero controls and all client links remain complete across four viewports',
     expect(await code.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
 
     await capture(page, `hero-layout-${width}`);
-  }
-});
+  });
+}
 
 test('selected targets produce one complete copyable command with keyboard activation', async ({
   page,
