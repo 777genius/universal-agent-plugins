@@ -6,23 +6,31 @@ import (
 	"github.com/tailscale/hujson"
 )
 
-// Gemini v0.65.0 parses JSON after stripping comments. Its settings.json is
-// comment-aware, but trailing commas remain invalid. Keep the original AST so
-// managed entry mutations preserve comments and unrelated configuration.
+// Gemini v0.65.0 and Devin3000.11.205 accept native JSON comments. Keep
+// the original AST so mutations preserve comments and unrelated configuration;
+// neither this admission nor a read-only policy check accepts trailing commas.
 func parseCodecDocument(body []byte, jsonc bool, codec Codec) (*document, error) {
 	if codec == CodecCodex {
 		return parseCodexTOML(body, jsonc)
 	}
-	if codec != CodecGemini || jsonc {
+	if (codec != CodecGemini && codec != CodecDevin) || jsonc {
 		return parseDocument(body, jsonc)
 	}
+	label := "Gemini"
+	if codec == CodecDevin {
+		label = "Devin"
+	}
+	return parseCommentsOnlyDocument(body, label)
+}
+
+func parseCommentsOnlyDocument(body []byte, label string) (*document, error) {
 	doc, err := parseDocument(body, true)
 	if err != nil {
 		return nil, err
 	}
 	for value := range doc.ast.All() {
 		if !geminiWithoutTrailingComma(value) {
-			return nil, fmt.Errorf("%w: Gemini settings do not support trailing commas", ErrMalformed)
+			return nil, fmt.Errorf("%w: %s settings do not support trailing commas", ErrMalformed, label)
 		}
 	}
 	doc.commentsOnly = true
@@ -60,4 +68,14 @@ func geminiRemoveTrailingCommas(ast *hujson.Value) {
 			}
 		}
 	}
+}
+
+// StandardizeCommentedJSON normalizes native JSON-with-comments grammar for
+// read-only policy inspection. Duplicate keys and trailing commas refuse;
+// callers retain original file bytes for mutation and ownership checks.
+func StandardizeCommentedJSON(body []byte) ([]byte, error) {
+	if _, err := parseCommentsOnlyDocument(body, "native config"); err != nil {
+		return nil, err
+	}
+	return hujson.Standardize(body)
 }

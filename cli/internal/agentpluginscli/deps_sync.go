@@ -352,6 +352,9 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			continue
 		}
 		for _, binding := range installation.Bindings {
+			if binding.ClientID == request.ClientID {
+				continue
+			}
 			sibling, ok := adapter.detected[domain.ClientID(binding.ClientID)]
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)

@@ -499,7 +499,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
