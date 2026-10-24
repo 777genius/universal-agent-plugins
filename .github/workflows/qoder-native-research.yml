@@ -6,6 +6,8 @@ on:
       - '.github/workflows/qoder-native-research.yml'
       - 'scripts/research-qoder-native.py'
       - 'scripts/test_qoder_native_research.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/test_native_client_research.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'
   workflow_dispatch:
@@ -28,7 +30,9 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify inert research safety contracts
-        run: python3 -m unittest discover -s scripts -p 'test_qoder_native_research.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
+          python3 -m unittest discover -s scripts -p 'test_qoder_native_research.py'
       - name: Capture pinned genuine research in a fresh credential-free profile
         env:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
