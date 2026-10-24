@@ -1,6 +1,6 @@
 import createOpenAPIClient from 'openapi-fetch';
 import type { paths } from './generated/schema.js';
-import type { ChangeRequest, Operation, SourceRequest, WireError } from './types.js';
+import type { ChangeRequest, LocalSkillRequest, Operation, SourceRequest, WireError } from './types.js';
 
 export interface ClientOptions {
   baseUrl: string;
@@ -35,16 +35,17 @@ export function isTerminal(operation: Operation): boolean {
   if (operation.state === 'queued' || operation.state === 'running') return false;
   throw new ManagementError('UNKNOWN_OPERATION_STATE', 'The engine returned an unsupported operation state. Upgrade the client before continuing.');
 }
+function responseError(response: { error?: WireError; response: Response }): void {
+  if (response.response.ok) return;
+  const error = response.error;
+  throw new ManagementError(
+    typeof error?.code === 'string' ? error.code : 'HTTP_ERROR',
+    typeof error?.message === 'string' ? error.message : `Management request failed (${response.response.status}).`,
+    response.response.status, error?.retryable === true,
+  );
+}
 function unwrap<T>(response: { data?: T; error?: WireError; response: Response }): T {
-  if (!response.response.ok) {
-    const error = response.error;
-    throw new ManagementError(
-      typeof error?.code === 'string' ? error.code : 'HTTP_ERROR',
-      typeof error?.message === 'string' ? error.message : `Management request failed (${response.response.status}).`,
-      response.response.status,
-      error?.retryable === true,
-    );
-  }
+  responseError(response);
   if (response.data === undefined) throw new ManagementError('EMPTY_RESPONSE', 'The engine returned an empty response.', response.response.status);
   return response.data;
 }
@@ -88,10 +89,19 @@ export function createClient(options: ClientOptions) {
     catalogEntry: async (id: string, request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/catalog/{id}', { ...request, params: { path: { id } } })),
     discoverSkills: async (body: SourceRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/skills/catalog', { ...request, body })),
     skills: {
+      local: {
+        prepare: async (body: LocalSkillRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/skills/local/plans', { ...request, body })),
+      },
       preview: async (catalogId: string, candidateId: string, request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/skills/catalog/{catalogId}/candidates/{candidateId}/preview', { ...request, params: { path: { catalogId, candidateId } } })),
     },
     environment: async (request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/environment', { ...request })),
     prepare: async (body: ChangeRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/plans', { ...request, body })),
+    plans: {
+      /** Release an unaccepted review when a dialog closes or the selection changes. */
+      discard: async (id: string, request: RequestOptions = {}): Promise<void> => {
+        responseError(await transport.DELETE('/api/v1/plans/{id}', { ...request, params: { path: { id } } }));
+      },
+    },
     /** Persist requestId in the host before calling. A retry must reuse both IDs. */
     apply: async (planId: string, requestId: string, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/plans/{id}/apply', { ...request, params: { path: { id: planId } }, body: { requestId } })),
     operation: async (id: string, request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/operations/{id}', { ...request, params: { path: { id } } })),

@@ -58,6 +58,12 @@ func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App,
 		if err != nil {
 			return err
 		}
+		if selection.ExpectedIndexSHA256 != "" && (pin.Source.Web == nil || pin.Source.Web.IndexSHA256 != selection.ExpectedIndexSHA256) {
+			return ErrSkillsPlanStale
+		}
+		if selection.ExpectedRawTreeDigest != "" && (pin.Source.Web == nil || pin.Source.Web.RawTreeDigest != selection.ExpectedRawTreeDigest) {
+			return ErrSkillsPlanStale
+		}
 		candidate.previous.Packages = append(candidate.previous.Packages, pin)
 	}
 	candidate.requirements.Dependencies[alias] = req

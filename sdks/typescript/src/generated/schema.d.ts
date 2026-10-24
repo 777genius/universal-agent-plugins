@@ -166,6 +166,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Release an unaccepted retained review and its acquired source resources. Absent or already discarded plans return 204. Accepted plans return 409; their durable operation is observed separately. */
+        delete: operations["discardPlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/local/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Prepare bounded local authoring changes. Returns an ordinary opaque plan: use the shared apply, discard, operation, and cancellation routes. JSON body is bounded to 16 MiB; at most 200 changes and 10 MiB decoded replacement bytes. */
+        post: operations["prepareLocalSkillPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -173,7 +207,7 @@ export interface components {
         /** @enum {integer} */
         ProtocolVersion: 1;
         /** @enum {string} */
-        ChangeAction: "install" | "install_skills" | "update" | "sync" | "repair" | "remove" | "recover";
+        ChangeAction: "install" | "install_skills" | "update" | "sync" | "repair" | "remove" | "recover" | "local_skill";
         /** @enum {string} */
         Scope: "user" | "project" | "local";
         StartupTarget: {
@@ -186,11 +220,14 @@ export interface components {
         Startup: {
             /** @description Optional host label. The authoritative contextId returned by the engine is derived from captured roots and targets, not from this label. */
             contextId?: string;
-            stateRoot: string;
-            dependenciesRoot: string;
+            /** @description Optional absolute override for isolated or alternate environments. Omission resolves the canonical existing UAP home in the Go executable composition, never in an SDK. */
+            stateRoot?: string;
+            /** @description Optional absolute override for isolated or alternate environments. Omission resolves the canonical existing UAP home in the Go executable composition, never in an SDK. */
+            dependenciesRoot?: string;
             scope: components["schemas"]["Scope"];
             projectRoot?: string;
             targets: components["schemas"]["StartupTarget"][];
+            authoringRoots?: components["schemas"]["LocalSkillRoot"][];
         };
         /** @description Exactly one private JSON line on stdout. URL and Origin are the same IPv4 loopback origin with an ephemeral port. No token in the URL. The owning host keeps stdin open; EOF requests graceful shutdown. Never forward this document to a renderer or logs. */
         Bootstrap: {
@@ -222,6 +259,9 @@ export interface components {
             scope: components["schemas"]["Scope"];
             targets: components["schemas"]["Target"][];
             capabilities: components["schemas"]["Capability"][];
+            /** @description Stable engine-derived identity of the mutation environment. Changes to target labels or executable paths do not hide retained operations. contextId identifies the immutable capture used for this session or operation. */
+            environmentId: string;
+            authoringRoots?: components["schemas"]["LocalSkillRoot"][];
         };
         Diagnostic: {
             code: string;
@@ -306,6 +346,8 @@ export interface components {
             diagnostics: components["schemas"]["Diagnostic"][];
             /** @description Unresolved accepted work from the durable ledger, including interrupted or partially failed work after restart; completed and explicitly reconciled history is omitted. */
             pendingOperations?: components["schemas"]["Operation"][];
+            /** @description Up to 100 latest available local Skill backups from durable accepted-operation observations. Display-only; restoring always prepares and revalidates the named retained backup. */
+            localSkillBackups?: components["schemas"]["LocalSkillBackup"][];
         };
         /** @description Typed intent; action-specific combinations are validated by Go. install uses source/alias; install_skills uses the retained catalogId and candidateIds; update uses aliases or all; sync restores locked intent; repair/remove select aliases; recover uses an interrupted operationId as a lookup hint, never as executable authority. targetIds refer only to captured startup targets. externalUninstalled is an explicit host attestation, never an SDK default. Preparation has no persistent installer effects. */
         ChangeRequest: {
@@ -367,6 +409,7 @@ export interface components {
             items: components["schemas"]["OperationItem"][];
             nextActions: components["schemas"]["NextAction"][];
             message: string;
+            localSkillBackup?: components["schemas"]["LocalSkillBackup"];
         };
         Progress: {
             phase: string;
@@ -396,6 +439,10 @@ export interface components {
             result?: components["schemas"]["OperationResult"];
             /** @description Operation ID of a later completed recovery that reconciles this historical unresolved operation. Its original outcome is not rewritten. */
             resolvedBy?: string;
+            /** @description Stable engine-derived identity of the mutation environment. Changes to target labels or executable paths do not hide retained operations. contextId identifies the immutable capture used for this session or operation. */
+            environmentId: string;
+            action: components["schemas"]["ChangeAction"];
+            localSkill?: components["schemas"]["LocalSkillIdentity"];
         };
         /** @description Structured failure before acceptance or while observing. retryable never authorizes generating a fresh ID for an uncertain mutation. */
         APIError: {
@@ -408,6 +455,40 @@ export interface components {
             candidateId: string;
             markdown: string;
             diagnostics: components["schemas"]["Diagnostic"][];
+        };
+        /** @description An explicit trusted-host Skill authoring root, captured on stdin before the session. It is not accepted from an HTTP request. root IDs and paths cannot be changed inside a session. Authoring scope may be user or project independently of the native installation scope; this does not enable project-scope UAP installation. */
+        LocalSkillRoot: {
+            id: string;
+            path: string;
+            scope: components["schemas"]["Scope"];
+            targetId?: string;
+        };
+        LocalSkillFile: {
+            relativePath: string;
+            /** @description SHA-256 of the exact previously reviewed bytes; null requires absence. */
+            expectedSHA256: string | null;
+            /** @description Base64 of exact replacement bytes; null removes the reviewed file. Total decoded bytes across the request are bounded to 10 MiB. */
+            contentBase64: string | null;
+        };
+        /** @description Review local authoring beneath one captured root. Upsert contains exact file changes; delete snapshots the entire directory; restore references an engine-owned retained backup from an earlier operation. Native UAP ownership is rechecked under the engine mutation lock at application. A local authoring plan never changes uap.toml, uap.lock, or installation ownership. */
+        LocalSkillRequest: {
+            /** @enum {string} */
+            action: "upsert" | "delete" | "restore";
+            rootId: string;
+            skillName: string;
+            files?: components["schemas"]["LocalSkillFile"][];
+            restoreOperationId?: string;
+        };
+        /** @description Engine-owned reversible copy of the previous local Skill. Restore uses operationId and a fresh review; path is display-only and is never accepted as authority. */
+        LocalSkillBackup: {
+            operationId: string;
+            rootId: string;
+            skillName: string;
+            path: string;
+        };
+        LocalSkillIdentity: {
+            rootId: string;
+            skillName: string;
         };
     };
     responses: {
@@ -628,7 +709,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful response */
-            200: {
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -658,6 +739,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SkillPreview"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    discardPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Review released or already absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    prepareLocalSkillPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LocalSkillRequest"];
+            };
+        };
+        responses: {
+            /** @description A retained local Skill review. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Plan"];
                 };
             };
             default: components["responses"]["Error"];

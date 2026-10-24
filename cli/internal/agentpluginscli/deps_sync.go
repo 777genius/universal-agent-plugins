@@ -187,6 +187,9 @@ type dependencyInstaller struct {
 	beforeApply     func() error
 	consent         map[string]bool
 	previewUpdate   *installer.PreparedOperation
+	operationIDs    map[string]string
+	onResult        func(environment.PreparedBinding, installer.Result)
+	currentAction   environment.PreparedBinding
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
@@ -215,10 +218,15 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	if err := resolveDependencyBindingIdentity(view, &action); err != nil {
 		return nil, err
 	}
-	operationID, err := domain.NewInstallationID()
-	if err != nil {
-		return nil, err
+	operationID := adapter.operationIDs[action.Alias+"\x00"+action.ClientID]
+	if operationID == "" {
+		var err error
+		operationID, err = domain.NewInstallationID()
+		if err != nil {
+			return nil, err
+		}
 	}
+	adapter.currentAction = action
 	request := installer.Request{OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
 		ClientExecutable: backendExecutable(client, adapter.detected), InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
@@ -241,7 +249,11 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 			return installer.Result{}, err
 		}
 	}
-	return adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
+	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
+	if adapter.onResult != nil {
+		adapter.onResult(adapter.currentAction, result)
+	}
+	return result, err
 }
 
 // Recheck the exact signed publication for lock restoration. Superseded releases

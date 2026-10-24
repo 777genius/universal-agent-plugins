@@ -161,14 +161,14 @@ paths:
     post:
       operationId: cancelOperation
       responses:
-        '200':
+        default:
+          $ref: '#/components/responses/Error'
+        '202':
           description: Successful response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Operation'
-        default:
-          $ref: '#/components/responses/Error'
       parameters:
       - name: id
         in: path
@@ -206,6 +206,46 @@ paths:
                 $ref: '#/components/schemas/SkillPreview'
         default:
           $ref: '#/components/responses/Error'
+  /api/v1/plans/{id}:
+    delete:
+      operationId: discardPlan
+      description: Release an unaccepted retained review and its acquired source resources. Absent or
+        already discarded plans return 204. Accepted plans return 409; their durable operation is observed
+        separately.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 256
+      responses:
+        '204':
+          description: Review released or already absent.
+        default:
+          $ref: '#/components/responses/Error'
+  /api/v1/skills/local/plans:
+    post:
+      operationId: prepareLocalSkillPlan
+      description: 'Prepare bounded local authoring changes. Returns an ordinary opaque plan: use the
+        shared apply, discard, operation, and cancellation routes. JSON body is bounded to 16 MiB; at
+        most 200 changes and 10 MiB decoded replacement bytes.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocalSkillRequest'
+      responses:
+        '200':
+          description: A retained local Skill review.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        default:
+          $ref: '#/components/responses/Error'
 components:
   securitySchemes:
     sessionCapability:
@@ -236,6 +276,7 @@ components:
       - repair
       - remove
       - recover
+      - local_skill
     Scope:
       type: string
       enum:
@@ -270,8 +311,6 @@ components:
       type: object
       additionalProperties: false
       required:
-      - stateRoot
-      - dependenciesRoot
       - scope
       - targets
       properties:
@@ -286,10 +325,16 @@ components:
           type: string
           maxLength: 4096
           minLength: 1
+          x-go-type-skip-optional-pointer: true
+          description: Optional absolute override for isolated or alternate environments. Omission resolves
+            the canonical existing UAP home in the Go executable composition, never in an SDK.
         dependenciesRoot:
           type: string
           maxLength: 4096
           minLength: 1
+          x-go-type-skip-optional-pointer: true
+          description: Optional absolute override for isolated or alternate environments. Omission resolves
+            the canonical existing UAP home in the Go executable composition, never in an SDK.
         scope:
           $ref: '#/components/schemas/Scope'
         projectRoot:
@@ -302,6 +347,12 @@ components:
             $ref: '#/components/schemas/StartupTarget'
           minItems: 1
           maxItems: 128
+        authoringRoots:
+          type: array
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/LocalSkillRoot'
+          x-go-type-skip-optional-pointer: true
       description: Trusted host configuration, sent as one bounded JSON line on stdin before bootstrap.
         Roots and executable paths are absolute. Targets are captured for this process; one target per
         client in v1. Unsupported scopes fail explicitly. This is not an HTTP request.
@@ -398,6 +449,7 @@ components:
       - scope
       - targets
       - capabilities
+      - environmentId
       properties:
         apiVersion:
           $ref: '#/components/schemas/ProtocolVersion'
@@ -418,6 +470,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Capability'
+        environmentId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Stable engine-derived identity of the mutation environment. Changes to target labels
+            or executable paths do not hide retained operations. contextId identifies the immutable capture
+            used for this session or operation.
+        authoringRoots:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocalSkillRoot'
+          x-go-type-skip-optional-pointer: true
     Diagnostic:
       type: object
       additionalProperties: false
@@ -726,6 +790,14 @@ components:
           items:
             $ref: '#/components/schemas/Operation'
           x-go-type-skip-optional-pointer: true
+        localSkillBackups:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/LocalSkillBackup'
+          x-go-type-skip-optional-pointer: true
+          description: Up to 100 latest available local Skill backups from durable accepted-operation
+            observations. Display-only; restoring always prepares and revalidates the named retained backup.
     ChangeRequest:
       type: object
       additionalProperties: false
@@ -961,6 +1033,8 @@ components:
         message:
           type: string
           maxLength: 4096
+        localSkillBackup:
+          $ref: '#/components/schemas/LocalSkillBackup'
       description: Authoritative result when effects are known. An interrupted operation with uncertain
         effects omits result until inspected; mutated=false must never stand for unknown. Partial outcomes
         do not imply global rollback.
@@ -1016,6 +1090,8 @@ components:
       - diagnostics
       - createdAt
       - updatedAt
+      - environmentId
+      - action
       properties:
         operationId:
           type: string
@@ -1066,6 +1142,17 @@ components:
           x-go-type-skip-optional-pointer: true
           description: Operation ID of a later completed recovery that reconciles this historical unresolved
             operation. Its original outcome is not rewritten.
+        environmentId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Stable engine-derived identity of the mutation environment. Changes to target labels
+            or executable paths do not hide retained operations. contextId identifies the immutable capture
+            used for this session or operation.
+        action:
+          $ref: '#/components/schemas/ChangeAction'
+        localSkill:
+          $ref: '#/components/schemas/LocalSkillIdentity'
       description: Authoritative operation snapshot. Accepted work outlives its HTTP request. Waiting
         cancellation does not cancel effects. interrupted requires fresh inspection/recovery, not automatic
         replay. Records are retained at least 30 days; a full retained-record budget refuses new work
@@ -1112,3 +1199,132 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Diagnostic'
+    LocalSkillRoot:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - path
+      - scope
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        scope:
+          $ref: '#/components/schemas/Scope'
+        targetId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+      description: An explicit trusted-host Skill authoring root, captured on stdin before the session.
+        It is not accepted from an HTTP request. root IDs and paths cannot be changed inside a session.
+        Authoring scope may be user or project independently of the native installation scope; this does
+        not enable project-scope UAP installation.
+    LocalSkillFile:
+      type: object
+      additionalProperties: false
+      required:
+      - relativePath
+      - expectedSHA256
+      - contentBase64
+      properties:
+        relativePath:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        expectedSHA256:
+          type: string
+          nullable: true
+          pattern: ^[a-f0-9]{64}$
+          description: SHA-256 of the exact previously reviewed bytes; null requires absence.
+        contentBase64:
+          type: string
+          nullable: true
+          maxLength: 13981016
+          description: Base64 of exact replacement bytes; null removes the reviewed file. Total decoded
+            bytes across the request are bounded to 10 MiB.
+    LocalSkillRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - action
+      - rootId
+      - skillName
+      properties:
+        action:
+          type: string
+          enum:
+          - upsert
+          - delete
+          - restore
+        rootId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        skillName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        files:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/LocalSkillFile'
+          x-go-type-skip-optional-pointer: true
+        restoreOperationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+          x-go-type-skip-optional-pointer: true
+      description: Review local authoring beneath one captured root. Upsert contains exact file changes;
+        delete snapshots the entire directory; restore references an engine-owned retained backup from
+        an earlier operation. Native UAP ownership is rechecked under the engine mutation lock at application.
+        A local authoring plan never changes uap.toml, uap.lock, or installation ownership.
+    LocalSkillBackup:
+      type: object
+      additionalProperties: false
+      required:
+      - operationId
+      - rootId
+      - skillName
+      - path
+      properties:
+        operationId:
+          type: string
+          minLength: 1
+          maxLength: 256
+        rootId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        skillName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        path:
+          type: string
+          maxLength: 4096
+      description: Engine-owned reversible copy of the previous local Skill. Restore uses operationId
+        and a fresh review; path is display-only and is never accepted as authority.
+    LocalSkillIdentity:
+      type: object
+      additionalProperties: false
+      required:
+      - rootId
+      - skillName
+      properties:
+        rootId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        skillName:
+          type: string
+          minLength: 1
+          maxLength: 255

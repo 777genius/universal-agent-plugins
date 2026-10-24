@@ -128,6 +128,7 @@ func newAgentpluginsCLIApp(home, dataRoot string, directoryClient *directoryv1.C
 	}
 	app := assembleAgentpluginsApp(home, dataRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
 	app.Installer = facade
+	app.ManagementFactory = managementAppFactory(home, dataRoot)
 	return app, nil
 }
 

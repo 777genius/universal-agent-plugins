@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
@@ -17,6 +16,7 @@ var ErrSkillsPlanStale = errors.New("skill installation plan is stale")
 type SkillsSelection struct {
 	Repository, Commit, Path, Name, Alias, CandidateID string
 	Website                                            string
+	ExpectedIndexSHA256, ExpectedRawTreeDigest         string
 	Selector                                           environment.Selector
 }
 type SkillsBatchRequest struct {
@@ -92,28 +92,15 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	if p.closed || p.applied {
 		return result, errors.New("skill plan closed or already applied")
 	}
-	unlock, err := (processlock.Lock{Path: p.app.EnvironmentLockPath}).Acquire(ctx)
-	if err != nil {
-		return result, err
-	}
-	defer func() { _ = unlock() }()
-	if err = p.check(ctx); err != nil {
-		return result, err
-	}
-	if err = ensureDependencyStore(ctx, p.app, p.request.selectedLock()); err != nil {
-		return result, err
-	}
-	if err = p.request.publish(); err != nil {
-		return result, err
-	}
 	p.applied = true
-	adapter := &dependencyInstaller{app: p.app, opts: &options{}, detected: p.request.detected, beforeApply: p.request.checkInputs}
-	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(ctx, environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: p.request.lock.ManifestDigest, Bindings: p.request.prepared}, true)
+	adapter := &dependencyInstaller{app: p.app, opts: &options{}, detected: p.request.detected}
+	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, p.check)
+	results := applied.Results
 	cursor := 0
 	failedItem := false
 	for _, action := range p.actions {
 		item := SkillsBatchItem{Alias: action.Alias, ClientID: action.ClientID, TargetPath: action.TargetPath, CandidateID: action.CandidateID, Status: "not_attempted"}
-		if action.Action == string(environment.ActionUnchanged) {
+		if action.Action == "unchanged" {
 			item.Status = "unchanged"
 		} else if cursor < len(results) {
 			r := results[cursor]
@@ -128,7 +115,7 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 		result.Items = append(result.Items, item)
 	}
 	if applyErr != nil {
-		if len(results) > 0 {
+		if len(results) > 0 || applied.Published {
 			result.Status = "partial"
 		}
 		result.RepairInstructions = append(result.RepairInstructions, "Inspect agentplugins deps status and follow existing recovery/repair instructions.")

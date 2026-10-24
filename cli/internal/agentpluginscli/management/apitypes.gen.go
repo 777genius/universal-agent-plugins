@@ -50,6 +50,7 @@ func (e CatalogEntryKind) Valid() bool {
 const (
 	Install       ChangeAction = "install"
 	InstallSkills ChangeAction = "install_skills"
+	LocalSkill    ChangeAction = "local_skill"
 	Recover       ChangeAction = "recover"
 	Remove        ChangeAction = "remove"
 	Repair        ChangeAction = "repair"
@@ -63,6 +64,8 @@ func (e ChangeAction) Valid() bool {
 	case Install:
 		return true
 	case InstallSkills:
+		return true
+	case LocalSkill:
 		return true
 	case Recover:
 		return true
@@ -139,6 +142,27 @@ func (e EnvironmentEntryUpdateStatus) Valid() bool {
 	case EnvironmentEntryUpdateStatusCurrent:
 		return true
 	case EnvironmentEntryUpdateStatusPinned:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LocalSkillRequestAction.
+const (
+	Delete  LocalSkillRequestAction = "delete"
+	Restore LocalSkillRequestAction = "restore"
+	Upsert  LocalSkillRequestAction = "upsert"
+)
+
+// Valid indicates whether the value is a known member of the LocalSkillRequestAction enum.
+func (e LocalSkillRequestAction) Valid() bool {
+	switch e {
+	case Delete:
+		return true
+	case Restore:
+		return true
+	case Upsert:
 		return true
 	default:
 		return false
@@ -318,6 +342,9 @@ type Environment struct {
 	Diagnostics []Diagnostic       `json:"diagnostics"`
 	Entries     []EnvironmentEntry `json:"entries"`
 
+	// LocalSkillBackups Up to 100 latest available local Skill backups from durable accepted-operation observations. Display-only; restoring always prepares and revalidates the named retained backup.
+	LocalSkillBackups []LocalSkillBackup `json:"localSkillBackups,omitempty"`
+
 	// PendingOperations Unresolved accepted work from the durable ledger, including interrupted or partially failed work after restart; completed and explicitly reconciled history is omitted.
 	PendingOperations []Operation `json:"pendingOperations,omitempty"`
 }
@@ -338,6 +365,50 @@ type EnvironmentEntryKind string
 // EnvironmentEntryUpdateStatus defines model for EnvironmentEntry.UpdateStatus.
 type EnvironmentEntryUpdateStatus string
 
+// LocalSkillBackup Engine-owned reversible copy of the previous local Skill. Restore uses operationId and a fresh review; path is display-only and is never accepted as authority.
+type LocalSkillBackup struct {
+	OperationId string `json:"operationId"`
+	Path        string `json:"path"`
+	RootId      string `json:"rootId"`
+	SkillName   string `json:"skillName"`
+}
+
+// LocalSkillFile defines model for LocalSkillFile.
+type LocalSkillFile struct {
+	// ContentBase64 Base64 of exact replacement bytes; null removes the reviewed file. Total decoded bytes across the request are bounded to 10 MiB.
+	ContentBase64 *string `json:"contentBase64"`
+
+	// ExpectedSHA256 SHA-256 of the exact previously reviewed bytes; null requires absence.
+	ExpectedSHA256 *string `json:"expectedSHA256"`
+	RelativePath   string  `json:"relativePath"`
+}
+
+// LocalSkillIdentity defines model for LocalSkillIdentity.
+type LocalSkillIdentity struct {
+	RootId    string `json:"rootId"`
+	SkillName string `json:"skillName"`
+}
+
+// LocalSkillRequest Review local authoring beneath one captured root. Upsert contains exact file changes; delete snapshots the entire directory; restore references an engine-owned retained backup from an earlier operation. Native UAP ownership is rechecked under the engine mutation lock at application. A local authoring plan never changes uap.toml, uap.lock, or installation ownership.
+type LocalSkillRequest struct {
+	Action             LocalSkillRequestAction `json:"action"`
+	Files              []LocalSkillFile        `json:"files,omitempty"`
+	RestoreOperationId string                  `json:"restoreOperationId,omitempty"`
+	RootId             string                  `json:"rootId"`
+	SkillName          string                  `json:"skillName"`
+}
+
+// LocalSkillRequestAction defines model for LocalSkillRequest.Action.
+type LocalSkillRequestAction string
+
+// LocalSkillRoot An explicit trusted-host Skill authoring root, captured on stdin before the session. It is not accepted from an HTTP request. root IDs and paths cannot be changed inside a session. Authoring scope may be user or project independently of the native installation scope; this does not enable project-scope UAP installation.
+type LocalSkillRoot struct {
+	Id       string `json:"id"`
+	Path     string `json:"path"`
+	Scope    Scope  `json:"scope"`
+	TargetId string `json:"targetId,omitempty"`
+}
+
 // NextAction defines model for NextAction.
 type NextAction struct {
 	Alias    string `json:"alias,omitempty"`
@@ -348,15 +419,20 @@ type NextAction struct {
 
 // Operation Authoritative operation snapshot. Accepted work outlives its HTTP request. Waiting cancellation does not cancel effects. interrupted requires fresh inspection/recovery, not automatic replay. Records are retained at least 30 days; a full retained-record budget refuses new work rather than dropping live identity.
 type Operation struct {
-	Completed   int             `json:"completed"`
-	ContextId   string          `json:"contextId"`
-	CreatedAt   time.Time       `json:"createdAt"`
-	Diagnostics []Diagnostic    `json:"diagnostics"`
-	Items       []OperationItem `json:"items"`
-	OperationId string          `json:"operationId"`
-	Phase       string          `json:"phase"`
-	PlanId      string          `json:"planId"`
-	RequestId   string          `json:"requestId"`
+	Action      ChangeAction `json:"action"`
+	Completed   int          `json:"completed"`
+	ContextId   string       `json:"contextId"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	Diagnostics []Diagnostic `json:"diagnostics"`
+
+	// EnvironmentId Stable engine-derived identity of the mutation environment. Changes to target labels or executable paths do not hide retained operations. contextId identifies the immutable capture used for this session or operation.
+	EnvironmentId string              `json:"environmentId"`
+	Items         []OperationItem     `json:"items"`
+	LocalSkill    *LocalSkillIdentity `json:"localSkill,omitempty"`
+	OperationId   string              `json:"operationId"`
+	Phase         string              `json:"phase"`
+	PlanId        string              `json:"planId"`
+	RequestId     string              `json:"requestId"`
 
 	// ResolvedBy Operation ID of a later completed recovery that reconciles this historical unresolved operation. Its original outcome is not rewritten.
 	ResolvedBy string `json:"resolvedBy,omitempty"`
@@ -381,10 +457,13 @@ type OperationItem struct {
 type OperationResult struct {
 	DataRetained bool            `json:"dataRetained,omitempty"`
 	Items        []OperationItem `json:"items"`
-	Message      string          `json:"message"`
-	Mutated      bool            `json:"mutated"`
-	NextActions  []NextAction    `json:"nextActions"`
-	Outcome      string          `json:"outcome"`
+
+	// LocalSkillBackup Engine-owned reversible copy of the previous local Skill. Restore uses operationId and a fresh review; path is display-only and is never accepted as authority.
+	LocalSkillBackup *LocalSkillBackup `json:"localSkillBackup,omitempty"`
+	Message          string            `json:"message"`
+	Mutated          bool              `json:"mutated"`
+	NextActions      []NextAction      `json:"nextActions"`
+	Outcome          string            `json:"outcome"`
 }
 
 // OperationState defines model for OperationState.
@@ -439,12 +518,16 @@ type Scope string
 
 // Session defines model for Session.
 type Session struct {
-	ApiVersion    ProtocolVersion `json:"apiVersion"`
-	Capabilities  []Capability    `json:"capabilities"`
-	ContextId     string          `json:"contextId"`
-	EngineVersion string          `json:"engineVersion"`
-	Scope         Scope           `json:"scope"`
-	Targets       []Target        `json:"targets"`
+	ApiVersion     ProtocolVersion  `json:"apiVersion"`
+	AuthoringRoots []LocalSkillRoot `json:"authoringRoots,omitempty"`
+	Capabilities   []Capability     `json:"capabilities"`
+	ContextId      string           `json:"contextId"`
+	EngineVersion  string           `json:"engineVersion"`
+
+	// EnvironmentId Stable engine-derived identity of the mutation environment. Changes to target labels or executable paths do not hide retained operations. contextId identifies the immutable capture used for this session or operation.
+	EnvironmentId string   `json:"environmentId"`
+	Scope         Scope    `json:"scope"`
+	Targets       []Target `json:"targets"`
 }
 
 // SkillCandidate defines model for SkillCandidate.
@@ -483,13 +566,19 @@ type SourceRequest struct {
 
 // Startup Trusted host configuration, sent as one bounded JSON line on stdin before bootstrap. Roots and executable paths are absolute. Targets are captured for this process; one target per client in v1. Unsupported scopes fail explicitly. This is not an HTTP request.
 type Startup struct {
+	AuthoringRoots []LocalSkillRoot `json:"authoringRoots,omitempty"`
+
 	// ContextId Optional host label. The authoritative contextId returned by the engine is derived from captured roots and targets, not from this label.
-	ContextId        string          `json:"contextId,omitempty"`
-	DependenciesRoot string          `json:"dependenciesRoot"`
-	ProjectRoot      string          `json:"projectRoot,omitempty"`
-	Scope            Scope           `json:"scope"`
-	StateRoot        string          `json:"stateRoot"`
-	Targets          []StartupTarget `json:"targets"`
+	ContextId string `json:"contextId,omitempty"`
+
+	// DependenciesRoot Optional absolute override for isolated or alternate environments. Omission resolves the canonical existing UAP home in the Go executable composition, never in an SDK.
+	DependenciesRoot string `json:"dependenciesRoot,omitempty"`
+	ProjectRoot      string `json:"projectRoot,omitempty"`
+	Scope            Scope  `json:"scope"`
+
+	// StateRoot Optional absolute override for isolated or alternate environments. Omission resolves the canonical existing UAP home in the Go executable composition, never in an SDK.
+	StateRoot string          `json:"stateRoot,omitempty"`
+	Targets   []StartupTarget `json:"targets"`
 }
 
 // StartupTarget defines model for StartupTarget.
@@ -527,3 +616,6 @@ type ApplyPlanJSONRequestBody = ApplyRequest
 
 // DiscoverSkillsJSONRequestBody defines body for DiscoverSkills for application/json ContentType.
 type DiscoverSkillsJSONRequestBody = SourceRequest
+
+// PrepareLocalSkillPlanJSONRequestBody defines body for PrepareLocalSkillPlan for application/json ContentType.
+type PrepareLocalSkillPlanJSONRequestBody = LocalSkillRequest

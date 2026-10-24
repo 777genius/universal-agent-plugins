@@ -20,13 +20,18 @@ source unchanged. Request validation and authorization remain explicit Go behavi
 
 ## Lifecycle contract
 
-- One engine process captures one immutable environment/profile context.
+- One engine process captures one immutable environment/profile context. The stable
+  environment identity is distinct from that capture revision; executable or target
+  label changes must not hide unresolved accepted work. Canonical state defaults are
+  resolved only by Go composition, so normal integration shares CLI ownership/locks.
 - The trusted host writes one JSON `Startup` line to `manage serve` stdin, leaves it
   open and reads exactly one private `Bootstrap` line from stdout. EOF requests
   graceful shutdown. Diagnostics must not contain the capability.
 - Every HTTP request sends bearer authorization and the exact bootstrap Origin.
 - Prepare is read-only with respect to persistent installer state. It retains a Go
   prepared object behind an expiring ID. Apply rechecks current state.
+- DELETE of an unaccepted plan releases retained source resources. It returns 204
+  when already absent and refuses accepted work; observation/cancel are separate.
 - The host persists its request ID before apply. Accepted-request lookup precedes
   plan lookup/expiry. Same accepted identity observes prior work; changed input
   conflicts. After restart no serialized plan is executed automatically.
@@ -59,3 +64,27 @@ for success, and do not enable automatic retries of unaccepted mutation identiti
 and HTTP protocol. It is deliberately a smoke client, not a published Python SDK.
 It runs an actual fixture installation using the real engine and reports only
 public session/operation metadata. Pass only disposable profile and state roots.
+
+## Bounded local authoring
+
+Local authoring roots are explicitly captured by the trusted host and independent
+of the native installation scope. The local plan route accepts relative exact-byte
+changes under one root and one Skill directory, with a 16 MiB JSON cap, 200 changed
+files, and 10 MiB decoded content. It uses the same retained-plan, acceptance,
+observation and cancellation lifecycle. UAP remains the writer: no check-then-host-write
+lease is exposed. The backend holds environment then native mutation locks, reloads
+authoritative ownership, checks the full reviewed tree and uses the existing
+`dirswap.Manager` for durable publication/rollback. A separate retained backup
+provides reversible local deletion. Restore names an accepted local operation and
+its root/Skill identity; changed backups or local edits block restoration.
+
+The guarantee covers participating tools sharing the canonical UAP state and locks.
+An independently configured foreign state store cannot be inferred to have no native
+ownership; normal integrations must not create a private store for the same profile.
+
+Local undo has a minimum 30-day retention window. Existing acceptance-time history
+pruning calls an optional backend cleanup hook before deleting an eligible ledger
+record. The hook touches only a verified private backup and its metadata, refuses
+pending journals or changed data, and never deletes an active/native path. Cleanup
+refusal keeps the record; the shared 1024-record budget bounds retained growth and
+refuses further work when full. There is no cleanup daemon or independent job store.

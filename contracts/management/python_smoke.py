@@ -3,7 +3,7 @@
 
 Run only against disposable profiles. This is not a maintained Python SDK.
 Example: python contracts/management/python_smoke.py --executable /path/agentplugins \
-  --config /tmp/fixture/startup.json --source /tmp/fixture/skill-source --kind skill
+  --config /tmp/fixture/startup.json --source 777genius/universal-agent-plugins@PINNED_COMMIT//repotests/testdata/agentplugins_commands_fixture --kind skill
 """
 import argparse
 from contextlib import suppress

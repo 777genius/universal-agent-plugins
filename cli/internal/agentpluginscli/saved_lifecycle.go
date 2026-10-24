@@ -6,7 +6,6 @@ import (
 	"os"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -330,96 +329,4 @@ func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, op
 		return err
 	}
 	return nil
-}
-
-func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, alias string, installation *domain.Installation) (environment.Requirements, environment.Lock, error) {
-	requirements := snapshot.Requirements
-	old, ok := snapshot.Lock.Package(alias)
-	if !ok || old.Source.Registry == nil {
-		return requirements, snapshot.Lock, errors.New("registry dependency has no locked release")
-	}
-	request, err := savedRegistryUpdateRequest(cmd, app, old.Targets, installation)
-	if err != nil {
-		return requirements, snapshot.Lock, err
-	}
-	loaded, err := app.acquireDirectory(cmd.Context(), old.Source.Registry.DistributionID, request)
-	if errors.Is(err, domain.ErrDirectoryNoSafeUpdate) {
-		return requirements, snapshot.Lock, nil
-	}
-	if err != nil {
-		return requirements, snapshot.Lock, err
-	}
-	err = validateSavedRegistryUpdate(loaded, old.Source.Registry)
-	if err != nil || loaded.directorySelection.ReleaseSequence == old.Source.Registry.ReleaseSequence {
-		if loaded.cleanup != nil {
-			_ = loaded.cleanup()
-		}
-		return requirements, snapshot.Lock, err
-	}
-	requirements, candidate := savedRegistryCandidate(snapshot, alias, old, loaded)
-	next, _ := candidate.Package(alias)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), loaded, next); err != nil {
-		return requirements, snapshot.Lock, err
-	}
-	// Validate the authoritative old graph before rebuilding edges from the new
-	// immutable manifests. Replacing a node inside old edges creates a false conflict.
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
-	return requirements, locked, err
-}
-
-func savedRegistryUpdateRequest(cmd *cobra.Command, app App, targets []string, installation *domain.Installation) (packageResolutionRequest, error) {
-	request := packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall}
-	detected, err := detectDependencyClients(cmd.Context(), app)
-	if err != nil {
-		return request, err
-	}
-	request.Clients = detected
-	for _, target := range targets {
-		request.Targets = append(request.Targets, domain.ClientID(target))
-	}
-	if installation == nil {
-		return request, nil
-	}
-	if installation.Directory == nil {
-		return request, errors.New("owned registry installation lacks publication provenance")
-	}
-	request.Operation = domain.DirectoryUpdate
-	request.Recorded = recordedDirectoryRelease(*installation, installation.Directory.DesiredReleaseSequence, installation.Source.ResolvedRevision)
-	return request, nil
-}
-
-func validateSavedRegistryUpdate(loaded loadedPackage, prior *environment.LockedRegistrySource) error {
-	if loaded.directorySelection == nil || loaded.directory == nil {
-		return errors.New("registry update lacks publication identity")
-	}
-	if loaded.directorySelection.ProductID != prior.ProductID || loaded.directorySelection.DistributionID != prior.DistributionID {
-		return errors.New("registry update changed product or distribution identity")
-	}
-	return nil
-}
-
-func savedRegistryCandidate(snapshot environmentSnapshot, alias string, old environment.LockedPackage, loaded loadedPackage) (environment.Requirements, environment.Lock) {
-	requirements := cloneSavedRequirements(snapshot.Requirements)
-	key := dependencyRootKey(requirements, snapshot.Lock, alias)
-	requirement := requirements.Dependencies[key]
-	registry := *requirement.Registry
-	selection := loaded.directorySelection
-	registry.Selector = environment.Selector{Kind: environment.SelectorRelease, Value: strconv.FormatUint(selection.ReleaseSequence, 10)}
-	requirement.Registry = &registry
-	requirements.Dependencies[key] = requirement
-	next := old
-	next.Version = loaded.envelope.Manifest.Version
-	next.TreeDigest = loaded.envelope.TreeDigest
-	next.ManifestDigest = loaded.envelope.ManifestDigest
-	next.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	next.Source.Registry = &environment.LockedRegistrySource{Distribution: registry.Distribution, ProductID: selection.ProductID, DistributionID: selection.DistributionID, ReleaseSequence: selection.ReleaseSequence, Requested: registry.Selector, Repository: selection.Source.Repository, Path: selection.Source.Path, Commit: selection.Source.Revision}
-	locked := snapshot.Lock
-	locked.Packages = append([]environment.LockedPackage(nil), locked.Packages...)
-	for index := range locked.Packages {
-		if locked.Packages[index].Alias == alias {
-			locked.Packages[index] = next
-		}
-	}
-	locked.ManifestDigest, _ = environment.ManifestDigest(requirements)
-	return requirements, locked
 }

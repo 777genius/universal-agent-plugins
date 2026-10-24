@@ -306,6 +306,9 @@ type InspectedInstallation struct {
 
 // InspectedBinding is a public subset of one client binding.
 type InspectedBinding struct {
+	// ManagedPaths are observed ownership locations, never mutation authority.
+	ManagedPaths                                                 []string `json:",omitempty"`
+	Policy                                                       string
 	LifecycleConverged                                           bool
 	ClientID, BindingID, Scope, TargetPath, DataRoot, TreeDigest string
 	Materialization, Activation, Authentication, Verification    string

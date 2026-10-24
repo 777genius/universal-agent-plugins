@@ -114,7 +114,7 @@ func (adapter *dependencyInstaller) authorize(ctx context.Context, loaded *loade
 		return errors.New("scanner unavailable")
 	}
 	if adapter.previewWarnings != nil && loaded.security.Counts.Warnings > 0 {
-		*adapter.previewWarnings = append(*adapter.previewWarnings, fmt.Sprintf("%d security warning(s) for pinned Skill content", loaded.security.Counts.Warnings))
+		*adapter.previewWarnings = append(*adapter.previewWarnings, fmt.Sprintf("%d security warning(s) for pinned content", loaded.security.Counts.Warnings))
 	}
 	if loaded.security.Counts.Blocking > 0 && !adapter.opts.acceptSecurityRisk {
 		return fmt.Errorf("%w: %d blocking findings", installer.ErrAssessmentRejected, loaded.security.Counts.Blocking)

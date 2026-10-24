@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -73,8 +74,12 @@ func cloneSavedRequirements(value environment.Requirements) environment.Requirem
 }
 
 func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, matches []string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
+	return resolveSavedAddContext(cmd.Context(), app, opts, source, targets, matches, snapshot)
+}
+
+func resolveSavedAddContext(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, matches []string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
 	if matches == nil && !isDirectorySelector(source) {
-		return resolveDirectSavedAdd(cmd, app, opts, source, snapshot)
+		return resolveDirectSavedAdd(ctx, app, opts, source, snapshot)
 	}
 	var requirement environment.Requirement
 	alias := ""
@@ -122,16 +127,16 @@ func resolveSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	}
 
 	if alias == "" {
-		return acquireSavedAdd(cmd, app, opts, source, targets, matches, requirement, snapshot.Requirements)
+		return acquireSavedAdd(ctx, app, opts, source, targets, matches, requirement, snapshot.Requirements)
 	}
 	requirement.Alias = alias
 	return requirement, pin, nil
 
 }
 
-func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement, requirements environment.Requirements) (environment.Requirement, environment.LockedPackage, error) {
+func acquireSavedAdd(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement, requirements environment.Requirements) (environment.Requirement, environment.LockedPackage, error) {
 	var pin environment.LockedPackage
-	loaded, err := loadSavedAddPackage(cmd, app, source, targets, matches, requirement)
+	loaded, err := loadSavedAddPackage(ctx, app, source, targets, matches, requirement)
 	if err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
@@ -167,7 +172,7 @@ func acquireSavedAdd(cmd *cobra.Command, app App, opts *options, source string, 
 	pin.ManifestDigest = loaded.envelope.ManifestDigest
 	pin.Version = loaded.envelope.Manifest.Version
 	pin.ExecutableFiles = append([]string{}, loaded.envelope.ExecutableFiles...)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), loaded, pin); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(ctx, loaded, pin); err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
 	return requirement, pin, nil
@@ -262,31 +267,31 @@ func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirem
 	return previous
 }
 
-func loadSavedAddPackage(cmd *cobra.Command, app App, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement) (loadedPackage, error) {
+func loadSavedAddPackage(ctx context.Context, app App, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement) (loadedPackage, error) {
 	var err error
 	var loaded loadedPackage
 	if matches != nil {
-		snapshot, e := app.acquireDependencyGit(cmd.Context(), *requirement.Git, requirement.Git.Selector.Value, "")
+		snapshot, e := app.acquireDependencyGit(ctx, *requirement.Git, requirement.Git.Selector.Value, "")
 		if e != nil {
 			return loadedPackage{}, e
 		}
 		identity := githubIdentity(requirement.Git.Repository, requirement.Git.Selector.Value, requirement.Git.Path)
 		snapshot.Source = domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: requirement.Git.Repository, ResolvedRevision: requirement.Git.Selector.Value, PackageSubpath: requirement.Git.Path, SourceBindingHint: "uap-dependency-git"}
 		_, rootErr := os.Stat(filepath.Join(snapshot.Root, "plugin.json"))
-		loaded, err = app.loadStandardSnapshot(cmd.Context(), snapshot, domain.OriginModeDirect, nil, nil)
+		loaded, err = app.loadStandardSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
 		if requirement.Git.Path == "" && os.IsNotExist(rootErr) {
-			paths, discoverErr := app.SourceAcquirer.DiscoverGitHubPackages(cmd.Context(), requirement.Git.Repository, requirement.Git.Selector.Value)
+			paths, discoverErr := app.SourceAcquirer.DiscoverGitHubPackages(ctx, requirement.Git.Repository, requirement.Git.Selector.Value)
 			if discoverErr != nil {
 				return loadedPackage{}, discoverErr
 			}
 			return loadedPackage{}, fmt.Errorf("choose //path for a standard package; candidates: %v", paths)
 		}
 	} else {
-		detected, detectErr := detectDependencyClients(cmd.Context(), app)
+		detected, detectErr := detectDependencyClients(ctx, app)
 		if detectErr != nil {
 			return loadedPackage{}, detectErr
 		}
-		loaded, err = app.acquireDirectory(cmd.Context(), source, withDetectedClients(packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, Targets: targets}, detected))
+		loaded, err = app.acquireDirectory(ctx, source, withDetectedClients(packageResolutionRequest{StandardOnly: true, Operation: domain.DirectoryInstall, Targets: targets}, detected))
 	}
 	if err != nil {
 		return loadedPackage{}, err

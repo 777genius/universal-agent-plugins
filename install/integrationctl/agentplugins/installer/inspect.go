@@ -132,6 +132,7 @@ func inspectInstallations(state domain.StateFileV2) ([]InspectedInstallation, ma
 				LifecycleConverged: binding.LifecycleConverged(), ClientID: binding.ClientID, BindingID: binding.ClientBindingID, Scope: binding.Scope,
 				TargetPath: binding.TargetLocator, DataRoot: receipt.Locator,
 				TreeDigest: digest, Materialization: string(binding.Materialization), Activation: string(binding.Activation),
+				Policy: string(binding.Policy), ManagedPaths: inspectedManagedPaths(binding),
 				Authentication: string(binding.Authentication), Verification: string(binding.Verification),
 			})
 			inspected := &item.Bindings[len(item.Bindings)-1]
@@ -512,4 +513,26 @@ func populateInspectedBinding(inspected *InspectedBinding, binding domain.Client
 			inspected.Owner = &cloned
 		}
 	}
+}
+
+// inspectedManagedPaths projects existing native ownership receipts for hosts
+// protecting local editors. The lock-owning mutation path must still recheck.
+func inspectedManagedPaths(binding domain.ClientBinding) []string {
+	paths := []string{}
+	if binding.TargetLocator != "" {
+		paths = append(paths, binding.TargetLocator)
+	}
+	for _, object := range binding.NativeObjects {
+		if object.Path != "" && object.ProtectionClass == "managed" {
+			paths = append(paths, object.Path)
+		}
+	}
+	sort.Strings(paths)
+	out := paths[:0]
+	for _, path := range paths {
+		if len(out) == 0 || out[len(out)-1] != path {
+			out = append(out, path)
+		}
+	}
+	return out
 }

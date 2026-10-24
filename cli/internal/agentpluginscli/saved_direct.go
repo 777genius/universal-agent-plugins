@@ -1,10 +1,9 @@
 package agentpluginscli
 
 import (
+	"context"
 	"errors"
 	"net/url"
-
-	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
@@ -61,7 +60,7 @@ func retainedDirectAdd(snapshot environmentSnapshot, requirement environment.Req
 	return requirement, environment.LockedPackage{}, false, nil
 }
 
-func resolveDirectSavedAdd(cmd *cobra.Command, app App, opts *options, source string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
+func resolveDirectSavedAdd(ctx context.Context, app App, opts *options, source string, snapshot environmentSnapshot) (environment.Requirement, environment.LockedPackage, error) {
 	spec, err := sourcespec.Parse(source)
 	if err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
@@ -71,7 +70,7 @@ func resolveDirectSavedAdd(cmd *cobra.Command, app App, opts *options, source st
 	if found || err != nil {
 		return retained, pin, err
 	}
-	result, err := app.acquireDirectPackage(cmd.Context(), spec)
+	result, err := app.acquireDirectPackage(ctx, spec)
 	if err != nil {
 		return environment.Requirement{}, environment.LockedPackage{}, err
 	}
@@ -95,7 +94,7 @@ func resolveDirectSavedAdd(cmd *cobra.Command, app App, opts *options, source st
 	}
 	result.requirement = requirement
 	pin = completeDirectPin(result, alias)
-	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(cmd.Context(), result.loaded, pin); err != nil {
+	if err := (dependencyResolver{app: app, dryRun: opts.dryRun}).finishLoaded(ctx, result.loaded, pin); err != nil {
 		return requirement, pin, err
 	}
 	return requirement, pin, nil

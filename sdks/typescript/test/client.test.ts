@@ -6,7 +6,7 @@ import { createClient, ManagementError, type Operation } from '../dist/index.js'
 
 const token = 'a'.repeat(64);
 function operation(state: Operation['state'] = 'running'): Operation {
-  return { operationId: 'operation-one', planId: 'plan-one', requestId: 'request-123456789', contextId: 'context-one', state, phase: 'commit', completed: 0, total: 1, items: [], diagnostics: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
+  return { operationId: 'operation-one', planId: 'plan-one', requestId: 'request-123456789', contextId: 'context-one', environmentId: 'environment-one', action: 'install', state, phase: 'commit', completed: 0, total: 1, items: [], diagnostics: [], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' };
 }
 async function fixture(handler: (request: IncomingMessage, response: ServerResponse) => void) {
   const server = createServer((request, response) => {
@@ -113,4 +113,43 @@ test('Skill preview uses the retained catalog and candidate identities', async (
   });
   t.after(f.close);
   assert.equal((await f.client.skills.preview('catalog-one', 'skill/one')).markdown, '# A Skill');
+});
+
+
+test('discard releases a retained review and treats empty 204 as success', async (t) => {
+  let calls = 0;
+  const f = await fixture((request, response) => {
+    assert.equal(request.method, 'DELETE');
+    assert.equal(request.url, '/api/v1/plans/review%2Fone');
+    calls++;
+    response.statusCode = 204;
+    response.end();
+  });
+  t.after(f.close);
+  await f.client.plans.discard('review/one');
+  await f.client.plans.discard('review/one');
+  assert.equal(calls, 2);
+});
+
+test('discard reports an accepted review conflict without cancelling work', async (t) => {
+  const f = await fixture((request, response) => {
+    assert.equal(request.method, 'DELETE');
+    response.statusCode = 409;
+    response.end(JSON.stringify({ code: 'PLAN_ALREADY_ACCEPTED', message: 'Observe the accepted operation.', retryable: false }));
+  });
+  t.after(f.close);
+  await assert.rejects(f.client.plans.discard('accepted-review'), (error: unknown) => error instanceof ManagementError && error.code === 'PLAN_ALREADY_ACCEPTED');
+});
+
+
+test('local Skill changes preserve exact digests, null absence and binary bytes', async (t) => {
+  const body = { action: 'upsert' as const, rootId: 'project-local', skillName: 'draft', files: [{ relativePath: 'assets/example.bin', expectedSHA256: null, contentBase64: 'AP8B' }] };
+  const f = await fixture((request, response) => {
+    assert.equal(request.url, '/api/v1/skills/local/plans');
+    let received = '';
+    request.on('data', (chunk: Buffer) => { received += chunk.toString(); });
+    request.on('end', () => { assert.deepEqual(JSON.parse(received), body); response.end(JSON.stringify({ planId: 'local-plan', contextId: 'captured', expiresAt: '2026-10-24T12:00:00Z', action: 'local_skill', confirmable: true, actions: [], warnings: [], conflicts: [] })); });
+  });
+  t.after(f.close);
+  assert.equal((await f.client.skills.local.prepare(body)).action, 'local_skill');
 });

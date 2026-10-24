@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
@@ -39,6 +40,7 @@ type SourceAcquirer interface {
 }
 
 type App struct {
+	ManagementFactory  func(management.Startup) (App, error)
 	chatGPTPreparation bool
 	chatGPTAppID       string
 	Prompter           prompt.Prompter

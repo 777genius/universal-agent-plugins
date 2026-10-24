@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -28,6 +27,7 @@ type dependencySyncRequest struct {
 	candidateManifest, candidateLock []byte
 	aliases                          []string
 	attestation                      *environment.Attestation
+	repairOnly                       bool
 }
 
 func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock) ([]dependencyAction, error) {
@@ -144,7 +144,7 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 }
 
 func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, yes bool) error {
-	lock, prepared, detected := request.lock, request.prepared, request.detected
+	prepared, detected := request.prepared, request.detected
 	var actions []dependencyAction
 	if err := renderDependencyConfirmation(cmd, opts, prepared); err != nil {
 		return err
@@ -156,33 +156,20 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	if err != nil || !confirmed {
 		return err
 	}
-	unlock, err := processlock.Lock{Path: app.EnvironmentLockPath}.Acquire(cmd.Context())
-	if err != nil {
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent}
+	checked := func(ctx context.Context) error {
+		if err := request.checkInputs(); err != nil {
+			return err
+		}
+		var err error
+		actions, err = request.recheck(cmd, app, opts)
+		if err == nil && !reflect.DeepEqual(actions, prepared) {
+			return installer.ErrPlanChanged
+		}
 		return err
 	}
-	defer func() { _ = unlock() }()
-	if err := requireDependencyMutationReady(app); err != nil {
-		return err
-	}
-	if err := request.checkInputs(); err != nil {
-		return err
-	}
-	actions, err = request.recheck(cmd, app, opts)
-	if err != nil {
-		return err
-	}
-	if !reflect.DeepEqual(actions, prepared) {
-		return installer.ErrPlanChanged
-	}
-	storeLock := request.selectedLock()
-	if err := ensureDependencyStore(cmd.Context(), app, storeLock); err != nil {
-		return err
-	}
-	if err := request.publish(); err != nil {
-		return err
-	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, beforeApply: request.checkInputs}
-	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: lock.ManifestDigest, Bindings: actions}, true)
+	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
+	results := applied.Results
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
@@ -303,6 +290,10 @@ func (request *dependencySyncRequest) publish() error {
 }
 
 func prepareDependencySyncCandidate(cmd *cobra.Command, app App, opts *options, lockedOnly bool) (dependencySyncRequest, error) {
+	return prepareDependencySyncCandidateContext(cmd.Context(), app, opts, lockedOnly)
+}
+
+func prepareDependencySyncCandidateContext(ctx context.Context, app App, opts *options, lockedOnly bool) (dependencySyncRequest, error) {
 	manifestPath, lockPath := app.dependencyPaths()
 	manifestBytes, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -332,7 +323,7 @@ func prepareDependencySyncCandidate(cmd *cobra.Command, app App, opts *options, 
 			return dependencySyncRequest{}, err
 		}
 	}
-	requirements, lock, err := resolveDependencySyncCandidate(cmd.Context(), app, opts, requirements, previous, lockedOnly)
+	requirements, lock, err := resolveDependencySyncCandidate(ctx, app, opts, requirements, previous, lockedOnly)
 	if err != nil {
 		return dependencySyncRequest{}, err
 	}

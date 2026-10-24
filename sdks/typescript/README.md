@@ -37,10 +37,13 @@ try {
 }
 ```
 
-The host captures explicit roots and executable paths; ambient HOME does not select
-target profiles. The authoritative `session.contextId` is derived by Go from captured
+The host captures explicit target roots and executable paths; ambient HOME does not select
+target profiles. Omit stateRoot/dependenciesRoot in normal integration to share the canonical
+existing UAP state and mutation locks with the CLI; Go resolves those defaults. Explicit
+overrides are for isolated or alternate environments and must not silently split ownership. The authoritative `session.contextId` is derived by Go from captured
 facts. It is separate from an application's navigation ID or optional startup label.
-Unsupported scope/target capabilities are refused instead of falling back to user scope.
+`session.environmentId` remains stable across executable/label changes, so unresolved
+operations remain visible. Unsupported scope/target capabilities are refused instead of falling back to user scope.
 
 Startup sends one bounded JSON line to `agentplugins manage serve` on stdin. Stdin
 stays open for this owned process. The private stdout bootstrap supplies an ephemeral
@@ -76,6 +79,10 @@ console.log(operation.state, operation.result?.nextActions);
 
 A plan is diagnostic data plus an opaque retained handle. The client never serializes
 it back as authority, reprepares automatically or retries a mutation with a new ID.
+When a review dialog closes or its selection changes, call `client.plans.discard(plan.planId)`
+to release its source resources. Discard is idempotent for absent/unaccepted plans and
+refuses accepted plans; it does not cancel an accepted operation.
+
 A repeated accepted request is resolved before plan expiry checks, including after
 process restart. Conflicting input under the same request ID is refused.
 
@@ -88,6 +95,35 @@ An AbortSignal or waiting deadline stops observation only. Explicitly request
 cooperative cancellation with `client.cancel(operationId)`, then observe the actual
 outcome. Completion can win; cancellation does not promise rollback. Progress has
 real phases and item counts, not invented completion percentages.
+
+
+## Local Skill authoring
+
+Capture optional `authoringRoots: [{ id, path, scope, targetId? }]` from the trusted
+host before startup. A project authoring root is a bounded local-file edit permission;
+it does not enable native UAP project-scope installation. No HTTP request supplies an
+absolute mutation path.
+
+`client.skills.local.prepare({ action: 'upsert', rootId, skillName, files })` returns an
+ordinary retained plan. Each file has `relativePath`, `expectedSHA256` (the exact old
+bytes, or null for absence) and `contentBase64` (new bytes, or null for deletion).
+The limit is 200 changes and 10 MiB total replacement bytes. The engine captures the
+complete current tree and rechecks it plus authoritative ownership while holding
+the same environment/native mutation locks as the CLI. Direct edits to managed
+projections are refused; copy reviewed bytes to a different unowned Skill directory.
+
+`action: 'delete'` prepares a complete directory removal. The result's
+`localSkillBackup` identifies a retained reversible copy in private engine state, outside
+native Skill discovery. `environment.localSkillBackups` exposes the latest retained
+backups after host restart. Restore with a fresh
+`skills.local.prepare({ action: 'restore', rootId, skillName, restoreOperationId })`
+and the usual apply/observe flow. Uncertain `operation.action === 'local_skill'`
+uses that same local restore route and `operation.localSkill`; generic native
+recovery cannot settle unknown local file effects. Changed live files or backups
+are retained and block unsafe restoration. Undo is retained for at least 30 days. Later acceptance may prune only verified
+private backups and receipts with settled observations; changed backups and pending
+journals are preserved. A maximum of 1024 retained observations bounds growth and
+refuses new work when full rather than discarding unresolved identity.
 
 ## Use an existing endpoint
 
