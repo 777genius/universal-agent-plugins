@@ -43,7 +43,7 @@ Independently reported focused verification:
 
 ## Review 2: independent APM reviewer
 
-Reviewer: independent APM reviewer, agent `/root/skillshare_scope`.
+Reviewer: independent APM reviewer, agent `/root/apm_vercel_scope`.
 Final decision: **CODE GO**.
 
 The reviewer inspected the full `b07c3a6e` through `f50111a` branch, including
