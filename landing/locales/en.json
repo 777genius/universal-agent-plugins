@@ -973,7 +973,7 @@
       "required": "Authentication required",
       "not_required": "No authentication required",
       "unknown": "Authentication requirements unknown",
-      "varies": "Authentication varies by agent",
+      "varies": "Depends on the agent",
       "automatic": "Installed agents are detected when you run the command. Select agents in Install to see their resolved requirements.",
       "unresolved": "No install candidate is resolved for these agents. Select a supported agent to check its requirements.",
       "release": "{id} · release {sequence}",

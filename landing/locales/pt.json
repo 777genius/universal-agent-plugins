@@ -956,7 +956,7 @@
       "required": "Autenticação necessária",
       "not_required": "Não requer autenticação",
       "unknown": "Requisitos de autenticação desconhecidos",
-      "varies": "A autenticação varia por agente",
+      "varies": "Depende do agente",
       "automatic": "Os agentes instalados são detectados ao executar o comando. Selecione agentes em Instalar para ver seus requisitos.",
       "unresolved": "Nenhuma opção de instalação foi resolvida para estes agentes. Selecione um agente compatível para verificar os requisitos.",
       "release": "{id} · versão {sequence}",

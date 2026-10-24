@@ -13,6 +13,8 @@ const release: Pick<DistributionView, 'id' | 'release_sequence' | 'targets'> = {
 };
 const t = (key: string, params?: Record<string, string | number>) =>
   `${key}${params ? JSON.stringify(params) : ''}`;
+const groupStates = (indicator: ReturnType<typeof authenticationIndicator>) =>
+  indicator.groups.map((group) => [group.authentication, group.clients]);
 describe('card authentication indicator', () => {
   it('uses resolved release target policy instead of contradictory legacy hints', () => {
     const plugin = { authentication: 'none', distribution: release };
@@ -26,7 +28,7 @@ describe('card authentication indicator', () => {
       'not_required',
     );
     assert.match(
-      authenticationIndicator(release, ['cursor'], false, t).detail,
+      authenticationIndicator(release, ['cursor'], false, t).release,
       /upstream\/example/,
     );
   });
@@ -38,7 +40,12 @@ describe('card authentication indicator', () => {
         authentication: 'not_required' as const,
       })),
     };
-    assert.equal(authenticationIndicator(uniform, ['cursor'], true, t).state, 'not_required');
+    const uniformResult = authenticationIndicator(uniform, ['cursor'], true, t);
+    assert.equal(uniformResult.state, 'not_required');
+    assert.equal(uniformResult.varies, false);
+    assert.deepEqual(groupStates(uniformResult), [
+      ['not_required', ['codex', 'cursor', 'kiro']],
+    ]);
     const required = {
       ...release,
       targets: release.targets.map((target) => ({
@@ -49,15 +56,24 @@ describe('card authentication indicator', () => {
     assert.equal(authenticationIndicator(required, ['cursor'], true, t).state, 'required');
     const mixed = authenticationIndicator(release, ['cursor'], true, t);
     assert.equal(mixed.state, 'unknown');
+    assert.equal(mixed.varies, true);
     assert.match(mixed.label, /varies/);
-    assert.match(mixed.detail, /codex: .*required/);
-    assert.match(mixed.detail, /automatic/);
+    assert.deepEqual(groupStates(mixed), [
+      ['required', ['codex']],
+      ['unknown', ['kiro']],
+      ['not_required', ['cursor']],
+    ]);
+    assert.equal(mixed.summary, 'registryUi.authenticationIndicator.unknownDetail');
+    assert.equal(mixed.note, 'registryUi.authenticationIndicator.automatic');
   });
   it('keeps unresolved selections unknown', () => {
-    assert.equal(authenticationIndicator(undefined, ['cursor'], true, t).state, 'unknown');
-    assert.match(authenticationIndicator(undefined, ['cursor'], true, t).detail, /automatic/);
-    assert.equal(authenticationIndicator(undefined, ['cursor'], false, t).state, 'unknown');
-    assert.match(authenticationIndicator(undefined, ['cursor'], false, t).detail, /unresolved/);
+    const automatic = authenticationIndicator(undefined, ['cursor'], true, t);
+    assert.equal(automatic.state, 'unknown');
+    assert.equal(automatic.summary, 'registryUi.authenticationIndicator.automatic');
+    assert.deepEqual(automatic.groups, []);
+    const manual = authenticationIndicator(undefined, ['cursor'], false, t);
+    assert.equal(manual.state, 'unknown');
+    assert.equal(manual.summary, 'registryUi.authenticationIndicator.unresolved');
     assert.equal(authenticationIndicator(release, [], false, t).state, 'unknown');
   });
   it('keeps per-agent policy disagreements visible for automatic installs', () => {
@@ -70,15 +86,25 @@ describe('card authentication indicator', () => {
     } as Pick<DistributionView, 'id' | 'release_sequence' | 'targets'>;
     const result = authenticationIndicator(divergent, ['codex'], true, t);
     assert.equal(result.state, 'unknown');
+    assert.equal(result.varies, true);
     assert.match(result.label, /varies/);
-    assert.match(result.detail, /cursor: .*not_required \/ .*required/);
-    assert.match(result.detail, /automatic/);
+    assert.deepEqual(groupStates(result), [
+      ['required', ['cursor']],
+      ['not_required', ['cursor']],
+    ]);
+    assert.equal(result.note, 'registryUi.authenticationIndicator.automatic');
   });
   it('explains mixed and unknown requirements without an open-lock claim', () => {
     const mixed = authenticationIndicator(release, ['cursor', 'codex'], false, t);
     assert.equal(mixed.state, 'unknown');
-    assert.match(mixed.label, /varies/);
-    assert.match(mixed.detail, /cursor: .*not_required; codex: .*required/);
-    assert.equal(authenticationIndicator(release, ['kiro'], false, t).state, 'unknown');
+    assert.equal(mixed.varies, true);
+    assert.deepEqual(groupStates(mixed), [
+      ['required', ['codex']],
+      ['not_required', ['cursor']],
+    ]);
+    const unknown = authenticationIndicator(release, ['kiro'], false, t);
+    assert.equal(unknown.state, 'unknown');
+    assert.equal(unknown.varies, false);
+    assert.deepEqual(groupStates(unknown), [['unknown', ['kiro']]]);
   });
 });

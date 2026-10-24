@@ -51,6 +51,8 @@ for (const mobile of [false, true]) {
         const indicator = card.locator('.authentication-indicator');
         const dialog = page.locator('.authentication-indicator__content');
         await expect(indicator).toHaveAttribute('data-authentication', 'unknown');
+        await expect(indicator).toHaveAttribute('data-varies', 'true');
+        await expect(indicator).toHaveAttribute('data-icon', 'varies');
         if (mobile) await indicator.tap();
         else {
           await indicator.hover();
@@ -86,15 +88,21 @@ for (const mobile of [false, true]) {
         await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
         await targets(page, card, ['Codex']);
         await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
+        await expect(indicator).toHaveAttribute('data-icon', 'lock-open');
         await indicator.click();
-        await expect(dialog).toContainText('codex: No authentication required');
+        await expect(dialog).toContainText('No authentication required');
+        await expect(dialog.locator('.authentication-indicator__clients')).toHaveText('codex');
         await page.keyboard.press('Escape');
         await targets(page, card, ['Cursor']);
         await expect(indicator).toHaveAttribute('data-authentication', 'unknown');
+        await expect(indicator).toHaveAttribute('data-varies', 'true');
+        await expect(indicator).toHaveAttribute('data-icon', 'varies');
         await targets(page, card, ['Codex']);
         await expect(indicator).toHaveAttribute('data-authentication', 'required');
+        await expect(indicator).toHaveAttribute('data-icon', 'lock');
         await indicator.click();
-        await expect(dialog).toContainText('cursor: Authentication required');
+        await expect(dialog).toContainText('Authentication required');
+        await expect(dialog.locator('.authentication-indicator__clients')).toHaveText('cursor');
         await page.keyboard.press('Escape');
         const locale = locales.find((value) => value !== 'en')!;
         await navigate(page, '/plugins/', locale, '?q=i18n-state-00');
@@ -104,9 +112,8 @@ for (const mobile of [false, true]) {
           t('registryUi.authenticationIndicator.required'),
         );
         await indicator.click();
-        await expect(dialog).toContainText(
-          `cursor: ${t('registryUi.authenticationIndicator.required')}`,
-        );
+        await expect(dialog).toContainText(t('registryUi.authenticationIndicator.required'));
+        await expect(dialog.locator('.authentication-indicator__clients')).toHaveText('cursor');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
@@ -124,6 +131,8 @@ for (const mobile of [false, true]) {
           .locator(`.plugin-card[data-install-source="${plugin.name}"]`)
           .locator('.authentication-indicator');
         await expect(indicator).toHaveAttribute('data-authentication', 'unknown');
+        await expect(indicator).toHaveAttribute('data-varies', 'true');
+        await expect(indicator).toHaveAttribute('data-icon', 'varies');
         expect(errors).toEqual([]);
       });
       test('automatic badge follows the no-target command instead of the chip selection', async ({
