@@ -117,3 +117,20 @@ func TestPreparationMalformedProjectRefusesBeforeReadiness(t *testing.T) {
 		})
 	}
 }
+
+func TestPreparationProjectCannotPromoteUnsupportedCompatibility(t *testing.T) {
+	plan := qualifiedKiroPreparation(t)
+	plan.Status = domain.PlanUnsupported
+	for _, direct := range []bool{false, true} {
+		candidate := plan
+		var err error
+		if direct {
+			err = kiro.New().RefinePreparation(&candidate)
+		} else {
+			err = ApplyInstallIntent(all.Default(), &candidate, domain.InstallIntentPrepare)
+		}
+		if err != nil || candidate.Status != domain.PlanUnsupported || candidate.Activation == domain.ActivationPrepared || candidate.Verification == domain.VerificationPackageValid {
+			t.Fatalf("unsupported project compatibility promoted direct%t %+v %v", direct, candidate, err)
+		}
+	}
+}

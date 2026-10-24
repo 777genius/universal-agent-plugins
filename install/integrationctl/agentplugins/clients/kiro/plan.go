@@ -49,6 +49,9 @@ func (*Adapter) RefinePreparation(plan *domain.DeliveryPlan) error {
 		if _, err := kiroProjectPlanRoot(domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: plan.TargetContext.UserConfigRoot}, *plan); err != nil {
 			return err
 		}
+		if plan.Status == domain.PlanUnsupported {
+			return nil
+		}
 		if !shared.OnlyNativeComponents(plan.Components) {
 			return fmt.Errorf("kiro project preparation requires supported native components")
 		}

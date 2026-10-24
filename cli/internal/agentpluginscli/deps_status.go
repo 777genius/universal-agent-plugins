@@ -20,6 +20,7 @@ import (
 )
 
 type dependencyStatusFact struct {
+	Scope            domain.InstallScope       `json:"-"`
 	Alias            string                    `json:"alias,omitempty"`
 	ClientID         string                    `json:"client_id,omitempty"`
 	InstallationID   string                    `json:"installation_id,omitempty"`
@@ -148,6 +149,7 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 }
 
 func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage, environmentIDs ...string) {
+	mergeDependencyGuidanceScope(fact, binding.Scope)
 	_, lifecycle := environment.LifecycleFacts(binding)
 	fact.Facts = append(fact.Facts, lifecycle...)
 	fact.NextActions = dependencyNextActions(*fact)
@@ -307,7 +309,7 @@ func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspec
 		}
 	}
 	for _, receipt := range receipts {
-		fact := dependencyStatusFact{Alias: receipt.Alias, ClientID: receipt.ClientID, PackageDigest: receipt.PackageDigest, Facts: []string{"not_synced"}}
+		fact := dependencyStatusFact{Scope: app.scope(), Alias: receipt.Alias, ClientID: receipt.ClientID, PackageDigest: receipt.PackageDigest, Facts: []string{"not_synced"}}
 		appendStoreStatus(ctx, app, &fact, domain.TreeDigestAlgorithm)
 		appendReceiptStatus(&fact, state, receipt)
 		facts = append(facts, fact)
@@ -316,7 +318,7 @@ func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspec
 }
 
 func desiredDependencyFact(ctx context.Context, app App, state installer.Inspection, pkg environment.LockedPackage, target string, receipt domain.EnvironmentReceipt, owned bool) dependencyStatusFact {
-	fact := dependencyStatusFact{Alias: pkg.Alias, ClientID: target, PackageDigest: pkg.TreeDigest}
+	fact := dependencyStatusFact{Scope: app.scope(), Alias: pkg.Alias, ClientID: target, PackageDigest: pkg.TreeDigest}
 	appendStoreStatus(ctx, app, &fact, pkg.DigestAlgorithm)
 	if !owned {
 		fact.Facts = append(fact.Facts, "not_synced")
@@ -368,6 +370,7 @@ func appendReceiptStatus(fact *dependencyStatusFact, state installer.Inspection,
 		fact.Facts = append(fact.Facts, "partial")
 		return
 	}
+	mergeDependencyGuidanceScope(fact, binding.Scope)
 	fact.Revision, fact.ProjectionDigest = binding.Revision, binding.ProjectionDigest
 	if binding.ProjectionStatus != "" {
 		fact.Facts = append(fact.Facts, binding.ProjectionStatus)
@@ -384,11 +387,27 @@ func dependencyNextActions(fact dependencyStatusFact, sdk ...installer.NextActio
 	}
 	for _, item := range fact.Facts {
 		if item == "activation_manual" || item == "activation_prepared" {
-			out = append(out, dependencyNextActionDTO{Kind: "attest_activation", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --activation-complete", fact.ClientID)})
+			if fact.Scope == domain.ScopeProject {
+				out = append(out, dependencyNextActionDTO{Kind: "review_project_activation", Reason: "review the selected project's client instructions and native loading, then retry supported verification in the same selected project; prepared files do not establish native activation"})
+			} else {
+				out = append(out, dependencyNextActionDTO{Kind: "attest_activation", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --activation-complete", fact.ClientID)})
+			}
 		}
 		if item == "auth_pending" || item == "auth_failed" {
 			return append(out, dependencyNextActionDTO{Kind: "attest_authentication", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --auth-complete", fact.ClientID)})
 		}
 	}
 	return out
+}
+
+// Never downgrade a project context to user guidance because inspected metadata
+// disagrees. This chooses conservative text only; it confers no authority.
+func mergeDependencyGuidanceScope(fact *dependencyStatusFact, bindingScope string) {
+	if fact.Scope == domain.ScopeProject || bindingScope == string(domain.ScopeProject) {
+		fact.Scope = domain.ScopeProject
+		return
+	}
+	if fact.Scope == "" {
+		fact.Scope = domain.InstallScope(bindingScope)
+	}
 }
