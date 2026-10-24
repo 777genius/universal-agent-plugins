@@ -93,3 +93,18 @@ alias refusal, and malformed enabled values. The complete focused inert Go set
 passed0.075s with guarded native opt-in absent; earlier69 Python admission/matrix
 tests remain unchanged by this Go-only correction. Both narrow code re-review
 GOs and final platform/lint gates remain required before publication.
+
+## Final code review and platform compile receipts
+
+Both Root and Skillshare independently issued semantic CODE GO on frozen
+4f70dc58c08f5e50f54696cdf1da2d6903847544 after tracing the initial implementation
+and complete narrow correction. Their only remaining format request was standard
+os imports separated from x/sys in the two platform snapshot helpers; this final
+revision changes those import groups only and records the receipts.
+
+Root independently cross-compiled the complete repotests package at exact4f70
+for Windows amd64 using Go1.26.10 and -p1:19,473,408bytes, SHA256
+f07ecaa98cb8f8305f5f69d506dc43d262eb3a34a5d49b026b81244c66d76560.
+No Windows test or native executable was run. Final hosted source gate and lint
+remain required. The typed pure ExitError classification is Go's exposed cause,
+not a new assertion that a failed process tree or all inherited pipes are gone.

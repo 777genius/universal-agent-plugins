@@ -3,8 +3,9 @@
 package pluginkitairepo_test
 
 import (
-	"golang.org/x/sys/windows"
 	"os"
+
+	"golang.org/x/sys/windows"
 )
 
 func openProjectNativeSnapshot(path string) (*os.File, error) {
