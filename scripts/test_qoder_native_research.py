@@ -107,14 +107,14 @@ class QoderResearchTests(unittest.TestCase):
             root = Path(temporary)
             ready, escaped = root / "child-ready", root / "child-survived"
             child = ("from pathlib import Path; import time; Path(" + repr(str(ready))
-                     + ").write_text('ready'); time.sleep(.5); Path(" + repr(str(escaped)) + ").write_text('survived')")
+                     + ").write_text('ready'); time.sleep(2); Path(" + repr(str(escaped)) + ").write_text('survived')")
             parent = ("import subprocess,time; from pathlib import Path; subprocess.Popen(["
                       + repr(sys.executable) + ",'-c'," + repr(child) + "]); "
                       + "time.sleep(10)")
-            record, _, _ = research.run_probe([sys.executable, "-c", parent], root, {}, root, "timeout", timeout=.2)
+            record, _, _ = research.run_probe([sys.executable, "-c", parent], root, {}, root, "timeout", timeout=1)
             self.assertEqual(record["error"], "probe deadline exceeded")
             self.assertTrue(ready.exists(), "inert descendant must actually start before the deadline")
-            time.sleep(.6)
+            time.sleep(2.1)
             self.assertFalse(escaped.exists(), "descendant outlived killed probe group")
 
     def test_exact_version_empty_schema_and_complete_command_allowlist(self):
@@ -129,6 +129,10 @@ class QoderResearchTests(unittest.TestCase):
         self.assertFalse(accepted("plugins-empty-list", b"[]", b"native error"))
         self.assertFalse(accepted("plugins-empty-list", b"[]", code=1))
         self.assertFalse(accepted("plugins-empty-list", b"[]", error="output limit reached"))
+        self.assertFalse(accepted("version", b"1.1.78\n", b"native warning"))
+        for label, _ in research.PROBES:
+            self.assertFalse(accepted(label, b"Usage: inert help", b"native warning"))
+            self.assertFalse(accepted(label, b"[]" if label == "plugins-empty-list" else b"1.1.78\n", b" \n\t"))
         self.assertEqual([args for _, args in research.PROBES], [
             ("--version",), ("plugins", "--help"), ("plugins", "list", "--help"),
             ("plugins", "install", "--help"), ("plugins", "uninstall", "--help"),

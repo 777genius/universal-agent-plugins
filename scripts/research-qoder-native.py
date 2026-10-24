@@ -101,14 +101,14 @@ def runtime_environment(home, temp):
 
 
 def validate_probe(record, stdout, stderr):
-    if record["error"] or record["exit"] != 0:
+    if record["error"] or record["exit"] != 0 or stderr:
         return False
     try:
         if record["probe"] == "version":
             return re.search(r"(?<![A-Za-z0-9_.+-])v?" + re.escape(VERSION)
                              + r"(?![A-Za-z0-9_.+-])", stdout.decode("utf-8")) is not None
         if record["probe"] == "plugins-empty-list":
-            return not stderr.strip() and json.loads(stdout.decode("utf-8")) == []
+            return json.loads(stdout.decode("utf-8")) == []
         return bool(stdout.strip() or stderr.strip())
     except (UnicodeError, ValueError):
         return False
