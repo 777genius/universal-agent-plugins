@@ -87,6 +87,50 @@ agentplugins remove context7 --target codex,cursor
 Removal changes files owned by the CLI. It does not revoke a service account,
 uninstall an unrelated runtime, or delete an author's source directory.
 
+## Restore on another machine
+
+Carry your plugin set to another computer with `deps export` and `deps import`.
+The transfer contains only `uap.toml` and `uap.lock`. Installation on the
+destination then fetches the exact pinned packages.
+
+On the source machine, run this in the folder you want to carry:
+
+```bash
+agentplugins deps export
+```
+
+On the destination, install the target clients, then run:
+
+```bash
+agentplugins deps import
+agentplugins install --locked
+```
+
+Or import and restore in one step:
+
+```bash
+agentplugins deps import --install
+```
+
+- The optional `[directory]` argument overrides the exchange folder, which
+  defaults to the current folder. Export reads the global user environment;
+  import writes it. `AGENTPLUGINS_HOME` selects that environment.
+- Every copy shows a preview and needs a confirmation or `--yes`. `--dry-run`
+  previews without writing.
+- Import validates the pair strictly and offline. It refuses missing or
+  inconsistent files, stale locks, unsafe sources and excluded targets.
+- Store content, receipts, client profiles, settings, secrets and `PLUGIN_DATA`
+  are not transferred. Configure client profiles and authentication on the
+  destination, and back up `PLUGIN_DATA` separately.
+- Installation with an empty store fetches each exact pin and verifies its
+  package and manifest digests. It never selects newer versions. Missing source
+  bytes or mismatched digests fail the install.
+- If installation fails after import saved the agreement, fix the error and run
+  `agentplugins install --locked` again. If recovery is pending, run
+  `agentplugins deps recover` first.
+- Do not run `agentplugins deps lock` to recreate transferred pins. Moving
+  selectors could resolve differently.
+
 ## Report a problem clearly
 
 Record the operation, package source, selected clients, result, and remaining
