@@ -98,11 +98,12 @@ candidates require an explicit path; more than 16 possible packages require it
 before candidate fetching. An exact source is immutable: repair replays recorded
 source, while moving to another exact source is a separate switch decision.
 
-## Install Agent Skills from GitHub
+## Install Agent Skills
 
 Agent Skills use the same CLI through the `skills` command group. Its `add`
 subcommand selects Skills from a public GitHub repository, a folder inside it,
-or a `SKILL.md` URL:
+a `SKILL.md` URL, or an HTTPS publisher that serves a complete `.well-known`
+Skills index:
 
 ```bash
 agentplugins skills add owner/repository --ui
@@ -124,6 +125,8 @@ agentplugins skills add owner/repository --skill review --skill pdf --target cod
 - JSON and non-interactive use require explicit `--skill` or `--path`, `--target`,
   and `--yes`, except with `--dry-run`.
 - `--ui` cannot be combined with `--skill`, `--target`, or `--dry-run`.
+- For an HTTPS publisher, pass the publisher URL and an exact `--skill` name.
+  The publisher's index must list every file of the Skill.
 - The installation scope is `user` only in this release.
 
 Automated security findings can block an install. `--security-details` shows

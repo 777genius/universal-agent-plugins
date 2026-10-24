@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -175,16 +174,7 @@ func skillError(code, format string, args ...any) error {
 	return &skillFailure{code, fmt.Sprintf(format, args...)}
 }
 func normativeSkillName(name string) bool {
-	n := utf8.RuneCountInString(name)
-	if n < 1 || n > MaxSkillNameBytes || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
-		return false
-	}
-	for _, r := range name {
-		if r != '-' && !unicode.IsLower(r) && !unicode.IsNumber(r) {
-			return false
-		}
-	}
-	return true
+	return domain.ValidSkillName(name)
 }
 
 // SkillErrorCode distinguishes normative invalidity from incomplete host-safety

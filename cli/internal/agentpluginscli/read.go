@@ -584,6 +584,12 @@ func publicSource(source domain.SourceBinding) string {
 		return publicRepositoryPath(source.Repository, source.PackageSubpath)
 	}
 	canonical := strings.TrimSpace(source.CanonicalSource)
+	if source.SourceKind != "" {
+		canonical = source.SourceURL
+		if source.SourceKind == "git" && !strings.Contains(canonical, "://") {
+			return canonical
+		}
+	}
 	if canonical == "" || filepath.IsAbs(canonical) {
 		return "local"
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 var (
@@ -252,6 +253,13 @@ func (app App) loadPackageFor(ctx context.Context, raw string, request packageRe
 	if requested == "" {
 		return loadedPackage{}, fmt.Errorf("plugin name or source is required")
 	}
+	if localArchiveInput(requested) {
+		spec, err := sourcespec.Parse(requested)
+		if err != nil {
+			return loadedPackage{}, err
+		}
+		return app.acquireDirectInput(ctx, spec)
+	}
 	if explicitLocalPath(requested) {
 		return app.acquireLocal(ctx, requested)
 	}
@@ -262,7 +270,11 @@ func (app App) loadPackageFor(ctx context.Context, raw string, request packageRe
 		return app.acquireDiscovery(ctx, requested, request)
 	}
 	if !isDirectorySelector(requested) {
-		return loadedPackage{}, fmt.Errorf("source must be a local path, an exact owner/repo@FULL_SHA[//path] source, a discovery: slug, or a Directory selector")
+		spec, err := sourcespec.Parse(requested)
+		if err != nil {
+			return loadedPackage{}, err
+		}
+		return app.acquireDirectInput(ctx, spec)
 	}
 	return app.acquireDirectory(ctx, requested, request)
 }

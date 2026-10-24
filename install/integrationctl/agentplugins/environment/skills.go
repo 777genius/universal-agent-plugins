@@ -2,9 +2,8 @@ package environment
 
 import (
 	"errors"
-	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func validateSkillSource(source *GitSource) error {
@@ -17,14 +16,15 @@ func validateSkillSource(source *GitSource) error {
 	if source.Kind != SkillKind {
 		return errors.New("unsupported Git source kind")
 	}
-	name := source.Skill
-	if n := utf8.RuneCountInString(name); n < 1 || n > 64 || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
-		return errors.New("invalid expected Skill name")
+	if source.URL != "" || !repositoryPattern.MatchString(source.Repository) {
+		return errors.New("standalone Skills require a GitHub owner/repo source")
 	}
-	for _, r := range name {
-		if r != '-' && !unicode.IsLower(r) && !unicode.IsNumber(r) {
-			return errors.New("invalid expected Skill name")
-		}
+	return validateSkillName(source.Skill)
+}
+
+func validateSkillName(name string) error {
+	if !domain.ValidSkillName(name) {
+		return errors.New("invalid expected Skill name")
 	}
 	return nil
 }
@@ -36,7 +36,7 @@ func validateLockedSkill(source *LockedGitSource) error {
 		}
 		return nil
 	}
-	if source.Kind != SkillKind || source.Normalizer != SkillNormalizerV1 || !validGraphDigest(source.RawTreeDigest) {
+	if source.Kind != SkillKind || source.URL != "" || !repositoryPattern.MatchString(source.Repository) || source.Normalizer != SkillNormalizerV1 || !validGraphDigest(source.RawTreeDigest) {
 		return errors.New("unsupported or incomplete Skill normalization identity")
 	}
 	return validateSubpath(source.ResolvedSkillPath)

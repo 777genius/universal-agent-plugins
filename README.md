@@ -164,10 +164,10 @@ or backup. Transferring the files does not guarantee offline installation.
 See [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine)
 for confirmation prompts, supported restore behavior and recovery.
 
-[Install Agent Skills from GitHub](docs/AGENT_SKILLS_INSTALLER.md) with
-`agentplugins skills add`, including the local browser picker and saved
-dependencies. The published CLI supports GitHub sources only; Skills from
-`.well-known` publishers and archive or Git URL sources are not in a release yet.
+[Install Agent Skills](docs/AGENT_SKILLS_INSTALLER.md) with `agentplugins skills add`
+from a GitHub repository or from an HTTPS publisher that serves a `.well-known`
+Skills index. Publisher installs take an exact `--skill` name. The local browser
+picker and saved dependencies are included.
 
 ## Any Agent Plugins 1.0 package
 
@@ -192,6 +192,14 @@ extensions depend on the target client; they do not imply portable behavior.
 You can also install a local package or a pinned GitHub package without adding
 it to the registry. Direct-install examples are collected near the end of this
 README.
+
+**SOURCE ONLY / UNRELEASED:** direct source support now includes arbitrary HTTPS
+and SSH Git, GitHub/GitLab/Azure browser URLs, and complete HTTPS/local
+ZIP/TAR/TAR.GZ/TGZ packages. See [Direct complete package sources](docs/DIRECT_PACKAGE_SOURCES.md)
+for syntax, native credentials, immutable archive byte pins and supported limits.
+These complete-package `agentplugins add` transports do not import standalone
+skill files as plugins. The separate source-build `agentplugins skills add`
+workflow above installs raw Agent Skills through deterministic normalization.
 
 Other manifest formats are ignored and cannot override `plugin.json`.
 

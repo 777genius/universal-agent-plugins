@@ -239,8 +239,10 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 		edit := manifestedit.DependencyEdit{Alias: alias}
 		if ok {
 			v := &manifestedit.Dependency{}
-			if value.Git != nil {
-				v.Git = "https://github.com/" + value.Git.Repository + ".git"
+			if value.Web != nil {
+				v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
+			} else if value.Git != nil {
+				v.Git = value.Git.Endpoint()
 				v.Path = value.Git.Path
 				v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
 				switch value.Git.Selector.Kind {
@@ -249,6 +251,10 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 				case environment.SelectorRef:
 					v.Ref = value.Git.Selector.Value
 				}
+			} else if value.Archive != nil {
+				v.Archive = value.Archive.URL
+				v.SHA256 = value.Archive.SHA256
+				v.Path = value.Archive.Path
 			} else {
 				v.Registry = "uap"
 				v.Distribution = value.Registry.Distribution

@@ -46,6 +46,8 @@ func (coordinator Coordinator) Resolve(ctx context.Context, requirements Require
 		}
 		moving := selected.Git != nil && selected.Git.Selector.Kind != SelectorCommit
 		moving = moving || selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange
+		moving = moving || selected.Archive != nil && selected.Archive.SHA256 == ""
+		moving = moving || selected.Web != nil
 		if !moving {
 			return Lock{}, errors.New("exact commit/release/version pins must be changed in the manifest")
 		}
@@ -159,12 +161,7 @@ func syncAction(pkg LockedPackage, observed BindingObservation) (DesiredAction, 
 	if observed.SourceKey != "" && observed.SourceKey != pkg.SourceKey {
 		return "", "source_change"
 	}
-	revision := ""
-	if pkg.Source.Git != nil {
-		revision = pkg.Source.Git.Commit
-	} else if pkg.Source.Registry != nil {
-		revision = pkg.Source.Registry.Commit
-	}
+	revision := lockedRevision(pkg)
 	if observed.PackageDigest == pkg.TreeDigest && observed.Revision == revision && !observed.Incomplete {
 		return ActionUnchanged, "pinned package digest already matches"
 	}
@@ -248,6 +245,12 @@ func sortSyncBindings(bindings []PreparedBinding) {
 }
 
 func lockedRevision(pkg LockedPackage) string {
+	if pkg.Source.Web != nil {
+		return pkg.Source.Web.RawTreeDigest
+	}
+	if pkg.Source.Archive != nil {
+		return "sha256:" + pkg.Source.Archive.SHA256
+	}
 	if pkg.Source.Git != nil {
 		return pkg.Source.Git.Commit
 	}

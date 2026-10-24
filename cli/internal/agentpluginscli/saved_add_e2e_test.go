@@ -19,6 +19,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -42,6 +43,19 @@ func (s *savedJourneySource) ResolveGitHubRef(ctx context.Context, repo, ref str
 func (s *savedJourneySource) ResolveGitHubSelector(ctx context.Context, repo, selector string) (sourceacquisition.RefResolution, error) {
 	s.selectors++
 	return s.Acquirer.ResolveGitHubSelector(ctx, repo, selector)
+}
+
+func (s *savedJourneySource) AcquireGit(ctx context.Context, source sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	s.downloads++
+	return s.Acquirer.AcquireGit(ctx, source, commit, digest)
+}
+func (s *savedJourneySource) ResolveGit(ctx context.Context, source sourcespec.Git, selector string, exact bool) (sourceacquisition.RefResolution, error) {
+	if exact {
+		s.refs++
+	} else {
+		s.selectors++
+	}
+	return s.Acquirer.ResolveGit(ctx, source, selector, exact)
 }
 
 type savedJourneyRunner struct {

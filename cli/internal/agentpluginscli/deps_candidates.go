@@ -95,7 +95,7 @@ func (resolver dependencyResolver) AcquireCandidate(ctx context.Context, require
 		return environment.ResolvedPackage{}, err
 	}
 	result := environment.ResolvedPackage{Package: pkg, Dependencies: facts}
-	return result, resolver.finishLoaded(loaded)
+	return result, resolver.finishLoaded(ctx, loaded, pkg)
 }
 
 func dependencyManifestAlias(name string) string {
@@ -119,7 +119,7 @@ func describePinnedDependency(ctx context.Context, app App, pin environment.Lock
 	if err != nil {
 		return environment.ResolvedPackage{}, err
 	}
-	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest, ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: pkg.Metadata.Source}
+	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest, ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: identityFromLocked(pin)}
 	envelope, err := app.loadStandardEnvelope(ctx, input)
 	if err != nil {
 		return environment.ResolvedPackage{}, err

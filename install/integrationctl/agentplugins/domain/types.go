@@ -60,14 +60,18 @@ func CloneSkillSourceFacts(f *SkillSourceFacts) *SkillSourceFacts {
 }
 
 type SourceIdentity struct {
-	Skill             *SkillSourceFacts `json:"skill,omitempty"`
-	StableSourceKey   string            `json:"stable_source_key,omitempty"`
-	RequestedSource   string            `json:"requested_source,omitempty"`
-	CanonicalSource   string            `json:"canonical_source,omitempty"`
-	Repository        string            `json:"repository,omitempty"`
-	PackageSubpath    string            `json:"package_subpath,omitempty"`
-	ResolvedRevision  string            `json:"resolved_revision,omitempty"`
-	SourceBindingHint string            `json:"source_binding_hint,omitempty"`
+	SourceKind        string               `json:"source_kind,omitempty"`
+	SourceURL         string               `json:"source_url,omitempty"`
+	ArchiveSHA256     string               `json:"archive_sha256,omitempty"`
+	Skill             *SkillSourceFacts    `json:"skill,omitempty"`
+	WebSkill          *WebSkillSourceFacts `json:"web_skill,omitempty"`
+	StableSourceKey   string               `json:"stable_source_key,omitempty"`
+	RequestedSource   string               `json:"requested_source,omitempty"`
+	CanonicalSource   string               `json:"canonical_source,omitempty"`
+	Repository        string               `json:"repository,omitempty"`
+	PackageSubpath    string               `json:"package_subpath,omitempty"`
+	ResolvedRevision  string               `json:"resolved_revision,omitempty"`
+	SourceBindingHint string               `json:"source_binding_hint,omitempty"`
 }
 
 type Author struct {

@@ -204,7 +204,9 @@ func (e *Engine) loadGroupSnapshot(ctx context.Context, handle *PreparedOperatio
 			return domain.PackageEnvelope{}, "", err
 		}
 	}
-	e.reuseMatchingSourceIdentity(req.InstallationID, &snapshot, req.Operation == OpUpdate)
+	if req.AcquiredSnapshot == nil {
+		e.reuseMatchingSourceIdentity(req.InstallationID, &snapshot, req.Operation == OpUpdate)
+	}
 	handle.snapshots[len(handle.snapshots)-1] = snapshot
 	if i == 0 {
 		handle.snapshot = snapshot

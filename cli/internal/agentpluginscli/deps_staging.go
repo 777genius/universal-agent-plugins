@@ -2,6 +2,9 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -10,21 +13,8 @@ import (
 )
 
 type dependencySnapshotKey struct {
-	repository, commit, path, algorithm, digest                  string
-	kind, skill, requestedPath, sourceKey, rawDigest, normalizer string
-}
-
-func lockedDependencyCoordinates(locked environment.LockedPackage) (string, string, string, error) {
-	if source := locked.Source.Git; source != nil {
-		if source.Kind == environment.SkillKind {
-			return source.Repository, source.Commit, source.ResolvedSkillPath, nil
-		}
-		return source.Repository, source.Commit, source.Path, nil
-	}
-	if source := locked.Source.Registry; source != nil {
-		return source.Repository, source.Commit, source.Path, nil
-	}
-	return "", "", "", errors.New("locked package has no source")
+	sourceKey, revision, algorithm, digest            string
+	kind, skill, requestedPath, rawDigest, normalizer string
 }
 
 // The command owns these acquired bytes until its final preflight/apply returns.
@@ -42,14 +32,27 @@ func (cache *dependencySnapshotCache) close() {
 }
 
 func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySnapshotKey, error) {
-	repository, commit, path, err := lockedDependencyCoordinates(locked)
-	if err != nil {
-		return dependencySnapshotKey{}, err
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil {
+		return dependencySnapshotKey{}, errors.New("locked package has no source")
 	}
-	key := dependencySnapshotKey{repository: repository, commit: commit, path: path, algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
+	sourceKey := locked.SourceKey
+	if sourceKey == "" {
+		sourceKey = identityFromLocked(locked).CanonicalSource
+	}
+	key := dependencySnapshotKey{sourceKey: sourceKey, revision: locked.Revision(), algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
 	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind {
 		key.kind, key.skill, key.requestedPath = source.Kind, source.Skill, source.Path
-		key.sourceKey, key.rawDigest, key.normalizer = locked.SourceKey, source.RawTreeDigest, source.Normalizer
+		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
+	}
+	if source := locked.Source.Web; source != nil {
+		key.kind, key.skill = "https-skill", source.Skill
+		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
+		body, err := json.Marshal(source)
+		if err != nil {
+			return dependencySnapshotKey{}, err
+		}
+		digest := sha256.Sum256(body)
+		key.requestedPath = hex.EncodeToString(digest[:])
 	}
 	return key, nil
 }
@@ -70,11 +73,12 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 		if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
 			acquired, err = app.acquireLockedSkill(ctx, locked)
 		} else {
-			acquired, err = app.SourceAcquirer.AcquireGitHubVerified(ctx, key.repository, key.commit, key.path, key.digest)
+			acquired, err = app.acquirePinnedSource(ctx, locked)
 		}
 		if err != nil {
 			return domain.PackageSnapshot{}, err
 		}
+		acquired.Source = identityFromLocked(locked)
 		if cache == nil {
 			return acquired, nil
 		}
@@ -86,7 +90,7 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 	}
 	// A consumer may release its snapshot, while the command retains the raw
 	// acquisition. Recompute the digest rather than trusting retained metadata.
-	snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(ctx, acquired.Root, acquired.Source, acquired.ExecutableFiles)
+	snapshot, err := (packagedigest.Builder{}).SnapshotWithExecutables(ctx, acquired.Root, identityFromLocked(locked), acquired.ExecutableFiles)
 	if err != nil {
 		return domain.PackageSnapshot{}, err
 	}
@@ -98,13 +102,8 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 }
 
 func lockedDependencySource(locked environment.LockedPackage) (domain.SourceIdentity, error) {
-	repository, commit, subpath, err := lockedDependencyCoordinates(locked)
-	if err != nil {
-		return domain.SourceIdentity{}, err
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil {
+		return domain.SourceIdentity{}, errors.New("locked package has no source")
 	}
-	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
-		return skillSnapshotSource(locked), nil
-	}
-	identity := githubIdentity(repository, commit, subpath)
-	return domain.SourceIdentity{RequestedSource: identity, CanonicalSource: identity, Repository: repository, PackageSubpath: subpath, ResolvedRevision: commit, SourceBindingHint: dependencySourceHint(locked)}, nil
+	return identityFromLocked(locked), nil
 }
