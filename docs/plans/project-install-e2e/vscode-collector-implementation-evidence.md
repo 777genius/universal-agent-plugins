@@ -41,3 +41,23 @@ are required before publishing this source to trigger the hosted native workflow
 Successful help/version capture will still require independent interpretation
 and a new reviewed workspace-evidence/adapter plan. It never sets
 native_project_qualified true.
+
+## Independent review findings and narrow corrections
+
+Root's initial source review was GO for help/version only. Independent second
+review correctly found that a failing raw-directory cap did not prevent the
+workflow's always-upload from uploading that same raw directory. That initial
+source is not admitted for publication/native execution. The revision now creates
+one validated stored ZIP in a distinct upload directory. Source files are bounded,
+regular, unaliased, flat-named and identity-checked while staging; invalid raw data
+produces only a bounded failure-summary ZIP. The workflow uploads only that exact
+ZIP after a separate regular-file/link-count/32MiB admission step, never raw logs
+or a partially staged temporary. Extra bounds reserve ZIP headers and cap members.
+
+The second review also required original nonroot GID and real/effective UID/GID
+matching. Both parent admission and the same-process verifier now enforce them;
+recorded namespace facts include euid/egid and are checked again after the probe.
+New inert regressions exercise overflow/nonregular raw output through the actual
+published envelope, preserved original failure, and root-group/effective-ID refusal.
+Dedicated revised suite13 PASS0.183s; affected/full shared checks are recorded at
+the next source freeze. No publisher acquisition or native client execution occurred.

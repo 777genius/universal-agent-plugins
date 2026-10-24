@@ -11,6 +11,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import zipfile
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("vscode_research", Path(__file__).with_name("research-vscode-native.py"))
@@ -181,7 +182,8 @@ class VSCodeResearchTests(unittest.TestCase):
             self.assertNotIn("GH_TOKEN", env)
             self.assertNotIn("HTTP_PROXY", env)
             self.assertNotIn("VSCODE_IPC_HOOK_CLI", env)
-            with patch.object(research.os, "getuid", return_value=1000), patch.object(research.os, "getgid", return_value=1001):
+            with patch.object(research.os, "getuid", return_value=1000), patch.object(research.os, "getgid", return_value=1001), \
+                    patch.object(research.os, "geteuid", return_value=1000), patch.object(research.os, "getegid", return_value=1001):
                 chain, argv, _ = research.isolated_command(root, "version", env, "--version", 12345)
             self.assertEqual(argv[:3], [str(root / "publisher" / research.PREFIX / "code"), str(root / "publisher" / research.PREFIX / research.REQUIRED[1]), "--version"])
             self.assertEqual(chain[:5], ["/usr/bin/sudo", "-n", "/usr/bin/unshare", "--net", "/usr/bin/setpriv"])
@@ -237,6 +239,52 @@ class VSCodeResearchTests(unittest.TestCase):
         self.assertIn("github.event.pull_request.head.sha || github.sha", text)
         self.assertNotIn("pull_request_target", text)
         self.assertIn("if: ${{ always() }}", text)
+        self.assertIn("vscode-native-research/upload/research.zip", text)
+        self.assertNotIn("path: ${{ runner.temp }}/vscode-native-research/\n", text)
+        self.assertIn("steps.upload_admission.outputs.valid", text)
+
+    def test_only_validated_bounded_envelope_is_uploaded_even_on_admission_failure(self):
+        for condition in ("valid", "overflow", "symlink", "directory"):
+            with self.subTest(condition=condition), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                raw = root / "raw"
+                raw.mkdir()
+                (raw / "version.stdout.log").write_bytes(b"observed finite output")
+                if condition == "overflow":
+                    (raw / "large.log").write_bytes(b"x" * 100)
+                elif condition == "symlink":
+                    foreign = root / "foreign"
+                    foreign.write_text("must never upload foreign data")
+                    (raw / "alias").symlink_to(foreign)
+                elif condition == "directory":
+                    (raw / "unexpected").mkdir()
+                limit = (64 << 10) + 64 if condition == "overflow" else research.MAX_ARTIFACT
+                with patch.object(research, "MAX_ARTIFACT", limit):
+                    accepted = research.publish_artifacts(raw, {"source_commit": "inert", "error": "original failure"})
+                self.assertEqual(accepted, condition == "valid")
+                upload = raw / "upload"
+                self.assertEqual([path.name for path in upload.iterdir()], ["research.zip"])
+                envelope = upload / "research.zip"
+                self.assertLessEqual(envelope.stat().st_size, limit)
+                with zipfile.ZipFile(envelope) as archive:
+                    if accepted:
+                        self.assertEqual(archive.namelist(), ["version.stdout.log"])
+                        self.assertEqual(archive.read("version.stdout.log"), b"observed finite output")
+                    else:
+                        self.assertEqual(archive.namelist(), ["collection-failure.json"])
+                        failure = json.loads(archive.read("collection-failure.json"))
+                        self.assertFalse(failure["collection_complete"])
+                        self.assertFalse(failure["native_project_qualified"])
+                        self.assertEqual(failure["collection_error"], "original failure")
+
+    def test_root_group_or_effective_identity_mismatch_refuses_before_exec(self):
+        for uid, gid, euid, egid in ((1000, 0, 1000, 0), (1000, 1001, 0, 1001), (1000, 1001, 1000, 0)):
+            with self.subTest(ids=(uid, gid, euid, egid)), patch.object(research.os, "getuid", return_value=uid), \
+                    patch.object(research.os, "getgid", return_value=gid), patch.object(research.os, "geteuid", return_value=euid), \
+                    patch.object(research.os, "getegid", return_value=egid), self.assertRaises(ValueError):
+                research.isolated_command(Path("/inert"), "version", {}, "--version", 12345)
+        for required in ('observed["gid"]==0', 'observed["euid"]!=int(uid)', 'observed["egid"]!=int(gid)'):
+            self.assertIn(required, research.ISOLATION_VERIFIER)
 
 
 if __name__ == "__main__":

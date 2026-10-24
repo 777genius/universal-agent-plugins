@@ -21,6 +21,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+import zipfile
 
 from native_client_research import bounded_read, run_probe
 
@@ -298,8 +299,8 @@ def required_files(root, budget=None):
 ISOLATION_VERIFIER = r'''
 import json,os,socket,sys
 parent,uid,gid,output,env,argv=sys.argv[1:]
-observed={"network_namespace":os.stat("/proc/self/ns/net").st_ino,"uid":os.getuid(),"gid":os.getgid(),"groups":os.getgroups(),"interfaces":[name for _,name in socket.if_nameindex()]}
-if observed["network_namespace"]==int(parent) or observed["uid"]!=int(uid) or observed["gid"]!=int(gid) or observed["uid"]==0 or observed["groups"] or observed["interfaces"]!=["lo"]:
+observed={"network_namespace":os.stat("/proc/self/ns/net").st_ino,"uid":os.getuid(),"gid":os.getgid(),"euid":os.geteuid(),"egid":os.getegid(),"groups":os.getgroups(),"interfaces":[name for _,name in socket.if_nameindex()]}
+if observed["network_namespace"]==int(parent) or observed["uid"]!=int(uid) or observed["gid"]!=int(gid) or observed["uid"]==0 or observed["gid"]==0 or observed["euid"]!=int(uid) or observed["egid"]!=int(gid) or observed["groups"] or observed["interfaces"]!=["lo"]:
     raise SystemExit("isolated native process admission failed")
 with open("/proc/self/status") as source:
     status=dict(line.rstrip().split(":",1) for line in source if ":" in line)
@@ -354,7 +355,7 @@ def probe_environment(root):
 
 
 def isolated_command(root, label, env, flag, parent_ns):
-    if os.getuid() == 0:
+    if os.getuid() == 0 or os.getgid() == 0 or os.geteuid() != os.getuid() or os.getegid() != os.getgid():
         raise ValueError("hosted native research requires the original nonroot user")
     argv = [str(root / "publisher" / PREFIX / "code"), str(root / "publisher" / PREFIX / REQUIRED[1]), flag,
             "--user-data-dir", str(root / label / "user-data"), "--extensions-dir", str(root / label / "extensions")]
@@ -381,18 +382,77 @@ def validate_probe(record, stdout, stderr, label):
 
 
 def artifact_bound(output):
-    size = 0
+    files, size = [], 0
     for path in output.iterdir():
         info = path.lstat()
-        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", path.name)):
             raise ValueError("research artifact is not a flat ordinary file")
         size += info.st_size
-        if size > MAX_ARTIFACT:
-            raise ValueError("research artifact exceeds total byte bound")
+        files.append((path, info))
+        # Reserve final ZIP directory/header overhead; raw output is never uploaded.
+        if size > MAX_ARTIFACT - (64 << 10) or len(files) > 64:
+            raise ValueError("research artifact exceeds total byte/member bound")
+    return files
+
+
+def publish_artifacts(output, summary):
+    """Publish one bounded ZIP, or only a bounded failure ZIP, to upload/."""
+    stage = output / "upload"
+    error = None
+    descriptor, name = tempfile.mkstemp(prefix=".upload-", dir=output)
+    temporary = Path(name)
+    # Take the source list before the ZIP temporary or upload directory exists.
+    os.close(descriptor)
+    temporary.unlink()
+    try:
+        files = artifact_bound(output)
+        descriptor = os.open(temporary, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "w+b") as container, zipfile.ZipFile(container, "w", compression=zipfile.ZIP_STORED) as archive:
+            total = 0
+            for path, recorded in files:
+                source_fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                with os.fdopen(source_fd, "rb") as source, archive.open(path.name, "w") as target:
+                    if bounds.regular_identity(os.fstat(source.fileno())) != bounds.regular_identity(recorded):
+                        raise ValueError("research artifact changed before upload staging")
+                    size = 0
+                    while True:
+                        body = source.read(min(64 << 10, recorded.st_size + 1 - size))
+                        if not body:
+                            break
+                        size += len(body)
+                        total += len(body)
+                        if size > recorded.st_size or total > MAX_ARTIFACT - (64 << 10):
+                            raise ValueError("research artifact grew while staging")
+                        target.write(body)
+                    if (size != recorded.st_size
+                            or bounds.regular_identity(os.fstat(source.fileno())) != bounds.regular_identity(recorded)
+                            or bounds.regular_identity(path.lstat()) != bounds.regular_identity(recorded)):
+                        raise ValueError("research artifact changed during upload staging")
+        if temporary.stat().st_size > MAX_ARTIFACT:
+            raise ValueError("staged ZIP exceeds upload bound")
+    except Exception as exc:
+        error = str(exc)[:512]
+        temporary.unlink(missing_ok=True)
+        failure = {"evidence_kind": "vscode-research-upload-refusal", "version": VERSION,
+                   "source_commit": str(summary.get("source_commit", ""))[:128],
+                   "collection_complete": False, "native_project_qualified": False,
+                   "artifact_admission_error": error, "collection_error": str(summary.get("error", ""))[:512]}
+        descriptor = os.open(temporary, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "w+b") as container, zipfile.ZipFile(container, "w", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("collection-failure.json", json.dumps(failure, indent=2) + "\n")
+        if temporary.stat().st_size > MAX_ARTIFACT:
+            raise ValueError("bounded failure ZIP cannot fit configured upload bound")
+    # upload/ did not exist during native execution and contains only this envelope.
+    stage.mkdir(mode=0o700, exist_ok=False)
+    os.link(temporary, stage / "research.zip", follow_symlinks=False)
+    temporary.unlink()
+    return error is None
 
 
 def collect(root, output, summary, budget):
-    if os.getuid() == 0 or shutil.disk_usage(root).free < MIN_FREE:
+    if (os.getuid() == 0 or os.getgid() == 0 or os.geteuid() != os.getuid() or os.getegid() != os.getgid()
+            or shutil.disk_usage(root).free < MIN_FREE):
         raise ValueError("nonroot hosted user and at least four GiB free required")
     archive = acquire_archive(root, budget)
     publisher = root / "publisher"
@@ -424,7 +484,8 @@ def collect(root, output, summary, budget):
                     raise ValueError("isolation facts changed while reading")
             facts_record = json.loads(body, object_pairs_hook=bounds.unique_object, parse_constant=bounds.invalid_constant)
             if (facts_record.get("network_namespace") == parent_ns or facts_record.get("uid") != os.getuid()
-                    or facts_record.get("gid") != os.getgid() or facts_record.get("groups") != []
+                    or facts_record.get("gid") != os.getgid() or facts_record.get("euid") != os.getuid()
+                    or facts_record.get("egid") != os.getgid() or facts_record.get("groups") != []
                     or facts_record.get("interfaces") != ["lo"] or facts_record.get("capabilities_zero") is not True
                     or facts_record.get("no_new_privileges") is not True):
                 raise ValueError("reported isolation facts do not match required boundary")
@@ -474,8 +535,8 @@ def main():
             if not summary["cleanup"]["complete"]:
                 summary["collection_complete"] = False
     (output / "vscode-precode-research.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-    artifact_bound(output)
-    return 0 if summary["collection_complete"] else 1
+    uploaded = publish_artifacts(output, summary)
+    return 0 if summary["collection_complete"] and uploaded else 1
 
 
 if __name__ == "__main__":
