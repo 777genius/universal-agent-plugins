@@ -76,7 +76,7 @@ def identity(info):
             info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
-def inventory(roots, budget):
+def inventory(roots, budget, *, native_log_alias=False):
     """Descriptor-relative bounded reads; aliases and incomplete scans fail closed."""
     result, count, total = {}, 0, 0
 
@@ -126,6 +126,28 @@ def inventory(roots, budget):
                         raise ValueError("file changed during inventory")
                 total += len(body)
                 record["sha256"] = hashlib.sha256(body).hexdigest()
+            elif stat.S_ISLNK(before.st_mode) and native_log_alias and path == "home/.qoder/logs/latest":
+                record.update({"kind": "refused", "type": oct(stat.S_IFMT(before.st_mode))})
+                budget.check()
+                if before.st_nlink != 1 or not 0 <= before.st_size <= MAX_METADATA or before.st_size > MAX_TOTAL - total:
+                    raise ValueError("native log alias metadata size/alias/aggregate bound exceeded")
+                # Read only literal link bytes relative to the already held real logs directory.
+                # They never become a path for an open/stat/native command.
+                try:
+                    target = os.readlink(os.fsencode(name), dir_fd=fd)
+                    if not isinstance(target, bytes):
+                        target = os.fsencode(target)
+                    budget.check()
+                except grok.CollectorDeadline as exc:
+                    raise InventoryError(str(exc), result) from exc
+                if len(target) != before.st_size or len(target) > MAX_METADATA or len(target) > MAX_TOTAL - total:
+                    raise ValueError("native log alias target byte count changed or exceeded bound")
+                if identity(os.stat(name, dir_fd=fd, follow_symlinks=False)) != identity(before):
+                    raise ValueError("native log alias changed during metadata observation")
+                total += len(target)
+                record.update({"kind": "symlink_metadata_only", "target_bytes": len(target),
+                               "target_sha256": hashlib.sha256(target).hexdigest(), "target_hex": target.hex(),
+                               "target_followed": False})
             else:
                 record["kind"] = "refused"
                 record["type"] = oct(stat.S_IFMT(before.st_mode))
@@ -326,7 +348,7 @@ def collect(request, summary, budget):
         probe(label, arguments, root / "user-cwd", "version" if label == "version" else "help", "empty")
     for stage in STAGES:
         summary["stage"] = stage
-        summary["inventories"][stage + "-before"] = inventory(roots, budget)
+        summary["inventories"][stage + "-before"] = inventory(roots, budget, native_log_alias=True)
         if stage != "empty":
             key = {"user-installed": "user", "A-installed": "A", "B-installed": "B"}[stage]
             location = {"user": "user-cwd", "A": "project-A", "B": "project-B"}[key]
@@ -335,7 +357,7 @@ def collect(request, summary, budget):
         for location in LOCATIONS:
             probe(stage + "-" + location + "-list", ["plugins", "list", "--json"], root / location, "list", stage)
         check_pins(request, budget)
-        summary["inventories"][stage + "-after"] = inventory(roots, budget)
+        summary["inventories"][stage + "-after"] = inventory(roots, budget, native_log_alias=True)
     summary["success"] = len(summary["probes"]) == 19
 
 
