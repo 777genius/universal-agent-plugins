@@ -64,3 +64,7 @@ Cline. Root may publish this separate stacked research checkpoint to collect
 the missing actual hosted observations. Publication and all remote merges
 remain root-owned; the production adapter and genuine native outcomes remain
 pending the artifact interpretation above.
+
+## Historical hosted observation recovered on 2026-10-24
+
+A genuine successful earlier run at exact source `bb8c89bf62542096a0af3aff26f21a16fee4d595` was recovered and independently interpreted by the implementing worker and root. The raw text artifact, verified provenance and precise source-closure differences are preserved in [the hosted observation record](../../evidence/project-scope-research/cline-3.0.73-linux-amd64-40017958131/README.md). Positive exact skill paths and explicit MCP override attribution close the missing pre-code observation for a [concrete post-observation adapter plan](cline-post-observation-plan.md). This does not replace a current-source UAP native gate, establish automatic project MCP startup or alter the original artifact's false qualification flags.
