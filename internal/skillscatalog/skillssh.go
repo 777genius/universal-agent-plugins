@@ -85,7 +85,7 @@ func (p *SkillsSH) Search(ctx context.Context, q string, limit int) (Page, error
 	return result, err
 }
 func (p *SkillsSH) fetch(ctx context.Context, path string) (upstreamPage, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.origin+path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.origin+path, http.NoBody)
 	if err != nil {
 		return upstreamPage{}, &ProviderError{}
 	}
@@ -94,7 +94,7 @@ func (p *SkillsSH) fetch(ctx context.Context, path string) (upstreamPage, error)
 	if err != nil {
 		return upstreamPage{}, &ProviderError{}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		retry := time.Duration(0)
 		if resp.StatusCode == 429 {
@@ -122,7 +122,7 @@ func parseRetryAfter(s string, now time.Time) time.Duration {
 	return 30 * time.Second
 }
 func safeText(s string, maxLen int) bool {
-	return strings.TrimSpace(s) != "" && len(s) <= maxLen && !strings.ContainsFunc(s, func(r rune) bool { return unicode.IsControl(r) })
+	return strings.TrimSpace(s) != "" && len(s) <= maxLen && !strings.ContainsFunc(s, unicode.IsControl)
 }
 func repository(source string) bool {
 	parts := strings.Split(source, "/")

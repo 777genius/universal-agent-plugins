@@ -86,7 +86,7 @@ func TestRedirectAnd429Boundaries(t *testing.T) {
 	var targetHits atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { targetHits.Add(1) }))
 	defer target.Close()
-	p := upstream(t, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, 302) })
+	p := upstream(t, func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, http.StatusFound) })
 	if _, err := p.Browse(context.Background(), Popular, 0); err == nil || targetHits.Load() != 0 {
 		t.Fatal("followed upstream redirect")
 	}
@@ -100,7 +100,7 @@ func TestRedirectAnd429Boundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for n := 0; n < 2; n++ {
+	for n := range 2 {
 		_, err = s.Get(context.Background(), Request{View: Popular, Page: n})
 		var pe *ProviderError
 		if !errors.As(err, &pe) || pe.RetryAfter < time.Second*119 {
@@ -242,7 +242,7 @@ func TestHTTPValidationSearchAndCORS(t *testing.T) {
 	invalid := []string{"view=unknown", "page=-1", "page=10001", "page=1&page=2", "q=x", "q=", "q=find&page=1", "q=find&limit=101", "limit=10", "url=https://evil", "q=%ff", "q=%0atest"}
 	for _, q := range invalid {
 		rr := httptest.NewRecorder()
-		h.ServeHTTP(rr, httptest.NewRequest("GET", "/v1/skills?"+q, nil))
+		h.ServeHTTP(rr, testRequest(t, "GET", "/v1/skills?"+q))
 		if rr.Code != 400 {
 			t.Fatalf("query %s: %d %s", q, rr.Code, rr.Body.String())
 		}
@@ -251,7 +251,7 @@ func TestHTTPValidationSearchAndCORS(t *testing.T) {
 		t.Fatal("invalid query hit provider")
 	}
 	rr := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/v1/skills?q=find+skills&view=hot", nil)
+	r := testRequest(t, "GET", "/v1/skills?q=find+skills&view=hot")
 	r.Header.Set("Origin", "https://universal-agent-plugins.com")
 	r.Header.Set("Cookie", "private=secret")
 	r.Header.Set("Authorization", "Bearer private")
@@ -265,7 +265,7 @@ func TestHTTPValidationSearchAndCORS(t *testing.T) {
 	}
 	for _, origin := range []string{"https://evil.test", "https://universal-agent-plugins.com.evil.test", "null"} {
 		rr = httptest.NewRecorder()
-		r = httptest.NewRequest("GET", "/v1/skills", nil)
+		r = testRequest(t, "GET", "/v1/skills")
 		r.Header.Set("Origin", origin)
 		h.ServeHTTP(rr, r)
 		if rr.Code != 403 || rr.Header().Get("Access-Control-Allow-Origin") != "" {
@@ -273,7 +273,7 @@ func TestHTTPValidationSearchAndCORS(t *testing.T) {
 		}
 	}
 	rr = httptest.NewRecorder()
-	r = httptest.NewRequest("OPTIONS", "/v1/skills", nil)
+	r = testRequest(t, "OPTIONS", "/v1/skills")
 	r.Header.Set("Origin", "http://localhost:3000")
 	r.Header.Set("Access-Control-Request-Method", "GET")
 	h.ServeHTTP(rr, r)
@@ -281,7 +281,7 @@ func TestHTTPValidationSearchAndCORS(t *testing.T) {
 		t.Fatal(rr.Code)
 	}
 	rr = httptest.NewRecorder()
-	h.ServeHTTP(rr, httptest.NewRequest("GET", "/healthz", nil))
+	h.ServeHTTP(rr, testRequest(t, "GET", "/healthz"))
 	if rr.Code != 200 {
 		t.Fatal(rr.Code)
 	}
@@ -304,14 +304,14 @@ func TestBoundedConcurrentMissesAndCoalescing(t *testing.T) {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
-	for n := 0; n < 4; n++ {
+	for n := range 4 {
 		wg.Add(1)
 		go func(page int) {
 			defer wg.Done()
 			_, _ = s.Get(context.Background(), Request{View: Popular, Page: page})
 		}(n)
 	}
-	for n := 0; n < 4; n++ {
+	for range 4 {
 		select {
 		case <-entered:
 		case <-time.After(3 * time.Second):
@@ -349,7 +349,7 @@ func TestPersistentCacheBoundAndCorruptRecordRejection(t *testing.T) {
 	now := time.Now().UTC()
 	s.now = func() time.Time { return now }
 	s.tokenAt = now
-	for n := 0; n < 130; n++ {
+	for n := range 130 {
 		now = now.Add(time.Second)
 		if _, err = s.Get(context.Background(), Request{View: Popular, Page: n}); err != nil {
 			t.Fatal(err)
@@ -435,7 +435,7 @@ func TestHTTPUnavailableIsStructuredAndDoesNotLeakUpstream(t *testing.T) {
 		t.Fatal(err)
 	}
 	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, httptest.NewRequest("GET", "/v1/skills", nil))
+	h.ServeHTTP(rr, testRequest(t, "GET", "/v1/skills"))
 	var envelope errorEnvelope
 	if rr.Code != 503 || json.Unmarshal(rr.Body.Bytes(), &envelope) != nil || envelope.Error.Code != "provider_unavailable" || envelope.RetryAfter < 1 || rr.Header().Get("Retry-After") == "" {
 		t.Fatal(rr.Code, rr.Body.String())
@@ -444,7 +444,7 @@ func TestHTTPUnavailableIsStructuredAndDoesNotLeakUpstream(t *testing.T) {
 		t.Fatal("leaked upstream details")
 	}
 	rr = httptest.NewRecorder()
-	h.ServeHTTP(rr, httptest.NewRequest("GET", "/healthz", nil))
+	h.ServeHTTP(rr, testRequest(t, "GET", "/healthz"))
 	if rr.Code != 200 {
 		t.Fatal("upstream outage broke health")
 	}
@@ -536,4 +536,15 @@ func TestSharedRefreshSurvivesFirstCallerCancellation(t *testing.T) {
 	if hits.Load() != 1 {
 		t.Fatalf("shared refresh hit upstream %d times", hits.Load())
 	}
+}
+
+// http.NewRequestWithContext preserves the module's Go 1.22 API floor;
+// httptest.NewRequestWithContext was only introduced in Go 1.23.
+func testRequest(t *testing.T, method, target string) *http.Request {
+	t.Helper()
+	request, err := http.NewRequestWithContext(context.Background(), method, target, http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request
 }
