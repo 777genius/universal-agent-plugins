@@ -93,3 +93,12 @@ These tests execute no vendor, native plugin, MCP server, authentication or mode
 ### Frozen code review correction
 
 Root's independent review of2cbfecc8 identified a known-effect reporting edge when nativeComplete=true: an adapter that unexpectedly reports NativeEffectCommitted during VerifyOnly must still report the actual effect, even with identical saved facts. Final target mutation therefore includes NativeEffectCommitted independently of projection completeness; the same final flag clears target NoChange and accumulates into group mutation. This preserves effect truth without promoting discovery or changing adapter authority. A new inert Active/Installed binding case proves complete=true/VerifyOnly=true, real marker write, unchanged state/receipts, and both mutation flags true. Focused six-case group table plus existing Kimi/projection-failure tests PASS0.299s. No test assertion or native gate was weakened.
+
+## Independent frozen-source code review receipts
+
+Both reviewers assessed exact source commit `20920de589227ffd34ece978ac52add365ceac4b` (tree `39a42178feabf4a9589085f8c67f9bd4501c477c`) after the earlier `2cbfecc8` correction. This record changes documentation only; the reviewed core/SDK production source remains identical.
+
+- `/root`: CODE GO. Reviewed all three production files, CLI/core/SDK regressions and final committed-effect delta. Confirmed exact actual delivery reuse and unchanged strict Prepared predicate; nativeComplete/native attempts/ownership/Prepared handoff remain separate. Final known committed effect is reported independently of complete/VerifyOnly, clears target NoChange and aggregates group mutation. SDK mutation propagation/final unchanged guard remain narrow. Reviewed the owner's focused passing test outputs; no independent vendor run was claimed.
+- `/root/apm_vercel_scope`: CODE GO. Independently read the complete production, CLI, core and SDK source and the final delta. Confirmed complete=true committed-effect marker case pins group/target mutation and target NoChange; Prepared predicate, actual delivery, native completeness and uncertainty fences remain intact. Confirmed SDK entry OR and final mutation guard. No new build or vendor process was run by this reviewer.
+
+Publication may carry the exact reviewed production source plus this receipt and already reviewed plans/evidence. Genuine exact corrected-source hosted Prepared lifecycle qualification remains required; neither code review nor the inert local tests certifies native project loading, MCP initialization, or model use.
