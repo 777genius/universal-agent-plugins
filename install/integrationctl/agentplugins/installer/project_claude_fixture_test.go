@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
@@ -54,9 +55,12 @@ func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeS
 	}
 	f.runner = &claudeSDKRunner{t: t, user: user, project: project, executable: f.executable}
 	f.engine, err = installer.New(installer.Config{ProjectRoot: project, StateRoot: f.state, Registry: registry, Runner: f.runner, HelperExecutable: f.executable, EnableNativeObserver: true, TrustedLocalPackages: true,
-		OnCommittedBinding: func(context.Context, installer.BindingFacts) error {
+		OnCommittedBinding: func(_ context.Context, facts installer.BindingFacts) error {
 			if f.failAfterCommit {
-				f.runner.fail = true
+				body, err := os.ReadFile(filepath.Join(facts.TargetPath, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md"))
+				if err == nil && strings.Contains(string(body), "Moving source bytes.") {
+					f.runner.fail = true
+				}
 			}
 			return nil
 		},
@@ -112,6 +116,8 @@ type claudeSDKRunner struct {
 	t                         *testing.T
 	user, project, executable string
 	fail                      bool
+	trusted                   bool
+	calls                     int
 }
 
 func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -139,9 +145,36 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 	if r.fail {
 		return legacyports.CommandResult{}, fmt.Errorf("inert unavailable native listing")
 	}
+	r.calls++
+	listing := claudeSDKListing(r.t, r.user, "user")
+	if scope == "project" {
+		projectRows := claudeSDKListing(r.t, root, "project")
+		if len(projectRows) > 0 && !r.trusted {
+			listing = append(listing, map[string]any{"id": "(suppressed)@skills-dir", "version": "unknown", "scope": "project", "enabled": false, "installPath": "", "notes": []string{"1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."}})
+		} else {
+			// Fixture model of the documented same-name user precedence. This
+			// is deliberately not represented as genuine trusted native evidence.
+			userIDs := map[any]bool{}
+			for _, row := range listing {
+				userIDs[row["id"]] = true
+			}
+			for _, row := range projectRows {
+				if !userIDs[row["id"]] {
+					listing = append(listing, row)
+				}
+			}
+		}
+	}
+
+	body, err := json.Marshal(listing)
+	return legacyports.CommandResult{Stdout: body}, err
+}
+
+func claudeSDKListing(t *testing.T, root, scope string) []map[string]any {
+	t.Helper()
 	entries, err := os.ReadDir(filepath.Join(root, "skills"))
 	if err != nil && !os.IsNotExist(err) {
-		return legacyports.CommandResult{}, err
+		t.Fatal(err)
 	}
 	listing := []map[string]any{}
 	for _, entry := range entries {
@@ -151,14 +184,13 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 			continue
 		}
 		if err != nil {
-			return legacyports.CommandResult{}, err
+			t.Fatal(err)
 		}
 		var manifest map[string]any
 		if err := json.Unmarshal(body, &manifest); err != nil {
-			return legacyports.CommandResult{}, err
+			t.Fatal(err)
 		}
-		listing = append(listing, map[string]any{"id": fmt.Sprint(manifest["name"]) + "@skills-dir", "scope": scope, "enabled": true, "installPath": path})
+		listing = append(listing, map[string]any{"id": fmt.Sprint(manifest["name"]) + "@skills-dir", "version": manifest["version"], "scope": scope, "enabled": true, "installPath": path})
 	}
-	body, err := json.Marshal(listing)
-	return legacyports.CommandResult{Stdout: body}, err
+	return listing
 }
