@@ -45,7 +45,10 @@ func TestProjectPreparedGuidanceDesiredAndRetainedScopes(t *testing.T) {
 	for _, desired := range []bool{false, true} {
 		for _, scopes := range [][2]domain.InstallScope{{domain.ScopeProject, domain.ScopeUser}, {domain.ScopeUser, domain.ScopeProject}, {domain.ScopeProject, domain.ScopeProject}, {domain.ScopeUser, domain.ScopeUser}} {
 			root := t.TempDir()
-			app := App{Scope: scopes[0], ProjectRoot: root, EnvironmentStoreRoot: filepath.Join(root, "content-store")}
+			app := App{Scope: scopes[0], EnvironmentStoreRoot: filepath.Join(root, "content-store")}
+			if scopes[0] == domain.ScopeProject {
+				app.ProjectRoot = root
+			}
 			receipt := domain.EnvironmentReceipt{EnvironmentID: app.environmentID(), Alias: "docs", ClientID: "grok", InstallationID: "install", ClientBindingID: "binding", SourceKey: "source", PackageDigest: "sha256:" + strings.Repeat("a", 64)}
 			binding := installer.InspectedBinding{ClientID: "grok", BindingID: "binding", Scope: string(scopes[1]), Materialization: string(domain.MaterializationMaterialized), Activation: string(domain.ActivationPrepared), Verification: string(domain.VerificationPackageValid), TreeDigest: receipt.PackageDigest}
 			state := installer.Inspection{EnvironmentReceipts: []domain.EnvironmentReceipt{receipt}, Installations: []installer.InspectedInstallation{{InstallationID: "install", SourceKey: "source", Bindings: []installer.InspectedBinding{binding}}}}

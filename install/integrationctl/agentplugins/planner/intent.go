@@ -47,15 +47,11 @@ func ApplyInstallIntent(registry *clients.Registry, plan *domain.DeliveryPlan, i
 // Reapplying an intent to a previously built plan must not bypass explicit
 // project context admission. Genuine historical user plans retain their default.
 func validatePreparationScope(registry *clients.Registry, plan domain.DeliveryPlan) error {
-	scope := plan.Scope
-	if scope == "" {
-		scope = domain.ScopeUser
-	}
-	if !clients.SupportsScope(registry, plan.ClientID, scope) {
-		return fmt.Errorf("preparation is not qualified for scope %s", scope)
-	}
 	if plan.Scope != domain.ScopeProject && plan.TargetContext.Scope != domain.ScopeProject && plan.TargetContext.ProjectRoot == "" {
 		return nil
+	}
+	if !clients.SupportsScope(registry, plan.ClientID, domain.ScopeProject) {
+		return fmt.Errorf("preparation is not qualified for scope %s", domain.ScopeProject)
 	}
 	if plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject {
 		return fmt.Errorf("project preparation requires matching explicit project scope")

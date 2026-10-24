@@ -1,12 +1,12 @@
 package planner
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kiro"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
