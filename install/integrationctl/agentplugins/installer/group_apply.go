@@ -112,7 +112,9 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 
 func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {
 	for _, target := range got.Targets {
-		result.ManualActions = append(result.ManualActions, target.Activation.UserActions...)
+		if target.Plan.Scope == domain.ScopeProject {
+			result.ManualActions = append(result.ManualActions, target.Activation.UserActions...)
+		}
 		if target.Plan.ClientID == "" || target.GroupPhase == "" {
 			continue
 		}
