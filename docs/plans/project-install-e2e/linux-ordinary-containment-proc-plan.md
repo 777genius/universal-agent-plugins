@@ -56,3 +56,34 @@ Production composition/caller inventory traced read-only: cli/cmd/agentplugins/c
 A successful self prerequisite query proves availability of the bounded proc interface only. Actual supported-host containment qualification still requires the unchanged real cancellation/setsid/cleanup assertions. This environment's unsupported result will remain explicitly distinct from those hosted qualifications.
 
 R2 exact 09e24c58 independently received PLAN GO from Root and apm_vercel_scope before production edits. Root approved explicit numeric cap supplement (stat 4KiB+1; children 64KiB+1; existing 1000-process traversal/deadline). These are prerequisite bounds, not runtime qualification. No bootstrap/process production source has yet been edited.
+
+## Implemented candidate and bounded validation
+
+The candidate now performs the same process-inert prerequisite in the ordinary parent constructor and again in its isolated supervisor before starting the requested command. The public OS.OrdinaryPreflight query reports that prerequisite only. Runtime task scans in both the supervisor traversal and passive parent tracker reuse the same per-call observation helper. A missing interface for a still-live task has a distinct unsupported sentinel and deliberately does not wrap ENOENT: existing ancestor traversal must not misread it as a disappeared process. Missing stat inside a still-present task and changed/malformed/permission/unknown observations fail closed.
+
+Concrete bounds are stat 4KiB plus one, children 64KiB plus one, and task-directory enumeration 1000 entries plus one, reusing the existing traversal count. A process exceeding that task enumeration budget produces an observation error; it cannot contribute an empty-tree proof. Task names and PID/starttime/state fields are parsed strictly. Operations are injected only per call in private inert test seams; there is no environment override or mutable fault global. Strict duplex cgroup handling, existing cleanup/reap deadlines and supported-host containment assertions remain unchanged.
+
+Focused local Go1.26.10 validation with -p=1:
+
+- Process inert observation/cap/identity/prelaunch tests plus existing traversal/quiescent-boundary/sole-reaper checks: PASS0.021s. Covered 10 disappearance/error subcases, exact/over byte and directory bounds, invalid identities, actual unsupported OS.Run refusal with command marker absent, and injected available empty interface retaining ordinary wrapping without starting a child.
+- The exact22 reviewed real-process tests reported explicit pre-launch unsupported capability and SKIPPED on this host (process0.004s; bootstrap0.011s). Their raw log is retained. This result is not runtime containment qualification and no manager/setsid child was launched.
+- Existing custom inert Runner captured-staging regression PASS0.020s. Custom bootstrap runners keep their existing contract.
+
+Raw selected local test logs and member hashes are saved under docs/evidence/process-containment/linux-proc-children-unavailable/. The original real failure trace/proc proof remains preserved. No vendor, native client, MCP server, model, authentication, trust change or broad suite ran for this candidate. Supported hosted Linux runtime qualification is still required. The source must receive two independent frozen-source code reviews before publication.
+
+### Final review correction and validation
+
+Root's review of candidate4a1b536e required the new ordinary prerequisite to run after helper-only exit/return branches. The final delta moves only that added query in14 helper-bearing tests; original helper behavior and existing duplex-query order stay intact. Other8 ordinary-query guards remain at test start. As a result, final local runtime accounting is16 ordinary-prerequisite skips plus6 existing duplex-prerequisite skips,22 unqualified runtime tests in total. No test assertion, timeout, skip predicate or cgroup rule was weakened.
+
+The new helper's three deliberate non-errno wrapping boundaries render the original errno as message text; the unsupported sentinel remains the sole wrapped cause. This retains the required distinction from disappeared ancestors and satisfies errorlint. State membership, integer range and constructor-only CommandContext corrections preserve behavior.
+
+Final combined focused validation after those corrections: process PASS0.037s (inert assertions passed; runtime skips excluded from qualification), bootstrap PASS0.025s (custom Runner assertion passed;3runtime tests unsupported). The final raw combined log is retained separately from earlier candidate logs. Pinned golangci-lint2.13.2 changed-source check over only process+bootstrap, concurrency1/GOMEMLIMIT512MiB/90s: PASS0issues. No broad module lint or vendor run was performed.
+
+## Final independent code review receipts
+
+Both reviewers approved exact final source932ed0f9fc86d5bde6b2c8c08f91354be4afce63 (treef7f9c53093ffd88f873ace86be7405ba0aab7913) before publication.
+
+- **Root (`/root`) — final CODE GO.** Reviewed the full4a1b implementation and final4-file correction. All14 added guards follow helper-only exits/returns and precede parent child launches; existing duplex order is preserved. Explicit errno message rendering keeps missing-live-task failures distinct from ENOENT ancestry disappearance. IndexByte, integer range and constructor-only CommandContext changes preserve behavior. Accepted the inert local passes and22 explicit unqualified runtime skips; supported hosted Linux runtime qualification remains mandatory.
+- **APM (`/root/apm_vercel_scope`) — final independent CODE GO.** Reviewed the full4a1b production/test delta and final932 correction. Confirmed helper branches and existing duplex order are intact, bounded task observations fail closed, missing-live children produce the exact unsupported sentinel and other observation errors cannot provide empty-tree proof. Accepted the equivalent lint corrections and truthful final SKIP provenance. Performed source review only during this final review; no new build, vendor or native execution was claimed.
+
+The separate Claude hosted success run40139625617 is preserved under docs/evidence/project-scope-native/claude-2.1.263-prepared-success-40139625617/. It qualifies the committed earlier Claude/grouped Prepared fix, not these later Linux containment changes.

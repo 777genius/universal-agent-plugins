@@ -1,0 +1,12 @@
+[
+  {
+    "id": "(suppressed)@skills-dir",
+    "version": "unknown",
+    "scope": "project",
+    "enabled": false,
+    "installPath": "",
+    "notes": [
+      "1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."
+    ]
+  }
+]

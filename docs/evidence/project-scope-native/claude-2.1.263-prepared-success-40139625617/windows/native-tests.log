@@ -1,0 +1,13 @@
+=== RUN   TestAgentpluginsClaudeNativeCommandsLifecycle
+    agentplugins_claude_commands_native_e2e_test.go:46: claude native evidence: D:\a\_temp\uap-native-hosted-wlb4x_pl\evidence\uap-claude-native-evidence-3306580122
+--- PASS: TestAgentpluginsClaudeNativeCommandsLifecycle (13.48s)
+=== RUN   TestAgentpluginsClaudeNativeLifecycle
+    agentplugins_claude_native_e2e_test.go:376: claude native evidence: D:\a\_temp\uap-native-hosted-wlb4x_pl\evidence\uap-claude-native-evidence-925369014
+--- PASS: TestAgentpluginsClaudeNativeLifecycle (17.33s)
+=== RUN   TestAgentpluginsClaudeNativeProjectPreparedLifecycle
+    agentplugins_claude_project_native_e2e_test.go:16: claude native evidence: D:\a\_temp\uap-native-hosted-wlb4x_pl\evidence\uap-claude-native-evidence-2732888560
+--- PASS: TestAgentpluginsClaudeNativeProjectPreparedLifecycle (14.77s)
+=== RUN   TestAgentpluginsClaudeNativeRuntimeLifecycle
+    agentplugins_claude_runtime_fixture_test.go:224: native evidence: D:\a\_temp\uap-native-hosted-wlb4x_pl\evidence\uap-native-evidence-781463327
+--- PASS: TestAgentpluginsClaudeNativeRuntimeLifecycle (18.76s)
+PASS
