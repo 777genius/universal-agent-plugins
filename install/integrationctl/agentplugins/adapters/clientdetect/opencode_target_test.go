@@ -16,6 +16,19 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// Replace disposable executable inodes instead of truncating bytes that a
+// completed probe may still have mapped (ETXTBSY on Linux, signing cache on macOS).
+func replaceOpenCodeFixture(t *testing.T, executable string, body []byte) {
+	t.Helper()
+	next := executable + ".next"
+	if err := os.WriteFile(next, body, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(next, executable); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func nativeOpenCodeFixture(t *testing.T, version, mode string) string {
 	t.Helper()
 	// All executed fixture bytes and probe working directories live in this
@@ -130,19 +143,20 @@ func TestOpenCodeTargetIdentityAndWrapperRestriction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, err := os.ReadFile(replacement)
+	body, err := os.ReadFile(binary)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Replace the inode: rewriting an executed Mach-O in place can leave the
-	// kernel's code-signing cache bound to the old bytes on macOS.
-	next := binary + ".next"
-	if err := os.WriteFile(next, body, 0700); err != nil {
+	replaceOpenCodeFixture(t, binary, body)
+	same, err := ProbeOpenCodeTarget(context.Background(), target)
+	if err != nil || same.Version != before.Version || same.ExecutableIdentity != before.ExecutableIdentity {
+		t.Fatalf("same-byte replacement changed identity: %+v %+v %v", before, same, err)
+	}
+	body, err = os.ReadFile(replacement)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(next, binary); err != nil {
-		t.Fatal(err)
-	}
+	replaceOpenCodeFixture(t, binary, body)
 	after, err := ProbeOpenCodeTarget(context.Background(), target)
 	if err != nil || after.Version != before.Version || after.ExecutableIdentity == before.ExecutableIdentity {
 		t.Fatalf("same-version change: %+v %+v %v", before, after, err)
@@ -178,9 +192,8 @@ func TestOpenCodeTargetIdentityAndWrapperRestriction(t *testing.T) {
 		if !errors.Is(err, ErrUnverifiedProbeTarget) || evidence.Reason != "host_target_unverified" {
 			t.Fatalf("wrapper: %+v %v", evidence, err)
 		}
-		if err := os.WriteFile(binary, []byte("swapped runtime"), 0700); err != nil {
-			t.Fatal(err)
-		}
+		// selected now resolves to replacement, so change the actual runtime.
+		replaceOpenCodeFixture(t, replacement, []byte("swapped runtime"))
 	}
 }
 
