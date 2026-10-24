@@ -5,7 +5,7 @@ critique and fixes, parallel implementation for all supported clients, independe
 code review, incremental commits/pushes, and merge after verification. Publishing
 a release is not part of this continuation.
 
-Status: **R1 critique incorporated; awaiting two independent R2 decisions before new production implementation**.
+Status: **two independent R2 GOs on revision 7c18c08d; implementation authorized under the staged evidence and review gates below**.
 Baseline assembly: `0cf52a6067b03bc36d3bb1f45ac2c6356f95ae52`.
 Fresh main: `4555aa53` (includes source transports and the standalone Skills UI).
 

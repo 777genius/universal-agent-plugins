@@ -64,5 +64,21 @@ Both reviewers must inspect the revised plan in Round 2 before production code.
 
 ## Round 2
 
-Pending independent decisions on the revised plan. Do not infer approval from the
-expected outcome stated in a Round 1 review.
+Both independent critics reviewed exact revised commit
+`7c18c08d892227c14961030aed95101184e5a8e0` and relevant source seams.
+
+- **/root/skillshare_scope — GO.** The first-add admission table closes R1's
+  blocker. RegistryClear does not reconcile native discovery; prepared scan,
+  unmanaged-path and owned-digest gates remain intact. Original namespace lock
+  checks, host-free status, Prepared repetition, process death and evidence
+  boundaries are adequate. No remaining blocking plan finding.
+- **/root/apm_vercel_scope — GO.** All three blocking clarifications are resolved.
+  Adapter-local observation avoids unnecessary generic schema/recovery changes.
+  Shared Skills direct APIs, stable Prepared replay, Codex component choice,
+  canonical client coverage and exact-head integration gates are adequate.
+
+Neither reviewer modified production or ran tests during R2. These decisions
+approve implementation under this plan, not unimplemented adapters, native runtime,
+merge readiness or release. Evidence-dependent Qoder/Cline/VS Code concrete designs
+still require their own post-spike review rounds. Independent code review and
+final exact-source CI remain required.
