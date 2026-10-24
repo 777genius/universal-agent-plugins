@@ -282,3 +282,25 @@ The ordinary process cancellation diagnostic establishes that this local host
 lacks a required proc interface. Tests above ran before the separately planned
 fail-closed prerequisite correction; no descendant-containment qualification is
 implied by these ownership regression results.
+
+## Independent frozen-source code reviews
+
+Both independent reviewers inspected exact source commit
+`c86859167511dbb3244fab1b3dfe20b3924a501f`
+(tree `693086518d9076fc266bea5a6ced1dd1630828de`) before publication.
+
+- skillshare_scope: CODE GO after tracing default composition, canonical original
+  authority, runner-free component inspection, conservative finding precedence,
+  typed repair evidence, staging/attempt rechecks and actual pending refusal.
+  The absent legacy Devin profile follows the existing domain/adapter contract.
+- apm_vercel_scope: CODE GO after all fourteen changed files and surrounding
+  provider/repair paths. Confirmed exact managed drift evidence cannot mask
+  foreign components; observed native files cannot authorize recovery; existing
+  Prepared group handoff stays incomplete. The test-only inode replacement
+  preserves its changed-after-preflight assertion.
+
+Both reviews were source-only under the shared build reservation and accepted
+the separately recorded focused/full-usecase results without claiming new
+execution. The original Cline code review's conditional shared ownership gate
+is therefore closed at this source. Final reporting, native and integration
+gates remain independent.
