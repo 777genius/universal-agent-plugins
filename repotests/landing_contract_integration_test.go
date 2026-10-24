@@ -300,7 +300,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 		mustContain(t, pluginsPage, `usePageSeo('Agent Plugins 1.0 Directory | Find Plugins'`)
 	}
 	mustContain(t, pluginsPage, `'@type': 'ItemList'`)
-	mustContain(t, pluginsPage, `<PluginCatalog`)
+	mustContain(t, pluginsPage, `<UnifiedCatalog`)
 	mustContain(t, pluginsPage, `:plugins="registry.plugins"`)
 
 	pluginDetailPageBody, err := os.ReadFile(filepath.Join(landingRoot, "pages", "plugins", "[slug].vue"))

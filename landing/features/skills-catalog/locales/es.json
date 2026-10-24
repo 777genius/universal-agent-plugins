@@ -1,0 +1,57 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "Tipo de catálogo",
+      "plugins": "Complementos",
+      "skills": "Habilidades",
+      "heading": "Explora Agent Skills",
+      "intro": "Encuentra una habilidad, elige tus agentes y copia el comando de instalación.",
+      "search": "Buscar Skills",
+      "searchPlaceholder": "Busca por nombre o repositorio",
+      "clearSearch": "Borrar búsqueda",
+      "sortLabel": "Ordenar Skills",
+      "loaded": "Mostrando {count} Skills",
+      "searchResults": "Mostrando {count} resultados",
+      "stale": "Resultados guardados del {date}. Los datos recientes no están disponibles temporalmente.",
+      "minSearch": "Introduce al menos 2 caracteres",
+      "minSearchHelp": "Usa un nombre o repositorio, o borra la búsqueda para explorar.",
+      "loading": "Cargando Skills…",
+      "unavailable": "Skills no disponibles temporalmente",
+      "unavailableHelp": "Vuelve a intentar cargar el catálogo en un momento.",
+      "retry": "Reintentar",
+      "noMatches": "No se encontraron Skills",
+      "noMatchesHelp": "Prueba una búsqueda más amplia o bórrala para explorar.",
+      "moreUnavailable": "No se pudieron cargar más Skills. Tus resultados actuales siguen disponibles.",
+      "showMore": "Mostrar más Skills",
+      "externalSource": "Fuente externa",
+      "githubSource": "Código en GitHub",
+      "unsupportedSource": "La instalación desde esta fuente aún no es compatible.",
+      "chooseAgents": "Elige agentes",
+      "chooseInTerminal": "Elegir agentes en la terminal",
+      "chooseInTerminalHelp": "El comando permite elegir agentes antes de instalar.",
+      "checkedBeforeInstall": "La CLI comprueba la fuente y la Skill antes de instalar.",
+      "views": {
+        "popular": "Populares · histórico",
+        "trending": "Tendencias · 24 horas",
+        "hot": "En auge · última hora"
+      },
+      "metric": {
+        "all-time": "{count} instalaciones · histórico",
+        "24h": "{count} instalaciones · últimas 24 horas",
+        "1h": "{count} instalaciones · última hora"
+      },
+      "pageHeading": "Encuentra Agent Skills",
+      "unsupportedName": "El nombre de esta skill no es compatible. Consulta la fuente para ver cómo instalarla.",
+      "collectionShown": "Mostrando {count} de {total} en esta colección",
+      "headingPrefix": "Encuentra tus"
+    },
+    "directoryPage": {
+      "pluginDirectory": "Directorio de complementos",
+      "findAgentPlugins10": "Encuentre complementos de agente 1.0.",
+      "useThemEverywhere": "Úselos en todas partes.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Busque paquetes revisados y complementos comunitarios descubiertos en repositorios públicos de GitHub.",
+      "explorePlugins": "Explorar complementos",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Filtre por capacidad, fuente, autenticación o agente admitido."
+    }
+  }
+}

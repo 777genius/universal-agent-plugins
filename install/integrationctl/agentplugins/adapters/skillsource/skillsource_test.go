@@ -386,3 +386,49 @@ func TestRootRawSkillRejectsGitlinksBeforeSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Windows lacks POSIX executable bits. Exercise the real final-sealing boundary
+// with non-executable host files so portable Git metadata remains authoritative.
+func TestNormalizedTreeSealingUsesPortableExecutableInventory(t *testing.T) {
+	for _, withExecutable := range []bool{false, true} {
+		t.Run(fmt.Sprint(withExecutable), func(t *testing.T) {
+			root := t.TempDir()
+			put(t, root, "skills/review/SKILL.md", document("review"), 0600)
+			raw := domain.PackageSnapshot{Source: domain.SourceIdentity{Repository: "example/fixture"}}
+			expected := []string{}
+			if withExecutable {
+				put(t, root, "skills/review/scripts/run", "#!/bin/sh\nprintf resource-only\n", 0600)
+				raw.ExecutableFiles = []string{"scripts/run"}
+				expected = []string{"skills/review/scripts/run"}
+				info, err := os.Stat(filepath.Join(root, "skills/review/scripts/run"))
+				if err != nil || info.Mode()&0111 != 0 {
+					t.Fatalf("fixture must have no host executable bits: %v %v", info, err)
+				}
+			}
+			if err := writeSyntheticManifest(root, "github-skill:example/fixture:review:review"); err != nil {
+				t.Fatal(err)
+			}
+			builder := packagedigest.Builder{TempRoot: t.TempDir()}
+			got, err := snapshotNormalizedTree(context.Background(), builder, root, raw, "review")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = packagedigest.Remove(got) }()
+			if !slices.Equal(got.ExecutableFiles, expected) {
+				t.Fatalf("portable executable metadata lost: got %v want %v", got.ExecutableFiles, expected)
+			}
+			reference, err := builder.SnapshotWithExecutables(context.Background(), root, raw.Source, expected)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = packagedigest.Remove(reference) }()
+			if got.DigestAlgorithm != domain.TreeDigestAlgorithm || got.TreeDigest != reference.TreeDigest {
+				t.Fatalf("portable tree identity differs: got %s want %s", got.TreeDigest, reference.TreeDigest)
+			}
+			body, err := os.ReadFile(filepath.Join(got.Root, "skills/review/SKILL.md"))
+			if err != nil || string(body) != document("review") {
+				t.Fatal("sealing changed raw document", err)
+			}
+		})
+	}
+}
