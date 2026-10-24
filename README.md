@@ -27,7 +27,7 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 
 **Keep a reproducible set of plugins and dependencies, and carry it to another
 computer.** The manifest records what you need; the lockfile pins the exact
-packages to restore. This workflow is **SOURCE ONLY / UNRELEASED**; see
+packages to restore. This workflow ships in the published CLI; see
 [Restore your plugin setup](#restore-your-plugin-setup). For the published
 installer, start with the [Quick start](#quick-start).
 
@@ -137,9 +137,8 @@ selected agent.
 
 ## Restore your plugin setup
 
-**SOURCE ONLY / UNRELEASED:** these commands require a compatible CLI built from
-current source. The published CLI is not qualified for this workflow; the
-[Quick start](#quick-start) above covers released installation.
+These commands are part of the published CLI (`agentplugins` 0.1.90 and later).
+The [Quick start](#quick-start) above covers installation.
 
 On the source computer, open a folder to use for the transfer and run:
 
@@ -162,12 +161,13 @@ Codex, OpenCode, Cursor and Gemini CLI.
 
 Authentication, client settings, secrets and plugin data need separate setup
 or backup. Transferring the files does not guarantee offline installation.
-See [Restore on another machine](docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
+See [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine)
 for confirmation prompts, supported restore behavior and recovery.
 
-Source-build development: [install raw Agent Skills from GitHub](docs/AGENT_SKILLS_INSTALLER.md),
-including the local browser picker and versioned saved dependencies. This does not
-claim availability in an already published installer release.
+[Install Agent Skills from GitHub](docs/AGENT_SKILLS_INSTALLER.md) with
+`agentplugins skills add`, including the local browser picker and saved
+dependencies. The published CLI supports GitHub sources only; Skills from
+`.well-known` publishers and archive or Git URL sources are not in a release yet.
 
 ## Any Agent Plugins 1.0 package
 
