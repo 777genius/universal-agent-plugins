@@ -148,7 +148,7 @@ Both review rounds are complete. Production implementation must still pass the
 concrete regressions above and two independent frozen-source code reviews.
 
 
-## Repair admission amendment — R1
+## Repair admission amendment — R2
 
 The required real public SDK regressions exposed a second boundary while the
 observer implementation was still uncommitted. First-install foreign skill/MCP
@@ -160,7 +160,7 @@ adapter after the binding has been persisted as failed (`Mutated=true`). The
 foreign bytes survive, but this does not satisfy the plan's intact-state refusal
 requirement. The failing lifecycle regression remains unchanged.
 
-Proposed bounded correction, awaiting two independent amendment review rounds:
+Proposed bounded correction after both independent R1 GOs; R2 review is required before repair code:
 
 1. Add one project-native-config prepared admission helper to the existing repair
    preconditions. Invoke it after exact target/receipt/digest preflight, before
@@ -176,17 +176,27 @@ Proposed bounded correction, awaiting two independent amendment review rounds:
    checks remain authoritative. The prepared path never invokes a process.
 3. Compare the whole prepared observation with the already measured managed
    package condition. For an intact package require Managed with the same
-   nonempty receipt digest, via the existing identity validator. For a known
-   absent managed package permit only Absent. For a known digest mismatch permit
+   nonempty receipt digest and ReceiptReconciled=true, using the existing identity
+   validator plus the explicit receipt requirement. For a known
+   absent managed package (typed VerificationAbsent) permit only Absent. For a
+   typed VerificationDigestMismatch permit
    only Indeterminate carrying exactly the same nonempty measured actual digest.
    The provider attaches a digest only after local component findings are clear
    or expected; collision/unknown/malformed local findings cannot supply that
-   managed-drift proof. Arbitrary errors, an unmatched state/digest, or a changed
+   managed-drift proof. Contradictory receipt/discovery flags are not accepted as
+   prepared ownership proof. Arbitrary errors, an unmatched state/digest, or a changed
    package since the first verification refuse without state publication.
 4. A missing exact-owned native component remains repairable: its clear local
    finding plus the intact managed package still produces Managed. Existing
    controlled managed-directory restoration, receipt validation and commit-time
-   preconditions remain unchanged. Do not treat a known digest mismatch as
+   preconditions remain unchanged. Repeat this same prepared admission in the
+   existing managed repair precommit path before the transaction publishes, and
+   immediately before reapplying intact native state starts its attempt. A
+   foreign edit during staging must refuse before managed publication. These
+   checks do not claim a portable atomic guarantee against a noncooperating
+   writer in the final read-to-syscall interval; the existing native mutation
+   primitives still enforce their own immediate ownership checks.
+   Do not treat a known digest mismatch as
    native discovery or use it to clear uncertainty. Existing unresolved-attempt
    recovery fences still precede this branch.
 5. Retain the concrete Cline+Codex tests: intact state on tampered skill and MCP
@@ -194,8 +204,27 @@ Proposed bounded correction, awaiting two independent amendment review rounds:
    real two-target group repair with known receipts and foreign-native refusal,
    and a genuine callback-created pending attempt whose managed digest and local
    native files both verify but still cannot recover. Add any gap identified by
-   independent critics before implementing this amendment.
+   independent critics before implementing this amendment. In particular cover
+   managed absence/drift together with foreign skill/MCP contents, missing or
+   contradictory receipt evidence, unknown/error observations, a mismatched
+   ActualDigest or package changing between the two measurements, and a native
+   file edited during staging before the second admission.
 
 This amendment is a precondition addition required by observed behavior. It does
 not relax the original plan's separation of filesystem ownership and native
 activation evidence. Production repair code has not been edited.
+
+### Amendment review record
+
+R1 exact3510549a8c8bd2ae8b31bdc03c8a338dfac1f212 received independent GOs:
+
+- claude_codex_scope traced the actual repair/refresh preflight and provider
+  digest boundary. Requested explicit ReceiptReconciled for intact ownership,
+  typed managed absence/digest mismatch and contradictory/changing evidence tests.
+- skillshare_scope traced the unresolved-attempt fence before repair and the
+  provider's refusal-before-digest ordering. Requested combined managed/native
+  negatives and an explicit staging-time recheck or honest race boundary.
+
+R2 incorporates both: existing precommit and pre-attempt rechecks, exact evidence
+matching and the stated final noncooperating-writer race limit. No production
+repair code was edited before these plan reviews.
