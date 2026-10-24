@@ -189,7 +189,9 @@ func TestManagementLocalSkillRejectsTraversalSymlinksAndChangedBackup(t *testing
 	}
 }
 func TestManagementLocalSkillRestoresInterruptedDirectorySwap(t *testing.T) {
-	b, rootPath := localSkillTestBackend(t)
+	b, configuredRoot := localSkillTestBackend(t)
+	// Internal receipts use the captured physical root, as publication does.
+	rootPath := b.config.AuthoringRoots[0].Path
 	localSkillWrite(t, filepath.Join(rootPath, "draft", "SKILL.md"), "before crash")
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
@@ -230,7 +232,7 @@ func TestManagementLocalSkillRestoresInterruptedDirectorySwap(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(rootPath, "draft")); !os.IsNotExist(err) {
 		t.Fatal("fault not in rename window", err)
 	}
-	localSkillAssertRestoreRefusesNewOwner(t, b, rootPath, id)
+	localSkillAssertRestoreRefusesNewOwner(t, b, configuredRoot, id)
 	out := localSkillApply(t, localSkillPrepare(t, b, management.LocalSkillRequest{Action: management.LocalSkillRequestAction("restore"), RootId: "project-local", SkillName: "draft", RestoreOperationId: id}, strings.Repeat("c", 64)))
 	if len(out.ReconciledOperationIDs) != 1 || dependencyRead(t, filepath.Join(rootPath, "draft", "SKILL.md")) != "before crash" {
 		t.Fatal(out)
@@ -266,7 +268,8 @@ func localSkillAssertRestoreRefusesNewOwner(t *testing.T, b *ManagementBackend, 
 }
 
 func TestManagementLocalSkillRestoreRejectsNewReceiptAfterReview(t *testing.T) {
-	b, root := localSkillTestBackend(t)
+	b, _ := localSkillTestBackend(t)
+	root := b.config.AuthoringRoots[0].Path
 	id := strings.Repeat("d", 64)
 	p := localSkillPrepare(t, b, management.LocalSkillRequest{Action: management.LocalSkillRequestAction("restore"), RootId: "project-local", SkillName: "draft", RestoreOperationId: id}, strings.Repeat("e", 64))
 	absent := localSkillTree{Directories: []localSkillDirectory{}, Files: []localSkillFile{}}

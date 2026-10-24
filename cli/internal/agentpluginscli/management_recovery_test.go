@@ -13,7 +13,7 @@ func TestManagementManifestOnlyFailureHasFreshRecovery(t *testing.T) {
 	j := newSavedJourney(t, repo)
 	backend := managementJourneyBackend(t, j)
 	prepared := managementPrepare(t, backend, managementInstallRequest("github:acme/demo@"+sha))
-	manifest, lock := j.cli.app.dependencyPaths()
+	manifest, lock := backend.app.dependencyPaths()
 	publish := publishEnvironmentFile
 	t.Cleanup(func() { publishEnvironmentFile = publish })
 	publishEnvironmentFile = func(path string, body []byte) error {

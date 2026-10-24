@@ -89,6 +89,14 @@ func managementAbsolute(value string) (string, error) {
 		if !os.IsNotExist(err) {
 			return "", err
 		}
+		// An existing dangling link is unresolved authority, not a missing child.
+		info, statErr := os.Lstat(current)
+		if statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			return "", err
+		}
+		if statErr != nil && !os.IsNotExist(statErr) {
+			return "", statErr
+		}
 		parent := filepath.Dir(current)
 		if parent == current {
 			return "", err

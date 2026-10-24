@@ -403,6 +403,11 @@ func (adapter *dependencyInstaller) recordedDependencyRelease(action environment
 			return nil, err
 		}
 		installation, found := locallyMatchedInstallation(state, action.InstallationID)
+		if !found && unboundDependencyInstall(action) {
+			// A retained review reserves the future physical identity before the
+			// first receipt exists. That identity grants no installed-release exception.
+			return nil, nil
+		}
 		if !found || installation.Directory == nil {
 			return nil, installer.ErrPlanChanged
 		}

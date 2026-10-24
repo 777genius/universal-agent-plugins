@@ -297,23 +297,44 @@ func (b *ManagementBackend) localSkillUnowned(ctx context.Context, target string
 	}
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
-			if localSkillPathOverlap(target, binding.TargetLocator) {
-				return localSkillRefusal("MANAGED_SKILL", "This path is managed by UAP; make an editable copy in a separate local directory")
+			if err := localSkillCheckOwnershipPath(target, binding.TargetLocator); err != nil {
+				return err
 			}
 			for _, object := range binding.NativeObjects {
-				if object.ProtectionClass == "managed" && localSkillPathOverlap(target, object.Path) {
-					return localSkillRefusal("MANAGED_SKILL", "This path is managed by UAP; make an editable copy in a separate local directory")
+				if object.ProtectionClass == "managed" {
+					if err := localSkillCheckOwnershipPath(target, object.Path); err != nil {
+						return err
+					}
 				}
 			}
 		}
 	}
 	return nil
 }
-func (p *managementLocalSkill) desiredLocalTree(current localSkillTree) (localSkillTree, error) {
-	current.Exists = true
-	if current.Mode == 0 {
-		current.Mode = 0755
+
+// CLI ownership can retain an alias such as /var or a Windows short path.
+// Keep the lexical guard, then compare physical paths even for missing leaves.
+func localSkillCheckOwnershipPath(target, owned string) error {
+	if !filepath.IsAbs(owned) {
+		return nil // A native selector does not describe filesystem ownership.
 	}
+	if localSkillPathOverlap(target, owned) {
+		return localSkillRefusal("MANAGED_SKILL", "This path is managed by UAP; make an editable copy in a separate local directory")
+	}
+	physical, err := managementAbsolute(owned)
+	if err != nil {
+		return localSkillRefusal("OWNERSHIP_UNAVAILABLE", "Authoritative installation ownership paths could not be resolved")
+	}
+	if localSkillPathOverlap(target, physical) {
+		return localSkillRefusal("MANAGED_SKILL", "This path is managed by UAP; make an editable copy in a separate local directory")
+	}
+	return nil
+}
+func (p *managementLocalSkill) desiredLocalTree(current localSkillTree) (localSkillTree, error) {
+	if !current.Exists {
+		current.Mode = localSkillDefaultMode(true)
+	}
+	current.Exists = true
 	files := map[string]localSkillFile{}
 	dirs := map[string]uint32{}
 	for _, f := range current.Files {
@@ -327,14 +348,14 @@ func (p *managementLocalSkill) desiredLocalTree(current localSkillTree) (localSk
 			delete(files, change.relative)
 			continue
 		}
-		mode := uint32(0644)
+		mode := localSkillDefaultMode(false)
 		if previous, exists := files[change.relative]; exists {
 			mode = previous.Mode
 		}
 		files[change.relative] = localSkillFile{Path: change.relative, Mode: mode, SHA256: localSkillDigest(change.content), Bytes: change.content}
 		for parent := path.Dir(change.relative); parent != "."; parent = path.Dir(parent) {
 			if _, exists := dirs[parent]; !exists {
-				dirs[parent] = 0755
+				dirs[parent] = localSkillDefaultMode(true)
 			}
 		}
 	}

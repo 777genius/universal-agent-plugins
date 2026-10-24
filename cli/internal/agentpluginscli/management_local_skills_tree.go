@@ -62,6 +62,19 @@ func localSkillRelative(name string) bool {
 	}
 	return true
 }
+
+// New modes must match what the host can observe after publication. Existing
+// modes, including read-only attributes, remain part of the captured tree.
+func localSkillDefaultMode(directory bool) uint32 {
+	fileMode, directoryMode := uint32(0644), uint32(0755)
+	if runtime.GOOS == "windows" {
+		fileMode, directoryMode = 0666, 0777
+	}
+	if directory {
+		return directoryMode
+	}
+	return fileMode
+}
 func readLocalSkillTree(root *os.Root, name string, keepBytes bool) (localSkillTree, error) {
 	tree := localSkillTree{Directories: []localSkillDirectory{}, Files: []localSkillFile{}}
 	info, err := root.Lstat(name)
