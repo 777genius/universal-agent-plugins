@@ -32,6 +32,7 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 			return err
 		}
 		if plan.Status != domain.PlanUnsupported && shared.OnlyNativeComponents(plan.Components) {
+			plan.Status = domain.PlanReady
 			plan.Activation = domain.ActivationPrepared
 			plan.Verification = domain.VerificationPackageValid
 			plan.UserActions = shared.AppendUnique(plan.UserActions, projectPreparationAction)

@@ -129,6 +129,9 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 			return clients.RegistryIndeterminate, err
 		}
 		if managed != nil {
+			if managed.Scope != string(domain.ScopeProject) {
+				return clients.RegistryIndeterminate, fmt.Errorf("grok project ownership requires a project receipt")
+			}
 			if err := New().ValidateBindingProfile(root, *managed); err != nil {
 				return clients.RegistryIndeterminate, err
 			}

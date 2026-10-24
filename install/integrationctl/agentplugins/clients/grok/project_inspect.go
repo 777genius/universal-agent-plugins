@@ -106,6 +106,9 @@ func inspectProject(ctx context.Context, env clients.Env, client domain.Detected
 	for _, entry := range native.plugins {
 		if entry.name == plan.DeclaredName {
 			if owned && entry.scope == "project" && entry.path == plan.ActivePath {
+				if finding != clients.RegistryExpected {
+					return clients.RegistryIndeterminate, fmt.Errorf("grok project source lacks its exact prepared manifest")
+				}
 				return clients.RegistryExpected, nil
 			}
 			return clients.RegistryCollision, nil
