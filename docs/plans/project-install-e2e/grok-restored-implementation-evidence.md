@@ -46,3 +46,68 @@ Actual full public Grok TLS Git A/B saved add/locked-sync/persisted attestation
 refusal/retry/moving-source pinned repair/update/status/remove PASS5.299s. Its
 client process boundary accepts only inspect --json at the selected cwd; no native
 client or MCP runs and no native loaded-skill qualification is claimed.
+
+
+## Current completion branch verification, 2026-10-24
+
+The restored Grok leaf is integrated with current main and the shared project
+assembly in the Qoder/Grok completion branch. At code tree
+`15dcc674b81ab5bbd73e7d46de36f99c8e605fe3` (published head
+`e29237fe546d8aebde98adaae59d346142143d2d`), fresh focused validation passes:
+
+| Gate | Current result |
+| --- | --- |
+| Full `clients/grok` contracts | PASS, 15.206 s |
+| Full domain contracts | PASS, 0.036 s |
+| Grok composed provider contract | PASS, 0.018 s |
+| Public CLI TLS Git saved Grok lifecycle | PASS, 4.051 s |
+| Windows amd64 Grok test cross-compilation | PASS, compile only |
+| `go vet` Grok client, providers and public CLI | PASS |
+| `gofmt -l` Grok client, provider/CLI fixtures | No changes |
+
+The public lifecycle uses real TLS Git transport and production saved CLI,
+solver, staging, immutable source pin, state and ownership machinery. Its client
+boundary is inert and permits only exact `inspect --json` at the selected cwd.
+It covers user/A/B preservation, locked sync, denied activation attestation,
+explicit retry, pinned repair after the remote source advances, update, saved
+Prepared status and exact owned removal. No Grok, MCP, skill or model process
+runs in those tests. Windows execution is not implied by cross-compilation.
+
+The test subprocess alone removes case-duplicate lowercase proxy variables and
+uses the checksum-verified local Go 1.26.10 runtime with short temporary paths.
+No test assertions or security checks are disabled. The default user profile
+semantics remain unchanged. The native source-attribution artifact remains the
+prior actual evidence; project_source_qualified is still false.
+
+Full relevant golangci-lint and two fresh independent implementation reviews
+remain pending at this checkpoint. Standard Go vet/format checks do not replace
+the repository's size/architecture and changed-lines lint gates. The collector
+or unrelated hosted suite cannot close the prepared adapter's remaining gates.
+
+
+## Independent completion implementation reviews
+
+Frozen product source at published `e29237fe546d8aebde98adaae59d346142143d2d`
+(tree `15dcc674b81ab5bbd73e7d46de36f99c8e605fe3`) received two independent
+current-byte **GO** decisions for the prepared-only Grok contract:
+
+- **R1, skillshare_scope:** traced project scope/root/profile identity, exact
+  staging/layout, anchored typed no-follow/nonblocking foreign-source walks,
+  pinned bounded inspect and project lifecycle dispatch. Verified no MCP
+  projection, global trust, native uninstall or attested activation. Independently
+  reran full Grok client, domain/provider scope and the real TLS Git public saved
+  A/B lifecycle with inert client transport: PASS (15.273/0.009/0.217/5.756 s).
+- **R2, root:** independently read project context/target/root identity, pinned
+  inspect, finite collision scanning, POSIX and Windows handle implementations,
+  all staging/lifecycle dispatch and recorded removal authority. Independent
+  focused project client/provider and public TLS Git lifecycle contracts PASS
+  (0.043/0.022/3.953 s).
+
+These approvals cover Prepared/package-valid ownership, not native activation.
+The scanner deliberately collides with a same-name user source; native source
+attribution does not establish unrestricted same-name active coexistence. This
+limitation must remain explicit in the final client matrix. Native MCP startup,
+skill execution, model/session use and actual Windows execution remain unproved.
+The two fresh code-review gate is closed. Full relevant golangci-lint remains a
+separate pending exact-head hosted gate; no local linter was downloaded because
+shared runtime capacity is bounded. Go vet and formatting are not substitutes.
