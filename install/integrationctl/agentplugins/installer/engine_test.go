@@ -6306,7 +6306,7 @@ func TestDiscoverDoesNotCreateStateOrRunHelper(t *testing.T) {
 		t.Fatalf("discover: %+v", got)
 	}
 	claude := discoveredClient(t, got, "claude")
-	if len(claude.Scopes) != 1 || claude.Scopes[0] != "user" {
+	if len(claude.Scopes) != 2 || claude.Scopes[0] != "user" || claude.Scopes[1] != "project" {
 		t.Fatalf("scopes: %+v", got)
 	}
 	if runner.n != 0 {

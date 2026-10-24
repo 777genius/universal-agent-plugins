@@ -60,9 +60,19 @@ func (p *PreparedSkillsBatch) Check(ctx context.Context) error {
 	return p.check(ctx)
 }
 
-func (p *PreparedSkillsBatch) check(ctx context.Context) error {
+func (p *PreparedSkillsBatch) checkInputs() error {
+	if err := p.app.checkSkillsContext(nil); err != nil {
+		return fmt.Errorf("%w: %w", ErrSkillsPlanStale, err)
+	}
 	if err := p.request.checkInputs(); err != nil {
 		return fmt.Errorf("%w: %w", ErrSkillsPlanStale, err)
+	}
+	return nil
+}
+
+func (p *PreparedSkillsBatch) check(ctx context.Context) error {
+	if err := p.checkInputs(); err != nil {
+		return err
 	}
 	actions, detected, paths, err := prepareSkillsBindings(ctx, p.preview, p.request.requirements, p.request.lock, p.request.aliases, p.request.prepared)
 	if err != nil {
@@ -92,6 +102,10 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	if p.closed || p.applied {
 		return result, errors.New("skill plan closed or already applied")
 	}
+	// Check the original authority before creating a lock in the selected root.
+	if err := p.checkInputs(); err != nil {
+		return result, err
+	}
 	unlock, err := (processlock.Lock{Path: p.app.EnvironmentLockPath}).Acquire(ctx)
 	if err != nil {
 		return result, err
@@ -103,12 +117,15 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	if err = ensureDependencyStore(ctx, p.app, p.request.selectedLock()); err != nil {
 		return result, err
 	}
+	if err = p.checkInputs(); err != nil {
+		return result, err
+	}
 	if err = p.request.publish(); err != nil {
 		return result, err
 	}
 	p.applied = true
-	adapter := &dependencyInstaller{app: p.app, opts: &options{}, detected: p.request.detected, beforeApply: p.request.checkInputs}
-	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(ctx, environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: p.request.lock.ManifestDigest, Bindings: p.request.prepared}, true)
+	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs}
+	results, applyErr := (environment.Coordinator{EnvironmentID: p.app.environmentID(), Mutator: adapter}).ApplySync(ctx, environment.PreparedSync{EnvironmentID: p.app.environmentID(), ManifestDigest: p.request.lock.ManifestDigest, Bindings: p.request.prepared}, true)
 	cursor := 0
 	failedItem := false
 	for _, action := range p.actions {
