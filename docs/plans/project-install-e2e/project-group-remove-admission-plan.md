@@ -61,3 +61,33 @@ canonical project validation. Preserve errors and all user-scope behavior.
 Use focused installer tests and changed-source/static architecture checks only.
 Two independent plan rounds and two frozen code reviews are required. No
 production group-removal source has been edited for this plan.
+
+## R2 — current target capability and unchanged historical contract
+
+APM and Claude independently gave R1 architecture GO on exact
+be90b4ac05617dba3a697208778831cd16ea1d8e after reading the actual public
+scope validation, historical boolean guard and removal preflight/core paths.
+Their refinements are explicit constraints on implementation:
+
+- Apply the exception only when the original historical refusal condition is
+  true. Keep that original expression, its parentheses, found/absent handling,
+  selectedCapable discovery and nonzero SelectedDelivery semantics unchanged.
+- Qualify the current iterated target, never the first group target: explicit
+  request ScopeProject, nonempty canonical request ProjectRoot equal to the
+  configured engine ProjectRoot, and existing ClientScopeSupported for that
+  target and project scope. Missing/mixed/mismatched roots or capability grant
+  no exception; the public context validator continues to reject them first.
+- Present targets always pass the existing removalPreflight during Prepare and
+  Apply, exact frozen binding confirmation and core scoped ownership checks.
+  A swapped or changed saved profile/binding cannot borrow another target's
+  admission. Absent targets create no synthetic binding, receipt or context,
+  retain the original NoChange path and do not dispatch deactivation.
+- Keep user zero-selected guard/error, nonzero selected behavior, exactly-two
+  target cardinality and OpenCode host snapshot restrictions unchanged.
+
+The finite negative acceptance snapshots saved state and untouched user/B files
+for each refusal, including a changed binding/profile after Prepare. Existing
+pending-journal, selected-delivery and missing/changed PLUGIN_DATA cases remain
+required. The positive actual Cline/Codex end-to-end test will switch its final
+per-client cleanup to group removal only with this independently reviewed slice.
+Both final plan GOs precede source edits. No group-removal source has changed.
