@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  automatic,
   navigate,
   locales,
   offline,
@@ -8,6 +9,29 @@ import {
   targets,
   wording,
 } from './i18n-state.helpers';
+import type { RegistryIndex } from '../../types/registry';
+
+// Declared default answers codex with no authentication while the alternative
+// distribution the command can resolve without --target requires it.
+function divergentFixture(index: RegistryIndex) {
+  const plugin = index.plugins[1]!;
+  const declared = plugin.distributions[0]!;
+  const alternative = structuredClone(declared);
+  alternative.id = `community/${plugin.name}`;
+  alternative.kind = 'community';
+  for (const target of [
+    ...alternative.targets,
+    ...alternative.releases.flatMap((release) => release.targets),
+  ])
+    target.authentication = 'required';
+  declared.targets = declared.targets
+    .filter((target) => target.client === 'codex')
+    .map((target) => ({ ...target, authentication: 'not_required' }));
+  for (const release of declared.releases) release.targets = structuredClone(declared.targets);
+  plugin.distributions.push(alternative);
+  return plugin;
+}
+
 
 for (const mobile of [false, true]) {
   test.describe(
@@ -86,6 +110,37 @@ for (const mobile of [false, true]) {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
           true,
         );
+        expect(errors).toEqual([]);
+      });
+      test('automatic badge covers every distribution the command can resolve', async ({
+        page,
+      }) => {
+        const errors = await offline(page);
+        const index = registryFixture();
+        const plugin = divergentFixture(index);
+        await projections(page, index);
+        await navigate(page, '/plugins/', 'en', `?q=${plugin.name}`);
+        const indicator = page
+          .locator(`.plugin-card[data-install-source="${plugin.name}"]`)
+          .locator('.authentication-indicator');
+        await expect(indicator).toHaveAttribute('data-authentication', 'unknown');
+        expect(errors).toEqual([]);
+      });
+      test('automatic badge follows the no-target command instead of the chip selection', async ({
+        page,
+      }) => {
+        const errors = await offline(page);
+        const index = registryFixture();
+        const plugin = divergentFixture(index);
+        await projections(page, index);
+        await navigate(page, '/plugins/', 'en', `?q=${plugin.name}`);
+        const card = page.locator(`.plugin-card[data-install-source="${plugin.name}"]`);
+        const indicator = card.locator('.authentication-indicator');
+        await card.getByRole('button', { name: `Install ${plugin.display_name}`, exact: true }).click();
+        await targets(page, card, ['Codex']);
+        await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
+        await automatic(page, card, 'en');
+        await expect(indicator).toHaveAttribute('data-authentication', 'unknown');
         expect(errors).toEqual([]);
       });
     },

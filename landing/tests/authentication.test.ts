@@ -60,6 +60,20 @@ describe('card authentication indicator', () => {
     assert.match(authenticationIndicator(undefined, ['cursor'], false, t).detail, /unresolved/);
     assert.equal(authenticationIndicator(release, [], false, t).state, 'unknown');
   });
+  it('keeps per-agent policy disagreements visible for automatic installs', () => {
+    const divergent = {
+      id: 'example',
+      targets: [
+        { client: 'cursor', authentication: 'not_required', delivery: 'managed', scopes: ['user'] },
+        { client: 'cursor', authentication: 'required', delivery: 'managed', scopes: ['user'] },
+      ],
+    } as Pick<DistributionView, 'id' | 'release_sequence' | 'targets'>;
+    const result = authenticationIndicator(divergent, ['codex'], true, t);
+    assert.equal(result.state, 'unknown');
+    assert.match(result.label, /varies/);
+    assert.match(result.detail, /cursor: .*not_required \/ .*required/);
+    assert.match(result.detail, /automatic/);
+  });
   it('explains mixed and unknown requirements without an open-lock claim', () => {
     const mixed = authenticationIndicator(release, ['cursor', 'codex'], false, t);
     assert.equal(mixed.state, 'unknown');
