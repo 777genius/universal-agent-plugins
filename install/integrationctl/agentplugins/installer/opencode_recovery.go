@@ -16,7 +16,7 @@ import (
 // OpenCode recorder owns native classification, state publication and cleanup;
 // this guard permits only its current journal and binding to advance.
 func (e *Engine) recoverObservedOpenCode(ctx context.Context, svc usecase.Service, observed RecoveryObservation) error {
-	t := opencode.NativeTransitions{PackageVerifier: svc.Stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeconfig.New()}
+	t := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: svc.Stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeconfig.New()}
 	pending, err := t.Pending()
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func (s *openCodeRecoveryState) confirm(completed bool) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 	}
-	pending, err := (opencode.NativeTransitions{State: transaction.Kernel{StateStore: s.engine.store}}).Pending()
+	pending, err := (opencode.NativeTransitions{ProjectRoot: s.engine.cfg.ProjectRoot, State: transaction.Kernel{StateStore: s.engine.store}}).Pending()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 	}

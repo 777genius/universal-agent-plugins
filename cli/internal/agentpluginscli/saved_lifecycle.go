@@ -190,7 +190,7 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	if err := runSavedEnvironment(cmd, preview, opts, snapshot, requirements, locked, manifest, []string{selection.alias}, nil); err != nil {
 		return true, err
 	}
-	return true, selection.renderNextAction(cmd, opts, requirements, locked, operation, app.environmentID())
+	return true, selection.renderNextAction(cmd, app, opts, requirements, locked, operation)
 }
 
 func selectSavedLifecycle(app App, opts *options, selector string) (savedLifecycleSelection, error) {
@@ -301,7 +301,7 @@ func (selection savedLifecycleSelection) update(cmd *cobra.Command, app App, opt
 	return requirements, locked, err
 }
 
-func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, opts *options, requirements environment.Requirements, locked environment.Lock, operation string, environmentIDs ...string) error {
+func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, app App, opts *options, requirements environment.Requirements, locked environment.Lock, operation string) error {
 	if opts.format == "json" {
 		return nil
 	}
@@ -323,8 +323,8 @@ func (selection savedLifecycleSelection) renderNextAction(cmd *cobra.Command, op
 		_, err := fmt.Fprintln(cmd.OutOrStdout(), "Exact archive checksum retained; choose a new checksum in uap.toml")
 		return err
 	}
-	if operation == "remove" && selection.installation != nil && len(savedAliasTargets(requirements, domain.StateFileV2{}, selection.alias, environmentIDs...)) == 0 {
-		_, err := fmt.Fprintf(cmd.OutOrStdout(), "PLUGIN_DATA preserved; after removal completes, run agentplugins remove %s --purge-data to delete retained data\n", selection.installation.InstallationID)
+	if operation == "remove" && selection.installation != nil && len(savedAliasTargets(requirements, domain.StateFileV2{}, selection.alias, app.environmentID())) == 0 {
+		_, err := fmt.Fprintf(cmd.OutOrStdout(), "PLUGIN_DATA preserved; after removal completes, run %s to delete retained data\n", retainedDataPurgeCommand(app, selection.installation.InstallationID))
 		return err
 	}
 	return nil

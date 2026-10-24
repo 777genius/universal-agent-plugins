@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/qoder-native-research.yml'
       - 'scripts/research-qoder-native.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/test_qoder_native_research.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'

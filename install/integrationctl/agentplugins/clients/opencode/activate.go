@@ -17,8 +17,18 @@ func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationR
 func automaticallyActivatesOpenCode(request domain.ActivationRequest) bool {
 	// Removing the final declarations still reconciles owned native objects.
 	// Keep empty first installs manual and preserve non-native plan restrictions.
-	cleanup := request.Client.ConfigRoot != "" && len(request.Plan.Components) == 0 && len(OpenCodeObjects(request.PreviousNativeObjects)) > 0
-	return request.Plan.InstallIntent == domain.InstallIntentAutomatic && (shared.HasNativeConfigRoot(request) || cleanup)
+	root := request.Client.ConfigRoot
+	native := shared.HasNativeConfigRoot(request)
+	if request.Plan.Scope == domain.ScopeProject {
+		layout, err := openCodeActivationLayout(request)
+		if err != nil {
+			return false
+		}
+		root = layout.Root
+		native = root != "" && shared.OnlyNativeComponents(request.Plan.Components)
+	}
+	cleanup := root != "" && len(request.Plan.Components) == 0 && len(OpenCodeObjects(request.PreviousNativeObjects)) > 0
+	return request.Plan.InstallIntent == domain.InstallIntentAutomatic && (native || cleanup)
 }
 
 // VerifierAvailable reports that an exact native configuration listing can be
@@ -29,13 +39,20 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 
 // Activate installs or verifies managed OpenCode skills and MCP servers
 // through the native config kernel.
-func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if !request.VerifyOnly && request.Client.OpenCodeHost != nil {
 		if err := request.Client.OpenCodeHost.ValidateNative(false, nil); err != nil {
 			return domain.ActivationOutcome{}, err
 		}
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	layout, err := openCodeActivationLayout(request)
+	if err != nil {
+		return domain.ActivationOutcome{}, err
+	}
+	if err := adapter.PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	automatic := automaticallyActivatesOpenCode(request)
@@ -46,7 +63,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		RetryAction:       "retry the managed OpenCode native installation",
 		CompletedAction:   "restart OpenCode to load the installed plugin",
 		Verify: func() error {
-			return VerifyOpenCodeNativeObjects(request.Client.ConfigRoot, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false)
+			return verifyOpenCodeNativeLayout(layout, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			if crossOpenCodeDialect(request.PreviousNativeObjects, request.Delivery.NativeObjects) {
@@ -55,12 +72,18 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 			return ActivateOpenCodeNativeWithKernel(ctx, request, env.NativeConfig)
 		},
 	})
-	return outcome, err
+	if err != nil {
+		return outcome, err
+	}
+	return openCodeProjectStatus(request, outcome), nil
 }
 
 // Deactivate removes managed OpenCode native objects.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
+	if _, err := openCodeTargetLayout(request.Client, request.TargetContext, request.NativeRegistryRoot); err != nil {
+		return outcome, err
+	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove its managed OpenCode skills and MCP entries automatically")
 		return outcome, nil

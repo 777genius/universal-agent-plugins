@@ -64,7 +64,7 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 		SourceRoot:      loaded.envelope.Source.CanonicalSource,
 		ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		ClientID:        string(selected.ClientID), ClientConfigRoot: selected.ConfigRoot,
-		ClientExecutable: backendExecutable(selected, detected, app.scope()), OperationID: operationID,
+		ClientExecutable: backendExecutable(selected, detected, app.scope()), ClientVersion: selected.Version, OperationID: operationID,
 		RequiredComponents: requiredFacadeComponents(loaded.envelope), Assessment: &assessment,
 	}
 	prepared, err := app.Installer.Prepare(ctx, request)
