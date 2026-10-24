@@ -51,9 +51,21 @@ within one of the two bounded compiler slots authorized after reset.
   own directories; no production condition or authority assertion was relaxed.
 - gofmt and authored whitespace checks PASS.
 
-Existing/new direct saved lifecycle/provenance/repair checks, pinned changed-code
-and full-file size/architecture lint, and two fresh independent code reviews are
-pending at this checkpoint. No pending gate is counted as passed. No prior native
+## Fresh final authored gates
+
+- Existing/new direct saved lifecycle/provenance/repair/replay selection PASS
+  21.212s with actual loopback TLS Git/ZIP. A previous tool response was lost at
+  context transition; that unobserved result is not counted, and this is the
+  fresh completed rerun.
+- Pinned changed-code lint from pre-code two-GO checkpoint7e4fe426 PASS0issues
+  across complete sourcespec, environment, sourceacquisition and public CLI.
+- Full-file revive/funlen/gocyclo/gocognit/dupl/depguard over those same packages
+  PASS0issues. No guard or baseline changes were made.
+
+Two fresh independent code review closures remain pending at this evidence
+checkpoint. These leaf results precede a newly required forward integration of
+upstream main008370dd and do not certify unconstructed merge bytes. No pending
+gate is counted as passed. No prior native
 platform/source result is relabeled, no client/model/auth/trust/scanner operation
 ran, and no guard or legacy source was removed or weakened. Root alone publishes
 the exact clean checkpoint; merges remain confined to the project feature.
