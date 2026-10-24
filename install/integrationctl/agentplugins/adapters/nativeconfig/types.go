@@ -178,6 +178,7 @@ type lockAcquirer func(Paths, Codec) (func() error, error)
 type Kernel struct {
 	files        FileIO
 	acquireLocks lockAcquirer
+	codexParser  CodexDocumentParser
 }
 
 func New() Kernel { return Kernel{files: conditionalOSFiles{}} }

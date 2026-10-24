@@ -1,14 +1,15 @@
-package nativeconfig
+package codextoml
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 
 	"github.com/creachadair/tomledit"
 	"github.com/creachadair/tomledit/parser"
 	"github.com/creachadair/tomledit/transform"
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 )
 
 func removeCodexTOMLEntry(doc *tomledit.Document, name string) {
@@ -26,9 +27,9 @@ func removeCodexTOMLEntry(doc *tomledit.Document, name string) {
 }
 
 func setCodexTOMLEntry(doc *tomledit.Document, name string, body []byte) error {
-	var value map[string]any
-	if err := json.Unmarshal(body, &value); err != nil || value == nil {
-		return fmt.Errorf("%w: Codex MCP entry must be a table", ErrMalformed)
+	value, err := decodeTOMLJSON(body)
+	if err != nil || value == nil {
+		return fmt.Errorf("%w: Codex MCP entry must be a table", nativeconfig.ErrMalformed)
 	}
 	var encoded bytes.Buffer
 	if err := toml.NewEncoder(&encoded).SetTablesInline(true).Encode(map[string]any{name: value}); err != nil {
@@ -49,7 +50,7 @@ func setCodexTOMLEntry(doc *tomledit.Document, name string, body []byte) error {
 			parent.Value.X = inline
 			return nil
 		}
-		return fmt.Errorf("%w: Codex MCP collection is not a table", ErrMalformed)
+		return fmt.Errorf("%w: Codex MCP collection is not a table", nativeconfig.ErrMalformed)
 	}
 	if parent != nil && parent.IsSection() {
 		transform.InsertMapping(parent.Section, entry.KeyValue, false)

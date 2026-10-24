@@ -11,7 +11,7 @@ import (
 // neither this admission nor a read-only policy check accepts trailing commas.
 func parseCodecDocument(body []byte, jsonc bool, codec Codec) (*document, error) {
 	if codec == CodecCodex {
-		return parseCodexTOML(body, jsonc)
+		return nil, fmt.Errorf("codex TOML document parser is required")
 	}
 	if (codec != CodecGemini && codec != CodecDevin) || jsonc {
 		return parseDocument(body, jsonc)

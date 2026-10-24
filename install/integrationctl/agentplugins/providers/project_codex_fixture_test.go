@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/codextoml"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
@@ -58,7 +59,7 @@ func newProjectCodexFixture(t *testing.T) projectCodexFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.kernel = nativeconfig.New()
+	f.kernel = nativeconfig.New().WithCodexDocumentParser(codextoml.Parse)
 	f.activator = providers.Activator{Registry: f.registry, NativeConfig: &f.kernel}
 	return f
 }

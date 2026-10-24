@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/codextoml"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -64,7 +65,7 @@ func mutateCodexProject(ctx context.Context, env clients.Env, root, active strin
 		servers[object.LogicalName] = server
 	}
 	return (shared.ProjectComponentMutation{Layout: codexProjectLayout(root), ActivePath: active,
-		Previous: codexProjectOwned(previous), Desired: codexProjectOwned(desired), Servers: servers, Kernel: env.NativeConfig}).Apply(ctx)
+		Previous: codexProjectOwned(previous), Desired: codexProjectOwned(desired), Servers: servers, Kernel: env.NativeConfig.WithCodexDocumentParser(codextoml.Parse)}).Apply(ctx)
 }
 
 func deactivateCodexProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {

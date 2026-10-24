@@ -1,4 +1,4 @@
-package nativeconfig
+package codextoml
 
 import (
 	"errors"
@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 )
 
 func TestProjectCodexTOMLExactLifecyclePreservesForeignData(t *testing.T) {
@@ -22,8 +24,8 @@ func TestProjectCodexTOMLExactLifecyclePreservesForeignData(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
 			before := "# preserve native settings\ncreated = 2026-10-23\n" + collection + "\n[foreign]\nkeep = [1, 2, 3] # foreign comment\n"
 			mustWrite(t, path, before)
-			kernel := New()
-			request := Request{Paths: Paths{JSON: path}, Codec: CodecCodex, Action: ActionAdd, Name: "managed", Server: Server{Type: "remote", URL: "https://managed.test/mcp", RemoteTransport: "streamable-http", Headers: map[string]string{"X-Fixture": "inert"}}}
+			kernel := newKernel()
+			request := nativeconfig.Request{Paths: nativeconfig.Paths{JSON: path}, Codec: nativeconfig.CodecCodex, Action: nativeconfig.ActionAdd, Name: "managed", Server: nativeconfig.Server{Type: "remote", URL: "https://managed.test/mcp", RemoteTransport: "streamable-http", Headers: map[string]string{"X-Fixture": "inert"}}}
 			receipt, err := kernel.Apply(request)
 			if err != nil {
 				t.Fatal(err)
@@ -33,8 +35,8 @@ func TestProjectCodexTOMLExactLifecyclePreservesForeignData(t *testing.T) {
 				t.Fatalf("exact Codex entry = %v/%v, %v", present, owned, err)
 			}
 			projectCodexAssertForeignTOML(t, path, before)
-			request.Action, request.Owned = ActionUpdate, &receipt
-			request.Server = Server{Type: "stdio", Command: "TEST-never-executed", Args: []string{"fixture"}, Env: map[string]string{"FIXTURE": "inert"}, CWD: filepath.Dir(path)}
+			request.Action, request.Owned = nativeconfig.ActionUpdate, &receipt
+			request.Server = nativeconfig.Server{Type: "stdio", Command: "TEST-never-executed", Args: []string{"fixture"}, Env: map[string]string{"FIXTURE": "inert"}, CWD: filepath.Dir(path)}
 			receipt, err = kernel.Apply(request)
 			if err != nil {
 				t.Fatal(err)
@@ -45,7 +47,7 @@ func TestProjectCodexTOMLExactLifecyclePreservesForeignData(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertBytes(t, path, string(unchanged))
-			request.Action = ActionRemove
+			request.Action = nativeconfig.ActionRemove
 			if _, err := kernel.Apply(request); err != nil {
 				t.Fatal(err)
 			}
@@ -90,27 +92,27 @@ func TestProjectCodexTOMLRejectsMalformedCollisionAndForeignEdit(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
 			mustWrite(t, path, body)
-			request := Request{Paths: Paths{JSON: path}, Codec: CodecCodex, Action: ActionAdd, Name: "managed", Server: Server{Type: "remote", URL: "https://managed.test/mcp"}}
-			if _, err := New().Apply(request); !errors.Is(err, ErrMalformed) {
+			request := nativeconfig.Request{Paths: nativeconfig.Paths{JSON: path}, Codec: nativeconfig.CodecCodex, Action: nativeconfig.ActionAdd, Name: "managed", Server: nativeconfig.Server{Type: "remote", URL: "https://managed.test/mcp"}}
+			if _, err := newKernel().Apply(request); !errors.Is(err, nativeconfig.ErrMalformed) {
 				t.Fatalf("invalid TOML admitted: %v", err)
 			}
 			assertBytes(t, path, body)
 		})
 	}
 	path := filepath.Join(t.TempDir(), "config.toml")
-	request := Request{Paths: Paths{JSON: path}, Codec: CodecCodex, Action: ActionAdd, Name: "managed", Server: Server{Type: "remote", URL: "https://managed.test/mcp"}}
-	receipt, err := New().Apply(request)
+	request := nativeconfig.Request{Paths: nativeconfig.Paths{JSON: path}, Codec: nativeconfig.CodecCodex, Action: nativeconfig.ActionAdd, Name: "managed", Server: nativeconfig.Server{Type: "remote", URL: "https://managed.test/mcp"}}
+	receipt, err := newKernel().Apply(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New().Apply(request); !errors.Is(err, ErrCollision) {
+	if _, err := newKernel().Apply(request); !errors.Is(err, nativeconfig.ErrCollision) {
 		t.Fatalf("foreign entry was adopted: %v", err)
 	}
 	const edited = "[mcp_servers.managed]\nurl='https://managed.test/mcp'\nenabled=false # foreign policy\n"
 	mustWrite(t, path, edited)
-	for _, action := range []Action{ActionUpdate, ActionRemove} {
+	for _, action := range []nativeconfig.Action{nativeconfig.ActionUpdate, nativeconfig.ActionRemove} {
 		request.Action, request.Owned = action, &receipt
-		if _, err := New().Apply(request); !errors.Is(err, ErrNotOwned) {
+		if _, err := newKernel().Apply(request); !errors.Is(err, nativeconfig.ErrNotOwned) {
 			t.Fatalf("edited native entry accepted by %s: %v", action, err)
 		}
 		assertBytes(t, path, edited)
@@ -121,19 +123,34 @@ func TestProjectCodexTOMLRemovesCompleteNestedOwnedEntry(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	const body = "[mcp_servers.managed]\ncommand='TEST-never-executed'\n[mcp_servers.managed.env]\nFIXTURE='inert'\n[mcp_servers.foreign]\nurl='https://foreign.test/keep' # keep\n"
 	mustWrite(t, path, body)
-	server := Server{Type: "stdio", Command: "TEST-never-executed", Env: map[string]string{"FIXTURE": "inert"}}
-	receipt, err := DesiredReceipt(path, CodecCodex, "managed", server, Placeholders{})
+	server := nativeconfig.Server{Type: "stdio", Command: "TEST-never-executed", Env: map[string]string{"FIXTURE": "inert"}}
+	receipt, err := nativeconfig.DesiredReceipt(path, nativeconfig.CodecCodex, "managed", server, nativeconfig.Placeholders{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New().Apply(Request{Paths: Paths{JSON: path}, Codec: CodecCodex, Action: ActionRemove, Name: "managed", Owned: &receipt}); err != nil {
+	if _, err := newKernel().Apply(nativeconfig.Request{Paths: nativeconfig.Paths{JSON: path}, Codec: nativeconfig.CodecCodex, Action: nativeconfig.ActionRemove, Name: "managed", Owned: &receipt}); err != nil {
 		t.Fatal(err)
 	}
 	actual, _ := os.ReadFile(path)
 	if strings.Contains(string(actual), "managed") || !strings.Contains(string(actual), "# keep") {
 		t.Fatalf("nested native removal changed foreign entry or left owned child: %s", actual)
 	}
-	if _, err := DesiredReceipt(path, CodecCodex, "sse", Server{Type: "remote", URL: "https://managed.test/mcp", RemoteTransport: "sse"}, Placeholders{}); err == nil {
+	if _, err := nativeconfig.DesiredReceipt(path, nativeconfig.CodecCodex, "sse", nativeconfig.Server{Type: "remote", URL: "https://managed.test/mcp", RemoteTransport: "sse"}, nativeconfig.Placeholders{}); err == nil {
 		t.Fatal("Codex silently accepted unsupported SSE transport")
+	}
+}
+
+func newKernel() nativeconfig.Kernel { return nativeconfig.New().WithCodexDocumentParser(Parse) }
+func mustWrite(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+func assertBytes(t *testing.T, path, expected string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil || string(body) != expected {
+		t.Fatalf("bytes=%q, error=%v, expected=%q", body, err, expected)
 	}
 }
