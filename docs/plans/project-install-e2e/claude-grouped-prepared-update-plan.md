@@ -61,3 +61,15 @@ R1 reviewed exact `6876e8f3` before production edits:
 - apm_vercel_scope: architecture GO after tracing the helper, grouped activation, CLI route, and native evidence; require same-recorded-facts NativeEffectCommitted negative at both group and target levels.
 
 The R2 proposal incorporates both requirements above. No production source, test selector, strict native assertion, or native completeness semantics have changed.
+
+## SDK group mutation propagation amendment — R1
+
+Root's real public SDK Cline+Codex two-target repair regression exposed a separate inherited reporting omission while the default observer work was being tested. In installer/group_apply.go, finishGroup receives a core GroupResult whose real managed directory restoration has Mutated=true, but never transfers that flag to installer.Result. Its inherited Prepared/Installed bindings continue to have hostHandoffPending, so the SDK honestly retains OutcomeIncomplete with the existing reason committed binding is not activated; it incorrectly reports Mutated=false even after the owned files were restored. This amendment changes only mutation reporting, not that Prepared handoff contract.
+
+Proposed bounded correction, awaiting two independent R1 and R2 reviews before editing SDK code:
+
+1. At the start of finishGroup, accumulate result.Mutated OR got.Mutated before state reload, activation-error, pending-handoff, or normal-success return branches. This preserves effects already recorded by host reconciliation and actual core mutation even if later inspection fails. Do not infer native activation or mutation from Prepared alone.
+2. Keep OutcomeIncomplete, its native handoff reason, activation/verifier facts, recovery decisions, and all hostHandoffPending behavior unchanged. There is no new automatic completion of Prepared bindings and no attestation/discovery promotion. Do not alter the unrelated early unchanged Apply branch.
+3. Focused SDK tests must pin: actual managed repair with Prepared/Installed remains Incomplete but Mutated=true; unchanged read-only core result does not manufacture mutation; existing input result.Mutated=true is not cleared; committed effects remain visible on activation/pending/reload-error exits. Reuse the root's composed real two-target repair regression when integrated and add a narrow installer finishGroup unit table for the reporting paths as needed. The earlier core group classification negatives remain mandatory independently.
+
+No SDK production code was edited for this amendment. Independent review and a frozen code checkpoint are required before publication.
