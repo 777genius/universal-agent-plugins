@@ -122,7 +122,10 @@ var _ clients.RegistryInspector = (*Adapter)(nil)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return true }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
+		return inspectProject(ctx, env, client, plan, managed != nil)
+	}
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
@@ -146,4 +149,20 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ do
 		return clients.RegistryExpected, nil
 	}
 	return clients.RegistryCollision, nil
+}
+
+var _ clients.PreparedRegistryInspector = (*Adapter)(nil)
+
+// Project discovery replaces generic prepared scanning with finite native roots.
+func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, error) {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
+		if _, err := grokPlanRoot(domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: plan.TargetContext.UserConfigRoot}, plan); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if name != plan.DeclaredName {
+			return clients.RegistryIndeterminate, fmt.Errorf("grok prepared name differs from plan")
+		}
+		return inspectProjectFiles(plan, owned)
+	}
+	return shared.InspectUnqualifiedPluginRoot(plan.TargetRoot, name, plan.ActivePath, owned)
 }
