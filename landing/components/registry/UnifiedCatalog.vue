@@ -5,12 +5,10 @@ import { catalogModeQuery, isSkillsCatalog } from '~/utils/skillsCatalog';
 const props = withDefaults(
   defineProps<{
     plugins: RegistryPlugin[];
-    heading?: string;
     intro?: string;
     directoryPage?: boolean;
   }>(),
   {
-    heading: undefined,
     intro: undefined,
   },
 );
@@ -21,16 +19,22 @@ const catalogI18n = useI18n({ useScope: 'local' });
 catalogI18n.missingWarn = false;
 catalogI18n.fallbackWarn = false;
 const { t } = catalogI18n;
-const pluginHeading = computed(() =>
-  props.directoryPage ? t('registryUi.directoryPage.explorePlugins') : props.heading,
+const catalogIntro = computed(() =>
+  skillsActive.value
+    ? t('registryUi.skills.intro')
+    : props.directoryPage
+      ? t(
+          'registryUi.directoryPage.searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories',
+        )
+      : (props.intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource')),
 );
-const pluginIntro = computed(() =>
-  props.directoryPage
-    ? t('registryUi.directoryPage.filterByCapabilitySourceAuthenticationOrSupportedAgent')
-    : props.intro,
-);
+const { repositoryUrl } = useSite();
 const route = useRoute();
 const skillsActive = computed(() => isSkillsCatalog(route.query));
+const headingLabel = computed(
+  () =>
+    `${t('registryUi.skills.headingPrefix')} ${t(skillsActive.value ? 'registryUi.skills.skills' : 'registryUi.skills.plugins')}`,
+);
 const modeLink = (skills: boolean) => ({
   path: route.path,
   query: catalogModeQuery(route.query, skills),
@@ -40,52 +44,49 @@ const modeLink = (skills: boolean) => ({
 
 <template>
   <div class="unified-catalog">
-    <div v-if="directoryPage" class="page-intro">
-      <p v-if="!skillsActive" class="eyebrow">
-        {{ t('registryUi.directoryPage.pluginDirectory') }}
-      </p>
-      <h1>
-        {{
-          skillsActive
-            ? t('registryUi.skills.pageHeading')
-            : t('registryUi.directoryPage.findAgentPlugins10')
-        }}
-        <br /><em>
-          {{ t('registryUi.directoryPage.useThemEverywhere') }}
-        </em>
-      </h1>
-      <p>
-        {{
-          skillsActive
-            ? t('registryUi.skills.intro')
-            : t(
-                'registryUi.directoryPage.searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories',
-              )
-        }}
-      </p>
+    <div class="unified-catalog__heading" :class="directoryPage ? 'page-intro' : 'section-heading'">
+      <div class="catalog-heading-row">
+        <component
+          :is="directoryPage ? 'h1' : 'h2'"
+          id="unified-catalog-title"
+          class="unified-catalog__title"
+          :aria-label="headingLabel"
+        >
+          <span>{{ t('registryUi.skills.headingPrefix') }}</span>
+          <span class="catalog-modes" role="group" :aria-label="t('registryUi.skills.catalogType')">
+            <NuxtLink
+              :to="modeLink(false)"
+              :aria-current="!skillsActive ? 'page' : undefined"
+              class="catalog-mode"
+              :class="{ 'catalog-mode--active': !skillsActive }"
+            >
+              {{ t('registryUi.skills.plugins') }}
+            </NuxtLink>
+            <NuxtLink
+              :to="modeLink(true)"
+              :aria-current="skillsActive ? 'page' : undefined"
+              class="catalog-mode"
+              :class="{ 'catalog-mode--active': skillsActive }"
+            >
+              {{ t('registryUi.skills.skills') }}
+            </NuxtLink>
+          </span>
+        </component>
+        <a
+          v-if="!skillsActive"
+          class="catalog-add-button"
+          :href="`${repositoryUrl}/blob/main/registry/README.md#submit-an-external-package`"
+          target="_blank"
+          rel="noreferrer"
+          :aria-label="t('registryUi.catalog.addAPlugin')"
+        >
+          <span aria-hidden="true">＋</span><span>{{ t('registryUi.catalog.addPlugin') }}</span>
+        </a>
+      </div>
+      <p>{{ catalogIntro }}</p>
     </div>
-    <nav class="catalog-modes" :aria-label="t('registryUi.skills.catalogType')">
-      <NuxtLink
-        :to="modeLink(false)"
-        :aria-current="!skillsActive ? 'page' : undefined"
-        class="catalog-mode"
-        :class="{ 'catalog-mode--active': !skillsActive }"
-      >
-        <FilterIcon name="component" />
-        <span>{{ t('registryUi.skills.plugins') }}</span>
-      </NuxtLink>
-      <NuxtLink
-        :to="modeLink(true)"
-        :aria-current="skillsActive ? 'page' : undefined"
-        class="catalog-mode"
-        :class="{ 'catalog-mode--active': skillsActive }"
-      >
-        <FilterIcon name="category" />
-        <span>{{ t('registryUi.skills.skills') }}</span>
-      </NuxtLink>
-    </nav>
-    <SkillsCatalog v-if="skillsActive" :hide-heading="directoryPage" />
-    <PluginCatalog v-else :plugins="plugins" :heading="pluginHeading" :intro="pluginIntro" />
+    <SkillsCatalog v-if="skillsActive" hide-heading />
+    <PluginCatalog v-else :plugins="plugins" hide-heading />
   </div>
 </template>
 

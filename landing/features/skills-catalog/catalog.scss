@@ -1,10 +1,31 @@
 /* Catalog modes share the existing control and card vocabulary. */
-.catalog-modes {
-  display: flex;
-  width: fit-content;
-  gap: 4px;
-  padding: 5px;
+.unified-catalog__heading {
+  max-width: none;
   margin-bottom: 32px;
+}
+.unified-catalog__heading .catalog-heading-row {
+  flex-wrap: wrap;
+}
+.unified-catalog__heading .unified-catalog__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 0;
+  font-size: 2.25rem;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+.unified-catalog__heading > p {
+  max-width: 75ch;
+  margin-top: 18px;
+}
+.catalog-modes {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface-solid);
@@ -13,22 +34,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-width: 160px;
-  min-height: 46px;
-  padding: 10px 22px;
+  min-height: 44px;
+  padding: 6px 12px;
   border-radius: 10px;
   color: var(--muted);
-  font-size: 0.95rem;
-  font-weight: 700;
+  font: inherit;
   text-decoration: none;
   transition:
     background 0.18s ease,
     color 0.18s ease;
-}
-.catalog-mode svg {
-  width: 19px;
-  height: 19px;
 }
 .catalog-mode:hover {
   color: var(--text);
@@ -44,27 +58,6 @@
 }
 .skills-catalog__controls {
   grid-template-columns: minmax(240px, 1fr) minmax(210px, 0.4fr);
-}
-.skills-catalog__disclosure {
-  max-width: 75ch;
-  margin: 5px 0 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-  line-height: 1.6;
-}
-.skills-catalog__summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 18px;
-}
-.skills-catalog__summary .catalog-count {
-  margin: 0;
-}
-.skills-catalog__summary .button {
-  min-height: 34px;
-  padding: 7px 12px;
-  font-size: 0.72rem;
 }
 .skill-card {
   min-height: 180px;
@@ -120,13 +113,12 @@
   margin-top: 25px;
 }
 @media (max-width: 640px) {
-  .catalog-modes {
-    width: 100%;
+  .unified-catalog__heading .unified-catalog__title {
+    font-size: 1.55rem;
   }
   .catalog-mode {
-    flex: 1;
     min-width: 0;
-    padding-inline: 16px;
+    padding-inline: 10px;
   }
   .skills-catalog__controls {
     grid-template-columns: minmax(0, 1fr);

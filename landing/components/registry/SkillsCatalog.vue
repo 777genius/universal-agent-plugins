@@ -86,10 +86,10 @@ const staleDate = computed(() => {
 <template>
   <section
     class="catalog skills-catalog"
-    aria-labelledby="skills-catalog-title"
+    :aria-labelledby="hideHeading ? 'unified-catalog-title' : 'skills-catalog-title'"
     :aria-busy="loading"
   >
-    <div class="section-heading" :class="{ 'sr-only': hideHeading }">
+    <div v-if="!hideHeading" class="section-heading">
       <div class="catalog-heading-row">
         <h2 id="skills-catalog-title">{{ t('registryUi.skills.heading') }}</h2>
       </div>
@@ -116,38 +116,19 @@ const staleDate = computed(() => {
     </div>
     <div class="catalog-meta">
       <div aria-live="polite">
-        <div class="skills-catalog__summary">
-          <p v-if="query.trim() && !searchTooShort" class="catalog-count">
-            {{ t('registryUi.skills.searchResults', { count: n(displayed.length) }) }}
-          </p>
-          <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
-            {{
-              collectionTotal
-                ? t('registryUi.skills.collectionShown', {
-                    count: n(displayed.length),
-                    total: n(collectionTotal),
-                  })
-                : t('registryUi.skills.loaded', { count: n(displayed.length) })
-            }}
-          </p>
-          <button
-            v-if="!loading && !searchTooShort && (hasMore || (failed && displayed.length))"
-            type="button"
-            class="button button--secondary"
-            :disabled="loadingMore"
-            @click="failed ? retry() : showMore()"
-          >
-            {{
-              loadingMore
-                ? t('registryUi.skills.loading')
-                : failed
-                  ? t('registryUi.skills.retry')
-                  : t('registryUi.skills.showMore')
-            }}
-            <span v-if="!loadingMore" aria-hidden="true">↓</span>
-          </button>
-        </div>
-        <p class="skills-catalog__disclosure">{{ t('registryUi.skills.listingNote') }}</p>
+        <p v-if="query.trim() && !searchTooShort" class="catalog-count">
+          {{ t('registryUi.skills.searchResults', { count: n(displayed.length) }) }}
+        </p>
+        <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
+          {{
+            collectionTotal
+              ? t('registryUi.skills.collectionShown', {
+                  count: n(displayed.length),
+                  total: n(collectionTotal),
+                })
+              : t('registryUi.skills.loaded', { count: n(displayed.length) })
+          }}
+        </p>
         <p
           v-if="metadata?.cache.status === 'stale'"
           class="discovery-status discovery-status--stale"

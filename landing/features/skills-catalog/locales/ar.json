@@ -12,7 +12,6 @@
       "sortLabel": "ترتيب المهارات",
       "loaded": "عرض {count} مهارة",
       "searchResults": "عرض {count} نتيجة بحث",
-      "listingNote": "القوائم من skills.sh. الإدراج لا يضمن المراجعة أو التوافق.",
       "stale": "عرض نتائج محفوظة بتاريخ {date}. النتائج الحديثة غير متاحة مؤقتًا.",
       "minSearch": "أدخل حرفين على الأقل",
       "minSearchHelp": "استخدم اسم مهارة أو مستودع، أو امسح البحث للتصفح.",
@@ -26,7 +25,7 @@
       "showMore": "عرض المزيد من المهارات",
       "externalSource": "مصدر خارجي",
       "githubSource": "المصدر على GitHub",
-      "unsupportedSource": "تحتاج هذه المهارة إلى مستودع GitHub لتثبيتها هنا.",
+      "unsupportedSource": "التثبيت من هذا المصدر غير مدعوم بعد.",
       "chooseAgents": "اختر الوكلاء",
       "chooseInTerminal": "اختيار الوكلاء في الطرفية",
       "chooseInTerminalHelp": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
@@ -43,7 +42,8 @@
       },
       "pageHeading": "اعثر على Agent Skills",
       "unsupportedName": "اسم المهارة في هذا الإدراج غير مدعوم. راجع المصدر للحصول على تعليمات التثبيت.",
-      "collectionShown": "عرض {count} من {total} في هذه المجموعة"
+      "collectionShown": "عرض {count} من {total} في هذه المجموعة",
+      "headingPrefix": "اعثر على"
     },
     "directoryPage": {
       "pluginDirectory": "دليل الإضافات",

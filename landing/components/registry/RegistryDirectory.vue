@@ -27,10 +27,6 @@ const intro = computed(() =>
 
 <template>
   <div id="plugins" class="container catalog-wrap" data-scroll-reveal>
-    <UnifiedCatalog
-      :plugins="registry.plugins"
-      :heading="t('registryUi.directory.heading')"
-      :intro="intro"
-    />
+    <UnifiedCatalog :plugins="registry.plugins" :intro="intro" />
   </div>
 </template>

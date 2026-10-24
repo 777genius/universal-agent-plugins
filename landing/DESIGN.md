@@ -10,10 +10,10 @@ the existing `AppMultiSelect`, persisted installation preferences, and
 `CommandSnippet`. Skills remain a separate data model from reviewed packages.
 The mode is reflected in `?tab=skills`; search and sorting survive navigation.
 
-The directory's page heading already introduces Skills, so its catalog heading
-is available to assistive technology without repeating visible introductory
-copy. On the home page the catalog keeps its own visible heading. Collapsed
-Skill cards are compact; agent selection and commands appear after Install.
+The catalog heading combines a localized shared prefix with the Plugins/Skills
+segmented switch as its final phrase. It is the directory's unique h1 and the
+home catalog's h2. One introductory sentence follows; child catalogs do not
+repeat a heading or intro. Collapsed Skill cards are compact; agent selection and commands appear after Install.
 Agent choices come from the generated client capability manifest.
 
 Catalog translations belong to the feature's compiled Vue I18n resources.
@@ -25,8 +25,10 @@ global registry stylesheet, keeping unrelated pages within their HTML budget.
 
 Desktop is the acceptance target. Review includes real skills.sh data, search,
 installation choices, copy, navigation, pagination, and outage/empty states.
-The source and provider links identify provenance without claiming compatibility
-or review. The CLI validates the repository and exact declared Skill name.
+Cards link only to their validated GitHub repository roots. Provider links and
+listing notices are absent. The collection count describes the current view,
+and pagination remains below the cards. The CLI validates the repository and
+exact declared Skill name.
 
 Impeccable's final detector identified two inherited patterns in unrelated
 registry styles (gradient text and a workflow accent stripe). They are outside

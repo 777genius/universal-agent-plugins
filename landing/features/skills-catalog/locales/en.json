@@ -12,7 +12,6 @@
       "sortLabel": "Sort Skills",
       "loaded": "Showing {count} Skills",
       "searchResults": "Showing {count} search results",
-      "listingNote": "Listings are from skills.sh. Listing does not mean reviewed or compatible.",
       "stale": "Showing saved results from {date}. Fresh results are temporarily unavailable.",
       "minSearch": "Enter at least 2 characters",
       "minSearchHelp": "Use a skill name or repository, or clear your search to browse.",
@@ -26,7 +25,7 @@
       "showMore": "Show more Skills",
       "externalSource": "External source",
       "githubSource": "GitHub source",
-      "unsupportedSource": "This Skill needs a GitHub repository before it can be installed here.",
+      "unsupportedSource": "Installation from this source is not supported yet.",
       "chooseAgents": "Choose agents",
       "chooseInTerminal": "Choose agents in terminal",
       "chooseInTerminalHelp": "The command lets you choose agents before installation.",
@@ -43,7 +42,8 @@
       },
       "pageHeading": "Find Agent Skills",
       "unsupportedName": "This listing does not have a supported Skill name. Visit the source for installation details.",
-      "collectionShown": "Showing {count} of {total} in this collection"
+      "collectionShown": "Showing {count} of {total} in this collection",
+      "headingPrefix": "Find your"
     },
     "directoryPage": {
       "pluginDirectory": "Plugin directory",

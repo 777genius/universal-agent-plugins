@@ -12,7 +12,6 @@
       "sortLabel": "技能排序",
       "loaded": "显示 {count} 个技能",
       "searchResults": "显示 {count} 个搜索结果",
-      "listingNote": "列表来自 skills.sh。收录不代表已审核或兼容。",
       "stale": "正在显示 {date} 保存的结果。最新结果暂时不可用。",
       "minSearch": "请输入至少 2 个字符",
       "minSearchHelp": "输入技能名称或仓库，或清除搜索以浏览。",
@@ -26,7 +25,7 @@
       "showMore": "显示更多技能",
       "externalSource": "外部来源",
       "githubSource": "GitHub 源码",
-      "unsupportedSource": "此技能需要 GitHub 仓库才能在此安装。",
+      "unsupportedSource": "暂不支持从此来源安装。",
       "chooseAgents": "选择代理",
       "chooseInTerminal": "在终端中选择代理",
       "chooseInTerminalHelp": "命令会在安装前让你选择代理。",
@@ -43,7 +42,8 @@
       },
       "pageHeading": "查找 Agent Skills",
       "unsupportedName": "此条目的技能名称不受支持。请查看来源中的安装说明。",
-      "collectionShown": "本合集显示 {count} 个，共 {total} 个"
+      "collectionShown": "本合集显示 {count} 个，共 {total} 个",
+      "headingPrefix": "发现你的"
     },
     "directoryPage": {
       "pluginDirectory": "插件目录",

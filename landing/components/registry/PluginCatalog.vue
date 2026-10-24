@@ -14,7 +14,12 @@ import { canonicalPath } from '~/utils/seo';
 const { t, n } = useI18n();
 
 const props = withDefaults(
-  defineProps<{ plugins: RegistryPlugin[]; heading?: string; intro?: string }>(),
+  defineProps<{
+    plugins: RegistryPlugin[];
+    heading?: string;
+    intro?: string;
+    hideHeading?: boolean;
+  }>(),
   {
     heading: undefined,
     intro: undefined,
@@ -242,8 +247,12 @@ watch([query, category, component, source, trust, client, authentication, owner]
 </script>
 
 <template>
-  <section class="catalog" aria-labelledby="catalog-title" :data-discovery-state="discovery.state">
-    <div class="section-heading">
+  <section
+    class="catalog"
+    :aria-labelledby="hideHeading ? 'unified-catalog-title' : 'catalog-title'"
+    :data-discovery-state="discovery.state"
+  >
+    <div v-if="!hideHeading" class="section-heading">
       <p class="eyebrow">{{ t('registryUi.catalog.pluginDirectory') }}</p>
       <div class="catalog-heading-row">
         <h2 id="catalog-title">{{ heading ?? t('registryUi.catalog.explorePlugins') }}</h2>

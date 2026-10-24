@@ -46,7 +46,16 @@ test('Skills search reveals install choices, copies the exact command and surviv
   });
   await page.goto('plugins/?tab=skills');
   const catalog = page.locator('.skills-catalog');
-  await expect(catalog.getByRole('heading', { name: 'Explore Agent Skills' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Find your Skills', exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.locator('.catalog-modes').locator('xpath=..')).toHaveAttribute(
+    'id',
+    'unified-catalog-title',
+  );
+  await expect(catalog.locator('.skills-catalog__disclosure')).toHaveCount(0);
+  await expect(catalog.locator('.catalog-meta button')).toHaveCount(0);
   await expect(catalog.locator('.plugin-card__install-panel')).toHaveCount(0);
   await catalog.getByRole('searchbox', { name: 'Search Skills', exact: true }).fill('frontend');
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
@@ -75,6 +84,9 @@ test('Skills search reveals install choices, copies the exact command and surviv
     );
   await page.locator('.catalog-modes').getByRole('link', { name: 'Plugins', exact: true }).click();
   await expect(page.locator('.skills-catalog')).toHaveCount(0);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Find your Plugins', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Search plugins', exact: true })).toHaveValue(
     'frontend',
   );
@@ -85,6 +97,10 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect(catalog.locator('.skill-card').first().locator('pre')).toContainText(
     '--target codex',
   );
+  await page.goto('./?tab=skills');
+  await expect(
+    page.getByRole('heading', { level: 2, name: 'Find your Skills', exact: true }),
+  ).toBeVisible();
 });
 
 test('Skills renders in 48-item increments and requests the next upstream page only after loaded items', async ({
@@ -112,13 +128,12 @@ test('Skills renders in 48-item increments and requests the next upstream page o
     'Showing 48 of 9,911 in this collection',
   );
   await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
-  await expect(
-    catalog.locator('.skills-catalog__summary').getByRole('button', { name: /Show more Skills/ }),
-  ).toBeVisible();
+  await expect(catalog.getByRole('button', { name: /Show more Skills/ })).toHaveCount(1);
+  await expect(catalog.locator('.catalog-meta button')).toHaveCount(0);
   for (const count of [96, 144, 192, 200]) {
     await catalog
       .getByRole('button', { name: /Show more Skills/ })
-      .first()
+      .last()
       .click();
     await expect(catalog.locator('.skill-card')).toHaveCount(count);
     await expect(catalog.locator('.catalog-count')).toHaveText(

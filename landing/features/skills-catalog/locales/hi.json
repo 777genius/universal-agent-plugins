@@ -12,7 +12,6 @@
       "sortLabel": "स्किल क्रम",
       "loaded": "{count} स्किल दिख रही हैं",
       "searchResults": "{count} खोज परिणाम दिख रहे हैं",
-      "listingNote": "सूची skills.sh से है। सूची में होना समीक्षा या अनुकूलता की गारंटी नहीं है।",
       "stale": "{date} के सहेजे परिणाम दिख रहे हैं। नए परिणाम अभी उपलब्ध नहीं हैं।",
       "minSearch": "कम से कम 2 अक्षर लिखें",
       "minSearchHelp": "स्किल का नाम या रिपॉज़िटरी लिखें, या ब्राउज़ करने के लिए खोज साफ़ करें।",
@@ -26,7 +25,7 @@
       "showMore": "और स्किल दिखाएँ",
       "externalSource": "बाहरी स्रोत",
       "githubSource": "GitHub स्रोत",
-      "unsupportedSource": "यहाँ इंस्टॉल करने के लिए इस स्किल को GitHub रिपॉज़िटरी चाहिए।",
+      "unsupportedSource": "इस स्रोत से इंस्टॉल करना अभी समर्थित नहीं है।",
       "chooseAgents": "एजेंट चुनें",
       "chooseInTerminal": "टर्मिनल में एजेंट चुनें",
       "chooseInTerminalHelp": "कमांड इंस्टॉल से पहले एजेंट चुनने देता है।",
@@ -43,7 +42,8 @@
       },
       "pageHeading": "Agent Skills खोजें",
       "unsupportedName": "इस सूची में Skill का नाम समर्थित नहीं है। इंस्टॉल करने के निर्देश स्रोत में देखें।",
-      "collectionShown": "इस संग्रह में {total} में से {count} दिख रहे हैं"
+      "collectionShown": "इस संग्रह में {total} में से {count} दिख रहे हैं",
+      "headingPrefix": "खोजें"
     },
     "directoryPage": {
       "pluginDirectory": "प्लगइन निर्देशिका",

@@ -12,7 +12,6 @@
       "sortLabel": "Ordenar Skills",
       "loaded": "Mostrando {count} Skills",
       "searchResults": "Mostrando {count} resultados",
-      "listingNote": "Datos de skills.sh. Una ficha no garantiza revisión ni compatibilidad.",
       "stale": "Resultados guardados del {date}. Los datos recientes no están disponibles temporalmente.",
       "minSearch": "Introduce al menos 2 caracteres",
       "minSearchHelp": "Usa un nombre o repositorio, o borra la búsqueda para explorar.",
@@ -26,7 +25,7 @@
       "showMore": "Mostrar más Skills",
       "externalSource": "Fuente externa",
       "githubSource": "Código en GitHub",
-      "unsupportedSource": "Esta habilidad necesita un repositorio de GitHub para instalarse aquí.",
+      "unsupportedSource": "La instalación desde esta fuente aún no es compatible.",
       "chooseAgents": "Elige agentes",
       "chooseInTerminal": "Elegir agentes en la terminal",
       "chooseInTerminalHelp": "El comando permite elegir agentes antes de instalar.",
@@ -43,7 +42,8 @@
       },
       "pageHeading": "Encuentra Agent Skills",
       "unsupportedName": "El nombre de esta skill no es compatible. Consulta la fuente para ver cómo instalarla.",
-      "collectionShown": "Mostrando {count} de {total} en esta colección"
+      "collectionShown": "Mostrando {count} de {total} en esta colección",
+      "headingPrefix": "Encuentra tus"
     },
     "directoryPage": {
       "pluginDirectory": "Directorio de complementos",
