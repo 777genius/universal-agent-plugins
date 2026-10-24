@@ -31,3 +31,24 @@ independent implementation reviews remain pending and must close before root
 publishes/integrates this correction. No vendor/native, model, trust or MCP
 process ran during source reconstruction. Exact Codex authority/public SDK/CLI
 recovery is a separate required reviewed slice, not completed by this extraction.
+
+## Fresh first execution and concrete fixture correction
+
+At initial sourcefff4b87f, unchanged TestContractLayerDependencyClosure actually
+passed0.021s and complete nativeconfig passed4.013s. The moved backend test
+initially failed compilation because mechanical type qualification also
+qualified struct field labels/request selectors; both reviewers independently
+reported that same concrete blocker. Only labels/selectors were corrected to
+their original spelling, retaining qualified RHS types and all assertions.
+
+The initial full preserved Codex client attempt also failed on duplicate ambient
+uppercase/lowercase HTTP_PROXY/HTTPS_PROXY/NO_PROXY variable names. The production
+validator was not changed. A new run removed only the conflicting lowercase
+ambient entries for that test process, preserving explicit fixture validation.
+
+After the test-only qualification correction, complete concrete codextoml tests
+passed0.053s, full preserved Codex client passed0.181s, and all ProjectCodex
+provider contracts passed0.733s. These are new workspace executions with the
+verified Go1.26.10 toolchain/caches and one coordinated GOMAXPROCS2/-p2 process.
+Failed compile/environment attempts are not passes. Lint and final independent
+review closures remain pending; no native/client/model/MCP/trust execution.
