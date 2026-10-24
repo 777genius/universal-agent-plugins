@@ -16,6 +16,7 @@ type claudeProjectNativeFixture struct {
 	base                                     *claudeNativeFixture
 	client, installer, project, otherProject string
 	foreign                                  map[string]string
+	diagnosticAttempted                      bool
 }
 
 func newClaudeProjectNativeFixture(t *testing.T) *claudeProjectNativeFixture {
@@ -110,6 +111,14 @@ func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...str
 	}
 	args = append(args, "--scope", "project", "--project-root", f.project)
 	result, err := commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, label, args...)
+	if err != nil && !f.diagnosticAttempted {
+		f.diagnosticAttempted = true
+		records, logs := claudeFailureListingRecords(f.client, f.project, f.otherProject, f.base.env(filepath.Dir(f.client)), captureClaudeDiagnostic)
+		for name, body := range logs {
+			nativeWrite(t, filepath.Join(f.base.Root, name), body, 0600)
+		}
+		nativeJSON(t, filepath.Join(f.base.Root, "failure-listing-diagnostics.json"), map[string]any{"installer_label": label, "original_installer_error": boundedClaudeDiagnosticError(err), "diagnostics": records, "original_failure_preserved": true, "project_qualified": false})
+	}
 	f.requireForeign(t)
 	return result, err
 }
