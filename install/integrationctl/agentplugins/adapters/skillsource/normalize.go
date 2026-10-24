@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -61,7 +62,7 @@ func Normalize(ctx context.Context, raw domain.PackageSnapshot, expectedName, st
 	if err = writeSyntheticManifest(temp, stableSourceKey); err != nil {
 		return domain.PackageSnapshot{}, err
 	}
-	artifact, err := builder.Snapshot(ctx, temp, raw.Source)
+	artifact, err := snapshotNormalizedTree(ctx, builder, temp, verified, skill.Name)
 	if err != nil {
 		return domain.PackageSnapshot{}, err
 	}
@@ -137,4 +138,14 @@ func writeSyntheticManifest(root, stableSourceKey string) error {
 		return err
 	}
 	return nil
+}
+
+// snapshotNormalizedTree seals the portable package after raw content is copied.
+// Executable identity belongs to the immutable Git inventory, not host mode bits.
+func snapshotNormalizedTree(ctx context.Context, builder packagedigest.Builder, root string, raw domain.PackageSnapshot, skillName string) (domain.PackageSnapshot, error) {
+	executables := make([]string, 0, len(raw.ExecutableFiles))
+	for _, relative := range raw.ExecutableFiles {
+		executables = append(executables, path.Join("skills", skillName, relative))
+	}
+	return builder.SnapshotWithExecutables(ctx, root, raw.Source, executables)
 }
