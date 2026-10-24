@@ -1,0 +1,47 @@
+name: Grok Pinned Project Source Research
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/grok-native-research.yml'
+      - 'scripts/research-grok-native.py'
+      - 'scripts/test_grok_native_research.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grok-native-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research:
+    name: Grok 1.0.67 project source observations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify inert Grok and shared Qoder research safety contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_grok_native_research.py'
+          python3 -m unittest discover -s scripts -p 'test_qoder_native_research.py'
+      - name: Capture pinned genuine source observations in fresh profiles
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/research-grok-native.py --output '${{ runner.temp }}/grok-native-research'
+      - name: Upload research including failed collection
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-1.0.67-precode-project-source-linux-amd64
+          path: ${{ runner.temp }}/grok-native-research/
+          if-no-files-found: error
+          retention-days: 14

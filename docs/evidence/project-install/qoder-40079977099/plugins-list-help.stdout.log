@@ -1,0 +1,12 @@
+Usage: qodercli plugins list [options]
+
+List installed plugins.
+
+Options:
+  --json                        Output as JSON. (default: false)
+  --available                   Include available plugins from marketplaces
+                                (requires --json). (default: false)
+  -o, --output-format <format>  The format of the CLI output. (choices: "text",
+                                "json")
+  --plugin-dir <dirs...>        Additional plugin directories to scan.
+  -h, --help                    display help for command

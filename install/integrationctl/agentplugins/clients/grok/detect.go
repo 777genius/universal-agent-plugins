@@ -25,11 +25,15 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	if configured := strings.TrimSpace(host.Env("GROK_HOME")); configured != "" {
 		root = configured
 	}
-	return clients.Detection{
+	detection := clients.Detection{
 		ConfigRoot: root, ExecutablePath: host.LookPath("grok"),
 		Surfaces: []domain.ClientSurface{
 			host.BinarySurface("grok_cli", "grok"),
 			host.DirectorySurface("grok_config", root),
 		},
 	}
+	if strings.TrimSpace(host.Env("GROK_HOME")) != "" {
+		detection.Surfaces = append(detection.Surfaces, domain.ClientSurface{ID: "grok_custom_home", Detected: true})
+	}
+	return detection
 }
