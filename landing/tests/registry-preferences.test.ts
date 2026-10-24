@@ -1,3 +1,4 @@
+import { authenticationIndicator } from '../utils/authentication.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
@@ -36,6 +37,7 @@ const common = {
   watch,
   clients,
   ...registryDomain,
+  authenticationIndicator,
   ...filters,
   pluginCommands,
   onScopeDispose: Vue.onScopeDispose,
@@ -74,7 +76,7 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authLabel, toggleInstall',
+    'targets, autoDetect, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall',
   );
 }
 
@@ -351,10 +353,15 @@ test('distribution captions use stable kind and authentication visibility ignore
   instance.state.updateTargets(['codex']);
   instance.state.updateAutoDetect(false);
   const visible = instance.state.showAuthentication.value;
-  i18n.mergeLocaleMessage('en', { registryUi: { authentication: Object.fromEntries(
+  i18n.mergeLocaleMessage('en', { registryUi: { authenticationIndicator: Object.fromEntries(
     ['not_required', 'required', 'unknown', 'varies', 'oauth', 'client_managed'].map(key => [key, 'SYNTHETIC CAPTION']),
   ) } });
-  assert.equal(instance.state.authLabel.value, 'SYNTHETIC CAPTION');
+  // Node's vue-i18n composer does not invalidate computed consumers on a
+  // message merge. A normal target change refreshes this same card instance.
+  instance.state.updateTargets(['cursor']);
+  assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
+  instance.state.updateTargets(['codex']);
+  assert.equal(instance.state.authentication.value.label, 'SYNTHETIC CAPTION');
   assert.equal(instance.state.showAuthentication.value, visible);
   i18n.setLocaleMessage('en', messages);
   instance.stop();

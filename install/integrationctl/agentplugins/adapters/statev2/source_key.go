@@ -9,7 +9,10 @@ import (
 
 func installedSourceKey(installation domain.Installation) string {
 	sourceKey := "github:" + strings.ToLower(installation.Source.Repository) + ":" + installation.Source.PackageSubpath
-	if installation.Source.SourceKind != "" {
+	if installation.Source.StableSourceKey != "" {
+		sourceKey = installation.Source.StableSourceKey
+	}
+	if installation.Source.SourceKind != "" && installation.Source.SourceKind != "https-skill" {
 		sourceKey = sourcespec.Key(sourcespec.Kind(installation.Source.SourceKind), installation.Source.SourceURL, installation.Source.PackageSubpath)
 	}
 	if installation.Directory != nil {

@@ -131,7 +131,7 @@ func (session *applySession) validateExistingPackage() error {
 	// update" diagnostic. A same-release digest conflict is a supply-chain
 	// failure regardless of whether the caller happened to be adding a target.
 	installation := session.state.Installations[session.installationIndex]
-	managedDirect := session.input.EnvironmentAuthority != nil && session.input.OriginMode == domain.OriginModeDirect && installation.Source.Repository == session.input.Envelope.Source.Repository && installation.Source.PackageSubpath == session.input.Envelope.Source.PackageSubpath
+	managedDirect := managedDirectSource(installation, session.input)
 	if err := validatePackageTransition(installation, session.input.Envelope); err != nil && !managedDirect {
 		return err
 	}

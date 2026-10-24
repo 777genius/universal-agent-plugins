@@ -200,3 +200,64 @@ func TestDependencyCorruptStoreNeverDownloadsReplacement(t *testing.T) {
 		t.Fatal("corrupt store triggered a replacement source fetch")
 	}
 }
+
+// A retained normalized artifact must not bypass a different raw-source contract.
+func TestDependencyStagingSeparatesSkillProvenance(t *testing.T) {
+	j, _, sha := skillJourney(t)
+	ctx := context.Background()
+	plan, err := j.cli.app.PrepareSkills(ctx, SkillsBatchRequest{Selections: []SkillsSelection{{Repository: "acme/tools", Commit: sha, Path: "skills/pdf", Name: "pdf"}}, TargetIDs: []string{"codex"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plan.Close()
+	pin := plan.request.lock.Packages[0]
+	for _, change := range []struct {
+		name string
+		edit func(*environment.LockedGitSource)
+	}{
+		{"raw digest", func(source *environment.LockedGitSource) { source.RawTreeDigest = strings.Repeat("0", 64) }},
+		{"normalizer", func(source *environment.LockedGitSource) { source.Normalizer = "unsupported" }},
+		{"name", func(source *environment.LockedGitSource) { source.Skill = "other" }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			changed := pin
+			source := *pin.Source.Git
+			changed.Source.Git = &source
+			change.edit(&source)
+			if snapshot, acquireErr := plan.preview.acquireLockedSnapshot(ctx, changed); acquireErr == nil {
+				_ = packagedigest.Remove(snapshot)
+				t.Fatal("cached artifact bypassed changed Skill verification")
+			}
+		})
+	}
+	changed := pin
+	source := *pin.Source.Git
+	source.Path = "previous/pdf"
+	changed.Source.Git = &source
+	snapshot, err := plan.preview.acquireLockedSnapshot(ctx, changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = packagedigest.Remove(snapshot) }()
+	if snapshot.Source.Skill.RequestedPath != source.Path {
+		t.Fatal("cache returned a previous requested source anchor")
+	}
+}
+
+func TestSkillRootRequiresRawAcquisitionCapability(t *testing.T) {
+	app, pin, source := dependencyStagingFixture(t)
+	ctx := context.Background()
+	requirement := environment.Requirement{Alias: "pdf", Git: &environment.GitSource{Kind: environment.SkillKind, Skill: "pdf", Repository: "acme/pdf", Selector: environment.Selector{Kind: environment.SelectorCommit, Value: pin.Source.Git.Commit}}}
+	if _, err := (dependencyResolver{app: app}).resolveSkill(ctx, requirement, []string{"codex"}, nil, pin.Source.Git.Commit, "", ""); err == nil || !strings.Contains(err.Error(), "raw Skill acquisition unavailable") {
+		t.Fatalf("root resolution used plugin acquisition: %v", err)
+	}
+	pin.Source.Git.Kind = environment.SkillKind
+	pin.Source.Git.Skill = "pdf"
+	pin.Source.Git.Normalizer = environment.SkillNormalizerV1
+	if _, err := app.acquireLockedSkill(ctx, pin); err == nil || !strings.Contains(err.Error(), "raw Skill acquisition unavailable") {
+		t.Fatalf("root replay used plugin acquisition: %v", err)
+	}
+	if len(source.snapshots) != 0 {
+		t.Fatal("raw Skill fell back to plugin source acquisition")
+	}
+}

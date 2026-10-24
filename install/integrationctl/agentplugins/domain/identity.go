@@ -25,6 +25,15 @@ func newInstallationID(reader io.Reader) (string, error) {
 }
 
 func ComputeSourceBindingID(source SourceIdentity) string {
+	if source.SourceBindingHint == "uap-dependency-web-skill" && source.WebSkill != nil {
+		key := "https-skill:" + source.WebSkill.URL + ":" + source.WebSkill.Skill
+		sum := sha256.Sum256([]byte(key))
+		return "src_" + hex.EncodeToString(sum[:12])
+	}
+	if source.SourceBindingHint == "uap-dependency-skill" && strings.HasPrefix(source.StableSourceKey, "github-skill:") {
+		sum := sha256.Sum256([]byte(source.StableSourceKey))
+		return "src_" + hex.EncodeToString(sum[:12])
+	}
 	canonicalSource := source.CanonicalSource
 	if source.Repository != "" && (source.SourceBindingHint == "uap-dependency-git" || source.SourceBindingHint == "uap-dependency-registry") {
 		canonicalSource = "github:" + strings.ToLower(source.Repository) + ":" + source.PackageSubpath

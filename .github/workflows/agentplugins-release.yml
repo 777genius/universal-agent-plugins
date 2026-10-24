@@ -97,6 +97,7 @@ jobs:
             fi
           }
           require_check dependency-review
+          require_check skills-picker
           for name in \
             test \
             docs-check \
@@ -189,6 +190,16 @@ jobs:
         with:
           go-version: 1.26.10
           cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/skills-picker/package-lock.json
+      - name: Embed production Skills picker assets
+        working-directory: ui/skills-picker
+        run: |
+          npm ci
+          npm run bundle:go
       - name: Build exact-version binary
         env:
           TAG: ${{ inputs.tag }}

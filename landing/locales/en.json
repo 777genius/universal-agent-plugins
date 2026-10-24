@@ -968,6 +968,18 @@
       "nonEmptyOptions": "{component} \"{label}\" options must use non-empty values",
       "unknownValue": "{component} \"{label}\" received an unknown value",
       "selectionRequired": "{component} \"{label}\" requires at least one selected value"
+    },
+    "authenticationIndicator": {
+      "required": "Authentication required",
+      "not_required": "No authentication required",
+      "unknown": "Authentication requirements unknown",
+      "varies": "Authentication varies by agent",
+      "automatic": "Installed agents are detected when you run the command. Select agents in Install to see their resolved requirements.",
+      "unresolved": "No install candidate is resolved for these agents. Select a supported agent to check its requirements.",
+      "release": "{id} · release {sequence}",
+      "requiredDetail": "The package may require an account, token, or sign-in; this does not specify OAuth or confirm that you are signed in.",
+      "not_requiredDetail": "No authentication is declared for these agents. Service limits and other setup requirements may still apply.",
+      "unknownDetail": "Check the package requirements before connecting."
     }
   }
 }

@@ -39,7 +39,7 @@ func (solver *graphSolver) expand(choices map[string]ResolvedPackage) (map[strin
 }
 
 func mergeGraphDemand(nodes map[string]graphNode, parent graphNode, req Requirement) bool {
-	key, _ := req.SourceKey()
+	key, _ := acquisitionSourceKey(req)
 	child, exists := nodes[key]
 	changed := !exists
 	if !exists {
@@ -98,10 +98,20 @@ func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices 
 		} else if req.Git != nil && req.Git.Repository != "" {
 			req.Alias = req.Git.Repository
 		} else {
-			req.Alias = "candidate"
+			req.Alias = ""
 		}
 	}
 	return req
+}
+
+// Acquisition may know a source before its manifest supplies the binding name.
+// Only this operational key uses a disposable scalar; public validation and
+// every endpoint/path/selector check still run through the strict SourceKey.
+func acquisitionSourceKey(req Requirement) (string, error) {
+	if req.Alias == "" {
+		req.Alias = "source-acquisition"
+	}
+	return req.SourceKey()
 }
 
 func rootDeclaration(requirements Requirements, source string) string {

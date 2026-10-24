@@ -34,6 +34,7 @@ func NewRoot(app App) *cobra.Command {
 	flags.BoolVar(&opts.securityDetails, "security-details", false, "show every automated security finding in human output")
 
 	root.AddCommand(newAddCommand(app, opts))
+	root.AddCommand(newSkillsCommand(app, opts))
 	root.AddCommand(newUpdateCommand(app, opts))
 	root.AddCommand(newRepairCommand(app, opts))
 	root.AddCommand(newRemoveCommand(app, opts))

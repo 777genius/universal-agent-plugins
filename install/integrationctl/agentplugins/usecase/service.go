@@ -389,7 +389,9 @@ func immutableDirectGit(source domain.SourceBinding) bool {
 
 func packageRevisionFromEnvelope(envelope domain.PackageEnvelope) *domain.ClientPackageRevision {
 	return &domain.ClientPackageRevision{
-		Version: envelope.Manifest.Version, ResolvedRevision: envelope.Source.ResolvedRevision,
+		Skill:    domain.CloneSkillSourceFacts(envelope.Source.Skill),
+		WebSkill: domain.CloneWebSkillSourceFacts(envelope.Source.WebSkill),
+		Version:  envelope.Manifest.Version, ResolvedRevision: envelope.Source.ResolvedRevision,
 		TreeDigest: envelope.TreeDigest, ManifestDigest: envelope.ManifestDigest,
 		CatalogEvidence: cloneCatalogEvidence(envelope.CatalogEvidence),
 	}
@@ -406,6 +408,7 @@ func packageRevisionForInput(input AddInput) *domain.ClientPackageRevision {
 
 func packageRevisionMatches(revision *domain.ClientPackageRevision, envelope domain.PackageEnvelope) bool {
 	return revision != nil && revision.TreeDigest == envelope.TreeDigest && revision.ManifestDigest == envelope.ManifestDigest &&
+		reflect.DeepEqual(revision.WebSkill, envelope.Source.WebSkill) &&
 		reflect.DeepEqual(revision.CatalogEvidence, envelope.CatalogEvidence)
 }
 

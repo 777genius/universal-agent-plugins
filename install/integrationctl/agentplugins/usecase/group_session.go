@@ -133,7 +133,7 @@ func (session *groupSession) validateExistingGroupInstallation(sticky bool) erro
 			return err
 		}
 	}
-	managedDirect := session.first.EnvironmentAuthority != nil && normalizedOriginMode(session.first.OriginMode) == domain.OriginModeDirect && installation.Source.Repository == session.first.Envelope.Source.Repository && installation.Source.PackageSubpath == session.first.Envelope.Source.PackageSubpath
+	managedDirect := managedDirectSource(installation, session.first)
 	if session.replace && !managedDirect && !session.input.Switch && !session.input.Repair && installation.OriginMode == domain.OriginModeDirect && immutableDirectGit(installation.Source) {
 		return fmt.Errorf("direct full-SHA installations require explicit switch")
 	}

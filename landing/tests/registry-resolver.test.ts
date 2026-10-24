@@ -7,6 +7,7 @@ import { runInNewContext } from 'node:vm';
 import {
   authenticationLabel,
   authenticationState,
+  reachableTargetPolicies,
   resolveDistribution,
   validationLabel,
 } from '../utils/registry.ts';
@@ -184,4 +185,29 @@ test('validation evidence retains priority and requires environment metadata', (
     tested_at: '2026-09-08',
   });
   assert.equal(validationLabel(view), 'OAuth tested');
+});
+
+test('reachable target policies span every distribution a no-target add resolves', () => {
+  const upstream = candidate('default', 'upstream');
+  upstream.releases[0].targets = [
+    { client: 'codex', authentication: 'required', delivery: 'managed', scopes: ['project'] },
+  ];
+  const community = candidate('community', 'community');
+  community.releases[0].targets = [
+    { client: 'cursor', authentication: 'not_required', delivery: 'managed', scopes: ['project'] },
+  ];
+  const policies = () =>
+    reachableTargetPolicies([upstream, community])
+      .map((item) => `${item.client}:${item.authentication}`)
+      .sort();
+  assert.deepEqual(policies(), ['codex:required', 'cursor:not_required']);
+  community.releases[0].targets = [
+    { client: 'codex', authentication: 'not_required', delivery: 'managed', scopes: ['project'] },
+  ];
+  assert.deepEqual(policies(), ['codex:not_required', 'codex:required']);
+  upstream.releases[0].blocking_clients = ['codex'];
+  assert.deepEqual(policies(), ['codex:not_required']);
+  upstream.status = 'suspended';
+  community.releases[0].release_status = 'superseded';
+  assert.deepEqual(policies(), []);
 });

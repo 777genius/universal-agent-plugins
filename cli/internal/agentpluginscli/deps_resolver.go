@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
@@ -75,6 +76,9 @@ func (resolver dependencyResolver) Resolve(ctx context.Context, requirement envi
 	if previous != nil && !update && sameRequestedSelector(requirement, *previous) {
 		return *previous, nil
 	}
+	if requirement.Web != nil {
+		return resolver.resolveWebSkill(ctx, requirement, targets)
+	}
 	if requirement.Git != nil {
 		return resolver.resolveGit(ctx, requirement, targets, previous, update)
 	}
@@ -90,14 +94,13 @@ func sameRequestedSelector(requirement environment.Requirement, previous environ
 
 func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	source := requirement.Git
-	commit := source.Selector.Value
-	resolvedRef, defaultBranch := "", ""
-	if source.Selector.Kind != environment.SelectorCommit {
-		resolution, err := resolver.app.resolveDependencyGit(ctx, *source)
-		if err != nil {
-			return environment.LockedPackage{}, err
-		}
-		commit, resolvedRef, defaultBranch = resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
+	resolution, err := resolver.resolveGitSelector(ctx, source)
+	if err != nil {
+		return environment.LockedPackage{}, err
+	}
+	commit, resolvedRef, defaultBranch := resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
+	if source.Kind == environment.SkillKind {
+		return resolver.resolveSkill(ctx, requirement, targets, previous, commit, resolvedRef, defaultBranch)
 	}
 	snapshot, err := resolver.app.acquireDependencyGit(ctx, *source, commit, "")
 	if err != nil {
@@ -145,7 +148,17 @@ func (resolver dependencyResolver) resolveArchive(ctx context.Context, requireme
 		_ = loaded.cleanup()
 		return environment.LockedPackage{}, errors.New("archive requirement must explicitly select its logical package path")
 	}
+	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
+		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
+	}
 	return locked, resolver.finishLoaded(ctx, loaded, locked)
+}
+
+func (resolver dependencyResolver) resolveGitSelector(ctx context.Context, source *environment.GitSource) (sourceacquisition.RefResolution, error) {
+	if source.Selector.Kind == environment.SelectorCommit {
+		return sourceacquisition.RefResolution{Commit: source.Selector.Value}, nil
+	}
+	return resolver.app.resolveDependencyGit(ctx, *source)
 }
 
 func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
@@ -207,7 +220,12 @@ func (resolver dependencyResolver) finishLoaded(ctx context.Context, loaded load
 			_ = loaded.cleanup()
 			return err
 		}
-		key := dependencySnapshotKey{sourceKey: pin.SourceKey, revision: pin.Revision(), algorithm: pin.DigestAlgorithm, digest: pin.TreeDigest}
+		key, err := lockedDependencySnapshotKey(pin)
+		if err != nil {
+			_ = packagedigest.Remove(snapshot)
+			_ = loaded.cleanup()
+			return err
+		}
 		cache := resolver.app.dependencySnapshots
 		if old, ok := cache.snapshots[key]; ok {
 			_ = packagedigest.Remove(old)
@@ -236,6 +254,12 @@ func githubIdentity(repository, commit, packagePath string) string {
 }
 
 func mustSourceKey(requirement environment.Requirement) string {
+	// A fresh transitive acquisition has no owner alias until manifest loading.
+	// This copy only permits strict alias-free source-tuple derivation; the
+	// temporary scalar is never installed or persisted as binding identity.
+	if requirement.Alias == "" {
+		requirement.Alias = "source-acquisition"
+	}
 	key, _ := requirement.SourceKey()
 	return key
 }

@@ -55,6 +55,7 @@ func (coordinator Coordinator) Resolve(ctx context.Context, requirements Require
 		moving := selected.Git != nil && selected.Git.Selector.Kind != SelectorCommit
 		moving = moving || selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange
 		moving = moving || selected.Archive != nil && selected.Archive.SHA256 == ""
+		moving = moving || selected.Web != nil
 		if !moving {
 			return Lock{}, errors.New("exact commit/release/version pins must be changed in the manifest")
 		}
@@ -252,6 +253,9 @@ func sortSyncBindings(bindings []PreparedBinding) {
 }
 
 func lockedRevision(pkg LockedPackage) string {
+	if pkg.Source.Web != nil {
+		return pkg.Source.Web.RawTreeDigest
+	}
 	if pkg.Source.Archive != nil {
 		return "sha256:" + pkg.Source.Archive.SHA256
 	}

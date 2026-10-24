@@ -183,6 +183,10 @@ remains separate. The default scope is still user, and project scope without
 requirements depend on the client. See [Project installation](docs/PROJECT_INSTALLATION.md)
 for supported-target reporting, update/repair/removal and portable restore.
 
+Source-build development: [install raw Agent Skills from GitHub or compatible HTTPS publishers](docs/AGENT_SKILLS_INSTALLER.md),
+including the local browser picker and versioned saved dependencies. This does not
+claim availability in an already published installer release.
+
 ## Any Agent Plugins 1.0 package
 
 Install from the registry, a local folder, or a GitHub repository pinned to an
@@ -211,7 +215,9 @@ README.
 and SSH Git, GitHub/GitLab/Azure browser URLs, and complete HTTPS/local
 ZIP/TAR/TAR.GZ/TGZ packages. See [Direct complete package sources](docs/DIRECT_PACKAGE_SOURCES.md)
 for syntax, native credentials, immutable archive byte pins and supported limits.
-Standalone skill files are not imported as plugins.
+These complete-package `agentplugins add` transports do not import standalone
+skill files as plugins. The separate source-build `agentplugins skills add`
+workflow above installs raw Agent Skills through deterministic normalization.
 
 Other manifest formats are ignored and cannot override `plugin.json`.
 

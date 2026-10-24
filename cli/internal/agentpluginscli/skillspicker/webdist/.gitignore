@@ -1,0 +1,4 @@
+# Vite outputs are copied here by the release build; source Go tests use placeholder.html.
+*
+!.gitignore
+!placeholder.html

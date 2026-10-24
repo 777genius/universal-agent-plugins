@@ -44,8 +44,14 @@ func acquiredDirectSourceKey(source domain.SourceIdentity, portable bool) (strin
 
 func validateAcquiredSource(acquired *domain.AcquiredSnapshot, portable bool) (string, error) {
 	source := acquired.Source
-	if source.SourceKind != "" {
+	if source.SourceKind == "https-skill" || source.WebSkill != nil || source.SourceBindingHint == "uap-dependency-web-skill" {
 		if acquired.OriginMode != domain.OriginModeDirect {
+			return "", ErrInvalidRequest
+		}
+		return acquiredWebSkillSourceKey(source, portable)
+	}
+	if source.SourceKind != "" {
+		if acquired.OriginMode != domain.OriginModeDirect || source.Skill != nil || source.StableSourceKey != "" || source.SourceBindingHint == "uap-dependency-skill" {
 			return "", ErrInvalidRequest
 		}
 		return acquiredDirectSourceKey(source, portable)
@@ -56,6 +62,12 @@ func validateAcquiredSource(acquired *domain.AcquiredSnapshot, portable bool) (s
 	}
 	if source.Repository == "" || !sourcespec.ValidCommit(source.ResolvedRevision) || (acquired.OriginMode == domain.OriginModeDirect && source.RequestedSource != expected) || source.CanonicalSource != expected {
 		return "", fmt.Errorf("%w: acquired source coordinates disagree", ErrInvalidRequest)
+	}
+	if source.Skill != nil || source.StableSourceKey != "" || source.SourceBindingHint == "uap-dependency-skill" {
+		if acquired.OriginMode != domain.OriginModeDirect {
+			return "", ErrInvalidRequest
+		}
+		return acquiredSkillSourceKey(source, portable)
 	}
 	return "github:" + strings.ToLower(source.Repository) + ":" + source.PackageSubpath, nil
 }

@@ -94,9 +94,10 @@ func parseHTTPS(raw string, out Spec) (Spec, error) {
 }
 
 func parseArchive(u *url.URL) (Archive, error) {
-	fragment := u.Fragment
+	fragment := u.EscapedFragment()
 	base := *u
 	base.Fragment = ""
+	base.RawFragment = ""
 	endpoint, err := NormalizeArchiveURL(base.String())
 	if err != nil {
 		return Archive{}, err
@@ -106,7 +107,8 @@ func parseArchive(u *url.URL) (Archive, error) {
 
 func parseArchiveFragment(a Archive, fragment string) (Archive, error) {
 	if fragment != "" {
-		values, err := url.ParseQuery(fragment)
+		// Fragments are not form data: preserve literal plus while decoding percent escapes once.
+		values, err := url.ParseQuery(strings.ReplaceAll(fragment, "+", "%2B"))
 		if err != nil || len(values["sha256"]) != 1 || !ValidSHA256(values.Get("sha256")) {
 			return Archive{}, errors.New("archive fragment requires sha256=FULL_SHA256 and optional path")
 		}
