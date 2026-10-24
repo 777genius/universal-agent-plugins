@@ -75,6 +75,7 @@ REQUIRED_TESTS = {
 PROJECT_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle"},
     "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle"},
+    "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 
 
@@ -86,6 +87,39 @@ def select_native_tests(client, project_components=False, released=False):
         raise ValueError("project proof requires a qualified current-source client, not a released/draft installer")
     required = REQUIRED_TESTS[client] | PROJECT_TESTS[client]
     return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
+
+
+def collect_opencode_project_artifact(fixture, output):
+    """Only the new admitted envelope, in a finite child; never copy its raw tree."""
+    destination = output / (fixture.name + ".zip")
+    error = None
+    try:
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("native_client_project_artifacts.py")),
+                                 str(fixture), str(destination)], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, timeout=5, check=False)
+        if result.returncode:
+            error = "project envelope child refused (exit " + str(result.returncode) + ")"
+    except (OSError, subprocess.TimeoutExpired) as failure:
+        error = type(failure).__name__ + ": project envelope child failed or exceeded five seconds"
+    try:
+        info = destination.lstat()
+        valid = not destination.is_symlink() and destination.is_file() and info.st_nlink == 1 and info.st_size <= 32 << 20
+    except OSError:
+        valid = False
+    if error or not valid:
+        error = error or "project envelope archive admission refused"
+        # Write outside upload and atomically replace the final leaf, including
+        # a refused symlink; never open its target. No recursive failure cleanup.
+        pending_root = Path(tempfile.mkdtemp(prefix="opencode-fallback-", dir=fixture.parent))
+        pending = pending_root / "failure.zip"
+        with zipfile.ZipFile(pending, "x", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("opencode-project-evidence.json", json.dumps({"success": False,
+                "native_discovery_qualified": False, "native_mcp_initialization_qualified": False,
+                "native_model_use_qualified": False, "artifact_admission_error": error}))
+        if destination.exists() and destination.is_dir() and not destination.is_symlink():
+            os.replace(destination, pending_root / "refused-directory")
+        os.replace(pending, destination)
+    return error
 
 
 def require_verified_pin(pin):
@@ -475,10 +509,20 @@ def main():
         identity["finished_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         # Keep structured evidence and transcripts, never copy client caches,
         # profile databases, source payload binaries, or ephemeral client auth.
+        native_passed = identity["status"] == "passed"
+        project_artifact_errors = []
         evidence_dir = scratch / "evidence"
         allowed = {".json", ".jsonl", ".log"}
         if evidence_dir.exists():
             for fixture in evidence_dir.iterdir():
+                if fixture.name.startswith("uap-opencode-project-work-"):
+                    continue
+                if fixture.name.startswith("uap-opencode-project-admitted-"):
+                    if args.client == "opencode" and args.project_components:
+                        error = collect_opencode_project_artifact(fixture, output)
+                        if error:
+                            project_artifact_errors.append(error)
+                    continue
                 if not fixture.is_dir():
                     continue
                 for path in fixture.iterdir():
@@ -486,8 +530,13 @@ def main():
                         destination = output / fixture.name / path.name
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(path, destination)
+        if project_artifact_errors:
+            identity["status"] = "failed"
+            identity["project_artifact_admission_errors"] = project_artifact_errors
         identity["artifact_sha256"] = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in output.rglob("*") if p.is_file()}
         (output / "runner-evidence.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+        if native_passed and project_artifact_errors:
+            raise RuntimeError("new OpenCode project artifact admission failed; bounded failure evidence retained")
 
 
 if __name__ == "__main__":
