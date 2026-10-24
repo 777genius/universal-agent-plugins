@@ -25,7 +25,6 @@ import (
 // command still needs the process supervisor. The supervisor must relaunch
 // from the running inode, not from the removed pathname.
 func TestOSRunnerSurvivesRemovedOwnExecutable(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	const helperEnv = "AGENTPLUGINS_REMOVED_SELF_EXECUTABLE"
 	if copied := os.Getenv(helperEnv); copied != "" {
 		self, err := os.Executable()
@@ -43,6 +42,7 @@ func TestOSRunnerSurvivesRemovedOwnExecutable(t *testing.T) {
 		}
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +130,6 @@ func TestOSRunnerPlannedDuplexShutdownContainsImmediateSetsidDescendant(t *testi
 }
 
 func TestOSRunnerCancellationContainsImmediateSetsidDescendant(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_RUN_CANCEL_ESCAPE_CHILD") == "1" {
 		_, _ = syscall.Setsid()
@@ -152,6 +151,7 @@ func TestOSRunnerCancellationContainsImmediateSetsidDescendant(t *testing.T) {
 		}
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/escape.pid"
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -516,7 +516,6 @@ func TestLinuxTrackerTimeoutTransfersHandleOwnershipUntilJoin(t *testing.T) {
 }
 
 func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_RUN_DESCENDANT") == "1" {
 		for {
@@ -542,6 +541,7 @@ func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/descendant.pid"
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_RUN_LEADER_PID_PATH="+pidPath)
 	_, err := (OS{}).RunWithTreeExitGrace(context.Background(), ports.Command{
@@ -569,7 +569,6 @@ func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T
 }
 
 func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_DESCENDANT") == "1" {
 		time.Sleep(150 * time.Millisecond)
@@ -589,6 +588,7 @@ func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	_, err := (OS{}).RunWithDescendantExitGrace(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit"},
 		Env:  append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LEADER=1"),
@@ -599,7 +599,6 @@ func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
 }
 
 func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_LONG_DESCENDANT") == "1" {
 		for {
@@ -620,6 +619,7 @@ func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	_, err := (OS{}).RunWithDescendantExitGrace(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerDescendantGraceStillRejectsForcedCleanup"},
 		Env:  append(os.Environ(), "AGENTPLUGINS_PROCESS_GRACE_LONG_LEADER=1"),
@@ -630,7 +630,6 @@ func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
 }
 
 func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_DIAGNOSTIC_DESCENDANT") == "1" {
 		for {
@@ -657,6 +656,7 @@ func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *te
 		os.Exit(47)
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/descendant.pid"
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_DIAGNOSTIC_LEADER_PID_PATH="+pidPath)
 	_, err := (OS{}).RunWithTreeExitGrace(context.Background(), ports.Command{
@@ -684,7 +684,6 @@ func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *te
 }
 
 func TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession(t *testing.T) {
-	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_SETSID_DESCENDANT") == "1" {
 		for {
 			time.Sleep(time.Hour)
@@ -708,6 +707,7 @@ func TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession(t *test
 		os.Exit(0)
 	}
 
+	requireOrdinaryPreflight(t)
 	pidPath := t.TempDir() + "/setsid-descendant.pid"
 	_, err := (OS{}).RunWithTreeExitGrace(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession"},

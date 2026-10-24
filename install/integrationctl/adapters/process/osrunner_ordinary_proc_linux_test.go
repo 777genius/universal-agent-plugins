@@ -85,7 +85,7 @@ func TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity(t *testin
 
 func TestOrdinaryMissingLiveChildrenRefusesBeforeWrappingOrLaunch(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "must-not-launch")
-	cmd := exec.Command("/bin/sh", "-c", "printf started > \"$1\"", "sh", marker)
+	cmd := exec.CommandContext(t.Context(), "/bin/sh", "-c", "printf started > \"$1\"", "sh", marker)
 	ops := linuxTaskProcOps{
 		readFile: func(path string, _ int) ([]byte, error) {
 			if strings.HasSuffix(path, "/children") {
@@ -163,7 +163,7 @@ func TestOrdinaryAvailableEmptyProcInterfacePermitsWrapping(t *testing.T) {
 		},
 		taskExists: func(string) (bool, error) { return true, nil },
 	}
-	cmd := exec.Command("/bin/true")
+	cmd := exec.CommandContext(t.Context(), "/bin/true")
 	containment, err := newOrdinaryCommandContainmentWithPreflight(cmd, time.Second, func() error { return ordinaryContainmentPreflightWith(12, 44, ops) })
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestOrdinaryAvailableEmptyProcInterfacePermitsWrapping(t *testing.T) {
 
 func TestProcTaskEnumerationAndNamesAreBounded(t *testing.T) {
 	root := t.TempDir()
-	for i := 0; i < linuxProcTaskEntriesLimit+1; i++ {
+	for i := range linuxProcTaskEntriesLimit + 1 {
 		if err := os.WriteFile(filepath.Join(root, fmt.Sprint(i)), nil, 0600); err != nil {
 			t.Fatal(err)
 		}

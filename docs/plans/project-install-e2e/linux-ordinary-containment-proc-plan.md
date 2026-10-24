@@ -70,3 +70,11 @@ Focused local Go1.26.10 validation with -p=1:
 - Existing custom inert Runner captured-staging regression PASS0.020s. Custom bootstrap runners keep their existing contract.
 
 Raw selected local test logs and member hashes are saved under docs/evidence/process-containment/linux-proc-children-unavailable/. The original real failure trace/proc proof remains preserved. No vendor, native client, MCP server, model, authentication, trust change or broad suite ran for this candidate. Supported hosted Linux runtime qualification is still required. The source must receive two independent frozen-source code reviews before publication.
+
+### Final review correction and validation
+
+Root's review of candidate4a1b536e required the new ordinary prerequisite to run after helper-only exit/return branches. The final delta moves only that added query in14 helper-bearing tests; original helper behavior and existing duplex-query order stay intact. Other8 ordinary-query guards remain at test start. As a result, final local runtime accounting is16 ordinary-prerequisite skips plus6 existing duplex-prerequisite skips,22 unqualified runtime tests in total. No test assertion, timeout, skip predicate or cgroup rule was weakened.
+
+The new helper's three deliberate non-errno wrapping boundaries render the original errno as message text; the unsupported sentinel remains the sole wrapped cause. This retains the required distinction from disappeared ancestors and satisfies errorlint. State membership, integer range and constructor-only CommandContext corrections preserve behavior.
+
+Final combined focused validation after those corrections: process PASS0.037s (inert assertions passed; runtime skips excluded from qualification), bootstrap PASS0.025s (custom Runner assertion passed;3runtime tests unsupported). The final raw combined log is retained separately from earlier candidate logs. Pinned golangci-lint2.13.2 changed-source check over only process+bootstrap, concurrency1/GOMEMLIMIT512MiB/90s: PASS0issues. No broad module lint or vendor run was performed.

@@ -119,9 +119,9 @@ func linuxTaskChildrenWith(pid, tid int, ops linuxTaskProcOps) ([]byte, bool, er
 	// Do not wrap ENOENT: ancestor traversal treats that errno as a process
 	// disappearance. This task was independently proved to remain alive.
 	if os.IsNotExist(err) {
-		return nil, true, fmt.Errorf("%w: live task %d/%d has no children interface (%v)", ErrOrdinaryContainmentUnsupported, pid, tid, err)
+		return nil, true, fmt.Errorf("%w: live task %d/%d has no children interface (%s)", ErrOrdinaryContainmentUnsupported, pid, tid, err.Error())
 	}
-	return nil, true, fmt.Errorf("live task %d/%d children observation failed: %v", pid, tid, err)
+	return nil, true, fmt.Errorf("live task %d/%d children observation failed: %s", pid, tid, err.Error())
 }
 
 func linuxTaskGoneAfterIdentityError(task string, identityErr error, ops linuxTaskProcOps) (bool, error) {
@@ -137,7 +137,7 @@ func linuxTaskGoneAfterIdentityError(task string, identityErr error, ops linuxTa
 	}
 	// A missing stat inside a still-present task is unknown observation, not
 	// evidence that the task disappeared or that its children list was empty.
-	return false, fmt.Errorf("existing proc task identity is unavailable: %v", identityErr)
+	return false, fmt.Errorf("existing proc task identity is unavailable: %s", identityErr.Error())
 }
 
 func linuxReadTaskIdentity(task string, tid int, ops linuxTaskProcOps) (linuxProcessIdentity, error) {
@@ -155,7 +155,7 @@ func parseLinuxTaskIdentity(body []byte, tid int) (linuxProcessIdentity, error) 
 		return linuxProcessIdentity{}, fmt.Errorf("malformed proc task identity")
 	}
 	fields := strings.Fields(raw[closing+1:])
-	if len(fields) < 20 || len(fields[0]) != 1 || !strings.Contains("RSDZTtXxKWPI", fields[0]) {
+	if len(fields) < 20 || len(fields[0]) != 1 || strings.IndexByte("RSDZTtXxKWPI", fields[0][0]) < 0 {
 		return linuxProcessIdentity{}, fmt.Errorf("malformed proc task state")
 	}
 	for _, field := range fields[1:] {
@@ -172,7 +172,7 @@ func parseLinuxTaskIdentity(body []byte, tid int) (linuxProcessIdentity, error) 
 	if parentErr != nil || groupErr != nil || startErr != nil || parent < 0 || group < 0 {
 		return linuxProcessIdentity{}, fmt.Errorf("malformed proc task stable identity")
 	}
-	return linuxProcessIdentity{pid: tid, ppid: parent, pgid: group, startTime: started, zombie: strings.Contains("ZXx", fields[0])}, nil
+	return linuxProcessIdentity{pid: tid, ppid: parent, pgid: group, startTime: started, zombie: strings.IndexByte("ZXx", fields[0][0]) >= 0}, nil
 }
 
 func validateLinuxProcChildren(body []byte) error {
