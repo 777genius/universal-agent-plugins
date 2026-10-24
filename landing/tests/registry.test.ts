@@ -130,7 +130,7 @@ describe('unified registry landing', () => {
 
   it('intro counts collapse duplicate sources instead of counting raw records', () => {
     const reviewed = registry.plugins.find(
-      (plugin) => plugin.trust_state !== 'conformant_unreviewed',
+      (plugin) => plugin.installable && catalogVisiblePlugins([plugin]).length,
     )!;
     const alias = {
       ...reviewed,
@@ -441,7 +441,7 @@ describe('unified registry landing', () => {
   });
 
   it('keeps retired registry mirrors out of the catalog without removing current sources', () => {
-    const reviewed = registry.plugins[0]!;
+    const reviewed = registry.plugins.find((plugin) => catalogVisiblePlugins([plugin]).length)!;
     const current = discoveryPlugin(
       {
         ...discoveryRecord,
@@ -466,7 +466,7 @@ describe('unified registry landing', () => {
   });
 
   it('hides only fully retired products; suspended ones stay in the list', () => {
-    const reviewed = registry.plugins[0]!;
+    const reviewed = registry.plugins.find((plugin) => catalogVisiblePlugins([plugin]).length)!;
     const retired = {
       ...reviewed,
       name: 'retired-product',

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { productRootUrl } from '~/utils/seo';
 import { localizedPath } from '~/utils/localizedRoutes';
+import { catalogVisiblePlugins } from '~/utils/filter';
 import type { KnownLocale } from '~/data/i18n';
 const { t, locale } = useI18n();
 const registry = await useRegistryPage({ discovery: true });
@@ -12,7 +13,7 @@ const siteUrl = productRootUrl(
 ).replace(/\/+$/, '');
 const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
 const listId = computed(() => `${localizedUrl('/plugins/')}#plugin-list`);
-const reviewedPlugins = registry.plugins.filter(
+const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) => plugin.trust_state !== 'conformant_unreviewed',
 );
 
