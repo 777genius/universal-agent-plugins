@@ -24,6 +24,11 @@ func ApplyInstallIntent(registry *clients.Registry, plan *domain.DeliveryPlan, i
 	if err := intent.Validate(plan.ClientID); err != nil {
 		return err
 	}
+	if intent == domain.InstallIntentPrepare {
+		if err := validatePreparationScope(registry, *plan); err != nil {
+			return err
+		}
+	}
 	if intent == domain.InstallIntentPrepare && plan.Scope != domain.ScopeUser &&
 		!plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).Allows(intent) {
 		return fmt.Errorf("preparation is not qualified for scope %s", plan.Scope)
@@ -37,4 +42,24 @@ func ApplyInstallIntent(registry *clients.Registry, plan *domain.DeliveryPlan, i
 		return fmt.Errorf("unsupported install intent %q for client %s", intent, plan.ClientID)
 	}
 	return refiner.RefinePreparation(plan)
+}
+
+// Reapplying an intent to a previously built plan must not bypass explicit
+// project context admission. Genuine historical user plans retain their default.
+func validatePreparationScope(registry *clients.Registry, plan domain.DeliveryPlan) error {
+	scope := plan.Scope
+	if scope == "" {
+		scope = domain.ScopeUser
+	}
+	if !clients.SupportsScope(registry, plan.ClientID, scope) {
+		return fmt.Errorf("preparation is not qualified for scope %s", scope)
+	}
+	if plan.Scope != domain.ScopeProject && plan.TargetContext.Scope != domain.ScopeProject && plan.TargetContext.ProjectRoot == "" {
+		return nil
+	}
+	if plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject {
+		return fmt.Errorf("project preparation requires matching explicit project scope")
+	}
+	_, err := domain.NewTargetContext(plan.TargetContext.Scope, plan.TargetContext.ProjectRoot, plan.TargetContext.UserConfigRoot)
+	return err
 }
