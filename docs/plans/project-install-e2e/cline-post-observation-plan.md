@@ -41,7 +41,10 @@ It uses explicit `CLINE_MCP_SETTINGS_PATH=<absolute prepared file>`,
 Provide correct POSIX and PowerShell quoting or structured instructions for
 both platforms; no guessed shell execution, wrapper scripts, changed HOME,
 CLINE_DIR, CLINE_DATA_DIR or copied user secrets. Mark CLI-only selection and
-IDE behavior separately. No prompt/act/model/MCP-tool command is requested.
+IDE behavior separately. The explicit MCP file selects the **whole** session
+source: original user MCP registrations are not merged or copied into that
+session, and UAP must not manufacture a user/project overlay. No prompt/act/
+model/MCP-tool command is requested.
 
 ## Architecture and exact authority
 
@@ -50,7 +53,14 @@ receipts, transaction/recovery journal and original-App namespace guards. Add
 Cline's explicit project policy as `LifecycleNativeConfig` only with this
 adapter. Preserve the entire existing user implementation and user traits.
 No generic installer, new settings framework, SDK schema or client-ID branch
-in usecase orchestration is needed. Native policy belongs to `clients/cline`;
+in usecase orchestration is needed. One narrowly reviewed shared correction is
+required: existing `usecase.preflightActivation` must forward
+`input.ActivationComplete` into its existing `domain.ActivationRequest` before
+apply/group-plan/repair effects. The current helper omits that flag; the later
+provider preflight alone can refuse only after an attempt was recorded. This
+mechanical shared edit and regression are owned by the Cline implementation
+group, coordinated with root; no other shared lifecycle behavior is changed.
+Native policy belongs to `clients/cline`;
 shared filesystem ownership remains `ProjectComponents`/
 `ProjectComponentMutation` and the existing `nativeconfig.CodecCline`.
 
@@ -139,9 +149,15 @@ bindings, and failed MCP commit rollback. Reuse shared real interruption tests;
 add a Cline integration case only if its prepared path introduces an uncovered
 boundary. No test may mock a native success and label it native evidence.
 
-Real composed `providers.Activator` tests must reject `ActivationComplete`
-for first add, replay, repair and reloaded bindings **before** any filesystem
-or state mutation. Also cover mismatched scope fields/direct adapter entry,
+Real composed `providers.Activator` tests must reject `ActivationComplete`;
+public core/SDK/CLI regressions must additionally exercise first add, replay,
+update, repair and reloaded bindings. Compare selected persisted state/native
+object bytes and native runner counters before/after rejection to prove the
+shared early flag-forwarding prevents activation-attempt state writes and native
+commands. Operational lock metadata and temporary acquisition/cache activity
+are reported separately, not called immutable state. The preflight-only provider
+fixture cannot substitute for these public boundary tests. Also cover mismatched
+scope fields/direct adapter entry,
 AuthComplete, mixed unsupported components, and no native runner calls during
 host-free status. Prepared repeated outcomes should be stable under the shared
 native-config idempotence contract; no global LifecycleConverged change.
@@ -164,9 +180,18 @@ bounded upload envelope. Review this collector code before it can run.
 The new fixture may use public UAP operations to mutate **its own disposable**
 project/user files. Native Cline commands are strictly `--version` and
 `config {skills,mcp} --json`, always `--auto-approve false --cwd <selected root>`
-plus mandatory no-update. Fixture MCP registrations stay disabled loopback
-remote markers; no stdio executable, enabled connection, prompt, trust, auth,
-model, hook or plugin code is launched. No hosted environment is spoofed locally.
+plus mandatory no-update. Fixture MCP registrations are loopback remote markers
+in the **actual unedited
+file emitted by UAP**. The current Cline codec has no disabled field; the fixture
+must not pretend those entries are disabled, add a production option solely for
+testing, post-edit receipt-owned bytes, or inspect a disabled copy as product
+proof. This is a separately reviewed **read-only registration observation**
+contract: exact pinned source loads/parses registrations and prints metadata
+without constructing/registering/connecting an MCP manager. Enabled configuration
+is distinct from an enabled connection. No stdio executable, MCP initialize,
+prompt, trust, auth, model, hook or plugin code is launched. No hosted environment
+is spoofed locally. The six-source exact-tag trace below is a precondition of
+this contract, and its limitations require explicit independent plan review.
 
 Use separate source and native stages. Public UAP add/replay/update/repair/remove
 must return the truthful Prepared lifecycle and exact project file receipts;
@@ -195,3 +220,31 @@ qualifies only the pinned Linux CLI behavior/current source actually measured;
 other platforms and versions need their own observations. Final per-client
 matrix must name these limits. A failed native stage is not repaired by relaxing
 assertions, changing pins or substituting the historical artifact.
+
+## R1 corrections: exact pinned read-only source trace
+
+Both R1 critics required the concrete shared flag forwarding and a representable
+MCP evidence contract. The adopted route preserves the existing codec.
+`cli-v3.0.73` resolves via annotated tag object
+`75fc1aaa39db1119dc8b63e4969cf4ff5e27ba46` to source commit
+`c718573538d76310f464541617ab665108a6c999`; all six files below were reread
+from that immutable commit and compared equal to the exact-tag text. This is
+source-level no-initialization evidence plus the prior disabled-configuration
+observations, not a claim that enabled ordinary startup was already measured.
+The artifact binary remains pinned by its own recorded size/digest.
+
+| Exact source at `c7185735` | Traced behavior needed by this plan |
+| --- | --- |
+| [main.ts](https://github.com/cline/cline/blob/c718573538d76310f464541617ab665108a6c999/apps/cli/src/main.ts) | Config dispatch lazily builds the config command, parses the explicit target and returns when its numeric exit code is set, before the default agent/session path. Startup updater occurs earlier and therefore needs its separate literal suppression. |
+| [config.ts](https://github.com/cline/cline/blob/c718573538d76310f464541617ab665108a6c999/apps/cli/src/commands/config.ts) | Exact `mcp` target calls `runMcpConfigCommand`: choose path, test existence, resolve registrations, map name/transport/disabled/path and print. Post-action forwards the exit code. It does not take `config tools`, targetless interactive configuration or session branches. |
+| [config-loader.ts](https://github.com/cline/cline/blob/c718573538d76310f464541617ab665108a6c999/sdk/packages/core/src/extensions/mcp/config-loader.ts) | Resolution synchronously reads and validates the file, maps registrations and normalizes transport. The separate `registerMcpServersFromSettingsFile(manager, ...)` loop is not called by this observation path. |
+| [remote-proxy.ts](https://github.com/cline/cline/blob/c718573538d76310f464541617ab665108a6c999/sdk/packages/core/src/extensions/mcp/remote-proxy.ts) | Normalization only transforms transport data; remote markers are returned as data. Even legacy proxy recognition parses a URL without spawning or connecting. The fixture supplies no stdio/proxy entry. |
+| [paths.ts](https://github.com/cline/cline/blob/c718573538d76310f464541617ab665108a6c999/sdk/packages/shared/src/storage/paths.ts) | Explicit CLINE_MCP_SETTINGS_PATH wins over the user data/settings default; no project working-directory merge is performed by that resolver. |
+| [update.ts](https://github.com/cline/cline/blob/c718573538d76310f464541617ab665108a6c999/apps/cli/src/commands/update.ts) | `autoUpdateOnStartup` returns immediately on literal CLINE_NO_AUTO_UPDATE=1. Every fixture child must receive it, including version/help. |
+
+The new hosted lane records the emitted `disabled:false` rows honestly, exact
+source paths and preserved file receipts. If this pinned dispatch/source changes
+or the fixed target cannot be established, refuse the new observation lane; do
+not assume another version is read-only. The fresh native collection remains
+required, and a successful registration list cannot qualify initialization/tool
+use, trust, IDE forwarding or ordinary restart with the project override absent.
