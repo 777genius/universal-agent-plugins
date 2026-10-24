@@ -1,0 +1,8 @@
+{
+  "activation": "prepared",
+  "binding_id": "client_b3bccee22d1278f8439254f4",
+  "evidence_kind": "owned_files_not_native_discovery",
+  "scope": "project",
+  "target_path": "/Users/runner/work/_temp/uap-native-hosted-4fkh5g8r/evidence/uap-claude-native-evidence-3367966848/project-A/.claude/skills/uap-commands-fixture-4760574d1b66",
+  "verification": "installation_verified"
+}
