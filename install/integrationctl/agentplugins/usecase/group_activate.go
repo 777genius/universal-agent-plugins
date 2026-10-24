@@ -162,10 +162,11 @@ func (session *groupSession) preserveNoChangeActivation(target plannedGroupTarge
 }
 
 func (session *groupSession) assignActivationOutcome(target plannedGroupTarget, outcome domain.ActivationOutcome, activationErr, persistErr error, lifecycleChanged bool) {
+	mutated := !target.noChange || lifecycleChanged || outcome.NativeEffect == domain.NativeEffectCommitted
 	for _, resultIndex := range target.resultIndexes {
 		session.result.Targets[resultIndex].Activation = outcome
-		session.result.Targets[resultIndex].Mutated = !target.noChange || lifecycleChanged
-		if !target.noChange || lifecycleChanged {
+		session.result.Targets[resultIndex].Mutated = mutated
+		if mutated {
 			session.result.Targets[resultIndex].NoChange = false
 		}
 		session.result.Mutated = session.result.Mutated || session.result.Targets[resultIndex].Mutated

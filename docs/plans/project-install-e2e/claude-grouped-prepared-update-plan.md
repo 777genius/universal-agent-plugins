@@ -89,3 +89,7 @@ Focused inert Go1.26.10 tests, sequential with -p=1:
 - SDK reporting table, existing group attempt/cancellation classification and project Claude Prepared lifecycle: PASS2.148s. Pending handoff/error/read-failure effects remain visible; stale no-change previews cannot override actual mutation; existing handoff facts remain Prepared/Installed.
 
 These tests execute no vendor, native plugin, MCP server, authentication or model process. The unchanged genuine hosted Prepared lifecycle assertion still needs a successful exact corrected-source run before closure. Bootstrap remains a separately approved plan with no production edit in this checkpoint.
+
+### Frozen code review correction
+
+Root's independent review of2cbfecc8 identified a known-effect reporting edge when nativeComplete=true: an adapter that unexpectedly reports NativeEffectCommitted during VerifyOnly must still report the actual effect, even with identical saved facts. Final target mutation therefore includes NativeEffectCommitted independently of projection completeness; the same final flag clears target NoChange and accumulates into group mutation. This preserves effect truth without promoting discovery or changing adapter authority. A new inert Active/Installed binding case proves complete=true/VerifyOnly=true, real marker write, unchanged state/receipts, and both mutation flags true. Focused six-case group table plus existing Kimi/projection-failure tests PASS0.299s. No test assertion or native gate was weakened.

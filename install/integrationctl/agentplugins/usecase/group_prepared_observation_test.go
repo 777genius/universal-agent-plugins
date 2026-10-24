@@ -33,6 +33,7 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 	for _, tc := range []struct {
 		name                             string
 		effect                           domain.NativeEffectState
+		activation                       domain.ActivationState
 		wantMutation                     bool
 		wantStateChange                  bool
 		policy                           domain.PolicyState
@@ -40,6 +41,7 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 	}{
 		{name: "fresh unchanged prepared"},
 		{name: "same recorded facts with native effect", effect: domain.NativeEffectCommitted, wantMutation: true},
+		{name: "complete projection with committed effect", activation: domain.ActivationActive, effect: domain.NativeEffectCommitted, wantMutation: true},
 		{name: "new policy decision", policy: domain.PolicyBlocked, wantMutation: true, wantStateChange: true},
 		{name: "explicit authentication completion", authComplete: true, wantMutation: true, wantStateChange: true},
 		{name: "attested outcome is not read only", activationAttested: true, wantMutation: true},
@@ -68,6 +70,9 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 				available:         true,
 			}}
 			activator.effectPath = filepath.Join(project, "native-fixture-effect")
+			if tc.activation != "" {
+				activator.outcome.Activation = tc.activation
+			}
 			service.Activator = activator
 			added, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{input}, Confirmed: true, OperationGroupID: "prepared-group-add"})
 			if err != nil {
@@ -107,10 +112,10 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 				t.Fatalf("fresh observation missing: requests=%d/%d", len(activator.requests), count)
 			}
 			request := activator.requests[len(activator.requests)-1]
-			if request.VerifyOnly || !request.PackageUnchanged {
+			if request.VerifyOnly != (tc.activation == domain.ActivationActive) || !request.PackageUnchanged {
 				t.Fatalf("incomplete registration facts changed=%+v", request)
 			}
-			if got := updated.Targets[0].Activation; got.Activation != domain.ActivationPrepared || got.Verification != domain.VerificationInstalled {
+			if got := updated.Targets[0].Activation; got.Activation != binding.Activation || got.Verification != binding.Verification {
 				t.Fatalf("prepared observation promoted=%+v", got)
 			}
 			after, err := store.Load()
