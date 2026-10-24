@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +42,8 @@ func skillsFullFlowFixture(t *testing.T) (savedJourney, string, []byte) {
 	}
 	savedJourneyGit(t, repo, "init", "-b", "main")
 	savedJourneyGit(t, repo, "add", ".")
+	// Immutable Git executable metadata is independent of host filesystem bits.
+	savedJourneyGit(t, repo, "update-index", "--chmod=+x", "engineering/review/scripts/check.sh", "docs/review/scripts/check.sh")
 	savedJourneyGit(t, repo, "commit", "-m", "test: disposable raw Skills end-to-end fixture")
 	journey := newSavedJourney(t, repo)
 	journey.cli.app.SourceAcquirer = skillsource.Acquirer{Acquirer: journey.source.Acquirer}
@@ -65,8 +69,11 @@ func TestSkillsFullCLIEndToEnd(t *testing.T) {
 	if err != nil || string(got) != string(raw) {
 		t.Fatalf("raw Skill bytes changed: %q %v", got, err)
 	}
+	if !slices.Contains(pin.ExecutableFiles, "skills/review/scripts/check.sh") || !slices.Contains(snapshot.Metadata.ExecutableFiles, "skills/review/scripts/check.sh") {
+		t.Fatalf("resource executable metadata missing: lock=%v store=%v", pin.ExecutableFiles, snapshot.Metadata.ExecutableFiles)
+	}
 	script, err := os.Stat(filepath.Join(snapshot.Root, "skills", "review", "scripts", "check.sh"))
-	if err != nil || script.Mode()&0100 == 0 {
+	if err != nil || (runtime.GOOS != "windows" && script.Mode()&0100 == 0) {
 		t.Fatalf("resource executable mode missing: %v %v", script, err)
 	}
 	state := journey.state(t)

@@ -68,7 +68,7 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 		return environment.LockedPackage{}, err
 	}
 	pin.ManifestDigest = loaded.envelope.ManifestDigest
-	return pin, resolver.finishLoaded(loaded)
+	return pin, resolver.finishLoaded(ctx, loaded, pin)
 }
 
 func skillSnapshotSource(pin environment.LockedPackage) domain.SourceIdentity {

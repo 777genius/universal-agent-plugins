@@ -24,15 +24,11 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	} else if !errors.Is(err, environmentstore.ErrMissing) {
 		return loadedPackage{}, err
 	}
-	source, err := lockedDependencySource(locked)
-	if err != nil {
-		return loadedPackage{}, err
-	}
 	snapshot, err := app.acquireLockedSnapshot(ctx, locked)
 	if err != nil {
 		return loadedPackage{}, err
 	}
-	snapshot.Source = source
+	snapshot.Source = identityFromLocked(locked)
 	origin, directory := domain.OriginModeDirect, (*domain.DirectoryOrigin)(nil)
 	if locked.Source.Registry != nil {
 		origin = domain.OriginModeDirectory
@@ -76,6 +72,9 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 }
 
 func dependencySourceHint(locked environment.LockedPackage) string {
+	if locked.Source.Web != nil {
+		return "uap-dependency-web-skill"
+	}
 	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
 		return "uap-dependency-skill"
 	}
@@ -86,11 +85,7 @@ func dependencySourceHint(locked environment.LockedPackage) string {
 }
 
 func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
-	source, err := lockedDependencySource(locked)
-	if err != nil {
-		return loadedPackage{}, err
-	}
-	pkg.Metadata.Source = source
+	pkg.Metadata.Source = identityFromLocked(locked)
 	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest,
 		ExecutableFiles: append([]string{}, pkg.Metadata.ExecutableFiles...), Source: pkg.Metadata.Source}
 	envelope, err := app.loadStandardEnvelope(ctx, input)

@@ -165,7 +165,7 @@ or backup. Transferring the files does not guarantee offline installation.
 See [Restore on another machine](docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
 for confirmation prompts, supported restore behavior and recovery.
 
-Source-build development: [install raw Agent Skills from GitHub](docs/AGENT_SKILLS_INSTALLER.md),
+Source-build development: [install raw Agent Skills from GitHub or compatible HTTPS publishers](docs/AGENT_SKILLS_INSTALLER.md),
 including the local browser picker and versioned saved dependencies. This does not
 claim availability in an already published installer release.
 
@@ -192,6 +192,14 @@ extensions depend on the target client; they do not imply portable behavior.
 You can also install a local package or a pinned GitHub package without adding
 it to the registry. Direct-install examples are collected near the end of this
 README.
+
+**SOURCE ONLY / UNRELEASED:** direct source support now includes arbitrary HTTPS
+and SSH Git, GitHub/GitLab/Azure browser URLs, and complete HTTPS/local
+ZIP/TAR/TAR.GZ/TGZ packages. See [Direct complete package sources](docs/DIRECT_PACKAGE_SOURCES.md)
+for syntax, native credentials, immutable archive byte pins and supported limits.
+These complete-package `agentplugins add` transports do not import standalone
+skill files as plugins. The separate source-build `agentplugins skills add`
+workflow above installs raw Agent Skills through deterministic normalization.
 
 Other manifest formats are ignored and cannot override `plugin.json`.
 

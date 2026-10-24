@@ -1,4 +1,4 @@
-# Installing Agent Skills from GitHub
+# Installing Agent Skills
 
 This guide describes the source implementation in this change. It does not claim
 that these commands are available in an already published installer release.
@@ -9,6 +9,18 @@ A Skill can be installed from a public GitHub repository, a folder URL, or a
 `SKILL.md` URL. The installer keeps its original document, scripts and resources,
 then uses the existing package installer and ownership/recovery rules.
 Installation does not execute the Skill's scripts.
+
+Compatible HTTPS publishers can also expose complete Skills through a
+`.well-known` discovery index. This source-build workflow requires the exact
+Skill name and uses terminal review:
+
+```sh
+agentplugins skills add https://publisher.example --skill review --target codex
+```
+
+For unattended installation, add `--yes`; use `--dry-run` to review without
+applying. Website sources do not use the repository browser or Git options
+`--ref` and `--path`.
 
 ```sh
 # Interactive browser: nested folders, search, basket, target selection and review.
@@ -110,6 +122,40 @@ explicit dependency edit. Locked restore and repair do not search for a newer
 version. Existing protections for foreign files, drift and pending recovery apply.
 Native clients may require their normal uninstall/recovery steps; follow the
 command's instructions rather than deleting agent configuration manually.
+
+## Website sources
+
+The publisher must serve an index at
+`/.well-known/agent-skills/index.json` or `/.well-known/skills/index.json`.
+The supported discovery dialect supplies a `skills` array with each Skill's
+`name` and complete `files` list. The installer downloads every listed resource
+and validates the resulting Skill through the same normalization and package
+installation pipeline. It does not scrape arbitrary web pages. Other discovery
+formats, including proposed 0.2 artifact entries, are not supported yet.
+Publisher downloads must use direct HTTPS addresses; this workflow refuses
+redirects.
+
+Website intent uses its own source field:
+
+```toml
+[dependencies.review]
+website = "https://publisher.example"
+kind = "skill"
+skill = "review"
+
+[targets]
+codex = ["review"]
+```
+
+The lock preserves the resolved file addresses, each file's SHA256, discovery
+provenance, raw tree digest and normalizer version. `deps update review` explicitly
+discovers a newer version. Locked sync, repair and export/import restore the
+recorded bytes without selecting a newer version from the index. If the old
+files have changed or disappeared and no verified cache remains, restoration
+fails; the publisher must retain those bytes for cold restore to succeed.
+
+Website discovery remains an emerging convention. This compatibility does not
+promise that all websites or every proposed discovery format can be installed.
 
 ## Building and checking the picker
 

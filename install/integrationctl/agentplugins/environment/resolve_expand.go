@@ -39,7 +39,7 @@ func (solver *graphSolver) expand(choices map[string]ResolvedPackage) (map[strin
 }
 
 func mergeGraphDemand(nodes map[string]graphNode, parent graphNode, req Requirement) bool {
-	key, _ := req.SourceKey()
+	key, _ := acquisitionSourceKey(req)
 	child, exists := nodes[key]
 	changed := !exists
 	if !exists {
@@ -80,10 +80,7 @@ func validateGraphAliases(nodes map[string]graphNode) error {
 }
 
 func requirementSelector(req Requirement) Selector {
-	if req.Git != nil {
-		return req.Git.Selector
-	}
-	return req.Registry.Selector
+	return req.RequestedSelector()
 }
 
 func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices map[string]ResolvedPackage) Requirement {
@@ -98,11 +95,23 @@ func (solver *graphSolver) nodeRequirement(key string, req Requirement, choices 
 		// package-local declaration names do not name environment bindings.
 		if req.Registry != nil {
 			req.Alias = req.Registry.Distribution
-		} else {
+		} else if req.Git != nil && req.Git.Repository != "" {
 			req.Alias = req.Git.Repository
+		} else {
+			req.Alias = ""
 		}
 	}
 	return req
+}
+
+// Acquisition may know a source before its manifest supplies the binding name.
+// Only this operational key uses a disposable scalar; public validation and
+// every endpoint/path/selector check still run through the strict SourceKey.
+func acquisitionSourceKey(req Requirement) (string, error) {
+	if req.Alias == "" {
+		req.Alias = "source-acquisition"
+	}
+	return req.SourceKey()
 }
 
 func rootDeclaration(requirements Requirements, source string) string {

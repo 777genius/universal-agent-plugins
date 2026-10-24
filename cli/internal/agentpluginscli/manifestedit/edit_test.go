@@ -191,3 +191,24 @@ func TestApplyCanonicalKeysPreserveIntentCommentsAndCRLF(t *testing.T) {
 		t.Fatalf("lost CRLF: %q", out)
 	}
 }
+
+// Replacing website intent must remove stale transport fields in both directions.
+func TestWebsiteSkillReplacement(t *testing.T) {
+	input := []byte("schema_version=1\n[dependencies.pdf]\ngit='acme/tools'\nref='main'\n[targets]\ncodex=['pdf']\n")
+	out, err := Apply(input, Changes{Dependencies: []DependencyEdit{{Alias: "pdf", Value: &Dependency{Website: "https://publisher.example", Kind: "skill", Skill: "pdf"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := decode(t, out)["dependencies"].(map[string]any)["pdf"].(map[string]any)
+	if deps["website"] != "https://publisher.example" || deps["kind"] != "skill" || deps["skill"] != "pdf" || deps["git"] != nil || deps["ref"] != nil {
+		t.Fatal(deps)
+	}
+	out, err = Apply(out, Changes{Dependencies: []DependencyEdit{{Alias: "pdf", Value: &Dependency{Git: "acme/tools", Ref: "main"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps = decode(t, out)["dependencies"].(map[string]any)["pdf"].(map[string]any)
+	if deps["website"] != nil || deps["kind"] != nil || deps["skill"] != nil || deps["git"] != "acme/tools" {
+		t.Fatal(deps)
+	}
+}
