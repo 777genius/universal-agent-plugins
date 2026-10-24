@@ -14,6 +14,7 @@ Install and manage Agent Plugins 1.0 across your AI agents with one CLI.
 - [Use plugins](#use-plugins)
   - [Quick start](#quick-start)
 - [What the CLI does](#what-the-cli-does)
+- [Compare with other tools](#compare-with-other-tools)
 - [Restore your plugin setup](#restore-your-plugin-setup)
 - [Any Agent Plugins 1.0 package](#any-agent-plugins-10-package)
 - [Supported clients](#supported-clients)
@@ -135,6 +136,49 @@ selected agent.
 - converts the same Agent Plugins 1.0 package into each agent's native format;
 - keeps activation and OAuth prompts visible to you.
 
+## Compare with other tools
+
+**One standard plugin, multiple agents.** UAP adapts an Agent Plugins 1.0
+package's supported skills and MCP servers to each client's format. Plugin
+authors also get a [typed Go hook SDK](sdk/README.md) and an
+[embeddable installer](install/integrationctl/agentplugins/installer/README.md).
+
+Checked **2026-10-24** against the versions in the
+[comparison notes](docs/COMPARISON.md). ✅ = supported; ❌ = not provided in the
+compared version. Limited, experimental and unreleased support is labelled.
+
+| Capability | **UAP** | [Skillshare](https://github.com/runkids/skillshare) | [Vercel Skills](https://github.com/vercel-labs/skills) | [Microsoft APM](https://github.com/microsoft/apm) |
+| --- | --- | --- | --- | --- |
+| Convert one Agent Plugins 1.0 package for different agents¹ | ✅ Skills + MCP | Limited: formats each agent accepts | ❌ Skill extraction only | Limited: Copilot only |
+| Typed SDK for plugin hooks | ✅ Go, per-client APIs | ❌ | ❌ | ❌ |
+| Configure MCP servers | ✅ | ✅ | ❌ | ✅ |
+| Install skills across agents | ✅ | ✅ | ✅ | ✅ |
+| Local browser UI | ✅ Skill picker | ✅ Management dashboard | ❌ | ❌ |
+| Track installed skills in a lockfile² | ✅ | ✅ | ✅ | ✅ |
+| Resolve declared skill/plugin dependencies³ | Unreleased workflow | ❌ | Experimental skill-pack declarations | ✅ |
+| Project-local installation | ❌ In progress | ✅ | ✅ | ✅ |
+
+¹ This row covers the **Agent Plugins 1.0 format**. Skillshare installs plugins
+in formats each agent already accepts. APM also deploys its own and Claude-format
+packages across agents. UAP adapts supported skills and MCP configuration;
+hooks, other extensions, activation and authentication remain client-specific.
+Its hook SDK also has separate client APIs; hook behavior still varies by agent.
+
+² Lockfiles have different restore guarantees; their presence alone does not
+mean a frozen, integrity-checked install.
+
+³ UAP's complete dependency workflow is still
+[documented as unreleased](docs/UAP_DEPENDENCIES.md). Vercel follows skill-pack
+declarations after the project's package manager installs npm packages.
+Skillshare can delegate Pi/npm installation, but does not provide a general
+skill/plugin dependency resolver.
+
+Skillshare is a strong choice for syncing and visually managing an existing
+setup. Vercel Skills offers broad skill discovery through [skills.sh](https://skills.sh/)
+and many agent targets. APM provides project dependency management, frozen
+installs and organization policies. See the [sources and limits](docs/COMPARISON.md)
+for the details behind each column.
+
 ## Restore your plugin setup
 
 **SOURCE ONLY / UNRELEASED:** these commands require a compatible CLI built from
@@ -165,9 +209,11 @@ or backup. Transferring the files does not guarantee offline installation.
 See [Restore on another machine](docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
 for confirmation prompts, supported restore behavior and recovery.
 
-Source-build development: [install raw Agent Skills from GitHub](docs/AGENT_SKILLS_INSTALLER.md),
-including the local browser picker and versioned saved dependencies. This does not
-claim availability in an already published installer release.
+[Agentplugins 0.1.90](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.90)
+ships GitHub Skill installation, the local browser picker and Skill entries saved
+in `uap.toml` and `uap.lock`. This narrower released feature is separate from the
+complete dependency and transfer workflow above. See the
+[Skill installer implementation guide](docs/AGENT_SKILLS_INSTALLER.md).
 
 ## Any Agent Plugins 1.0 package
 
