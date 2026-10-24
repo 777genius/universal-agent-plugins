@@ -441,8 +441,11 @@ function evidenceTrustedForEligibility(
   // On the published_snapshot call path, production receives only snapshot
   // bytes verified by the publication workflow. The Directory signer therefore
   // vouches that github_actions trust matched the repository's approved
-  // workflow and protected-ref policy; these public fields are the CLI 0.1.18
-  // projection of that reviewed decision. Review previews never enable commands.
+  // workflow and protected-ref policy. Eligibility trust mirrors the signed
+  // resolver's HasTrustedEligibilityProvenance: schema gates need reproducible
+  // workflow provenance, while materialization and client runtime gates may
+  // also use exact evidence reviewed by the Directory publisher.
+  // Review previews never enable commands.
   if (!signerVouched || !record(item.trust)) return false;
   const trust = item.trust;
   if (trust.kind === 'github_actions') {
@@ -464,7 +467,10 @@ function evidenceTrustedForEligibility(
       return false;
     return true;
   }
-  return trust.kind === 'reviewed_external' && ['discovery', 'runtime', 'oauth'].includes(level);
+  return (
+    trust.kind === 'reviewed_external' &&
+    ['materialization', 'discovery', 'runtime', 'oauth'].includes(level)
+  );
 }
 
 function evidenceFromSnapshot(
