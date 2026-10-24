@@ -6,13 +6,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/sys/windows"
 )
 
 func openProjectHandle(path string, directory bool) (*os.File, error) {
 	// Refuse any existing reparse-point ancestor before obtaining a leaf handle.
-	for current := path; ; current = filepath.Dir(current) {
+	volume := filepath.VolumeName(path)
+	current := volume + string(filepath.Separator)
+	parts := strings.Split(strings.TrimPrefix(path, current), string(filepath.Separator))
+	for _, part := range append([]string{""}, parts...) {
+		if part != "" {
+			current = filepath.Join(current, part)
+		}
 		ptr, err := windows.UTF16PtrFromString(current)
 		if err != nil {
 			return nil, err
@@ -23,9 +30,6 @@ func openProjectHandle(path string, directory bool) (*os.File, error) {
 		}
 		if attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 			return nil, fmt.Errorf("grok discovery reparse point is unqualified")
-		}
-		if filepath.Dir(current) == current {
-			break
 		}
 	}
 	ptr, err := windows.UTF16PtrFromString(path)

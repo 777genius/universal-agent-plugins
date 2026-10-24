@@ -67,6 +67,9 @@ func grokPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (strin
 	if err != nil {
 		return "", err
 	}
+	if err := pathpolicy.ValidateLeafID(plan.DeclaredName); err != nil {
+		return "", err
+	}
 	if err := pathpolicy.ValidateLeafID(plan.PhysicalArtifactID); err != nil {
 		return "", err
 	}
@@ -95,6 +98,12 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if plan.Scope != domain.ScopeProject && in.TargetContext.Scope != domain.ScopeProject && in.TargetContext.ProjectRoot == "" {
 		return nil
+	}
+	if plan.Scope != domain.ScopeProject || in.TargetContext.Scope != domain.ScopeProject {
+		return fmt.Errorf("grok project plan scope mismatch")
+	}
+	if _, err := grokProjectRoot(in.Client, in.TargetContext, plan.NativeRegistryRoot); err != nil {
+		return err
 	}
 	for i := range plan.Components {
 		if plan.Components[i].Kind == domain.ComponentMCPServer {

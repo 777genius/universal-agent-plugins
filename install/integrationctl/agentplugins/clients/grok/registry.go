@@ -124,6 +124,18 @@ func (*Adapter) UsesNativeRegistryExecutable() bool { return true }
 
 func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
+		root, err := grokPlanRoot(client, plan)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if managed != nil {
+			if err := New().ValidateBindingProfile(root, *managed); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			if managed.PhysicalArtifact != plan.PhysicalArtifactID || managed.TargetLocator != plan.ActivePath {
+				return clients.RegistryIndeterminate, fmt.Errorf("grok binding differs from planned project artifact")
+			}
+		}
 		return inspectProject(ctx, env, client, plan, managed != nil)
 	}
 	if err := ctx.Err(); err != nil {

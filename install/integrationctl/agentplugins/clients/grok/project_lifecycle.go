@@ -21,6 +21,12 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 	if _, err := grokPlanRoot(request.Client, request.Plan); err != nil {
 		return err
 	}
+	if request.Plan.Status == domain.PlanUnsupported {
+		return fmt.Errorf("grok project package is unsupported")
+	}
+	if request.Delivery.ClientID != "" && request.Delivery.ClientID != domain.ClientGrok {
+		return fmt.Errorf("grok project delivery client differs from plan")
+	}
 	if request.ActivationComplete {
 		return fmt.Errorf("grok project preparation cannot be promoted by activation attestation")
 	}
@@ -41,7 +47,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
+	if request.Delivery.ClientID != domain.ClientGrok || request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
 		return domain.ActivationOutcome{}, fmt.Errorf("grok project delivered identity differs from plan")
 	}
 	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true)

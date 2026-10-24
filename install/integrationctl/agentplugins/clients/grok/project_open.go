@@ -14,7 +14,13 @@ func openProjectPath(path string, directory bool, beforeOpen func()) (*os.File, 
 	}
 	before, err := os.Lstat(path)
 	if err != nil {
-		return nil, nil, err
+		// Even an absent leaf must not hide an existing alias in its ancestors.
+		probe, openErr := openProjectHandle(path, directory)
+		if probe != nil {
+			_ = probe.Close()
+			return nil, nil, fmt.Errorf("grok discovery path appeared during open")
+		}
+		return nil, nil, openErr
 	}
 	if before.Mode()&os.ModeSymlink != 0 || before.IsDir() != directory || (!directory && !before.Mode().IsRegular()) {
 		return nil, nil, fmt.Errorf("grok discovery requires a real typed path")

@@ -59,11 +59,14 @@ func inspectProjectFiles(plan domain.DeliveryPlan, owned bool) (clients.Registry
 	return clients.RegistryClear, nil
 }
 func (scanner *projectFileScanner) scanRoot(root string) (bool, error) {
-	skill := filepath.Join(root, "skills", scanner.plan.DeclaredName)
-	if _, err := os.Lstat(skill); err == nil {
-		return true, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
+	skills, err := projectDirectoryEntries(filepath.Join(root, "skills"), nil)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, err
+	}
+	for _, entry := range skills {
+		if entry.Name() == scanner.plan.DeclaredName {
+			return true, nil
+		}
 	}
 	entries, err := projectDirectoryEntries(filepath.Join(root, "plugins"), nil)
 	if errors.Is(err, os.ErrNotExist) {
