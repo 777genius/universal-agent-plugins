@@ -98,4 +98,44 @@ candidates require an explicit path; more than 16 possible packages require it
 before candidate fetching. An exact source is immutable: repair replays recorded
 source, while moving to another exact source is a separate switch decision.
 
+## Install Agent Skills
+
+Agent Skills use the same CLI through the `skills` command group. Its `add`
+subcommand selects Skills from a public GitHub repository, a folder inside it,
+a `SKILL.md` URL, or an HTTPS publisher that serves a complete `.well-known`
+Skills index:
+
+```bash
+agentplugins skills add owner/repository --ui
+```
+
+`--ui` opens the bundled browser picker and needs an interactive terminal. The
+terminal picker is `--no-ui`. Explicit selections skip the picker:
+
+```bash
+agentplugins skills add owner/repository --skill review --skill pdf --target codex,claude --no-ui --yes
+```
+
+- `--skill` takes an exact Skill name and can repeat. If the name is ambiguous,
+  add `--path`.
+- `--path` selects one exact repository-relative Skill folder. Without it, the
+  repository root is used.
+- `--ref` names an exact Git ref when a URL boundary is ambiguous.
+- `--dry-run` shows the exact plan without changes.
+- JSON and non-interactive use require explicit `--skill` or `--path`, `--target`,
+  and `--yes`, except with `--dry-run`.
+- `--ui` cannot be combined with `--skill`, `--target`, or `--dry-run`.
+- For an HTTPS publisher, pass the publisher URL and an exact `--skill` name.
+  The publisher's index must list every file of the Skill.
+- The installation scope is `user` only in this release.
+
+Automated security findings can block an install. `--security-details` shows
+every finding in human output. `--accept-security-risk` continues past blocking
+findings and should be used only after review.
+
+Installed Skills are saved like other packages. They show up in
+`agentplugins list`, and you maintain them with `agentplugins update`,
+`agentplugins repair`, and `agentplugins remove`. See
+[maintaining installed plugins](./manage).
+
 Continue with [maintaining installed plugins](./manage).
