@@ -87,7 +87,7 @@ func TestManagementRetainsPreparationAndInstallerIdentity(t *testing.T) {
 		t.Fatal("native receipt lost accepted operation correlation", ids, binding.Receipts)
 	}
 	view, err := backend.Inspect(t.Context())
-	if err != nil || len(view.Entries) != 1 || len(view.Entries[0].Bindings) != 1 || len(view.Entries[0].Bindings[0].ManagedPaths) == 0 {
+	if err != nil || len(view.Entries) != 1 || !view.Entries[0].Declared || len(view.Entries[0].Bindings) != 1 || len(view.Entries[0].Bindings[0].ManagedPaths) == 0 {
 		t.Fatal(view, err)
 	}
 	oldLock, err := os.ReadFile(lockPath)
@@ -115,11 +115,11 @@ func TestManagementStaleReviewAndCancellationDoNotPublish(t *testing.T) {
 	j := newSavedJourney(t, repo)
 	backend := managementJourneyBackend(t, j)
 	request := managementInstallRequest("github:acme/demo@" + sha)
-	cancelled := managementPrepare(t, backend, request)
+	canceled := managementPrepare(t, backend, request)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	out, err := cancelled.Apply(ctx, nil)
-	if !errors.Is(err, context.Canceled) || out.State != management.Cancelled || out.Result.Mutated {
+	out, err := canceled.Apply(ctx, nil)
+	if !errors.Is(err, context.Canceled) || out.State != management.Canceled || out.Result.Mutated {
 		t.Fatal(out, err)
 	}
 	stale := managementPrepare(t, backend, request)

@@ -97,7 +97,7 @@ func requestJSON(t *testing.T, s *Server, method, path string, body any, status 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	encoded, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
@@ -216,7 +216,7 @@ func TestWaitingDoesNotCancelAcceptedEffectsAndExplicitCancelDoes(t *testing.T) 
 	p := &testPrepared{apply: func(ctx context.Context) (Outcome, error) {
 		close(started)
 		<-ctx.Done()
-		return Outcome{State: Cancelled, Result: OperationResult{Outcome: "unchanged"}}, ctx.Err()
+		return Outcome{State: Canceled, Result: OperationResult{Outcome: "unchanged"}}, ctx.Err()
 	}}
 	s := newTestServer(t, "", "captured", &testBackend{makePlan: func(ChangeRequest, string) Prepared { return p }})
 	review := prepareTest(t, s, ChangeRequest{Action: Sync})
@@ -224,17 +224,20 @@ func TestWaitingDoesNotCancelAcceptedEffectsAndExplicitCancelDoes(t *testing.T) 
 	<-started
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", s.URL()+"/api/v1/operations/"+op.OperationId, nil)
-	_, err := http.DefaultClient.Do(req)
+	req, _ := http.NewRequestWithContext(ctx, "GET", s.URL()+"/api/v1/operations/"+op.OperationId, http.NoBody)
+	res, err := http.DefaultClient.Do(req)
+	if res != nil {
+		defer func() { _ = res.Body.Close() }()
+	}
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected cancelled wait, got %v", err)
+		t.Fatalf("expected canceled wait, got %v", err)
 	}
 	live, ok := s.memoryOperation(op.OperationId)
 	if !ok || live.State != Running {
 		t.Fatal("wait cancellation changed accepted operation")
 	}
 	requestJSON(t, s, "POST", "/api/v1/operations/"+op.OperationId+"/cancel", nil, 202, nil)
-	if got := awaitTerminal(t, s, op.OperationId); got.State != Cancelled || got.Result == nil || got.Result.Mutated {
+	if got := awaitTerminal(t, s, op.OperationId); got.State != Canceled || got.Result == nil || got.Result.Mutated {
 		t.Fatal(got)
 	}
 }
@@ -281,7 +284,7 @@ func TestHTTPAuthorityAndStrictJSON(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer res.Body.Close()
+			defer func() { _ = res.Body.Close() }()
 			if res.StatusCode != tc.status {
 				t.Fatalf("status %d want %d", res.StatusCode, tc.status)
 			}

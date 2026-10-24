@@ -63,7 +63,7 @@ for success, and do not enable automatic retries of unaccepted mutation identiti
 `python_smoke.py` is a standard-library qualification client for this exact process
 and HTTP protocol. It is deliberately a smoke client, not a published Python SDK.
 It runs an actual fixture installation using the real engine and reports only
-public session/operation metadata. Pass only disposable profile and state roots.
+public session/operation metadata. Pass only disposable profile and state roots with an explicit real client executable. It isolates HOME/USERPROFILE/XDG/temp paths and does not inherit native credentials; proxy/certificate settings required for the public source remain available. `--kind skill` additionally qualifies retained Skill discovery and Markdown preview before installation.
 
 ## Bounded local authoring
 
@@ -88,3 +88,9 @@ record. The hook touches only a verified private backup and its metadata, refuse
 pending journals or changed data, and never deletes an active/native path. Cleanup
 refusal keeps the record; the shared 1024-record budget bounds retained growth and
 refuses further work when full. There is no cleanup daemon or independent job store.
+
+If an external CLI claims a local Skill path after an interrupted edit, restore
+reloads native ownership and refuses to overwrite that binding. Resolve the newer
+binding through its owning tool, preserve the private backup, then prepare a fresh
+local restore. The observation gate protects runtimes started by the integrating
+host; independent native processes must honor their own lifecycle coordination.

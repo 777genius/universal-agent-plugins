@@ -2,7 +2,6 @@ package agentpluginscli
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"strings"
 
@@ -24,7 +23,7 @@ func (b *ManagementBackend) validateManagementEnvironment(ctx context.Context, r
 	}
 	for client := range requirements.Targets {
 		if profiles[client] == "" {
-			return errors.New("desired target is outside the captured context")
+			return managementRefusal("TARGET_OUTSIDE_CONTEXT", "Reopen the environment with every affected native profile before changing this binding")
 		}
 	}
 	state, err := b.app.StateStore.Load()
@@ -35,7 +34,7 @@ func (b *ManagementBackend) validateManagementEnvironment(ctx context.Context, r
 		for _, binding := range installation.Clients {
 			root := profiles[binding.ClientID]
 			if root == "" || binding.Scope != string(domain.ScopeUser) || !managementBindingInProfile(binding, root) {
-				return errors.New("recorded native binding belongs to another captured profile")
+				return managementRefusal("TARGET_OUTSIDE_CONTEXT", "Reopen the environment with every affected native profile before changing this binding")
 			}
 		}
 	}
@@ -51,9 +50,35 @@ func managementBindingInProfile(binding domain.ClientBinding, root string) bool 
 		normalized, err := managementAbsolute(recorded)
 		return err == nil && normalized == root
 	}
-	// Filesystem-only user adapters record their materialized target beneath the
-	// selected profile. Native registry adapters must carry a native profile root.
-	relative, err := filepath.Rel(root, binding.TargetLocator)
+	// Some native configuration adapters retain a private package artifact plus
+	// separately owned projections instead of a profile token. The artifact is
+	// not the user's profile; every native projection must prove the same root.
+	return managementProjectionInProfile(binding, root)
+}
+
+func managementProjectionInProfile(binding domain.ClientBinding, root string) bool {
+	proved := managementPathInProfile(binding.TargetLocator, root)
+	for _, object := range binding.NativeObjects {
+		if object.ProtectionClass != "managed" {
+			continue
+		}
+		if object.Kind == "managed_package_directory" && object.Path == binding.TargetLocator {
+			continue
+		}
+		if !managementPathInProfile(object.Path, root) {
+			return false
+		}
+		proved = true
+	}
+	return proved
+}
+
+func managementPathInProfile(path, root string) bool {
+	physical, err := managementAbsolute(path)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(root, physical)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
 }
 
@@ -78,7 +103,7 @@ func (b *ManagementBackend) validateManagementActions(ctx context.Context, actio
 	}
 	for _, action := range actions {
 		if profiles[action.ClientID] == "" {
-			return errors.New("reviewed binding target is outside the captured context")
+			return managementRefusal("TARGET_OUTSIDE_CONTEXT", "Reopen the environment with every affected native profile before changing this binding")
 		}
 		if action.InstallationID != "" {
 			installations[action.InstallationID] = true
@@ -97,7 +122,7 @@ func (b *ManagementBackend) validateManagementActions(ctx context.Context, actio
 		for _, binding := range installation.Clients {
 			root := profiles[binding.ClientID]
 			if root == "" || binding.Scope != string(domain.ScopeUser) || !managementBindingInProfile(binding, root) {
-				return errors.New("reviewed installation has a binding outside the captured profile")
+				return managementRefusal("TARGET_OUTSIDE_CONTEXT", "Reopen the environment with every affected native profile before changing this binding")
 			}
 		}
 	}

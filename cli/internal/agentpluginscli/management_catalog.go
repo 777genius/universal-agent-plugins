@@ -20,10 +20,17 @@ func (b *ManagementBackend) Catalog(ctx context.Context, query string) (manageme
 	if err != nil {
 		return out, err
 	}
-	bundle, err := b.app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
-	if err != nil {
+	bundle, loadErr := b.app.DirectoryClient.Load(ctx, installedDirectoryFloor(state))
+	return b.managementCatalogOutcome(bundle, loadErr, query), nil
+}
+
+// An unavailable remote catalog is an explicit observation, not an empty
+// successful refresh. Installed inspection remains usable without the network.
+func (b *ManagementBackend) managementCatalogOutcome(bundle directoryv1.VerifiedBundle, loadErr error, query string) management.Catalog {
+	out := management.Catalog{Freshness: management.CatalogFreshnessUnavailable, Items: []management.CatalogEntry{}, Diagnostics: []management.Diagnostic{}}
+	if loadErr != nil {
 		out.Diagnostics = append(out.Diagnostics, managementDiagnostic("CATALOG_UNAVAILABLE", "Could not refresh the verified catalog; installed environment inspection remains available"))
-		return out, nil
+		return out
 	}
 	out.Freshness = management.CatalogFreshnessCurrent
 	if bundle.Source != directoryv1.BundleSourceRemote {
@@ -36,7 +43,7 @@ func (b *ManagementBackend) Catalog(ctx context.Context, query string) (manageme
 		out.Items = append(out.Items, b.catalogEntry(bundle.Snapshot, product))
 	}
 	sort.Slice(out.Items, func(i, j int) bool { return out.Items[i].Name < out.Items[j].Name })
-	return out, nil
+	return out
 }
 func (b *ManagementBackend) catalogEntry(snapshot domain.DirectorySnapshot, product domain.DirectoryProduct) management.CatalogEntry {
 	item := management.CatalogEntry{Id: product.ID, Name: product.DisplayName, Description: product.Description, Source: product.ID, Kind: management.CatalogEntryKindPlugin, Targets: []string{}}

@@ -29,7 +29,7 @@ export class ManagementError extends Error {
   }
 }
 
-const terminalStates = new Set(['succeeded', 'partial', 'failed', 'cancelled', 'interrupted']);
+const terminalStates = new Set(['succeeded', 'partial', 'failed', 'canceled', 'interrupted']);
 export function isTerminal(operation: Operation): boolean {
   if (terminalStates.has(operation.state)) return true;
   if (operation.state === 'queued' || operation.state === 'running') return false;
@@ -52,15 +52,15 @@ function unwrap<T>(response: { data?: T; error?: WireError; response: Response }
 async function delay(ms: number, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted();
   await new Promise<void>((resolve, reject) => {
-    const done = () => { signal.removeEventListener('abort', cancelled); resolve(); };
+    const done = () => { signal.removeEventListener('abort', canceled); resolve(); };
     const timer = setTimeout(done, ms);
-    const cancelled = () => {
+    const canceled = () => {
       clearTimeout(timer);
-      signal.removeEventListener('abort', cancelled);
-      reject(signal.reason ?? new DOMException('Waiting was cancelled.', 'AbortError'));
+      signal.removeEventListener('abort', canceled);
+      reject(signal.reason ?? new DOMException('Waiting was canceled.', 'AbortError'));
     };
-    signal.addEventListener('abort', cancelled, { once: true });
-    if (signal.aborted) cancelled();
+    signal.addEventListener('abort', canceled, { once: true });
+    if (signal.aborted) canceled();
   });
 }
 function positive(value: number, label: string): number {

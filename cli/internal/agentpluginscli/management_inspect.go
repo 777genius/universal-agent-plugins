@@ -32,7 +32,9 @@ func (b *ManagementBackend) Inspect(ctx context.Context) (management.Environment
 			entry.Kind = management.EnvironmentEntryKindSkill
 		}
 		key := dependencyRootKey(requirements, locked, pkg.Alias)
-		if req, ok := requirements.Dependencies[key]; ok && !environment.MovingRequirement(req) && (req.Registry == nil || req.Registry.Selector.Kind == environment.SelectorVersion) {
+		req, declared := requirements.Dependencies[key]
+		entry.Declared = declared
+		if declared && !environment.MovingRequirement(req) && (req.Registry == nil || req.Registry.Selector.Kind == environment.SelectorVersion) {
 			entry.UpdateStatus = management.EnvironmentEntryUpdateStatusPinned
 		}
 		entries[pkg.Alias] = &entry

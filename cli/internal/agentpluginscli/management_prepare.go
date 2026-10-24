@@ -3,7 +3,6 @@ package agentpluginscli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"slices"
 	"sort"
 
@@ -63,7 +62,7 @@ func (b *ManagementBackend) prepareEnvironment(ctx context.Context, preview App,
 		aliases, err = managementAliases(requirements, locked, aliases, false)
 	case management.Sync:
 		if snapshot.LockBytes == nil && len(requirements.Dependencies) > 0 {
-			return nil, errors.New("locked restore requires uap.lock")
+			return nil, managementRefusal("LOCK_REQUIRED", "Locked restoration requires uap.lock; prepare recovery to reconcile the desired environment")
 		}
 	}
 	if err != nil {
@@ -105,10 +104,10 @@ func (b *ManagementBackend) managementAdd(ctx context.Context, app App, input ma
 	requirements := cloneSavedRequirements(snapshot.Requirements)
 	source := input.Source
 	if explicitLocalPath(source) || localArchiveInput(source) {
-		return requirements, environment.Lock{}, nil, errors.New("local filesystem sources are not admitted by the management API")
+		return requirements, environment.Lock{}, nil, managementRefusal("SOURCE_NOT_SUPPORTED", "Use a Git, HTTPS archive or signed catalog reference; local plugin paths are not supported by this API")
 	}
 	if input.Ref != "" {
-		return requirements, environment.Lock{}, nil, errors.New("plugin revisions must be explicit in the supported source reference")
+		return requirements, environment.Lock{}, nil, invalidManagementRequest("Include the plugin revision in its source reference, for example owner/repository@commit")
 	}
 	targets := []domain.ClientID{}
 	for _, client := range clients {
@@ -140,8 +139,8 @@ func managementAliases(requirements environment.Requirements, locked environment
 	aliases := []string{}
 	for _, selector := range selected {
 		key := dependencyRootKey(requirements, locked, selector)
-		if key == "" {
-			return nil, errors.New("select a declared dependency; transitive dependencies are retained by their owners")
+		if _, declared := requirements.Dependencies[key]; !declared {
+			return nil, managementRefusal("DEPENDENCY_NOT_DECLARED", "Select a declared dependency; transitive dependencies are retained by their owners")
 		}
 		if !slices.Contains(aliases, key) {
 			aliases = append(aliases, key)
@@ -159,7 +158,7 @@ func managementRemove(ctx context.Context, app App, requirements environment.Req
 		}
 		for _, client := range targets {
 			if !slices.Contains(desired, client) {
-				return requirements, locked, errors.New("selected target does not own the dependency")
+				return requirements, locked, managementRefusal("TARGET_NOT_INSTALLED", "The selected target does not own this dependency")
 			}
 		}
 		requirements = removeSavedTargets(requirements, alias, targets)

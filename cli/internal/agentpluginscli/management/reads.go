@@ -141,7 +141,7 @@ func (s *Server) environment(w http.ResponseWriter, r *http.Request) {
 }
 
 func validID(id string) bool {
-	if len(id) == 0 || len(id) > 256 {
+	if id == "" || len(id) > 256 {
 		return false
 	}
 	for _, r := range id {

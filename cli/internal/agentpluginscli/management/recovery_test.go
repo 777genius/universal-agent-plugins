@@ -2,6 +2,7 @@ package management
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,15 +128,15 @@ func TestLocalRestoreLinksOnlyItsExactRetainedIdentity(t *testing.T) {
 	}
 }
 
-func TestCancelledPartialEffectsRemainPendingAndNeverAgeOut(t *testing.T) {
+func TestCanceledPartialEffectsRemainPendingAndNeverAgeOut(t *testing.T) {
 	now := time.Now().UTC()
 	for _, result := range []*OperationResult{
 		{Outcome: "partial", Mutated: true},
 		{Outcome: "unchanged", NextActions: []NextAction{{Kind: "recover", Reason: "cleanup required"}}},
 	} {
-		op := Operation{State: Cancelled, Result: result, UpdatedAt: now.Add(-90 * 24 * time.Hour)}
+		op := Operation{State: Canceled, Result: result, UpdatedAt: now.Add(-90 * 24 * time.Hour)}
 		if !pendingOperation(op) || prunable(op, now) {
-			t.Fatal("cancelled unresolved work released fence")
+			t.Fatal("canceled unresolved work released fence")
 		}
 		op.ResolvedBy = "reviewed-recovery"
 		if pendingOperation(op) || !prunable(op, now) {
@@ -163,10 +164,51 @@ func TestMalformedHistoryRefusesAcceptanceBeforeEffects(t *testing.T) {
 
 func TestNilResultCannotClaimKnownNoEffects(t *testing.T) {
 	op := Operation{State: Queued}
-	for _, outcome := range []Outcome{{State: Succeeded}, {State: Failed}, {State: Cancelled}, {State: Running}} {
+	for _, outcome := range []Outcome{{State: Succeeded}, {State: Failed}, {State: Canceled}, {State: Running}} {
 		result := finishOperation(op, outcome, nil, false)
 		if result.State != Interrupted || result.Result != nil {
 			t.Fatal("missing result treated as known", result)
 		}
+	}
+}
+
+func TestSuccessfulLocalBackupRemainsVisibleAfterHostRestart(t *testing.T) {
+	root := t.TempDir()
+	s := newTestServer(t, root, "capture-before", nil)
+	old := retainedRecord(s, "successful-delete", Succeeded)
+	old.Operation.Action = LocalSkill
+	old.Operation.LocalSkill = &LocalSkillIdentity{RootId: "user", SkillName: "mine"}
+	old.Operation.Result = &OperationResult{Outcome: "completed", Mutated: true, LocalSkillBackup: &LocalSkillBackup{OperationId: old.Operation.OperationId, RootId: "user", SkillName: "mine", Path: filepath.Join(root, "private-backup")}}
+	saveRecord(t, s, old)
+	s.Close()
+	next := newTestServer(t, root, "capture-after", nil)
+	var environment Environment
+	requestJSON(t, next, "GET", "/api/v1/environment", nil, 200, &environment)
+	if len(environment.PendingOperations) != 0 || len(environment.LocalSkillBackups) != 1 || environment.LocalSkillBackups[0].OperationId != old.Operation.OperationId {
+		t.Fatal("successful undo point disappeared across restart", environment)
+	}
+}
+
+func TestCleanupRefusalRetainsHistoryWithoutBlockingBelowBudget(t *testing.T) {
+	s := newTestServer(t, "", "capture", nil)
+	old := retainedRecord(s, "expired-backup", Succeeded)
+	old.Operation.Result = &OperationResult{Outcome: "completed"}
+	old.Operation.UpdatedAt = time.Now().Add(-31 * 24 * time.Hour)
+	saveRecord(t, s, old)
+	calls := 0
+	if err := s.store.reserve(time.Now(), func(acceptance) error { calls++; return errors.New("private backup changed") }); err != nil {
+		t.Fatal("cleanup refusal blocked unrelated acceptance", err)
+	}
+	if calls != 1 {
+		t.Fatal("expiry skipped authoritative cleanup")
+	}
+	if kept, err := s.store.byRequest(old.Operation.RequestId); err != nil || kept == nil {
+		t.Fatal("unverified undo data lost its observation", err)
+	}
+	if err := s.store.reserve(time.Now(), func(acceptance) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if kept, err := s.store.byRequest(old.Operation.RequestId); err != nil || kept != nil {
+		t.Fatal("verified expiry did not remove observation", err)
 	}
 }

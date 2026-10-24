@@ -735,6 +735,7 @@ components:
       - source
       - updateStatus
       - bindings
+      - declared
       properties:
         alias:
           type: string
@@ -763,6 +764,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Binding'
+        declared:
+          type: boolean
+          description: True when this alias is a directly declared manifest dependency. Transitive dependencies
+            are inspected here but changed through their declared parent.
     Environment:
       type: object
       additionalProperties: false
@@ -1072,7 +1077,7 @@ components:
       - succeeded
       - partial
       - failed
-      - cancelled
+      - canceled
       - interrupted
     Operation:
       type: object

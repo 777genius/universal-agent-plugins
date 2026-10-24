@@ -104,7 +104,7 @@ func (s observationStore) read(path string) (*acceptance, error) {
 		return nil, err
 	}
 	var extra any
-	if err = decoder.Decode(&extra); err != io.EOF {
+	if err = decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return nil, errors.New("invalid observation document")
 	}
 	if record.Version != 1 || record.EnvironmentID != s.environmentID || record.Operation.EnvironmentId != s.environmentID || record.Operation.ContextId != record.ContextID {

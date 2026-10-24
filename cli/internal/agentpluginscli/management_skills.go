@@ -2,7 +2,6 @@ package agentpluginscli
 
 import (
 	"context"
-	"errors"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 )
@@ -24,7 +23,7 @@ func (b *ManagementBackend) SkillsCatalog(ctx context.Context, input management.
 	defer b.mu.Unlock()
 	if b.closed || len(b.catalogs)+len(b.webCatalogs) >= 16 {
 		session.cleanup()
-		return management.SkillCatalog{}, errors.New("catalog session limit reached; close this session before opening another")
+		return management.SkillCatalog{}, managementRefusal("CATALOG_LIMIT", "Close and reopen the source session before discovering more repositories")
 	}
 	b.catalogs[catalog.CatalogId] = session
 	out := management.SkillCatalog{CatalogId: catalog.CatalogId, Source: input.Source, SourceRevision: catalog.SourceRevision, Candidates: []management.SkillCandidate{}, Diagnostics: []management.Diagnostic{}}
@@ -46,7 +45,7 @@ func (b *ManagementBackend) prepareSkills(ctx context.Context, input management.
 		return b.prepareWebsiteSkills(ctx, input, clients, operationID, website)
 	}
 	if session == nil {
-		return nil, errors.New("skill catalog is missing or expired; discover the source again")
+		return nil, managementRefusal("CATALOG_EXPIRED", "Discover the Skill source again before selecting candidates")
 	}
 	selections := []SkillsSelection{}
 	seen := map[string]bool{}
@@ -55,7 +54,7 @@ func (b *ManagementBackend) prepareSkills(ctx context.Context, input management.
 		candidate, ok := session.candidates[id]
 		if !ok || seen[id] || candidate.Status != "available" {
 			session.mu.Unlock()
-			return nil, errors.New("select unique available skill candidates")
+			return nil, invalidManagementRequest("Select unique available Skill candidates from the current catalog")
 		}
 		seen[id] = true
 		selections = append(selections, session.selection(candidate))

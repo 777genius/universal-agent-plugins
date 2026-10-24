@@ -31,7 +31,7 @@ test('real owned child performs private authenticated bootstrap and repeat close
   await assert.rejects(host.client.session());
 });
 
-for (const [mode, code] of [['version','UNSUPPORTED_API_VERSION'], ['remote','INVALID_BOOTSTRAP'], ['mismatch','SESSION_MISMATCH'], ['malformed','INVALID_BOOTSTRAP'], ['oversized','BOOTSTRAP_TOO_LARGE'], ['exit','PROCESS_EXITED'], ['timeout','STARTUP_TIMEOUT']] as const) {
+for (const [mode, code] of [['version','UNSUPPORTED_API_VERSION'], ['remote','INVALID_BOOTSTRAP'], ['mismatch','SESSION_MISMATCH'], ['malformed','INVALID_BOOTSTRAP'], ['oversized','BOOTSTRAP_TOO_LARGE'], ['exit','PROCESS_EXITED'], ['timeout','STARTUP_TIMEOUT'], ['environment-missing','SESSION_MISMATCH'], ['environment-empty','SESSION_MISMATCH'], ['environment-number','SESSION_MISMATCH']] as const) {
   test(`rejects ${mode} startup without exposing private output`, async () => {
     await assert.rejects(startUap({ ...options(mode), startupTimeoutMs: 300 }), (error: unknown) => {
       assert.ok(error instanceof ManagementError);
@@ -56,4 +56,25 @@ test('shutdown is bounded when the owned process ignores EOF and SIGTERM', async
 test('invalid executable paths fail without invoking a shell or PATH lookup', async () => {
   await assert.rejects(startUap({ ...options(), executable: 'agentplugins' }), (error: unknown) => error instanceof ManagementError && error.code === 'INVALID_EXECUTABLE');
   await assert.rejects(startUap({ ...options(), executable: join(directory, 'missing') }), (error: unknown) => error instanceof ManagementError && error.code === 'PROCESS_START_FAILED');
+});
+
+
+test('default process environment preserves the CLI home and removes duplicate proxy casing', async () => {
+  const changes: Record<string, string> = { AGENTPLUGINS_HOME: join(directory, 'custom-cli-home'), HTTP_PROXY: 'http://upper.invalid', http_proxy: 'http://lower.invalid', HTTPS_PROXY: 'http://upper.invalid', https_proxy: 'http://lower.invalid', NO_PROXY: '127.0.0.1', no_proxy: 'ignored.invalid' };
+  const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, process.env[key]]));
+  let host: Awaited<ReturnType<typeof startUap>> | undefined;
+  try {
+    Object.assign(process.env, changes);
+    host = await startUap({ executable, config, startupTimeoutMs: 2_000, shutdownTimeoutMs: 100 });
+    assert.equal(host.session.targets[0]?.displayPath, changes.AGENTPLUGINS_HOME);
+    for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY']) {
+      assert.equal(host.session.capabilities.find((item) => item.action === `environment:${name}`)?.supported, true);
+      // Windows environment lookup itself folds names; the fixture counts the
+      // inherited spellings instead of relying on case-insensitive Getenv.
+      assert.equal(host.session.capabilities.find((item) => item.action === `environment:${name.toLowerCase()}`)?.supported, false);
+    }
+  } finally {
+    await host?.close();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
+  }
 });

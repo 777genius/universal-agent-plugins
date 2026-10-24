@@ -13,7 +13,7 @@ export interface StartOptions {
   startupTimeoutMs?: number;
   shutdownTimeoutMs?: number;
   signal?: AbortSignal;
-  /** Explicit process environment. Default inherits only OS, locale and proxy settings. */
+  /** Explicit process environment. Default inherits only OS, UAP home, locale and proxy settings. */
   env?: Record<string, string | undefined>;
   requiredCapabilities?: string[];
 }
@@ -24,8 +24,13 @@ function boundedTimeout(value: number, name: string): number {
 }
 function defaultEnvironment(): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
-  for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'LANG', 'LC_ALL', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) {
-    if (process.env[name] !== undefined) result[name] = process.env[name];
+  const inherited = new Set<string>();
+  for (const name of ['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'AGENTPLUGINS_HOME', 'LANG', 'LC_ALL', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR']) {
+    const folded = name.toUpperCase();
+    if (process.env[name] !== undefined && !inherited.has(folded)) {
+      result[name] = process.env[name];
+      inherited.add(folded);
+    }
   }
   result.NO_COLOR = '1';
   return result;
@@ -49,7 +54,7 @@ function readBootstrap(line: string): Bootstrap {
   return record as unknown as Bootstrap;
 }
 function verifySession(session: Session, bootstrap: Bootstrap, required: string[]) {
-  if (session.apiVersion !== 1 || session.contextId !== bootstrap.contextId || session.engineVersion !== bootstrap.engineVersion || !Array.isArray(session.targets) || !Array.isArray(session.capabilities)) {
+  if (typeof session !== 'object' || session === null || typeof session.environmentId !== 'string' || session.environmentId.trim() === '' || session.apiVersion !== 1 || session.contextId !== bootstrap.contextId || session.engineVersion !== bootstrap.engineVersion || !Array.isArray(session.targets) || !Array.isArray(session.capabilities)) {
     throw new ManagementError('SESSION_MISMATCH', 'The authenticated engine session does not match its bootstrap.');
   }
   for (const action of required) {
@@ -111,12 +116,12 @@ export async function startUap(options: StartOptions) {
         child.stdout.removeListener('data', data);
         child.removeListener('error', failed);
         child.removeListener('exit', ended);
-        startup.signal.removeEventListener('abort', cancelled);
+        startup.signal.removeEventListener('abort', canceled);
         child.stdout.resume();
       };
       const failed = () => { cleanup(); reject(new ManagementError('PROCESS_START_FAILED', 'Could not start the pinned UAP executable. Check its path, permissions and platform.')); };
       const ended = () => { cleanup(); reject(new ManagementError('PROCESS_EXITED', `The engine exited before readiness (exit code ${exitCode ?? 'unknown'}).`)); };
-      const cancelled = () => { cleanup(); reject(startup.signal.reason); };
+      const canceled = () => { cleanup(); reject(startup.signal.reason); };
       const data = (chunk: Buffer) => {
         if (received) return;
         if (buffered.length + chunk.length > bootstrapLimit) {
@@ -135,8 +140,8 @@ export async function startUap(options: StartOptions) {
       child.stdout.on('data', data);
       child.once('error', failed);
       child.once('exit', ended);
-      startup.signal.addEventListener('abort', cancelled, { once: true });
-      if (startup.signal.aborted) cancelled();
+      startup.signal.addEventListener('abort', canceled, { once: true });
+      if (startup.signal.aborted) canceled();
       child.stdin.write(configuration);
     });
     const client = createClient({ baseUrl: bootstrap.url, origin: bootstrap.origin, token: bootstrap.token });

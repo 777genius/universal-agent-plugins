@@ -339,6 +339,8 @@ export interface components {
             /** @enum {string} */
             updateStatus: "current" | "available" | "pinned" | "blocked" | "check_unavailable";
             bindings: components["schemas"]["Binding"][];
+            /** @description True when this alias is a directly declared manifest dependency. Transitive dependencies are inspected here but changed through their declared parent. */
+            declared: boolean;
         };
         Environment: {
             contextId: string;
@@ -419,7 +421,7 @@ export interface components {
             items?: components["schemas"]["OperationItem"][];
         };
         /** @enum {string} */
-        OperationState: "queued" | "running" | "succeeded" | "partial" | "failed" | "cancelled" | "interrupted";
+        OperationState: "queued" | "running" | "succeeded" | "partial" | "failed" | "canceled" | "interrupted";
         /** @description Authoritative operation snapshot. Accepted work outlives its HTTP request. Waiting cancellation does not cancel effects. interrupted requires fresh inspection/recovery, not automatic replay. Records are retained at least 30 days; a full retained-record budget refuses new work rather than dropping live identity. */
         Operation: {
             operationId: string;

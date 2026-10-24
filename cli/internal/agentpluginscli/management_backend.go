@@ -2,7 +2,6 @@ package agentpluginscli
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -69,6 +68,9 @@ func (b *ManagementBackend) Session(ctx context.Context) (management.Session, er
 	for _, captured := range b.config.Targets {
 		target := byClient[captured.Client]
 		target.Id = captured.Id
+		if reason := managementExecutableReason(captured, b.app.Installer.RequiresClientExecutable(captured.Client)); reason != "" {
+			target.Available, target.Reason = false, reason
+		}
 		out.Targets = append(out.Targets, target)
 	}
 	for _, action := range []string{"install", "install_skills", "update", "sync", "repair", "remove", "recover", "source_git", "source_archive", "source_https_skill"} {
@@ -84,26 +86,20 @@ func (b *ManagementBackend) Session(ctx context.Context) (management.Session, er
 }
 func (b *ManagementBackend) clientTargets(ids []string, required bool) ([]string, error) {
 	if required && len(ids) == 0 {
-		return nil, errors.New("explicit targetIds required")
+		return nil, invalidManagementRequest("Select at least one captured target for installation")
 	}
 	out := []string{}
 	seen := map[string]bool{}
 	for _, id := range ids {
 		if seen[id] {
-			return nil, errors.New("duplicate target ID")
+			return nil, invalidManagementRequest("Select each target only once")
 		}
 		seen[id] = true
-		found := false
-		for _, target := range b.config.Targets {
-			if target.Id == id {
-				out = append(out, target.Client)
-				found = true
-				break
-			}
+		client, err := b.selectedManagementClient(id, required)
+		if err != nil {
+			return nil, err
 		}
-		if !found {
-			return nil, errors.New("target does not belong to captured context")
-		}
+		out = append(out, client)
 	}
 	sort.Strings(out)
 	return out, nil

@@ -81,7 +81,7 @@ func managementReadSkillPreview(path string) (string, error) {
 		return "", err
 	}
 	if len(body) > limit {
-		return "", errors.New("Skill preview exceeds 256 KiB")
+		return "", errors.New("skill preview exceeds 256 KiB")
 	}
 	return string(body), nil
 }

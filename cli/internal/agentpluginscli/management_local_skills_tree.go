@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
 const localSkillMaxBytes = 10 << 20
@@ -49,7 +49,7 @@ func localSkillDigest(body []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 func localSkillName(name string) bool {
-	return len(name) <= 255 && pathpolicy.ValidatePortablePathSegment(name) == nil && !strings.HasPrefix(name, ".uap-local-") && !strings.HasPrefix(name, ".agentplugins-")
+	return len(name) <= 255 && pathcontract.ValidatePortablePathSegment(name) == nil && !strings.HasPrefix(name, ".uap-local-") && !strings.HasPrefix(name, ".agentplugins-")
 }
 func localSkillRelative(name string) bool {
 	if len(name) > 1024 || path.Clean(name) != name || strings.Count(name, "/") > 16 {
@@ -121,7 +121,7 @@ func (w *localSkillWalker) read(current, relative string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
 		return err
@@ -205,7 +205,7 @@ func syncLocalSkillRoot(root *os.Root, name string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return file.Sync()
 }
 func localSkillPathOverlap(a, b string) bool {

@@ -71,8 +71,8 @@ func (p *managementPrepared) outcome(applied dependencyApplicationResult, applyE
 		out.Result.Outcome = "incomplete"
 	}
 	if !result.Mutated && (errors.Is(applyErr, context.Canceled) || errors.Is(applyErr, context.DeadlineExceeded)) {
-		out.State = management.Cancelled
-		out.Result.Outcome = "cancelled"
+		out.State = management.Canceled
+		out.Result.Outcome = "canceled"
 	}
 	out.Result.NextActions = append(out.Result.NextActions, management.NextAction{Kind: "inspect", Reason: "Inspect desired files and owned binding receipts, then prepare recovery or locked synchronization"})
 	return out

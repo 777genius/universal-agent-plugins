@@ -43,7 +43,9 @@ existing UAP state and mutation locks with the CLI; Go resolves those defaults. 
 overrides are for isolated or alternate environments and must not silently split ownership. The authoritative `session.contextId` is derived by Go from captured
 facts. It is separate from an application's navigation ID or optional startup label.
 `session.environmentId` remains stable across executable/label changes, so unresolved
-operations remain visible. Unsupported scope/target capabilities are refused instead of falling back to user scope.
+operations remain visible. Adding captured project authoring roots changes the context revision, not the stable environment identity. Unsupported scope/target capabilities are refused instead of falling back to user scope.
+
+The default child environment preserves `AGENTPLUGINS_HOME` alongside OS/home/locale/proxy settings, so custom CLI state is shared. It inherits one spelling of each case-insensitive environment key, preferring uppercase proxy names. An explicit `env` is passed exactly as supplied and remains the host's responsibility.
 
 Startup sends one bounded JSON line to `agentplugins manage serve` on stdin. Stdin
 stays open for this owned process. The private stdout bootstrap supplies an ephemeral
@@ -72,7 +74,7 @@ const operation = await host.client.wait(accepted.operationId, {
   onProgress: (snapshot) => console.log(snapshot.phase),
   timeoutMs: 120_000,
 });
-// Render succeeded, partial, failed, cancelled or interrupted explicitly.
+// Render succeeded, partial, failed, canceled or interrupted explicitly.
 // Materialized configuration can still require authentication/manual activation.
 console.log(operation.state, operation.result?.nextActions);
 ```
@@ -89,7 +91,7 @@ process restart. Conflicting input under the same request ID is refused.
 `wait()` returns terminal failed/partial/interrupted snapshots as data. HTTP errors
 throw `ManagementError` with `code`, `status` and `retryable`; network failures remain
 network errors. Neither implies that an earlier accepted operation had no effects.
-The server's outstanding `environment.pendingOperations` survives app restart.
+The server's outstanding `environment.pendingOperations` survives app restart. Environment entries include `declared`: only direct manifest dependencies can be updated or removed independently; transitive entries are observed and changed through their declared parent.
 
 An AbortSignal or waiting deadline stops observation only. Explicitly request
 cooperative cancellation with `client.cancel(operationId)`, then observe the actual
@@ -166,3 +168,29 @@ node contracts/management/generate.ts --check
 Never edit `src/generated/schema.d.ts` directly. A source pin, SDK tarball digest and
 engine digest belong in the consuming app's build evidence; public npm or binary
 release publication is a separate authorized action.
+
+## Real engine qualification
+
+After building, run the example with explicitly provisioned UAP and OpenCode
+executables and the public fixture at an immutable source commit:
+
+```sh
+node examples/real-engine-smoke.ts \
+  --executable /absolute/path/to/agentplugins \
+  --client-executable /absolute/path/to/opencode \
+  --source 777genius/universal-agent-plugins@4555aa53844ee0078e9036cd82638afd67f77c16//repotests/testdata/agentplugins_commands_fixture \
+  --output /absolute/test-output/sdk-native-evidence.json
+```
+
+The example creates disposable state, profile, HOME and XDG roots. It installs
+through the actual Go engine, invokes real `opencode debug skill`, checks the exact
+fixture bytes and portable command discovery, and confirms explicit-only commands
+remain withheld. It also checks targeted pinned update, repair, removal, local
+create/edit/delete and restart-visible undo. No model or account login is used.
+
+For crash qualification it removes one disposable managed fixture file, prepares
+repair, drops the real accepted HTTP response and kills only the owned Go process.
+After restart it reuses the persisted request identity, observes interrupted work,
+prepares fresh recovery and requires the real native consumer to load the restored
+bytes. Transport success alone cannot satisfy that assertion. The output records
+checks incrementally, including failed stages and executable SHA-256 digests.

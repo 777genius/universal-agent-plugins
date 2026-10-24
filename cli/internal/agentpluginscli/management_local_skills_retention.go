@@ -8,7 +8,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
 // ForgetObservation is called only for an expired settled observation while the
@@ -51,7 +51,7 @@ func (b *ManagementBackend) ForgetObservation(ctx context.Context, operation man
 }
 func (b *ManagementBackend) forgetLocalSkillBackup(ctx context.Context, id string, receipt *localSkillReceipt) error {
 	directory := b.localSkillBackupRoot()
-	if err := pathpolicy.RequireContainedChild(b.config.StateRoot, directory); err != nil {
+	if err := pathcontract.RequireContainedChild(b.config.StateRoot, directory); err != nil {
 		return err
 	}
 	root, err := os.OpenRoot(directory)
@@ -61,7 +61,7 @@ func (b *ManagementBackend) forgetLocalSkillBackup(ctx context.Context, id strin
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	identity, err := root.Lstat(id)
 	if os.IsNotExist(err) {
 		return nil

@@ -5,9 +5,10 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
-	"github.com/spf13/cobra"
 )
 
 func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, alias string, installation *domain.Installation) (environment.Requirements, environment.Lock, error) {

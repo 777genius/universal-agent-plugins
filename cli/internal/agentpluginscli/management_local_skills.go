@@ -277,7 +277,7 @@ func localSkillObserve(rootPath, name string, keep bool) (localSkillTree, error)
 	if err != nil {
 		return localSkillTree{}, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	return readLocalSkillTree(root, name, keep)
 }
 func (b *ManagementBackend) localSkillUnowned(ctx context.Context, target string) error {

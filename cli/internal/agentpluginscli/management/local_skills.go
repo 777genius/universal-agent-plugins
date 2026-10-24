@@ -1,8 +1,10 @@
 package management
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime"
 	"net/http"
@@ -30,7 +32,7 @@ func (s *Server) prepareLocalSkill(w http.ResponseWriter, r *http.Request) {
 	if !decodeLocalSkill(w, r, &input) {
 		return
 	}
-	if !input.Action.Valid() || !validID(input.RootId) || len(input.SkillName) == 0 || len(input.SkillName) > 255 || len(input.Files) > 200 {
+	if !input.Action.Valid() || !validID(input.RootId) || input.SkillName == "" || len(input.SkillName) > 255 || len(input.Files) > 200 {
 		writeError(w, 400, "INVALID_REQUEST", "Invalid bounded local Skill selection", false)
 		return
 	}
@@ -84,4 +86,27 @@ func decodeLocalSkill(w http.ResponseWriter, r *http.Request, value *LocalSkillR
 		return false
 	}
 	return true
+}
+
+// UnmarshalJSON preserves required-nullable semantics: omitted content must not
+// accidentally become a reviewed deletion. Generated wire fields remain intact.
+func (f *LocalSkillFile) UnmarshalJSON(body []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return err
+	}
+	for _, key := range []string{"relativePath", "expectedSHA256", "contentBase64"} {
+		if _, present := fields[key]; !present {
+			return errors.New("local Skill files must explicitly include relativePath, expectedSHA256 and contentBase64")
+		}
+	}
+	type wireFile LocalSkillFile
+	var decoded wireFile
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	*f = LocalSkillFile(decoded)
+	return nil
 }

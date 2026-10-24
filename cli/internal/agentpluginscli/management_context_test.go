@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
 
@@ -44,5 +45,31 @@ func TestManagementIdentitySeparatesDurableEnvironmentFromCapture(t *testing.T) 
 	defer same.Close()
 	if same.ContextID() != backend.ContextID() {
 		t.Fatal("composed defaults changed captured identity")
+	}
+}
+
+func TestManagementMissingNativeExecutableIsUnavailableBeforeSourceAcquisition(t *testing.T) {
+	repo, _ := savedJourneyRepository(t)
+	j := newSavedJourney(t, repo)
+	base := managementJourneyBackend(t, j)
+	for _, client := range []string{"codex", "opencode"} {
+		t.Run(client, func(t *testing.T) {
+			cfg := base.config
+			cfg.Targets = []management.StartupTarget{{Id: "selected", Client: client, ConfigRoot: t.TempDir()}}
+			backend, err := NewManagementBackend(j.cli.app, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer backend.Close()
+			session, err := backend.Session(t.Context())
+			if err != nil || len(session.Targets) != 1 || session.Targets[0].Available || session.Targets[0].Reason == "" {
+				t.Fatalf("missing executable advertised as available: %+v, %v", session, err)
+			}
+			prepared, err := backend.Prepare(t.Context(), management.ChangeRequest{Action: management.Install, Source: "github:example/never-acquire", TargetIds: []string{"selected"}}, "unavailable-runtime")
+			var refusal *management.Refusal
+			if prepared != nil || !errors.As(err, &refusal) || refusal.Code != "TARGET_UNAVAILABLE" {
+				t.Fatalf("missing runtime did not produce an actionable pre-acquisition refusal: %T, %v", prepared, err)
+			}
+		})
 	}
 }

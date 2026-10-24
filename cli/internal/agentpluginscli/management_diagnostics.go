@@ -20,7 +20,7 @@ func managementNativeMessage(result installer.Result) string {
 	case installer.OutcomeConflict:
 		return "Ownership or native target changed; prepare a new review"
 	case installer.OutcomeCancelled:
-		return "Binding operation was cancelled; inspect the observed result"
+		return "Binding operation was canceled; inspect the observed result"
 	default:
 		return "Native outcome is unknown; inspect current installer state"
 	}

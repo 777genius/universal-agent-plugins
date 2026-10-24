@@ -147,7 +147,7 @@ func TestManagementLocalSkillHonorsNativeMutationLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer unlock()
+	defer func() { _ = unlock() }()
 	out, err := p.Apply(t.Context(), nil)
 	if !errors.Is(err, processlock.ErrActive) || out.Result.Mutated {
 		t.Fatal(out, err)
@@ -195,7 +195,7 @@ func TestManagementLocalSkillRestoresInterruptedDirectorySwap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	before, err := readLocalSkillTree(root, "draft", true)
 	if err != nil {
 		t.Fatal(err)
@@ -230,12 +230,38 @@ func TestManagementLocalSkillRestoresInterruptedDirectorySwap(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(rootPath, "draft")); !os.IsNotExist(err) {
 		t.Fatal("fault not in rename window", err)
 	}
+	localSkillAssertRestoreRefusesNewOwner(t, b, rootPath, id)
 	out := localSkillApply(t, localSkillPrepare(t, b, management.LocalSkillRequest{Action: management.LocalSkillRequestAction("restore"), RootId: "project-local", SkillName: "draft", RestoreOperationId: id}, strings.Repeat("c", 64)))
 	if len(out.ReconciledOperationIDs) != 1 || dependencyRead(t, filepath.Join(rootPath, "draft", "SKILL.md")) != "before crash" {
 		t.Fatal(out)
 	}
 	if _, err = b.localSkillManager().Load(id); !os.IsNotExist(err) {
 		t.Fatal("recovery retained unfinished native journal", err)
+	}
+}
+
+// An independent CLI can claim an absent path after a crash. Its authoritative
+// ownership must win over our older local undo, even with a valid swap journal.
+func localSkillAssertRestoreRefusesNewOwner(t *testing.T, b *ManagementBackend, root, id string) {
+	t.Helper()
+	original := b.app.StateStore
+	state, err := original.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Installations = append(state.Installations, domain.Installation{Clients: map[string]domain.ClientBinding{"native": {NativeObjects: []domain.NativeObjectOwnership{{Path: filepath.Join(root, "draft"), ProtectionClass: "managed"}}}}})
+	b.app.StateStore = &localSkillObservedState{state: state}
+	defer func() { b.app.StateStore = original }()
+	_, err = b.PrepareLocalSkill(t.Context(), management.LocalSkillRequest{Action: management.LocalSkillRequestAction("restore"), RootId: "project-local", SkillName: "draft", RestoreOperationId: id}, strings.Repeat("f", 64))
+	var refused *management.Refusal
+	if !errors.As(err, &refused) || refused.Code != "MANAGED_SKILL" {
+		t.Fatal("interrupted local restore ignored a newer native owner", err)
+	}
+	if got := dependencyRead(t, filepath.Join(b.localSkillBackupRoot(), id, "SKILL.md")); got != "before crash" {
+		t.Fatal("refused restoration changed private backup", got)
+	}
+	if _, err = b.localSkillManager().Load(id); err != nil {
+		t.Fatal("refused restoration discarded the pending swap journal", err)
 	}
 }
 

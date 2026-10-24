@@ -17,25 +17,26 @@ import (
 
 // PreparedOperation owns a sealed source snapshot until Close or a terminal Apply.
 type PreparedOperation struct {
-	engine       *Engine
-	mu           sync.Mutex
-	closed       bool
-	busy         bool
-	applied      bool
-	req          Request
-	plan         Plan
-	snapshot     domain.PackageSnapshot
-	snapshots    []domain.PackageSnapshot
-	envelope     domain.PackageEnvelope
-	envelopes    []domain.PackageEnvelope
-	client       domain.DetectedClient
-	clients      []domain.DetectedClient
-	detected     map[domain.ClientID]domain.DetectedClient
-	facts        BindingFacts
-	openCodeHost *OpenCodePreparedHost
-	artifact     string
-	deliveries   []preparedDeliveryPlan
-	recorded     domain.StateFileV2
+	engine          *Engine
+	mu              sync.Mutex
+	closed          bool
+	busy            bool
+	applied         bool
+	req             Request
+	plan            Plan
+	observationPlan domain.DeliveryPlan
+	snapshot        domain.PackageSnapshot
+	snapshots       []domain.PackageSnapshot
+	envelope        domain.PackageEnvelope
+	envelopes       []domain.PackageEnvelope
+	client          domain.DetectedClient
+	clients         []domain.DetectedClient
+	detected        map[domain.ClientID]domain.DetectedClient
+	facts           BindingFacts
+	openCodeHost    *OpenCodePreparedHost
+	artifact        string
+	deliveries      []preparedDeliveryPlan
+	recorded        domain.StateFileV2
 }
 
 func (p *PreparedOperation) Plan() Plan {
@@ -454,6 +455,7 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 		TargetPath:       handle.plan.TargetPath, OperationID: req.OperationID, TreeDigest: snapshot.TreeDigest,
 	}
 	handle.req.InstallationID = handle.plan.InstallationID
+	handle.observationPlan = cloneObservedDeliveryPlan(preview.Plan)
 	handle.artifact = preview.Plan.PhysicalArtifactID
 	if len(missing) != 0 {
 		_ = handle.closeLocked()

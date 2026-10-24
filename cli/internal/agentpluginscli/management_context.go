@@ -98,7 +98,10 @@ func managementAbsolute(value string) (string, error) {
 	}
 }
 
-type managementDetector struct{ targets []management.StartupTarget }
+type managementDetector struct {
+	targets            []management.StartupTarget
+	requiresExecutable func(string) bool
+}
 
 func (d managementDetector) Detect(ctx context.Context) ([]domain.DetectedClient, error) {
 	if err := ctx.Err(); err != nil {
@@ -107,11 +110,8 @@ func (d managementDetector) Detect(ctx context.Context) ([]domain.DetectedClient
 	detected := make([]domain.DetectedClient, 0, len(d.targets))
 	for _, target := range d.targets {
 		item := domain.DetectedClient{ClientID: domain.ClientID(target.Client), ConfigRoot: target.ConfigRoot, ExecutablePath: target.Executable, Status: domain.DetectionDetected}
-		if target.Executable != "" {
-			info, err := os.Stat(target.Executable)
-			if err != nil || !info.Mode().IsRegular() {
-				item.DetectionError = errors.New("captured executable is unavailable")
-			}
+		if reason := managementExecutableReason(target, d.requiresExecutable(target.Client)); reason != "" {
+			item.DetectionError = errors.New(reason)
 		}
 		detected = append(detected, item)
 	}
@@ -133,7 +133,7 @@ func ConfigureManagementApp(app App, cfg management.Startup) (App, error) {
 		}
 	}
 	app.DependenciesRoot = cfg.DependenciesRoot
-	app.Detector = managementDetector{targets: append([]management.StartupTarget(nil), cfg.Targets...)}
+	app.Detector = managementDetector{targets: append([]management.StartupTarget(nil), cfg.Targets...), requiresExecutable: app.Installer.RequiresClientExecutable}
 	app.Terminal = false
 	return app, nil
 }

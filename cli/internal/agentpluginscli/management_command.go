@@ -8,8 +8,9 @@ import (
 	"errors"
 	"io"
 
-	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 )
 
 func newManagementCommand(app App) *cobra.Command {

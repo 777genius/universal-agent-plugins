@@ -46,7 +46,7 @@ func TestManagementPreparationRefusalReturnsJSONWithoutTypedNilPanic(t *testing.
 	if err := json.NewDecoder(response.Body).Decode(&failure); err != nil {
 		t.Fatal(err)
 	}
-	if response.StatusCode != http.StatusUnprocessableEntity || failure.Code != "OPERATION_REFUSED" {
+	if response.StatusCode != http.StatusUnprocessableEntity || failure.Code != "SOURCE_NOT_SUPPORTED" {
 		t.Fatal(response.StatusCode, failure)
 	}
 }

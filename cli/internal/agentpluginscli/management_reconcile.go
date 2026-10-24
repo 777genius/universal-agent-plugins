@@ -5,9 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
-
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
@@ -98,6 +97,9 @@ func (b *ManagementBackend) managementRecoveryCoherent(ctx context.Context, app 
 		if action.Action != environment.ActionUnchanged {
 			return false, nil, nil
 		}
+	}
+	if coherent, err := verifyManagementNativeBindings(ctx, app, prepared.Bindings); err != nil || !coherent {
+		return false, nil, err
 	}
 	next := []management.NextAction{}
 	for _, installation := range view.Installations {

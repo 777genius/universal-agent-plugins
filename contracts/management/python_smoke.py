@@ -3,15 +3,17 @@
 
 Run only against disposable profiles. This is not a maintained Python SDK.
 Example: python contracts/management/python_smoke.py --executable /path/agentplugins \
-  --config /tmp/fixture/startup.json --source 777genius/universal-agent-plugins@PINNED_COMMIT//repotests/testdata/agentplugins_commands_fixture --kind skill
+  --config /tmp/fixture/startup.json --source 777genius/universal-agent-plugins@PINNED_COMMIT//repotests/testdata/agentplugins_commands_fixture/skills/fixture-guide --kind skill
 """
 import argparse
 from contextlib import suppress
 import json
+import os
 from pathlib import Path
 import queue
 import subprocess
 import threading
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -34,8 +36,22 @@ def main():
     encoded = (json.dumps(configuration) + "\n").encode()
     if len(encoded) > 65536:
         raise ValueError("Startup configuration exceeds 64 KiB")
+    # The public fixture needs network/proxy settings, but never ambient native
+    # profiles or credentials. This process owns and cleans only its test home.
+    home = tempfile.TemporaryDirectory(prefix="uap-python-home-")
+    env = {}
+    inherited = set()
+    for name in ("PATH", "Path", "SystemRoot", "WINDIR", "LANG", "LC_ALL", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR"):
+        if name in os.environ and name.upper() not in inherited:
+            env[name] = os.environ[name]
+            inherited.add(name.upper())
+    for name, relative in {"HOME": "home", "USERPROFILE": "home", "APPDATA": "home/AppData/Roaming", "LOCALAPPDATA": "home/AppData/Local", "XDG_CONFIG_HOME": "config", "XDG_DATA_HOME": "data", "XDG_CACHE_HOME": "cache", "XDG_STATE_HOME": "state", "TMPDIR": "tmp", "TEMP": "tmp", "TMP": "tmp"}.items():
+        directory = Path(home.name) / relative
+        directory.mkdir(parents=True, exist_ok=True)
+        env[name] = str(directory)
+    env.update({"OPENCODE_PURE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1", "OPENCODE_DISABLE_AUTOUPDATE": "1", "NO_COLOR": "1"})
     process = subprocess.Popen([str(executable), "manage", "serve"], stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
     try:
         process.stdin.write(encoded)
         process.stdin.flush()
@@ -76,7 +92,7 @@ def main():
             return json.loads(data)
 
         session = request("GET", "/api/v1/session")
-        if session["contextId"] != bootstrap["contextId"] or session["apiVersion"] != 1:
+        if session["contextId"] != bootstrap["contextId"] or session["apiVersion"] != 1 or not isinstance(session.get("environmentId"), str) or not session["environmentId"]:
             raise RuntimeError("Authenticated session mismatch")
         initial = request("GET", "/api/v1/environment")
         if initial["entries"] or initial.get("pendingOperations"):
@@ -117,7 +133,7 @@ def main():
         if not observed["entries"]:
             raise RuntimeError("Successful installation has no observed owned entry")
         print(json.dumps({"apiVersion": session["apiVersion"], "engineVersion": session["engineVersion"],
-                          "contextId": session["contextId"], "operationId": operation["operationId"],
+                          "contextId": session["contextId"], "environmentId": session["environmentId"], "kind": args.kind, "operationId": operation["operationId"],
                           "state": operation["state"], "observedEntries": len(observed["entries"])}))
     finally:
         with suppress(BrokenPipeError):
@@ -132,6 +148,7 @@ def main():
                 process.kill()
                 process.wait(timeout=3)
         process.stdout.close()
+        home.cleanup()
 
 
 if __name__ == "__main__":

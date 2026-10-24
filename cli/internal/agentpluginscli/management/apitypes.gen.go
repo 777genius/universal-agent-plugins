@@ -171,7 +171,7 @@ func (e LocalSkillRequestAction) Valid() bool {
 
 // Defines values for OperationState.
 const (
-	Cancelled   OperationState = "cancelled"
+	Canceled    OperationState = "canceled"
 	Failed      OperationState = "failed"
 	Interrupted OperationState = "interrupted"
 	Partial     OperationState = "partial"
@@ -183,7 +183,7 @@ const (
 // Valid indicates whether the value is a known member of the OperationState enum.
 func (e OperationState) Valid() bool {
 	switch e {
-	case Cancelled:
+	case Canceled:
 		return true
 	case Failed:
 		return true
@@ -351,8 +351,11 @@ type Environment struct {
 
 // EnvironmentEntry defines model for EnvironmentEntry.
 type EnvironmentEntry struct {
-	Alias        string                       `json:"alias"`
-	Bindings     []Binding                    `json:"bindings"`
+	Alias    string    `json:"alias"`
+	Bindings []Binding `json:"bindings"`
+
+	// Declared True when this alias is a directly declared manifest dependency. Transitive dependencies are inspected here but changed through their declared parent.
+	Declared     bool                         `json:"declared"`
 	Kind         EnvironmentEntryKind         `json:"kind"`
 	Source       string                       `json:"source"`
 	UpdateStatus EnvironmentEntryUpdateStatus `json:"updateStatus"`

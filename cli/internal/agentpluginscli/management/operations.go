@@ -227,7 +227,7 @@ func pendingOperation(op Operation) bool {
 	if op.State == Queued || op.State == Running || op.State == Interrupted || op.State == Partial {
 		return true
 	}
-	if op.State != Failed && op.State != Cancelled || op.Result == nil {
+	if op.State != Failed && op.State != Canceled || op.Result == nil {
 		return false
 	}
 	if op.Result.Mutated {

@@ -149,7 +149,7 @@ func (p *managementRecovery) recoveryOutcome(ctx context.Context, native install
 			out.State = management.Partial
 		}
 		if !result.Mutated && errors.Is(applyErr, context.Canceled) {
-			out.State = management.Cancelled
+			out.State = management.Canceled
 		}
 		out.Result.Message = "Recovery stopped; inspect current receipts before continuing"
 		out.Result.NextActions = append(out.Result.NextActions, management.NextAction{Kind: "recover", Reason: "Prepare a fresh review of the remaining installer recovery"})

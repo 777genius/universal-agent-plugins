@@ -26,7 +26,7 @@ func TestGuardProtectsAllAPIRequests(t *testing.T) {
 				called = true
 				w.WriteHeader(http.StatusNoContent)
 			}))
-			req := httptest.NewRequest(tc.method, "/api/v1/session", nil)
+			req := httptest.NewRequestWithContext(t.Context(), tc.method, "/api/v1/session", http.NoBody)
 			req.Host = tc.host
 			req.Header.Set("Origin", tc.origin)
 			req.Header.Set("Authorization", tc.token)
@@ -48,7 +48,7 @@ func TestDecodeRejectsAmbiguousOrOversizedInput(t *testing.T) {
 		`{"known":"one"} {"known":"two"}`,
 		`{"known":"` + strings.Repeat("x", 1<<20) + `"}`,
 	} {
-		req := httptest.NewRequest("POST", "/api/v1/plans", strings.NewReader(body))
+		req := httptest.NewRequestWithContext(t.Context(), "POST", "/api/v1/plans", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		out := httptest.NewRecorder()
 		var value struct {

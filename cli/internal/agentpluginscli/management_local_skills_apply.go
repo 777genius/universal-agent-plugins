@@ -13,7 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
 // The existing dirswap manager owns physical publication, crash receipts and
@@ -46,7 +46,7 @@ func (b *ManagementBackend) saveLocalSkillReceipt(receipt localSkillReceipt) err
 	if !localSkillSHA(receipt.OperationID) {
 		return errors.New("invalid local receipt identity")
 	}
-	if err = pathpolicy.RequireContainedChild(b.config.StateRoot, b.localSkillReceiptPath(receipt.OperationID)); err != nil {
+	if err = pathcontract.RequireContainedChild(b.config.StateRoot, b.localSkillReceiptPath(receipt.OperationID)); err != nil {
 		return err
 	}
 	parent := filepath.Dir(b.localSkillReceiptPath(receipt.OperationID))
@@ -73,7 +73,7 @@ func (b *ManagementBackend) loadLocalSkillReceipt(id string) (*localSkillReceipt
 		return nil, localSkillRefusal("INVALID_REQUEST", "Restore requires a retained local operation identity")
 	}
 	filename := b.localSkillReceiptPath(id)
-	if err := pathpolicy.RequireContainedChild(b.config.StateRoot, filename); err != nil {
+	if err := pathcontract.RequireContainedChild(b.config.StateRoot, filename); err != nil {
 		return nil, err
 	}
 	info, err := os.Lstat(filename)
@@ -100,10 +100,13 @@ func (b *ManagementBackend) loadLocalSkillReceipt(id string) (*localSkillReceipt
 	if decoder.Decode(&extra) != io.EOF {
 		return nil, errors.New("invalid local Skill recovery record")
 	}
-	if receipt.Version != 1 || receipt.OperationID != id || receipt.RootID == "" || !filepath.IsAbs(receipt.RootPath) || filepath.Clean(receipt.RootPath) != receipt.RootPath || !localSkillName(receipt.SkillName) || receipt.BackupName != id || !localSkillSHA(receipt.BeforeDigest) || !localSkillSHA(receipt.AfterDigest) || receipt.Phase != "prepared" && receipt.Phase != "committed" {
+	if !validLocalSkillReceipt(receipt, id) {
 		return nil, localSkillRefusal("RECOVERY_CONTEXT_MISMATCH", "The retained backup belongs to a different captured Skill")
 	}
 	return &receipt, nil
+}
+func validLocalSkillReceipt(receipt localSkillReceipt, id string) bool {
+	return receipt.Version == 1 && receipt.OperationID == id && receipt.RootID != "" && filepath.IsAbs(receipt.RootPath) && filepath.Clean(receipt.RootPath) == receipt.RootPath && localSkillName(receipt.SkillName) && receipt.BackupName == id && localSkillSHA(receipt.BeforeDigest) && localSkillSHA(receipt.AfterDigest) && (receipt.Phase == "prepared" || receipt.Phase == "committed")
 }
 func (p *managementLocalSkill) validateRestoreSnapshot() error {
 	manager := p.backend.localSkillManager()
@@ -156,7 +159,7 @@ func (p *managementLocalSkill) Apply(ctx context.Context, progress func(manageme
 	if err != nil {
 		return p.localUnchanged(err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	before, err := readLocalSkillTree(root, p.input.SkillName, true)
 	if err != nil || before.digest() != p.before.digest() {
 		return p.localUnchanged(management.ErrPlanStale)
@@ -263,7 +266,7 @@ func (p *managementLocalSkill) prepareLocalPublication(before, desired localSkil
 }
 func (b *ManagementBackend) backupLocalSkill(id string, tree localSkillTree) error {
 	directory := b.localSkillBackupRoot()
-	if err := pathpolicy.RequireContainedChild(b.config.StateRoot, directory); err != nil {
+	if err := pathcontract.RequireContainedChild(b.config.StateRoot, directory); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(directory, 0700); err != nil {
@@ -273,7 +276,7 @@ func (b *ManagementBackend) backupLocalSkill(id string, tree localSkillTree) err
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if err = writeLocalSkillTree(root, id, tree); err != nil {
 		return err
 	}
@@ -296,12 +299,12 @@ func stageLocalSkill(parent, id string, tree localSkillTree) (*localSkillStage, 
 	stage := &localSkillStage{root: root, name: ".agentplugins-staging-local-" + id}
 	stage.path = filepath.Join(parent, stage.name)
 	if err = root.Mkdir(stage.name, 0700); err != nil {
-		root.Close()
+		_ = root.Close()
 		return nil, err
 	}
 	stage.identity, err = root.Lstat(stage.name)
 	if err != nil {
-		root.Close()
+		_ = root.Close()
 		return nil, err
 	}
 	if err = populateLocalSkillTree(root, stage.name, tree); err != nil {
@@ -313,7 +316,7 @@ func stageLocalSkill(parent, id string, tree localSkillTree) (*localSkillStage, 
 	return stage, nil
 }
 func (s *localSkillStage) close(remove bool) error {
-	defer s.root.Close()
+	defer func() { _ = s.root.Close() }()
 	if !remove {
 		return nil
 	}
@@ -353,7 +356,7 @@ func (p *managementLocalSkill) applyLocalRestore(ctx context.Context) (managemen
 	if err != nil {
 		return p.localUnchanged(err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	current, err := readLocalSkillTree(root, p.input.SkillName, true)
 	if err != nil {
 		return p.localInterrupted(err)
@@ -379,7 +382,7 @@ func (p *managementLocalSkill) applyLocalRestore(ctx context.Context) (managemen
 func (p *managementLocalSkill) localUnchanged(err error) (management.Outcome, error) {
 	state := management.Failed
 	if errors.Is(err, context.Canceled) {
-		state = management.Cancelled
+		state = management.Canceled
 	}
 	out := p.localSuccess(false, nil)
 	out.State = state

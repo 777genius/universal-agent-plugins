@@ -83,7 +83,7 @@ func managementOperationIDs(operationID string, actions []dependencyAction) map[
 	return ids
 }
 func (p *managementPrepared) OperationIDs() []string {
-	ids := []string{}
+	ids := make([]string, 0, len(p.operationIDs))
 	for _, id := range p.operationIDs {
 		ids = append(ids, id)
 	}
@@ -184,6 +184,9 @@ func (p *managementPrepared) bindingActions(ctx context.Context, view installer.
 		prepared, err = (environment.Coordinator{}).PrepareSyncFor(p.request.requirements, p.request.lock, observed, p.request.aliases, nil)
 	} else {
 		prepared, err = (environment.Coordinator{}).PrepareSync(p.request.requirements, p.request.lock, observed)
+	}
+	if err == nil && p.input.Action == management.Recover {
+		return prepareManagementNativeRecovery(ctx, p.preview, prepared.Bindings)
 	}
 	return prepared.Bindings, err
 }
