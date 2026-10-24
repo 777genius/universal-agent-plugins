@@ -16,18 +16,19 @@ import (
 )
 
 type managementPrepared struct {
-	mu              sync.Mutex
-	backend         *ManagementBackend
-	app, preview    App
-	input           management.ChangeRequest
-	clients         []string
-	request         dependencySyncRequest
-	cleanup         func()
-	closed, applied bool
-	operationIDs    map[string]string
-	paths           map[string]string
-	review          management.Plan
-	warnings        []string
+	mu                 sync.Mutex
+	backend            *ManagementBackend
+	app, preview       App
+	input              management.ChangeRequest
+	clients            []string
+	request            dependencySyncRequest
+	cleanup            func()
+	closed, applied    bool
+	operationIDs       map[string]string
+	paths              map[string]string
+	review             management.Plan
+	warnings           []string
+	externalUninstalls map[string]bool
 }
 
 func (b *ManagementBackend) finishManagementPreparation(ctx context.Context, preview App, cleanup func(), input management.ChangeRequest, clients []string, request dependencySyncRequest, operationID string) (*managementPrepared, error) {
@@ -63,6 +64,9 @@ func (b *ManagementBackend) finishManagementPreparation(ctx context.Context, pre
 	}
 	for _, warning := range p.warnings {
 		p.review.Warnings = append(p.review.Warnings, managementDiagnostic("INSTALLER_WARNING", warning))
+	}
+	if err := p.reviewExternalUninstalled(); err != nil {
+		return nil, err
 	}
 	if input.Action == management.Update {
 		p.review.Warnings = append(p.review.Warnings, managementPinnedWarnings(input, request)...)
@@ -111,6 +115,9 @@ func (p *managementPrepared) Check(ctx context.Context) error {
 	return p.check(ctx)
 }
 func (p *managementPrepared) check(ctx context.Context) error {
+	if len(p.externalUninstalls) > 0 && !p.input.ExternalUninstalled {
+		return managementRefusal("EXTERNAL_UNINSTALL_REQUIRED", "Confirm external removal or that the listed plugins were never activated, then prepare a new review")
+	}
 	if err := p.backend.validateManagementContext(ctx); err != nil {
 		return err
 	}
@@ -161,12 +168,18 @@ func (p *managementPrepared) prepareBindings(ctx context.Context, prior []depend
 	}
 	paths := skillBindingPaths(view, actions)
 	warnings := []string{}
-	adapter := &dependencyInstaller{app: p.preview, opts: &options{externalUninstalled: p.input.ExternalUninstalled}, detected: detected, previewPaths: paths, operationIDs: p.operationIDs, previewWarnings: &warnings}
+	externalUninstalls := map[string]bool{}
+	adapter := &dependencyInstaller{previewExternalUninstalled: externalUninstalls, app: p.preview, opts: &options{externalUninstalled: p.input.ExternalUninstalled}, detected: detected, previewPaths: paths, operationIDs: p.operationIDs, previewWarnings: &warnings}
 	actions, err = preflightDependencyAdapter(ctx, adapter, actions)
-	if prior == nil {
-		p.warnings = warnings
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return actions, detected, paths, err
+	if prior == nil {
+		p.warnings, p.externalUninstalls = warnings, externalUninstalls
+	} else if !reflect.DeepEqual(p.externalUninstalls, externalUninstalls) {
+		return nil, nil, nil, installer.ErrPlanChanged
+	}
+	return actions, detected, paths, nil
 }
 func (p *managementPrepared) bindingActions(ctx context.Context, view installer.Inspection) ([]dependencyAction, error) {
 	if p.input.Action == management.Repair {

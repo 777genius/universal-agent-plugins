@@ -109,6 +109,31 @@ continue beyond the 16 simultaneously retained discovery sessions. Closing a
 candidate preview alone should keep its containing catalog. An already prepared
 installation plan owns an independent source snapshot and survives catalog discard.
 
+An HTTPS candidate keeps the bytes established by its first successful preview.
+If the publisher changes those bytes, another preview returns `PLAN_STALE` and
+preparation refuses the changed source. Discard and rediscover the catalog before
+reviewing that new content.
+
+## External uninstall confirmation
+
+Some native clients require the user to uninstall the owned package in that client
+before UAP removes its binding. The first `prepare` returns `confirmable: false`
+with `EXTERNAL_UNINSTALL_REQUIRED` conflicts naming the affected aliases and targets.
+Show that review and let the user complete the external action. After their explicit
+confirmation, prepare a **new** review with `externalUninstalled: true`;
+`EXTERNAL_UNINSTALL_ATTESTED` warnings identify the exact removal bindings covered.
+Only the newly reviewed plan can be applied. Discard the superseded unaccepted plan.
+
+Applicability follows the actual prepared removal actions, not the intent's name.
+An `update` or `sync` that prunes a native dependency can require the same explicit
+confirmation, as can a complete environment `recover` convergence. A receipt-only
+recovery or a request without an applicable removal refuses it with HTTP 422
+`EXTERNAL_UNINSTALL_NOT_APPLICABLE`. Complete receipt recovery without the flag,
+then request a separate convergence review. The SDK never supplies this attestation:
+it must not be a default, a remembered preference, or automatically forwarded to a
+later recovery. An accepted operation keeps its original request identity; changing
+an attestation requires a fresh preparation and a new apply request ID.
+
 ## Local Skill authoring
 
 Capture optional `authoringRoots: [{ id, path, scope, targetId? }]` from the trusted

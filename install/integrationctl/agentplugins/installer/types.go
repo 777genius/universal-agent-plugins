@@ -140,6 +140,9 @@ type Plan struct {
 	Delivery             DeliveryPlan
 	Client               ClientResult
 	RequiresConfirmation bool
+	// RequiresExternalUninstalled is adapter-owned removal policy for a live
+	// binding. It remains true after the host supplies the explicit attestation.
+	RequiresExternalUninstalled bool
 }
 
 // DeliveryPlan is the provider's presentation snapshot, without mutation APIs.
@@ -168,6 +171,7 @@ type PlanTarget struct {
 	SelectedDelivery                                        domain.SelectedDelivery `json:"-"`
 	ClientID, ConfigRoot, TargetPath, BindingID, TreeDigest string
 	NoChange                                                bool
+	RequiresExternalUninstalled                             bool
 }
 
 // Result is returned together with an error when part of the work already happened.

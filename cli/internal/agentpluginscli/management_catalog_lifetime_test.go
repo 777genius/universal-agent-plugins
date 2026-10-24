@@ -12,7 +12,7 @@ func TestManagementCatalogDiscardReleasesQuotaWithoutInvalidatingPreparedPlan(t 
 	source := "https://github.com/acme/tools/tree/" + sha + "/skills/pdf"
 	var retained management.Prepared
 	cleanups := 0
-	for attempt := 0; attempt < 20; attempt++ {
+	for attempt := range 20 {
 		catalog, err := backend.SkillsCatalog(t.Context(), management.SourceRequest{Source: source})
 		if err != nil || len(catalog.Candidates) != 1 {
 			t.Fatal("a discarded source retained the catalog quota", attempt, catalog, err)

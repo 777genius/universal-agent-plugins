@@ -63,6 +63,11 @@ func (b *ManagementBackend) websiteSkillPreview(ctx context.Context, catalogID, 
 	if b.closed || !retained {
 		return management.SkillPreview{}, managementRefusal("CATALOG_EXPIRED", "Discover the Skill source again before previewing this candidate")
 	}
+	// A catalog candidate retains its first reviewed bytes. Another concurrent
+	// preview must not replace the authority held by an earlier successful one.
+	if digest := current.candidates[candidateID].previewDigest; digest != "" && digest != snapshot.TreeDigest {
+		return management.SkillPreview{}, management.ErrPlanStale
+	}
 	candidate.previewDigest = snapshot.TreeDigest
 	current.candidates[candidateID] = candidate
 	return management.SkillPreview{CatalogId: catalogID, CandidateId: candidateID, Markdown: markdown, Diagnostics: []management.Diagnostic{}}, nil

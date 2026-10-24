@@ -22,9 +22,6 @@ func validateManagementChange(input management.ChangeRequest) error {
 	return nil
 }
 func validateManagementFields(input management.ChangeRequest) error {
-	if input.Action != management.Remove && input.ExternalUninstalled {
-		return invalidManagementRequest("externalUninstalled applies only to remove")
-	}
 	if input.Action != management.Recover && input.OperationId != "" {
 		return invalidManagementRequest("operationId applies only to recovery")
 	}

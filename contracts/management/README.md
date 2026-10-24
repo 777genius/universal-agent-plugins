@@ -32,7 +32,21 @@ source unchanged. Request validation and authorization remain explicit Go behavi
   prepared object behind an expiring ID. Apply rechecks current state.
 - DELETE of a Skill catalog releases its discovery workspace and serializes with
   preview; already prepared plans own independent source snapshots. Replacing a
-  source or closing its discovery dialog must release the old catalog.
+  source or closing its discovery dialog must release the old catalog. Each HTTPS
+  candidate retains its first preview digest; changed later bytes require a fresh
+  catalog, so concurrent previews cannot replace an earlier review.
+- A native removal policy may return a non-confirmable review with
+  `EXTERNAL_UNINSTALL_REQUIRED` for exact aliases and targets. Only after explicit
+  user confirmation of that external uninstall may a fresh preparation set
+  `externalUninstalled: true`. Applicability follows the authoritative prepared
+  removal actions, including `update` or `sync` that prune a native dependency and
+  complete environment `recover` convergence. Its review identifies the exact
+  affected removal bindings with `EXTERNAL_UNINSTALL_ATTESTED`.
+  Receipt-only recovery does not consume this attestation; it and requests with no
+  applicable removal return HTTP 422 `EXTERNAL_UNINSTALL_NOT_APPLICABLE`. Finish
+  receipt recovery normally, then prepare a separate convergence review. The host
+  must never default, remember as a preference, or automatically carry this flag
+  into a later review.
 - DELETE of an unaccepted plan releases retained source resources. It returns 204
   when already absent and refuses accepted work; observation/cancel are separate.
 - The host persists its request ID before apply. Accepted-request lookup precedes

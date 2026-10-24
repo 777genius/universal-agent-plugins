@@ -41,7 +41,8 @@ func TestManagementGitSkillCatalogRetainsExactScopeAndSelection(t *testing.T) {
 	}
 }
 
-func TestManagementWebsitePreviewFreezesOriginalBytes(t *testing.T) {
+func managementMutableWebsite(t *testing.T) (*ManagementBackend, savedJourney, string, func(string)) {
+	t.Helper()
 	var mu sync.Mutex
 	content := "---\nname: pdf\ndescription: Read PDFs\n---\nFirst reviewed content.\n"
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,28 +57,54 @@ func TestManagementWebsitePreviewFreezesOriginalBytes(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
 	j := newSavedJourney(t, t.TempDir())
 	j.cli.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: t.TempDir(), HTTPClient: server.Client()}
 	backend := managementJourneyBackend(t, j)
-	catalog, err := backend.SkillsCatalog(t.Context(), management.SourceRequest{Source: server.URL})
+	return backend, j, server.URL, func(next string) {
+		mu.Lock()
+		defer mu.Unlock()
+		content = next
+	}
+}
+
+func TestManagementWebsitePreviewFreezesOriginalBytes(t *testing.T) {
+	backend, j, source, changeContent := managementMutableWebsite(t)
+	catalog, err := backend.SkillsCatalog(t.Context(), management.SourceRequest{Source: source})
 	if err != nil || len(catalog.Candidates) != 1 {
 		t.Fatal(catalog, err)
 	}
 	candidate := catalog.Candidates[0]
-	if _, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id); err != nil {
+	preview, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id)
+	if err != nil {
 		t.Fatal(err)
 	}
-	mu.Lock()
-	content += "Changed after the preview.\n"
-	mu.Unlock()
+	if repeated, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id); err != nil || repeated.Markdown != preview.Markdown {
+		t.Fatal("unchanged preview must retain its original bytes", repeated, err)
+	}
+	changeContent(preview.Markdown + "Changed after the preview.\n")
 	request := management.ChangeRequest{Action: management.InstallSkills, CatalogId: catalog.CatalogId, CandidateIds: []string{candidate.Id}, TargetIds: []string{"profile-codex"}}
 	if _, err := backend.Prepare(t.Context(), request, "stale-website"); !errors.Is(err, ErrSkillsPlanStale) {
 		t.Fatal("mutable publisher content bypassed preview binding", err)
 	}
-	if _, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id); err != nil {
+	if _, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id); !errors.Is(err, management.ErrPlanStale) {
+		t.Fatal("a later preview replaced the retained candidate's original authority", err)
+	}
+	if _, err := backend.Prepare(t.Context(), request, "still-stale-website"); !errors.Is(err, ErrSkillsPlanStale) {
+		t.Fatal("refused preview changed the earlier review's authority", err)
+	}
+	if err := backend.DiscardSkillsCatalog(t.Context(), catalog.CatalogId); err != nil {
 		t.Fatal(err)
 	}
+	catalog, err = backend.SkillsCatalog(t.Context(), management.SourceRequest{Source: source})
+	if err != nil || len(catalog.Candidates) != 1 {
+		t.Fatal(catalog, err)
+	}
+	candidate = catalog.Candidates[0]
+	if _, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id); err != nil {
+		t.Fatal("rediscovery must permit reviewing the new publisher bytes", err)
+	}
+	request.CatalogId, request.CandidateIds = catalog.CatalogId, []string{candidate.Id}
 	prepared := managementPrepare(t, backend, request)
 	if err := backend.DiscardSkillsCatalog(t.Context(), catalog.CatalogId); err != nil {
 		t.Fatal(err)

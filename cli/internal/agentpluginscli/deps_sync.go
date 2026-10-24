@@ -151,6 +151,9 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
 		}
 		plan := prepared.Plan()
+		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {
+			adapter.previewExternalUninstalled[action.Alias+"\x00"+action.ClientID] = true
+		}
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
@@ -178,18 +181,19 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 }
 
 type dependencyInstaller struct {
-	previewWarnings *[]string
-	previewPaths    map[string]string
-	app             App
-	opts            *options
-	detected        map[domain.ClientID]domain.DetectedClient
-	cmd             *cobra.Command
-	beforeApply     func() error
-	consent         map[string]bool
-	previewUpdate   *installer.PreparedOperation
-	operationIDs    map[string]string
-	onResult        func(environment.PreparedBinding, installer.Result)
-	currentAction   environment.PreparedBinding
+	previewExternalUninstalled map[string]bool
+	previewWarnings            *[]string
+	previewPaths               map[string]string
+	app                        App
+	opts                       *options
+	detected                   map[domain.ClientID]domain.DetectedClient
+	cmd                        *cobra.Command
+	beforeApply                func() error
+	consent                    map[string]bool
+	previewUpdate              *installer.PreparedOperation
+	operationIDs               map[string]string
+	onResult                   func(environment.PreparedBinding, installer.Result)
+	currentAction              environment.PreparedBinding
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {

@@ -305,7 +305,8 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 		TargetPath: binding.TargetLocator, InstallationID: installation.InstallationID,
 		BindingID: binding.ClientBindingID, HelperVersion: helperVersion, HelperDigest: helperDigest,
 		SelectedDelivery: binding.SelectedDelivery, TreeDigest: recordedBindingDigest(binding, installation.Source.TreeDigest),
-		Client: liveClientResult(binding, req.RequiredComponents, installation.Source.TreeDigest),
+		Client:                      liveClientResult(binding, req.RequiredComponents, installation.Source.TreeDigest),
+		RequiresExternalUninstalled: e.removalRequiresExternalUninstalled(client, installation, binding, req.ClientExecutable),
 	}
 	handle.facts = BindingFacts{ProfileAuthority: domain.CloneProfileAuthority(handle.client.ProfileAuthority),
 		InstallationID: installation.InstallationID, ClientID: string(client.ClientID),

@@ -51,7 +51,7 @@ func (b *ManagementBackend) catalogEntry(snapshot domain.DirectorySnapshot, prod
 	for _, target := range b.config.Targets {
 		selection, err := domain.ResolveDirectory(snapshot, domain.DirectoryResolveRequest{Selector: product.ID, Targets: []domain.ClientID{domain.ClientID(target.Client)}, Scope: domain.ScopeUser, Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: b.app.Version, OS: host.OS, Architecture: host.Architecture})
 		if err != nil {
-			item.Reason = "No eligible signed release for the captured target"
+			item.Reason = err.Error()
 			continue
 		}
 		item.Available = true

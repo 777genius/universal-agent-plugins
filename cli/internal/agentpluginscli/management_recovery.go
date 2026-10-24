@@ -34,6 +34,9 @@ func (b *ManagementBackend) prepareRecovery(ctx context.Context, input managemen
 	if !observed.Recovery.Required {
 		return b.prepareRecoveryConvergence(ctx, input, operationID)
 	}
+	if input.ExternalUninstalled {
+		return nil, managementRefusal("EXTERNAL_UNINSTALL_NOT_APPLICABLE", "First review and reconcile pending installer receipts without externalUninstalled; a separate fresh review will identify any native removals requiring confirmation")
+	}
 	files, err := managementRecoveryFiles(b.app)
 	if err != nil {
 		return nil, err
