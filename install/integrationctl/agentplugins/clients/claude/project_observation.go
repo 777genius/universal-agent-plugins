@@ -32,103 +32,147 @@ type projectListObservation struct {
 
 const claudeUntrustedProjectNote = "1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."
 
+type projectListQuery struct {
+	name, active, project, user string
+}
+
+func (q projectListQuery) valid(body []byte) bool {
+	return len(body) <= 1<<20 && q.name != "" && exactAbsolute(q.active) && exactAbsolute(q.project) && exactAbsolute(q.user) && filepath.Dir(q.active) == filepath.Join(q.project, ".claude", "skills")
+}
+
+type projectListRow struct {
+	scope, path string
+	enabled     bool
+}
+
+type projectListScan struct {
+	query                                projectListQuery
+	observation                          projectListObservation
+	seen                                 map[string]bool
+	selected, other, suppressed, foreign bool
+}
+
 func observeClaudeProjectList(body []byte, name, active, project, user string) projectListObservation {
-	unknown := projectListObservation{}
-	if len(body) > 1<<20 || name == "" || !exactAbsolute(active) || !exactAbsolute(project) || !exactAbsolute(user) || filepath.Dir(active) != filepath.Join(project, ".claude", "skills") {
-		return unknown
+	query := projectListQuery{name: name, active: active, project: project, user: user}
+	if !query.valid(body) {
+		return projectListObservation{}
 	}
+	entries, ok := decodeProjectList(body)
+	if !ok {
+		return projectListObservation{}
+	}
+	scan := projectListScan{query: query, observation: projectListObservation{state: projectListAbsent}, seen: map[string]bool{}}
+	for _, value := range entries {
+		entry, ok := value.(map[string]any)
+		if !ok || !scan.record(entry) {
+			return projectListObservation{}
+		}
+	}
+	return scan.result()
+}
+
+func decodeProjectList(body []byte) ([]any, bool) {
 	decoder := json.NewDecoder(strings.NewReader(string(body)))
 	decoder.UseNumber()
 	parsed, err := shared.DecodeUniqueJSONValue(decoder)
 	if err != nil {
-		return unknown
+		return nil, false
 	}
 	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return unknown
+		return nil, false
 	}
 	entries, ok := parsed.([]any)
-	if !ok {
-		return unknown
+	return entries, ok
+}
+
+func (s *projectListScan) record(entry map[string]any) bool {
+	id, ok := entry["id"].(string)
+	if !ok || id == "" {
+		return false
 	}
-	result := projectListObservation{state: projectListAbsent}
-	seen := map[string]bool{}
-	selected, other, suppressed, foreign := false, false, false, false
-	for _, value := range entries {
-		entry, ok := value.(map[string]any)
-		if !ok {
-			return unknown
+	if id == "(suppressed)@skills-dir" {
+		trust, valid := projectSuppression(entry)
+		if !valid || s.suppressed {
+			return false
 		}
-		id, ok := entry["id"].(string)
-		if !ok || id == "" {
-			return unknown
-		}
-		if id == "(suppressed)@skills-dir" {
-			trust, valid := projectSuppression(entry)
-			if !valid || suppressed {
-				return unknown
-			}
-			suppressed, result.untrusted = true, trust
-			continue
-		}
-		scope, scopeOK := entry["scope"].(string)
-		enabled, enabledOK := entry["enabled"].(bool)
-		path, pathOK := entry["installPath"].(string)
-		if !scopeOK || !enabledOK || !pathOK || !exactAbsolute(path) || !knownClaudeScope(scope) || !validProjectListMetadata(entry, project) {
-			return unknown
-		}
-		identity := id + "\x00" + scope + "\x00" + path
-		if seen[identity] {
-			return unknown
-		}
-		seen[identity] = true
-		if id != name+"@skills-dir" {
-			continue
-		}
-		switch scope {
-		case "user":
-			if filepath.Dir(path) != filepath.Join(user, "skills") || other {
-				return unknown
-			}
-			other = true
-		case "project":
-			if filepath.Dir(path) != filepath.Join(project, ".claude", "skills") {
-				return unknown
-			}
-			if path != active {
-				foreign = true
-				continue
-			}
-			if selected {
-				return unknown
-			}
-			selected = true
-			for _, key := range []string{"errors", "notes"} {
-				if reported, exists := entry[key]; exists && len(reported.([]any)) != 0 {
-					return unknown
-				}
-			}
-			if enabled {
-				result.state = projectListEnabled
-			} else {
-				result.state = projectListDisabled
-			}
-		default:
-			// Skills-directory plugins have only the observed user/project origins.
-			return unknown
-		}
+		s.suppressed, s.observation.untrusted = true, trust
+		return true
 	}
-	if selected && (suppressed || other || foreign) {
-		return unknown
+	row, valid := parseProjectListRow(entry, s.query.project)
+	if !valid {
+		return false
 	}
-	if foreign {
+	identity := id + "\x00" + row.scope + "\x00" + row.path
+	if s.seen[identity] {
+		return false
+	}
+	s.seen[identity] = true
+	if id != s.query.name+"@skills-dir" {
+		return true
+	}
+	return s.recordCandidate(entry, row)
+}
+
+func parseProjectListRow(entry map[string]any, project string) (projectListRow, bool) {
+	scope, scopeOK := entry["scope"].(string)
+	enabled, enabledOK := entry["enabled"].(bool)
+	path, pathOK := entry["installPath"].(string)
+	if !scopeOK || !enabledOK || !pathOK || !exactAbsolute(path) || !knownClaudeScope(scope) || !validProjectListMetadata(entry, project) {
+		return projectListRow{}, false
+	}
+	return projectListRow{scope: scope, path: path, enabled: enabled}, true
+}
+
+func (s *projectListScan) recordCandidate(entry map[string]any, row projectListRow) bool {
+	switch row.scope {
+	case "user":
+		if filepath.Dir(row.path) != filepath.Join(s.query.user, "skills") || s.other {
+			return false
+		}
+		s.other = true
+	case "project":
+		if filepath.Dir(row.path) != filepath.Join(s.query.project, ".claude", "skills") {
+			return false
+		}
+		if row.path != s.query.active {
+			s.foreign = true
+			return true
+		}
+		if s.selected {
+			return false
+		}
+		s.selected = true
+		for _, key := range []string{"errors", "notes"} {
+			if reported, exists := entry[key]; exists && len(reported.([]any)) != 0 {
+				return false
+			}
+		}
+		if row.enabled {
+			s.observation.state = projectListEnabled
+		} else {
+			s.observation.state = projectListDisabled
+		}
+	default:
+		// Skills-directory plugins have only the observed user/project origins.
+		return false
+	}
+	return true
+}
+
+func (s *projectListScan) result() projectListObservation {
+	if s.selected && (s.suppressed || s.other || s.foreign) {
+		return projectListObservation{}
+	}
+	result := s.observation
+	if s.foreign {
 		result.state = projectListForeign
 		return result
 	}
-	if suppressed {
-		result.state, result.otherSource = projectListSuppressed, other
+	if s.suppressed {
+		result.state, result.otherSource = projectListSuppressed, s.other
 		return result
 	}
-	if other {
+	if s.other {
 		result.state, result.otherSource = projectListOtherSource, true
 	}
 	return result
