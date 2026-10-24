@@ -1,6 +1,6 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v3 — independent lifecycle, transport and UX critiques incorporated.
+Status: implementation plan v4 — implementation findings and independent lifecycle critiques incorporated; end-to-end qualification in progress.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
@@ -255,7 +255,7 @@ Serialize acceptance lookup/create with an existing environment/process lock.
 Session mutexes alone are insufficient across two UAP processes. Lookup a known
 accepted request before resolving its old plan handle or enforcing plan expiry.
 
-Namespace request IDs by captured environment identity. Keep request ID, immutable
+Namespace request IDs by the stable Go mutation environment identity, not a hash of mutable host capture details. Keep request ID, immutable
 context/input fingerprint, accepted plan ID, correlated installer operation IDs,
 disposition and final public result/next actions. Store no credentials, operational
 prepared objects, filesystem transaction copies or progress ticks. Persist before
@@ -271,7 +271,7 @@ Document exact limits in the contract and test them.
 
 ### Bulk resolution policy
 
-Manifest exact pins remain unchanged with a pinned explanation. Eligible moving
+Manifest commit, exact SemVer and archive-digest pins remain unchanged with a pinned explanation. A signed registry release selector retains the existing safe release-update policy; its saved sequence is not an immutable user pin. Eligible moving
 selections resolve together into one candidate graph; failed acquisition, dependency
 conflict or validation refuses the candidate before acceptance. Excluded pins and
 unsupported/policy-blocked entries appear with stable reasons in review. An unknown
@@ -482,3 +482,48 @@ implementation review remains a separate gate.
   Reuse the narrow runtime ownership boundary; no run snapshot framework.
 
 Plan direction is approved for implementation subject to these explicit gates.
+
+### v4 implementation evidence and critic dispositions
+
+- Separate stable `environmentId` (canonical state root + existing user environment
+  + scope) from immutable `contextId` (dependency root, captured targets, profile
+  roots and executables). Changing a binary or a manifest location must not hide
+  unresolved accepted work. Each observation retains its original context and
+  dependency root; recovery cannot settle a different root by inspecting an empty
+  replacement. Recovery proof can settle all compatible native pending records in
+  one reviewed operation, without rewriting their original outcomes.
+- Agent Teams uses the canonical UAP CLI state root and its environment/native
+  mutation locks. An app-private receipt store cannot prove that a default-CLI
+  managed Skill is locally owned. Trusted embedders may supply explicit isolated
+  roots, but this does not establish custody across arbitrary unregistered stores.
+- Local Skill authoring uses the same Go retained-plan/acceptance lifecycle and
+  existing `dirswap.Manager` under the shared installer locks. The host captures
+  allowed roots on stdin; HTTP accepts root IDs, relative names and expected file
+  digests. No JavaScript check-then-write lease. Authoring in an explicit project
+  Skills directory does not enable native project-scope plugin installation.
+- Local changes retain reversible bytes in private engine storage outside native
+  Skills discovery. Recovery references the exact prior local operation/root/name;
+  generic native recovery never settles uncertain local file effects. Backups and
+  journals are evidence for a fresh review, not executable serialized plans.
+- Cancelled operations with mutations or unresolved next actions remain pending.
+  The Go admission boundary also refuses new ordinary work while durable pending
+  work exists; an SDK caller cannot bypass the app's runtime fence after restart.
+- Graph updates preserve the existing minimum-compatible SemVer selection policy.
+  Re-evaluating a range is not a promise to install the numerically greatest version.
+  Selected ranges resolve together while unselected bindings keep exact locks.
+- The app preserves an uncertain apply request ID across panel remounts. Definitive
+  stale-plan rejection is interpreted only after durable replay lookup. Network,
+  observation and acceptance persistence failures retain the fence and identity.
+- Verified so far: generated SDK build/typecheck and 21 protocol/owned-process
+  tests; application retained lifecycle/recovery/Skills tests; 12 transport tests
+  for durable replay, locks, cancellation, malformed history, category-specific
+  reconciliation, strict HTTP admission and stale/discarded reviews. The actual Go
+  binary builds. Actual SDK/Python installation, Electron interaction, packaging,
+  full repository gates and final independent review remain separate open gates.
+- Rechecked prerequisite PRs #472 and Agent Teams #982: still open drafts at the
+  original pinned heads. Project/worktree scenarios S25/S26 remain dependent on
+  the separate qualified adapter workstream. Do not reinterpret a disabled scope
+  control as completed project installation.
+
+The implementation retains one HTTP contract, one native engine and one language
+SDK. No daemon, generic file lease, parallel installer or public release was added.
