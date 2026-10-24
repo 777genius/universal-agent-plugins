@@ -95,3 +95,18 @@ test('retired products never reach catalog ItemList structured data', async () =
     assert.equal(structured[0].numberOfItems, names.length);
   }
 });
+
+test('temporarily unlisted products never reach catalog surfaces', async () => {
+  const hidden = structuredClone(fixture.plugins[0]);
+  hidden.name = 'agent-notifications';
+  hidden.display_name = 'Agent Notifications';
+  const registry = { ...fixture, plugins: [...fixture.plugins, hidden] };
+  for (const filename of ['plugins/index.vue', 'agents/[client].vue']) {
+    const { seo } = await page(filename, { slug: 'gitlab', client: 'codex' }, registry);
+    const structured = toValue(seo.options.structuredData) as any[];
+    const names = structured[0].itemListElement.map((entry: any) => entry.name);
+    assert.ok(names.includes('GitLab'), `${filename} keeps listed products`);
+    assert.ok(!names.includes('Agent Notifications'), `${filename} drops held-back products`);
+    assert.equal(structured[0].numberOfItems, names.length);
+  }
+});

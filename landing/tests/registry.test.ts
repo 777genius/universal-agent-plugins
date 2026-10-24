@@ -128,6 +128,18 @@ describe('unified registry landing', () => {
     assert.equal(counts.reviewed + counts.community, counts.total);
   });
 
+  it('keeps temporarily unlisted products out of every catalog surface', () => {
+    const hidden = registry.plugins.find((plugin) => plugin.name === 'agent-notifications')!;
+    assert.ok(hidden, 'the held-back product is still published in the Directory feed');
+    assert.equal(catalogVisiblePlugins([hidden]).length, 0);
+    assert.equal(catalogVisiblePlugins(registry.plugins).includes(hidden), false);
+    assert.equal(catalogTrustCounts([hidden]).total, 0);
+    const visible = registry.plugins.find(
+      (plugin) => plugin.name !== 'agent-notifications' && catalogVisiblePlugins([plugin]).length,
+    )!;
+    assert.equal(groupCatalogPlugins(catalogVisiblePlugins([hidden, visible])).length, 1);
+  });
+
   it('derives product authentication from signed release target policies', () => {
     const fixture = structuredClone(snapshot) as {
       distributions: {
