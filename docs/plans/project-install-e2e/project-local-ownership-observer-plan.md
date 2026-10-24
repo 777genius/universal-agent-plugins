@@ -146,3 +146,56 @@ R2 independently reviewed exact local
 
 Both review rounds are complete. Production implementation must still pass the
 concrete regressions above and two independent frozen-source code reviews.
+
+
+## Repair admission amendment — R1
+
+The required real public SDK regressions exposed a second boundary while the
+observer implementation was still uncommitted. First-install foreign skill/MCP
+collisions now refuse before managed/state publication for all three disabled or
+unavailable observer configurations. Single-target `Service.Repair`, however,
+does not call either identity observer. It verifies the managed package, then
+begins a native attempt; a changed Cline/Codex skill is only refused by the
+adapter after the binding has been persisted as failed (`Mutated=true`). The
+foreign bytes survive, but this does not satisfy the plan's intact-state refusal
+requirement. The failing lifecycle regression remains unchanged.
+
+Proposed bounded correction, awaiting two independent amendment review rounds:
+
+1. Add one project-native-config prepared admission helper to the existing repair
+   preconditions. Invoke it after exact target/receipt/digest preflight, before
+   either intact-native repair or managed-package restoration. Both dry-run and
+   confirmed single repair use it, as does the same existing preflight used by
+   RefreshProjection. User scope, CLI-registry and prepared-plugin policies keep
+   their current paths. No lifecycle outcome, transaction, native-attempt, schema,
+   registry writer or capability declaration changes.
+2. Require the existing PreparedIdentityObserver capability for that project
+   file policy; no nil/fallback package-only observation may stand in for local
+   component ownership. Call through the existing prepared observer and complete
+   frozen plan/binding so the independently supplied kernel, root and receipt
+   checks remain authoritative. The prepared path never invokes a process.
+3. Compare the whole prepared observation with the already measured managed
+   package condition. For an intact package require Managed with the same
+   nonempty receipt digest, via the existing identity validator. For a known
+   absent managed package permit only Absent. For a known digest mismatch permit
+   only Indeterminate carrying exactly the same nonempty measured actual digest.
+   The provider attaches a digest only after local component findings are clear
+   or expected; collision/unknown/malformed local findings cannot supply that
+   managed-drift proof. Arbitrary errors, an unmatched state/digest, or a changed
+   package since the first verification refuse without state publication.
+4. A missing exact-owned native component remains repairable: its clear local
+   finding plus the intact managed package still produces Managed. Existing
+   controlled managed-directory restoration, receipt validation and commit-time
+   preconditions remain unchanged. Do not treat a known digest mismatch as
+   native discovery or use it to clear uncertainty. Existing unresolved-attempt
+   recovery fences still precede this branch.
+5. Retain the concrete Cline+Codex tests: intact state on tampered skill and MCP
+   refusal, normal missing-native repair, managed drift/absence restoration,
+   real two-target group repair with known receipts and foreign-native refusal,
+   and a genuine callback-created pending attempt whose managed digest and local
+   native files both verify but still cannot recover. Add any gap identified by
+   independent critics before implementing this amendment.
+
+This amendment is a precondition addition required by observed behavior. It does
+not relax the original plan's separation of filesystem ownership and native
+activation evidence. Production repair code has not been edited.
