@@ -152,8 +152,12 @@ func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan
 		outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
 		!input.ActivationComplete && !input.AuthComplete && !outcome.ActivationAttested && !outcome.AuthenticationAttested &&
 		(outcome.NativeEffect == "" || outcome.NativeEffect == domain.NativeEffectUnchanged) && len(outcome.NativeObjects) == 0 &&
-		delivery.ActivePath == client.TargetLocator && delivery.ArtifactDigest != "" && delivery.ArtifactDigest == managedDigest(client) &&
-		reflect.DeepEqual(delivery.NativeObjects, client.NativeObjects)
+		preparedDeliveryUnchanged(client, delivery)
+}
+
+func preparedDeliveryUnchanged(client domain.ClientBinding, delivery domain.StagedDelivery) bool {
+	return delivery.ActivePath == client.TargetLocator && delivery.ArtifactDigest != "" &&
+		delivery.ArtifactDigest == managedDigest(client) && reflect.DeepEqual(delivery.NativeObjects, client.NativeObjects)
 }
 
 // clientVerifierAvailable asks the activator whether an exact client-side

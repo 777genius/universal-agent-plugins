@@ -49,6 +49,7 @@ func (e *Engine) applyGroup(ctx context.Context, prepared *PreparedOperation) (R
 }
 
 func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending bool, got usecase.GroupResult, err error) (Result, error) {
+	result.Mutated = result.Mutated || got.Mutated
 	err = wrapLifecycleError(err)
 	result.InstallationID = firstNonEmpty(got.InstallationID, prepared.plan.InstallationID)
 	state, loadErr := e.store.Load()
@@ -85,7 +86,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 		result.Reason = "committed binding is not activated"
 		return result, fmt.Errorf("%s", result.Reason)
 	}
-	if !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
+	if !result.Mutated && !pending && (prepared.plan.NoChange || (!got.Mutated && groupPreviewUnchanged(got))) {
 		result.Outcome = OutcomeUnchanged
 		result.NoChange = true
 		return result, nil

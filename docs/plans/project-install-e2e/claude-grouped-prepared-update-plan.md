@@ -75,3 +75,17 @@ Proposed bounded correction after both independent R1 architecture GOs; R2 revie
 No SDK production code was edited for this amendment. Independent review and a frozen code checkpoint are required before publication.
 
 SDK amendment R1 exact a30408aa received independent architecture GOs from Root and apm_vercel_scope. Root required verified mutation preservation even when state reload/Outcome classification fails; APM required that finishGroup's final unchanged branch cannot contradict an actual core/prior host effect. R2 incorporates those requirements without changing the early applyGroup branch or Prepared handoff semantics.
+
+Core grouped Prepared R2 exact cd99183b independently received PLAN GO from Root and apm_vercel_scope before source edits. SDK reporting amendment R2 exact ad6478e8 independently received PLAN GO from both reviewers before its two production-line changes. Original failing native assertions remain unchanged.
+
+## Local implementation checkpoint validation
+
+The approved correction now reuses the exact activation delivery in grouped classification, retains nativeComplete=false for blocked registration, synchronizes target NoChange after invalidation, and accumulates final target mutation into the group. The SDK amendment accumulates the core/prior mutation before every finishGroup exit and gates only that function's final unchanged result. The existing Prepared handoff remains Incomplete with its original reason when pending. The existing delivery equality predicate was extracted unchanged into a small private helper to satisfy the repository complexity gate; no condition was removed or widened.
+
+Focused inert Go1.26.10 tests, sequential with -p=1:
+
+- CLI project regression plus existing user idempotent update tests: PASS0.226s. Actual project namespace composition, exact suppression fixture, repeated add/update with fresh listing and exact state/owned bytes, changed real skill bytes remaining Prepared, and original user-native/user-state/A/B foreign preservation.
+- Usecase grouped Prepared table plus existing single-resume authentication, Kimi unchanged and pre-activation projection-failure regressions: PASS0.231s. The same-recorded-facts committed effect writes an actual inert native marker while receipts/lifecycle/state bytes remain exact; both group/target mutation flags must report it. Policy/authentication/attested outcome negatives are covered.
+- SDK reporting table, existing group attempt/cancellation classification and project Claude Prepared lifecycle: PASS2.148s. Pending handoff/error/read-failure effects remain visible; stale no-change previews cannot override actual mutation; existing handoff facts remain Prepared/Installed.
+
+These tests execute no vendor, native plugin, MCP server, authentication or model process. The unchanged genuine hosted Prepared lifecycle assertion still needs a successful exact corrected-source run before closure. Bootstrap remains a separately approved plan with no production edit in this checkpoint.
