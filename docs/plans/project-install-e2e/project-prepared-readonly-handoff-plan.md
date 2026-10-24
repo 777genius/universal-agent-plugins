@@ -40,3 +40,31 @@ Mutated=true and failed-load evidence must never be overridden by this change.
 Two independent plan rounds precede this narrowly scoped source edit and two
 frozen code reviews follow. No production source for this handoff correction
 has been changed.
+
+## R2 — exact predicate and preserved group authority
+
+APM and Skillshare independently gave architecture R1 GO exactee36799f after
+reading the actual SDK/core call sites. Incorporate both sets of refinements:
+the exception is inside the existing resume branch and requires incoming true
+VerifyOnly, PackageUnchanged, zero SelectedDelivery, matching Client/Plan IDs,
+explicit project Plan.Scope and TargetContext.Scope, a nonempty canonical project
+root and original TargetContext.UserConfigRoot matching the actual client. The
+existing scoped trait must be LifecycleNativeConfig. Do not canonicalize paths
+or infer new filesystem/profile authority in this pure decision helper.
+
+In grouped operations a.facts can describe the first target. Compare the current
+request's client, plan and target context; never require each client to equal the
+first group's a.facts.ClientID/BindingID. All already established core ownership,
+receipt and selected projection checks remain authoritative. No new bypass for
+unknown/missing state or unresolved attempts is introduced.
+
+Tests cover incoming false, missing/mixed scope/root/user context, client-plan
+mismatch and nonzero selected delivery. User scope, project CLIRegistry and
+Prepared lifecycles retain their existing acting behavior. Actual SDK group and
+single replay must freshly verify, successful callback must still precede the
+verifier/profile recheck, failed callback must retain its failure, and missing or
+changed native projections must stay acting or refuse under existing ownership
+rules. Preserve actual native effects and all existing pending/recovery tests.
+
+No production seam source has been edited for this correction. Final independent
+R2 reviews precede that edit.
