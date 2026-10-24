@@ -128,6 +128,42 @@ describe('unified registry landing', () => {
     assert.equal(counts.reviewed + counts.community, counts.total);
   });
 
+  it('derives product authentication from signed release target policies', () => {
+    const fixture = structuredClone(snapshot) as {
+      distributions: {
+        id: string;
+        product_id: string;
+        release_policies: {
+          targets: { client: string; authentication: string; delivery: string; scopes: string[] }[];
+        }[];
+      }[];
+    };
+    const distributions = fixture.distributions.filter((item) => item.product_id === 'context7');
+    assert.ok(distributions.length, 'context7 policies are present in the Directory feed');
+    for (const distribution of distributions)
+      for (const policy of distribution.release_policies)
+        for (const target of policy.targets) target.authentication = 'not_required';
+    const parse = () =>
+      parseDirectoryData(fixture, 'published_snapshot').plugins.find(
+        (plugin) => plugin.name === 'context7',
+      )!;
+    assert.equal(parse().authentication, 'none');
+    const parsed = parse();
+    const alternative = distributions.find((item) => item.id !== parsed.default_distribution)!;
+    assert.ok(alternative, 'context7 has an alternative distribution in the Directory feed');
+    for (const policy of alternative.release_policies)
+      policy.targets[0]!.authentication = 'required';
+    assert.equal(
+      parse().authentication,
+      'none',
+      'the default install path decides the product answer',
+    );
+    for (const policy of distributions.find((item) => item.id === parsed.default_distribution)!
+      .release_policies)
+      for (const target of policy.targets) target.authentication = 'required';
+    assert.equal(parse().authentication, 'unknown');
+  });
+
   it('intro counts collapse duplicate sources instead of counting raw records', () => {
     const reviewed = registry.plugins.find(
       (plugin) => plugin.installable && catalogVisiblePlugins([plugin]).length,

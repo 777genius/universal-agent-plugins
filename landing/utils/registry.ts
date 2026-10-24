@@ -866,7 +866,11 @@ function parseSnapshot(
       distributions,
       evidence: selected.evidence,
       package_evidence: selected.package_evidence,
-      authentication: 'unknown',
+      authentication:
+        selected.targets.length > 0 &&
+        selected.targets.every((target) => target.authentication === 'not_required')
+          ? 'none'
+          : 'unknown',
       client_support: {
         resolution: 'directory',
         clients: [

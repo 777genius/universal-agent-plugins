@@ -155,9 +155,7 @@ const targetOptions = computed(() =>
 const authentication = computed(() =>
   authenticationIndicator(selectedDistribution.value, targets.value, autoDetect.value, t),
 );
-const showAuthentication = computed(
-  () => !autoDetect.value && authentication.value.state !== 'not_required',
-);
+const showAuthentication = computed(() => authentication.value.state !== 'not_required');
 const repositoryStars = computed(() =>
   new Intl.NumberFormat(locale.value, {
     notation: 'compact',
