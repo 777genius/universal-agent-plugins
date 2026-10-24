@@ -102,8 +102,10 @@ func observeClaudeProjectList(body []byte, name, active, project, user string) p
 				return unknown
 			}
 			selected = true
-			if reported, exists := entry["errors"]; exists && len(reported.([]any)) != 0 {
-				return unknown
+			for _, key := range []string{"errors", "notes"} {
+				if reported, exists := entry[key]; exists && len(reported.([]any)) != 0 {
+					return unknown
+				}
 			}
 			if enabled {
 				result.state = projectListEnabled

@@ -137,6 +137,11 @@ func (f *claudeProjectNativeFixture) writeEvidence(t *testing.T, evidence map[st
 	}
 	evidence["stages"], evidence["artifact_sha256"], evidence["finished_utc"] = stages, hashes, time.Now().UTC().Format(time.RFC3339Nano)
 	nativeJSON(t, filepath.Join(f.base.Root, "claude-project-plugin-evidence.json"), evidence)
+	if evidence["project_contract"] == "untrusted_prepared_v1" {
+		if err := validateClaudePreparedStages(stages); err != nil {
+			t.Error(err)
+		}
+	}
 	if err := nativeStageFailures(stages); err != nil {
 		t.Error(err)
 	}

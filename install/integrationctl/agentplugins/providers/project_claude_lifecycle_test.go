@@ -174,6 +174,11 @@ func TestProjectClaudeSuppressionDoesNotSupplyOwnershipOrDiscovery(t *testing.T)
 	if out := observe(nil); out.State != domain.NativeIdentityAbsent {
 		t.Fatalf("clear initial destination=%+v", out)
 	}
+	f.runner.suppressed, f.runner.enabled = false, false
+	if out := observe(nil); out.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("unowned disabled native candidate was adopted: %+v", out)
+	}
+	f.runner.suppressed = true
 	projectGeminiWrite(t, filepath.Join(f.request.Plan.TargetRoot, "foreign-same-name", ".claude-plugin", "plugin.json"), `{"name":"demo"}`)
 	if out := observe(nil); out.State != domain.NativeIdentityUnmanaged {
 		t.Fatalf("suppression hid foreign project artifact: %+v", out)

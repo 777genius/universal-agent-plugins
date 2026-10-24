@@ -186,3 +186,23 @@ Genuine hosted replay and independent raw-output interpretation are required
 before proposing any parser correction. The direct-child timeout/pipe bounds
 are not OS isolation or general descendant sandboxing, and no model/trust/MCP
 initialization or project success is claimed.
+
+
+## Completion continuation: blocked discovery is prepared
+
+The independently reviewed completion plan keeps the same skills-directory
+backend and original manifest name. The Linux pinned spike is preserved under
+[the 2026-10-24 spike evidence](../../evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24/README.md).
+The current implementation recognizes the native suppression sentinel without
+using it as ownership proof. Selected-project filesystem namespace and receipt
+verification remain independent. Suppressed/disabled/user-shadowed owned installs
+stay Prepared+Installed; malformed listings remain failures. Exact active project
+listing is the only discovery confirmation, and no MCP workload follows from it.
+
+The source-only project gate is explicitly
+`TestAgentpluginsClaudeNativeProjectPreparedLifecycle`; it exercises production
+add/replay/update/intact repair/missing-directory repair/remove and separate fresh
+native A/B listing. Its stage validator requires native skill/command discovery
+to remain blocked and MCP/model use unevaluated. It cannot replace existing user
+native runtime gates or certify trusted project discovery. No new hosted result
+is claimed by the implementation or inert contract tests.

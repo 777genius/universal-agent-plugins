@@ -28,7 +28,7 @@ func TestProjectObservationSeparatesBlockedDiscoveryFromIdentity(t *testing.T) {
 		{"user-and-suppressed", projectListSuppressed}, {"suppressed-and-user", projectListSuppressed},
 		{"exact-and-user", projectListUnknown}, {"user-and-exact", projectListUnknown}, {"exact-and-suppressed", projectListUnknown},
 		{"suppressed-and-exact", projectListUnknown}, {"duplicate-suppression", projectListUnknown}, {"duplicate-exact", projectListUnknown},
-		{"foreign-project", projectListForeign}, {"other-project", projectListUnknown}, {"load-errors", projectListUnknown},
+		{"foreign-project", projectListForeign}, {"other-project", projectListUnknown}, {"load-errors", projectListUnknown}, {"load-notes", projectListUnknown},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			root, user, active, selected, other, suppressed := projectListFixture(t)
@@ -68,8 +68,12 @@ func TestProjectObservationSeparatesBlockedDiscoveryFromIdentity(t *testing.T) {
 			case "other-project":
 				selected["projectPath"] = filepath.Join(filepath.Dir(root), "B")
 				rows = append(rows, selected)
-			case "load-errors":
-				selected["errors"] = []string{"Not loaded"}
+			case "load-errors", "load-notes":
+				key := "errors"
+				if test.name == "load-notes" {
+					key = "notes"
+				}
+				selected[key] = []string{"Not loaded"}
 				rows = append(rows, selected)
 			}
 			body, err := json.Marshal(rows)

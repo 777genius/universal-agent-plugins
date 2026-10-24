@@ -51,7 +51,12 @@ func claudeProjectRegistryFinding(body []byte, client domain.DetectedClient, pla
 			return clients.RegistryCollision
 		}
 		return clients.RegistryExpected
-	case projectListAbsent, projectListSuppressed, projectListDisabled, projectListOtherSource:
+	case projectListDisabled:
+		if managed == nil {
+			return clients.RegistryCollision
+		}
+		return clients.RegistryClear
+	case projectListAbsent, projectListSuppressed, projectListOtherSource:
 		// Clear applies only to this scoped native namespace. The prepared scan and
 		// generic receipt/digest verification independently establish file ownership.
 		// This is deliberately not Expected/native-discovery reconciliation.
