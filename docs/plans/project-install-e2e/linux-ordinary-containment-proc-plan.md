@@ -1,4 +1,4 @@
-# Linux ordinary containment proc prerequisite plan — R1
+# Linux ordinary containment proc prerequisite plan — R2
 
 ## Observed failure and preserved evidence
 
@@ -32,3 +32,25 @@ Do not fall back to numeric PID polling, /proc-wide ancestry sampling, process g
 - Existing descendant traversal identity, quiescent-empty, stable pidfd, bounded reaper and cleanup causality tests remain unchanged and pass where their declared primitive is available. Do not run a broad suite for this correction.
 - Exact bootstrap runtime test on this environment must report explicit pre-start unsupported capability (if still missing), with no manager/setsid artifacts. That result is not a substitute for supported-host cancellation containment evidence.
 - Two independent R1 and R2 plan reviews must precede production edits, then two frozen-source code reviews must precede publication. Root decides the bounded implementation after review. No production source has been edited for this plan.
+
+## R2 precision and affected surface inventory
+
+R1 exact ec1c179b received independent architecture GOs from Root and apm_vercel_scope. Both required this explicit impact inventory and precise unsupported classification before code. Root additionally required bounded proc reads and strict task identity parsing.
+
+All proc task/stat/children reads introduced or reused by the new prerequisite/absence classifier must have finite byte limits and strict parsing of PID/TID/starttime/state/parent fields. Read at most the specified cap plus one byte, refuse overflow/trailing malformed content and unknown identity errors, and keep the existing traversal process/deadline bounds. Use per-call small read/identity operations for inert injection, never mutable package globals. The unsupported sentinel is reserved for ENOENT of the required children interface while BEFORE and AFTER observations prove the same live task; permission errors, malformed identity, unknown read errors and a changed task are failures or explicit race outcomes, not unsupported skip authority.
+
+The ordinary wrapper fronts OS.Run, RunWithTreeExitGrace and RunWithDescendantExitGrace. On this host all of those production commands must now refuse before requested-child launch, including ordinary Git acquisition, scanners, client version/list/probe calls, legacy integrations and dependency bootstrap. This is a deliberate fail-closed unsupported-host contract. It is not a claim that only one bootstrap test is affected. The strict duplex/cgroup path remains unchanged.
+
+The first implementation will gate only these named real-process tests on the exact production prerequisite before any child launch (helper-only child branches must retain their existing behavior):
+
+| File | Exact tests needing ordinary prerequisite |
+| --- | --- |
+| bootstrap/process_linux_test.go | TestDefaultRunnerKeepsCapturedStagingAndContainsSetsidDescendant; TestDefaultRunnerExecutesOnlyLockedCommandWithSanitizedEnvironment; TestDefaultRunnerCancellationStopsDescendants |
+| process/osrunner_test.go | TestOSRunnerPreservesCommandOutputAndExitCode; TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess; TestOSRunnerBoundsStdoutAndReturnsLimitError; TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput; TestOSRunnerStdoutLimitPreservesNonzeroExit; TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands; TestOSRunnerBoundsStderrWhileRetainingDiagnosticEdges |
+| process/osrunner_tree_linux_test.go | TestOSRunnerSurvivesRemovedOwnExecutable; TestOrdinaryCommandContainmentDoesNotRequireDelegatedCgroup; TestOrdinaryRunWorksWhenDelegatedCgroupIsUnavailable; TestOrdinarySupervisorDescriptorsAreClosedBeforeCommandExec; TestOSRunnerRapidSuccessfulCommandsPreserveNaturalExit; TestOSRunnerRapidShellCommandsWithShortLivedChildrenPreserveNaturalExit; TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit; TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit; TestOSRunnerDescendantGraceStillRejectsForcedCleanup; TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup; TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession; TestOSRunnerCancellationContainsImmediateSetsidDescendant |
+
+Existing requireDuplexCapability gates are not weakened or repurposed; a dual prerequisite test keeps both. Inert tests of injected traversal, quiescent-boundary counting, stable identities, output buffers and sole-reaper behavior remain unconditional. A named runtime test that reports unsupported is not a runtime containment pass.
+
+Production composition/caller inventory traced read-only: cli/cmd/agentplugins/compose.go injects OS into client discovery, lifecycle and scanner boundaries; clients/shared/native_registry.go uses tree grace; clients/claude/probe.go uses descendant grace; agentplugins/adapters/sourceacquisition/{acquirer,git_transport}.go directly use ordinary/tree-grace OS for Git; integrationctl_service.go and adapters/{source,claude,gemini} retain ordinary legacy defaults; authoring/bootstrap/bootstrap.go invokes OS.Run. Existing external source-acquisition, scanner and client probe integration tests may therefore refuse on this host too. No broad package skip or fallback runner will be added to make those tests appear qualified; supported hosted CI must exercise them. Any additional per-test prerequisite edits require their exact test names and review before expanding this bounded list.
+
+A successful self prerequisite query proves availability of the bounded proc interface only. Actual supported-host containment qualification still requires the unchanged real cancellation/setsid/cleanup assertions. This environment's unsupported result will remain explicitly distinct from those hosted qualifications.
