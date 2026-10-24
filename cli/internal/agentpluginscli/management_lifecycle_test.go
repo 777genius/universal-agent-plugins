@@ -26,6 +26,9 @@ func managementJourneyBackend(t *testing.T, j savedJourney) *ManagementBackend {
 		if err := os.WriteFile(target.ExecutablePath, []byte("fixture executable"), 0700); err != nil {
 			t.Fatal(err)
 		}
+		if err := os.Chmod(target.ExecutablePath, 0700); err != nil {
+			t.Fatal(err)
+		}
 		cfg.Targets = append(cfg.Targets, management.StartupTarget{Id: "profile-" + string(target.ClientID), Client: string(target.ClientID), ConfigRoot: target.ConfigRoot, Executable: target.ExecutablePath})
 	}
 	backend, err := NewManagementBackend(j.cli.app, cfg)

@@ -11,7 +11,10 @@ import (
 )
 
 func TestManagementNativeProjectionProfileUsesOwnedObjectsOutsidePrivateArtifact(t *testing.T) {
-	profile := t.TempDir()
+	profile, err := managementAbsolute(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	artifact := filepath.Join(t.TempDir(), "private-package")
 	binding := domain.ClientBinding{ClientID: "opencode", Scope: "user", TargetLocator: artifact,
 		NativeObjects: []domain.NativeObjectOwnership{

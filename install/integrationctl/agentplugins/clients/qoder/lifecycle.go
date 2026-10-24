@@ -137,7 +137,7 @@ func verifyAbsent(ctx context.Context, env clients.Env, executable, name string)
 	return nil
 }
 
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {
 		outcome.ExternalRemovalComplete = true
@@ -146,7 +146,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if !qualifiedPluginName(request.DeclaredName) {
 		return outcome, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
 	}
-	if !shared.HasClientCLI(env, request.BackendExecutable) {
+	if adapter.RequiresExternalUninstalled(env, request) {
 		return shared.RequireExternalUninstall(outcome, false, "uninstall the managed plugin in Qoder, then rerun remove with --external-uninstalled"), nil
 	}
 	if !request.Confirmed {

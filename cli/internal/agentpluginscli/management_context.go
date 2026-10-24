@@ -124,7 +124,8 @@ func ConfigureManagementApp(app App, cfg management.Startup) (App, error) {
 	if app.Installer == nil || app.StateStore == nil {
 		return app, errors.New("installer is unavailable")
 	}
-	if filepath.Dir(app.ManagedRoot) != cfg.StateRoot {
+	engineStateRoot, err := managementAbsolute(filepath.Dir(app.ManagedRoot))
+	if err != nil || engineStateRoot != cfg.StateRoot {
 		return app, errors.New("engine state root differs from captured context")
 	}
 	for _, target := range cfg.Targets {

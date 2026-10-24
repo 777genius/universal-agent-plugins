@@ -2,7 +2,9 @@ package agentpluginscli
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
@@ -71,5 +73,37 @@ func TestManagementMissingNativeExecutableIsUnavailableBeforeSourceAcquisition(t
 				t.Fatalf("missing runtime did not produce an actionable pre-acquisition refusal: %T, %v", prepared, err)
 			}
 		})
+	}
+}
+
+func TestManagementCompositionComparesCanonicalStateRoots(t *testing.T) {
+	repo, _ := savedJourneyRepository(t)
+	j := newSavedJourney(t, repo)
+	base := managementJourneyBackend(t, j)
+	if err := os.MkdirAll(base.config.StateRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(t.TempDir(), "state-alias")
+	if err := os.Symlink(base.config.StateRoot, alias); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink privilege unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	app := j.cli.app
+	app.ManagedRoot = filepath.Join(alias, "managed")
+	same, err := NewManagementBackend(app, base.config)
+	if err != nil {
+		t.Fatal("same physical state root was rejected through its alias", err)
+	}
+	defer same.Close()
+	if same.EnvironmentID() != base.EnvironmentID() || same.ContextID() != base.ContextID() {
+		t.Fatal("an equivalent root spelling changed captured identity")
+	}
+	foreign := base.config
+	foreign.StateRoot = t.TempDir()
+	if other, err := NewManagementBackend(app, foreign); err == nil {
+		other.Close()
+		t.Fatal("a genuinely different state root was accepted")
 	}
 }

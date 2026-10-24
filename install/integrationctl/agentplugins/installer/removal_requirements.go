@@ -14,7 +14,7 @@ func (e *Engine) removalRequiresExternalUninstalled(client domain.DetectedClient
 	if !ok {
 		return false
 	}
-	return policy.RequiresExternalUninstalled(domain.DeactivationRequest{
+	return policy.RequiresExternalUninstalled(clients.Env{Runner: e.cfg.Runner}, domain.DeactivationRequest{
 		Client: client, DeclaredName: installation.DeclaredName,
 		CurrentActivation: binding.Activation, SelectedDelivery: binding.SelectedDelivery,
 		LocalEntryObservation: binding.LocalEntryObservation.Clone(),

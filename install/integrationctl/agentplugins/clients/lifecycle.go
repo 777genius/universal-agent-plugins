@@ -26,7 +26,7 @@ type ActivationPreflighter interface {
 // host confirmation that its native plugin was removed or never activated. The
 // answer is read-only policy, independent of Confirmed or ExternalUninstalled.
 type RemovalAttestationPolicy interface {
-	RequiresExternalUninstalled(req domain.DeactivationRequest) bool
+	RequiresExternalUninstalled(env Env, req domain.DeactivationRequest) bool
 }
 
 // AutomaticActivator reports whether Activate will drive a managed client CLI

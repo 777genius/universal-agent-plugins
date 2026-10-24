@@ -14,7 +14,9 @@ var _ clients.RemovalAttestationPolicy = (*Adapter)(nil)
 
 // RequiresExternalUninstalled preserves Codex's explicit external-removal
 // contract, including plugins that were prepared but never activated.
-func (*Adapter) RequiresExternalUninstalled(_ domain.DeactivationRequest) bool { return true }
+func (*Adapter) RequiresExternalUninstalled(_ clients.Env, _ domain.DeactivationRequest) bool {
+	return true
+}
 
 // Deactivate removes the managed Codex plugin and marketplace after the
 // operator confirms, or records the manual steps when the CLI is missing.
@@ -23,7 +25,7 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
 		return outcome, err
 	}
-	if adapter.RequiresExternalUninstalled(request) && !request.ExternalUninstalled {
+	if adapter.RequiresExternalUninstalled(env, request) && !request.ExternalUninstalled {
 		return shared.RequireExternalUninstall(outcome, false, "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"), nil
 	}
 	if !request.Confirmed {

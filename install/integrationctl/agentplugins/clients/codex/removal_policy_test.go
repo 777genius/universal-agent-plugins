@@ -16,7 +16,7 @@ func TestRemovalAttestationPolicyMatchesDeactivateIncludingNeverActivated(t *tes
 				CurrentActivation: activation, DeclaredName: "demo", PhysicalArtifactID: "artifact", Confirmed: true,
 				ManagedArtifactPath: tempRoot(t),
 			}
-			if !adapter.RequiresExternalUninstalled(request) {
+			if !adapter.RequiresExternalUninstalled(clients.Env{}, request) {
 				t.Fatal("removal policy lost the explicit confirmation requirement")
 			}
 			outcome, err := adapter.Deactivate(t.Context(), clients.Env{}, request)
