@@ -167,8 +167,14 @@ func openCodeProjectCheckConfig(object map[string]any, urls map[string]string, a
 	}
 	for name, url := range urls {
 		server, ok := mcp[name].(map[string]any)
-		if !ok || server["type"] != "remote" || server["url"] != url || server["enabled"] == false {
+		if !ok || server["type"] != "remote" || server["url"] != url {
 			return fmt.Errorf("native MCP source %q differs", name)
+		}
+		if enabled, present := server["enabled"]; present {
+			flag, valid := enabled.(bool)
+			if !valid || !flag {
+				return fmt.Errorf("native MCP enabled flag %q malformed or false", name)
+			}
 		}
 	}
 	for _, name := range absent {
@@ -177,4 +183,16 @@ func openCodeProjectCheckConfig(object map[string]any, urls map[string]string, a
 		}
 	}
 	return nil
+}
+
+// Early public remove errors have no JSON envelope: prepare returns before the
+// renderer and main emits one exact fixed stderr line. This is not a fallback
+// parser for failed native JSON.
+func openCodeProjectAbsentRemoval(result projectNativeCaptureResult) bool {
+	if result.Exit != 1 || result.ErrorKind != "exit" || result.Error == "" || len(result.Stdout) != 0 || result.Deadline || result.StdoutLimit || result.StderrLimit {
+		return false
+	}
+	first := "agentplugins: installation \"" + commandsPluginName + "\" was not found\n"
+	second := "agentplugins: plugin is not installed for target \"opencode\" in project scope; no target was changed\n"
+	return string(result.Stderr) == first || string(result.Stderr) == second
 }

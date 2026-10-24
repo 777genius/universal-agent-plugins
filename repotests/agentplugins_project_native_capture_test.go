@@ -44,6 +44,7 @@ type projectNativeCaptureResult struct {
 	Stderr      []byte `json:"-"`
 	Exit        int    `json:"exit"`
 	Error       string `json:"error,omitempty"`
+	ErrorKind   string `json:"error_kind,omitempty"`
 	Deadline    bool   `json:"deadline"`
 	StdoutLimit bool   `json:"stdout_limit"`
 	StderrLimit bool   `json:"stderr_limit"`
@@ -70,10 +71,36 @@ func captureProjectNative(parent context.Context, executable, cwd string, env, a
 		result.Exit = command.ProcessState.ExitCode()
 	}
 	if err != nil {
+		result.ErrorKind = projectNativeErrorKind(err, ctx.Err())
 		result.Error = err.Error()
 		if len(result.Error) > 512 {
 			result.Error = result.Error[:512]
 		}
 	}
 	return result
+}
+
+func projectNativeErrorKind(err, contextErr error) string {
+	if contextErr != nil {
+		return "context"
+	}
+	if err == nil {
+		return ""
+	}
+	if _, ok := err.(*exec.ExitError); ok {
+		return "exit"
+	}
+	return "capture"
+}
+func projectNativeCaptureAdmission(result projectNativeCaptureResult, expectedAbsent bool) error {
+	if result.Deadline || result.StdoutLimit || result.StderrLimit {
+		return errors.New("capture deadline or stream limit")
+	}
+	if result.Error == "" && result.ErrorKind == "" && result.Exit == 0 {
+		return nil
+	}
+	if expectedAbsent && result.Error != "" && result.ErrorKind == "exit" && result.Exit == 1 {
+		return nil
+	}
+	return errors.New("process/capture did not complete cleanly")
 }

@@ -2,10 +2,12 @@ package pluginkitairepo_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -170,5 +172,94 @@ func TestProjectNativeCaptureCapsEveryChildClass(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestOpenCodeProjectCaptureRefusesWaitDelayAndRecognizesOnlyExactAbsence(t *testing.T) {
+	if projectNativeErrorKind(exec.ErrWaitDelay, nil) != "capture" || projectNativeErrorKind(&exec.ExitError{}, nil) != "exit" || projectNativeErrorKind(errors.Join(&exec.ExitError{}, exec.ErrWaitDelay), nil) != "capture" || projectNativeErrorKind(&exec.ExitError{}, context.Canceled) != "context" {
+		t.Fatal("capture/exit/context causes were conflated")
+	}
+	partial := projectNativeCaptureResult{Exit: 0, Stdout: []byte(`{"mcp":{}}`), Error: exec.ErrWaitDelay.Error(), ErrorKind: "capture"}
+	if projectNativeCaptureAdmission(partial, false) == nil || projectNativeCaptureAdmission(partial, true) == nil {
+		t.Fatal("valid partial JSON after WaitDelay was admitted")
+	}
+	first := "agentplugins: installation \"" + commandsPluginName + "\" was not found\n"
+	second := "agentplugins: plugin is not installed for target \"opencode\" in project scope; no target was changed\n"
+	for _, line := range []string{first, second} {
+		result := projectNativeCaptureResult{Exit: 1, Error: "exit status 1", ErrorKind: "exit", Stderr: []byte(line)}
+		if projectNativeCaptureAdmission(result, true) != nil || !openCodeProjectAbsentRemoval(result) {
+			t.Fatal("exact source absence refused")
+		}
+	}
+	for _, kind := range []string{"other-stderr", "extra-stdout", "extra-stderr", "signal", "capture", "context", "no-typed-cause"} {
+		result := projectNativeCaptureResult{Exit: 1, Error: "exit status 1", ErrorKind: "exit", Stderr: []byte(first)}
+		switch kind {
+		case "other-stderr":
+			result.Stderr = []byte("not found somewhere else\n")
+		case "extra-stdout":
+			result.Stdout = []byte(`{}`)
+		case "extra-stderr":
+			result.Stderr = append(result.Stderr, []byte("warning\n")...)
+		case "signal":
+			result.Exit = -1
+		case "capture":
+			result.ErrorKind = "capture"
+		case "context":
+			result.ErrorKind = "context"
+		case "no-typed-cause":
+			result.ErrorKind = ""
+		}
+		if openCodeProjectAbsentRemoval(result) {
+			t.Fatal("unrecognized failed operation became absence", kind)
+		}
+	}
+}
+func TestOpenCodeProjectSnapshotIsBoundedStableAndDoesNotFollowLeafLinks(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "owned.json")
+	if err := os.WriteFile(path, []byte("inert"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := readProjectNativeSnapshot(path, before, 5)
+	if err != nil || string(body) != "inert" {
+		t.Fatalf("stable snapshot %q %v", body, err)
+	}
+	if _, err := readProjectNativeSnapshot(path, before, 4); err == nil {
+		t.Fatal("snapshot cap ignored")
+	}
+	if err := os.WriteFile(path, []byte("larger replacement"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readProjectNativeSnapshot(path, before, 5); err == nil {
+		t.Fatal("post-stat growth accepted")
+	}
+	foreign := filepath.Join(root, "foreign")
+	if err := os.WriteFile(foreign, []byte("inert"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(foreign, path); err != nil {
+		t.Log("symlink unavailable", err)
+		return
+	}
+	if _, err := readProjectNativeSnapshot(path, before, 5); err == nil {
+		t.Fatal("leaf alias accepted")
+	}
+}
+func TestOpenCodeProjectConfigRejectsMalformedEnabled(t *testing.T) {
+	for _, flag := range []string{`null`, `"true"`, `0`, `false`} {
+		config, err := openCodeProjectConfig([]byte(`{"mcp":{"marker":{"type":"remote","url":"http://127.0.0.1:9/A","enabled":` + flag + `}}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if openCodeProjectCheckConfig(config, map[string]string{"marker": "http://127.0.0.1:9/A"}, nil) == nil {
+			t.Fatal("malformed or disabled entry qualified", flag)
+		}
 	}
 }

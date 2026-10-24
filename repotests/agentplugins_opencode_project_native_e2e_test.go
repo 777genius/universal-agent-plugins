@@ -34,7 +34,7 @@ func TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle(t *testing.T) {
 	// Snapshot only original user ownership/config/state and B's installed state,
 	// native files and package receipts; vendor caches are separate bootstrap effects.
 	userRoots := []string{filepath.Join(f.work, "xdg-config", "opencode", "opencode.jsonc"), filepath.Join(f.work, "xdg-config", "opencode", "skills", "uap-user-control"), filepath.Join(f.state, "state-v2.json")}
-	otherRoots := []string{filepath.Join(f.B, ".uap"), filepath.Join(f.B, ".opencode", "skills")}
+	otherRoots := []string{filepath.Join(f.B, ".uap"), filepath.Join(f.B, ".opencode", "skills"), filepath.Join(f.B, "opencode.jsonc")}
 	userBefore, otherBefore := f.snapshot(t, userRoots...), f.snapshot(t, otherRoots...)
 	nativeAttempt(f.stages, "unchanged_lifecycle", "opencode-project-evidence.json")
 	stable := f.snapshot(t, filepath.Join(f.A, ".uap", "state-v2.json"), filepath.Join(f.A, ".opencode", "skills"), filepath.Join(f.A, "opencode.jsonc"))

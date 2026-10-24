@@ -65,3 +65,31 @@ Released, draft and prepared-installer project selection still refuses.
 Two independent code reviews, relevant final lint/platform compilation and the
 actual hosted macOS-arm64/Windows-amd64 project observations remain pending.
 Nothing here qualifies a released installer or successful MCP initialization.
+
+## Independent code review correction
+
+Initial frozen c8a5eaa6 received NO-GO from both Root and Skillshare. Both found
+that exit0 with a nonempty exec.ErrWaitDelay could admit valid partial JSON, and
+that exact B/opencode.jsonc bytes were missing from the original snapshot. Root
+also required bounded cap+1 snapshot reads after the initial size check. All
+findings are corrected in the narrow revision: capture/context errors are typed
+separately from a pure *exec.ExitError and refuse before parsing; the sole expected
+repeat-removal exit1 is classified by exact source-established absence text;
+B's entire native config bytes are included; stable no-follow held-file snapshots
+read only the remaining byte cap plus one and revalidate path/held identity.
+Malformed present MCP enabled fields now refuse as well.
+
+The actual early repeated-removal error precedes the JSON renderer:
+remove_multi.go prepare/selectInstallation (read.go645) or buildInputs116 returns
+an error, and cmd/agentplugins/main.go emits one fixed agentplugins stderr line.
+Only empty stdout plus the exact two absence messages for the fixed fixture
+name/target/scope, a pure ExitError with exit1, and unchanged owned state/files
+are accepted. Other stderr, extra output, signal, capture/context error or failed
+native JSON cannot become successful discovery. No public schema was invented.
+
+New inert negatives cover exit0 plus WaitDelay and valid JSON, wrapped exit/capture
+causes, both exact absence forms and counterexamples, post-stat growth/size/leaf
+alias refusal, and malformed enabled values. The complete focused inert Go set
+passed0.075s with guarded native opt-in absent; earlier69 Python admission/matrix
+tests remain unchanged by this Go-only correction. Both narrow code re-review
+GOs and final platform/lint gates remain required before publication.

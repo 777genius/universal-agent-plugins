@@ -205,8 +205,8 @@ func (f *openCodeProjectFixture) command(t *testing.T, class, label, exe, cwd st
 	f.keep(t, outName, result.Stdout)
 	f.keep(t, errName, result.Stderr)
 	digest := func(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
-	f.records = append(f.records, map[string]any{"class": class, "label": label, "argv": append([]string{exe}, args...), "cwd": cwd, "exit": result.Exit, "error": result.Error, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit, "elapsed_ms": result.ElapsedMS, "stdout_file": outName, "stderr_file": errName, "stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr), "stdout_sha256": digest(result.Stdout), "stderr_sha256": digest(result.Stderr), "recorder_before": before, "recorder_after": after})
-	if before != [2]int64{} || after != [2]int64{} || result.Deadline || result.StdoutLimit || result.StderrLimit {
+	f.records = append(f.records, map[string]any{"class": class, "label": label, "argv": append([]string{exe}, args...), "cwd": cwd, "exit": result.Exit, "error": result.Error, "error_kind": result.ErrorKind, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit, "elapsed_ms": result.ElapsedMS, "stdout_file": outName, "stderr_file": errName, "stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr), "stdout_sha256": digest(result.Stdout), "stderr_sha256": digest(result.Stderr), "recorder_before": before, "recorder_after": after})
+	if before != [2]int64{} || after != [2]int64{} || projectNativeCaptureAdmission(result, class == "uap" && label == "repeat-remove-A") != nil {
 		f.failed = true
 		t.Fatal("child deadline/output limit or unexpected MCP connection; see bounded evidence")
 	}
@@ -282,18 +282,19 @@ func (f *openCodeProjectFixture) run(t *testing.T, label, project string, args .
 	}
 	args = append(args, "--target", "opencode", "--format", "json")
 	r := f.command(t, "uap", label, f.installer, cwd, f.env(), args)
+	if label == "repeat-remove-A" {
+		if !openCodeProjectAbsentRemoval(r) {
+			t.Fatal("repeat removal did not give exact source-established absence refusal")
+		}
+		f.evidence["repeat_remove_contract"] = "empty stdout; exact fixed stderr; pure ExitError exit1; unchanged owned state/files"
+		return nil
+	}
 	if len(bytesTrim(r.Stderr)) != 0 {
 		t.Fatal("public UAP emitted dirty stderr; see evidence")
 	}
 	result, err := openCodeProjectConfig(r.Stdout)
 	if err != nil {
 		t.Fatalf("public UAP whole JSON: %v", err)
-	}
-	if label == "repeat-remove-A" {
-		if r.Exit == 0 || result["result"] == "success" || !strings.Contains(string(r.Stdout), "not found") {
-			t.Fatal("repeat removal did not give recognized absent-installation refusal")
-		}
-		return result
 	}
 	if r.Exit != 0 || result["result"] != "success" {
 		t.Fatal("public UAP operation failed; see exact bounded evidence")
@@ -422,7 +423,7 @@ func (f *openCodeProjectFixture) snapshot(t *testing.T, roots ...string) map[str
 			if !info.Mode().IsRegular() || info.Size() > 1<<20 || total+info.Size() > 4<<20 {
 				return fmt.Errorf("snapshot refuses type/size")
 			}
-			body, err := os.ReadFile(path)
+			body, err := readProjectNativeSnapshot(path, info, min(int64(1<<20), (4<<20)-total))
 			if err != nil {
 				return err
 			}
