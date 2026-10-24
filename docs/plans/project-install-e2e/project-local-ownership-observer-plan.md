@@ -131,5 +131,18 @@ published with identical tree as 689296a62ea2415b32fd00036cceaac4790df250.
 Those conditions are incorporated above. No global
 UsesNativeRegistryExecutable()==false gate is introduced: scoped policy and
 an explicitly runner-free inspection control this path. Missing inspector,
-missing kernel and unknown findings remain fail-closed. R2 reviews are pending;
-no production changes have been made for this plan.
+missing kernel and unknown findings remain fail-closed.
+
+R2 independently reviewed exact local
+`75e2f12f1ac7c587e817092ad90ce2d4fa9a2dc2`, before production implementation:
+
+- skillshare_scope: GO. Traced groupRecoveryPostApplyVerify and its exact recorded
+  digest requirement; prepared restoration does not require or promote native
+  reconciliation. The genuine pending-attempt and foreign-component negatives
+  remain mandatory implementation gates.
+- claude_codex_scope: GO. Rechecked complete scope/client/canonical-root/original
+  authority admission, runner-free dispatch, missing capability refusal and the
+  documented group-restoration eligibility effect. No remaining plan blocker.
+
+Both review rounds are complete. Production implementation must still pass the
+concrete regressions above and two independent frozen-source code reviews.
