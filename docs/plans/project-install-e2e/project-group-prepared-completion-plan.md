@@ -162,3 +162,14 @@ are preserved. No weakening of core guards, assertion meaning or evidence gates
 is authorized by this reporting correction.
 
 No production source has been changed for this plan revision.
+
+## Independent final plan approvals
+
+APM and Skillshare independently gave final R2 PLAN GO on frozen
+bd721cd3ef1bed12b983bc11575d8afd2e0c800e after reading the full revised
+plan and actual SDK/core seams. Both confirmed that their R1 refinements are
+incorporated, including positive outcome enums, exact binding authority,
+pending-attempt refusal, fail-closed loaded state, real mutation preservation,
+fresh actions and callback behavior. Neither review executed a vendor client
+or treated presentation completion as native activation. Implementation and
+two frozen code reviews follow this approved plan.
