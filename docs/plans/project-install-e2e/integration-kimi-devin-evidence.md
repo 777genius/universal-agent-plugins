@@ -11,3 +11,7 @@ The known inherited Codex TOML dependency-closure issue remains an independent r
 ## Fresh combined public CLI execution
 
 At documentation-only successor 6401a953 (production unchanged from a9dd4402), the actual command `go test -p=2 ./cli/cmd/agentplugins -run 'Test.*Project' -count=1 -timeout=5m` passed in **97.217s**, using verified Go 1.26.10 and the production composed CLI tests on Linux. This includes the assembled project source/lifecycle/ownership contracts; it is not native vendor-client execution, a Windows/macOS pass, or a claim that the full planner/architecture gates are green. Both previously recorded planner failures remain required follow-ups.
+
+## Independent integration reviews
+
+Two GPT-6.1 Sol xhigh reviewers independently approved the exact production union at a9dd44022252a0ee96c82d6840b4e9e880e5c606. Their preserved reports are `integration-kimi-devin-restored-r1.md` and `integration-kimi-devin-r2.md`. Both distinguish the successful Linux public CLI and selected codec/domain checks from the remaining planner, architecture, cross-platform, and native-runtime qualification gates. This documentation checkpoint changes no production or test bytes.
