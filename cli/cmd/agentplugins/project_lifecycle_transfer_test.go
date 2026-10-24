@@ -15,7 +15,7 @@ func TestProjectComposedAgreementColdRestoreUsesPortablePins(t *testing.T) {
 			original.run(t, original.a, "add", transport.endpoint, "--alias", "docs", "--target", "gemini")
 			installation := original.assertOwnedContext(t, original.a)
 			pair := original.assertPortablePair(t, original.a)
-			exchange := t.TempDir()
+			exchange := projectJourneyTemp(t)
 			original.run(t, original.a, "deps", "export", exchange, "--yes")
 			if pair != original.assertPortablePair(t, exchange) {
 				t.Fatal("export changed the exact portable agreement")

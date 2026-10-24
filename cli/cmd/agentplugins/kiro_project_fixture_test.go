@@ -26,7 +26,7 @@ type kiroProjectJourney struct{ projectJourney }
 
 func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kiroProjectJourney {
 	t.Helper()
-	f := kiroProjectJourney{projectJourney{home: t.TempDir(), a: t.TempDir(), b: t.TempDir(), transport: transport}}
+	f := kiroProjectJourney{projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}}
 	f.cache = filepath.Join(f.home, "uap")
 	for _, root := range []string{"", f.a, f.b} {
 		native := f.kiroRoot(root)

@@ -15,9 +15,9 @@ import (
 
 func projectCompositionFixture(t *testing.T) (agentpluginscli.App, string, string, string) {
 	t.Helper()
-	home := t.TempDir()
+	home := projectJourneyTemp(t)
 	user := filepath.Join(home, "user-uap")
-	a, b := t.TempDir(), t.TempDir()
+	a, b := projectJourneyTemp(t), projectJourneyTemp(t)
 	registry, err := specregistry.New()
 	if err != nil {
 		t.Fatal(err)

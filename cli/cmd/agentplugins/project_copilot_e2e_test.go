@@ -70,6 +70,9 @@ func projectCopilotUpdateRemove(t *testing.T, journey projectJourney, installati
 			t.Fatalf("Copilot status omitted %s: %s", expected, status)
 		}
 	}
+	if strings.Contains(status, "--activation-complete") || strings.Contains(status, `"attest_activation"`) || !strings.Contains(status, `"review_project_activation"`) {
+		t.Fatalf("prepared project status suggested unsupported promotion: %s", status)
+	}
 	journey.run(t, journey.a, "remove", "docs", "--target", "copilot")
 	projectJourneyAbsent(t, binding.TargetLocator, filepath.Join(journey.a, ".github", "skills", "docs"))
 	config := projectJourneyRead(t, filepath.Join(journey.a, ".mcp.json"))

@@ -69,7 +69,7 @@ func kiroProjectUpdateAndTransfer(t *testing.T, f kiroProjectJourney) {
 		t.Fatal("Kiro update did not retain source/binding authority while advancing the pin")
 	}
 	pair := f.assertPortablePair(t, f.a)
-	exchange := t.TempDir()
+	exchange := projectJourneyTemp(t)
 	f.run(t, f.a, "deps", "export", exchange, "--yes")
 	if pair != f.assertPortablePair(t, exchange) {
 		t.Fatal("Kiro export changed exact portable pins")
