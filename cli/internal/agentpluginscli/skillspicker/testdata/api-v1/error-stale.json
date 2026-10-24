@@ -1,0 +1,5 @@
+{
+  "code": "PLAN_STALE",
+  "message": "Installation facts changed; prepare a new review",
+  "retryable": false
+}

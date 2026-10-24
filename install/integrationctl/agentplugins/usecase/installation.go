@@ -360,3 +360,15 @@ func (service Service) freezeProfile(ctx context.Context, state domain.StateFile
 	c.ProfileAuthority = domain.CloneProfileAuthority(c.ProfileAuthority)
 	return c, nil
 }
+
+// A moved Skill retains the environment's explicit stable source authority;
+// ordinary direct packages keep their historical repository/path rule.
+func managedDirectSource(installation domain.Installation, input AddInput) bool {
+	if input.EnvironmentAuthority == nil || normalizedOriginMode(input.OriginMode) != domain.OriginModeDirect || installation.Source.Repository != input.Envelope.Source.Repository {
+		return false
+	}
+	if installation.Source.StableSourceKey != "" {
+		return input.Envelope.Source.SourceBindingHint == "uap-dependency-skill" && installation.Source.StableSourceKey == input.Envelope.Source.StableSourceKey && input.EnvironmentAuthority.SourceKey == installation.Source.StableSourceKey
+	}
+	return installation.Source.PackageSubpath == input.Envelope.Source.PackageSubpath
+}

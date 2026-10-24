@@ -188,3 +188,77 @@ func selectExactGitRef(output []byte, patterns []string, selector, resolvedRef s
 	}
 	return match, nil
 }
+
+// ResolveGitHubURLPath compares ref/path boundaries against one bounded remote
+// refs observation. It never guesses that a ref ends at the first slash.
+func (acquirer Acquirer) ResolveGitHubURLPath(ctx context.Context, repository, tail, explicitRef string) (RefResolution, string, error) {
+	if !repositoryPattern.MatchString(repository) || tail == "" || len(tail) > 4096 {
+		return RefResolution{}, "", fmt.Errorf("invalid GitHub URL ref/path")
+	}
+	if explicitRef != "" {
+		short := shortGitRef(explicitRef)
+		if tail != short && !strings.HasPrefix(tail, short+"/") {
+			return RefResolution{}, "", fmt.Errorf("URL does not match explicit ref")
+		}
+		p := strings.TrimPrefix(strings.TrimPrefix(tail, short), "/")
+		if err := ValidateSkillPath(p); err != nil {
+			return RefResolution{}, "", err
+		}
+		r, e := acquirer.ResolveGitHubRef(ctx, repository, explicitRef)
+		return r, p, e
+	}
+	first, p, _ := strings.Cut(tail, "/")
+	if fullSHA.MatchString(first) {
+		if err := ValidateSkillPath(p); err != nil {
+			return RefResolution{}, "", err
+		}
+		return RefResolution{RequestedRef: first, Commit: first}, p, nil
+	}
+	url := "https://github.com/" + repository + ".git"
+	if acquirer.URLForRepo != nil {
+		url = acquirer.URLForRepo(repository)
+	}
+	out, err := acquirer.runner().Run(ctx, Command{Dir: acquirer.TempRoot, Args: []string{"ls-remote", "--refs", url}, MaxOutputBytes: maxGitHubDiscoveryMetadataBytes})
+	if err != nil {
+		return RefResolution{}, "", gitAcquisitionFailure(repository, "URL", "enumerate Git refs")
+	}
+	matches, paths := urlRefMatches(out, tail)
+	if len(matches) != 1 {
+		return RefResolution{}, "", fmt.Errorf("GitHub URL ref/path is unavailable or ambiguous; provide --ref")
+	}
+	r := matches[0]
+	commit, err := acquirer.resolveCommit(ctx, url, repository, r.object)
+	if err != nil {
+		return RefResolution{}, "", err
+	}
+	return RefResolution{RequestedRef: r.name, ResolvedRef: r.name, Commit: commit}, paths[0], nil
+}
+
+func shortGitRef(ref string) string {
+	for _, prefix := range []string{"refs/heads/", "refs/tags/"} {
+		if strings.HasPrefix(ref, prefix) {
+			return strings.TrimPrefix(ref, prefix)
+		}
+	}
+	return ref
+}
+func urlRefMatches(output []byte, tail string) ([]remoteRef, []string) {
+	var matches []remoteRef
+	var paths []string
+	for _, r := range parseRefs(output) {
+		short := shortGitRef(r.name)
+		if short == r.name {
+			continue
+		}
+		if tail != short && !strings.HasPrefix(tail, short+"/") {
+			continue
+		}
+		p := strings.TrimPrefix(strings.TrimPrefix(tail, short), "/")
+		if ValidateSkillPath(p) != nil {
+			continue
+		}
+		matches = append(matches, r)
+		paths = append(paths, p)
+	}
+	return matches, paths
+}

@@ -136,6 +136,7 @@ type SourceBinding struct {
 	SourceKind       string `json:"source_kind,omitempty"`
 	SourceURL        string `json:"source_url,omitempty"`
 	ArchiveSHA256    string `json:"archive_sha256,omitempty"`
+	StableSourceKey  string `json:"stable_source_key,omitempty"`
 	SourceBindingID  string `json:"source_binding_id"`
 	RequestedSource  string `json:"requested_source"`
 	CanonicalSource  string `json:"canonical_source"`
@@ -203,13 +204,14 @@ type MutationReceipt struct {
 // projected into one client. Installation.Package is the latest accepted
 // revision, while individual clients may temporarily converge one at a time.
 type ClientPackageRevision struct {
-	Version          string           `json:"version,omitempty"`
-	ResolvedRevision string           `json:"resolved_revision,omitempty"`
-	TreeDigest       string           `json:"tree_digest"`
-	ManifestDigest   string           `json:"manifest_digest"`
-	DistributionID   string           `json:"distribution_id,omitempty"`
-	ReleaseSequence  uint64           `json:"release_sequence,omitempty"`
-	CatalogEvidence  *CatalogEvidence `json:"catalog_evidence,omitempty"`
+	Skill            *SkillSourceFacts `json:"skill,omitempty"`
+	Version          string            `json:"version,omitempty"`
+	ResolvedRevision string            `json:"resolved_revision,omitempty"`
+	TreeDigest       string            `json:"tree_digest"`
+	ManifestDigest   string            `json:"manifest_digest"`
+	DistributionID   string            `json:"distribution_id,omitempty"`
+	ReleaseSequence  uint64            `json:"release_sequence,omitempty"`
+	CatalogEvidence  *CatalogEvidence  `json:"catalog_evidence,omitempty"`
 }
 
 type ClientBinding struct {

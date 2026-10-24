@@ -951,6 +951,18 @@
       "nonEmptyOptions": "{component}“{label}”选项必须使用非空值",
       "unknownValue": "{component}“{label}”收到未知值",
       "selectionRequired": "{component} “{label}” 需要至少一个选定的值"
+    },
+    "authenticationIndicator": {
+      "required": "需要身份验证",
+      "not_required": "无需身份验证",
+      "unknown": "身份验证要求未知",
+      "varies": "身份验证要求因代理而异",
+      "automatic": "运行命令时会检测已安装的代理。请在安装中选择代理以查看其要求。",
+      "unresolved": "尚未确定这些代理的安装方案。请选择受支持的代理以查看要求。",
+      "release": "{id} · 版本 {sequence}",
+      "requiredDetail": "此包可能需要账户、令牌或登录；这并不指定 OAuth，也不确认您已登录。",
+      "not_requiredDetail": "这些代理未声明身份验证要求。仍可能存在服务限制和其他设置要求。",
+      "unknownDetail": "连接前请检查包的要求。"
     }
   }
 }

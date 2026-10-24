@@ -402,8 +402,8 @@ func TestSkillFieldAndFramingOrigins(t *testing.T) {
 		})
 	}
 	body := append([]byte{0xef, 0xbb, 0xbf}, skillInput("good", "").Document.Bytes()...)
-	if _, e := ParseInstallerSkill("good", body); e == nil {
-		t.Fatal("installer BOM behavior changed")
+	if _, e := ParseInstallerSkill("good", body); e != nil {
+		t.Fatal("installer and author BOM admission differ")
 	}
 	f, e := d.DecodeSkill(context.Background(), SkillInput{"good", NewDocument("skills/good/SKILL.md", Present, body)})
 	if e != nil || f.Coverage.Skills != Pass || string(f.Package.Skills["good"].Raw) != string(body) {

@@ -33,6 +33,9 @@ func legacyGitIdentity(repository, commit, packagePath, hint string) domain.Sour
 
 func identityFromLocked(pin environment.LockedPackage) domain.SourceIdentity {
 	if source := pin.Source.Git; source != nil {
+		if source.Kind == environment.SkillKind {
+			return skillSnapshotSource(pin)
+		}
 		if source.Repository != "" {
 			return legacyGitIdentity(source.Repository, source.Commit, source.Path, "uap-dependency-git")
 		}
@@ -66,6 +69,9 @@ func (app App) acquireDependencyGit(ctx context.Context, source environment.GitS
 
 func (app App) acquirePinnedSource(ctx context.Context, pin environment.LockedPackage) (domain.PackageSnapshot, error) {
 	if source := pin.Source.Git; source != nil {
+		if source.Kind == environment.SkillKind {
+			return app.acquireLockedSkill(ctx, pin)
+		}
 		return app.acquireDependencyGit(ctx, environment.GitSource{Repository: source.Repository, URL: source.URL, Path: source.Path}, source.Commit, pin.TreeDigest)
 	}
 	if source := pin.Source.Archive; source != nil {

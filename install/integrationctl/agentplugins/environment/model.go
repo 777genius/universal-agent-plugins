@@ -49,8 +49,13 @@ type Selector struct {
 	Value string       `json:"value,omitempty"`
 }
 
+const SkillKind = "skill"
+const SkillNormalizerV1 = "agent-skill-package/v1"
+
 type GitSource struct {
 	URL        string   `json:"url,omitempty"`
+	Kind       string   `json:"kind,omitempty"`
+	Skill      string   `json:"skill,omitempty"`
 	Repository string   `json:"repository,omitempty"`
 	Path       string   `json:"path,omitempty"`
 	Selector   Selector `json:"selector"`
@@ -94,13 +99,18 @@ type LockedSource struct {
 }
 
 type LockedGitSource struct {
-	URL           string   `json:"url,omitempty"`
-	Repository    string   `json:"repository,omitempty"`
-	Path          string   `json:"path,omitempty"`
-	Requested     Selector `json:"requested"`
-	Commit        string   `json:"commit"`
-	ResolvedRef   string   `json:"resolved_ref,omitempty"`
-	DefaultBranch string   `json:"default_branch,omitempty"`
+	URL               string   `json:"url,omitempty"`
+	Kind              string   `json:"kind,omitempty"`
+	Skill             string   `json:"skill,omitempty"`
+	ResolvedSkillPath string   `json:"resolved_skill_path,omitempty"`
+	RawTreeDigest     string   `json:"raw_tree_digest,omitempty"`
+	Normalizer        string   `json:"normalizer,omitempty"`
+	Repository        string   `json:"repository,omitempty"`
+	Path              string   `json:"path,omitempty"`
+	Requested         Selector `json:"requested"`
+	Commit            string   `json:"commit"`
+	ResolvedRef       string   `json:"resolved_ref,omitempty"`
+	DefaultBranch     string   `json:"default_branch,omitempty"`
 }
 
 type LockedRegistrySource struct {
@@ -250,6 +260,9 @@ func (requirement Requirement) Validate() error {
 		return requirement.Archive.Validate()
 	}
 	if requirement.Git != nil {
+		if err := validateSkillSource(requirement.Git); err != nil {
+			return err
+		}
 		if err := requirement.Git.ValidateEndpoint(); err != nil {
 			return err
 		}
@@ -330,6 +343,9 @@ func (requirement Requirement) SourceKey() (string, error) {
 		return "", err
 	}
 	if requirement.Git != nil {
+		if requirement.Git.Kind == SkillKind {
+			return "github-skill:" + strings.ToLower(requirement.Git.Repository) + ":" + requirement.Git.Skill + ":" + requirement.Git.Path, nil
+		}
 		if requirement.Git.URL != "" {
 			return sourcespec.Key(sourcespec.KindGit, requirement.Git.URL, requirement.Git.Path), nil
 		}
@@ -434,9 +450,12 @@ func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
 func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 	if requirement.Git != nil {
 		if pkg.Source.Git == nil || pkg.Source.Registry != nil || pkg.Source.Archive != nil || pkg.Source.Git.URL != requirement.Git.URL || !strings.EqualFold(pkg.Source.Git.Repository, requirement.Git.Repository) ||
-			pkg.Source.Git.Path != requirement.Git.Path || pkg.Source.Git.Requested != requirement.Git.Selector ||
+			pkg.Source.Git.Path != requirement.Git.Path || pkg.Source.Git.Kind != requirement.Git.Kind || pkg.Source.Git.Skill != requirement.Git.Skill || pkg.Source.Git.Requested != requirement.Git.Selector ||
 			!commitPattern.MatchString(pkg.Source.Git.Commit) {
 			return errors.New("locked Git identity does not match manifest")
+		}
+		if err := validateLockedSkill(pkg.Source.Git); err != nil {
+			return err
 		}
 		if requirement.Git.Selector.Kind == SelectorCommit && pkg.Source.Git.Commit != requirement.Git.Selector.Value {
 			return errors.New("locked commit differs from exact selector")

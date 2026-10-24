@@ -81,9 +81,9 @@ for (const locale of locales) {
     await expect(card.locator('.command-snippet code')).toContainText('--target codex');
     await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
     await targets(page, card, ['Cursor']);
-    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authentication.varies'));
+    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.varies'));
     await targets(page, card, ['Codex']);
-    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authentication.required'));
+    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.required'));
     await expect(card.locator('.command-snippet code')).toContainText('--target cursor');
     await card.locator('.app-multiselect__trigger').click();
     const auto = page.locator('.app-multiselect__auto');

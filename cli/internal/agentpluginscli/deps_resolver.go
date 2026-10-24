@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/environmentstore"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
@@ -90,14 +91,13 @@ func sameRequestedSelector(requirement environment.Requirement, previous environ
 
 func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	source := requirement.Git
-	commit := source.Selector.Value
-	resolvedRef, defaultBranch := "", ""
-	if source.Selector.Kind != environment.SelectorCommit {
-		resolution, err := resolver.app.resolveDependencyGit(ctx, *source)
-		if err != nil {
-			return environment.LockedPackage{}, err
-		}
-		commit, resolvedRef, defaultBranch = resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
+	resolution, err := resolver.resolveGitSelector(ctx, source)
+	if err != nil {
+		return environment.LockedPackage{}, err
+	}
+	commit, resolvedRef, defaultBranch := resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
+	if source.Kind == environment.SkillKind {
+		return resolver.resolveSkill(ctx, requirement, targets, previous, commit, resolvedRef, defaultBranch)
 	}
 	snapshot, err := resolver.app.acquireDependencyGit(ctx, *source, commit, "")
 	if err != nil {
@@ -149,6 +149,13 @@ func (resolver dependencyResolver) resolveArchive(ctx context.Context, requireme
 		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
 	return locked, resolver.finishLoaded(ctx, loaded, locked)
+}
+
+func (resolver dependencyResolver) resolveGitSelector(ctx context.Context, source *environment.GitSource) (sourceacquisition.RefResolution, error) {
+	if source.Selector.Kind == environment.SelectorCommit {
+		return sourceacquisition.RefResolution{Commit: source.Selector.Value}, nil
+	}
+	return resolver.app.resolveDependencyGit(ctx, *source)
 }
 
 func (resolver dependencyResolver) resolveRegistry(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {

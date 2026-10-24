@@ -84,7 +84,7 @@ func validateLockedArchive(requirement Requirement, pkg LockedPackage) error {
 func (pkg LockedPackage) Requirement() Requirement {
 	r := Requirement{Alias: pkg.Alias}
 	if s := pkg.Source.Git; s != nil {
-		r.Git = &GitSource{Repository: s.Repository, URL: s.URL, Path: s.Path, Selector: s.Requested}
+		r.Git = &GitSource{Repository: s.Repository, URL: s.URL, Path: s.Path, Selector: s.Requested, Kind: s.Kind, Skill: s.Skill}
 	}
 	if s := pkg.Source.Archive; s != nil {
 		r.Archive = &ArchiveSource{URL: s.URL, Path: s.Path, SHA256: s.RequestedSHA256}

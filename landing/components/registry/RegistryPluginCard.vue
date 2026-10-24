@@ -6,12 +6,12 @@
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import {
-  authenticationState,
   expectedDistribution,
   githubSourceUrl,
   resolveDistribution,
   vendorInstallSource,
 } from '~/utils/registry';
+import { authenticationIndicator } from '~/utils/authentication';
 import { pluginCommands } from '~/utils/commands';
 const { t, locale, n } = useI18n();
 const localePath = useLocalePath();
@@ -152,19 +152,11 @@ const targetOptions = computed(() =>
     })(),
   })),
 );
-const authLabel = computed(() =>
-  t(
-    `registryUi.authentication.${authenticationState(resolution.value.distribution, targets.value, props.plugin.authentication)}`,
-  ),
+const authentication = computed(() =>
+  authenticationIndicator(selectedDistribution.value, targets.value, autoDetect.value, t),
 );
 const showAuthentication = computed(
-  () =>
-    !autoDetect.value &&
-    authenticationState(
-      resolution.value.distribution,
-      targets.value,
-      props.plugin.authentication,
-    ) !== 'not_required',
+  () => !autoDetect.value && authentication.value.state !== 'not_required',
 );
 const repositoryStars = computed(() =>
   new Intl.NumberFormat(locale.value, {
@@ -330,18 +322,30 @@ function updateAutoDetect(value: boolean) {
       </ul>
     </details>
     <div class="plugin-card__bottom">
-      <button
-        v-if="canInstall"
-        type="button"
-        class="plugin-card__install-toggle"
-        :aria-controls="installPanelId"
-        :aria-expanded="installExpanded"
-        :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
-        @click="toggleInstall"
-      >
-        {{ t('registryUi.card.install') }}
-      </button>
-      <template v-else-if="vendorInstall">
+      <div class="plugin-card__actions">
+        <AuthenticationIndicator :indicator="authentication" />
+        <button
+          v-if="canInstall"
+          type="button"
+          class="plugin-card__install-toggle"
+          :aria-controls="installPanelId"
+          :aria-expanded="installExpanded"
+          :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
+          @click="toggleInstall"
+        >
+          {{ t('registryUi.card.install') }}
+        </button>
+        <span v-else-if="!vendorInstall" class="plugin-card__unavailable">{{
+          isDiscovered
+            ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
+            : expired
+              ? t('registryUi.card.commandsDisabledBecauseTheDirectoryIsTemporarilyStale')
+              : !published
+                ? t('registryUi.card.commandsDisabledInPreview')
+                : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
+        }}</span>
+      </div>
+      <template v-if="!canInstall && vendorInstall">
         <p class="plugin-card__unavailable">
           {{ t('registryUi.install.vendorInstallerHeading') }}
         </p>
@@ -353,15 +357,6 @@ function updateAutoDetect(value: boolean) {
           >{{ t('registryUi.install.vendorInstallerCta') }} ↗</a
         >
       </template>
-      <span v-else class="plugin-card__unavailable">{{
-        isDiscovered
-          ? t('registryUi.card.unavailableAtItsIndexedSourceNoInstallCommandIsGenerated')
-          : expired
-            ? t('registryUi.card.commandsDisabledBecauseTheDirectoryIsTemporarilyStale')
-            : !published
-              ? t('registryUi.card.commandsDisabledInPreview')
-              : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
-      }}</span>
       <Transition name="plugin-install">
         <div
           v-if="installExpanded && canInstall"
@@ -386,7 +381,7 @@ function updateAutoDetect(value: boolean) {
           >
             {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
           </p>
-          <p v-if="showAuthentication" class="plugin-card__auth">{{ authLabel }}</p>
+          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
           <ul
             v-if="!autoDetect && selectedDistribution"
             class="badge-list"
@@ -419,3 +414,15 @@ function updateAutoDetect(value: boolean) {
     </div>
   </article>
 </template>
+
+<style scoped lang="scss">
+.plugin-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plugin-card__actions > .plugin-card__install-toggle {
+  flex: 1;
+  width: auto;
+}
+</style>

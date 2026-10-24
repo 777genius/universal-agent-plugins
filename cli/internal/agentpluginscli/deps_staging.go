@@ -10,11 +10,15 @@ import (
 )
 
 type dependencySnapshotKey struct {
-	sourceKey, revision, algorithm, digest string
+	sourceKey, revision, algorithm, digest            string
+	kind, skill, requestedPath, rawDigest, normalizer string
 }
 
 func lockedDependencyCoordinates(locked environment.LockedPackage) (string, string, string, error) {
 	if source := locked.Source.Git; source != nil {
+		if source.Kind == environment.SkillKind {
+			return source.Repository, source.Commit, source.ResolvedSkillPath, nil
+		}
 		return source.Repository, source.Commit, source.Path, nil
 	}
 	if source := locked.Source.Registry; source != nil {
@@ -37,12 +41,27 @@ func (cache *dependencySnapshotCache) close() {
 	}
 }
 
-func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.LockedPackage) (domain.PackageSnapshot, error) {
+func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySnapshotKey, error) {
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil {
+		return dependencySnapshotKey{}, errors.New("locked package has no source")
+	}
 	sourceKey := locked.SourceKey
 	if sourceKey == "" {
 		sourceKey = identityFromLocked(locked).CanonicalSource
 	}
 	key := dependencySnapshotKey{sourceKey: sourceKey, revision: locked.Revision(), algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
+	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind {
+		key.kind, key.skill, key.requestedPath = source.Kind, source.Skill, source.Path
+		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
+	}
+	return key, nil
+}
+
+func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.LockedPackage) (domain.PackageSnapshot, error) {
+	key, err := lockedDependencySnapshotKey(locked)
+	if err != nil {
+		return domain.PackageSnapshot{}, err
+	}
 	cache := app.dependencySnapshots
 	var acquired domain.PackageSnapshot
 	var ok bool
@@ -51,7 +70,11 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 	}
 	if !ok {
 		var err error
-		acquired, err = app.acquirePinnedSource(ctx, locked)
+		if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
+			acquired, err = app.acquireLockedSkill(ctx, locked)
+		} else {
+			acquired, err = app.acquirePinnedSource(ctx, locked)
+		}
 		if err != nil {
 			return domain.PackageSnapshot{}, err
 		}
@@ -76,4 +99,11 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 		return domain.PackageSnapshot{}, errors.New("staged dependency no longer matches uap.lock")
 	}
 	return snapshot, nil
+}
+
+func lockedDependencySource(locked environment.LockedPackage) (domain.SourceIdentity, error) {
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil {
+		return domain.SourceIdentity{}, errors.New("locked package has no source")
+	}
+	return identityFromLocked(locked), nil
 }

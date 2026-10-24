@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,10 @@ type environmentSnapshot struct {
 }
 
 func snapshotEnvironment(cmd *cobra.Command, app App, verifyPrevious ...bool) (environmentSnapshot, error) {
+	return snapshotEnvironmentContext(cmd.Context(), app, verifyPrevious...)
+}
+
+func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...bool) (environmentSnapshot, error) {
 	s := environmentSnapshot{}
 	if err := requireDependencyMutationReady(app); err != nil {
 		return s, err
@@ -35,7 +40,7 @@ func snapshotEnvironment(cmd *cobra.Command, app App, verifyPrevious ...bool) (e
 	if app.Installer == nil {
 		return s, errors.New("typed SDK installer is unavailable")
 	}
-	view, err := app.Installer.Inspect(cmd.Context())
+	view, err := app.Installer.Inspect(ctx)
 	if err != nil {
 		return s, err
 	}
@@ -78,7 +83,7 @@ func snapshotEnvironment(cmd *cobra.Command, app App, verifyPrevious ...bool) (e
 		return s, err
 	}
 	if len(verifyPrevious) == 0 || verifyPrevious[0] {
-		if err := verifyDependencyDeclarations(cmd.Context(), app, s.Lock); err != nil {
+		if err := verifyDependencyDeclarations(ctx, app, s.Lock); err != nil {
 			return s, err
 		}
 	}
@@ -237,6 +242,7 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 			if value.Git != nil {
 				v.Git = value.Git.Endpoint()
 				v.Path = value.Git.Path
+				v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
 				switch value.Git.Selector.Kind {
 				case environment.SelectorCommit:
 					v.Commit = value.Git.Selector.Value

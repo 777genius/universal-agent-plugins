@@ -41,7 +41,7 @@ func TestInstallerFacadeCharacterization(t *testing.T) {
 		{"numeric-metadata", "metadata: {count: 5}\n", false, conformance.Fail},
 		{"nested-metadata", "metadata: {nested: {value: x}}\n", false, conformance.Fail},
 		{"empty-compatibility", "compatibility: ''\n", false, conformance.Fail},
-		{"unknown-field", "future: true\n", false, conformance.Pass},
+		{"unknown-field", "future: true\n", true, conformance.Pass},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()

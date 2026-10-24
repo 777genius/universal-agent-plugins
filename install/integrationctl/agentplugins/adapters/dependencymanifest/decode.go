@@ -17,6 +17,8 @@ import (
 type rawDependency struct {
 	Archive      string `toml:"archive"`
 	SHA256       string `toml:"sha256"`
+	Kind         string `toml:"kind"`
+	Skill        string `toml:"skill"`
 	Version      string `toml:"-"`
 	Git          string `toml:"git"`
 	Path         string `toml:"path"`
@@ -192,6 +194,9 @@ func decodeRawDependency(value any) (rawDependency, error) {
 }
 
 func requirementFromRaw(alias string, raw rawDependency) (environment.Requirement, error) {
+	if (raw.Kind != "" || raw.Skill != "") && raw.Git == "" {
+		return environment.Requirement{}, errors.New("kind and skill require a git source")
+	}
 	if raw.Version != "" {
 		return versionRequirement(alias, raw)
 	}
@@ -225,7 +230,7 @@ func rawSourceCount(raw rawDependency) int {
 }
 
 func versionRequirement(alias string, raw rawDependency) (environment.Requirement, error) {
-	if rawSourceCount(raw) != 0 || raw.SHA256 != "" || raw.Path != "" || raw.Ref != "" || raw.Commit != "" {
+	if rawSourceCount(raw) != 0 || raw.SHA256 != "" || raw.Path != "" || raw.Ref != "" || raw.Commit != "" || raw.Kind != "" || raw.Skill != "" {
 		return environment.Requirement{}, errors.New("version shortcut cannot contain source table fields")
 	}
 	selector, err := rawSelector(raw)
@@ -252,7 +257,7 @@ func gitRequirement(alias string, raw rawDependency, selector environment.Select
 	if err != nil {
 		return environment.Requirement{}, err
 	}
-	source := &environment.GitSource{Repository: repository, Path: raw.Path, Selector: selector}
+	source := &environment.GitSource{Repository: repository, Path: raw.Path, Selector: selector, Kind: raw.Kind, Skill: raw.Skill}
 	if repository == "" {
 		source.URL = normalized
 	}
@@ -340,7 +345,7 @@ func validateDependencyFields(path string, body []byte, alias string, value any)
 	}
 	for _, key := range sortedKeys(fields) {
 		switch key {
-		case "git", "path", "ref", "commit", "registry", "distribution", "archive", "sha256":
+		case "git", "path", "ref", "commit", "registry", "distribution", "archive", "sha256", "kind", "skill":
 			if _, ok := fields[key].(string); !ok {
 				return manifestError(path, body, fmt.Errorf("dependencies.%s.%s must be a string", alias, key), "dependencies", alias, key)
 			}

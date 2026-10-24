@@ -47,7 +47,7 @@ func (acquirer Acquirer) AcquireGit(ctx context.Context, source sourcespec.Git, 
 	if err != nil {
 		return domain.PackageSnapshot{}, err
 	}
-	snapshot, err := acquirer.acquireGitTransport(ctx, acquirer.directEndpoint(endpoint, repository), endpoint, commit, packagePath, true)
+	snapshot, err := acquirer.acquireGitTransport(ctx, acquirer.directEndpoint(endpoint, repository), endpoint, commit, packagePath, true, true)
 	if err != nil {
 		if ctx.Err() != nil {
 			return domain.PackageSnapshot{}, ctx.Err()
