@@ -418,6 +418,9 @@ func (e *Engine) loadMutatingPackage(ctx context.Context, handle *PreparedOperat
 	if err != nil {
 		return err
 	}
+	if snapshot.Source.WebSkill != nil && (envelope.LoaderKind != domain.LoaderKindAgentPlugins || envelope.FormatID != domain.FormatIDAgentPluginsV1 || len(envelope.Skills) != 1 || envelope.Skills[snapshot.Source.WebSkill.Skill].Name != snapshot.Source.WebSkill.Skill) {
+		return fmt.Errorf("%w: HTTPS Skill acquisition requires its normalized portable Skill package", ErrInvalidRequest)
+	}
 	handle.envelope = envelope
 	return nil
 }

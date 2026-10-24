@@ -2,6 +2,9 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -12,19 +15,6 @@ import (
 type dependencySnapshotKey struct {
 	sourceKey, revision, algorithm, digest            string
 	kind, skill, requestedPath, rawDigest, normalizer string
-}
-
-func lockedDependencyCoordinates(locked environment.LockedPackage) (string, string, string, error) {
-	if source := locked.Source.Git; source != nil {
-		if source.Kind == environment.SkillKind {
-			return source.Repository, source.Commit, source.ResolvedSkillPath, nil
-		}
-		return source.Repository, source.Commit, source.Path, nil
-	}
-	if source := locked.Source.Registry; source != nil {
-		return source.Repository, source.Commit, source.Path, nil
-	}
-	return "", "", "", errors.New("locked package has no source")
 }
 
 // The command owns these acquired bytes until its final preflight/apply returns.
@@ -42,7 +32,7 @@ func (cache *dependencySnapshotCache) close() {
 }
 
 func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySnapshotKey, error) {
-	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil {
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil {
 		return dependencySnapshotKey{}, errors.New("locked package has no source")
 	}
 	sourceKey := locked.SourceKey
@@ -53,6 +43,16 @@ func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySn
 	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind {
 		key.kind, key.skill, key.requestedPath = source.Kind, source.Skill, source.Path
 		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
+	}
+	if source := locked.Source.Web; source != nil {
+		key.kind, key.skill = "https-skill", source.Skill
+		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
+		body, err := json.Marshal(source)
+		if err != nil {
+			return dependencySnapshotKey{}, err
+		}
+		digest := sha256.Sum256(body)
+		key.requestedPath = hex.EncodeToString(digest[:])
 	}
 	return key, nil
 }
@@ -102,7 +102,7 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 }
 
 func lockedDependencySource(locked environment.LockedPackage) (domain.SourceIdentity, error) {
-	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil {
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil {
 		return domain.SourceIdentity{}, errors.New("locked package has no source")
 	}
 	return identityFromLocked(locked), nil

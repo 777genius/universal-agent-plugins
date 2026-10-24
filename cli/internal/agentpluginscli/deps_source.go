@@ -32,6 +32,9 @@ func legacyGitIdentity(repository, commit, packagePath, hint string) domain.Sour
 }
 
 func identityFromLocked(pin environment.LockedPackage) domain.SourceIdentity {
+	if pin.Source.Web != nil {
+		return webSkillSnapshotSource(pin)
+	}
 	if source := pin.Source.Git; source != nil {
 		if source.Kind == environment.SkillKind {
 			return skillSnapshotSource(pin)
@@ -68,6 +71,9 @@ func (app App) acquireDependencyGit(ctx context.Context, source environment.GitS
 }
 
 func (app App) acquirePinnedSource(ctx context.Context, pin environment.LockedPackage) (domain.PackageSnapshot, error) {
+	if pin.Source.Web != nil {
+		return app.acquireLockedWebSkill(ctx, pin)
+	}
 	if source := pin.Source.Git; source != nil {
 		if source.Kind == environment.SkillKind {
 			return app.acquireLockedSkill(ctx, pin)

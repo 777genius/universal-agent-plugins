@@ -72,6 +72,9 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 }
 
 func dependencySourceHint(locked environment.LockedPackage) string {
+	if locked.Source.Web != nil {
+		return "uap-dependency-web-skill"
+	}
 	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
 		return "uap-dependency-skill"
 	}

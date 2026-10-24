@@ -15,6 +15,7 @@ import (
 )
 
 type rawDependency struct {
+	Website      string `toml:"website"`
 	Archive      string `toml:"archive"`
 	SHA256       string `toml:"sha256"`
 	Kind         string `toml:"kind"`
@@ -164,6 +165,10 @@ func (doc Document) clone() environment.Requirements {
 			source := *value.Archive
 			value.Archive = &source
 		}
+		if value.Web != nil {
+			source := *value.Web
+			value.Web = &source
+		}
 		if value.Registry != nil {
 			source := *value.Registry
 			value.Registry = &source
@@ -194,8 +199,8 @@ func decodeRawDependency(value any) (rawDependency, error) {
 }
 
 func requirementFromRaw(alias string, raw rawDependency) (environment.Requirement, error) {
-	if (raw.Kind != "" || raw.Skill != "") && raw.Git == "" {
-		return environment.Requirement{}, errors.New("kind and skill require a git source")
+	if (raw.Kind != "" || raw.Skill != "") && raw.Git == "" && raw.Website == "" {
+		return environment.Requirement{}, errors.New("kind and skill require a git or website source")
 	}
 	if raw.Version != "" {
 		return versionRequirement(alias, raw)
@@ -205,7 +210,10 @@ func requirementFromRaw(alias string, raw rawDependency) (environment.Requiremen
 		return environment.Requirement{}, err
 	}
 	if rawSourceCount(raw) != 1 {
-		return environment.Requirement{}, errors.New("dependency must contain exactly one git, archive or registry source")
+		return environment.Requirement{}, errors.New("dependency must contain exactly one git, archive, registry or website source")
+	}
+	if raw.Website != "" {
+		return webRequirement(alias, raw)
 	}
 	if raw.Archive != "" {
 		return archiveRequirement(alias, raw)
@@ -221,7 +229,7 @@ func requirementFromRaw(alias string, raw rawDependency) (environment.Requiremen
 
 func rawSourceCount(raw rawDependency) int {
 	count := 0
-	for _, source := range []bool{raw.Git != "", raw.Registry != "" || raw.Distribution != "" || raw.Release != nil, raw.Archive != ""} {
+	for _, source := range []bool{raw.Git != "", raw.Registry != "" || raw.Distribution != "" || raw.Release != nil, raw.Archive != "", raw.Website != ""} {
 		if source {
 			count++
 		}
@@ -278,6 +286,9 @@ func registryRequirement(alias string, raw rawDependency, selector environment.S
 }
 
 func rawSelector(raw rawDependency) (environment.Selector, error) {
+	if raw.Website != "" {
+		return environment.Selector{Kind: environment.SelectorDefault}, nil
+	}
 	if raw.Version != "" {
 		kind := environment.SelectorVersion
 		if strings.HasPrefix(raw.Version, "^") {
@@ -345,7 +356,7 @@ func validateDependencyFields(path string, body []byte, alias string, value any)
 	}
 	for _, key := range sortedKeys(fields) {
 		switch key {
-		case "git", "path", "ref", "commit", "registry", "distribution", "archive", "sha256", "kind", "skill":
+		case "website", "git", "path", "ref", "commit", "registry", "distribution", "archive", "sha256", "kind", "skill":
 			if _, ok := fields[key].(string); !ok {
 				return manifestError(path, body, fmt.Errorf("dependencies.%s.%s must be a string", alias, key), "dependencies", alias, key)
 			}
@@ -355,4 +366,18 @@ func validateDependencyFields(path string, body []byte, alias string, value any)
 		}
 	}
 	return nil
+}
+
+func webRequirement(alias string, raw rawDependency) (environment.Requirement, error) {
+	if raw.Kind != environment.SkillKind || raw.Skill == "" {
+		return environment.Requirement{}, errors.New("website source requires kind=skill and an exact skill name")
+	}
+	if raw.Path != "" || raw.Ref != "" || raw.Commit != "" || raw.SHA256 != "" {
+		return environment.Requirement{}, errors.New("website source cannot contain Git or archive fields")
+	}
+	endpoint, err := environment.NormalizeWebURL(raw.Website)
+	if err != nil {
+		return environment.Requirement{}, err
+	}
+	return environment.Requirement{Alias: alias, Web: &environment.WebSource{URL: endpoint, Skill: raw.Skill}}, nil
 }

@@ -31,13 +31,8 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 			return nil, errors.New("recorded package revision is missing")
 		}
 		pkg := environment.LockedPackage{Alias: authority.Alias, SourceKey: authority.SourceKey, DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: rev.TreeDigest, ManifestDigest: rev.ManifestDigest, Targets: []string{string(target)}}
-		pkg.Source.Git = &environment.LockedGitSource{Repository: installation.Source.Repository, URL: installation.Source.SourceURL, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}}
-		if installation.Source.StableSourceKey != "" {
-			facts := rev.Skill
-			if facts == nil {
-				return nil, errors.New("recorded Skill source provenance unavailable; restore the matching state/lock before repair")
-			}
-			pkg.Source.Git = &environment.LockedGitSource{Kind: environment.SkillKind, Skill: facts.Name, Repository: installation.Source.Repository, Path: facts.RequestedPath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}, ResolvedSkillPath: facts.ResolvedPath, RawTreeDigest: facts.RawTreeDigest, Normalizer: facts.Normalizer}
+		if err := setRepairSkillSource(&pkg, installation, rev); err != nil {
+			return nil, err
 		}
 		if installation.Source.SourceKind == "archive" {
 			digest := strings.TrimPrefix(rev.ResolvedRevision, "sha256:")

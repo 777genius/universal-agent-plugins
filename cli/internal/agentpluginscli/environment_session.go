@@ -239,7 +239,9 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 		edit := manifestedit.DependencyEdit{Alias: alias}
 		if ok {
 			v := &manifestedit.Dependency{}
-			if value.Git != nil {
+			if value.Web != nil {
+				v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
+			} else if value.Git != nil {
 				v.Git = value.Git.Endpoint()
 				v.Path = value.Git.Path
 				v.Kind, v.Skill = value.Git.Kind, value.Git.Skill

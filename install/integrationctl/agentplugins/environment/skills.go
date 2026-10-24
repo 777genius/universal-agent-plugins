@@ -20,7 +20,10 @@ func validateSkillSource(source *GitSource) error {
 	if source.URL != "" || !repositoryPattern.MatchString(source.Repository) {
 		return errors.New("standalone Skills require a GitHub owner/repo source")
 	}
-	name := source.Skill
+	return validateSkillName(source.Skill)
+}
+
+func validateSkillName(name string) error {
 	if n := utf8.RuneCountInString(name); n < 1 || n > 64 || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
 		return errors.New("invalid expected Skill name")
 	}

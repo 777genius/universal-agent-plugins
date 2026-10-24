@@ -76,6 +76,9 @@ func (resolver dependencyResolver) Resolve(ctx context.Context, requirement envi
 	if previous != nil && !update && sameRequestedSelector(requirement, *previous) {
 		return *previous, nil
 	}
+	if requirement.Web != nil {
+		return resolver.resolveWebSkill(ctx, requirement, targets)
+	}
 	if requirement.Git != nil {
 		return resolver.resolveGit(ctx, requirement, targets, previous, update)
 	}
@@ -217,7 +220,12 @@ func (resolver dependencyResolver) finishLoaded(ctx context.Context, loaded load
 			_ = loaded.cleanup()
 			return err
 		}
-		key := dependencySnapshotKey{sourceKey: pin.SourceKey, revision: pin.Revision(), algorithm: pin.DigestAlgorithm, digest: pin.TreeDigest}
+		key, err := lockedDependencySnapshotKey(pin)
+		if err != nil {
+			_ = packagedigest.Remove(snapshot)
+			_ = loaded.cleanup()
+			return err
+		}
 		cache := resolver.app.dependencySnapshots
 		if old, ok := cache.snapshots[key]; ok {
 			_ = packagedigest.Remove(old)

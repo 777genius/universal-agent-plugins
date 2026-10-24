@@ -47,7 +47,14 @@ func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App,
 	if old, ok := candidate.requirements.Dependencies[alias]; ok && mustSourceKey(old) == mustSourceKey(req) {
 		req = old
 	} else {
-		pin, err := (dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true}).resolveSkill(ctx, req, targets, nil, selection.Commit, "", "")
+		resolver := dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true}
+		var pin environment.LockedPackage
+		var err error
+		if req.Web != nil {
+			pin, err = resolver.resolveWebSkill(ctx, req, targets)
+		} else {
+			pin, err = resolver.resolveSkill(ctx, req, targets, nil, selection.Commit, "", "")
+		}
 		if err != nil {
 			return err
 		}
@@ -70,6 +77,14 @@ func skillSelectionRequirement(wanted environment.Requirements, selection Skills
 		selector = environment.Selector{Kind: environment.SelectorCommit, Value: selection.Commit}
 	}
 	req := environment.Requirement{Alias: defaultSkillAlias(selection), Git: &environment.GitSource{Kind: environment.SkillKind, Skill: selection.Name, Repository: strings.ToLower(selection.Repository), Path: selection.Path, Selector: selector}}
+	if selection.Website != "" {
+		req.Git = nil
+		endpoint, err := environment.NormalizeWebURL(selection.Website)
+		if err != nil {
+			return req, err
+		}
+		req.Web = &environment.WebSource{URL: endpoint, Skill: selection.Name}
+	}
 	key, err := req.SourceKey()
 	if err != nil {
 		return req, err
@@ -105,6 +120,10 @@ func defaultSkillAlias(selection SkillsSelection) string {
 		return selection.Alias
 	}
 	probe := environment.Requirement{Alias: selection.Name, Git: &environment.GitSource{Repository: selection.Repository, Selector: environment.Selector{Kind: environment.SelectorDefault}}}
+	if selection.Website != "" {
+		probe.Git = nil
+		probe.Web = &environment.WebSource{URL: selection.Website, Skill: selection.Name}
+	}
 	if probe.Validate() == nil {
 		return selection.Name
 	}

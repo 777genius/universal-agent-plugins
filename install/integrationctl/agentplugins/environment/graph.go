@@ -112,19 +112,7 @@ func validatePin(pkg LockedPackage) error {
 	if !aliasPattern.MatchString(pkg.Alias) {
 		return fmt.Errorf("invalid locked alias %q", pkg.Alias)
 	}
-	req := Requirement{Alias: pkg.Alias}
-	if pkg.Source.Git != nil {
-		source := pkg.Source.Git
-		req.Git = &GitSource{Repository: source.Repository, URL: source.URL, Path: source.Path, Selector: source.Requested, Kind: source.Kind, Skill: source.Skill}
-	}
-	if pkg.Source.Registry != nil {
-		source := pkg.Source.Registry
-		req.Registry = &RegistrySource{Distribution: source.Distribution, Selector: source.Requested}
-	}
-	if pkg.Source.Archive != nil {
-		source := pkg.Source.Archive
-		req.Archive = &ArchiveSource{URL: source.URL, Path: source.Path, SHA256: source.RequestedSHA256}
-	}
+	req := pkg.Requirement()
 	key, err := req.SourceKey()
 	if err != nil {
 		return err
@@ -184,6 +172,10 @@ func validateRequiredBySource(pkg LockedPackage, edge RequiredBy) error {
 	} else if pkg.Source.Archive != nil {
 		if edge.Selector != (Selector{Kind: SelectorArchive, Value: pkg.Source.Archive.RequestedSHA256}) {
 			return fmt.Errorf("%s: archive selector differs from consumer %s", pkg.Alias, edge.Alias)
+		}
+	} else if pkg.Source.Web != nil {
+		if edge.Selector != (Selector{Kind: SelectorDefault}) {
+			return fmt.Errorf("%s: website selector differs from consumer %s", pkg.Alias, edge.Alias)
 		}
 	} else if edge.Selector.Kind != SelectorRelease && edge.Selector.Kind != SelectorVersion && edge.Selector.Kind != SelectorRange {
 		return fmt.Errorf("%s: invalid registry dependency selector", pkg.Alias)

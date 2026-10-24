@@ -368,7 +368,8 @@ func managedDirectSource(installation domain.Installation, input AddInput) bool 
 		return false
 	}
 	if installation.Source.StableSourceKey != "" {
-		return input.Envelope.Source.SourceBindingHint == "uap-dependency-skill" && installation.Source.StableSourceKey == input.Envelope.Source.StableSourceKey && input.EnvironmentAuthority.SourceKey == installation.Source.StableSourceKey
+		hint := input.Envelope.Source.SourceBindingHint
+		return (hint == "uap-dependency-skill" || hint == "uap-dependency-web-skill") && installation.Source.StableSourceKey == input.Envelope.Source.StableSourceKey && input.EnvironmentAuthority.SourceKey == installation.Source.StableSourceKey
 	}
 	return installation.Source.PackageSubpath == input.Envelope.Source.PackageSubpath
 }

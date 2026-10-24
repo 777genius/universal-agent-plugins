@@ -193,7 +193,7 @@ func (solver *graphSolver) choose(ctx context.Context, key string, node graphNod
 			}
 		}
 	}
-	if node.requirement.Git != nil || node.requirement.Archive != nil || node.requirement.Registry.Selector.Kind == SelectorRelease {
+	if node.requirement.Git != nil || node.requirement.Archive != nil || node.requirement.Web != nil || node.requirement.Registry.Selector.Kind == SelectorRelease {
 		return solver.chooseExact(ctx, key, node, choices, last)
 	}
 	return solver.chooseCandidates(ctx, key, node, choices, last)

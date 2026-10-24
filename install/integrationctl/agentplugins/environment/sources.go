@@ -58,6 +58,9 @@ func (source ArchiveSource) Validate() error {
 }
 
 func (requirement Requirement) RequestedSelector() Selector {
+	if requirement.Web != nil {
+		return Selector{Kind: SelectorDefault}
+	}
 	if requirement.Git != nil {
 		return requirement.Git.Selector
 	}
@@ -73,7 +76,7 @@ func (requirement Requirement) RequestedSelector() Selector {
 func validateLockedArchive(requirement Requirement, pkg LockedPackage) error {
 	a := pkg.Source.Archive
 	r := requirement.Archive
-	if a == nil || pkg.Source.Git != nil || pkg.Source.Registry != nil || a.URL != r.URL || a.Path != r.Path || a.RequestedSHA256 != r.SHA256 || !sourcespec.ValidSHA256(a.SHA256) || (r.SHA256 != "" && r.SHA256 != a.SHA256) {
+	if a == nil || pkg.Source.Git != nil || pkg.Source.Registry != nil || pkg.Source.Web != nil || a.URL != r.URL || a.Path != r.Path || a.RequestedSHA256 != r.SHA256 || !sourcespec.ValidSHA256(a.SHA256) || (r.SHA256 != "" && r.SHA256 != a.SHA256) {
 		return errors.New("locked archive identity does not match manifest")
 	}
 	return nil
@@ -83,6 +86,9 @@ func validateLockedArchive(requirement Requirement, pkg LockedPackage) error {
 // adopts mutable store provenance or a machine's profile/project paths.
 func (pkg LockedPackage) Requirement() Requirement {
 	r := Requirement{Alias: pkg.Alias}
+	if s := pkg.Source.Web; s != nil {
+		r.Web = &WebSource{URL: s.URL, Skill: s.Skill}
+	}
 	if s := pkg.Source.Git; s != nil {
 		r.Git = &GitSource{Repository: s.Repository, URL: s.URL, Path: s.Path, Selector: s.Requested, Kind: s.Kind, Skill: s.Skill}
 	}

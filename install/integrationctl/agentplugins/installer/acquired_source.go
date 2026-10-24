@@ -44,6 +44,12 @@ func acquiredDirectSourceKey(source domain.SourceIdentity, portable bool) (strin
 
 func validateAcquiredSource(acquired *domain.AcquiredSnapshot, portable bool) (string, error) {
 	source := acquired.Source
+	if source.SourceKind == "https-skill" || source.WebSkill != nil || source.SourceBindingHint == "uap-dependency-web-skill" {
+		if acquired.OriginMode != domain.OriginModeDirect {
+			return "", ErrInvalidRequest
+		}
+		return acquiredWebSkillSourceKey(source, portable)
+	}
 	if source.SourceKind != "" {
 		if acquired.OriginMode != domain.OriginModeDirect || source.Skill != nil || source.StableSourceKey != "" || source.SourceBindingHint == "uap-dependency-skill" {
 			return "", ErrInvalidRequest

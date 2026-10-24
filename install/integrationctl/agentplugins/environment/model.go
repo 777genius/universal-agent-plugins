@@ -79,7 +79,16 @@ type LockedArchiveSource struct {
 	SHA256          string `json:"sha256"`
 }
 
+type WebSource struct {
+	URL   string `json:"url"`
+	Skill string `json:"skill"`
+}
+
+// LockedWebSource records the complete immutable website acquisition contract.
+type LockedWebSource = domain.WebSkillSourceFacts
+
 type Requirement struct {
+	Web      *WebSource      `json:"web,omitempty"`
 	Archive  *ArchiveSource  `json:"archive,omitempty"`
 	Alias    string          `json:"alias"`
 	Git      *GitSource      `json:"git,omitempty"`
@@ -93,6 +102,7 @@ type Requirements struct {
 }
 
 type LockedSource struct {
+	Web      *LockedWebSource      `json:"web,omitempty"`
 	Archive  *LockedArchiveSource  `json:"archive,omitempty"`
 	Git      *LockedGitSource      `json:"git,omitempty"`
 	Registry *LockedRegistrySource `json:"registry,omitempty"`
@@ -253,8 +263,11 @@ func (requirement Requirement) Validate() error {
 	if !validDeclarationKey(requirement.Alias) {
 		return fmt.Errorf("alias %q must match %s", requirement.Alias, aliasPattern)
 	}
-	if sourceCount(requirement.Git != nil, requirement.Registry != nil, requirement.Archive != nil) != 1 {
-		return errors.New("dependency must contain exactly one git, archive or registry source")
+	if sourceCount(requirement.Git != nil, requirement.Registry != nil, requirement.Archive != nil, requirement.Web != nil) != 1 {
+		return errors.New("dependency must contain exactly one git, archive, registry or website source")
+	}
+	if requirement.Web != nil {
+		return requirement.Web.Validate()
 	}
 	if requirement.Archive != nil {
 		return requirement.Archive.Validate()
@@ -342,6 +355,9 @@ func (requirement Requirement) SourceKey() (string, error) {
 	if err := requirement.Validate(); err != nil {
 		return "", err
 	}
+	if requirement.Web != nil {
+		return "https-skill:" + requirement.Web.URL + ":" + requirement.Web.Skill, nil
+	}
 	if requirement.Git != nil {
 		if requirement.Git.Kind == SkillKind {
 			return "github-skill:" + strings.ToLower(requirement.Git.Repository) + ":" + requirement.Git.Skill + ":" + requirement.Git.Path, nil
@@ -394,7 +410,7 @@ func ManifestDigest(requirements Requirements) (string, error) {
 			item.Path = requirement.Archive.Path
 			item.Selector = requirement.RequestedSelector()
 		} else {
-			item.Selector = requirement.Registry.Selector
+			item.Selector = requirement.RequestedSelector()
 		}
 		intent.Dependencies = append(intent.Dependencies, item)
 	}
@@ -448,8 +464,11 @@ func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
 }
 
 func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
+	if requirement.Web != nil {
+		return validateLockedWeb(requirement, pkg)
+	}
 	if requirement.Git != nil {
-		if pkg.Source.Git == nil || pkg.Source.Registry != nil || pkg.Source.Archive != nil || pkg.Source.Git.URL != requirement.Git.URL || !strings.EqualFold(pkg.Source.Git.Repository, requirement.Git.Repository) ||
+		if pkg.Source.Git == nil || pkg.Source.Registry != nil || pkg.Source.Archive != nil || pkg.Source.Web != nil || pkg.Source.Git.URL != requirement.Git.URL || !strings.EqualFold(pkg.Source.Git.Repository, requirement.Git.Repository) ||
 			pkg.Source.Git.Path != requirement.Git.Path || pkg.Source.Git.Kind != requirement.Git.Kind || pkg.Source.Git.Skill != requirement.Git.Skill || pkg.Source.Git.Requested != requirement.Git.Selector ||
 			!commitPattern.MatchString(pkg.Source.Git.Commit) {
 			return errors.New("locked Git identity does not match manifest")
@@ -470,7 +489,7 @@ func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
 
 func validateLockedRegistrySelector(requirement Requirement, pkg LockedPackage) error {
 	source := pkg.Source.Registry
-	if source == nil || pkg.Source.Git != nil || pkg.Source.Archive != nil || !strings.EqualFold(source.Distribution, requirement.Registry.Distribution) ||
+	if source == nil || pkg.Source.Git != nil || pkg.Source.Archive != nil || pkg.Source.Web != nil || !strings.EqualFold(source.Distribution, requirement.Registry.Distribution) ||
 		source.Requested != requirement.Registry.Selector || source.ReleaseSequence == 0 || !registrySelectorMatches(requirement.Registry.Selector, pkg) ||
 		!strings.EqualFold(source.DistributionID, source.Distribution) || !distributionPattern.MatchString(source.DistributionID) || !repositoryPattern.MatchString(source.Repository) || validateSubpath(source.Path) != nil || !commitPattern.MatchString(source.Commit) {
 		return errors.New("locked registry identity does not match manifest")
