@@ -1,6 +1,6 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v4 — implementation findings and independent lifecycle critiques incorporated; end-to-end qualification in progress.
+Status: implementation plan v5 — final review dispositions incorporated; remaining end-to-end gates are explicit.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
@@ -527,3 +527,82 @@ Plan direction is approved for implementation subject to these explicit gates.
 
 The implementation retains one HTTP contract, one native engine and one language
 SDK. No daemon, generic file lease, parallel installer or public release was added.
+
+### v5 final implementation review and remaining qualification
+
+Independent final review found four blocking issues; its minimal corrections are
+accepted without adding another installer, scheduler, persistence layer or protocol:
+
+- **Stale admission observation (P1):** Agent Teams records the shared admission
+  generation before inspecting an environment. An older empty response cannot
+  release a fence acquired by a later accepted mutation. Deferred-response tests
+  must complete acceptance before delivering that stale response.
+- **External removal attestation (P1):** the authoritative native adapter declares
+  whether an actual prepared removal requires explicit external-uninstall
+  confirmation. Installer plans expose that fact; management returns an existing
+  non-confirmable review with `EXTERNAL_UNINSTALL_REQUIRED` for the exact bindings.
+  Missing confirmation must refuse Check/Apply before acceptance and before desired
+  TOML/lock publication. No management client-ID policy table is introduced.
+  An explicit fresh review may carry `externalUninstalled: true` only when its
+  actual native actions include a requiring removal. This includes transitive
+  pruning during update/sync, not only a top-level remove. Such a review identifies
+  its exact attested bindings with `EXTERNAL_UNINSTALL_ATTESTED`. A receipt-only
+  recovery or a graph with no applicable removal refuses the flag with
+  `EXTERNAL_UNINSTALL_NOT_APPLICABLE`. Full fresh convergence can therefore finish
+  an older accepted partial removal without bypassing the pending-operation gate.
+  Confirmation is never an automatically stored preference or carried to a
+  different review. Existing CLI removal semantics stay unchanged.
+- **Discovery lifetime (P2):** expose idempotent `skills.discard` through the SDK
+  and both app transports. Release replaced/closed discovery catalogs. Prepared
+  plans retain their own source snapshots and remain independent of disposal.
+- **Definitive local-delete refusal (P2):** preserve the same request while its
+  acceptance is uncertain or its effects need recovery. A definitive pre-effect
+  refusal, or an observed terminal no-effect result, releases the local deletion
+  handle so the next explicit Delete can prepare a fresh review.
+
+Additional reviewed corrections:
+
+- Native recovery requires fresh verification of the owned native projection,
+  including every Skill and MCP entry. A private receipt/artifact alone cannot
+  prove that a missing native file was restored. Existing installer authority and
+  environment/native locks remain the source of this proof.
+- Edited owned Skill directories are preserved. The typed changed-content outcome
+  reports unchanged effects only after successful rollback; a failed rollback
+  remains uncertain and keeps recovery data. A wholly missing directory can be
+  restored from the retained pin. Manual native readiness stays distinct from
+  materialization and authentication.
+- A website candidate's first preview digest is immutable for that discovery
+  session. Changed publisher content requires rediscovery and another review;
+  concurrent previews cannot silently replace the bytes a user already reviewed.
+- Code signing changes executable bytes. macOS packaging updates the UAP digest
+  after nested signing and immediately before the outer app seal. Windows updates
+  it after signed resource copying. Final checks are read-only. Reuse
+  electron-builder's existing signer, options, retry policy and packaging hooks.
+
+Evidence is recorded against the revision actually tested:
+
+- UAP `08a9218c0ecf9bc44e951c3921f20abd9d3b275b`: Required test lane, generated
+  artifacts, workspace vet, conformance, SDK generation/build/protocol tests and
+  the packed consumer passed remotely. Installer and CLI lint passed; four root
+  fixture style findings were subsequently corrected.
+- UAP `7fb4695002310f72a4ed43193ddd82ab733b2b3b`: SDK generation, protocol and
+  packed-consumer gates passed. Final native/test and lint qualification still
+  belongs to the subsequent corrected commit.
+- Actual matching 08a SDK/native tests passed local Skill create/edit/delete,
+  binary-byte preservation, stale-hash refusal, restart, visible undo and restore.
+  Actual Python HTTP tests acquired and installed plugin and standalone-Skill
+  fixtures and verified native OpenCode files. These results do not qualify later
+  native-recovery changes without rerunning the affected smoke.
+- Agent Teams `a213b80e8a4a97b613ffbe35df9f42f4ed7b090e` passed Fast feedback,
+  including the full pinned TypeScript check. Actual Electron has reached the
+  managed panel and HTTPS Skill preview. Complete installation/recovery/keyboard/
+  narrow-window UX and final signed packaging are still open at this revision.
+- Rechecked #472/#475/#480 and Agent Teams #982: all remain open drafts at the
+  recorded heads. S25/S26 remain dependency-blocked; this revision does not claim
+  qualified native project installation.
+
+Next checkpoint: finish the scoped corrections, independently review their exact
+diff, refresh the SDK/native source pin together, run the real Electron lifecycle,
+and record final S01–S30 evidence. Current-commit required CI is still a merge
+gate. The macOS test uses an explicitly unsigned native fixture followed by real
+ad-hoc signing; it is not a claim of release-certificate notarization.
