@@ -1,0 +1,16 @@
+Usage: qodercli plugins install|i [options] <plugin>
+
+Install a plugin from available marketplaces, a remote HTTPS .zip URL, or a
+local directory path.
+
+Arguments:
+  plugin               Plugin name, plugin@marketplace, remote HTTPS .zip URL,
+                       or local plugin directory path.
+
+Options:
+  -s, --scope <scope>  Installation scope: "user" (global, default), "project"
+                       (shared, committed to VCS), or "local" (personal, not
+                       committed). (choices: "user", "project", "local",
+                       default: "user")
+  --json               Output as JSON. (default: false)
+  -h, --help           display help for command
