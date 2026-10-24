@@ -4,18 +4,14 @@ package skillspicker
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/subtle"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"io"
-	"mime"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/loopbackapi"
 )
 
 // Prepared keeps the temporary installer workspace alive until apply or cleanup.
@@ -124,13 +120,7 @@ func Start(ctx context.Context, opts Options) (*Server, error) {
 	return s, nil
 }
 
-func randomID() string {
-	var b [32]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(b[:])
-}
+func randomID() string                  { return loopbackapi.RandomID() }
 func (s *Server) URL() string           { return s.origin + "/#capability=" + s.token }
 func (s *Server) Done() <-chan struct{} { return s.done }
 
@@ -208,28 +198,8 @@ func (s *Server) expiryLoop() {
 	}
 }
 func (s *Server) guard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if r.Host != s.host {
-			writeError(w, 403, "INVALID_HOST", "Unexpected loopback host", false)
-			return
-		}
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
-			expected := "Bearer " + s.token
-			if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte(expected)) != 1 {
-				writeError(w, 401, "UNAUTHORIZED", "The picker capability is missing or invalid", false)
-				return
-			}
-			if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("Origin") != s.origin {
-				writeError(w, 403, "INVALID_ORIGIN", "Unexpected request origin", false)
-				return
-			}
-			// Even read requests never grant a cross-origin caller access.
-			if origin := r.Header.Get("Origin"); origin != "" && origin != s.origin {
-				writeError(w, 403, "INVALID_ORIGIN", "Unexpected request origin", false)
-				return
-			}
 			s.mu.Lock()
 			if s.expired {
 				s.mu.Unlock()
@@ -244,33 +214,15 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+	return loopbackapi.Guard(s.host, s.origin, s.token, writeError, handler)
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
+func writeJSON(w http.ResponseWriter, status int, v any) { loopbackapi.WriteJSON(w, status, v) }
 func writeError(w http.ResponseWriter, status int, code, message string, retry bool) {
 	writeJSON(w, status, APIError{Code: code, Message: message, Retryable: retry})
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	if ct, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || ct != "application/json" {
-		writeError(w, 415, "INVALID_REQUEST", "Content-Type must be application/json", false)
-		return false
-	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(v); err != nil {
-		writeError(w, 400, "INVALID_REQUEST", "Invalid or oversized JSON request", false)
-		return false
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		writeError(w, 400, "INVALID_REQUEST", "Expected one JSON document", false)
-		return false
-	}
-	return true
+	return loopbackapi.Decode(w, r, v, writeError)
 }
 func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
