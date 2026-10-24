@@ -34,6 +34,10 @@ func TestProjectProcessDeathReopenRetainsUnacknowledgedNativeAttempt(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Register after TempDir so this runs only after all test assertions,
+			// immediately before testing removes its disposable root. A killed
+			// SDK child cannot unseal its package snapshots through deferred Close.
+			t.Cleanup(func() { deathAllowSnapshotCleanup(t, base) })
 			deathWrite(t, filepath.Join(base, "codex-fixture"), deathRead(t, probe))
 			if err := os.Chmod(filepath.Join(base, "codex-fixture"), 0700); err != nil {
 				t.Fatal(err)

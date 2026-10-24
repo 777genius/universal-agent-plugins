@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -293,4 +294,47 @@ func deathEmitAndBlock(t *testing.T, barrier deathBarrier) {
 	var release [1]byte
 	_, err := os.Stdin.Read(release[:])
 	t.Fatalf("parent did not kill the child at its barrier: %v", err)
+}
+
+// Abrupt process death intentionally leaves the sealed acquisition snapshot in
+// place. Keep its original modes for every ownership/receipt/state assertion;
+// only testing's final cleanup may regain owner-write on its exact directories.
+// No file bytes, native files, binding facts or production permissions change.
+func deathAllowSnapshotCleanup(t *testing.T, base string) {
+	t.Helper()
+	tmp := filepath.Join(base, "A", ".uap", "tmp")
+	info, err := os.Lstat(tmp)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		t.Errorf("process-death snapshot cleanup root is not ordinary: %v", err)
+		return
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), "agentplugins-package-") || !entry.IsDir() {
+			continue
+		}
+		root := filepath.Join(tmp, entry.Name())
+		if err := filepath.WalkDir(root, func(path string, item os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if !item.IsDir() { // WalkDir never follows a leaf or intermediate link.
+				return nil
+			}
+			info, err := item.Info()
+			if err != nil {
+				return err
+			}
+			return os.Chmod(path, info.Mode().Perm()|0200)
+		}); err != nil {
+			t.Errorf("restore only disposable snapshot directory write bits: %v", err)
+		}
+	}
 }
