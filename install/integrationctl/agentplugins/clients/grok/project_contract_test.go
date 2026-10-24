@@ -227,3 +227,36 @@ func TestProjectGrokProjectionRejectsForeignStagingBeforeWrites(t *testing.T) {
 		})
 	}
 }
+
+func TestProjectGrokMissingLeafCannotHideAncestorAlias(t *testing.T) {
+	request := projectTestRequest(t)
+	alias := filepath.Join(filepath.Dir(request.Plan.TargetContext.ProjectRoot), ".claude")
+	if err := os.Symlink(projectTestRoot(t), alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if finding, err := inspectProjectFiles(request.Plan, false); err == nil || finding != clients.RegistryIndeterminate {
+		t.Fatalf("missing leaf under alias became absence proof: %v %v", finding, err)
+	}
+}
+func TestProjectGrokManifestSparseCapAndExactLimit(t *testing.T) {
+	path := filepath.Join(projectTestRoot(t), "manifest.json")
+	body := `{"name":"other"}`
+	projectTestWrite(t, path, body+strings.Repeat(" ", projectManifestLimit-len(body)))
+	scanner := projectFileScanner{remaining: projectDiscoveryLimit}
+	if got, err := scanner.readProjectManifest(path, nil); err != nil || len(got) != projectManifestLimit {
+		t.Fatal("exact limit refused", err)
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(1 << 30); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scanner.readProjectManifest(path, nil); err == nil {
+		t.Fatal("sparse overlimit manifest admitted")
+	}
+}

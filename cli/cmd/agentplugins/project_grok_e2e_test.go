@@ -97,13 +97,21 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 		t.Fatal("skills-only projection invented MCP persistent data")
 	}
 	journey.run(t, journey.a, "deps", "sync", "--locked", "--yes")
-	beforeAttest, callsBefore := securityFixtureTree(t, journey.a), runner.calls
+	beforeAttest := securityFixtureTree(t, filepath.Join(journey.a, ".grok"))
 	if _, err := journey.execute(journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok", "--activation-complete"); err == nil {
 		t.Fatal("persisted prepared Grok binding accepted activation attestation")
 	}
-	if !reflect.DeepEqual(beforeAttest, securityFixtureTree(t, journey.a)) || callsBefore != runner.calls {
-		t.Fatalf("refused attestation difference calls %d -> %d projectEqual %t before%v after%v", callsBefore, runner.calls, reflect.DeepEqual(beforeAttest, securityFixtureTree(t, journey.a)), beforeAttest, securityFixtureTree(t, journey.a))
+	if !reflect.DeepEqual(beforeAttest, securityFixtureTree(t, filepath.Join(journey.a, ".grok"))) {
+		t.Fatal("refused attestation changed native project bytes")
 	}
+	_, refused := journey.owned(t, journey.a)
+	if refused.Activation == domain.ActivationActive || refused.Verification == domain.VerificationInstalled || refused.TargetLocator != binding.TargetLocator {
+		t.Fatal("refused attestation promoted loading or changed artifact ownership")
+	}
+	// A rejected attestation records a failed attempt in existing core state.
+	// An explicit ordinary add retries that attempt without native trust or loading.
+	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
+	projectGrokOwned(t, journey, journey.a, projectJourneySkill)
 	projectJourneyWrite(t, filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md"), "TEST immutable drift\n")
 	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), projectJourneyAdvancedSkill)
 	projectJourneyGit(t, transport.repo, "add", ".")

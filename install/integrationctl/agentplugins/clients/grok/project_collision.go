@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -121,7 +122,7 @@ func (scanner *projectFileScanner) pluginName(path string) (string, error) {
 		return "", fmt.Errorf("grok plugin manifest identity is indeterminate")
 	}
 	name, ok := object["name"].(string)
-	if !ok || name == "" {
+	if !ok || pathpolicy.ValidateLeafID(name) != nil {
 		return "", fmt.Errorf("grok plugin manifest name is missing")
 	}
 	return name, nil

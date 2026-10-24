@@ -29,3 +29,20 @@ MCP data from a skills-only projection; it now asserts no fabricated MCP receipt
 The remaining CLI attestation assertion is under investigation; current lint,
 Windows compile and two fresh code approvals are pending. No pending gate is a
 pass, and no native client, skill, model, trust, auth or MCP process executed.
+
+## Current composed fixture correction closure
+
+The attestation experiment confirmed refusal without any native .grok byte,
+manifest or portable lock change and without active/installed promotion. Existing
+core behavior does record a failed activation attempt in state and refresh its
+operational lock files after one read-only source observation. The initial new
+fixture incorrectly demanded that whole selected-project operational state be
+byte-identical and that no read-only inspect occur. It now checks exact native
+bytes and conservative persisted ownership instead, retaining full original-user
+and B inventory checks. An explicit ordinary add retries the failed attempt before
+the independent pinned-repair journey; repair itself does not activate a failed
+binding. This is a test contract correction, not a generic core semantics change.
+Actual full public Grok TLS Git A/B saved add/locked-sync/persisted attestation
+refusal/retry/moving-source pinned repair/update/status/remove PASS5.299s. Its
+client process boundary accepts only inspect --json at the selected cwd; no native
+client or MCP runs and no native loaded-skill qualification is claimed.
