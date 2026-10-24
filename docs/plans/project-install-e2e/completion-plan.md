@@ -5,7 +5,7 @@ critique and fixes, parallel implementation for all supported clients, independe
 code review, incremental commits/pushes, and merge after verification. Publishing
 a release is not part of this continuation.
 
-Status: **draft for independent review; no new production implementation yet**.
+Status: **R1 critique incorporated; awaiting two independent R2 decisions before new production implementation**.
 Baseline assembly: `0cf52a6067b03bc36d3bb1f45ac2c6356f95ae52`.
 Fresh main: `4555aa53` (includes source transports and the standalone Skills UI).
 
@@ -100,8 +100,12 @@ Picker target capabilities and displayed destination must use selected project
 layout, not detected user ConfigRoot. An unavailable project target remains disabled
 with a precise reason. Terminal and browser use the same preparation/apply API.
 Stale-plan checks bind namespace, selected scope, exact inputs, target paths and
-client authority. Apply checks again before cache publication, intent publication
-and native mutation under the correct environment lock. No process-global cwd.
+client authority. The original scoped App/installer namespace is checked before opening the
+project environment lock, and again after acquiring it before cache, intent or
+native writes. Rechecking only a disposable preview is insufficient. Rejected
+replacement roots must not gain a lock file. Direct StartSkillsPicker/PrepareSkills
+entrypoints enforce the same selected-scope/target/namespace admission as CLI entry.
+No process-global cwd.
 
 Tests: public CLI Git and website Skills; prepared browser callback route; dry-run
 has no durable mutation; rejected target acquires no source; user/A/B isolation;
@@ -119,6 +123,36 @@ exact id/scope/false enabled/empty path/unknown version and bounded nonempty not
 Contradictory fields or wrong types remain unknown; unknown suppression reasons do
 not become a trust claim. The sentinel establishes no package identity.
 
+### Pre-delivery admission is separate from native activation
+
+The project-only RegistryInspector maps known suppression, a disabled exact row
+and an out-of-project competing winner to RegistryClear **only for native namespace
+ownership**. It does not claim the target is absent or native discovery reconciled.
+Existing InspectPreparedRegistry scans the selected project namespace, and generic
+receipt/digest/path/namespace validation must independently gate every mutation.
+No generic RegistryFinding, combinedIdentityState or recovery change is planned.
+
+| First-install or maintenance situation | Admission |
+| --- | --- |
+| Known suppression; exact destination absent; project namespace and prepared scan clear | Admit prepared first install; suppression supplies no package identity or ownership |
+| Known suppression; exact destination or same-name project artifact exists without matching ownership | Collision/refusal; no adoption |
+| Known suppression; matching owned binding and validated directory/digest | Admit the existing owned maintenance path; keep native result prepared |
+| Exact disabled project row without matching UAP ownership | Collision/refusal through prepared scan; disabled does not mean absent |
+| Same-name user winner; exact project target absent and project scan clear | Admit a prepared shadowed project copy; preserve the user row and settings |
+| Same-name user winner; matching owned project target | Permit validated owned maintenance/removal; no native-discovery reconciliation |
+| Same-name foreign path inside selected project | Collision, even if native listing is suppressed or disabled |
+| Native record claims another project or contradicts selected context | Indeterminate/refusal, never selected-project authority |
+| Unknown/malformed listing, target drift, symlink escape or replaced namespace | Existing uncertainty/refusal/recovery path; no adoption or activation |
+
+Decode all rows strictly before selecting a result. Duplicate sentinels, duplicate
+expected identities, wrong types and contradictory selected-project rows yield
+Unknown. A sentinel plus an exact selected-project record is contradictory and
+cannot promote activation. A sentinel plus a user winner is valid blocked evidence;
+suppression and shadowing may both be reported. Unrelated valid rows do not change
+selected identity. Two matching user/project candidates are ambiguous unless a
+future pinned native schema explicitly establishes a winner. A foreign same-name
+selected-project path always refuses ownership independently of native ordering.
+
 Filesystem receipt/namespace/path/digest verification independently establishes
 owned delivery. After exact owned delivery, known suppressed/disabled/shadowed
 native state is Prepared+Installed with actionable next step, never Active.
@@ -131,15 +165,42 @@ shadowed or absent; no native plugin uninstall, force-disable, user settings edi
 or trust mutation. Preserve active foreign path and symlink protections. Repair
 must not acquire ownership of a same-name foreign target. Tests model user and
 project candidates together rather than scanning only the selected fixture root.
-Exercise status/update/repair/remove in blocked and unblocked states, including
-operator activation flag rejection and project A/B/user precedence.
+Exercise the initial untrusted public add as well as owned update/repair/remove,
+unowned exact targets under suppression, malformed mixed rows and both user/project
+precedence orders. Assert NativeDiscoveryReconciled remains false for recognized
+blocked observations. Preserve operator activation flag rejection and user behavior.
+
+### Saved status, repeated operations and native evidence
+
+Engine.Inspect remains host-free: plain status reports saved Prepared/Installed
+and generic next action, not a freshly observed trust/shadowing reason. Precise
+blocker text belongs to fresh activation/update/repair outcomes. Runner-count regressions must prove ordinary inspect/status launches no native process. No new persisted
+blocker field or hidden native status command is included. If an intact repair
+reconstructs its result from a binding, preserve fresh transient guidance narrowly.
+Do not globally declare Prepared converged. Verify repeated blocked add/sync and
+repair retain exact bytes and honest mutation/no-change classification.
+
+Inactive owned removal uses the ordinary verified transactional deletion path;
+the adapter only admits it. A previously Active binding with missing/contradictory
+native evidence retains its conservative refusal until a supported confirmed
+operation records the blocked state. Do not infer new ownership from old activation.
+
+The genuine untrusted native project fixture must exercise prepared add, repeated
+install, update, missing-directory repair and removal using its public owned binding
+path. It must verify the native suppression boundary and unchanged user/A/B files.
+It must **not** mark native_skill_discovery or native_mcp_initialization as passed
+using filesystem reads. Those stages remain blocked/not evaluated. Keep existing
+user native runtime requirements unchanged. Trusted project discovery is a distinct
+qualification with actual observed output, not a rewritten label or a trust grant
+performed to make this gate pass. The harness/evidence validator must encode both
+contracts explicitly; a successful prepared journey does not certify loaded plugins.
 
 ## D. Parallel client lanes
 
 | Lane | Work and acceptance boundary |
 | --- | --- |
-| Codex | Preserve .agents/skills + .codex/config.toml route; latest observed native regression and exact existing pinned matrix. Validate selected config and MCP startup with local harmless server where possible. No catalog-cache ownership claim. |
-| Cursor, Gemini, Copilot, Kiro, Kimi, Devin | Reconcile implemented adapters; fix only demonstrated shared/client defects; verify complete prepared lifecycle and exact version/harness admission. Preserve specific trust/manual/session guidance. |
+| Codex | Preserve .agents/skills + .codex/config.toml route; latest observed native regression and exact existing pinned matrix. Record selected config and MCP startup separately as attempted/passed/blocked/not evaluated; use a local harmless server only through a permitted native observation surface. No catalog-cache ownership claim. |
+| Cursor, Gemini, Copilot, Kiro, Kimi, Windsurf / Devin (`windsurf`) | Reconcile implemented adapters; fix only demonstrated shared/client defects; verify complete prepared lifecycle and exact version/harness admission. Preserve specific trust/manual/session guidance. |
 | OpenCode | Reuse existing root config and project components; add genuine project discovery/configuration/lifecycle to existing pinned native harness. Do not mix native v1 and v2 schemas. |
 | Grok | Integrate existing prepared skills-only leaf; independent final reviews, lint/platform lifecycle checks. MCP remains explicitly unsupported unless a new separately reviewed spike establishes it. |
 | Qoder | Execute already twice-reviewed populated user/A/B research at pinned1.1.78, inspect output independently; then review a concrete adapter plan before coding. Use real scoped install/list/uninstall semantics, exact scope/source/path/version/enablement identity and retained-data behavior. Empty list evidence is insufficient. |
@@ -172,10 +233,19 @@ completion item, not silently counted as fully implemented.
 5. Test supported user+A+B outcomes through production composition: add, unchanged
    replay, explicit update, exact-pin repair, status, interruption/recover/remove;
    retain foreign artifacts and plugin data. Verify cross-client shared skill paths
-   and separate Copilot/VS Code project MCP authority. Distinguish fixtures from
-   native sessions and native configuration from MCP handshake/tool execution.
+   and separate Copilot/VS Code project MCP authority. Include one actual process-
+   death/reopen case after a skill-directory swap and before MCP commit/acknowledgment:
+   unresolved native attempt must fence blind retry/adoption and preserve the bytes
+   needed for recovery or honest refusal. Reuse existing attempt/journal machinery.
+   Distinguish fixtures from native sessions and native configuration from MCP
+   handshake/tool execution.
 6. Update user docs, help/capability matrix and truthful source availability with
-   exact remaining native boundaries. Do not relabel historic binaries as supporting
+   exact remaining native boundaries. Per client, record implementation contract,
+   fixture lifecycle, observed native discovery, observed MCP initialization,
+   trust/account/session restrictions and exact tested version/platform. A missing
+   installation contract remains an outstanding item. Cover every canonical
+   SupportedClientIDs() entry, including ChatGPT unsupported-before-acquisition.
+   Do not relabel historic binaries as supporting
    a feature merged later. Record actual commands/results and source SHA.
 7. Refresh main, integrate any relevant movement, rerun affected gates on the final
    assembled SHA, then merge the reviewed PR using expected-head protection. Do not
