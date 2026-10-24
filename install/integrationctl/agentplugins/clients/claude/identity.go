@@ -53,6 +53,9 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if result.ExitCode != 0 {
 		return clients.RegistryIndeterminate, fmt.Errorf("the Claude Code plugin registry command failed with exit code %d", result.ExitCode)
 	}
+	if plan.Scope == domain.ScopeProject {
+		return claudeProjectRegistryFinding(result.Stdout, client, plan, managed), nil
+	}
 	switch PluginStatusFromListForScope(result.Stdout, plan.DeclaredName, plan.ActivePath, claudeListingScope(plan.Scope)) {
 	case StatusInstalled:
 		if managed == nil {

@@ -50,6 +50,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return shared.FailedActivation(outcome, "install Claude Code CLI and retry exact @skills-dir verification", fmt.Errorf("trusted Claude Code CLI is required"))
 	}
+	if request.Plan.Scope == domain.ScopeProject {
+		return activateClaudeProject(ctx, env, request)
+	}
 	if err := verifyClaudePlugin(ctx, env, request); err != nil {
 		return shared.FailedActivation(outcome, fmt.Sprintf("verify with `%s plugin list --json`", request.BackendExecutable), err)
 	}
@@ -77,6 +80,9 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 }
 
 func finishClaudeDeactivation(outcome domain.DeactivationOutcome, stdout []byte, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return finishClaudeProjectDeactivation(outcome, stdout, request)
+	}
 	switch PluginStatusFromListForScope(stdout, request.DeclaredName, request.ManagedArtifactPath, claudeListingScope(request.TargetContext.Scope)) {
 	case StatusInstalled:
 	case StatusAbsent:
