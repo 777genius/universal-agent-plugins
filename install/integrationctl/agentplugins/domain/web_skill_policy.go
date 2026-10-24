@@ -58,7 +58,8 @@ func validateWebSkillEndpointPath(u *url.URL) error {
 }
 
 // ValidSkillName is the one Skill-name contract shared by every acquisition,
-// environment and installer path: 1-64 lowercase letters, digits and single hyphens.
+// environment and installer path: 1-64 runes that are Unicode lowercase letters
+// or numbers, with single hyphens between them and no leading or trailing hyphen.
 func ValidSkillName(name string) bool {
 	if size := utf8.RuneCountInString(name); size < 1 || size > 64 || !utf8.ValidString(name) || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
 		return false

@@ -143,3 +143,16 @@ Commands and results (`GOTOOLCHAIN=go1.26.10`):
 - `install/integrationctl/agentplugins`: `go test ./domain ./environment ./installer ./sourcespec ./adapters/sourceacquisition ./adapters/dependencymanifest ./adapters/statev2 ./adapters/skillsource ./adapters/environmentstore -count=1`: PASS.
 - `cli`: `go test ./cmd/agentplugins ./internal/agentpluginscli -count=1`: PASS (`agentpluginscli` 293.6 s).
 - `golangci-lint` v2.13.2 with `--new-from-merge-base=origin/main` on the touched packages in both modules: 0 issues. The whole-file gate `--enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard` on the same packages: 0 issues.
+
+A focused re-review of `cb3e89a5` returned APPROVE. Its four P3 notes are fixed in the next commit:
+
+- `ssh://` hosts and users starting with a dash are refused, not only the SCP form.
+- `conformance` delegates the Skill-name check to `domain.ValidSkillName`.
+- The `ValidSkillName` comment states the Unicode behaviour.
+- The default alias normalizes the publisher URL, covered by `TestWebsiteDefaultAliasUsesCanonicalPublisherURL`.
+
+Final commands (`GOTOOLCHAIN=go1.26.10`):
+
+- `install/integrationctl/agentplugins`: `go test ./adapters/sourceacquisition ./adapters/skillsource ./adapters/dependencymanifest ./adapters/statev2 ./adapters/environmentstore ./conformance ./domain ./environment ./installer ./sourcespec -count=1`: PASS.
+- `cli`: `go test ./cmd/agentplugins ./internal/agentpluginscli -count=1`: PASS (`agentpluginscli` 288.3 s).
+- Lint and whole-file gate on the touched packages in both modules: 0 issues.

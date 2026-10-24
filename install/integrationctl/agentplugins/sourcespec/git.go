@@ -29,6 +29,9 @@ func NormalizeGitURL(value string) (string, string, error) {
 	if err := normalizeGitUser(u); err != nil {
 		return "", "", err
 	}
+	if strings.HasPrefix(u.Hostname(), "-") || (u.User != nil && strings.HasPrefix(u.User.Username(), "-")) {
+		return "", "", errors.New("Git endpoint host and user cannot start with a dash")
+	}
 	repository := ""
 	if u.Scheme == "https" && u.Host == "github.com" {
 		if encodedSeparator(u.RawPath) {

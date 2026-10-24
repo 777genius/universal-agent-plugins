@@ -122,7 +122,9 @@ func defaultSkillAlias(selection SkillsSelection) string {
 	probe := environment.Requirement{Alias: selection.Name, Git: &environment.GitSource{Repository: selection.Repository, Selector: environment.Selector{Kind: environment.SelectorDefault}}}
 	if selection.Website != "" {
 		probe.Git = nil
-		probe.Web = &environment.WebSource{URL: selection.Website, Skill: selection.Name}
+		// An invalid publisher URL normalizes to "", which fails Validate and keeps the hashed alias.
+		endpoint, _ := environment.NormalizeWebURL(selection.Website)
+		probe.Web = &environment.WebSource{URL: endpoint, Skill: selection.Name}
 	}
 	if probe.Validate() == nil {
 		return selection.Name
