@@ -22,6 +22,7 @@ func TestWebsiteSkillsSavedLifecycleAndColdRefusal(t *testing.T) {
 	var mu sync.Mutex
 	version := 1
 	indexAvailable := true
+	resourceAvailable := true
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -38,6 +39,10 @@ func TestWebsiteSkillsSavedLifecycleAndColdRefusal(t *testing.T) {
 		case "/scoped/.well-known/agent-skills/pdf/SKILL.md":
 			_, _ = fmt.Fprint(w, "---\nname: pdf\ndescription: Read PDF documents\n---\nRead references/note.txt.\n")
 		case "/scoped/.well-known/agent-skills/pdf/references/note.txt":
+			if !resourceAvailable {
+				http.NotFound(w, r)
+				return
+			}
 			_, _ = fmt.Fprintf(w, "resource version %d", version)
 		default:
 			http.NotFound(w, r)
@@ -103,6 +108,20 @@ func TestWebsiteSkillsSavedLifecycleAndColdRefusal(t *testing.T) {
 	indexAvailable = true
 	version = 2
 	mu.Unlock()
+	// With the local store gone, locked replay must fetch the recorded files,
+	// refuse the changed publisher bytes and leave the lock, state and install intact.
+	if err := os.RemoveAll(j.cli.app.EnvironmentStoreRoot); err != nil {
+		t.Fatal(err)
+	}
+	installedResource := filepath.Join(addedBinding.TargetLocator, "skills", "pdf", "references", "note.txt")
+	_, replayLockPath := j.cli.app.dependencyPaths()
+	replayState, replayLock := dependencyRead(t, j.cli.store.Path), dependencyRead(t, replayLockPath)
+	if _, _, err := j.cli.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil || !strings.Contains(strings.ToLower(err.Error()), "checksum") {
+		t.Fatalf("locked replay accepted changed publisher bytes: %v", err)
+	}
+	if dependencyRead(t, j.cli.store.Path) != replayState || dependencyRead(t, replayLockPath) != replayLock || dependencyRead(t, installedResource) != "resource version 1" {
+		t.Fatal("refused locked replay changed state, lock or installed resource")
+	}
 	j.run(t, "update", "pdf", "--format", "json")
 	_, updated := j.intent(t)
 	if updated.Packages[0].TreeDigest == pin.TreeDigest || updated.Packages[0].SourceKey != pin.SourceKey {
@@ -133,6 +152,24 @@ func TestWebsiteSkillsSavedLifecycleAndColdRefusal(t *testing.T) {
 		}
 	}
 	if len(refused.state(t).Installations) != 0 {
+		t.Fatal("failed import changed profiles")
+	}
+	// A publisher that deleted the pinned resource must fail the same way, with no
+	// published profile or lock.
+	mu.Lock()
+	resourceAvailable = false
+	mu.Unlock()
+	missing := makeJourney()
+	missingRequirementsPath, missingLockPath := missing.cli.app.dependencyPaths()
+	if _, _, err = missing.cli.execute(false, "deps", "import", exchange, "--install", "--yes", "--format", "json"); err == nil || !strings.Contains(err.Error(), "404") {
+		t.Fatalf("deleted historical bytes accepted for cold import: %v", err)
+	}
+	for _, p := range []string{missingRequirementsPath, missingLockPath} {
+		if _, e := os.Stat(p); !os.IsNotExist(e) {
+			t.Fatalf("failed import published %s: %v", p, e)
+		}
+	}
+	if len(missing.state(t).Installations) != 0 {
 		t.Fatal("failed import changed profiles")
 	}
 }

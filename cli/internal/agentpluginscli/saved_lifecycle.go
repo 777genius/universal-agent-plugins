@@ -171,7 +171,9 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	if operation == "remove" && opts.purgeData {
 		return true, errors.New("remove owned bindings before purging retained data; PLUGIN_DATA is preserved")
 	}
-	snapshot, err := snapshotEnvironment(cmd, app, operation != "remove")
+	// Update replaces the recorded pins, so their old bytes are not a precondition.
+	// runSavedEnvironment still verifies every pin of the candidate before publication.
+	snapshot, err := snapshotEnvironment(cmd, app, operation != "remove" && operation != "update")
 	if err != nil {
 		return true, err
 	}

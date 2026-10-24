@@ -74,3 +74,45 @@ Existing PR #473 and its commits remain the delivery vehicle. This extension
 does not merge the PR, publish a CLI package, change the landing command to an
 unsupported published `latest`, or claim every catalog entry is compatible.
 Discovery artifact format 0.2 and redirects remain explicitly unsupported.
+
+## Completion pass
+
+2026-10-24, on PR #473 head `19f12263` before this pass. Source-only and
+unreleased; no merge, installer publication or release was performed.
+
+Defects found by the lifecycle checks and fixed:
+
+- `update` of a website Skill verified the previous pin's bytes first. With an
+  empty local store and changed publisher bytes it failed with `skill file
+  original-byte SHA256 does not match its locked checksum`. Update no longer
+  requires those old bytes; `runSavedEnvironment` still verifies the whole
+  candidate, including unchanged pins, before publication. This applies to every
+  saved update, not only website Skills.
+- Cancellation while reading a Skill file body returned `skill download was
+  incomplete` instead of `context.Canceled`. Body-read cancellation now reports
+  the context error, as the request path already did.
+
+Checks added or extended:
+
+- `TestWebsiteSkillsSavedLifecycleAndColdRefusal`: locked replay with an empty
+  store and changed publisher bytes is refused by checksum, leaving state, lock
+  and the installed resource unchanged. A deleted historical resource fails cold
+  import with HTTP 404 and publishes no profile or lock.
+- `TestWebSkillCancellationDuringFileBodyLeavesNoTree`: cancellation inside the
+  body read returns `context.Canceled` and removes the download workspace.
+- `TestWebSkillRefusesUntrustedCertificateByDefault`: the default client refuses
+  a self-signed publisher certificate.
+- `TestWebSkillSourceFactsBoundPinnedFileCount`: 256 pinned files are accepted
+  and 257 are refused.
+
+Commands and results (`GOTOOLCHAIN=go1.26.10`):
+
+- `cd cli && go test ./internal/agentpluginscli -run TestWebsiteSkillsSavedLifecycleAndColdRefusal -count=1`: PASS.
+- `cd install/integrationctl/agentplugins && go test ./adapters/sourceacquisition -run TestWebSkill -count=5`: PASS.
+- `cd cli && go test ./internal/agentpluginscli ./cmd/agentplugins/... -count=1`: PASS (`agentpluginscli` 332.5 s, `cmd/agentplugins` 67.0 s).
+- `cd install/integrationctl/agentplugins && go test ./... -count=1`: FAIL in `adapters/clientdetect`, `providers`, `usecase` and `vscodelocalhooks`. The same 50 test failures reproduce on the unmodified base `19f12263` in a temporary worktree. `usecase` also panics in `TestPublicS1GeminiFailedFirstRetriesCompleteDesiredWithoutAdoptingForeignBytes` on this host. The cause of the base failures was not investigated. `cursorhooks` `TestLiteralArgvThroughJSONAndTargetShell` failed once in the full run and passed 3 of 3 reruns; it passed on the base.
+- `golangci-lint` v2.13.2 with `--new-from-merge-base=origin/main` on the changed `cli` and `install/integrationctl/agentplugins` packages: 0 issues. The whole-file gate `--enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard` on the same packages: 0 issues.
+
+The real-publisher receipt above predates this pass. Live acquisition was not
+re-run after these changes; the changed code does not alter the success path of
+acquisition.

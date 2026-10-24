@@ -1,6 +1,10 @@
 package domain
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
 func TestWebSkillEndpointPreservesPrefixAndRejectsAmbiguousCoordinates(t *testing.T) {
 	for input, expected := range map[string]string{"https://Skills.Example/": "https://skills.example", "https://Skills.Example/prefix/": "https://skills.example/prefix"} {
@@ -33,5 +37,25 @@ func TestWebSkillBindingIdentityDependsOnPublisherAndName(t *testing.T) {
 	second.WebSkill.URL += "/other"
 	if ComputeSourceBindingID(second) == id {
 		t.Fatal("different publisher prefixes share a binding")
+	}
+}
+
+func TestWebSkillSourceFactsBoundPinnedFileCount(t *testing.T) {
+	facts := func(count int) WebSkillSourceFacts {
+		hash := strings.Repeat("a", 64)
+		base := "https://skills.example"
+		pinned := WebSkillSourceFacts{URL: base, Skill: "pdf", IndexURL: base + "/.well-known/agent-skills/index.json", IndexSHA256: hash, Normalizer: "agent-skill-package/v1", RawTreeDigest: "sha256:" + hash}
+		pinned.Files = append(pinned.Files, WebSkillFile{Path: "SKILL.md", URL: base + "/.well-known/agent-skills/pdf/SKILL.md", SHA256: hash})
+		for i := 1; i < count; i++ {
+			name := fmt.Sprintf("ref%03d.md", i)
+			pinned.Files = append(pinned.Files, WebSkillFile{Path: name, URL: base + "/.well-known/agent-skills/pdf/" + name, SHA256: hash})
+		}
+		return pinned
+	}
+	if err := ValidateWebSkillSourceFacts(facts(256)); err != nil {
+		t.Fatalf("256 pinned files rejected: %v", err)
+	}
+	if err := ValidateWebSkillSourceFacts(facts(257)); err == nil {
+		t.Fatal("257 pinned files accepted")
 	}
 }

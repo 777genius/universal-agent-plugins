@@ -177,6 +177,9 @@ func (acquirer Acquirer) webSkillGET(ctx context.Context, endpoint string, limit
 	}
 	body, err := io.ReadAll(io.LimitReader(&archiveContextReader{ctx: ctx, reader: response.Body}, limit+1))
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, 0, "", ctx.Err()
+		}
 		return nil, 0, "", errors.New("skill download was incomplete")
 	}
 	if int64(len(body)) > limit {

@@ -2,7 +2,9 @@ package sourceacquisition
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -240,5 +242,76 @@ func TestWebSkillFallbackForPositiveHTMLOnly(t *testing.T) {
 				t.Fatalf("unexpected fallback=%d err=%v", probes, err)
 			}
 		})
+	}
+}
+
+// cancelAfterFirstRead cancels once the client has read the first body bytes,
+// so cancellation lands inside the body read rather than inside Do.
+type cancelAfterFirstRead struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (body cancelAfterFirstRead) Read(buffer []byte) (int, error) {
+	n, err := body.ReadCloser.Read(buffer)
+	body.cancel()
+	return n, err
+}
+
+type cancelOnFileBodyTransport struct {
+	base   http.RoundTripper
+	path   string
+	cancel context.CancelFunc
+}
+
+func (transport cancelOnFileBodyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	response, err := transport.base.RoundTrip(request)
+	if err == nil && request.URL.Path == transport.path {
+		response.Body = cancelAfterFirstRead{ReadCloser: response.Body, cancel: transport.cancel}
+	}
+	return response, err
+}
+
+func TestWebSkillCancellationDuringFileBodyLeavesNoTree(t *testing.T) {
+	const prefix = "/publisher/.well-known/agent-skills/"
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case prefix + "index.json":
+			_, _ = fmt.Fprint(w, `{"skills":[{"name":"demo","files":["SKILL.md","references/slow.md"]}]}`)
+		case prefix + "demo/SKILL.md":
+			_, _ = fmt.Fprint(w, "inert")
+		case prefix + "demo/references/slow.md":
+			_, _ = fmt.Fprint(w, "partial")
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	temporary := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := &http.Client{Transport: cancelOnFileBodyTransport{base: server.Client().Transport, path: prefix + "demo/references/slow.md", cancel: cancel}}
+	_, _, err := (Acquirer{TempRoot: temporary, HTTPClient: client}).ResolveHTTPSkill(ctx, server.URL+"/publisher", "demo")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Skill file body cancellation = %v", err)
+	}
+	if entries, err := os.ReadDir(temporary); err != nil || len(entries) != 0 {
+		t.Fatalf("canceled Skill download left workspace: %v %v", entries, err)
+	}
+}
+
+func TestWebSkillRefusesUntrustedCertificateByDefault(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprint(w, `{"skills":[{"name":"demo","files":["SKILL.md"]}]}`)
+	}))
+	defer server.Close()
+	snapshot, _, err := (Acquirer{TempRoot: t.TempDir()}).ResolveHTTPSkill(context.Background(), server.URL, "demo")
+	if err == nil || !strings.Contains(err.Error(), "TLS") {
+		if err == nil {
+			_ = packagedigest.Remove(snapshot)
+		}
+		t.Fatalf("self-signed publisher certificate was not refused by TLS verification: %v", err)
 	}
 }
