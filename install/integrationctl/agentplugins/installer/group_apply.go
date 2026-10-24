@@ -53,7 +53,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	err = wrapLifecycleError(err)
 	result.InstallationID = firstNonEmpty(got.InstallationID, prepared.plan.InstallationID)
 	state, loadErr := e.store.Load()
-	if loadErr != nil && err == nil && !got.Mutated && !prepared.plan.NoChange {
+	if prepared.req.Scope != domain.ScopeProject && loadErr != nil && err == nil && !got.Mutated && !prepared.plan.NoChange {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = "committed state is unknown"
 		return result, loadErr
@@ -81,6 +81,17 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 		}
 		return result, err
 	}
+	if prepared.req.Scope == domain.ScopeProject {
+		if loadErr != nil {
+			result.Outcome, result.Reason = OutcomeIncomplete, "committed project state is unknown"
+			return result, loadErr
+		}
+		if completeErr := completedProjectGroup(prepared, got, state); completeErr != nil {
+			result.Outcome, result.Reason = OutcomeIncomplete, completeErr.Error()
+			return result, completeErr
+		}
+		pending = false
+	}
 	if pending && e.anyGroupHostHandoffPending(prepared) {
 		result.Outcome = OutcomeIncomplete
 		result.Reason = "committed binding is not activated"
@@ -101,6 +112,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 
 func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {
 	for _, target := range got.Targets {
+		result.ManualActions = append(result.ManualActions, target.Activation.UserActions...)
 		if target.Plan.ClientID == "" || target.GroupPhase == "" {
 			continue
 		}

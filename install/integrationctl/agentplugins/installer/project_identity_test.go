@@ -290,11 +290,15 @@ func TestProjectFileObserverGroupRepairsOnlyKnownMissingManagedPackage(t *testin
 					t.Fatal("foreign refusal restored managed package", statErr)
 				}
 			} else {
-				// The existing public SDK group handoff remains incomplete while
-				// native activation is Prepared. File restoration is proved
-				// independently below; this never claims native convergence.
-				if err == nil || out.Outcome != OutcomeIncomplete || out.Reason != "committed binding is not activated" {
-					t.Fatalf("prepared group handoff classification: %+v %v", out, err)
+				// The file operation completed; the actual client lifecycles
+				// and remaining native-loading instructions stay Prepared.
+				if err != nil || out.Outcome != OutcomeCompleted || !out.Mutated || out.NoChange || len(out.ManualActions) == 0 {
+					t.Fatalf("prepared group file completion: %+v %v", out, err)
+				}
+				for _, target := range out.Targets {
+					if target.Activation != "prepared" || target.Verification != "installation_verified" {
+						t.Fatalf("promoted project client: %+v", target)
+					}
 				}
 				if deathRead(t, filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md")) != native {
 					t.Fatal("known managed package was not restored")

@@ -200,3 +200,24 @@ zero value. This does not pre-authorize a future selected project delivery mode
 or ignore its projection revision. NativeProfileRoot is compared with the
 existing authority token's canonical root when present, otherwise the exact
 project registry root recorded by the existing scoped binding contract.
+
+## Implemented presentation candidate and finite validation
+
+Both independent reviewers gave final narrow PLAN GO to legacy-effect addendum
+e2c327d8. The implementation validates the existing fresh completed group and
+its exact frozen/live identities using the already loaded state, retains real
+mutation facts on failures and preserves fresh opaque actions in target order.
+It changes no client lifecycle, native observation, state, receipt or filesystem.
+
+Go1.26.10 focused installer regressions passed1.682s: actual two-client default
+SDK restoration of a missing managed package while both remain Prepared, the
+foreign-file refusal, exact/mixed group reporting, all negative identity/outcome
+cases, legacy-versus-tracked effect handling, state reload failures and existing
+user-scope mutation reporting. The real broader lifecycle regression separately
+found the pre-existing SDK handoff forcing VerifyOnly=false on intact project
+files; that acting-path correction has its own two-round plan and remains work
+in progress. Do not label that full lifecycle green from this narrower result.
+
+Two independent frozen code reviews and the size/correctness gates are required
+before the complete integration is accepted. No vendor process was run by these
+SDK tests, and Prepared completion does not qualify native discovery or MCP.
