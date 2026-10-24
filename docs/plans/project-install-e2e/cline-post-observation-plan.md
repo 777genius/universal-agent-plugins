@@ -67,7 +67,10 @@ shared filesystem ownership remains `ProjectComponents`/
 Add narrow `clients/cline/{scope,project_components,project_lifecycle,
 project_identity,project_validation}.go` files and dispatch at the existing
 plan/project/identity/activation/removal entry points when either scope field
-selects project. New code must validate both fields agree; mismatches fail.
+selects project **or TargetContext.ProjectRoot is nonempty**. New code must
+validate both scope fields agree on project; mismatches fail, including both
+labels=user with a project root. Direct adapter entry cannot fall through to
+legacy user helpers in that malformed case.
 
 Canonical project paths are:
 
@@ -114,8 +117,11 @@ settings are not inspected or copied to infer effective Cline policy.
 
 `ActivationPreflighter` rejects project `ActivationComplete` before the
 provider's generic attestation branch and is called again by direct activation.
-It validates target/delivery identities, supported components, previous/desired
-object kinds and exact file paths. Activation uses shared native-config
+Early preflight is deliberately valid before staging: an empty Delivery is
+permitted, while plan/target/flags and any supplied delivery identity are checked.
+Final activation requires the populated exact Delivery before mutation and
+repeats those checks. Both validate supported components, previous/desired
+object kinds and exact file paths; a partial delivery cannot authorize effects. Activation uses shared native-config
 completion for actual component mutation/verification, then keeps Prepared and
 clears attestation. Auth flags cannot complete project native activation.
 A per-session read-only observation never changes this result to Active.
