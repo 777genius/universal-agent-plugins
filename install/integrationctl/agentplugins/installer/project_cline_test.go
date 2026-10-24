@@ -63,7 +63,7 @@ func (f *clineSDKFixture) execute(t *testing.T, request installer.Request) (inst
 	}()
 	return f.engine.Apply(t.Context(), handle, installer.Decision{Confirmed: true})
 }
-func (f *clineSDKFixture) apply(t *testing.T, op installer.Operation) installer.Result {
+func (f *clineSDKFixture) apply(t *testing.T, op installer.Operation) {
 	t.Helper()
 	req := f.request
 	req.Operation, req.OperationID = op, string(op)+"-Cline"
@@ -71,7 +71,6 @@ func (f *clineSDKFixture) apply(t *testing.T, op installer.Operation) installer.
 	if err != nil || out.Outcome != installer.OutcomeCompleted && out.Outcome != installer.OutcomeUnchanged {
 		t.Fatalf("%s: %+v %v", op, out, err)
 	}
-	return out
 }
 func (f *clineSDKFixture) stateBytes(t *testing.T) string {
 	t.Helper()
