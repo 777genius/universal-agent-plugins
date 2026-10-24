@@ -1,0 +1,91 @@
+{
+  "evidence_kind": "genuine-hosted-research-failure-provenance",
+  "source_commit": "e29237fe546d8aebde98adaae59d346142143d2d",
+  "run_id": 40130660701,
+  "job_id": 120981483006,
+  "artifact_id": 12575528479,
+  "archive_bytes": 6264,
+  "archive_sha256": "acf3d04abec66d0fde470e76fb501efd7bf20621c86c72ee15cfeb5719ee9bb8",
+  "archive_committed": false,
+  "member_hashes_and_lengths_verified": true,
+  "native_probe_stream_pairs_verified": 4,
+  "auxiliary_stream_pairs_verified": 3,
+  "qualified_project_installation": false,
+  "files": [
+    {
+      "name": "cleanup.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "cleanup.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "install-help.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "install-help.stdout.log",
+      "bytes": 681,
+      "sha256": "b2a99711c310da0df75a1918b42fe82870bcfc198221213e46bd48e79c0ec96e"
+    },
+    {
+      "name": "isolated-collector.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "isolated-collector.stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "list-help.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "list-help.stdout.log",
+      "bytes": 531,
+      "sha256": "9d29ee8027c2862585f860bea7e53bc5253654137ee88fd6ce8df49ef31e167b"
+    },
+    {
+      "name": "qoder-populated-research.json",
+      "bytes": 13521,
+      "sha256": "96c65504aefbb511456bdbd9979924a96e6d9cdc6d9bbe7b5c969cf0889c8be2"
+    },
+    {
+      "name": "source-checkout.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "source-checkout.stdout.log",
+      "bytes": 41,
+      "sha256": "c5fd24e8b59928f6ae0d8a1a793781b6c708a93c023ad73e868a7c32e66d5cd9"
+    },
+    {
+      "name": "uninstall-help.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uninstall-help.stdout.log",
+      "bytes": 606,
+      "sha256": "8d43b1ec885561af42110e20bf202ad858b0ad7787c533ac1d13105acfcc3ca9"
+    },
+    {
+      "name": "version.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "version.stdout.log",
+      "bytes": 7,
+      "sha256": "c4686cb8ea686d3220f88295494aaebff51a91ac90d64a6b5eb48b27d6ce6fde"
+    }
+  ]
+}

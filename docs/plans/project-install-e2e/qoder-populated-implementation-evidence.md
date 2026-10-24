@@ -69,9 +69,11 @@ or Qoder process ran locally, and hosted-admission variables were not forged.
 The first genuine populated run is
 [40130660701](https://github.com/777genius/universal-agent-plugins/actions/runs/40130660701),
 at published source `e29237fe546d8aebde98adaae59d346142143d2d`.
-At this documentation checkpoint it is queued; this is not a successful run
-or native observation. Pending deployments are empty. The repository has an
-active runner backlog; no hosted guard, platform or approval was weakened.
+The first run later completed with an honest inventory failure. Its verified raw
+[artifact and provenance](../../evidence/project-scope-research/qoder-1.1.78-linux-amd64-40130660701/README.md)
+are preserved separately. Four actual help probes passed, but the native log
+symlink stopped inventory before any list/install. This is not a successful
+populated observation. No hosted guard, platform or approval was weakened.
 
 Raw actual observations must be downloaded, verified and independently
 interpreted before proposing a production project adapter. Unknown output or
