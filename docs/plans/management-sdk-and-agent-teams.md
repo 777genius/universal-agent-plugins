@@ -1,6 +1,6 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v2 — independent lifecycle, transport and UX critiques incorporated.
+Status: implementation plan v3 — independent lifecycle, transport and UX critiques incorporated.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
@@ -452,5 +452,33 @@ Any material expansion requires a recorded reason and critic review.
 - Compatibility/result terminology: conservative unknown handling and readiness axes.
 
 No critic requested another transport, installer, scheduler or frontend rewrite.
-All mandatory written-plan findings known at this revision have been incorporated;
+Mandatory lifecycle/transport findings known at v2 were incorporated;
 implementation review remains a separate gate.
+
+### v3 final UX critic dispositions
+
+- F1/F2/F4/F5 are covered by v2 active-profile admission, narrow HTTP authority,
+  exact-source artifact delivery and separate foundation/full-integration gates.
+- F3: ownership has three states: managed, proven-unmanaged, unknown. An engine
+  failure is unknown, never proof of local ownership. Compare canonical physical
+  destination identities, including symlink/alias handling. Revalidate at local
+  edit/import/delete apply and serialize app-managed UAP changes. Before claiming
+  external-CLI race protection, inspect current projection layout and environment
+  locks and implement the narrow shared ownership/reservation seam if needed.
+  This is an implementation gate, not permission to add a general filesystem lease
+  service. Explicit copies use a distinct proven-unmanaged destination and existing
+  validation. Test unavailable engine, alias/symlink, concurrent same-destination
+  install, import overwrite, backend delete and successful copy.
+- F6: Plugins includes Install from source for engine-advertised source forms.
+  Skills includes source URL -> candidate preview/selection -> scope/runtime ->
+  install. Keep local import/authoring separate. Reuse one small source dialog when
+  semantics match; expose unsupported/private-auth limitations from capabilities,
+  never arbitrary CLI flags or executable paths. Real Electron E2E covers this path.
+- F7: desktop UX qualification includes keyboard-only action/result flow and a
+  narrow window. Assert accessible labels/focus and visible usable scope, disabled
+  reasons, partial outcomes and recovery controls through existing CDP.
+- Active-profile admission must coordinate launch and mutation at the actual effect
+  boundary; two disconnected activity checks alone do not close a start/update race.
+  Reuse the narrow runtime ownership boundary; no run snapshot framework.
+
+Plan direction is approved for implementation subject to these explicit gates.
