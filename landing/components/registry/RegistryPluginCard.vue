@@ -8,6 +8,7 @@ import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import {
   expectedDistribution,
   githubSourceUrl,
+  reachableTargetPolicies,
   resolveDistribution,
   vendorInstallSource,
 } from '~/utils/registry';
@@ -153,7 +154,14 @@ const targetOptions = computed(() =>
   })),
 );
 const authentication = computed(() =>
-  authenticationIndicator(selectedDistribution.value, targets.value, autoDetect.value, t),
+  authenticationIndicator(
+    autoDetect.value
+      ? { id: props.plugin.name, targets: reachableTargetPolicies(props.plugin.distributions) }
+      : selectedDistribution.value,
+    targets.value,
+    autoDetect.value,
+    t,
+  ),
 );
 const showAuthentication = computed(
   () => !autoDetect.value && authentication.value.state !== 'not_required',

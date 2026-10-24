@@ -1,4 +1,5 @@
 import type { RegistryPlugin } from '../types/registry';
+import { isTemporarilyUnlistedProduct } from '../data/routes.ts';
 
 export interface CatalogFilters {
   query?: string;
@@ -20,11 +21,17 @@ export function isFullyRetired(plugin: RegistryPlugin): boolean {
   );
 }
 
+/** Held out of every catalog surface by owner request, not a retirement. */
+export function isTemporarilyUnlisted(plugin: RegistryPlugin): boolean {
+  return isTemporarilyUnlistedProduct(plugin.name);
+}
+
 /** Keep retired and metadata-only Discovery records available by direct URL, not in the catalog. */
 export function catalogVisiblePlugins(plugins: RegistryPlugin[]): RegistryPlugin[] {
   return plugins.filter(
     (plugin) =>
       !isFullyRetired(plugin) &&
+      !isTemporarilyUnlisted(plugin) &&
       !(
         plugin.trust_state === 'conformant_unreviewed' &&
         retiredCatalogRepositories.has(plugin.source.repository.toLowerCase())

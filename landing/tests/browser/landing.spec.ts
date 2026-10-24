@@ -624,17 +624,12 @@ test('the authoring frontdoor distinguishes Use from released Build and links to
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
-test('the built-with showcase links to the SDK how-to-build docs', async ({ page }) => {
+test('the built-with showcase stays hidden while its product is temporarily unlisted', async ({
+  page,
+}) => {
   await page.goto('./');
 
-  const showcase = page.locator('#built-with-uap');
-  await expect(showcase.getByRole('link', { name: 'View on GitHub' })).toHaveAttribute(
-    'href',
-    'https://github.com/777genius/agent-notifications',
-  );
-  await expect(
-    showcase.getByRole('link', { name: 'Build with the SDK', exact: true }),
-  ).toHaveAttribute('href', 'https://777genius.github.io/universal-agent-plugins/docs/en/build/');
+  await expect(page.locator('#built-with-uap')).toHaveCount(0);
 });
 
 test('an unsupported localized route is never selected for browser-language visitors', async ({
