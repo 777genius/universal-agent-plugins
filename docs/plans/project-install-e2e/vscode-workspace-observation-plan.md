@@ -69,17 +69,20 @@ dependencies, providers, commands, tools, hooks or network calls. It declares
 untrusted-workspace support only so observation can run without granting trust.
 The test entry exports the documented async test runner shape, reads workspace
 folders/trust, the two metadata APIs and resource-scoped read-only configuration
-inspection. It writes one bounded JSON result and returns. It never registers
+inspection. It writes one bounded final JSON result, then keeps the test-runner promise
+pending until the controller requests planned kernel shutdown. Returning normally
+could cause the extension-test leader to exit before the strict shutdown boundary,
+so a final file is not permission to return/exit. It never registers
 skills/MCP definitions, creates an MCP gateway, starts a server, invokes a prompt,
 modifies settings, installs extensions, accepts dialogs or reads resource bodies
 outside the exact inert marker set.
 
-Allow at most 128 native MCP/skill rows, 512KiB result JSON, bounded strings and
+Allow at most 128 native MCP/skill rows, 512 KiB result JSON, bounded strings and
 portable expected local URIs. Record actual API shapes before semantic assertions;
 unknown shapes, duplicate JSON keys, missing fields or output overflow fail.
 Subscribe/poll to allow normal asynchronous discovery for at most 15 seconds;
 record the final raw inventory, including empty/blocked results. Record the
-read-only effective trust, skills-enabled and MCP-access setting values; do not
+read-only effective trust, skills-enabled, MCP-access and MCP-autostart setting values; do not
 copy the entire settings/profile. Empty markers with untrusted context are a
 blocked attribution stage; do not invent a causal trust explanation without
 explicit native evidence. Parent validates
@@ -113,27 +116,53 @@ helper alone is insufficient for this new boundary. Reuse the repository's stric
 Go helper. Its Linux path requires atomic CLONE_INTO_CGROUP creation and kernel
 cgroup teardown; do not add a second process manager or loosen that primitive.
 Build the helper from exact reviewed source with the existing pinned Go workflow
-setup, recording its digest. Its sole task is the finite sequence below, not an
+setup, recording its digest. Build is nonroot, has a 60-second deadline and live
+1 MiB limits on each output stream, and may use only the already pinned module
+set. A build failure remains bounded evidence; no on-the-fly package setup.
+Its sole task is the finite sequence below, not an
 arbitrary command/JSON execution endpoint. No production process-runner change.
 
 The hosted controller uses sudo only for this fixed audited helper so existing
 strict containment can create task-owned cgroups. The helper itself executes no
 publisher code while privileged: construct literal unshare/setpriv/env-i plus
 the existing same-process nonroot/network/capability verifier before the ELF.
-Root controller assets/control paths are private and cannot be replaced by the
-nonroot publisher; validate all derived paths and original IDs before launch.
+Before native work, the fixed helper requires actual/effective root controller
+identity and validates the original nonzero real/effective UID/GID against the
+trusted sudo-populated SUDO_UID/SUDO_GID and the frontend's pre-sudo measurement;
+arbitrary command-line IDs alone cannot authorize a different identity. The
+frontend itself must have matching nonroot real/effective IDs. The helper seals
+its own executable, publisher tree, observer source and fixture executable parents
+into task-only root-owned, non-publisher-writable directories, verifies the exact
+reviewed hashes/types, and checks them before/after every run. Root-private
+control paths are mode 0700. Only declared HOME/profile/result directories are
+writable by the original identity; untrusted results cannot replace executables.
+Validate every derived path before launch.
 Task data/results are untrusted data, never executable controller inputs. Failure
 to obtain the required cgroup/CLONE_INTO_CGROUP or namespace capability stops
 before workbench code; no ordinary-runner/process-group/no-sandbox fallback.
 
-Use already installed absolute system Xvfb and xauth binaries only; do not apt
-install them. Record ordinary executable identities/version. Missing tools fail
-before publisher GUI launch. A private fixed task display, no TCP listener and
-a random task-only Xauthority cookie provide the test display. Cookie contents
-are not logged/uploaded and do not authenticate any product/user account. Existing
-display/lock collision fails; do not attach to another display. Run Xvfb under
-the same strict contained lifecycle and original nonroot identity. No shell
-wrapper or inherited DISPLAY/XAUTHORITY is used.
+Use only the already installed absolute system Xvfb and xauth executables; do
+not apt install them. Record ordinary root-owned executable identities/version.
+Missing tools fail before publisher GUI launch. Use the literal task display :93,
+Xvfb -nolisten tcp, and one random task-only Xauthority cookie. Before launch,
+lstat the exact /tmp/.X93-lock and /tmp/.X11-unix/X93 and require both absent;
+a collision fails without querying or connecting to that display. Xvfb uses the
+same strict contained lifecycle and original nonroot identity. Its same-process
+verifier records its PID before exec. Within ten seconds, readiness requires the
+new ordinary lock to contain that exact PID and the new Unix socket to have the
+expected UID and stable identity. A preexisting/replaced socket or wrong PID/UID
+fails before any GUI process; no attach-or-retry display search.
+
+Create the authority file with the fixed xauth -f <exact-file> source - command,
+feeding only the reviewed add-display operation plus cookie on its explicit
+stdin. Cookie bytes never appear in recorded argv or controller summaries. Give
+the native identity read-only access through a root-owned nonwritable auth parent
+and file; keep it separate from mode 0700 controller assets. Exclude the file from
+upload and redact any occurrence in bounded xauth diagnostics, explicitly marking
+that stream as redacted. This is task display isolation, not product/account
+authentication. No inherited DISPLAY/XAUTHORITY or new vendor shell wrapper is
+used. The reused strict primitive does perform its existing fixed inert shell
+loop capability probe; that established probe is not an editor invocation.
 
 Run shipped ELF directly as an editor (without ELECTRON_RUN_AS_NODE), explicit
 fresh user-data/extensions dirs, --new-window, exact extensionDevelopmentPath,
@@ -143,18 +172,86 @@ Never pass --disable-workspace-trust, --no-sandbox, --disable-setuid-sandbox or
 change kernel/AppArmor policy. If the real Electron sandbox cannot initialize,
 retain its bounded diagnostics and stop. No second archive/runtime fallback.
 
-Each GUI observer has a 45-second bound. The strict duplex callback ends only
-after the bounded current result is validated or an error/deadline occurs;
-planned shutdown then terminates the kernel-contained process tree. Record that
-planned shutdown separately, never as a natural exit-zero result. Existing
-primitive cleanup failures remain failures. A total independent eight-minute
-watchdog, shorter inner deadlines, bounded stdout/stderr and independent five-
-second filesystem cleanup/upload admission remain. The helper must own signal/
-timeout cleanup; an outer kill alone is not a successful containment proof. Set
-its total/signal contexts before starting any child, keep inner deadlines shorter
-than the outer watchdog, and emit only bounded controller summaries on stdout.
-A killed controller or unproved cgroup cleanup forces collection incomplete; do
-not convert VM disposal or a missing process handle into successful cleanup.
+### One nested lifetime owner and exact cleanup reserve
+
+The helper installs its signal/overall contexts before creating any child. One
+outer RunDuplexWithPlannedShutdown call owns Xvfb. Its callback starts the bounded
+Xvfb diagnostic drain, proves readiness, then runs all four inner GUI strict
+calls sequentially. Each GUI exchange watches only its current result, validates
+it, and returns nil solely to request planned kernel shutdown; it returns a
+non-nil cause on missing/invalid result, overflow or deadline. It never returns
+nil just because the publisher exited. Join each inner strict call and its
+bounded drain before starting another. Only after all inner trees are reaped
+may the callback return and request Xvfb teardown. A failed stage stops the
+remaining table, then cleans the current GUI tree before the display tree.
+
+Use separate work cancellation and display-lifetime contexts: cancellation of
+a GUI/API work deadline signals the current inner exchange first, and does not
+simultaneously kill the outer Xvfb owner while that inner tree is being reaped.
+An external signal requests the same ordered shutdown. The outer context is a
+later independent safety deadline, not the parent canceled work context.
+
+Reuse the exact process primitive, not copied kernel code. At the current source,
+Linux creates an exact task cgroup beneath its own unified cgroup2 membership;
+required events/kill/procs files and an open cgroup FD precede atomic
+CLONE_INTO_CGROUP/Setpgid launch. Each invocation first runs the existing strict
+capability probe. Planned teardown allows a one-second pidfd stop/causality wait,
+then cgroup.kill and up to one second for leader exit plus populated=0; exceptional
+leader-kill fallback can add one second. Sole Wait/reap has a one-second bound,
+WaitDelay is100 ms, and containment close owns only its created cgroup. The
+ordinary two-second duplex exit grace applies to the nonplanned natural-exit
+path, not as a substitute for planned teardown. Reserve ten seconds per strict
+scope including its established preflight/cleanup/fallback windows and report
+any failure from the primitive. These are bounded userspace operations; an
+uninterruptible kernel syscall is not promised an impossible hard bound.
+
+The existing strict runner retains only a bounded32 KiB diagnostic stderr buffer
+and does not export a successful stderr stream. Therefore, immediately before
+exec, the same-process nonroot verifier redirects stderr to stdout for Xvfb and
+GUI children. Each exchange drains one explicitly **merged** diagnostic stream
+with a live1 MiB retained limit; overflow cancels work and cannot become a nil
+exchange result. Keep result JSON separate (512 KiB). Join drains after the
+primitive closes their pipes, bounded by the enclosing cleanup reserve. Record
+merged byte counts/hashes, overflow and planned stop; never invent separate
+stderr=0 or a natural successful exit. Planned teardown can truncate a final log
+tail, which is stated separately from the validated final API JSON boundary.
+Pre-exec verifier failures retain the primitive's bounded diagnostic error.
+
+All absolute offsets below start at the frontend's monotonic eight-minute
+budget before acquisition/build. Check remaining budget before each phase; do
+not start another inner GUI if less than 65 seconds of work budget remain. Each
+GUI has a 45-second work bound including its 15-second API discovery wait; Xvfb
+readiness is ten seconds. At 420 seconds stop/cancel work, allowing up to ten
+seconds to finish inner teardown and another ten for outer Xvfb teardown. The
+root helper then gets an independent five-second held-root cleanup window for
+its root-owned assets and returns its bounded summary by 450 seconds. Its normal
+return deadline precedes the frontend watchdog: at 460 seconds the watchdog sends
+TERM, permits signal cleanup until 470 seconds, then may kill the helper only as a failed,
+unproved-cleanup outcome. Reserve the last ten seconds for frontend-owned
+filesystem cleanup (five) and upload admission (five). Partial collection is
+allowed if earlier acquisition/build consumed the work window; deadlines are
+not silently extended to finish the table. No new child starts during cleanup.
+
+Root-created control/sealed trees are cleaned by their root helper owner using
+the existing anchored, descriptor-relative bounded cleanup pattern; the
+nonroot frontend cannot claim to remove root-owned descendants. Frontend cleanup
+handles only its own held task root. A killed controller, cleanup timeout or
+unproved cgroup emptiness forces collection incomplete. Never convert VM
+disposal or a missing process handle into successful cleanup.
+
+### Every-child capture and upload admission
+
+GUI/Xvfb diagnostics are merged as above. The helper build has separate live1 MiB
+stdout/stderr limits and 60 seconds; fixed system identity/version and xauth setup
+commands have five seconds and 64 KiB per stream. Controller stdout/stderr each
+have 64 KiB, and no child command or cleanup failure uses an unbounded fallback.
+Every child is in a literal finite command table; no executable/argument comes
+from metadata. All retained raw/redacted streams, four <=512 KiB API results,
+bounded identity/cgroup/cleanup records and failure summaries share an enforced
+<=32 MiB/64 flat-file envelope. Stop on cumulative exhaustion. The previously
+reviewed five-second separate ZIP_STORED admission and independent upload gate
+remain the only upload path; rejected raw trees yield a bounded false-claim
+failure ZIP, never an always-upload of raw profiles or caches.
 
 ## Inert fixtures and finite observation table
 
@@ -164,8 +261,26 @@ MCP markers (no stdio commands, credentials, OAuth or external endpoint). Fixtur
 and extension sources are immutable during each observation. Native cache/log/
 database writes are isolated from authored baselines and never uploaded wholesale.
 Fresh profile preferences disable updater, telemetry, extension auto-update and
-welcome prompts; they keep workspace trust enabled and ungranted. No agent,
-discovery, autostart or user security policy is silently enabled to create proof.
+welcome prompts; they keep workspace trust enabled and ungranted. All four runs
+use the **same** original task HOME outside A/B; only their explicit user-data
+profiles are fresh clones of the declared inert baseline, not of another run's
+mutable state or the actual user's profile.
+
+Set chat.mcp.autostart="never" explicitly in that baseline and record its actual
+effective value. This is a restrictive research setting, not a claim about the
+editor's default startup or enabled session behavior. At the exact pinned source,
+[mcp.contribution.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/contrib/mcp/browser/mcp.contribution.ts)
+registers editor discovery and services. [mcpService.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/contrib/mcp/common/mcpService.ts)
+constructs definition/enablement/cache observers; its autostart method checks
+Never and returns before collection activation, candidate enumeration or
+startServerAndWaitForLiveTools. [mcpManagement.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/platform/mcp/common/mcpManagement.ts)
+defines that exact setting/value. [mcpRegistry.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/contrib/mcp/common/mcpRegistry.ts)
+separately gates workspace connection resolution on trust; the observer never
+calls that start path or accepts trust. Preserve metadata discovery without
+enabling an agent, harness or autostart. The absence of a port 9 server is **not**
+proof of zero connection attempts. This collector does not instrument accepted
+TCP or prove universal absence of attempts; MCP connection/handshake/runtime
+remain not evaluated regardless of returned metadata.
 
 Use one user skill at the documented personal root and user-profile User/mcp.json;
 A/B each have .github/skills and .vscode/mcp.json with unique marker names/URLs.
@@ -193,10 +308,14 @@ parsed files for an unavailable native API or mix filesystem data into native ro
 ## Verification, interpretation and conditional product design
 
 Inert tests cover real guard refusal before effects; literal finite argv and
-proposal/extension limits; no forbidden commands/security bypass; path/output/
-identity/freshness caps; native-shape/empty/duplicate failures; callback lifetime
-and contained planned-shutdown causality; source mutation refusal; bounded clean
-failure envelope; and exact source pins. Reuse existing process containment tests,
+proposal/extension/autostart limits; no forbidden commands/security bypass;
+trusted sudo identity and root-owned executable parents; cookie-free/redacted
+records; preexisting display refusal, exact PID/socket readiness and ten-second
+startup failure; fixed HOME/fresh baseline; path/output/identity/freshness caps;
+native-shape/empty/duplicate/API-denied distinctions; pending extension lifetime;
+GUI-before-display teardown order, cancellation and joined bounded drains;
+all-child/aggregate overflow, build/xauth failure; source mutation refusal;
+bounded clean failure envelope; and exact source pins. Reuse existing process containment tests,
 including immediate setsid descendants and cancellation; do not copy their kernel
 implementation into the collector. Validate build/vet/format/workflow and run
 the relevant no-vendor suites. Obtain two frozen code GOs before publication.
@@ -215,3 +334,23 @@ native-config mutation and Prepared lifecycle. The legacy New user/Copilot
 backend and NewLocal1.140 TEST/profile/hook source stay untouched. Single local
 folder only; remote/multi-root/Local-session effectiveness and trust are separate
 limits. No adapter source or new scope capability is admitted by this plan.
+
+## Independent R1 review receipt and R2 scope
+
+Both critics reviewed immutable 01f55f6218427ce97e44d6e167507ad06e5cbcf2
+(published equivalent 9c43f29fcd4e580672ef2adfd7f8cbc559de3c57), without native
+execution. Root independently read the pinned proposed APIs, extension-host
+gates/MainThread publication and trust calculation, and gave architecture GO
+conditional on explicit nested display/GUI lifetime, readiness and cleanup
+reserve, every-child caps and blocked-versus-denied classification. APM's
+independent R1 architecture GO additionally required a workbench autostart
+boundary, fixed original HOME, trusted sudo caller identity, root-owned
+nonwritable controller/source parents and cookie-free recorded argv.
+
+This R2 plan makes those conditions concrete, corrects final-test return into a
+pending promise, and describes the existing runner's merged-diagnostic limit
+honestly. An empty inventory or a known API response with blocked/unknown attribution
+may complete safe collection with false attribution/qualification; explicit API
+denial, unknown/malformed output shape, changed
+trust or sandbox failure is a failed stage. No sandbox fallback, trust grant,
+collector code or project adapter is authorized before the two final R2 GOs.
