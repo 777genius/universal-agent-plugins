@@ -244,3 +244,27 @@ func TestProjectSkillsPreparedPlanRejectsReplacedRootBeforeLock(t *testing.T) {
 	}
 	projectJourneyAbsent(t, filepath.Join(original, ".uap"), filepath.Join(journey.cache, "store"))
 }
+
+func TestProjectSkillsSavedUnsupportedTargetRefusesBeforeNewSource(t *testing.T) {
+	app, user, a, _ := projectCompositionFixture(t)
+	spy := &projectChatGPTBoundaries{}
+	app = projectChatGPTApp(app, spy)
+	projectJourneyWrite(t, filepath.Join(a, "uap.toml"), "schema_version = 1\n[dependencies.docs]\ngit = \"https://github.com/acme/docs.git\"\nref = \"main\"\n[targets]\nchatgpt = [\"docs\"]\n")
+	before := securityFixtureTree(t, a)
+	journey := projectJourney{app: app}
+	if _, err := journey.execute(a, "skills", "add", "acme/new-skills", "--skill", "new", "--target", "gemini", "--yes"); err == nil || err.Error() != "chatgpt does not support project scope" {
+		t.Fatalf("saved target not rejected before catalog acquisition: %v", err)
+	}
+	selected, err := app.ForScope(domain.ScopeProject, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = selected.PrepareSkills(context.Background(), agentpluginscli.SkillsBatchRequest{Selections: []agentpluginscli.SkillsSelection{{Website: "https://invalid.example/never-acquire", Name: "new"}}, TargetIDs: []string{"gemini"}})
+	if err == nil || err.Error() != "chatgpt does not support project scope" {
+		t.Fatalf("saved target not rejected before direct acquisition: %v", err)
+	}
+	if !reflect.DeepEqual(before, securityFixtureTree(t, a)) {
+		t.Fatal("unsupported saved target changed project intent")
+	}
+	projectChatGPTAssertNoEffects(t, spy, user, a)
+}

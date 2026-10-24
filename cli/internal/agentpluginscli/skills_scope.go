@@ -1,7 +1,9 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -21,6 +23,11 @@ func (app App) checkSkillsContext(targets []string) error {
 		}
 	}
 	if err := app.checkProjectNamespace(); err != nil {
+		return err
+	}
+	// A first Skills add creates the manifest; an existing declaration still
+	// needs scope qualification before any new source is acquired.
+	if err := app.preflightProjectDependencyTargets(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	requirements := environment.Requirements{Targets: map[string][]string{}}
