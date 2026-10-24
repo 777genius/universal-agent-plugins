@@ -51,9 +51,8 @@ By default, the files live in `~/.config/agentplugins` on Linux
 on macOS, or `%APPDATA%\agentplugins` on Windows. `AGENTPLUGINS_HOME` can select
 another directory.
 
-**Current source, unreleased:** the transfer commands below require a compatible
-CLI built from current source; they are not yet qualified as a published CLI
-release. From a folder you want to carry to another machine, run:
+The transfer commands below ship in the published CLI. From a folder you want to
+carry to another machine, run:
 
 ```bash
 agentplugins deps export

@@ -38,3 +38,25 @@ solely for version selection or skipping a cancelled, never-public candidate.
 Preparation, review, and draft-only requests do not authorize public publication.
 All CI, independent review, environment, artifact, draft/promotion, and immutable
 tag requirements remain mandatory.
+
+## Where things live (repositories and sites)
+
+- `777genius/universal-agent-plugins` (this repo): CLI (`cli/`, `install/`),
+  landing (`landing/`, https://universal-agent-plugins.com/), public docs source
+  (`website/`, https://universal-agent-plugins.com/docs/en/).
+- `777genius/universal-agent-plugins-registry`: signed directory feeds
+  (`catalog/`, `registry/`). Its old site (`site/`) is retired:
+  https://777genius.github.io/universal-agent-plugins-registry/ shows a
+  "has moved" notice.
+- The Directory (plugin list and install buttons) is `landing/pages/plugins/`
+  in this repo, published at https://777genius.github.io/universal-agent-plugins/plugins/.
+- The landing build verifies the registry's signed feeds with
+  `cmd/agentplugins-registry-mirror`, so Directory data follows the registry.
+- Install buttons in the Directory and the landing catalog must match the
+  source kinds the released CLI accepts. Check `agentplugins skills add --help`
+  (or the release notes) before changing them.
+- Public docs are published only for `index`, `use/*`, `build/*`,
+  `guide/quickstart`, `reference/client-compatibility` and the authoring API.
+  Other `website/source/en` pages are archived and not published.
+- Pages under `use/` and `build/` are journey pages. They need released status
+  and routes in all five maintained locales (`en`, `ru`, `es`, `fr`, `zh`).
