@@ -44,6 +44,13 @@ func openProjectPath(path string, directory bool, beforeOpen func()) (*os.File, 
 	return file, actual, nil
 }
 func stableProjectPath(path string, file *os.File, before os.FileInfo) error {
+	// Re-open through the same anchored no-reparse walk, so a same-object leaf
+	// reached through a newly introduced ancestor alias cannot pass SameFile.
+	probe, _, err := openProjectPath(path, before.IsDir(), nil)
+	if err != nil {
+		return err
+	}
+	_ = probe.Close()
 	actual, err := file.Stat()
 	if err != nil {
 		return err
