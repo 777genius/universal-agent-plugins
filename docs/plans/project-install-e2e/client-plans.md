@@ -610,5 +610,5 @@ is replaced by explicit unsupported. R2 fixes independently verified GO in
 | cline | GO | Verified | GO | Root assignment required |
 | windsurf | GO | Verified | GO | Root assignment required |
 | kimi | GO (current docs) | Verified | GO | Root assignment required |
-| chatgpt | GO | Verified | GO | Root assignment required |
+| chatgpt | GO | Verified | GO | Explicit project refusal implemented; independent implementation review pending |
 | vscode | GO | Verified | GO | Root assignment required |
