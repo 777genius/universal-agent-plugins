@@ -1,6 +1,6 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v1 — research complete, independent plan review pending.
+Status: implementation plan v2 — independent lifecycle, transport and UX critiques incorporated.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
@@ -188,7 +188,7 @@ claiming support. Dependency-blocked rows remain visibly blocked.
 | S03 | Standalone Skill install | Candidate selection, immutable pin, managed ownership and native discovery |
 | S04 | Local Skill authoring | Existing local create/edit/import/remove continues for unowned destinations |
 | S05 | Managed Skill protection | Backend rejects direct edit/import overwrite/delete; explicit local copy works |
-| S06 | Add target/profile | Source pin reused; sibling profiles and ownership preserved |
+| S06 | Add client target / separate profile context | Source pin reused where supported; same-client profiles use separate captured environments; no sibling overwrite |
 | S07 | Update one/selected | One candidate graph; unselected pins unchanged; per-binding results |
 | S08 | Update all | Saved moving dependencies included; exact pins/blocked/unavailable reported |
 | S09 | Locked restore | Exact content and normalization restored into a fresh environment |
@@ -209,7 +209,7 @@ claiming support. Dependency-blocked rows remain visibly blocked.
 | S24 | HTTP/IPC | Same feature facade, parity validation/outcomes; no renderer token leakage |
 | S25 | Project scope | Qualified project adapter + explicit root; no fallback to user scope |
 | S26 | Worktree launch | Exact locked environment materialized at actual execution cwd before new run |
-| S27 | Active run | Updates apply to next launch unless qualified safe reload exists |
+| S27 | Active affected profile | Mutation refused/deferred before effects while a run uses shared roots; unaffected profiles remain usable |
 | S28 | Bad executable/version/process exit | Bounded startup, useful error, cleanup, no latest download |
 | S29 | Electron install/update/remove/reopen | Real clicks, screenshots, actual UAP process and native artifact assertions |
 | S30 | Packaged app | Pinned UAP executable packaged/resolved for supported OS/architecture |
@@ -238,6 +238,106 @@ Host migration #982 remains a dependency to recheck. If merged, wire UAP below i
 captured context and mutation owner; do not bypass it with a second writer. Do not
 cherry-pick the whole draft migration for this task.
 
+## Contract decisions after independent review
+
+### Immutable context and profile isolation
+
+A management process/session binds one immutable trusted-host context: manifest/
+lock root, state/managed roots, scope and explicit client profile/executable mapping.
+A second profile for the same client is a separate captured environment unless the
+engine explicitly supports multiple profile bindings. Do not add a speculative
+profile dimension to the client-ID-keyed dependency graph. Existing physical-root
+ownership checks remain authoritative; conflicting roots are refused.
+
+### Acceptance ordering, storage and retention
+
+Serialize acceptance lookup/create with an existing environment/process lock.
+Session mutexes alone are insufficient across two UAP processes. Lookup a known
+accepted request before resolving its old plan handle or enforcing plan expiry.
+
+Namespace request IDs by captured environment identity. Keep request ID, immutable
+context/input fingerprint, accepted plan ID, correlated installer operation IDs,
+disposition and final public result/next actions. Store no credentials, operational
+prepared objects, filesystem transaction copies or progress ticks. Persist before
+effects; a persistence failure refuses acceptance. It is an observation record,
+not an automatically replayed job queue.
+
+Retention policy: keep terminal observations for at least 30 days; bound individual
+record/result size and history. Never prune unresolved/recovery-required records by
+display-history limits. Expired/unknown observations return a structured not-found/
+expired result and require environment inspection; they never imply no effects.
+A request ID is never silently recycled within retained acceptance history.
+Document exact limits in the contract and test them.
+
+### Bulk resolution policy
+
+Manifest exact pins remain unchanged with a pinned explanation. Eligible moving
+selections resolve together into one candidate graph; failed acquisition, dependency
+conflict or validation refuses the candidate before acceptance. Excluded pins and
+unsupported/policy-blocked entries appear with stable reasons in review. An unknown
+update check is not current. No largest-installable-subset solver and no silent
+best-effort graph loop. Partial results refer to effects of an accepted plan.
+An exact lock revision does not mean manifest intent itself is pinned.
+
+### Reproducible artifacts without public release
+
+Build the SDK tarball from an exact reviewed UAP source commit. Vendor that tarball
+in Agent Teams with package identity, source SHA and SHA-256, following the existing
+vendor/terminal-platform/sdk precedent. Pin the same source commit for native UAP.
+Agent Teams build/CI builds that source with its declared Go toolchain and
+read-only module resolution, then stages the executable into packaged resources.
+End users receive a built executable; no runtime Go build or latest download.
+
+Use the same pins for PR E2E and clean-checkout/package-consumer qualification.
+Include license and third-party notices. Do not depend on an expiring Actions URL
+or an unpublished registry version. A later move to public release artifacts uses
+the separately authorized release process. Refresh source and package pins together
+before final qualification.
+
+### SDK lifetime, compatibility and qualification
+
+wait() abort/deadline never kills the child or cancels accepted work. UI navigation
+does not close the engine. Node close() is idempotent, asks its own process to shut
+down gracefully, waits a bounded interval, and only then terminates that child if
+needed. Interrupted accepted work stays discoverable for recovery. No unrelated
+native process is killed. Test startup exit, bootstrap timeout, repeat close and
+close during accepted work.
+
+Protocol major is independent of package/engine version. Reject major mismatch.
+Optional response fields are additive; unknown outcomes/actions are conservative,
+never success. New request fields need supported capability/version. Map
+materialization, activation, authentication, policy and verification without
+flattening them into an installed boolean; include a manual-action response fixture.
+
+CI runs pinned generation with --check. Explicit incoming request validation remains
+required. Test the packed TS package from a clean consumer against real Go. Check
+pure exports for accidental Node/Electron/DOM-storage dependencies. Add one small
+Python standard-library protocol smoke against the real server (handshake, read,
+fixture lifecycle and structured error), not a speculative maintained Python SDK.
+
+### Application HTTP admission and live profiles
+
+S24 covers only the new Agent Teams feature, as required by its feature standard;
+it does not rebuild every legacy web extension API. Both adapters invoke the same
+facade. Existing application CORS settings are not mutation authority. Add a narrow
+management-route admission check: exact trusted Host/Origin and loopback client;
+refuse unauthenticated non-loopback deployment unless an existing authenticated
+trusted adapter supplies authority. Require bounded JSON mutation bodies. Test
+hostile/unknown Origin/Host and broad CORS configuration before facade invocation.
+Do not weaken UAP's own capability checks or introduce a global auth framework.
+
+Current shared native profile files can be read by active agents. Therefore refuse/
+defer affected-context mutations while a run uses those roots, with an actionable
+stop/defer message; unaffected contexts are allowed. No false immutable-run promise.
+
+### Completion and dependency gates
+
+API/SDK can be independently mergeable when their advertised capabilities pass.
+Full Agent Teams project/worktree completion still requires S25/S26 against a
+merged, qualified project engine. Capability refusal tests are fallback evidence,
+not a passing project installation. Never merge unfinished prerequisite adapters
+or mark dependent scenarios passed to satisfy a checklist.
+
 ## Delivery sequence and review checkpoints
 
 M0 Research and plan:
@@ -248,12 +348,15 @@ M0 Research and plan:
 M1 Contract and smallest vertical lifecycle:
 - Shared preparation/application seam and versioned headless HTTP startup.
 - Generated Go/TS DTOs; pure SDK + Node helper.
-- Real fixture install, operation wait, lost response retry, process restart.
+- Before the first mutation: durable acceptance/result correlation, request fingerprint,
+  installer operation IDs, cross-process acceptance serialization, interrupted state.
+- Real fixture install, operation wait, combined lost-response + kill + restart retry.
+- Acceptance lookup precedes expired/missing plan lookup; no automatic replay.
 - Independent contract/code review before broadening surface.
 
 M2 Complete management lifecycle:
 - Catalog/Skills/environment, selected/all update, locked sync, repair/remove.
-- Durable acceptance correlation, cancellation and recovery semantics.
+- Extend M1's acceptance correlation, cancellation and recovery to every lifecycle.
 - Shared CLI/picker behavior, generated drift checks and second-language recipe.
 
 M3 Agent Teams host integration:
@@ -308,7 +411,7 @@ toolchain/dependency preparation. Do not claim any test passed until executed.
 | Acceptance/result persistence and crash boundary | Correlate current installer OperationID/receipts, deterministic S15 barriers |
 | Manifest succeeds but lock publication fails | Existing publication path fault injection; truthful partial/recovery result |
 | General managed Skill ownership inventory | Inspect authoritative binding materialization roots; server-side bypass tests |
-| New TS package consumption before public release | Pin reviewed source/artifact for PR E2E; document production packaging/publishing gate |
+| Cross-repository artifacts | Decided: exact-source SDK tarball vendored with digest; same source builds native binary during app build/CI |
 | Project/worktree readiness | Recheck separate project PR qualification; keep capability truthful |
 | Host migration timing | Recheck #982 before final integration; bind beneath captured ownership if landed |
 | Cross-platform binary launch/package lifetime | Node helper contract and existing packaged matrix; no implicit latest |
@@ -333,3 +436,21 @@ Any material expansion requires a recorded reason and critic review.
   identified HTTP parity, native identity preservation, backend Skill ownership,
   retained recovery authority, manifest publication effects, and durable request
   correlation. Independent review of this written plan is the next checkpoint.
+
+### v2 critic dispositions
+
+- Lifecycle B1/M1: moved durable correlation and cross-process acceptance into M1;
+  specified retry lookup before missing/expired plan checks.
+- Lifecycle M2: immutable context, separate same-client profile environments.
+- Lifecycle M3: explicit batch pin/refusal policy; no best-effort subset solver.
+- Transport R1 / lifecycle M4: reproducible vendored SDK + same-source native build.
+- Transport R2/R3/R4/R5: combined restart retry, shutdown semantics, actual Python
+  smoke, packed-consumer/generated drift qualification.
+- Transport R6: new-feature IPC/HTTP parity only, mandated by app standard.
+- Lifecycle M5/M6: dependency completion gate and limited observation persistence.
+- UX: enforce active-profile mutation refusal and strict management HTTP admission.
+- Compatibility/result terminology: conservative unknown handling and readiness axes.
+
+No critic requested another transport, installer, scheduler or frontend rewrite.
+All mandatory written-plan findings known at this revision have been incorporated;
+implementation review remains a separate gate.
