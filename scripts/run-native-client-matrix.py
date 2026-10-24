@@ -74,7 +74,7 @@ REQUIRED_TESTS = {
 }
 PROJECT_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle"},
-    "claude": {"TestAgentpluginsClaudeNativeProjectPluginLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle"},
 }
 
 
@@ -335,7 +335,7 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--prepared-input", type=Path)
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
-    parser.add_argument("--project-components", action="store_true", help="also require current-source project component discovery; never released/draft proof")
+    parser.add_argument("--project-components", action="store_true", help="also require current-source project lifecycle evidence with explicit discovery limits; never released/draft proof")
     args = parser.parse_args()
     draft.validate(args)
     if args.release_state == "draft" and args.producer_source is None:

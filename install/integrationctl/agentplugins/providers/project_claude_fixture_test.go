@@ -104,12 +104,13 @@ func (f *claudeProjectFixture) removal() domain.DeactivationRequest {
 // A fixture runner validates production command contracts without executing a
 // native client or package. Its listing is fixture evidence only.
 type claudeProjectRunner struct {
-	t                    *testing.T
-	fixture              *claudeProjectFixture
-	scope                string
-	enabled              bool
-	wrongPath, malformed bool
-	calls                int
+	t                       *testing.T
+	fixture                 *claudeProjectFixture
+	scope                   string
+	enabled                 bool
+	wrongPath, malformed    bool
+	suppressed, otherSource bool
+	calls                   int
 }
 
 func (r *claudeProjectRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -136,6 +137,13 @@ func (r *claudeProjectRunner) Run(_ context.Context, command legacyports.Command
 	if r.wrongPath {
 		path = filepath.Join(f.other, ".claude", "skills", filepath.Base(path))
 	}
-	body, err := json.Marshal([]map[string]any{{"id": "demo@skills-dir", "scope": r.scope, "enabled": r.enabled, "installPath": path}})
+	rows := []map[string]any{{"id": "demo@skills-dir", "scope": r.scope, "enabled": r.enabled, "installPath": path}}
+	if r.suppressed {
+		rows = []map[string]any{{"id": "(suppressed)@skills-dir", "version": "unknown", "scope": "project", "enabled": false, "installPath": "", "notes": []string{"1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."}}}
+	}
+	if r.otherSource {
+		rows = append(rows, map[string]any{"id": "demo@skills-dir", "scope": "user", "enabled": true, "installPath": filepath.Join(f.user, "skills", "demo-user")})
+	}
+	body, err := json.Marshal(rows)
 	return legacyports.CommandResult{Stdout: body}, err
 }

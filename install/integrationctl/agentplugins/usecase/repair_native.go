@@ -93,6 +93,10 @@ func (session *repairSession) correctIntactLifecycle(verified domain.ActivationO
 		corrected.Verification = verified.Verification
 	}
 	session.result.Activation = lifecycleOutcome(corrected)
+	// Fresh verification guidance is transient; the binding intentionally stores
+	// lifecycle values only. Preserve the current adapter's actions in this result.
+	session.result.Activation.UserActions = append([]string(nil), verified.UserActions...)
+	session.result.Activation.LocalActions = append([]string(nil), verified.LocalActions...)
 	if corrected.Materialization == session.client.Materialization && sameLifecycleOutcome(lifecycleOutcome(corrected), lifecycleOutcome(session.client)) {
 		session.result.NoChange = true
 		return session.result, nil
