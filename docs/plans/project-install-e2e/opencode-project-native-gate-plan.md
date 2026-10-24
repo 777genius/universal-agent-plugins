@@ -27,7 +27,13 @@ model request. Start with the existing macOS-arm64/Windows-amd64 source workflow
 no new Linux isolation claim or runner substitution is introduced by this plan.
 
 Use one explicit fresh original HOME/XDG authority outside sibling A/B and an
-ordinary user working directory. Every UAP/native child shares that authority.
+ordinary user working directory. Create a real fresh Git repository boundary in
+each A/B and the user working directory, and a fourth for the short JSON case.
+All are canonical temporary directories outside the checked-out UAP source and
+outside each other. Use only fixed bounded `git -c core.hooksPath=/dev/null init`
+with the fresh HOME/Git configuration; no hooks, remote or Git config import.
+Assert each native cwd resolves to its own expected worktree before observation,
+so native upward discovery cannot inherit the parent checkout or sibling. Every UAP/native child shares that authority.
 Never use a project as HOME or `OPENCODE_CONFIG_DIR`. Preserve the explicit
 platform environment, `OPENCODE_PURE=1`, and source-supported literal controls
 `OPENCODE_DISABLE_AUTOUPDATE=1`, `OPENCODE_DISABLE_MODELS_FETCH=1`,
@@ -64,8 +70,19 @@ not duplicate every lifecycle step. Never invent a v2 schema or silently change
 the pinned version/dialect when a native command fails.
 
 Fixture packages contain only standard inert skills/portable commands and
-remote loopback MCP declarations (`http://127.0.0.1:9/...`), with no local stdio
-server, JS/TS plugin, hook or payload executable. The MCP declarations exercise
+remote loopback MCP declarations pointing at a parent-owned passive HTTP
+recorder on an ephemeral `127.0.0.1` port, with no local stdio
+server, JS/TS plugin, hook or payload executable. The passive recorder implements
+no MCP protocol or authentication: it counts accepted TCP connections and HTTP
+requests, and returns HTTP 503. Record bounded connection/request counters and a
+bounded method/path metadata sample (no request bodies/credentials), with bounded
+server read/header/write/idle deadlines. Both aggregate counters across all child
+operations and their deltas for each positive config/skill probe must remain
+zero. Any accepted connection or request fails that stage and is retained as
+attempted connection evidence, never as a handshake. Close it under the fixture
+deadline. Zero counters only describe this live recorder endpoint; they do not
+prove the absence of unrelated network traffic.
+The MCP declarations exercise
 exact effective config selection, not connection or initialization. Do not run
 `mcp list`: the existing helper explicitly attempts live connections. Actual MCP
 handshake/tool qualification remains a separate gate and is marked not evaluated
@@ -92,7 +109,10 @@ Use at most 30 direct native observation processes and 30 public UAP commands
 per complete fixture, with an independent six-minute fixture deadline inside
 the existing matrix's 15-minute test budget. UAP's own pinned host preparation
 may invoke additional bounded version probes; do not misreport the direct-probe
-ceiling as a measured total of all descendants.
+ceiling as a measured total of all descendants. Setup uses at most four fixed
+Git commands, with an overall 60 captured-child ceiling across these classes.
+All new subprocess classes share bounded capture and the same aggregate artifact
+budget, including UAP and setup failure output.
 A fixed command list permits only `--version`, `debug config`, and `debug skill`.
 No general shell, command taken from output, arbitrary path lookup, MCP list,
 run/prompt/session, plugin install, trust, account or updater command is allowed.
@@ -130,13 +150,26 @@ separate gate. Do not increase global native timeouts silently.
 ## Capture, interpretation and artifact contract
 
 Do not copy the unbounded old `CombinedOutput` helpers into the new fixture.
-Reuse the already reviewed bounded native diagnostic capture primitive behind a
-client-neutral test wrapper if necessary: fixed executable/argv/cwd/environment,
-empty stdin, separate live 512 KiB stdout/stderr limits, <=10-second per-process
-context, bounded pipe drain/WaitDelay and child termination/reap. A failure,
+Reuse the already reviewed bounded diagnostic capture primitive behind a
+client-neutral test wrapper if necessary, parameterizing limits without changing
+existing caller behavior. It applies to EVERY new child, including public UAP
+operations and Git setup, not only direct native observations. Require fixed
+executable/argv/cwd/environment, empty stdin, separate live 128 KiB stdout/stderr
+limits, <=10 seconds for direct native/Git and <=30 seconds for public UAP, each
+also capped by remaining fixture time, bounded pipe drain/WaitDelay and child
+termination/reap. Never reuse old unbounded f.uap/f.native/CombinedOutput paths
+in the new fixture. A failure,
 deadline, overflow, nonzero exit, dirty warning or unrecognized JSON is recorded
 and fails the relevant stage. No failed output becomes an empty successful list.
 Any helper extraction is behavior-preserving and independently code-reviewed.
+
+Only in the isolated same-name precedence phase, a recognized exact duplicate-
+skill warning may be retained as a blocked/unqualified precedence observation
+with its valid path-bearing winner. Do not strip or globally ignore warnings.
+Validate the known name and every reported source against exact fixture paths;
+if the warning format is unknown, retain it as a blocked/failed observation.
+Mandatory positive phases continue to fail on dirty warnings, malformed output,
+nonzero exit or truncation. No failure becomes an empty or successful discovery.
 
 Decode one whole JSON document with duplicate/case-ambiguous keys, trailing
 bytes, nonfinite values and malformed required field types refused. The new
@@ -150,14 +183,19 @@ Keep separate attempted/passed/blocked/not-evaluated stages. Mandatory passed
 stages cover actual UAP Prepared file lifecycle and the positive unique-marker
 project discovery/config source. Same-name precedence and inline shadowing
 retain their measured limits. MCP initialization/tool use, authentication,
-model use, trust policy, managed enterprise sources, IDE and default plugins are
+model use, trust policy, managed enterprise/ancestor sources, IDE and default plugins are
 explicitly not evaluated. No stdout or filesystem fallback can upgrade them.
 
 Retain only bounded flat JSON/log evidence, exact stdout/stderr lengths/hashes,
 source/native/installer identities and foreign/owned state snapshots. No native
-cache, database, binary, auth data or node_modules is uploaded. With <=30 probes
-at 512 KiB per stream plus bounded summaries, admit the new fixture to <=32 MiB
-and at most 128 flat files before publication to the upload source. A
+cache, database, binary, auth data or node_modules is uploaded. The aggregate
+<=32 MiB/128 flat-file upload envelope includes ALL public-UAP/native/Git streams,
+state snapshots, metadata and failure diagnostics. At most 60 captured child
+commands with 128 KiB/stream contribute at most 15 MiB; reserve at most 120 stream
+files and 8 metadata/snapshot files within the 128 file cap. The remaining bounded
+budget covers summaries/snapshots. Enforce the cumulative limit while recording
+and again at admission; stop further probes on exhaustion. Never admit only the
+new native logs while leaving UAP/snapshot output outside the budget. A
 refused envelope produces only a bounded false-qualification failure record;
 raw refused trees are not the always-upload path. Reuse an already reviewed
 admission helper if its actual boundary matches, otherwise review the narrow
@@ -181,3 +219,33 @@ foreign state preservation. Compile the fixture and run affected Python matrix
 contracts plus syntax/diff checks. No native process runs locally. Genuine
 artifacts are then downloaded, hashed and independently interpreted; their exact
 source/version/platform and remaining boundaries enter the final client matrix.
+
+
+## R1 corrections and MCP source boundary
+
+Both independent R1 critics requested the all-child capture/aggregate budget and
+known duplicate-warning distinction; root additionally required explicit Git
+boundaries and a concrete enabled-MCP bootstrap trace. Those requirements are
+incorporated above, without changing the adapter or promoting native lifecycle.
+
+At exact upstream commit `aec0b9a6`, [mcp/index.ts](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/mcp/index.ts)
+creates a shared MCP service whose per-instance state is registered through
+`InstanceState.make`. This is a service/cache allocation, not a per-server
+transport/client construction. [instance-state.ts](https://github.com/anomalyco/opencode/blob/aec0b9a6d8898f68f923aaf08b7306d931fd9d76/packages/opencode/src/effect/instance-state.ts)
+constructs a ScopedCache with a deferred lookup; only `InstanceState.get` invokes
+the initializer. MCP's initializer enumerates enabled entries and creates the
+actual Client/transports, so operations such as `MCP.status/clients/tools/connect`
+can cause connections. `createClient`/`client.connect` are in those invoked
+paths, rather than the shared service constructor.
+
+The fixed debug config handler only calls Config.Service.get; fixed debug skill
+only calls Skill.Service.all. InstanceBootstrap eagerly invokes Config.get and
+Plugin.init plus its listed LSP/share/format/VCS/snapshot/project services, not
+MCP.status/clients/tools/connect. The declared controls disable default plugins
+and external plugin execution, and the fixture supplies no plugin, hook or skill
+URL with another execution route. This is a static trace supporting the narrow
+observation route, not a universal no-side-effects or no-network claim. The
+passive loopback recorder adds actual attempted-connection evidence for the
+only configured MCP URLs. If an accepted connection or request occurs despite this trace, keep that
+failure and investigate before changing assertions or invoking another command.
+No successful MCP initialization, tool use or network isolation is inferred.
