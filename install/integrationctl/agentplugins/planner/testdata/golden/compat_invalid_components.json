@@ -217,7 +217,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
