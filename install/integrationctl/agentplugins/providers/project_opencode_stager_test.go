@@ -25,7 +25,7 @@ import (
 func TestProjectOpenCodePlannerStagerRendersCommandsAndOwnsExactNativeComponents(t *testing.T) {
 	request, projectB, user := projectOpenCodeRequest(t)
 	beforeUser, beforeB := projectGeminiInventory(t, user), projectGeminiInventory(t, projectB)
-	source := filepath.Join(t.TempDir(), "source")
+	source := filepath.Join(projectGeminiTemp(t), "source")
 	projectGeminiWrite(t, filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"demo","version":"1.0.0"}`)
 	projectGeminiWrite(t, filepath.Join(source, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Project docs\n---\nInert docs.\n")
 	projectGeminiWrite(t, filepath.Join(source, filepath.FromSlash(commandext.RelativeDirectory), "echo.md"), "---\ndescription: Echo the marker\ndisable-model-invocation: false\n---\nUAP-PROJECT-INERT\n")

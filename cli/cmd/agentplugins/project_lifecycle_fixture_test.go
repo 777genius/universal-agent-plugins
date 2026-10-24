@@ -54,6 +54,17 @@ type projectJourney struct {
 const projectJourneySkill = "---\nname: docs\ndescription: Inert project documentation\n---\nUAP-PROJECT-SOURCE-FIXTURE\n"
 const projectJourneyAdvancedSkill = "---\nname: docs\ndescription: Inert project documentation\n---\nUAP-PROJECT-UPDATED-FIXTURE\n"
 
+// Resolve existing fixture roots before composition and exact receipt assertions.
+// Native observations and production path validation remain unchanged.
+func projectJourneyTemp(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func projectJourneyWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -76,19 +87,19 @@ func projectJourneyGit(t *testing.T, root string, args ...string) {
 
 func newProjectJourneyTransport(t *testing.T, kind string) *projectJourneyTransport {
 	t.Helper()
-	gitHome := t.TempDir()
+	gitHome := projectJourneyTemp(t)
 	for _, name := range []string{"HOME", "USERPROFILE", "XDG_CONFIG_HOME"} {
 		t.Setenv(name, gitHome)
 	}
 	projectJourneyWrite(t, filepath.Join(gitHome, ".gitconfig"), "[credential]\n helper =\n[http]\n schannelUseSSLCAInfo = true\n")
-	transport := &projectJourneyTransport{repo: t.TempDir()}
+	transport := &projectJourneyTransport{repo: projectJourneyTemp(t)}
 	projectJourneyWrite(t, filepath.Join(transport.repo, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"project-demo","version":"1.0.0"}`)
 	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), projectJourneySkill)
 	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"}}}}`)
 	projectJourneyGit(t, transport.repo, "init", "-b", "main")
 	projectJourneyGit(t, transport.repo, "add", ".")
 	projectJourneyGit(t, transport.repo, "commit", "-m", "disposable project source")
-	remoteRoot := t.TempDir()
+	remoteRoot := projectJourneyTemp(t)
 	transport.remote = filepath.Join(remoteRoot, "repo.git")
 	projectJourneyGit(t, transport.repo, "clone", "--quiet", "--bare", transport.repo, transport.remote)
 	git, err := exec.LookPath("git")
@@ -107,7 +118,7 @@ func newProjectJourneyTransport(t *testing.T, kind string) *projectJourneyTransp
 		_, _ = w.Write(transport.archive)
 	}))
 	t.Cleanup(transport.server.Close)
-	ca := filepath.Join(t.TempDir(), "ca.pem")
+	ca := filepath.Join(projectJourneyTemp(t), "ca.pem")
 	projectJourneyWrite(t, ca, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: transport.server.Certificate().Raw})))
 	t.Setenv("GIT_SSL_CAINFO", ca)
 	transport.endpoint = transport.server.URL + "/package.zip"
@@ -138,7 +149,7 @@ func projectJourneyArchive(t *testing.T, root string) []byte {
 
 func newProjectJourney(t *testing.T, transport *projectJourneyTransport) projectJourney {
 	t.Helper()
-	journey := projectJourney{home: t.TempDir(), a: t.TempDir(), b: t.TempDir(), transport: transport}
+	journey := projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}
 	journey.cache = filepath.Join(journey.home, "uap")
 	for _, native := range []string{filepath.Join(journey.home, ".gemini"), filepath.Join(journey.a, ".gemini"), filepath.Join(journey.b, ".gemini")} {
 		projectJourneyWrite(t, filepath.Join(native, "settings.json"), "{\n// retained foreign settings\n\"mcpServers\":{\"foreign\":{\"url\":\"https://foreign.test/mcp\"}},\"theme\":\"foreign\"\n}\n")

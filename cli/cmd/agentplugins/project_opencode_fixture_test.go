@@ -26,7 +26,7 @@ func projectOpenCodeProbeFixture(t *testing.T) string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	path := filepath.Join(t.TempDir(), name)
+	path := filepath.Join(projectJourneyTemp(t), name)
 	command := exec.CommandContext(t.Context(), "go", "build", "-ldflags", "-X main.version=1.18.34 -X main.mode=version-only", "-o", path,
 		"../../../install/integrationctl/agentplugins/adapters/clientdetect/testdata/opencode_probe.go")
 	if body, err := command.CombinedOutput(); err != nil {

@@ -26,7 +26,7 @@ type cursorProjectJourney struct{ projectJourney }
 
 func newCursorProjectJourney(t *testing.T, transport *projectJourneyTransport) cursorProjectJourney {
 	t.Helper()
-	f := cursorProjectJourney{projectJourney{home: t.TempDir(), a: t.TempDir(), b: t.TempDir(), transport: transport}}
+	f := cursorProjectJourney{projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}}
 	f.cache = filepath.Join(f.home, "uap")
 	for _, root := range []string{"", f.a, f.b} {
 		native := f.cursorRoot(root)

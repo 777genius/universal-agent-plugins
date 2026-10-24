@@ -22,7 +22,7 @@ func projectOpenCodeRequest(t *testing.T) (domain.ActivationRequest, string, str
 
 func projectOpenCodeRequestWithNames(t *testing.T, names []string) (domain.ActivationRequest, string, string) {
 	t.Helper()
-	base := t.TempDir()
+	base := projectGeminiTemp(t)
 	user, projectA, projectB := filepath.Join(base, "user", "opencode"), filepath.Join(base, "A"), filepath.Join(base, "B")
 	foreign := "{ // preserve foreign settings\n\"mcp\":{\"foreign\":{\"type\":\"remote\",\"url\":\"https://foreign.test/mcp\",\"enabled\":false}},\"theme\":\"foreign\"}\n"
 	for _, root := range []string{user, projectA, projectB} {

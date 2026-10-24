@@ -18,7 +18,7 @@ func TestProjectKimiColdSavedImportPreservesPinnedAgreement(t *testing.T) {
 	original.run(t, original.a, "add", transport.endpoint, "--alias", "docs", "--target", "kimi")
 	installation, _ := projectKimiOwned(t, original, original.a, projectJourneySkill)
 	pair := original.assertPortablePair(t, original.a)
-	exchange := t.TempDir()
+	exchange := projectJourneyTemp(t)
 	original.run(t, original.a, "deps", "export", exchange, "--yes")
 	cold := newProjectJourney(t, transport)
 	cold.app = configureProjectKimiJourney(cold.app, filepath.Join(cold.home, ".kimi-code"), filepath.Join(cold.home, "kimi"))
