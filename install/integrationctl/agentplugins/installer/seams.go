@@ -145,7 +145,7 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 	// Selected deliveries retain their separate confirmation contract.
 	resume := request.PackageUnchanged && request.Plan.SelectedDelivery.IsZero() && a.facts.BindingID != ""
 	if resume {
-		if a.hostHandoffPending(request) {
+		if a.hostHandoffPending(request) && !keepProjectVerifyOnly(request) {
 			request.VerifyOnly = false
 		}
 	} else if a.onCommitted != nil && !request.VerifyOnly {
@@ -163,6 +163,19 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 		}
 	}
 	return a.inner.Activate(ctx, request)
+}
+
+// keepProjectVerifyOnly preserves the core's existing read-only decision for
+// verified project component files. Prepared session activation alone must not
+// turn that verification back into a write. It never invents VerifyOnly.
+func keepProjectVerifyOnly(request domain.ActivationRequest) bool {
+	if !request.VerifyOnly || !request.PackageUnchanged || !request.Plan.SelectedDelivery.IsZero() ||
+		request.Plan.Scope != domain.ScopeProject || request.Plan.ClientID != request.Client.ClientID {
+		return false
+	}
+	target, err := domain.NewTargetContext(domain.ScopeProject, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot)
+	return err == nil && target == request.Plan.TargetContext &&
+		request.Plan.SelectedDelivery.EffectiveTraitsForScope(request.Client.ClientID, request.Plan.Scope).LifecycleKind == domain.LifecycleNativeConfig
 }
 
 func hostHandoffPending(binding domain.ClientBinding) bool {

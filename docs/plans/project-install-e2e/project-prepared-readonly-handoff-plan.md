@@ -68,3 +68,39 @@ rules. Preserve actual native effects and all existing pending/recovery tests.
 
 No production seam source has been edited for this correction. Final independent
 R2 reviews precede that edit.
+
+## Implementation and focused acceptance
+
+Both APM and Skillshare gave final R2 PLAN GO on exact49028da815077c4ce9793bad271a5d5655032f0e
+before production edits. The source exception preserves only incoming VerifyOnly
+for an unchanged zero-selected explicit project NativeConfig request whose
+client, validated TargetContext and original user root agree. It uses existing
+scoped traits and NewTargetContext (pure lexical validation), without IO or a
+client-ID switch. Acting requests, user/CLIRegistry/Prepared lifecycles and
+selected-delivery confirmation retain their previous routes.
+
+Focused installer acceptance on the assembled source passed3.667s: actual group
+and single file replay, narrow real seam/provider dispatch, strict Prepared group
+reporting, existing committed-callback retry and file lifecycle regressions.
+The actual Cline+Codex group covers fresh read-only repeated install/update,
+intact repair, callback success/failure, changed update, partial native-directory
+refusal, positive whole-directory absence repair, reopen and per-client removal.
+Original user/B files remain identical and the forbidden runner is never called.
+The single replay checks the actual adapter request, observation, state and file
+bytes; existing completed-with-no-mutation presentation is preserved.
+
+Group Repair intentionally restages managed packages under the existing core
+contract (!Repair in the unchanged predicate); its real state/receipt mutation is
+reported Completed/Mutated even if native bytes match. Removing just SKILL.md
+from a still-present owned native directory is integrity drift and remains a
+refusal; removing the entire independently owned object is typed absence and is
+repairable. Neither contract was relaxed to satisfy a test. Group removal's
+historical SDK beta guard has a separate twice-reviewed admission plan; this
+handoff test uses existing public single removals until that slice is complete.
+
+The focused seam test preserves user/project-CLI/project-Prepared behavior,
+incoming false, malformed/mixed context, client mismatch and selected-delivery
+refusal. Profile failure remains fatal and a resumed request never repeats the
+post-commit callback here. Group facts deliberately identify another client so
+the exception cannot accidentally be tied to the first target. Architecture and
+changed-source lint results will be recorded separately, before publication.
