@@ -62,6 +62,39 @@ include URI and source. Preserve all native rows/duplicates; never collapse by
 name before checking attribution. The source's workspace/personal skill priority
 is a hypothesis until an actual same-name observation supports it.
 
+### Exact nonprivileged executable modes for the GUI slice
+
+The help collector's extractor intentionally creates every regular file 0600 and
+only enables its top-level code ELF. Do not silently reuse that mode policy for
+a GUI, restore arbitrary TAR modes or turn on setuid/setgid bits. After the exact
+archive length/digest and streaming extraction succeed, the workspace collector
+permits mode 0555 on **exactly** these two regular, single-link, bounded ELF paths:
+
+- VSCode-linux-x64/code;
+- VSCode-linux-x64/resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/linux-x64/rg.
+
+Check no-follow parent/leaf identity, ELF magic, individual length/hash and exact
+archive-derived source before sealing; record both individual digests. All other
+publisher files are read-only ordinary data, and root-owned directories are
+non-publisher-writable. The archive's privileged/other executable mode metadata
+cannot authorize another executable. A missing/mis-typed required path or any
+additional required executable stops the stage for review, without exploratory
+native probes or permission widening. Keep the old help collector's default
+materialization behavior unchanged.
+
+The exact pinned [packager](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/build/gulpfile.vscode.ts)
+unpacks the ripgrep-universal bin tree; [platform filtering](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/build/lib/copilot.ts)
+keeps linux-x64, and [rgDiskPath](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/base/node/ripgrep.ts)
+rewrites node_modules.asar to node_modules.asar.unpacked. That is source support
+for the fixed search-helper path, not a runtime success claim. Pass the fixed
+--disable-crash-reporter flag: [mainImpl.ts](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/mainImpl.ts)
+configures reporting only on its explicit directory/runtime-preference path;
+there is no need to enable an unobserved crashpad executable. Never enable
+chrome-sandbox setuid mode or disable/replace the real Electron sandbox. A real
+sandbox/helper failure remains a failed observation stage. Inert tests cover
+exact allowlist, missing/non-ELF/link/alias refusal, read-only sealed modes and
+all privileged/unlisted executable metadata being ignored/refused.
+
 ## Reviewed observer extension
 
 Add a small repository-authored CommonJS extension and test entry with no runtime
@@ -354,3 +387,10 @@ may complete safe collection with false attribution/qualification; explicit API
 denial, unknown/malformed output shape, changed
 trust or sandbox failure is a failed stage. No sandbox fallback, trust grant,
 collector code or project adapter is authorized before the two final R2 GOs.
+
+The root critic gave final R2 GO on5995254a after independently checking the
+MCP autostart enum/service and trust gate. Before collector code, implementation
+feasibility review found the extractor's intentionally non-executable file modes.
+The explicit two-file nonprivileged-mode section above is a narrow R2 addendum
+requiring both critics' final review at this new frozen checkpoint. It enables no
+extra native probe, privileged publisher mode or project adapter.
