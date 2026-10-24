@@ -17,6 +17,7 @@ const (
 	// command/args/env/cwd and remote uses url/headers with no transport tag.
 	// Clients with different native transport keys require their own codec.
 	CodecMCPServers Codec = "mcpServers"
+	CodecCopilot    Codec = "copilot-mcpServers"
 	CodecGemini     Codec = "gemini-mcpServers"
 	CodecOpenCode   Codec = "opencode-mcp"
 	CodecOpenCodeV2 Codec = "opencode-v2-mcp"
@@ -208,7 +209,7 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecGemini || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecCopilot || codec == CodecGemini || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecCline
 }
 
 func codecCollectionKey(codec Codec) string {
