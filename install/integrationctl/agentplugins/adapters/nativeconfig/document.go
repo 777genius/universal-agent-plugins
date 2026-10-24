@@ -12,11 +12,11 @@ import (
 )
 
 type document struct {
-	ast          hujson.Value
-	root         *hujson.Object
-	jsonc        bool
-	commentsOnly bool
-	codexTOML    *codexTOMLDocument
+	ast           hujson.Value
+	root          *hujson.Object
+	jsonc         bool
+	commentsOnly  bool
+	codexDocument CodexDocument
 }
 
 func parseDocument(body []byte, jsonc bool) (*document, error) {
@@ -37,11 +37,11 @@ func parseDocument(body []byte, jsonc bool) (*document, error) {
 	return &document{ast: ast, root: root, jsonc: jsonc}, nil
 }
 
-func newDocument(jsonc bool, codec Codec) (*document, error) {
+func (kernel Kernel) newDocument(jsonc bool, codec Codec) (*document, error) {
 	if codec == CodecCodex {
-		return parseCodecDocument(nil, jsonc, codec)
+		return kernel.parseDocument(nil, jsonc, codec)
 	}
-	return parseCodecDocument([]byte("{}\n"), jsonc, codec)
+	return kernel.parseDocument([]byte("{}\n"), jsonc, codec)
 }
 
 func rejectDuplicateKeys(value *hujson.Value, path string) error {
@@ -153,8 +153,8 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 func (doc *document) render() ([]byte, error) {
-	if doc.codexTOML != nil {
-		return doc.renderCodexTOML()
+	if doc.codexDocument != nil {
+		return doc.renderCodexDocument()
 	}
 	if doc.commentsOnly {
 		geminiRemoveTrailingCommas(&doc.ast)

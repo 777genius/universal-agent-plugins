@@ -5,60 +5,84 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"sort"
-	"strings"
 
-	"github.com/creachadair/tomledit"
-	"github.com/pelletier/go-toml/v2"
 	"github.com/tailscale/hujson"
 )
 
-// Only MCP entries enter the existing kernel's neutral mutation representation.
-// The native TOML AST retains all other settings, types and comments.
-type codexTOMLDocument struct {
-	body     []byte
-	ast      *tomledit.Document
-	original map[string]json.RawMessage
-	settings map[string]any
+// CodexDocument retains concrete syntax outside the contract dependency closure.
+// Implementations return independent entry/output byte slices.
+type CodexDocument interface {
+	MCPEntries() (map[string]json.RawMessage, error)
+	RenderMCPEntries(map[string]json.RawMessage) ([]byte, error)
 }
 
-func parseCodexTOML(body []byte, jsonc bool) (*document, error) {
+type CodexDocumentParser func([]byte) (CodexDocument, error)
+
+// WithCodexDocumentParser retains this Kernel's exact FileIO and lock authority.
+func (kernel Kernel) WithCodexDocumentParser(parser CodexDocumentParser) Kernel {
+	kernel.codexParser = parser
+	return kernel
+}
+
+func (kernel Kernel) requireDocumentParser(codec Codec) error {
+	if codec == CodecCodex && kernel.codexParser == nil {
+		return fmt.Errorf("codex TOML document parser is required")
+	}
+	return nil
+}
+
+func (kernel Kernel) parseDocument(body []byte, jsonc bool, codec Codec) (*document, error) {
+	if codec != CodecCodex {
+		return parseCodecDocument(body, jsonc, codec)
+	}
+	if err := kernel.requireDocumentParser(codec); err != nil {
+		return nil, err
+	}
 	if jsonc {
 		return nil, fmt.Errorf("%w: Codex requires one TOML config path", ErrMalformed)
 	}
-	var native map[string]any
-	if err := toml.Unmarshal(body, &native); err != nil {
-		return nil, fmt.Errorf("%w: invalid Codex TOML", ErrMalformed)
-	}
-	if native == nil {
-		native = map[string]any{}
-	}
-	servers, ok := native["mcp_servers"]
-	if !ok {
-		servers = map[string]any{}
-	}
-	if _, ok := servers.(map[string]any); !ok {
-		return nil, fmt.Errorf("%w: mcp_servers must be a table", ErrMalformed)
-	}
-	neutral, err := json.Marshal(map[string]any{"mcp_servers": servers})
+	native, err := kernel.codexParser(bytes.Clone(body))
 	if err != nil {
-		return nil, fmt.Errorf("%w: invalid Codex MCP entry values", ErrMalformed)
+		return nil, err
+	}
+	if nilCodexDocument(native) {
+		return nil, fmt.Errorf("codex TOML parser returned no document")
+	}
+	entries, err := native.MCPEntries()
+	if err != nil {
+		return nil, err
+	}
+	neutral, err := json.Marshal(map[string]any{"mcp_servers": cloneCodexEntries(entries)})
+	if err != nil {
+		return nil, err
 	}
 	doc, err := parseDocument(neutral, false)
 	if err != nil {
 		return nil, err
 	}
-	ast, err := tomledit.Parse(bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid Codex TOML structure", ErrMalformed)
-	}
-	original, err := doc.codexEntries()
-	if err != nil {
-		return nil, err
-	}
-	delete(native, "mcp_servers")
-	doc.codexTOML = &codexTOMLDocument{body: bytes.Clone(body), ast: ast, original: original, settings: native}
+	doc.codexDocument = native
 	return doc, nil
+}
+
+func nilCodexDocument(value CodexDocument) bool {
+	if value == nil {
+		return true
+	}
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
+}
+
+func cloneCodexEntries(entries map[string]json.RawMessage) map[string]json.RawMessage {
+	result := make(map[string]json.RawMessage, len(entries))
+	for name, body := range entries {
+		result[name] = bytes.Clone(body)
+	}
+	return result
 }
 
 func (doc *document) codexEntries() (map[string]json.RawMessage, error) {
@@ -73,94 +97,16 @@ func (doc *document) codexEntries() (map[string]json.RawMessage, error) {
 		if err != nil {
 			return nil, err
 		}
-		result[member.Name.Value.(hujson.Literal).String()] = body
+		result[member.Name.Value.(hujson.Literal).String()] = bytes.Clone(body)
 	}
 	return result, nil
 }
 
-func (doc *document) renderCodexTOML() ([]byte, error) {
-	current, err := doc.codexEntries()
+func (doc *document) renderCodexDocument() ([]byte, error) {
+	entries, err := doc.codexEntries()
 	if err != nil {
 		return nil, err
 	}
-	names := codexChangedNames(doc.codexTOML.original, current)
-	if len(names) == 0 {
-		return bytes.Clone(doc.codexTOML.body), nil
-	}
-	for _, name := range names {
-		removeCodexTOMLEntry(doc.codexTOML.ast, name)
-		if body, exists := current[name]; exists {
-			if err := setCodexTOMLEntry(doc.codexTOML.ast, name, body); err != nil {
-				return nil, err
-			}
-		}
-	}
-	var result bytes.Buffer
-	if err := tomledit.Format(&result, doc.codexTOML.ast); err != nil {
-		return nil, fmt.Errorf("render Codex native config: %w", err)
-	}
-	next := result.Bytes()
-	parsed, err := parseCodexTOML(next, false)
-	if err != nil {
-		return nil, err
-	}
-	if !reflect.DeepEqual(doc.codexTOML.settings, parsed.codexTOML.settings) {
-		return nil, fmt.Errorf("rendered Codex config changed foreign settings")
-	}
-	observed, err := parsed.codexEntries()
-	if err != nil || !equalCodexEntries(current, observed) {
-		return nil, fmt.Errorf("rendered Codex MCP entries differ from requested entries")
-	}
-	return next, nil
-}
-
-func codexChangedNames(previous, next map[string]json.RawMessage) []string {
-	changed := map[string]bool{}
-	for name, value := range previous {
-		changed[name] = !bytes.Equal(value, next[name])
-	}
-	for name, value := range next {
-		changed[name] = !bytes.Equal(value, previous[name])
-	}
-	result := make([]string, 0, len(changed))
-	for name, differs := range changed {
-		if differs {
-			result = append(result, name)
-		}
-	}
-	sort.Strings(result)
-	return result
-}
-
-func equalCodexEntries(a, b map[string]json.RawMessage) bool {
-	return len(a) == len(b) && len(codexChangedNames(a, b)) == 0
-}
-
-func projectCodexServer(server Server, placeholders Placeholders) (map[string]any, error) {
-	if server.OpenCodeV2 != nil {
-		return nil, fmt.Errorf("codex does not accept OpenCode V2 options")
-	}
-	if strings.EqualFold(strings.TrimSpace(server.Type), "remote") && server.RemoteTransport == "streamable-http" {
-		server.RemoteTransport = ""
-	}
-	projected, err := projectBaseServer(CodecMCPServers, server, placeholders)
-	if err != nil {
-		return nil, err
-	}
-	if headers, ok := projected["headers"]; ok {
-		delete(projected, "headers")
-		projected["http_headers"] = headers
-	}
-	if server.CodexAuth != nil {
-		if server.Type != "remote" {
-			return nil, fmt.Errorf("codex stdio servers do not accept remote authentication options")
-		}
-		if server.CodexAuth.BearerTokenEnvVar != "" {
-			projected["bearer_token_env_var"] = server.CodexAuth.BearerTokenEnvVar
-		}
-		if server.CodexAuth.OAuthResource != "" {
-			projected["oauth_resource"] = server.CodexAuth.OAuthResource
-		}
-	}
-	return projected, nil
+	body, err := doc.codexDocument.RenderMCPEntries(cloneCodexEntries(entries))
+	return bytes.Clone(body), err
 }

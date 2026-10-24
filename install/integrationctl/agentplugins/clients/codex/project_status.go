@@ -6,6 +6,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/codextoml"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -63,6 +64,7 @@ type codexProjectSettings struct {
 }
 
 func readCodexProjectSettings(kernel nativeconfig.Kernel, path string) (codexProjectSettings, error) {
+	kernel = kernel.WithCodexDocumentParser(codextoml.Parse)
 	var settings codexProjectSettings
 	if _, _, err := kernel.Inspect(nativeconfig.Paths{JSON: path}, nativeconfig.CodecCodex, "agentplugins-policy-inspection", nil); err != nil {
 		return settings, err

@@ -3,6 +3,7 @@ package codex
 import (
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/codextoml"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -31,12 +32,12 @@ func inspectCodexProject(plan domain.DeliveryPlan, managed *domain.ClientBinding
 		selected.NativeObjects = codexProjectOwned(managed.NativeObjects)
 		managed = &selected
 	}
-	return codexProjectLayout(plan.NativeRegistryRoot).Inspect(plan.Components, managed, kernel)
+	return codexProjectLayout(plan.NativeRegistryRoot).Inspect(plan.Components, managed, kernel.WithCodexDocumentParser(codextoml.Parse))
 }
 
 func verifyCodexProjectObjects(root string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {
 	if err := validateCodexProjectObjects(root, objects); err != nil {
 		return err
 	}
-	return codexProjectLayout(root).Verify(codexProjectOwned(objects), allowMissing, kernel)
+	return codexProjectLayout(root).Verify(codexProjectOwned(objects), allowMissing, kernel.WithCodexDocumentParser(codextoml.Parse))
 }
