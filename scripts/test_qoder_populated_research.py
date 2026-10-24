@@ -24,6 +24,7 @@ class CollectorTests(unittest.TestCase):
         return {"root": str(root), "output": str(output), "binary": str(root / "binary/qoder"),
                 "sources": {key: str(value) for key, value in sources.items()},
                 "fixture_pins": research.fixture_pins(sources, research.grok.Budget()),
+                "source_baseline": research.inventory({"source-" + key: value for key, value in sources.items()}, research.grok.Budget()),
                 "native_environment": research.phase1.runtime_environment(root / "home", root / "tmp"),
                 "parent_namespace": "net:[old]", "uid": 1001, "gid": 1001}
 
@@ -140,7 +141,7 @@ class CollectorTests(unittest.TestCase):
                     patch.object(research.os, "getegid", return_value=1001), \
                     patch.object(research.os, "getgroups", return_value=[1001] if failure == "groups" else []), \
                     patch.object(research.os, "readlink", return_value="net:[old]" if failure == "namespace" else "net:[new]"), \
-                    patch.object(research.os, "listdir", return_value=["eth0", "lo"] if failure == "interfaces" else ["lo"]):
+                    patch.object(research.socket, "if_nameindex", return_value=[(1, "lo"), (2, "eth0")] if failure == "interfaces" else [(1, "lo")]):
                 if failure:
                     with self.assertRaises(ValueError): research.isolation_facts("net:[old]", 1001, 1001)
                 else:
@@ -153,6 +154,11 @@ class CollectorTests(unittest.TestCase):
             import hashlib
             with patch.object(research, "BINARY_BYTES", 5), patch.object(research.phase1, "BINARY_SHA256", hashlib.sha256(b"inert").hexdigest()):
                 research.check_pins(request, research.grok.Budget())
+                added = Path(request["sources"]["A"]) / "extra-hook.json"
+                added.write_text("inert addition")
+                with self.assertRaisesRegex(ValueError, "complete inert source"):
+                    research.check_pins(request, research.grok.Budget())
+                added.unlink()
                 source = Path(next(iter(request["fixture_pins"]))); source.write_text("tampered")
                 with self.assertRaises(ValueError): research.check_pins(request, research.grok.Budget())
             with self.assertRaises(ValueError): research.check_pins(request, research.grok.Budget())

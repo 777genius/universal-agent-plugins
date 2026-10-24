@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import socket
 import sys
 import time
 
@@ -135,6 +136,7 @@ def inventory(roots, budget):
         for label, root in roots.items():
             budget.check()
             before = os.stat(root, follow_symlinks=False)
+            result[label] = {"kind": "directory", "mode": oct(stat.S_IMODE(before.st_mode)), "size": before.st_size}
             fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
             try:
                 if identity(os.fstat(fd)) != identity(before):
@@ -213,6 +215,9 @@ def check_pins(request, budget):
     size, digest = file_digest(Path(request["binary"]), budget, phase1.MAX_BINARY)
     if size != BINARY_BYTES or digest != phase1.BINARY_SHA256:
         raise ValueError("pinned binary changed before native execution")
+    sources = {"source-" + key: Path(value) for key, value in request["sources"].items()}
+    if inventory(sources, budget) != request["source_baseline"]:
+        raise ValueError("complete inert source fixture tree changed")
     for path, expected in request["fixture_pins"].items():
         if file_digest(Path(path), budget, MAX_FILE)[1] != expected:
             raise ValueError("fixed source fixture changed")
@@ -228,7 +233,7 @@ def isolation_facts(parent_namespace, uid, gid):
         key, _, value = line.partition(":")
         status[key] = value.strip()
     namespace = os.readlink("/proc/self/ns/net")
-    interfaces = sorted(os.listdir("/sys/class/net"))
+    interfaces = sorted(name for _, name in socket.if_nameindex())
     facts = {"uid": os.getuid(), "gid": os.getgid(), "euid": os.geteuid(), "egid": os.getegid(), "groups": os.getgroups(), "network_namespace": namespace,
              "parent_network_namespace": parent_namespace, "interfaces": interfaces,
              "no_new_privs": status.get("NoNewPrivs"),
@@ -299,6 +304,7 @@ def collect(request, summary, budget):
     env = request["native_environment"]
     summary["native_environment"] = env
     summary["fixture_pins"] = request["fixture_pins"]
+    summary["source_baseline"] = request["source_baseline"]
     summary["fixed_fixture_bodies"] = {path: read_regular(Path(path), budget, MAX_FILE).decode("utf-8") for path in request["fixture_pins"]}
     binary = request["binary"]
 
@@ -308,6 +314,7 @@ def collect(request, summary, budget):
                                           timeout=min(30, budget.check()))
         record["accepted"] = False
         summary["probes"].append(record)
+        check_pins(request, budget)
         parsed = validate_output(record, stdout, stderr, kind, stage)
         record["accepted"] = True
         if parsed is not None:
@@ -412,6 +419,7 @@ def main(argv=None):
             request = {"root": str(root), "output": str(output), "binary": str(binary),
                        "sources": {key: str(path) for key, path in sources.items()},
                        "fixture_pins": fixture_pins(sources, budget),
+                       "source_baseline": inventory({"source-" + key: value for key, value in sources.items()}, budget),
                        "native_environment": phase1.runtime_environment(root / "home", root / "tmp"),
                        "uid": os.getuid(), "gid": os.getgid(), "parent_namespace": os.readlink("/proc/self/ns/net"),
                        "deadline": budget.deadline}
