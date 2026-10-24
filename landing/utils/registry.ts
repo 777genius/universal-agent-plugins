@@ -775,13 +775,7 @@ function parseSnapshot(
         };
       });
       const eligibleTargets = (release: DistributionReleaseView) =>
-        release.selectable
-          ? release.targets.filter(
-              (target) =>
-                !release.blocking_clients.includes(target.client) &&
-                (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
-            )
-          : [];
+        release.selectable ? eligibleTargetPolicies(kind, release) : [];
       const selectedRelease =
         releaseViews.find((release) => eligibleTargets(release).length > 0) ?? releaseViews[0]!;
       const compatible = [
@@ -1120,6 +1114,42 @@ export function resolveDistribution(
       })),
     },
   };
+}
+
+export function eligibleTargetPolicies(
+  kind: DistributionKind,
+  release: Pick<DistributionReleaseView, 'targets' | 'blocking_clients' | 'materialized_clients'>,
+): ReleaseTarget[] {
+  return release.targets.filter(
+    (target) =>
+      !release.blocking_clients.includes(target.client) &&
+      (kind !== 'upstream' || release.materialized_clients.includes(target.client)),
+  );
+}
+
+/** Every policy a no-`--target` install can resolve: the signed resolver walks
+ * distributions in order and installs into whichever agents it detects, so any
+ * individually eligible (release, target) pair is reachable. */
+export function reachableTargetPolicies(
+  distributions: readonly Pick<DistributionView, 'kind' | 'status' | 'releases'>[],
+): ReleaseTarget[] {
+  const policies: ReleaseTarget[] = [];
+  for (const distribution of distributions) {
+    if (distribution.status !== 'active') continue;
+    for (const release of distribution.releases) {
+      if (release.release_status !== 'active' || !release.meets_minimum_capabilities) continue;
+      for (const target of eligibleTargetPolicies(distribution.kind, release)) {
+        if (
+          !policies.some(
+            (item) =>
+              item.client === target.client && item.authentication === target.authentication,
+          )
+        )
+          policies.push(target);
+      }
+    }
+  }
+  return policies;
 }
 
 export function expectedDistribution(
