@@ -1,7 +1,8 @@
 # UAP dependency environments
 
-**Unreleased:** this workflow is available in current source and has not been
-qualified as a published CLI release.
+**Released:** this workflow ships in the published CLI (`agentplugins` 0.1.90 and
+later). The restore guide is on the docs site:
+[Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine).
 
 `agentplugins deps` manages the selected dependency environment. By default it
 uses the current-user environment in `AGENTPLUGINS_HOME` (default:
@@ -243,8 +244,8 @@ repair keeps its existing signed-policy rules.
 
 ### Restore on another machine
 
-Use a compatible CLI built from current source; the transfer commands below
-remain unreleased. In the folder you want to carry to another machine, run:
+The transfer commands below ship in the published CLI. In the folder you want to
+carry to another machine, run:
 
 ```sh
 agentplugins deps export
