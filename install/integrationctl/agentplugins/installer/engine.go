@@ -134,10 +134,12 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 	transitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
 	inner := providers.Activator{OpenCodeTransitions: transitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver
+	identity := providers.NativeIdentityObserver{Stager: stager, NativeConfig: &nativeKernel, Registry: e.cfg.Registry}
 	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {
-		observer = providers.NativeIdentityObserver{
-			Stager: stager, Runner: e.cfg.Runner, NativeConfig: &nativeKernel, Registry: e.cfg.Registry,
-		}
+		identity.Runner = e.cfg.Runner
+		observer = identity
+	} else if e.cfg.ProjectRoot != "" {
+		observer = preparedProjectIdentityObserver{identity: identity}
 	}
 	return usecase.Service{
 		CheckNamespace: e.CheckProjectNamespace,

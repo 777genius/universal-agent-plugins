@@ -135,6 +135,9 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 			return session.result, fmt.Errorf("prepared host changed before repair commit: %w", err)
 		}
 	}
+	if err := session.verifyProjectRepairOwnership(); err != nil {
+		return session.result, err
+	}
 	// The user or client can change the native object while staging runs. Repair
 	// may replace the exact absent/digest-mismatched object reviewed above, but
 	// never a different object that appeared after preflight.

@@ -47,6 +47,9 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 		session.result.RequiresConfirmation = true
 		return session.result, nil
 	}
+	if err := session.verifyProjectRepairOwnership(); err != nil {
+		return session.result, err
+	}
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.result.Plan, Delivery: delivery,
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,

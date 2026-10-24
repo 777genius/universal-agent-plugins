@@ -228,3 +228,57 @@ R1 exact3510549a8c8bd2ae8b31bdc03c8a338dfac1f212 received independent GOs:
 R2 incorporates both: existing precommit and pre-attempt rechecks, exact evidence
 matching and the stated final noncooperating-writer race limit. No production
 repair code was edited before these plan reviews.
+
+### Final amendment approvals and compatibility finding
+
+Both independent reviewers, claude_codex_scope and skillshare_scope, issued R2
+GO on exact e3b7bd206782c2760b594a63295b741eb3e697f1 before repair source edits.
+They confirmed typed integrity evidence, explicit receipt reconciliation, the
+precommit/pre-attempt checks and the unresolved-attempt fence.
+
+The complete existing SDK suite identified an overly strict draft provider
+guard: current Devin project installation deliberately supports an absent
+legacy Windsurf user profile (TestProjectDevinPublicSDKAbsentLegacyProfileAndVersionAdmission,
+version3000.11.205). Valid original TargetContext therefore means the original
+profile locator exactly matches DetectedClient and passes NewTargetContext; it
+may be absent where the concrete adapter already supports that absence. The
+shared guard must not impose a new nonempty user-profile requirement. Concrete
+Cline/Codex and other adapter authority checks remain unchanged, with no client
+ID switch or fallback. Explicit canonical nonempty project root stays required.
+
+## Implementation checkpoint and finite validation
+
+The prepared provider now combines project component ownership with package
+identity using the exact scoped adapter and injected native kernel, with no
+runner. The SDK composes that prepared observer even when live observation is
+disabled or no runner exists. Repair checks it after managed integrity
+verification, before managed publication, and before an intact native attempt.
+Typed absent/drift evidence must match the independent package measurement;
+unknown errors, foreign components, contradictory receipts and package-only
+fallback observations refuse. Existing unresolved-attempt fencing is unchanged.
+
+Actual SDK regressions cover all three observer configurations, Cline and
+Codex install/replay/update/reopen/repair/remove, two-target managed restoration,
+foreign skill/MCP/malformed collisions, combined managed damage and foreign
+components, a foreign edit during real staging, and an actual persisted pending
+attempt created after managed commit. The latter independently verifies exact
+managed and native receipts yet still requires recovery; file observations do
+not fabricate native discovery or clear uncertainty. The inherited SDK group
+Prepared handoff remains Incomplete. Its separately reviewed mutation-reporting
+omission is tracked in the Claude grouped Prepared update amendment.
+
+Focused provider, SDK and usecase tests passed (0.015s, 3.911s and 0.010s).
+The complete affected usecase package passed in 26.343s. A broader provider/SDK
+run found two distinct failures: the valid absent legacy Devin profile described
+above, and a preexisting executed-fixture append that returned ETXTBSY. The
+provider fixture now writes the same changed bytes to a sibling inode and
+renames it, preserving the changed-after-preflight assertion. Exact focused
+regressions including both corrections then passed: providers 0.681s, installer
+4.153s, conformance 0.028s. These results do not claim the entire assembled
+repository is green: remaining native qualification, compatibility goldens and
+ordinary-process prerequisite work retain their own gates.
+
+The ordinary process cancellation diagnostic establishes that this local host
+lacks a required proc interface. Tests above ran before the separately planned
+fail-closed prerequisite correction; no descendant-containment qualification is
+implied by these ownership regression results.

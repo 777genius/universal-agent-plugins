@@ -31,9 +31,10 @@ type Config struct {
 	// Registry is the explicit set of client adapters supported by this
 	// executable. Nil is rejected rather than silently enabling every client.
 	Registry *clients.Registry
-	// EnableNativeObserver composes the namespace-aware client observer for
-	// repair and recovery. Callers that provide a real command runner should
-	// enable it; leaving it off retains the filesystem-only compatibility path.
+	// EnableNativeObserver enables live client discovery for repair and recovery
+	// when Runner is supplied. Project filesystem ownership checks remain
+	// mandatory when it is disabled or no runner is available. User scope keeps
+	// its existing filesystem-only compatibility path when disabled.
 	EnableNativeObserver bool
 	Runner               ports.CommandRunner
 	// ServerName selects the declared MCP server whose args the host may replace.

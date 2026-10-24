@@ -158,7 +158,7 @@ func (session *repairSession) verifyRepairPreconditions() error {
 		return fmt.Errorf("managed package digest is missing; refusing repair")
 	}
 	session.verifyErr = session.service.Stager.Verify(session.ctx, target.ActivePath, session.expectedDigest)
-	return nil
+	return session.verifyProjectRepairOwnership()
 }
 
 func (session *repairSession) persistRepair(client domain.ClientBinding) error {
