@@ -1210,6 +1210,7 @@ export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
   // select arbitrary files or make an external discovery entry load a logo.
   const icons: Record<string, string> = {
     'agent-code-navigator': 'agent-code-navigator',
+    'agent-notifications': 'agent-notifications',
     atlassian: 'atlassian',
     'chrome-devtools': 'googlechrome',
     cloudflare: 'cloudflare',
