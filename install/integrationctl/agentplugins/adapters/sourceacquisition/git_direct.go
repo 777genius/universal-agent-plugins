@@ -52,6 +52,10 @@ func (acquirer Acquirer) AcquireGit(ctx context.Context, source sourcespec.Git, 
 		if ctx.Err() != nil {
 			return domain.PackageSnapshot{}, ctx.Err()
 		}
+		var selected *gitPackagePathError
+		if errors.As(err, &selected) {
+			return domain.PackageSnapshot{}, fmt.Errorf("acquire direct Git source: package path %q: %s", packagePath, selected.reason)
+		}
 		return domain.PackageSnapshot{}, fmt.Errorf("acquire direct Git source: immutable fetch or package snapshot failed; verify native Git credentials and repository access")
 	}
 	if expectedTreeDigest != "" && snapshot.TreeDigest != expectedTreeDigest {

@@ -308,11 +308,17 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "inspect package tree")
 	}
 	if len(tree) == 0 {
-		return domain.PackageSnapshot{}, fmt.Errorf("acquire GitHub repository %q at revision %s: inspect package tree: plugin subpath %q does not exist", repository, revision, pathspec)
+		public := fmt.Errorf("acquire GitHub repository %q at revision %s: inspect package tree: plugin subpath %q does not exist", repository, revision, pathspec)
+		return domain.PackageSnapshot{}, gitPackageFailure(public, "selected package path does not exist")
+	}
+	if reason := selectedGitLeaf(tree, subpath); reason != "" {
+		return domain.PackageSnapshot{}, gitNonDirectoryFailure(repository, revision, pathspec, reason)
 	}
 	executableFiles, err := executablePathsFromTree(tree, subpath)
 	if err != nil {
-		return domain.PackageSnapshot{}, fmt.Errorf("acquire GitHub repository %q at revision %s: inspect package tree: %s", repository, revision, publicTreeError(err))
+		reason := publicTreeError(err)
+		public := fmt.Errorf("acquire GitHub repository %q at revision %s: inspect package tree: %s", repository, revision, reason)
+		return domain.PackageSnapshot{}, gitPackageFailure(public, reason)
 	}
 	if subpath != "" {
 		if _, err := run("-C", repoRoot, "sparse-checkout", "init", "--cone"); err != nil {
@@ -330,8 +336,15 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 		packageRoot = filepath.Join(repoRoot, filepath.FromSlash(subpath))
 	}
 	info, err := os.Lstat(packageRoot)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return domain.PackageSnapshot{}, fmt.Errorf("acquire GitHub repository %q at revision %s: plugin subpath %q is not a real directory", repository, revision, pathspec)
+	if err != nil {
+		public := fmt.Errorf("acquire GitHub repository %q at revision %s: plugin subpath %q is not a real directory", repository, revision, pathspec)
+		if os.IsNotExist(err) {
+			return domain.PackageSnapshot{}, gitPackageFailure(public, "selected package path does not exist")
+		}
+		return domain.PackageSnapshot{}, public
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return domain.PackageSnapshot{}, gitNonDirectoryFailure(repository, revision, pathspec, "selected package path is not a real directory")
 	}
 	requestedSource := repository + "@" + revision
 	canonicalSource := "https://github.com/" + requestedSource

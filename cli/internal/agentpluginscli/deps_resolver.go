@@ -145,6 +145,9 @@ func (resolver dependencyResolver) resolveArchive(ctx context.Context, requireme
 		_ = loaded.cleanup()
 		return environment.LockedPackage{}, errors.New("archive requirement must explicitly select its logical package path")
 	}
+	if strings.Contains(locked.Alias, "/") || locked.Alias == "" {
+		locked.Alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
+	}
 	return locked, resolver.finishLoaded(ctx, loaded, locked)
 }
 
@@ -236,6 +239,12 @@ func githubIdentity(repository, commit, packagePath string) string {
 }
 
 func mustSourceKey(requirement environment.Requirement) string {
+	// A fresh transitive acquisition has no owner alias until manifest loading.
+	// This copy only permits strict alias-free source-tuple derivation; the
+	// temporary scalar is never installed or persisted as binding identity.
+	if requirement.Alias == "" {
+		requirement.Alias = "source-acquisition"
+	}
 	key, _ := requirement.SourceKey()
 	return key
 }

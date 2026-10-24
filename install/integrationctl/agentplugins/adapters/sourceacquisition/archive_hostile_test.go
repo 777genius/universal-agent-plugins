@@ -129,10 +129,11 @@ func archiveMutateZIP(t *testing.T, source []byte, mutate func([]byte, []byte, [
 func TestArchiveStrictZIPBoundariesAndMetadata(t *testing.T) {
 	valid := archiveFixtureZIP(t, archivePackageEntries(""), "")
 	cases := map[string][]byte{
-		"prefix":        append([]byte("SFX"), valid...),
-		"tail":          append(bytes.Clone(valid), 0),
-		"second ZIP":    append(bytes.Clone(valid), valid...),
-		"truncated end": valid[:len(valid)-1],
+		"prefix":          append([]byte("SFX"), valid...),
+		"tail":            append(bytes.Clone(valid), 0),
+		"second ZIP":      append(bytes.Clone(valid), valid...),
+		"truncated end":   valid[:len(valid)-1],
+		"corrupt payload": archiveCorruptZIPPayload(t, valid),
 	}
 	mutators := map[string]func([]byte, []byte, []byte){
 		"multiple disks":      func(_, _, end []byte) { end[4] = 1 },
@@ -141,7 +142,6 @@ func TestArchiveStrictZIPBoundariesAndMetadata(t *testing.T) {
 		"unsupported method":  func(local, central, _ []byte) { local[8] = 99; central[10] = 99 },
 		"declared oversized":  func(_, central, _ []byte) { binary.LittleEndian.PutUint32(central[24:28], 64<<20+1) },
 		"actual size differs": func(_, central, _ []byte) { binary.LittleEndian.PutUint32(central[24:28], 1) },
-		"corrupt payload":     func(local, _, _ []byte) { local[40] ^= 1 },
 	}
 	for name, mutate := range mutators {
 		cases[name] = archiveMutateZIP(t, valid, mutate)

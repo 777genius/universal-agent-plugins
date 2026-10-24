@@ -94,9 +94,10 @@ func parseHTTPS(raw string, out Spec) (Spec, error) {
 }
 
 func parseArchive(u *url.URL) (Archive, error) {
-	fragment := u.Fragment
+	fragment := u.EscapedFragment()
 	base := *u
 	base.Fragment = ""
+	base.RawFragment = ""
 	endpoint, err := NormalizeArchiveURL(base.String())
 	if err != nil {
 		return Archive{}, err

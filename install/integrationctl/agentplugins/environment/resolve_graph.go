@@ -265,7 +265,7 @@ func (solver *graphSolver) try(ctx context.Context, key string, selected Resolve
 }
 
 func nodeAccepts(node graphNode, pkg LockedPackage) bool {
-	key, _ := node.requirement.SourceKey()
+	key, _ := acquisitionSourceKey(node.requirement)
 	if pkg.SourceKey != key {
 		return false
 	}

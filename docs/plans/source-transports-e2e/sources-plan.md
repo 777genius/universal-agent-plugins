@@ -64,7 +64,7 @@ Accept these forms:
 | `[user@]host:team/repo[.git][#REF[//path]]` | SCP-like SSH Git; require a real host and nonempty safe path; accept Azure `git@ssh.dev.azure.com:v3/org/project/repo`; canonicalize spelling deterministically |
 | `https://github.com/owner/repo[/tree/REF[/path]]` | Strip browser syntax, normalize to repository Git endpoint plus selector/path |
 | `https://gitlab.com/group[/subgroups]/repo[/-/tree/REF[/path]]` | Support nested groups; `/-/tree/` separates repository from selector/path; same syntax on self-managed hosts containing that explicit marker |
-| `https://dev.azure.com/org/[project/]_git/repo[?version=GBbranch|GTtag|GCsha&path=/package]` | Normalize clone endpoint; map GB/GT to explicit refs and GC to commit; decode path once |
+| `https://dev.azure.com/org/[project/]_git/repo[?version=GBbranch\|GTtag\|GCsha&path=/package]` | Normalize clone endpoint; map GB/GT to explicit refs and GC to commit; decode path once |
 | `https://org.visualstudio.com/[project/]_git/repo` | Azure legacy clone/browser host grammar; recognized query fields as above |
 | HTTPS `.zip`, `.tar`, `.tar.gz`, `.tgz` | Complete archive source |
 | HTTPS without recognized extension/provider/Git fragment | Bounded HTTPS body acquisition and sniffing; positive ZIP/TAR/gzip-TAR means archive. If the response is not an archive (including 401/404), try native Git for an arbitrary clone endpoint, then report a sanitized combined source error. No credential-bearing HTML/body logging |
