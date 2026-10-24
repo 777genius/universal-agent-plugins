@@ -234,6 +234,17 @@ editor or official `cursor-agent`/`agent` version must load project MCP/skill
 in A and not B; CLI and UI evidence are separate. No genuine Stop or plugin
 discovery claim follows from this component work.
 
+### Implemented component contract checkpoint
+
+The Cursor child stack implements native project component ownership at
+`.cursor/skills` and `.cursor/mcp.json`, using `.uap` managed artifacts and the
+existing kernel/managed stdio launcher. User package preparation remains manual.
+Production loader/planner/renderer/stager/provider contracts pass for scopes,
+updates, missing-same-pin repair, exact removal and failure preservation. Project
+readiness remains prepared+installed; native session discovery is unobserved
+and attestation cannot upgrade it. See `cursor-implementation-evidence.md` for
+current official docs, pinned read-only CLI help and explicit native proof limits.
+
 ## 4. Gemini CLI — native project skills and settings
 
 **Evidence/choice.** Project settings are `.gemini/settings.json`; project skills
@@ -602,13 +613,13 @@ is replaced by explicit unsupported. R2 fixes independently verified GO in
 | codex | GO | Verified | GO | Root assignment required |
 | cursor | GO | Verified | GO | Root assignment required |
 | gemini | GO | Verified | GO | Implemented at65b8f17a; independent implementation R1/R2 GO; native discovery pending |
-| opencode | GO | Verified | GO | Root assignment required |
-| copilot | GO | Verified | GO | Root assignment required |
+| opencode | GO | Verified | GO | Implemented locally; implementation R1/R2 pending; public CLI/native discovery pending |
+| copilot | GO | Verified | GO | Implementation 2 GO; native project evidence pending |
 | kiro | GO | Verified | GO | Root assignment required |
 | grok | GO | Verified | GO | Root assignment required |
 | qoder | GO | Verified | GO | Root assignment required |
 | cline | GO | Verified | GO | Root assignment required |
 | windsurf | GO | Verified | GO | Root assignment required |
 | kimi | GO (current docs) | Verified | GO | Root assignment required |
-| chatgpt | GO | Verified | GO | Root assignment required |
+| chatgpt | GO | Verified | GO | Explicit project refusal implemented; independent implementation review pending |
 | vscode | GO | Verified | GO | Root assignment required |

@@ -16,6 +16,7 @@ type document struct {
 	root         *hujson.Object
 	jsonc        bool
 	commentsOnly bool
+	codexTOML    *codexTOMLDocument
 }
 
 func parseDocument(body []byte, jsonc bool) (*document, error) {
@@ -37,6 +38,9 @@ func parseDocument(body []byte, jsonc bool) (*document, error) {
 }
 
 func newDocument(jsonc bool, codec Codec) (*document, error) {
+	if codec == CodecCodex {
+		return parseCodecDocument(nil, jsonc, codec)
+	}
 	return parseCodecDocument([]byte("{}\n"), jsonc, codec)
 }
 
@@ -149,6 +153,9 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 func (doc *document) render() ([]byte, error) {
+	if doc.codexTOML != nil {
+		return doc.renderCodexTOML()
+	}
 	if doc.commentsOnly {
 		geminiRemoveTrailingCommas(&doc.ast)
 	}

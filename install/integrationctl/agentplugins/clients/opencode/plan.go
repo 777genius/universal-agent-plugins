@@ -38,7 +38,15 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		}
 		plan.OpenCodeHost = in.Client.OpenCodeHost
 	}
-	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
+	root := in.Client.ConfigRoot
+	if in.TargetContext.Scope == domain.ScopeProject {
+		layout, err := openCodeTargetLayout(in.Client, in.TargetContext, plan.NativeRegistryRoot)
+		if err != nil {
+			return err
+		}
+		root = layout.Root
+	}
+	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete")
 	return nil
 }

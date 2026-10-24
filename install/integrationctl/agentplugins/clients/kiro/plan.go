@@ -20,6 +20,9 @@ var (
 )
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject {
+		return refineProjectPlan(in, plan)
+	}
 	eligible := shared.OnlyNativeComponents(plan.Components)
 	needsCLI := shared.HasSupportedMCP(plan.Components)
 	hasConfigRoot := strings.TrimSpace(in.Client.ConfigRoot) != ""

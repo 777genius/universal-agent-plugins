@@ -26,10 +26,13 @@ func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {
 	if err != nil {
 		return nil, err
 	}
-	roots, attempts := pendingTransitionAuthority(state)
+	roots, attempts, err := t.pendingTransitionAuthority(state)
+	if err != nil {
+		return nil, err
+	}
 	var pending []PendingNativeTransition
-	for root := range roots {
-		if err := appendPendingTransitionRoot(root, attempts, &pending); err != nil {
+	for _, layout := range roots {
+		if err := appendPendingTransitionRoot(layout, attempts, &pending); err != nil {
 			return nil, err
 		}
 	}
@@ -45,27 +48,34 @@ func (t NativeTransitions) Pending() ([]PendingNativeTransition, error) {
 	return pending, nil
 }
 
-func pendingTransitionAuthority(state domain.StateFileV2) (map[string]bool, map[string]PendingNativeTransition) {
-	roots := map[string]bool{}
+func (t NativeTransitions) pendingTransitionAuthority(state domain.StateFileV2) (map[string]openCodeNativeLayout, map[string]PendingNativeTransition, error) {
+	roots := map[string]openCodeNativeLayout{}
 	attempts := map[string]PendingNativeTransition{}
 	for _, installation := range state.Installations {
 		for _, b := range installation.Clients {
 			if b.ClientID != "opencode" {
 				continue
 			}
+			if (b.Scope == string(domain.ScopeProject) || t.ProjectRoot != "") && b.NativeProfileRoot == "" {
+				return nil, nil, fmt.Errorf("opencode project binding has no recorded native root")
+			}
 			if root := storedTransitionRoot(b); root != "" {
-				roots[root] = true
+				layout, err := t.selectedBindingLayout(b)
+				if err != nil {
+					return nil, nil, err
+				}
+				roots[root] = layout
 			}
 			if b.NativeActivationAttempt != "" {
 				attempts[b.NativeActivationAttempt] = PendingNativeTransition{OperationID: b.NativeActivationAttempt, InstallationID: installation.InstallationID, BindingID: b.ClientBindingID, TargetPath: b.TargetLocator, Phase: "native_attempt"}
 			}
 		}
 	}
-	return roots, attempts
+	return roots, attempts, nil
 }
 
-func appendPendingTransitionRoot(root string, attempts map[string]PendingNativeTransition, pending *[]PendingNativeTransition) error {
-	skills := filepath.Join(root, "skills")
+func appendPendingTransitionRoot(layout openCodeNativeLayout, attempts map[string]PendingNativeTransition, pending *[]PendingNativeTransition) error {
+	root, skills := layout.Root, layout.Skills
 	if err := pathpolicy.RequireContainedChild(root, skills); err != nil {
 		return err
 	}
@@ -80,7 +90,7 @@ func appendPendingTransitionRoot(root string, attempts map[string]PendingNativeT
 		if !strings.HasPrefix(entry.Name(), ".agentplugins-native-") {
 			continue
 		}
-		item, err := pendingTransitionEntry(root, skills, entry.Name())
+		item, err := pendingTransitionEntry(layout, entry.Name())
 		if err != nil {
 			return err
 		}
@@ -96,8 +106,9 @@ func appendPendingTransitionRoot(root string, attempts map[string]PendingNativeT
 	return nil
 }
 
-func pendingTransitionEntry(root, skills, name string) (*PendingNativeTransition, error) {
-	dir := filepath.Join(skills, name)
+func pendingTransitionEntry(layout openCodeNativeLayout, name string) (*PendingNativeTransition, error) {
+	root := layout.Root
+	dir := filepath.Join(layout.Skills, name)
 	if err := pathpolicy.RequireContainedChild(root, dir); err != nil {
 		return nil, err
 	}
@@ -110,7 +121,8 @@ func pendingTransitionEntry(root, skills, name string) (*PendingNativeTransition
 	if err != nil {
 		return nil, err
 	}
-	if r.Identity.NativeRoot != root {
+	recordLayout, layoutErr := recordOpenCodeLayout(r)
+	if layoutErr != nil || recordLayout != layout || r.Identity.NativeRoot != root {
 		return nil, fmt.Errorf("transition root identity mismatch")
 	}
 	_, b, err := transitionBinding(r.OldState, r.Identity)
@@ -150,6 +162,9 @@ type transitionReconciler struct {
 func (t NativeTransitions) Reconcile(ctx context.Context, root string) (domain.NativeEffectState, error) {
 	r, err := readTransitionRecord(root)
 	if err != nil {
+		return domain.NativeEffectUncertain, err
+	}
+	if err := t.validateRecordContext(r); err != nil {
 		return domain.NativeEffectUncertain, err
 	}
 	q := transitionReconciler{transitions: t, ctx: ctx, record: r, effect: domain.NativeEffectUncertain}

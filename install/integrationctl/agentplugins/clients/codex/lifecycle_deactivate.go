@@ -13,6 +13,9 @@ import (
 // Deactivate removes the managed Codex plugin and marketplace after the
 // operator confirms, or records the manual steps when the CLI is missing.
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return deactivateCodexProject(ctx, env, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
 		return outcome, err

@@ -1,6 +1,35 @@
-# Cursor adapter: selected editor package preparation
+# Cursor adapter: project components and user package preparation
 
-This adapter retains the manual skill/MCP package workflow. It prepares an
+## Project component lane
+
+Project requests own exact directories at `.cursor/skills/<name>` and exact
+MCP entries in `.cursor/mcp.json`. Prepared artifacts stay under the selected
+project's `.uap/managed/clients/cursor/`. Detected user ConfigRoot remains user
+authority and is never replaced by the workspace root. Native config ownership
+uses the existing kernel's whole-entry receipts, conditional writes and locks;
+skill directories stage, verify and swap with rollback around one MCP batch.
+Foreign same-name or disabled entries collide, foreign hooks/settings remain
+untouched, and persistent application data survives component removal.
+
+Project stdio uses the existing trusted managed launcher with explicit package,
+data and cwd bindings. It does not rely on plugin placeholder expansion or
+implicit native cwd behavior. No client, package, model or MCP code runs during
+installation. Successful configuration reports `prepared` activation with
+`installation_verified`; discovery, aliases, enablement, approvals, policy and
+MCP initialization remain unobserved. Project activation attestation is refused
+before generic provider shortcuts and on direct adapter reuse.
+
+The composed contract suite covers loader/planner/command rendering/staging,
+remote and stdio MCP projection, repeat/update/repair/component removal,
+user/project A/B isolation, malformed/disabled/foreign collisions, writer
+failure rollback, exact root/context authority and contained alias refusal.
+These tests do not qualify native runtime discovery. Current official docs and
+pinned CLI help evidence are recorded in
+`docs/plans/project-install-e2e/cursor-implementation-evidence.md`.
+
+## Preserved user package preparation
+
+The user lane retains the manual skill/MCP package workflow. It prepares an
 editor compatibility manifest at `.cursor-plugin/plugin.json`, selected skills,
 and one package-local `mcp.json`. Native plugin discovery, agent CLI plugin or
 skill loading, and genuine native Stop are unqualified. Plan results say
@@ -13,7 +42,7 @@ installation_verified without adapter dispatch. That operator assertion does
 not qualify native discovery, genuine Stop, or automatic activation.
 
 The single MCP strategy in this contract is **plugin package projection**.
-It never writes user or project `mcp.json`, enables a disabled server, or
+The user lane never writes user or project `mcp.json`, enables a disabled server, or
 registers a second copy. CLI user-config MCP lifecycle is the separate conditional
 UC4 slice. It cannot be inferred from this editor package contract.
 
@@ -47,17 +76,15 @@ under changed ambient HOME/USERPROFILE/cwd. Foreign disabled user MCP and hooks
 remain byte-identical; the sibling namespace and prepared manifest survive.
 No client, helper, MCP process, model or hook is executed by these tests.
 
-`ValidateBindingProfile` exposes the existing optional client contract for an
-exact recorded artifact locator and, if present, `NativeProfileRoot`.
-The current shared facade does not dispatch this interface or persist a Cursor
-physical directory identity. Its `ReserveIdentity` can return an existing
-binding without validating a supplied profile; update/repair still require
-explicit roots. UC-P must bind those operations to recorded profile authority,
-expose that authority in a public roots/facts view, and refuse mismatches or
-replaced directories before effects. This adapter adds no parallel state store.
-The existing registry inspector's clear finding covers absence of an additional
-managed executable registration only; the prepared-directory walk still owns
-namespace collisions. It is not an exhaustive native registry observation.
+`ValidateBindingProfile` checks the selected native registry and recorded
+artifact locator. Its user branch retains the exact `plugins/local` preparation
+layout. Its project branch requires exact `.cursor` authority, the selected
+`.uap/managed/clients/cursor/<physicalArtifact>` artifact and exact native object
+paths. Generic lifecycle checks independently validate scope, selected project
+namespace and recorded authority; this adapter adds no parallel state store.
+The user registry inspector retains its limited clear finding for executable
+registration; the project inspector checks only the exact configured component
+namespace. Neither is exhaustive native discovery evidence.
 
 Source evidence: macOS editor 3.22.7 bundle SHA256
 `a9157bf9054d3f27a2a6910c855e028bd5e38896fa74405ca2f766abff590cb8`;

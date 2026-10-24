@@ -10,7 +10,15 @@ import (
 var _ clients.Projector = (*Adapter)(nil)
 var _ clients.ActiveNativeProjector = (*Adapter)(nil)
 
-func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) ([]domain.NativeObjectOwnership, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		if err := validateOpenCodeProjectActiveProjection(root, envelope, plan, dataPath); err != nil {
+			return nil, err
+		}
+	}
 	return BuildOpenCodeNativeObjects(root, envelope, plan)
 }
 

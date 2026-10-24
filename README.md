@@ -154,8 +154,8 @@ and open the copied folder. Then restore the recorded plugins and dependencies:
 agentplugins deps import --install
 ```
 
-The optional directory argument defaults to the current folder. Export reads
-the global user environment; import writes it. Only `uap.toml` and `uap.lock`
+The optional directory argument defaults to the current folder. By default,
+export reads the global user environment and import writes it. Only `uap.toml` and `uap.lock`
 are transferred. Restore verifies exact locked packages from still-available
 sources or the destination cache for supported dependency clients: Claude Code,
 Codex, OpenCode, Cursor and Gemini CLI.
@@ -164,6 +164,24 @@ Authentication, client settings, secrets and plugin data need separate setup
 or backup. Transferring the files does not guarantee offline installation.
 See [Restore on another machine](docs/UAP_DEPENDENCIES.md#restore-on-another-machine)
 for confirmation prompts, supported restore behavior and recovery.
+
+## Install for one project
+
+**SOURCE ONLY / UNRELEASED:** select project scope explicitly in a compatible
+source build:
+
+```sh
+agentplugins add owner/repo --alias review --target cursor \
+  --scope project --project-root /path/to/project
+agentplugins install --locked --scope project --project-root /path/to/project
+```
+
+The portable `uap.toml` and `uap.lock` live in that project. Local receipts,
+recovery state and retained data live under `.uap/`; the user's environment
+remains separate. The default scope is still user, and project scope without
+`--project-root` uses the current directory. Native capabilities and activation
+requirements depend on the client. See [Project installation](docs/PROJECT_INSTALLATION.md)
+for supported-target reporting, update/repair/removal and portable restore.
 
 ## Any Agent Plugins 1.0 package
 
