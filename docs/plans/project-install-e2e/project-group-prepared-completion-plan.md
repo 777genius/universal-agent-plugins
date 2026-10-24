@@ -98,3 +98,67 @@ shortcut in this slice.
   assertion changes are required by this SDK presentation correction.
 
 No implementation has been written for this plan.
+
+
+## R2 — exact identity and fail-closed presentation after both R1 reviews
+
+Both independent reviewers (APM and Skillshare) gave R1 architecture GO with
+concrete admission refinements. This revision incorporates every refinement
+before source edits; their final R2 reviews remain required.
+
+The exception is scoped to the final presentation of an actual completed project
+operation. It does not change initial handoff detection or skip fresh core work.
+The shared helper receives the existing prepared operation, fresh GroupResult,
+and the state already loaded by finishGroup. It performs no new I/O, native
+commands, persistence, receipt verification, or lifecycle transition.
+
+Exact identity must agree across the frozen prepared target, fresh core delivery
+plan and loaded binding: installation ID, binding ID, client ID, physical artifact,
+active locator, explicit project scope, canonical project root, original user
+configuration root, selected delivery, profile authority and native profile
+namespace/root. Use the exact binding ID (derived by the existing domain helper
+where the core result lacks a direct field), not the first binding with a matching
+client ID. Reject empty, duplicate, missing, extra or inconsistent target identities.
+Each target must belong to the same requested installation and project context.
+No path canonicalization, discovery or new authority inference is added here;
+these are the already canonical values supplied by preparation and the core.
+
+Recognize only positive known completion values. Require GroupPhaseCompleted,
+every target GroupTargetExternalCompleted with nil failure, and the existing
+successful terminal lifecycle contract. Prepared requires installation_verified,
+no ActivationAttested, and the real fresh UserActions retained; it stays Prepared.
+Active and NotRequired may retain their successful existing verification contract.
+Authentication is limited to known NotRequired, NotChecked, Pending or Authenticated
+values; Failed and unknown values refuse. Pending and NotChecked never imply
+successful authentication. Require PolicyAllowed: blocked or unknown policy cannot
+qualify. NativeEffect must be explicitly Unchanged or Committed; unknown or uncertain
+effects refuse. The loaded binding must have an empty NativeActivationAttempt and
+nil PendingNativeIntent. Do not introduce new native discovery or runtime evidence.
+
+For project groups, a failed state load or missing/inconsistent exact binding
+returns Incomplete/error with the observed Mutated value preserved. It must not
+fall through the legacy anyGroupHostHandoffPending boolean, which treats unknown
+state as absence. Validate using the already loaded state and retain the existing
+core/host callback error when present. The user-scope branch keeps its behavior.
+An unqualified project result cannot become Completed merely because no older
+Prepared binding was found.
+
+Only that complete exact project result clears the old pending condition for
+final SDK result classification. Preserve the separately reviewed actual mutation
+propagation and require !result.Mutated before OutcomeUnchanged, even if a stale
+prepared plan says NoChange. Copy UserActions from the fresh target outcomes in
+target order, unchanged, to Result.ManualActions; never substitute preview actions
+or rewrite structured JSON command guidance.
+
+Tests must include exact binding mismatches (including another binding of the
+same client), physical/locator/context/profile/delivery mismatch, outstanding
+attempt/intent, each rejected unknown/negative dimension, missing/failed loaded
+state with and without mutation, and fresh outcome action propagation. Exercise
+both successful host callbacks that leave Prepared and failing callbacks, and
+prove fresh core observation still executes on a repeat Prepared operation.
+The actual Cline+Codex grouped lifecycle and foreign-file refusal remain the
+acceptance path; user scope, native attempts, cancellation and recovery regressions
+are preserved. No weakening of core guards, assertion meaning or evidence gates
+is authorized by this reporting correction.
+
+No production source has been changed for this plan revision.
