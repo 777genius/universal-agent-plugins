@@ -173,3 +173,30 @@ pending-attempt refusal, fail-closed loaded state, real mutation preservation,
 fresh actions and callback behavior. Neither review executed a vendor client
 or treated presentation completion as native activation. Implementation and
 two frozen code reviews follow this approved plan.
+
+## R2 contract clarification — legacy absence of a native-effect report
+
+Implementation source inspection found that Claude project listing intentionally
+returns the existing StartedActivation outcome with an empty NativeEffect. The
+core explicitly preserves legacy non-native activators without an effect contract
+(usecase/lifecycle.go), and its strict Prepared unchanged predicate allows this
+empty value. Requiring an explicit effect from every client would reject a real
+successful project operation or encourage fabrication of effect evidence.
+
+Both independent reviewers agreed with this narrow correction in principle.
+Final admission accepts exact empty NativeEffect only when the existing scoped
+traits declare !TracksNativeEffects and LifecycleCLIRegistry or LifecyclePrepared.
+This means only that the contract did not report an effect; do not replace it
+with NativeEffectUnchanged or infer native discovery. Tracked effects still
+require explicit Unchanged/Committed, and Uncertain or any arbitrary nonempty
+unknown value refuses for every target. All exact identity, live binding,
+positive lifecycle, attestation, pending-attempt and fresh completed-core fences
+remain. A mixed-target regression must distinguish a legacy empty effect from
+a tracked client's empty effect. No client adapter or core effect protocol is
+changed by this compatibility rule.
+
+SelectedDelivery comparisons stay exact: current project policy admits only its
+zero value. This does not pre-authorize a future selected project delivery mode
+or ignore its projection revision. NativeProfileRoot is compared with the
+existing authority token's canonical root when present, otherwise the exact
+project registry root recorded by the existing scoped binding contract.
