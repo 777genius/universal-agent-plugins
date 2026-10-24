@@ -11,7 +11,8 @@ two independent final code reviews before root publishes the exact checkpoint.
 ## 1. Decode archive selectors exactly once
 
 URL parsing already decodes Fragment. Feed u.EscapedFragment() to the existing
-url.ParseQuery decoder and clear both Fragment and RawFragment on the cloned
+percent decoder with literal plus preserved (replace raw + with %2B before
+url.ParseQuery), and clear both Fragment and RawFragment on the cloned
 endpoint before normalization. Local selector grammar is already encoded input
 and remains unchanged. Test HTTPS/local parity for literal plus (c++), ampersand,
 literal percent/%41, slash, Unicode and ordinary selected paths. Preserve malformed

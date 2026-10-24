@@ -28,3 +28,15 @@ func TestArchiveHTTPSAndLocalSelectorsDecodeExactlyOnce(t *testing.T) {
 		}
 	}
 }
+
+func TestArchiveSelectorsPreserveLiteralPlus(t *testing.T) {
+	checksum := strings.Repeat("b", 64)
+	for _, endpoint := range []string{"https://packages.test/plugin.zip", "/tmp/plugin.zip"} {
+		for _, spelling := range []string{"plugins/c++", "plugins/c%2B%2B"} {
+			spec, err := Parse(endpoint + "#sha256=" + checksum + "&path=" + spelling)
+			if err != nil || spec.Archive == nil || spec.Archive.Path != "plugins/c++" {
+				t.Fatalf("literal plus selector changed: %+v %v", spec, err)
+			}
+		}
+	}
+}

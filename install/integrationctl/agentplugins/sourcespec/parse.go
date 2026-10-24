@@ -107,7 +107,8 @@ func parseArchive(u *url.URL) (Archive, error) {
 
 func parseArchiveFragment(a Archive, fragment string) (Archive, error) {
 	if fragment != "" {
-		values, err := url.ParseQuery(fragment)
+		// Fragments are not form data: preserve literal plus while decoding percent escapes once.
+		values, err := url.ParseQuery(strings.ReplaceAll(fragment, "+", "%2B"))
 		if err != nil || len(values["sha256"]) != 1 || !ValidSHA256(values.Get("sha256")) {
 			return Archive{}, errors.New("archive fragment requires sha256=FULL_SHA256 and optional path")
 		}
