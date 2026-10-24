@@ -1,0 +1,51 @@
+name: Qoder Pinned Populated Scope Research
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qoder-populated-research.yml'
+      - 'scripts/research-qoder-populated.py'
+      - 'scripts/test_qoder_populated_research.py'
+      - 'scripts/research-qoder-native.py'
+      - 'scripts/research-grok-native.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/test_native_client_research.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qoder-populated-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research:
+    name: Qoder 1.1.78 populated user and project observations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify inert research contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
+          python3 -m unittest discover -s scripts -p 'test_qoder_native_research.py'
+          python3 -m unittest discover -s scripts -p 'test_qoder_populated_research.py'
+      - name: Observe finite installs and lists in a fresh nonroot network namespace
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/research-qoder-populated.py --output '${{ runner.temp }}/qoder-populated-research'
+      - name: Preserve actual observations including failures
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: qoder-1.1.78-populated-scope-research-linux-amd64
+          path: ${{ runner.temp }}/qoder-populated-research/
+          if-no-files-found: error
+          retention-days: 14
