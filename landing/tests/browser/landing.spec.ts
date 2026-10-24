@@ -495,7 +495,7 @@ test('directory filters and reviewed detail keep automatic detection as the defa
   await gitlabCard.getByRole('link', { name: 'GitLab', exact: true }).click();
   await expect(page).toHaveURL(/\/plugins\/gitlab\/?$/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'GitLab', exact: true })).toBeVisible();
-  await expect(page.getByText('All installed agents')).toBeVisible();
+  await expect(page.getByText('Choose agents in terminal')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Run with npx' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
     'npx -y universal-agent-plugins add',

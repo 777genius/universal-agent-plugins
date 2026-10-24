@@ -6,6 +6,17 @@ service is separate from the static GitHub Pages landing site. Only
 remain on GitHub Pages. The API contract is
 [skills-catalog.openapi.yaml](contracts/skills-catalog.openapi.yaml).
 
+Regenerate the landing DTOs after changing the contract:
+
+```sh
+npm exec --yes --package=openapi-typescript@7.13.0 -- openapi-typescript docs/contracts/skills-catalog.openapi.yaml -o landing/types/skillsCatalog.generated.ts
+```
+
+The generator is pinned for reproducibility and is a development tool only.
+The provider adapter uses anonymous skills.sh website/CLI endpoints, which are
+undocumented and may change. Its interface and cached last good results contain
+that dependency; the authenticated `/api/v1` service is not used.
+
 ## Destination and owned paths
 
 Deployment inventory supplied for this service:

@@ -209,9 +209,8 @@ function updateAutoDetect(value: boolean) {
 </script>
 
 <template>
-  <article
-    class="plugin-card"
-    :class="{ 'plugin-card--expanded': installExpanded }"
+  <CatalogCard
+    :expanded="installExpanded"
     :data-trust="isDiscovered ? 'community' : 'reviewed'"
     :data-install-source="plugin.install_source"
   >
@@ -412,7 +411,7 @@ function updateAutoDetect(value: boolean) {
         </div>
       </Transition>
     </div>
-  </article>
+  </CatalogCard>
 </template>
 
 <style scoped lang="scss">

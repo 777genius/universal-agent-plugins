@@ -148,7 +148,7 @@ test('catalog SEO titles never promise a count before the signed feed loads', ()
 
 test('owned Vue presentation compiles with no untranslated text or missing static keys', async () => {
   const { parse, compileScript, compileTemplate } = await import('vue/compiler-sfc');
-  const files = ['AppSelect', 'AppCombobox', 'AppMultiSelect', 'CommandSnippet', 'RegistryDirectory', 'PluginCatalog', 'RegistryPluginCard', 'InstallPanel', 'SecurityAssessmentBadge', 'SecurityAssessmentPanel']
+  const files = ['CatalogCard', 'CatalogSearchField', 'UnifiedCatalog', 'SkillsCatalog', 'SkillCard', 'AppSelect', 'AppCombobox', 'AppMultiSelect', 'CommandSnippet', 'RegistryDirectory', 'PluginCatalog', 'RegistryPluginCard', 'InstallPanel', 'SecurityAssessmentBadge', 'SecurityAssessmentPanel']
     .map(name => `components/registry/${name}.vue`)
     .concat(['pages/plugins/index.vue', 'pages/plugins/[slug].vue', 'pages/plugins/community.vue', 'pages/agents/[client].vue']);
   for (const filename of files) {

@@ -260,28 +260,12 @@ watch([query, category, component, source, trust, client, authentication, owner]
       <p>{{ intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource') }}</p>
     </div>
     <div class="catalog-controls" role="search" :aria-label="t('registryUi.catalog.filterPlugins')">
-      <label class="search-field">
-        <span class="sr-only">{{ t('registryUi.catalog.searchPlugins') }}</span>
-        <svg class="search-field__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none">
-          <circle cx="11" cy="11" r="6.5" />
-          <path d="m16 16 4 4" />
-        </svg>
-        <input
-          v-model="query"
-          type="search"
-          :aria-label="t('registryUi.catalog.searchPlugins')"
-          :placeholder="t('registryUi.catalog.searchByNameAuthorOrCapability')"
-        />
-        <button
-          v-if="query"
-          class="search-field__clear"
-          type="button"
-          :aria-label="t('registryUi.catalog.clearPluginSearch')"
-          @click="query = ''"
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-      </label>
+      <CatalogSearchField
+        v-model="query"
+        :label="t('registryUi.catalog.searchPlugins')"
+        :placeholder="t('registryUi.catalog.searchByNameAuthorOrCapability')"
+        :clear-label="t('registryUi.catalog.clearPluginSearch')"
+      />
       <button
         class="catalog-filter-toggle"
         type="button"

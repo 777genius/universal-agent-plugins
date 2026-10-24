@@ -8,6 +8,11 @@ import type { RegistryPlugin } from '../types/registry';
 
 const CLI_INVOCATION = 'npx -y universal-agent-plugins';
 
+/** Encode one shell argument; safe tokens retain the familiar readable command. */
+export function shellToken(value: string): string {
+  return /^[A-Za-z0-9_./:@+,=-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function communityAddSource(plugin: RegistryPlugin): string {
   const source = plugin.source;
   if (
@@ -26,9 +31,7 @@ function communityAddSource(plugin: RegistryPlugin): string {
   )
     throw new Error('Community source requires a relative package path');
   const selector = `github:${source.repository}@${source.revision}${source.path ? `//${source.path}` : ''}`;
-  return /^[A-Za-z0-9_./:@+-]+$/.test(selector)
-    ? selector
-    : `'${selector.replaceAll("'", "'\\''")}'`;
+  return shellToken(selector);
 }
 
 export function pluginCommands(
