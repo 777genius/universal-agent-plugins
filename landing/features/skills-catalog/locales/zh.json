@@ -1,0 +1,57 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "目录类型",
+      "plugins": "插件",
+      "skills": "技能",
+      "heading": "探索 Agent Skills",
+      "intro": "找到技能，选择代理，然后复制安装命令。",
+      "search": "搜索技能",
+      "searchPlaceholder": "按名称或仓库搜索技能",
+      "clearSearch": "清除搜索",
+      "sortLabel": "技能排序",
+      "loaded": "显示 {count} 个技能",
+      "searchResults": "显示 {count} 个搜索结果",
+      "listingNote": "列表来自 skills.sh。收录不代表已审核或兼容。",
+      "stale": "正在显示 {date} 保存的结果。最新结果暂时不可用。",
+      "minSearch": "请输入至少 2 个字符",
+      "minSearchHelp": "输入技能名称或仓库，或清除搜索以浏览。",
+      "loading": "正在加载技能…",
+      "unavailable": "技能暂时不可用",
+      "unavailableHelp": "请稍后重试加载目录。",
+      "retry": "重试",
+      "noMatches": "没有匹配的技能",
+      "noMatchesHelp": "尝试更宽泛的搜索，或清除搜索以浏览。",
+      "moreUnavailable": "无法加载更多技能。当前结果仍然可用。",
+      "showMore": "显示更多技能",
+      "externalSource": "外部来源",
+      "githubSource": "GitHub 源码",
+      "unsupportedSource": "此技能需要 GitHub 仓库才能在此安装。",
+      "chooseAgents": "选择代理",
+      "chooseInTerminal": "在终端中选择代理",
+      "chooseInTerminalHelp": "命令会在安装前让你选择代理。",
+      "checkedBeforeInstall": "CLI 会在安装前检查来源和技能。",
+      "views": {
+        "popular": "热门 · 全部时间",
+        "trending": "趋势 · 24 小时",
+        "hot": "热度 · 最近一小时"
+      },
+      "metric": {
+        "all-time": "{count} 次安装 · 全部时间",
+        "24h": "{count} 次安装 · 最近 24 小时",
+        "1h": "{count} 次安装 · 最近一小时"
+      },
+      "pageHeading": "查找 Agent Skills",
+      "unsupportedName": "此条目的技能名称不受支持。请查看来源中的安装说明。",
+      "collectionShown": "本合集显示 {count} 个，共 {total} 个"
+    },
+    "directoryPage": {
+      "pluginDirectory": "插件目录",
+      "findAgentPlugins10": "查找代理插件 1.0。",
+      "useThemEverywhere": "到处使用它们。",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "搜索从公共 GitHub 存储库中发现的已审阅的软件包和社区插件。",
+      "explorePlugins": "探索插件",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "按功能、来源、身份验证或支持的代理进行过滤。"
+    }
+  }
+}

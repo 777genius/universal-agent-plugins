@@ -1,5 +1,7 @@
 import type { SkillsView, SkillListing } from '../types/skillsCatalog.ts';
-import { shellToken } from './commands.ts';
+import { skillClients } from '../data/skillClients.ts';
+
+const skillTargetIds = new Set<string>(skillClients.map((client) => client.id));
 
 function queryValue(value: unknown): string {
   const first = Array.isArray(value) ? value[0] : value;
@@ -75,8 +77,13 @@ export function skillInstallCommand(
   ];
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
-    if (!ids.length) return undefined;
+    if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
     tokens.push('--target', ids.join(','));
   }
-  return tokens.map(shellToken).join(' ');
+  // Every dynamic token is a validated repository, normative name or known
+  // target ID. Double quotes preserve Unicode in CMD and CSV in PowerShell;
+  // these identifiers cannot contain shell expansions or quote delimiters.
+  return tokens
+    .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))
+    .join(' ');
 }

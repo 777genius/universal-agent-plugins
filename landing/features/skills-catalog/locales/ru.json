@@ -1,0 +1,57 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "Тип каталога",
+      "plugins": "Плагины",
+      "skills": "Навыки",
+      "heading": "Найдите Agent Skills",
+      "intro": "Найдите навык, выберите агентов и скопируйте команду установки.",
+      "search": "Поиск навыков",
+      "searchPlaceholder": "Название навыка или репозиторий",
+      "clearSearch": "Очистить поиск",
+      "sortLabel": "Сортировка навыков",
+      "loaded": "Показано навыков: {count}",
+      "searchResults": "Показано результатов: {count}",
+      "listingNote": "Данные из skills.sh. Наличие в каталоге не означает проверку или совместимость.",
+      "stale": "Сохранённые результаты от {date}. Свежие данные временно недоступны.",
+      "minSearch": "Введите хотя бы 2 символа",
+      "minSearchHelp": "Укажите название навыка или репозиторий либо очистите поиск для просмотра.",
+      "loading": "Загрузка навыков…",
+      "unavailable": "Навыки временно недоступны",
+      "unavailableHelp": "Попробуйте загрузить каталог чуть позже.",
+      "retry": "Повторить",
+      "noMatches": "Навыки не найдены",
+      "noMatchesHelp": "Попробуйте более общий запрос или очистите поиск.",
+      "moreUnavailable": "Не удалось загрузить ещё навыки. Текущие результаты доступны.",
+      "showMore": "Показать ещё навыки",
+      "externalSource": "Внешний источник",
+      "githubSource": "Исходники на GitHub",
+      "unsupportedSource": "Для установки этого навыка здесь нужен репозиторий GitHub.",
+      "chooseAgents": "Выберите агентов",
+      "chooseInTerminal": "Выбрать агентов в терминале",
+      "chooseInTerminalHelp": "Команда предложит выбрать агентов перед установкой.",
+      "checkedBeforeInstall": "CLI проверяет источник и навык перед установкой.",
+      "views": {
+        "popular": "Популярные · за всё время",
+        "trending": "В тренде · 24 часа",
+        "hot": "Горячие · последний час"
+      },
+      "metric": {
+        "all-time": "{count} установок · за всё время",
+        "24h": "{count} установок · за 24 часа",
+        "1h": "{count} установок · за последний час"
+      },
+      "pageHeading": "Найдите Agent Skills",
+      "unsupportedName": "Имя скилла в этой записи не поддерживается. Инструкции по установке смотрите в источнике.",
+      "collectionShown": "Показано {count} из {total} в этой подборке"
+    },
+    "directoryPage": {
+      "pluginDirectory": "Каталог плагинов",
+      "findAgentPlugins10": "Найдите Agent Plugins 1.0.",
+      "useThemEverywhere": "Используйте их везде.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Ищите проверенные пакеты и плагины сообщества, найденные в общедоступных репозиториях GitHub.",
+      "explorePlugins": "Обзор плагинов",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Фильтруйте по возможности, источнику, аутентификации или поддерживаемому агенту."
+    }
+  }
+}

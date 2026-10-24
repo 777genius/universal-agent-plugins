@@ -16,6 +16,13 @@ copy. On the home page the catalog keeps its own visible heading. Collapsed
 Skill cards are compact; agent selection and commands appear after Install.
 Agent choices come from the generated client capability manifest.
 
+Catalog translations belong to the feature's compiled Vue I18n resources.
+One local composer serves the catalog and its Skill cards; shared controls fall
+back to global labels. Directory SEO remains global. Detail and download pages
+do not serialize catalog-only copy into their HTML payloads.
+Catalog-specific styles also load with the catalog component instead of the
+global registry stylesheet, keeping unrelated pages within their HTML budget.
+
 Desktop is the acceptance target. Review includes real skills.sh data, search,
 installation choices, copy, navigation, pagination, and outage/empty states.
 The source and provider links identify provenance without claiming compatibility

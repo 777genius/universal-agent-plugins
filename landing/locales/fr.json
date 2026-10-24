@@ -848,12 +848,6 @@
       }
     },
     "directoryPage": {
-      "explorePlugins": "Explorer les plugins",
-      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Filtrez par fonctionnalité, source, authentification ou agent pris en charge.",
-      "pluginDirectory": "Répertoire des plugins",
-      "findAgentPlugins10": "Recherchez les plugins d'agent 1.0.",
-      "useThemEverywhere": "Utilisez-les partout.",
-      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Recherchez les packages examinés et les plugins communautaires découverts dans les référentiels publics GitHub.",
       "description": "Recherchez les plug-ins d'agent examinés et communautaires 1.0 pour Codex, Claude Code, Cursor, Gemini CLI, OpenCode, etc.",
       "title": "Annuaire Agent Plugins 1.0 {'|'} Rechercher des plugins",
       "listName": "Packages de plug-ins d'agent révisés 1.0"
@@ -963,52 +957,6 @@
       "requiredDetail": "Le paquet peut nécessiter un compte, un jeton ou une connexion ; cela ne précise pas OAuth et ne confirme pas votre connexion.",
       "not_requiredDetail": "Aucune authentification n’est déclarée pour ces agents. Des limites de service et d’autres exigences peuvent s’appliquer.",
       "unknownDetail": "Vérifiez les exigences du paquet avant la connexion."
-    },
-    "skills": {
-      "catalogType": "Type de catalogue",
-      "plugins": "Extensions",
-      "skills": "Compétences",
-      "heading": "Explorez les Agent Skills",
-      "intro": "Trouvez une compétence, choisissez vos agents et copiez la commande d’installation.",
-      "search": "Rechercher des Skills",
-      "searchPlaceholder": "Nom de compétence ou dépôt",
-      "clearSearch": "Effacer la recherche",
-      "sortLabel": "Trier les Skills",
-      "loaded": "{count} Skills affichées",
-      "searchResults": "{count} résultats affichés",
-      "listingNote": "Données de skills.sh. Une fiche ne garantit ni vérification ni compatibilité.",
-      "stale": "Résultats enregistrés le {date}. Les données récentes sont temporairement indisponibles.",
-      "minSearch": "Saisissez au moins 2 caractères",
-      "minSearchHelp": "Utilisez un nom ou un dépôt, ou effacez la recherche pour parcourir.",
-      "loading": "Chargement des Skills…",
-      "unavailable": "Skills temporairement indisponibles",
-      "unavailableHelp": "Réessayez de charger le catalogue dans un instant.",
-      "retry": "Réessayer",
-      "noMatches": "Aucune Skill trouvée",
-      "noMatchesHelp": "Élargissez la recherche ou effacez-la pour parcourir.",
-      "moreUnavailable": "Impossible de charger plus de Skills. Vos résultats actuels restent disponibles.",
-      "showMore": "Afficher plus de Skills",
-      "externalSource": "Source externe",
-      "githubSource": "Code sur GitHub",
-      "viewSource": "Voir la source",
-      "providerListing": "Voir sur skills.sh",
-      "unsupportedSource": "L’installation est disponible pour les dépôts GitHub. Consultez la source de cette Skill.",
-      "chooseAgents": "Choisir les agents",
-      "chooseInTerminal": "Choisir les agents dans le terminal",
-      "chooseInTerminalHelp": "La commande permet de choisir les agents avant l’installation.",
-      "checkedBeforeInstall": "La CLI vérifie la source et la Skill avant l’installation.",
-      "views": {
-        "popular": "Populaires · depuis le début",
-        "trending": "Tendances · 24 heures",
-        "hot": "En vogue · dernière heure"
-      },
-      "metric": {
-        "all-time": "{count} installations · depuis le début",
-        "24h": "{count} installations · dernières 24 heures",
-        "1h": "{count} installations · dernière heure"
-      },
-      "pageHeading": "Trouvez des Agent Skills",
-      "unsupportedName": "Le nom de cette skill n’est pas pris en charge. Consultez la source pour les instructions d’installation."
     }
   }
 }

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { createI18n } from 'vue-i18n';
+import { loadI18nMessages } from './load-i18n-messages.ts';
 import { slavicPluralRule } from '../utils/slavicPluralRule.ts';
 import { publishedLocales } from '../data/i18n.ts';
 import { productRoutes } from '../data/routes.ts';
@@ -245,11 +246,11 @@ export function activeMessages(message) {
 export async function checkI18n() {
   const read = async (locale, folder) =>
     JSON.parse(await fs.readFile(new URL(`../${folder}/${locale}.json`, import.meta.url), 'utf8'));
-  const reference = await read('en', 'locales');
+  const reference = loadI18nMessages('en');
   const en = activeMessages(reference);
   const download = await read('en', 'content/download');
   for (const locale of publishedLocales) {
-    const messages = activeMessages(await read(locale, 'locales'));
+    const messages = activeMessages(loadI18nMessages(locale));
     validateMessages(en, messages, locale);
     assertTranslatedCopy(en, messages, locale);
     const overlay = await read(locale, 'content/download');

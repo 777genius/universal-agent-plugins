@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { loadI18nMessages } from '../../scripts/load-i18n-messages.ts';
 import { expect, type Page, type Locator } from '@playwright/test';
 import { createI18n, type LocaleMessageDictionary, type VueMessageType } from 'vue-i18n';
 import { publishedLocales, type PublishedLocale } from '../../data/i18n';
@@ -9,7 +10,7 @@ import type { RegistryIndex } from '../../types/registry';
 
 export const locales: readonly PublishedLocale[] = publishedLocales;
 export function wording(locale: PublishedLocale) {
-  const messages = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+  const messages = loadI18nMessages(locale);
   const i18n = createI18n<[LocaleMessageDictionary<VueMessageType>], PublishedLocale, false>({ legacy: false, locale, fallbackLocale: false, pluralRules: { ru: slavicPluralRule, uk: slavicPluralRule }, messages: Object.fromEntries(publishedLocales.map(code => [code, code === locale ? messages : {}])) as Record<PublishedLocale, LocaleMessageDictionary<VueMessageType>> });
   return (key: string, params: Record<string, string | number> = {}) => {
     expect(i18n.global.te(key), `${locale}: missing ${key}`).toBe(true);

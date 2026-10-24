@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { spawnSync } from 'node:child_process';
 import { skillClients } from '../data/skillClients.ts';
 import capabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 import type { SkillListing } from '../types/skillsCatalog.ts';
@@ -35,7 +36,7 @@ test('Skill command preserves repository identity and exact selector without inv
   );
   assert.equal(
     skillInstallCommand(skill, ['codex', 'claude', 'codex']),
-    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target codex,claude',
+    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude"',
   );
   assert.equal(
     skillRepositoryUrl({
@@ -48,7 +49,38 @@ test('Skill command preserves repository identity and exact selector without inv
     'https://github.com/anthropics/skills',
   );
   assert.equal(skillInstallCommand(skill, []), undefined);
+  for (const target of ['unknown-agent', 'codex; echo injected', 'codex"', 'codex$HOME']) {
+    assert.equal(skillInstallCommand(skill, [target]), undefined);
+  }
 });
+
+test(
+  'portable quoting preserves Unicode names and target CSV in POSIX argv',
+  { skip: process.platform === 'win32' },
+  () => {
+    const command = skillInstallCommand({ ...skill, skillNameHint: 'révision-2' }, [
+      'codex',
+      'claude',
+    ])!;
+    assert.ok(command.includes('--skill "révision-2" --target "codex,claude"'));
+    // Set arguments without launching npx or an agent.
+    const result = spawnSync('/bin/sh', ['-c', `set -- ${command}; printf '%s\\n' "$@"`], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0);
+    assert.deepEqual(result.stdout.trim().split('\n'), [
+      'npx',
+      'universal-agent-plugins@latest',
+      'skills',
+      'add',
+      'https://github.com/anthropics/skills',
+      '--skill',
+      'révision-2',
+      '--target',
+      'codex,claude',
+    ]);
+  },
+);
 
 test('Skill metadata cannot inject shell syntax or external install sources', () => {
   for (const hint of [
@@ -69,7 +101,7 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
   }
   assert.ok(
     skillInstallCommand({ ...skill, skillNameHint: 'révision-2' }, ['codex'])?.includes(
-      "--skill 'révision-2'",
+      '--skill "révision-2"',
     ),
   );
   assert.equal(

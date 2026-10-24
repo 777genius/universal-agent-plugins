@@ -1,0 +1,57 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "Тип каталогу",
+      "plugins": "Плагіни",
+      "skills": "Навички",
+      "heading": "Знайдіть Agent Skills",
+      "intro": "Знайдіть навичку, виберіть агентів і скопіюйте команду встановлення.",
+      "search": "Пошук навичок",
+      "searchPlaceholder": "Назва навички або репозиторій",
+      "clearSearch": "Очистити пошук",
+      "sortLabel": "Сортування навичок",
+      "loaded": "Показано навичок: {count}",
+      "searchResults": "Показано результатів: {count}",
+      "listingNote": "Дані зі skills.sh. Наявність у каталозі не означає перевірку чи сумісність.",
+      "stale": "Збережені результати від {date}. Свіжі дані тимчасово недоступні.",
+      "minSearch": "Введіть щонайменше 2 символи",
+      "minSearchHelp": "Укажіть назву навички чи репозиторій або очистьте пошук для перегляду.",
+      "loading": "Завантаження навичок…",
+      "unavailable": "Навички тимчасово недоступні",
+      "unavailableHelp": "Спробуйте завантажити каталог трохи пізніше.",
+      "retry": "Повторити",
+      "noMatches": "Навичок не знайдено",
+      "noMatchesHelp": "Спробуйте загальніший запит або очистьте пошук.",
+      "moreUnavailable": "Не вдалося завантажити ще навички. Поточні результати доступні.",
+      "showMore": "Показати ще навички",
+      "externalSource": "Зовнішнє джерело",
+      "githubSource": "Код на GitHub",
+      "unsupportedSource": "Для встановлення цієї навички тут потрібен репозиторій GitHub.",
+      "chooseAgents": "Виберіть агентів",
+      "chooseInTerminal": "Вибрати агентів у терміналі",
+      "chooseInTerminalHelp": "Команда запропонує вибрати агентів перед встановленням.",
+      "checkedBeforeInstall": "CLI перевіряє джерело та навичку перед встановленням.",
+      "views": {
+        "popular": "Популярні · за весь час",
+        "trending": "У тренді · 24 години",
+        "hot": "Гарячі · остання година"
+      },
+      "metric": {
+        "all-time": "{count} встановлень · за весь час",
+        "24h": "{count} встановлень · за 24 години",
+        "1h": "{count} встановлень · за останню годину"
+      },
+      "pageHeading": "Знайдіть Agent Skills",
+      "unsupportedName": "Ім’я скіла в цьому записі не підтримується. Інструкції зі встановлення дивіться в джерелі.",
+      "collectionShown": "Показано {count} із {total} у цій добірці"
+    },
+    "directoryPage": {
+      "pluginDirectory": "Каталог плагінів",
+      "findAgentPlugins10": "Знаходьте Agent Plugins 1.0.",
+      "useThemEverywhere": "Використовуйте їх усюди.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Шукайте перевірені пакети та плагіни спільноти, знайдені в публічних репозиторіях GitHub.",
+      "explorePlugins": "Переглянути плагіни",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Фільтруйте за можливістю, джерелом, автентифікацією або підтримуваним агентом."
+    }
+  }
+}

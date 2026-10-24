@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { SkillListing } from '~/types/skillsCatalog';
 import { skillClients } from '~/data/skillClients';
-import { externalListingUrl, skillInstallCommand, skillRepositoryUrl } from '~/utils/skillsCatalog';
+import { skillInstallCommand, skillRepositoryUrl } from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 
 const props = defineProps<{ skill: SkillListing }>();
-const { t, n } = useI18n();
+const { t, n } = useI18n({ useScope: 'parent' });
 const { asset } = useSite();
 const preferences = useInstallPreferencesStore();
 const identity = `skill:${props.skill.id}`;
@@ -15,8 +15,6 @@ const expanded = ref(saved.expanded);
 const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
-const providerUrl = computed(() => externalListingUrl(props.skill.providerUrl));
-const sourceUrl = computed(() => repositoryUrl.value ?? externalListingUrl(props.skill.source.url));
 const command = computed(() =>
   skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value),
 );
@@ -76,13 +74,9 @@ function updateTerminal(value: boolean) {
         t(`registryUi.skills.metric.${skill.metrics.window}`, { count: n(skill.metrics.installs) })
       }}
     </p>
-    <div class="skill-card__links">
-      <a v-if="sourceUrl" :href="sourceUrl" target="_blank" rel="noreferrer"
-        >{{ repositoryUrl ? t('registryUi.skills.githubSource') : t('registryUi.skills.viewSource')
-        }}<span aria-hidden="true"> ↗</span></a
-      >
-      <a v-if="providerUrl" :href="providerUrl" target="_blank" rel="noreferrer"
-        >{{ t('registryUi.skills.providerListing') }}<span aria-hidden="true"> ↗</span></a
+    <div v-if="repositoryUrl" class="skill-card__links">
+      <a :href="repositoryUrl" target="_blank" rel="noreferrer"
+        >{{ t('registryUi.skills.githubSource') }}<span aria-hidden="true"> ↗</span></a
       >
     </div>
     <div class="plugin-card__bottom">

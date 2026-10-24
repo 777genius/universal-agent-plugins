@@ -28,8 +28,16 @@ test('Skills search reveals install choices, copies the exact command and surviv
     requests.push(url.search);
     await route.fulfill({
       json: {
-        items: [skill()],
+        items: [
+          skill(),
+          {
+            ...skill(1),
+            source: { kind: 'external', url: 'https://skills.sh/example/external' },
+            availability: 'unsupported-source',
+          },
+        ],
         page: 0,
+        total: 9911,
         hasMore: false,
         view: 'popular',
         cache: { status: 'fresh', fetchedAt: '2026-10-24T10:00:00Z' },
@@ -43,6 +51,9 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await catalog.getByRole('searchbox', { name: 'Search Skills', exact: true }).fill('frontend');
   await expect.poll(() => requests.some((query) => query.includes('q=frontend'))).toBe(true);
   await expect(page).toHaveURL(/tab=skills.*q=frontend/);
+  await expect(catalog.locator('.catalog-count')).toHaveText('Showing 2 search results');
+  await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
+  await expect(catalog.locator('.skill-card').nth(1).getByRole('link')).toHaveCount(0);
   const card = catalog.locator('.skill-card').first();
   await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
     'href',
@@ -87,6 +98,7 @@ test('Skills renders in 48-item increments and requests the next upstream page o
       json: {
         items: Array.from({ length: 200 }, (_, index) => skill(index + currentPage * 200)),
         page: currentPage,
+        total: 9911,
         hasMore: currentPage === 0,
         view: 'popular',
         cache: { status: 'fresh', fetchedAt: '2026-10-24T10:00:00Z' },
@@ -96,12 +108,28 @@ test('Skills renders in 48-item increments and requests the next upstream page o
   await page.goto('plugins/?tab=skills');
   const catalog = page.locator('.skills-catalog');
   await expect(catalog.locator('.skill-card')).toHaveCount(48);
+  await expect(catalog.locator('.catalog-count')).toHaveText(
+    'Showing 48 of 9,911 in this collection',
+  );
+  await expect(catalog.locator('a[href*="skills.sh"]')).toHaveCount(0);
+  await expect(
+    catalog.locator('.skills-catalog__summary').getByRole('button', { name: /Show more Skills/ }),
+  ).toBeVisible();
   for (const count of [96, 144, 192, 200]) {
-    await catalog.getByRole('button', { name: /Show more Skills/ }).click();
+    await catalog
+      .getByRole('button', { name: /Show more Skills/ })
+      .first()
+      .click();
     await expect(catalog.locator('.skill-card')).toHaveCount(count);
+    await expect(catalog.locator('.catalog-count')).toHaveText(
+      `Showing ${count} of 9,911 in this collection`,
+    );
     expect(pages).toEqual([0]);
   }
-  await catalog.getByRole('button', { name: /Show more Skills/ }).click();
+  await catalog
+    .getByRole('button', { name: /Show more Skills/ })
+    .last()
+    .click();
   await expect(catalog.locator('.skill-card')).toHaveCount(248);
   expect(pages).toEqual([0, 1]);
 });

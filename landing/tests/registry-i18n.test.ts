@@ -10,15 +10,14 @@ import {
 } from '../utils/securityPresentation.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 import { isKnownLocale } from '../data/i18n.ts';
+import { loadI18nMessages } from '../scripts/load-i18n-messages.ts';
 
-const messages = JSON.parse(
-  readFileSync(new URL('../locales/en.json', import.meta.url), 'utf8'),
-);
+const messages = loadI18nMessages('en');
 const { t } = createI18n<[LocaleMessageDictionary<VueMessageType>], string, false>({
   legacy: false,
   locale: 'en',
   fallbackLocale: false,
-  messages: { en: messages },
+  messages: { en: messages as unknown as LocaleMessageDictionary<VueMessageType> },
 }).global;
 const translate = (key: string, params: Record<string, string | number> = {}, plural?: number) =>
   plural === undefined ? t(key, params) : t(key, params, plural);
@@ -141,7 +140,7 @@ test('all owned presentation keys exist and technical client content remains the
 test('catalog SEO titles never promise a count before the signed feed loads', () => {
   for (const filename of readdirSync(new URL('../locales/', import.meta.url))) {
     if (!filename.endsWith('.json')) continue;
-    const locale = JSON.parse(readFileSync(new URL(`../locales/${filename}`, import.meta.url), 'utf8'));
+    const locale = loadI18nMessages(filename.replace('.json', ''));
     assert.doesNotMatch(locale.registryUi.directoryPage.title, /(?:2[\s,.]?500|2500)/, filename);
   }
 });
@@ -160,8 +159,8 @@ test('owned Vue presentation compiles with no untranslated text or missing stati
     assert.deepEqual(template.errors, [], filename);
     for (const match of source.matchAll(/(?:t\('|(keypath)="?)(registryUi\.[\w.]+)/g)) {
       const key = match[2];
-      let value = messages;
-      for (const part of key.split('.')) value = value?.[part];
+      let value: unknown = messages;
+      for (const part of key.split('.')) value = (value as Record<string, unknown> | undefined)?.[part];
       assert.equal(typeof value, 'string', `${filename}: ${key}`);
     }
     function visit(node: any) {

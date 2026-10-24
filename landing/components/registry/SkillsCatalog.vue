@@ -5,7 +5,7 @@ import { canonicalPath } from '~/utils/seo';
 
 defineProps<{ hideHeading?: boolean }>();
 
-const { t, n, d } = useI18n();
+const { t, n, d } = useI18n({ useScope: 'parent' });
 const route = useRoute();
 const router = useRouter();
 const initial = restoreSkillsQuery(route.query);
@@ -66,6 +66,15 @@ const viewOptions = computed(() =>
     label: t(`registryUi.skills.views.${value}`),
   })),
 );
+const collectionTotal = computed(() => {
+  const total = metadata.value?.total;
+  return typeof total === 'number' &&
+    Number.isSafeInteger(total) &&
+    total > 0 &&
+    total >= displayed.value.length
+    ? total
+    : undefined;
+});
 const staleDate = computed(() => {
   const date = metadata.value?.cache.fetchedAt;
   return date && Number.isFinite(Date.parse(date))
@@ -107,12 +116,37 @@ const staleDate = computed(() => {
     </div>
     <div class="catalog-meta">
       <div aria-live="polite">
-        <p v-if="query.trim() && !searchTooShort" class="catalog-count">
-          {{ t('registryUi.skills.searchResults', { count: n(displayed.length) }) }}
-        </p>
-        <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
-          {{ t('registryUi.skills.loaded', { count: n(displayed.length) }) }}
-        </p>
+        <div class="skills-catalog__summary">
+          <p v-if="query.trim() && !searchTooShort" class="catalog-count">
+            {{ t('registryUi.skills.searchResults', { count: n(displayed.length) }) }}
+          </p>
+          <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">
+            {{
+              collectionTotal
+                ? t('registryUi.skills.collectionShown', {
+                    count: n(displayed.length),
+                    total: n(collectionTotal),
+                  })
+                : t('registryUi.skills.loaded', { count: n(displayed.length) })
+            }}
+          </p>
+          <button
+            v-if="!loading && !searchTooShort && (hasMore || (failed && displayed.length))"
+            type="button"
+            class="button button--secondary"
+            :disabled="loadingMore"
+            @click="failed ? retry() : showMore()"
+          >
+            {{
+              loadingMore
+                ? t('registryUi.skills.loading')
+                : failed
+                  ? t('registryUi.skills.retry')
+                  : t('registryUi.skills.showMore')
+            }}
+            <span v-if="!loadingMore" aria-hidden="true">↓</span>
+          </button>
+        </div>
         <p class="skills-catalog__disclosure">{{ t('registryUi.skills.listingNote') }}</p>
         <p
           v-if="metadata?.cache.status === 'stale'"

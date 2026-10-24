@@ -848,12 +848,6 @@
       }
     },
     "directoryPage": {
-      "explorePlugins": "Переглянути плагіни",
-      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "Фільтруйте за можливістю, джерелом, автентифікацією або підтримуваним агентом.",
-      "pluginDirectory": "Каталог плагінів",
-      "findAgentPlugins10": "Знаходьте Agent Plugins 1.0.",
-      "useThemEverywhere": "Використовуйте їх усюди.",
-      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "Шукайте перевірені пакети та плагіни спільноти, знайдені в публічних репозиторіях GitHub.",
       "description": "Шукайте перевірені Agent Plugins 1.0 та плагіни спільноти для Codex, Claude Code, Cursor, Gemini CLI, OpenCode тощо.",
       "title": "Каталог Agent Plugins 1.0 {'|'} Пошук плагінів",
       "listName": "Перевірені пакети Agent Plugins 1.0"
@@ -963,52 +957,6 @@
       "requiredDetail": "Пакет може вимагати обліковий запис, токен або вхід. Це не вказує на OAuth і не підтверджує, що ви ввійшли.",
       "not_requiredDetail": "Для цих агентів автентифікацію не заявлено. Можливі обмеження сервісу та інші вимоги налаштування.",
       "unknownDetail": "Перевірте вимоги пакета перед підключенням."
-    },
-    "skills": {
-      "catalogType": "Тип каталогу",
-      "plugins": "Плагіни",
-      "skills": "Навички",
-      "heading": "Знайдіть Agent Skills",
-      "intro": "Знайдіть навичку, виберіть агентів і скопіюйте команду встановлення.",
-      "search": "Пошук навичок",
-      "searchPlaceholder": "Назва навички або репозиторій",
-      "clearSearch": "Очистити пошук",
-      "sortLabel": "Сортування навичок",
-      "loaded": "Показано навичок: {count}",
-      "searchResults": "Показано результатів: {count}",
-      "listingNote": "Дані зі skills.sh. Наявність у каталозі не означає перевірку чи сумісність.",
-      "stale": "Збережені результати від {date}. Свіжі дані тимчасово недоступні.",
-      "minSearch": "Введіть щонайменше 2 символи",
-      "minSearchHelp": "Укажіть назву навички чи репозиторій або очистьте пошук для перегляду.",
-      "loading": "Завантаження навичок…",
-      "unavailable": "Навички тимчасово недоступні",
-      "unavailableHelp": "Спробуйте завантажити каталог трохи пізніше.",
-      "retry": "Повторити",
-      "noMatches": "Навичок не знайдено",
-      "noMatchesHelp": "Спробуйте загальніший запит або очистьте пошук.",
-      "moreUnavailable": "Не вдалося завантажити ще навички. Поточні результати доступні.",
-      "showMore": "Показати ще навички",
-      "externalSource": "Зовнішнє джерело",
-      "githubSource": "Код на GitHub",
-      "viewSource": "Відкрити джерело",
-      "providerListing": "Відкрити на skills.sh",
-      "unsupportedSource": "Встановлення доступне для репозиторіїв GitHub. Відкрийте джерело цієї навички.",
-      "chooseAgents": "Виберіть агентів",
-      "chooseInTerminal": "Вибрати агентів у терміналі",
-      "chooseInTerminalHelp": "Команда запропонує вибрати агентів перед встановленням.",
-      "checkedBeforeInstall": "CLI перевіряє джерело та навичку перед встановленням.",
-      "views": {
-        "popular": "Популярні · за весь час",
-        "trending": "У тренді · 24 години",
-        "hot": "Гарячі · остання година"
-      },
-      "metric": {
-        "all-time": "{count} встановлень · за весь час",
-        "24h": "{count} встановлень · за 24 години",
-        "1h": "{count} встановлень · за останню годину"
-      },
-      "pageHeading": "Знайдіть Agent Skills",
-      "unsupportedName": "Ім’я скіла в цьому записі не підтримується. Інструкції зі встановлення дивіться в джерелі."
     }
   }
 }

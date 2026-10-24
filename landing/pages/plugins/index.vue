@@ -2,13 +2,10 @@
 import { productRootUrl } from '~/utils/seo';
 import { localizedPath } from '~/utils/localizedRoutes';
 import { catalogVisiblePlugins } from '~/utils/filter';
-import { isSkillsCatalog } from '~/utils/skillsCatalog';
 import type { KnownLocale } from '~/data/i18n';
 const { t, locale } = useI18n();
 const registry = await useRegistryPage({ discovery: true });
 const config = useRuntimeConfig();
-const route = useRoute();
-const skillsActive = computed(() => isSkillsCatalog(route.query));
 const description = computed(() => t('registryUi.directoryPage.description'));
 const siteUrl = productRootUrl(String(config.public.siteUrl), String(config.app.baseURL)).replace(
   /\/+$/,
@@ -46,38 +43,7 @@ usePageSeo(() => t('registryUi.directoryPage.title'), description, {
   <div class="registry-surface directory-page">
     <PageBackground />
     <div class="container">
-      <div class="page-intro">
-        <p v-if="!skillsActive" class="eyebrow">
-          {{ t('registryUi.directoryPage.pluginDirectory') }}
-        </p>
-        <h1>
-          {{
-            skillsActive
-              ? t('registryUi.skills.pageHeading')
-              : t('registryUi.directoryPage.findAgentPlugins10')
-          }}
-          <br /><em>
-            {{ t('registryUi.directoryPage.useThemEverywhere') }}
-          </em>
-        </h1>
-        <p>
-          {{
-            skillsActive
-              ? t('registryUi.skills.intro')
-              : t(
-                  'registryUi.directoryPage.searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories',
-                )
-          }}
-        </p>
-      </div>
-      <UnifiedCatalog
-        hide-skills-heading
-        :plugins="registry.plugins"
-        :heading="t('registryUi.directoryPage.explorePlugins')"
-        :intro="
-          t('registryUi.directoryPage.filterByCapabilitySourceAuthenticationOrSupportedAgent')
-        "
-      />
+      <UnifiedCatalog directory-page :plugins="registry.plugins" />
     </div>
   </div>
 </template>
