@@ -1,0 +1,203 @@
+{
+  "run_id": 40131383052,
+  "commit": "75cece1488cdab0674b4817ea7a30ea95f7aad06",
+  "tree": "c302aa9bc97127b89504c9e6de049abfcf5ef580",
+  "method": "GitHub connector artifact download, independently verified exact ZIP byte length/SHA256 and every copied project raw member against original evidence artifact_sha256; ZIP text only, no vendor execution",
+  "qualification": "failed at unchanged_update; all subsequent prepared lifecycle stages not evaluated; native project discovery remains blocked; existing user required tests passed",
+  "platforms": [
+    {
+      "platform": "darwin",
+      "artifact_id": 12575658957,
+      "artifact_zip_bytes": 382183,
+      "artifact_zip_sha256": "0359fc9c1dc6bf694a3fa1c89bbe585636a21c799eba5b0ea576d0bc6369ede4",
+      "artifact_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40131383052/artifacts/12575658957",
+      "members": {
+        "01-claude-version.log": {
+          "bytes": 22,
+          "sha256": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185"
+        },
+        "add-installer-stderr.log": {
+          "bytes": 156,
+          "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+        },
+        "add-installer.json": {
+          "bytes": 4227,
+          "sha256": "07b36551f923b028d96a54166902c72e929ea9a960f287e6b7dd9e9977ae0309"
+        },
+        "add-repeated-installer-stderr.log": {
+          "bytes": 156,
+          "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+        },
+        "add-repeated-installer.json": {
+          "bytes": 2756,
+          "sha256": "22959cc99dbb6174ef5567cdac343ccdef05fa44d807993b9740942ccaf915c4"
+        },
+        "after-add-native-A.json": {
+          "bytes": 402,
+          "sha256": "b39af9a5a7b59f4f1ba8083d0ed83852ab2b48d27a70eeee1e3f01f0deb3f848"
+        },
+        "after-add-native-A.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-add-native-A.stdout.log": {
+          "bytes": 419,
+          "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+        },
+        "after-add-native-B.json": {
+          "bytes": 403,
+          "sha256": "a45257a5196f296a05f5e601f873243fbd5fb4c682d8d2758a4365f10f381367"
+        },
+        "after-add-native-B.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-add-native-B.stdout.log": {
+          "bytes": 3,
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        "after-repeated-add-native-A.json": {
+          "bytes": 402,
+          "sha256": "a2b8fc44102e5fd32077dca59f5e2020ec4c02cad975c084434995be1c7983e6"
+        },
+        "after-repeated-add-native-A.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-repeated-add-native-A.stdout.log": {
+          "bytes": 419,
+          "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+        },
+        "after-repeated-add-native-B.json": {
+          "bytes": 403,
+          "sha256": "785efae85b9f4adf260afec63a9a425a54ce11eeff8f1f05d28974d4ff24a723"
+        },
+        "after-repeated-add-native-B.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-repeated-add-native-B.stdout.log": {
+          "bytes": 3,
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        "binding-after-add.json": {
+          "bytes": 380,
+          "sha256": "5393b517857351c8d98767175f2e4d4c969606a5c0cd938ea3cd27de6b4eb97e"
+        },
+        "claude-project-plugin-evidence.json": {
+          "bytes": 5869,
+          "sha256": "76f592840795640b25cd1f3e1f80146107e4c10ae1fbebd0c10cd32600306f46"
+        },
+        "native-tests.log": {
+          "bytes": 1543,
+          "sha256": "1299eef66c3b67d20b3382d18c35905a0199dbbbc6f70f7f51282a9a0c2b8fa8"
+        },
+        "update-unchanged-installer-stderr.log": {
+          "bytes": 87,
+          "sha256": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10"
+        },
+        "update-unchanged-installer.json": {
+          "bytes": 2850,
+          "sha256": "87e67551a11a77e55d67fb9be3e445b4ff0201696371777cccd719394b99254c"
+        }
+      }
+    },
+    {
+      "platform": "windows",
+      "artifact_id": 12575786665,
+      "artifact_zip_bytes": 396353,
+      "artifact_zip_sha256": "a944c0b0f27fe96c2eb32700830e6ec11b04ec3048cec3def9201f8c9479f60b",
+      "artifact_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40131383052/artifacts/12575786665",
+      "members": {
+        "01-claude-version.log": {
+          "bytes": 22,
+          "sha256": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185"
+        },
+        "add-installer-stderr.log": {
+          "bytes": 156,
+          "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+        },
+        "add-installer.json": {
+          "bytes": 4227,
+          "sha256": "771a4e14151e643fcfe04dc86a0f18322e7896075b2761f8e8d03471edcb6b13"
+        },
+        "add-repeated-installer-stderr.log": {
+          "bytes": 156,
+          "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+        },
+        "add-repeated-installer.json": {
+          "bytes": 2756,
+          "sha256": "311517367fccd64249309271c2181947df09fcf212b24fcce95ca7639b5efa26"
+        },
+        "after-add-native-A.json": {
+          "bytes": 388,
+          "sha256": "9b85d710633d1999859e16cf9a18caa874b1abdfed1d936507256efe250f63e9"
+        },
+        "after-add-native-A.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-add-native-A.stdout.log": {
+          "bytes": 419,
+          "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+        },
+        "after-add-native-B.json": {
+          "bytes": 389,
+          "sha256": "7e3bc30d01aa3656c142351c37c2d541e74f3ba28cbbb576d92997ce541e6355"
+        },
+        "after-add-native-B.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-add-native-B.stdout.log": {
+          "bytes": 3,
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        "after-repeated-add-native-A.json": {
+          "bytes": 388,
+          "sha256": "78512fd811c107b64d9bd703885133c1af587b43dbfbf074728276312b260de6"
+        },
+        "after-repeated-add-native-A.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-repeated-add-native-A.stdout.log": {
+          "bytes": 419,
+          "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+        },
+        "after-repeated-add-native-B.json": {
+          "bytes": 389,
+          "sha256": "73c7e7c75753499c7d40e9f4dcb9a52ac9d2ad310b5f668ddcf9eafa25e4391c"
+        },
+        "after-repeated-add-native-B.stderr.log": {
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "after-repeated-add-native-B.stdout.log": {
+          "bytes": 3,
+          "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+        },
+        "binding-after-add.json": {
+          "bytes": 374,
+          "sha256": "abba1d1782c7125f3eac537ba29c73aac1c47ea7b4ef6b01e0561f3b9ddd9a2e"
+        },
+        "claude-project-plugin-evidence.json": {
+          "bytes": 5873,
+          "sha256": "bcad25aac8981d1ee8f0f5142ca1451b6c727843bb9469571905582dfb9fab90"
+        },
+        "native-tests.log": {
+          "bytes": 1479,
+          "sha256": "8f6c4685253d206815a9c60104f821c809a0be300c855ecf5575efc38019a434"
+        },
+        "update-unchanged-installer-stderr.log": {
+          "bytes": 87,
+          "sha256": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10"
+        },
+        "update-unchanged-installer.json": {
+          "bytes": 2850,
+          "sha256": "d99b403497c03cdb88913c4fb53d11a09314a61b70c5090e6ff71d16b67f7742"
+        }
+      }
+    }
+  ]
+}
