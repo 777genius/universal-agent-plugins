@@ -394,3 +394,16 @@ feasibility review found the extractor's intentionally non-executable file modes
 The explicit two-file nonprivileged-mode section above is a narrow R2 addendum
 requiring both critics' final review at this new frozen checkpoint. It enables no
 extra native probe, privileged publisher mode or project adapter.
+
+Both independent critics gave final R2 PLAN GO on immutable
+2b9f825bb91d305fabe112f23677a064a60f2430. Root and APM each independently read
+the pinned autostart service/enum, crash-reporter startup condition, packager
+unpack/filter and ripgrep loader. Both accepted the exact two-ELF nonprivileged
+allowlist, sealed root-owned ancestors/trusted sudo identity, fixed HOME,
+pending observer, nested strict GUI-before-display lifetime, every-child capture
+and reserved cleanup budget. Both performed source-only review without native
+execution. This admits implementation of this research collector only; two fresh
+frozen code GOs are still required before native publication. A real sandbox,
+extra helper, API or trust failure remains an honest failed/blocked observation,
+and no project adapter is admitted before actual workspace evidence and a new
+reviewed adapter plan.
