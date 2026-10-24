@@ -78,3 +78,12 @@ Root's review of candidate4a1b536e required the new ordinary prerequisite to run
 The new helper's three deliberate non-errno wrapping boundaries render the original errno as message text; the unsupported sentinel remains the sole wrapped cause. This retains the required distinction from disappeared ancestors and satisfies errorlint. State membership, integer range and constructor-only CommandContext corrections preserve behavior.
 
 Final combined focused validation after those corrections: process PASS0.037s (inert assertions passed; runtime skips excluded from qualification), bootstrap PASS0.025s (custom Runner assertion passed;3runtime tests unsupported). The final raw combined log is retained separately from earlier candidate logs. Pinned golangci-lint2.13.2 changed-source check over only process+bootstrap, concurrency1/GOMEMLIMIT512MiB/90s: PASS0issues. No broad module lint or vendor run was performed.
+
+## Final independent code review receipts
+
+Both reviewers approved exact final source932ed0f9fc86d5bde6b2c8c08f91354be4afce63 (treef7f9c53093ffd88f873ace86be7405ba0aab7913) before publication.
+
+- **Root (`/root`) — final CODE GO.** Reviewed the full4a1b implementation and final4-file correction. All14 added guards follow helper-only exits/returns and precede parent child launches; existing duplex order is preserved. Explicit errno message rendering keeps missing-live-task failures distinct from ENOENT ancestry disappearance. IndexByte, integer range and constructor-only CommandContext changes preserve behavior. Accepted the inert local passes and22 explicit unqualified runtime skips; supported hosted Linux runtime qualification remains mandatory.
+- **APM (`/root/apm_vercel_scope`) — final independent CODE GO.** Reviewed the full4a1b production/test delta and final932 correction. Confirmed helper branches and existing duplex order are intact, bounded task observations fail closed, missing-live children produce the exact unsupported sentinel and other observation errors cannot provide empty-tree proof. Accepted the equivalent lint corrections and truthful final SKIP provenance. Performed source review only during this final review; no new build, vendor or native execution was claimed.
+
+The separate Claude hosted success run40139625617 is preserved under docs/evidence/project-scope-native/claude-2.1.263-prepared-success-40139625617/. It qualifies the committed earlier Claude/grouped Prepared fix, not these later Linux containment changes.

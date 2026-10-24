@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "D:\\a\\_temp\\uap-native-hosted-wlb4x_pl\\bin\\claude.exe",
+    "plugin",
+    "list",
+    "--json"
+  ],
+  "cwd": "D:\\a\\_temp\\uap-native-hosted-wlb4x_pl\\evidence\\uap-claude-native-evidence-2732888560\\project-A",
+  "deadline": false,
+  "elapsed_ms": 338,
+  "error": "",
+  "exit": 0,
+  "expected_suppression": false,
+  "stderr_limit": false,
+  "stdout_limit": false
+}
