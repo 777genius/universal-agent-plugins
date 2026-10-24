@@ -1,15 +1,15 @@
 package opencode
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
-
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -79,6 +79,12 @@ func (txn *openCodeSkillTxn) fail(err error) (*openCodeSkillTxn, error) {
 	if rollbackErr := txn.rollback(); rollbackErr != nil {
 		return nil, fmt.Errorf("%w; OpenCode skill rollback failed: %w; recovery retained at %q", err, rollbackErr, txn.root)
 	}
+	// A content conflict is raised while backing up previous Skills, before
+	// installStaged. Successful rollback has restored every earlier backup.
+	// Preserve unknown-effect handling for all later or failed rollbacks.
+	if errors.Is(err, domain.ErrManagedSkillChanged) && len(txn.installed) == 0 {
+		return nil, &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+	}
 	return nil, err
 }
 
@@ -129,7 +135,7 @@ func (txn *openCodeSkillTxn) backupPrevious(previousByID map[string]domain.Nativ
 		}
 		digest, err := shared.DigestSkillDirectory(object.Path)
 		if err != nil || digest != object.ManagedDigest {
-			return fmt.Errorf("managed OpenCode skill %q changed outside agentplugins", object.LogicalName)
+			return fmt.Errorf("managed OpenCode skill %q changed outside agentplugins: %w", object.LogicalName, domain.ErrManagedSkillChanged)
 		}
 		backup := filepath.Join(txn.root, "old-"+object.LogicalName)
 		if err := renameOpenCodeDirectoryNoReplace(object.Path, backup, txn.rename); err != nil {

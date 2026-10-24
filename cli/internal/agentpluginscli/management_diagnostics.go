@@ -1,6 +1,8 @@
 package agentpluginscli
 
 import (
+	"errors"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
@@ -41,4 +43,30 @@ func managementNativeNextAction(kind, alias, target string) management.NextActio
 		kind, reason = "inspect", "Inspect current native state before another change"
 	}
 	return management.NextAction{Kind: kind, Reason: reason, Alias: alias, TargetId: target}
+}
+
+// Map only the typed native ownership refusal. Provider messages and paths are
+// never parsed or forwarded, and readiness guidance for other bindings survives.
+func managementOwnedSkillFailure(out *management.Outcome, applyErr error) bool {
+	if !errors.Is(applyErr, installer.ErrManagedSkillChanged) {
+		return false
+	}
+	alias, target := "", ""
+	for _, item := range out.Result.Items {
+		if item.Status == string(installer.OutcomeIncomplete) {
+			alias, target = item.Alias, item.TargetId
+		}
+	}
+	message := "UAP preserved an externally changed managed Skill directory. Preserve that directory outside the native Skills root, then prepare a fresh recovery review"
+	out.Result.Message = "Managed Skill content changed; preserve it before continuing recovery"
+	out.Diagnostics = append(out.Diagnostics, management.Diagnostic{Code: "OWNED_SKILL_CHANGED", Message: message, Severity: management.DiagnosticSeverityError, Alias: alias, TargetId: target})
+	next := []management.NextAction{{Kind: "preserve_changes", Reason: message, Alias: alias, TargetId: target}}
+	for _, action := range out.Result.NextActions {
+		if action.Alias == alias && action.TargetId == target && (action.Kind == "activate" || action.Kind == "manual") {
+			continue
+		}
+		next = append(next, action)
+	}
+	out.Result.NextActions = next
+	return true
 }

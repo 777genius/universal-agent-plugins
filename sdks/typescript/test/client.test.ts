@@ -153,3 +153,19 @@ test('local Skill changes preserve exact digests, null absence and binary bytes'
   t.after(f.close);
   assert.equal((await f.client.skills.local.prepare(body)).action, 'local_skill');
 });
+
+
+test('Skill catalog discard releases discovery resources with an idempotent empty response', async (t) => {
+  let calls = 0;
+  const f = await fixture((request, response) => {
+    assert.equal(request.method, 'DELETE');
+    assert.equal(request.url, '/api/v1/skills/catalog/source%2Fone');
+    calls++;
+    response.statusCode = 204;
+    response.end();
+  });
+  t.after(f.close);
+  await f.client.skills.discard('source/one');
+  await f.client.skills.discard('source/one');
+  assert.equal(calls, 2);
+});

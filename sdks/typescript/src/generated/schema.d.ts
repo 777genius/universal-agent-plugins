@@ -150,6 +150,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills/catalog/{catalogId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Release a discovery session and its source workspace when its dialog closes or the source changes. Already absent catalogs return 204. Independently prepared plans remain valid. */
+        delete: operations["discardSkillCatalog"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/skills/catalog/{catalogId}/candidates/{candidateId}/preview": {
         parameters: {
             query?: never;
@@ -718,6 +735,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Operation"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    discardSkillCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                catalogId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discovery session released or already absent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

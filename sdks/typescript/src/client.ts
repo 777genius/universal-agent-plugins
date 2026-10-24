@@ -89,6 +89,10 @@ export function createClient(options: ClientOptions) {
     catalogEntry: async (id: string, request: RequestOptions = {}) => unwrap(await transport.GET('/api/v1/catalog/{id}', { ...request, params: { path: { id } } })),
     discoverSkills: async (body: SourceRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/skills/catalog', { ...request, body })),
     skills: {
+      /** Release discovery resources when the source changes or its dialog closes. */
+      discard: async (catalogId: string, request: RequestOptions = {}): Promise<void> => {
+        responseError(await transport.DELETE('/api/v1/skills/catalog/{catalogId}', { ...request, params: { path: { catalogId } } }));
+      },
       local: {
         prepare: async (body: LocalSkillRequest, request: RequestOptions = {}) => unwrap(await transport.POST('/api/v1/skills/local/plans', { ...request, body })),
       },

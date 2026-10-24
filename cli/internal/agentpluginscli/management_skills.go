@@ -23,7 +23,7 @@ func (b *ManagementBackend) SkillsCatalog(ctx context.Context, input management.
 	defer b.mu.Unlock()
 	if b.closed || len(b.catalogs)+len(b.webCatalogs) >= 16 {
 		session.cleanup()
-		return management.SkillCatalog{}, managementRefusal("CATALOG_LIMIT", "Close and reopen the source session before discovering more repositories")
+		return management.SkillCatalog{}, managementRefusal("CATALOG_LIMIT", "Discard an unused source catalog before discovering more repositories")
 	}
 	b.catalogs[catalog.CatalogId] = session
 	out := management.SkillCatalog{CatalogId: catalog.CatalogId, Source: input.Source, SourceRevision: catalog.SourceRevision, Candidates: []management.SkillCandidate{}, Diagnostics: []management.Diagnostic{}}
@@ -38,6 +38,10 @@ func (b *ManagementBackend) SkillsCatalog(ctx context.Context, input management.
 
 func (b *ManagementBackend) prepareSkills(ctx context.Context, input management.ChangeRequest, clients []string, operationID string) (management.Prepared, error) {
 	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return nil, managementRefusal("CATALOG_EXPIRED", "Discover the Skill source in an open management session")
+	}
 	session := b.catalogs[input.CatalogId]
 	website, webOK := b.webCatalogs[input.CatalogId]
 	b.mu.Unlock()
@@ -61,4 +65,20 @@ func (b *ManagementBackend) prepareSkills(ctx context.Context, input management.
 	}
 	session.mu.Unlock()
 	return b.prepareSelectedSkills(ctx, input, clients, operationID, selections)
+}
+
+// DiscardSkillsCatalog releases only discovery resources. Prepared selected-Skill
+// plans own independently retained source snapshots and remain valid.
+func (b *ManagementBackend) DiscardSkillsCatalog(ctx context.Context, catalogID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if session := b.catalogs[catalogID]; session != nil {
+		delete(b.catalogs, catalogID)
+		session.cleanup()
+	}
+	delete(b.webCatalogs, catalogID)
+	return nil
 }

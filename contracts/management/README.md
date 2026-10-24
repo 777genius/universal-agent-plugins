@@ -30,6 +30,9 @@ source unchanged. Request validation and authorization remain explicit Go behavi
 - Every HTTP request sends bearer authorization and the exact bootstrap Origin.
 - Prepare is read-only with respect to persistent installer state. It retains a Go
   prepared object behind an expiring ID. Apply rechecks current state.
+- DELETE of a Skill catalog releases its discovery workspace and serializes with
+  preview; already prepared plans own independent source snapshots. Replacing a
+  source or closing its discovery dialog must release the old catalog.
 - DELETE of an unaccepted plan releases retained source resources. It returns 204
   when already absent and refuses accepted work; observation/cancel are separate.
 - The host persists its request ID before apply. Accepted-request lookup precedes

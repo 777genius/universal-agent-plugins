@@ -84,12 +84,13 @@ def main():
             try:
                 with opener.open(req, timeout=30) as response:
                     data = response.read(4 * 1024 * 1024 + 1)
+                    status = response.status
             except urllib.error.HTTPError as error:
                 detail = json.loads(error.read(65536))
                 raise RuntimeError("Management refusal: " + str(detail.get("code"))) from None
             if len(data) > 4 * 1024 * 1024:
                 raise RuntimeError("Oversized management response")
-            return json.loads(data)
+            return None if status == 204 else json.loads(data)
 
         session = request("GET", "/api/v1/session")
         if session["contextId"] != bootstrap["contextId"] or session["apiVersion"] != 1 or not isinstance(session.get("environmentId"), str) or not session["environmentId"]:
@@ -116,6 +117,12 @@ def main():
         plan = request("POST", "/api/v1/plans", intent)
         if not plan["confirmable"]:
             raise RuntimeError("Fixture plan was not confirmable")
+        if args.kind == "skill":
+            # The retained prepared plan must own its source independently of
+            # the discovery dialog. Repeated release remains harmless.
+            discard_path = "/api/v1/skills/catalog/" + urllib.parse.quote(catalog["catalogId"], safe="")
+            request("DELETE", discard_path)
+            request("DELETE", discard_path)
         request_id = str(uuid.uuid4())
         apply_path = "/api/v1/plans/" + urllib.parse.quote(plan["planId"], safe="") + "/apply"
         accepted = request("POST", apply_path, {"requestId": request_id})
@@ -133,7 +140,7 @@ def main():
         if not observed["entries"]:
             raise RuntimeError("Successful installation has no observed owned entry")
         print(json.dumps({"apiVersion": session["apiVersion"], "engineVersion": session["engineVersion"],
-                          "contextId": session["contextId"], "environmentId": session["environmentId"], "kind": args.kind, "operationId": operation["operationId"],
+                          "contextId": session["contextId"], "environmentId": session["environmentId"], "kind": args.kind, "catalogDiscardedBeforeApply": args.kind == "skill", "operationId": operation["operationId"],
                           "state": operation["state"], "observedEntries": len(observed["entries"])}))
     finally:
         with suppress(BrokenPipeError):

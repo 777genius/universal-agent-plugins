@@ -45,7 +45,7 @@ func (b *ManagementBackend) websiteSkillsCatalog(ctx context.Context, input mana
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed || len(b.catalogs)+len(b.webCatalogs) >= 16 {
-		return management.SkillCatalog{}, errors.New("catalog session limit reached; open a new session")
+		return management.SkillCatalog{}, managementRefusal("CATALOG_LIMIT", "Discard an unused source catalog before discovering more repositories")
 	}
 	b.webCatalogs[id] = retained
 	return result, nil

@@ -3,10 +3,12 @@ package installer
 import (
 	"errors"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 var (
+	ErrManagedSkillChanged      = domain.ErrManagedSkillChanged
 	ErrInvalidConfig            = errors.New("installer config rejected")
 	ErrUnsupported              = errors.New("installer operation is not published in this beta")
 	ErrInvalidHandle            = errors.New("prepared operation does not belong to this engine")

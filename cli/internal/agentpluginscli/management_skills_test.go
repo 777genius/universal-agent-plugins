@@ -78,7 +78,14 @@ func TestManagementWebsitePreviewFreezesOriginalBytes(t *testing.T) {
 	if _, err := backend.SkillPreview(t.Context(), catalog.CatalogId, candidate.Id); err != nil {
 		t.Fatal(err)
 	}
-	managementApply(t, managementPrepare(t, backend, request))
+	prepared := managementPrepare(t, backend, request)
+	if err := backend.DiscardSkillsCatalog(t.Context(), catalog.CatalogId); err != nil {
+		t.Fatal(err)
+	}
+	if len(backend.webCatalogs) != 0 {
+		t.Fatal("discard retained publisher catalog state")
+	}
+	managementApply(t, prepared)
 	_, locked := j.intent(t)
 	if locked.Packages[0].Source.Web == nil || locked.Packages[0].Source.Web.IndexSHA256 == "" || locked.Packages[0].Source.Web.RawTreeDigest == "" {
 		t.Fatal("publisher provenance missing", locked)

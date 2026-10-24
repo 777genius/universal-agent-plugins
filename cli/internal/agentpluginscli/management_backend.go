@@ -50,6 +50,7 @@ func (b *ManagementBackend) Close() {
 		catalog.cleanup()
 		delete(b.catalogs, id)
 	}
+	clear(b.webCatalogs)
 }
 func (b *ManagementBackend) Session(ctx context.Context) (management.Session, error) {
 	discovered, err := b.app.skillsTargets(ctx)

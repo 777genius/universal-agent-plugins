@@ -12,23 +12,25 @@ import (
 
 func (b *ManagementBackend) SkillPreview(ctx context.Context, catalogID, candidateID string) (management.SkillPreview, error) {
 	b.mu.Lock()
-	git := b.catalogs[catalogID]
-	website, webOK := b.webCatalogs[catalogID]
-	candidate, available := website.candidates[candidateID]
-	closed := b.closed
-	b.mu.Unlock()
-	if closed {
+	if b.closed {
+		b.mu.Unlock()
 		return management.SkillPreview{}, errors.New("management session closed")
 	}
-	if git != nil {
+	if git := b.catalogs[catalogID]; git != nil {
+		// The source session owns open filesystem handles. Disposal and shutdown
+		// must wait until a bounded Git preview has finished using those handles.
+		defer b.mu.Unlock()
 		preview, err := git.preview(ctx, candidateID)
 		if err != nil {
 			return management.SkillPreview{}, err
 		}
 		return management.SkillPreview{CatalogId: catalogID, CandidateId: candidateID, Markdown: preview.Content, Diagnostics: []management.Diagnostic{}}, nil
 	}
+	website, webOK := b.webCatalogs[catalogID]
+	candidate, available := website.candidates[candidateID]
+	b.mu.Unlock()
 	if !webOK || !available || !candidate.available {
-		return management.SkillPreview{}, errors.New("skill catalog candidate is missing or unavailable")
+		return management.SkillPreview{}, managementRefusal("CATALOG_EXPIRED", "Discover the Skill source again before previewing this candidate")
 	}
 	return b.websiteSkillPreview(ctx, catalogID, candidateID, website, candidate)
 }
@@ -56,11 +58,13 @@ func (b *ManagementBackend) websiteSkillPreview(ctx context.Context, catalogID, 
 		return management.SkillPreview{}, err
 	}
 	b.mu.Lock()
-	if !b.closed {
-		candidate.previewDigest = snapshot.TreeDigest
-		website.candidates[candidateID] = candidate
+	defer b.mu.Unlock()
+	current, retained := b.webCatalogs[catalogID]
+	if b.closed || !retained {
+		return management.SkillPreview{}, managementRefusal("CATALOG_EXPIRED", "Discover the Skill source again before previewing this candidate")
 	}
-	b.mu.Unlock()
+	candidate.previewDigest = snapshot.TreeDigest
+	current.candidates[candidateID] = candidate
 	return management.SkillPreview{CatalogId: catalogID, CandidateId: candidateID, Markdown: markdown, Diagnostics: []management.Diagnostic{}}, nil
 }
 

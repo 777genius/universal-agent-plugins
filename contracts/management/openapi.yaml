@@ -179,6 +179,23 @@ paths:
           minLength: 1
       description: Request cooperative cancellation. Completion may win the race. This does not promise
         rollback; observe the returned operation and poll for its terminal outcome.
+  /api/v1/skills/catalog/{catalogId}:
+    delete:
+      operationId: discardSkillCatalog
+      description: Release a discovery session and its source workspace when its dialog closes or the source changes. Already absent catalogs return 204. Independently prepared plans remain valid.
+      parameters:
+      - name: catalogId
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 256
+      responses:
+        '204':
+          description: Discovery session released or already absent.
+        default:
+          $ref: '#/components/responses/Error'
   /api/v1/skills/catalog/{catalogId}/candidates/{candidateId}/preview:
     get:
       operationId: getSkillPreview

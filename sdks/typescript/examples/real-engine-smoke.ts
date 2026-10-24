@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { randomUUID, createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs, promisify } from 'node:util';
@@ -70,7 +70,7 @@ async function launch(): Promise<UapHost> {
   finally { globalThis.fetch = previous; }
 }
 function client() { assert.ok(host); return host.client; }
-async function apply(change: ChangeRequest | LocalSkillRequest, local = false): Promise<{ operation: Operation; planId: string; requestId: string }> {
+async function apply(change: ChangeRequest | LocalSkillRequest, local = false, expectedState: Operation['state'] = 'succeeded'): Promise<{ operation: Operation; planId: string; requestId: string }> {
   const api = client();
   const plan = local ? await api.skills.local.prepare(change as LocalSkillRequest) : await api.prepare(change as ChangeRequest);
   assert.ok(plan.confirmable, JSON.stringify(plan.conflicts));
@@ -79,9 +79,9 @@ async function apply(change: ChangeRequest | LocalSkillRequest, local = false): 
   const replay = await api.apply(plan.planId, requestId);
   assert.equal(replay.operationId, accepted.operationId);
   const operation = await api.wait(accepted.operationId, { timeoutMs: 120_000, pollIntervalMs: 100 });
-  assert.equal(operation.state, 'succeeded', JSON.stringify(operation));
   evidence.operations.push({ action: local ? `local_${change.action}` : change.action, operationId: operation.operationId, state: operation.state });
-  await checkpoint(`${local ? 'local_' : ''}${change.action} succeeded`);
+  await checkpoint(`${local ? 'local_' : ''}${change.action} ${operation.state}`);
+  assert.equal(operation.state, expectedState, JSON.stringify(operation));
   return { operation, planId: plan.planId, requestId };
 }
 async function nativeSkills(): Promise<Map<string, string>> {
@@ -105,9 +105,36 @@ async function verifyNativeGuide() {
   const fixture = await readFile(new URL('../../../repotests/testdata/agentplugins_commands_fixture/skills/fixture-guide/SKILL.md', import.meta.url));
   assert.deepEqual(await readFile(guide), fixture, 'Native consumer location must contain the pinned fixture bytes');
 }
+async function preserveEditedNativeSkill() {
+  const guideDirectory = join(skillsRoot, 'fixture-guide');
+  const guidePath = join(guideDirectory, 'SKILL.md');
+  const original = await readFile(guidePath);
+  const edited = Buffer.concat([original, Buffer.from('\nUnreviewed local fixture edit.\n')]);
+  await writeFile(guidePath, edited);
+  const refused = await apply({ action: 'repair', aliases: ['sdk-fixture'] }, false, 'partial');
+  assert.deepEqual(await readFile(guidePath), edited, 'Refused repair must preserve the edited native bytes');
+  assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.code === 'OWNED_SKILL_CHANGED'));
+  assert.ok(refused.operation.result?.nextActions.some((action) => action.kind === 'preserve_changes'));
+  assert.ok((await client().environment()).pendingOperations?.some((operation) => operation.operationId === refused.operation.operationId));
+  assert.equal((await client().operation(refused.operation.operationId)).resolvedBy, undefined);
+  // Explicit manual remediation belongs to this disposable test, not automatic
+  // SDK or installer behavior. Preserve the conflicting tree outside discovery.
+  const preservedRoot = join(root, 'manually-preserved-native-edits');
+  await mkdir(preservedRoot);
+  const preserved = join(preservedRoot, 'fixture-guide');
+  await rename(guideDirectory, preserved);
+  await checkpoint('manual preservation of conflicting native edits', 'edited native projection is refused as partial, keeps pending history and preserves its exact bytes');
+  const recovered = await apply({ action: 'recover', operationId: refused.operation.operationId });
+  await verifyNativeGuide();
+  assert.deepEqual(await readFile(join(preserved, 'SKILL.md')), edited);
+  assert.equal((await client().operation(refused.operation.operationId)).resolvedBy, recovered.operation.operationId);
+  assert.equal((await client().environment()).pendingOperations?.length ?? 0, 0);
+  await checkpoint('fresh recovery after explicit manual preservation', 'after manual preservation, a fresh review restores exact native fixture bytes and settles only proved recovery');
+}
 async function interruptedRepair() {
-  const guidePath = join(skillsRoot, 'fixture-guide', 'SKILL.md');
-  await unlink(guidePath); // Deliberate drift, only in this disposable owned fixture.
+  // A wholly absent owned directory can be safely reconstructed. An existing
+  // edited directory is a different policy case, qualified separately above.
+  await rm(join(skillsRoot, 'fixture-guide'), { recursive: true });
   const plan = await client().prepare({ action: 'repair', aliases: ['sdk-fixture'] });
   assert.ok(plan.confirmable);
   const requestId = randomUUID();
@@ -163,6 +190,7 @@ try {
   assert.deepEqual(await readFile(lockPath), lockBefore);
   await checkpoint('pinned update verified', 'targeted exact-commit update preserves the lock');
   await apply({ action: 'repair', aliases: ['sdk-fixture'] });
+  await preserveEditedNativeSkill();
   await interruptedRepair();
   await host.close();
   host = await launch();

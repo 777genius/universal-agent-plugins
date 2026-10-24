@@ -74,6 +74,9 @@ func (p *managementPrepared) outcome(applied dependencyApplicationResult, applyE
 		out.State = management.Canceled
 		out.Result.Outcome = "canceled"
 	}
+	if managementOwnedSkillFailure(&out, applyErr) {
+		return out
+	}
 	out.Result.NextActions = append(out.Result.NextActions, management.NextAction{Kind: "inspect", Reason: "Inspect desired files and owned binding receipts, then prepare recovery or locked synchronization"})
 	return out
 }

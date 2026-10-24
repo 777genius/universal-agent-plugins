@@ -22,13 +22,23 @@ func (service Service) InspectOwnedBinding(ctx context.Context, input AddInput, 
 	if service.Stager == nil || service.Activator == nil {
 		return false, errors.New("native materialization verification is unavailable")
 	}
+	activationPolicy := service.Activator
 	service = service.guardFrozenProfiles(ctx, []domain.DetectedClient{input.Client}, nil)
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, managedDigest(binding)); err != nil {
 		return false, err
 	}
 	input.DryRun, input.Confirmed, input.InstallIntent = true, false, plan.InstallIntent
-	_, complete, manual, err := service.activeNativeDelivery(ctx, input, plan, installation, binding)
+	// Projection only consults optional activation policy; the generic profile
+	// wrapper does not expose that optional interface. Keep it visible here
+	// while all filesystem/data ports and actual verification remain guarded.
+	projection := service
+	projection.Activator = activationPolicy
+	delivery, complete, manual, err := projection.activeNativeDelivery(ctx, input, plan, installation, binding)
 	if err != nil || !complete {
+		return false, err
+	}
+	manual = manual || projection.manualRegistrationSettled(input, plan, binding, delivery)
+	if err := service.profileCheck(); err != nil {
 		return false, err
 	}
 	if manual {

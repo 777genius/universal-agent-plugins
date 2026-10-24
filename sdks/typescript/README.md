@@ -99,6 +99,16 @@ outcome. Completion can win; cancellation does not promise rollback. Progress ha
 real phases and item counts, not invented completion percentages.
 
 
+## Skill discovery lifetime
+
+`client.discoverSkills({ source })` retains a bounded source session for candidate
+preview and selection. Keep that catalog while its discovery dialog is active.
+When the source changes or the dialog closes, call `client.skills.discard(catalogId)`.
+It is idempotent and releases source workspaces, allowing a long-lived host to
+continue beyond the 16 simultaneously retained discovery sessions. Closing a
+candidate preview alone should keep its containing catalog. An already prepared
+installation plan owns an independent source snapshot and survives catalog discard.
+
 ## Local Skill authoring
 
 Capture optional `authoringRoots: [{ id, path, scope, targetId? }]` from the trusted
@@ -188,7 +198,12 @@ fixture bytes and portable command discovery, and confirms explicit-only command
 remain withheld. It also checks targeted pinned update, repair, removal, local
 create/edit/delete and restart-visible undo. No model or account login is used.
 
-For crash qualification it removes one disposable managed fixture file, prepares
+It separately edits one disposable native Skill and requires a typed preservation
+refusal with unchanged edited bytes and pending observation. The example then
+explicitly moves that conflicting tree aside as **manual remediation** before
+preparing fresh recovery; the SDK never performs this step automatically.
+
+For crash qualification it removes one whole disposable owned Skill directory, prepares
 repair, drops the real accepted HTTP response and kills only the owned Go process.
 After restart it reuses the persisted request identity, observes interrupted work,
 prepares fresh recovery and requires the real native consumer to load the restored
