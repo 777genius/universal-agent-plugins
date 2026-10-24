@@ -67,6 +67,7 @@ func TestProjectClineSavedLifecycleSeparatesUserAndProjects(t *testing.T) {
 	journey.app = configureProjectCline(t, journey.app, user, runner)
 	journey.run(t, "", "add", transport.endpoint, "--alias", "docs", "--target", "cline")
 	userBefore := securityFixtureTree(t, user)
+	userStateBefore := projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json"))
 	for _, project := range []string{journey.a, journey.b} {
 		journey.run(t, project, "add", transport.endpoint, "--alias", "docs", "--target", "cline")
 		projectClineOwned(t, journey, project, projectJourneySkill)
@@ -107,8 +108,8 @@ func TestProjectClineSavedLifecycleSeparatesUserAndProjects(t *testing.T) {
 	}
 	journey.run(t, journey.a, "remove", "docs", "--target", "cline")
 	projectJourneyAbsent(t, current.TargetLocator, filepath.Join(journey.a, ".cline", "skills", "docs"))
-	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) || !reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) {
-		t.Fatal("A lifecycle changed original user or B")
+	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) || !reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) || userStateBefore != projectJourneyRead(t, filepath.Join(journey.cache, "state-v2.json")) {
+		t.Fatal("A lifecycle changed original user native/state authority or B")
 	}
 	if runner.calls != 0 {
 		t.Fatal("file preparation invoked native Cline or MCP")
