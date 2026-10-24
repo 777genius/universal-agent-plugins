@@ -34,8 +34,12 @@ PreparedRegistryInspector, RegistryInspector, native kernel and scope policies.
 Do not add client-ID switches, a generic installer, new CLI flags, or another
 ownership/path implementation.
 
-1. In providers.NativeIdentityObserver's prepared path, for a valid project
-   plan whose effective scoped lifecycle is LifecycleNativeConfig, also inspect
+1. Before selecting the extra file-inspection path, require matching client
+   and plan ClientID, both plan.Scope and TargetContext.Scope equal to project,
+   a nonempty exact canonical ProjectRoot and valid original-user TargetContext.
+   A malformed project hint must refuse, not select a user/fallback path. For
+   an admitted project whose effective scoped lifecycle is LifecycleNativeConfig,
+   also inspect
    the adapter's existing file-backed native registry with a copy of the
    observer whose Runner is nil. The exact injected kernel, client authority,
    selected plan and prior binding remain unchanged. This is the same file
@@ -58,7 +62,13 @@ ownership/path implementation.
 4. Because normal preview already calls ObservePreparedIdentity, it receives
    the same mandatory project file checks without invoking a host. Ordinary
    saved-state Inspect remains host-free and is not changed. No lifecycle,
-   NativeEffect, transaction, receipt, or recovery convergence rule changes.
+   NativeEffect, transaction, receipt, or convergence rule is rewritten. Making
+   a formerly nil observer non-nil can enable the existing
+   observeGroupRecoveryEligibility branch for SupportsPreparedRecovery. Verify
+   this configuration effect explicitly: only known-receipt, exclusively owned
+   missing-managed restoration is eligible, with current file collisions refused.
+   That existing prepared restoration contract does not claim native discovery
+   and does not authorize clearing an unresolved native attempt.
 5. Clarify the existing SDK flag documentation: disabling live observation does
    not disable project filesystem ownership admission. Do not invent a second
    flag or an opt-out from foreign-file checks.
@@ -84,12 +94,21 @@ project/original-user identity and complete receipts before reading native paths
   install, unchanged replay, update, missing-component repair, removal and reopen;
   tampered owned skill/MCP must refuse with previous installed state intact.
   Cover Cline plus an already supported representative component adapter rather
-  than duplicating the entire source-by-client matrix.
+  than duplicating the entire source-by-client matrix. Exercise actual public
+  group repair of a missing managed directory with live observation disabled,
+  known receipts and exclusive restoration; a foreign native component must
+  still refuse. Retain the existing prepared-restoration eligibility meaning.
 - Provider prepared-observation contracts cover component collision and malformed
   config, exact supplied receipts/kernel, unowned Expected refusal, missing
   inspector/unknown finding fail-closed, and no attempted/reconciled discovery
   bits. Include a project native-CLI adapter with a forbidden runner to prove
   its prepared path still never launches a process.
+- Add a real pending-attempt negative regression through normal SDK effects
+  (or reuse the genuine process-death fixture), not a forged clean journal.
+  Even a valid managed package receipt plus Expected local file observation
+  must not clear that attempt or promote lifecycle through the new default
+  prepared-only composition. Verify owner recovery refusal and exact retained
+  state/bytes, beyond merely asserting that discovery flags are false.
 - Retain all original-App namespace/physical-profile guards, user behavior,
   source acquisition rules, activation attestation preflight and crash fencing.
   Existing all-client provider, installer, usecase and public project CLI suites
@@ -99,4 +118,18 @@ project/original-user identity and complete receipts before reading native paths
 
 ## Review record
 
-R1: pending. No production changes have been made for this plan.
+R1 reviewed exact local 96259f319fb870bec05f4f9dd9fa2794d2b26218,
+published with identical tree as 689296a62ea2415b32fd00036cceaac4790df250.
+
+- skillshare_scope: GO. Audited the current qualified project file inspectors,
+  including Codex/Copilot whose global user-CLI trait is true. Required explicit
+  scope/client admission and a real pending-attempt recovery refusal test.
+- claude_codex_scope: GO. Confirmed prepared ports, physical-profile wrappers,
+  kernel and recovery boundaries. Added the missing-managed group-restoration
+  eligibility case because composing a non-nil observer changes that branch.
+
+Those conditions are incorporated above. No global
+UsesNativeRegistryExecutable()==false gate is introduced: scoped policy and
+an explicitly runner-free inspection control this path. Missing inspector,
+missing kernel and unknown findings remain fail-closed. R2 reviews are pending;
+no production changes have been made for this plan.
