@@ -19,13 +19,18 @@ Amend the collector inventory for this one exact label/path only:
 or directory and never as a package/discovery path. Native stage inventories may
 opt into this exception through an explicit argument that defaults false. The
 complete source-baseline inventory and every before/after source-pin check keep
-the strict default. An input path or native-emitted string cannot add exceptions.
+the strict default. Only the two native before/after-stage inventory call sites
+may opt in. Source labels remain source-user/source-A/source-B, never home. An input path or native-emitted string cannot add exceptions.
 
 The current anchored held directory supplies `os.stat(...,follow_symlinks=False)`
-and `os.readlink(...,dir_fd=fd)` for the exact entry. Read the literal target bytes
-with a metadata cap of4096bytes, require single-link symlink and matching
-before/after full lstat identity, and include those bytes in the existing total
-inventory byte budget. Record kind=`symlink_metadata_only`, target byte count,
+and `os.readlink(...,dir_fd=fd)` for the exact entry. Before readlink, require
+`st_nlink == 1` and `0 <= st_size <= 4096`, with sufficient remaining total
+inventory byte budget. Pass a bytes name and preserve the returned literal
+target bytes (or exact `os.fsencode` bytes), without Unicode replacement or
+operational path decoding. After readlink, check the budget again, require the
+actual byte count to equal the pre-read st_size and stay within4096/aggregate
+bounds, and require matching full before/after lstat identity. Include those
+bytes in the existing total inventory byte budget. Record kind=`symlink_metadata_only`, target byte count,
 SHA256 and an exact hex representation; explicitly record `target_followed:false`.
 Do not decode it into an operational path, resolve it, open it, stat the target,
 scan it, execute it or use it to choose any later native command.
@@ -62,7 +67,8 @@ Add focused no-vendor tests proving:
 1. Exact allowed native home alias records literal metadata and hashes without
    opening its target, including a dangling target, foreign readable file and
    FIFO/directory target. Foreign bytes are never read and no call can block on
-   a target. Keep no-follow directory admission checks.
+   a target. Include exact non-UTF8 bytes roundtrip and keep no-follow directory
+   admission checks, including an aliased intermediate .qoder/logs directory.
 2. The exception defaults off; identical aliases under each source fixture,
    differently named home entries and aliases in intermediate directories still
    refuse, with no target dereference.
@@ -76,3 +82,20 @@ No Qoder binary is executed locally. Freeze the small collector/test delta,
 obtain two independent code GOs, publish only those reviewed bytes, and verify/
 retain the next actual artifact regardless of outcome. Unexpected further
 native aliases require another concrete review; they do not widen this rule.
+
+
+## Independent R1 artifact interpretation and plan decisions
+
+Two independent reviewers, `skillshare_scope` and `claude_codex_scope`, verified
+all15 preserved raw member lengths/SHA256 hashes and all7 stdout/stderr pairs.
+The former also independently verified ZIP size/hash/CRC. Both confirmed the
+same exact failure boundary, four successful help probes, absent populated
+list/install evidence, unchanged false qualification fields and completed
+cleanup. No client or acquisition ran during either interpretation.
+
+Both gave **R1 GO** at `a665f6b81b4e5e072b6de6de245519c5de0c0370` for this
+metadata-only amendment. Their concrete R2 precision is incorporated above:
+pre-read nlink/size/budget admission, exact raw bytes and size equality, post-read
+identity/budget checks, two opt-in native call sites only, intermediate alias
+refusal and non-UTF8/race tests. No target interpretation or broader alias policy
+was added. Fresh R2 review remains required before collector source changes.
