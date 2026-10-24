@@ -62,7 +62,7 @@ func normalizeGitUser(u *url.URL) error {
 
 func normalizeSCP(value string) (string, string, error) {
 	left, right, ok := strings.Cut(value, ":")
-	if !ok || right == "" || strings.HasPrefix(right, "-") || strings.ContainsAny(left, " /?#") || strings.ContainsAny(right, "?#") || (!strings.Contains(left, "@") && !strings.Contains(left, ".")) {
+	if !ok || right == "" || strings.HasPrefix(right, "-") || strings.HasPrefix(left, "-") || strings.ContainsAny(left, " /?#") || strings.ContainsAny(right, "?#") || (!strings.Contains(left, "@") && !strings.Contains(left, ".")) {
 		return "", "", errors.New("Git endpoint must use HTTPS, ssh:// or user@host:path")
 	}
 	user, host, hasUser := strings.Cut(left, "@")
@@ -74,7 +74,7 @@ func normalizeSCP(value string) (string, string, error) {
 		host = user
 		user = ""
 	}
-	if strings.ContainsAny(host, "[]: ") || strings.ContainsAny(user, ": ") {
+	if strings.ContainsAny(host, "[]: ") || strings.ContainsAny(user, ": ") || strings.HasPrefix(host, "-") {
 		return "", "", errors.New("invalid SSH endpoint")
 	}
 	if err := validateSCPPath(right); err != nil {

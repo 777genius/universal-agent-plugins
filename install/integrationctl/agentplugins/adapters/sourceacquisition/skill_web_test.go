@@ -2,6 +2,7 @@ package sourceacquisition
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -308,7 +309,8 @@ func TestWebSkillRefusesUntrustedCertificateByDefault(t *testing.T) {
 	}))
 	defer server.Close()
 	snapshot, _, err := (Acquirer{TempRoot: t.TempDir()}).ResolveHTTPSkill(context.Background(), server.URL, "demo")
-	if err == nil || !strings.Contains(err.Error(), "TLS") {
+	var verification *tls.CertificateVerificationError
+	if err == nil || !errors.As(err, &verification) {
 		if err == nil {
 			_ = packagedigest.Remove(snapshot)
 		}

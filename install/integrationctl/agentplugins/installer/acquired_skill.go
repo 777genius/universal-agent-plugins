@@ -3,8 +3,6 @@ package installer
 import (
 	"path"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
@@ -18,7 +16,7 @@ func acquiredSkillSourceKey(source domain.SourceIdentity, portable bool) (string
 		return "", ErrInvalidRequest
 	}
 	_, repository, err := sourcespec.NormalizeGitURL("https://github.com/" + source.Repository + ".git")
-	if err != nil || !strings.EqualFold(repository, source.Repository) || !validAcquiredSkillName(facts.Name) {
+	if err != nil || !strings.EqualFold(repository, source.Repository) || !domain.ValidSkillName(facts.Name) {
 		return "", ErrInvalidRequest
 	}
 	if facts.Normalizer != "agent-skill-package/v1" || !strings.HasPrefix(facts.RawTreeDigest, "sha256:") || !sourcespec.ValidSHA256(strings.TrimPrefix(facts.RawTreeDigest, "sha256:")) {
@@ -53,16 +51,4 @@ func acquiredWebSkillSourceKey(source domain.SourceIdentity, portable bool) (str
 		return "", ErrInvalidRequest
 	}
 	return key, nil
-}
-
-func validAcquiredSkillName(name string) bool {
-	if size := utf8.RuneCountInString(name); size < 1 || size > 64 || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
-		return false
-	}
-	for _, character := range name {
-		if character != '-' && !unicode.IsLower(character) && !unicode.IsNumber(character) {
-			return false
-		}
-	}
-	return true
 }

@@ -152,7 +152,7 @@ func (acquirer Acquirer) ResolveGit(ctx context.Context, source sourcespec.Git, 
 	defer func() { _ = os.RemoveAll(workspace.root) }()
 	endpoint = acquirer.directEndpoint(endpoint, repository)
 	if !exactRef && (selector == "default" || selector == "HEAD") {
-		output, err := workspace.remote(ctx, "ls-remote", "--symref", endpoint, "HEAD")
+		output, err := workspace.remote(ctx, "ls-remote", "--symref", "--", endpoint, "HEAD")
 		if err != nil {
 			return RefResolution{}, directRefError(ctx)
 		}
@@ -175,7 +175,7 @@ func (acquirer Acquirer) ResolveGit(ctx context.Context, source sourcespec.Git, 
 			return RefResolution{}, errors.New("invalid exact Git ref")
 		}
 	}
-	output, err := workspace.remote(ctx, append([]string{"ls-remote", "--refs", endpoint}, patterns...)...)
+	output, err := workspace.remote(ctx, append([]string{"ls-remote", "--refs", "--", endpoint}, patterns...)...)
 	if err != nil {
 		return RefResolution{}, directRefError(ctx)
 	}
@@ -194,7 +194,7 @@ func (workspace directGitWorkspace) commit(ctx context.Context, endpoint string,
 	if strings.HasPrefix(ref.name, "refs/heads/") {
 		return ref.object, nil
 	}
-	if _, err := workspace.remote(ctx, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", endpoint, ref.object); err != nil {
+	if _, err := workspace.remote(ctx, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "--", endpoint, ref.object); err != nil {
 		return "", directRefError(ctx)
 	}
 	output, err := workspace.run(ctx, false, "-C", workspace.repository, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
@@ -223,7 +223,7 @@ func (acquirer Acquirer) resolveBrowserGit(ctx context.Context, source sourcespe
 	}
 	defer func() { _ = os.RemoveAll(workspace.root) }()
 	transportEndpoint := acquirer.directEndpoint(endpoint, repository)
-	output, err := workspace.remote(ctx, "ls-remote", "--refs", transportEndpoint, "refs/heads/*", "refs/tags/*")
+	output, err := workspace.remote(ctx, "ls-remote", "--refs", "--", transportEndpoint, "refs/heads/*", "refs/tags/*")
 	if err != nil {
 		return ResolvedGit{}, directRefError(ctx)
 	}

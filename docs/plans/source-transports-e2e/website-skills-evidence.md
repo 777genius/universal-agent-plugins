@@ -5,9 +5,13 @@ not qualify native agent execution or an authoring release.
 
 ## Lifecycle checks
 
-`TestWebsiteSkillsSavedLifecycleAndColdRefusal` exercises the actual public CLI
-composition against a disposable TLS publisher and isolated client roots.
-Only the native client runner and security scanner use existing test fixtures.
+`TestWebsiteSkillsSavedLifecycleAndColdRefusal` exercises the CLI command path
+against a disposable TLS publisher and isolated client roots, with a raw
+acquirer injected into the harness. It does not exercise the production
+composition. `TestProductionSourceAcquirerAcquiresHTTPSkills` in
+`cli/cmd/agentplugins` covers that: it resolves and restores a website Skill
+through the acquirer that `composeAgentpluginsApp` returns. Only the native
+client runner and security scanner use existing test fixtures.
 The extended scenario passed locally in 7.290 seconds:
 
 - Select and install one scoped website Skill, including actual nested resource
@@ -116,3 +120,26 @@ Commands and results (`GOTOOLCHAIN=go1.26.10`):
 The real-publisher receipt above predates this pass. Live acquisition was not
 re-run after these changes; the changed code does not alter the success path of
 acquisition.
+
+## Independent review fix pass
+
+An independent pre-merge review of 4c3667ed returned REQUEST_CHANGES. Fixes:
+
+- Blocker: the production source acquirer did not expose HTTPS Skill methods, so
+  website installs failed in the real binary. The wrapper now forwards them, and
+  `TestProductionSourceAcquirerAcquiresHTTPSkills` covers the composed acquirer.
+- Git option injection: SCP-style hosts and users starting with `-` are refused,
+  and Git receives `--` before every remote endpoint in the direct transport.
+  `TestNormalizeGitURLRejectsLeadingDashInSCPHostOrUser` covers it.
+- Website URL is normalized once, so the default alias and saved identity match.
+- One HTTP client per acquisition reuses connections; the per-request timeout
+  stays at 30 s and the whole acquisition is bounded at 10 min.
+- Files are written through `os.Root` with `O_EXCL`.
+- The certificate test asserts `tls.CertificateVerificationError`, not a message.
+- The Skill-name rule has one implementation, `domain.ValidSkillName`.
+
+Commands and results (`GOTOOLCHAIN=go1.26.10`):
+
+- `install/integrationctl/agentplugins`: `go test ./domain ./environment ./installer ./sourcespec ./adapters/sourceacquisition ./adapters/dependencymanifest ./adapters/statev2 ./adapters/skillsource ./adapters/environmentstore -count=1`: PASS.
+- `cli`: `go test ./cmd/agentplugins ./internal/agentpluginscli -count=1`: PASS (`agentpluginscli` 293.6 s).
+- `golangci-lint` v2.13.2 with `--new-from-merge-base=origin/main` on the touched packages in both modules: 0 issues. The whole-file gate `--enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard` on the same packages: 0 issues.

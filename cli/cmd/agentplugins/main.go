@@ -327,3 +327,17 @@ func (acquirer lazySourceAcquirer) AcquireArchive(ctx context.Context, source so
 	}
 	return acquirer.acquirer.AcquireArchive(ctx, source, archiveSHA, tree)
 }
+
+func (acquirer lazySourceAcquirer) ResolveHTTPSkill(ctx context.Context, endpoint, exactName string) (domain.PackageSnapshot, domain.WebSkillSourceFacts, error) {
+	if err := acquirer.prepare(); err != nil {
+		return domain.PackageSnapshot{}, domain.WebSkillSourceFacts{}, err
+	}
+	return acquirer.acquirer.ResolveHTTPSkill(ctx, endpoint, exactName)
+}
+
+func (acquirer lazySourceAcquirer) AcquireHTTPSkillVerified(ctx context.Context, facts domain.WebSkillSourceFacts) (domain.PackageSnapshot, error) {
+	if err := acquirer.prepare(); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	return acquirer.acquirer.AcquireHTTPSkillVerified(ctx, facts)
+}

@@ -2,9 +2,8 @@ package environment
 
 import (
 	"errors"
-	"strings"
-	"unicode"
-	"unicode/utf8"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func validateSkillSource(source *GitSource) error {
@@ -24,13 +23,8 @@ func validateSkillSource(source *GitSource) error {
 }
 
 func validateSkillName(name string) error {
-	if n := utf8.RuneCountInString(name); n < 1 || n > 64 || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
+	if !domain.ValidSkillName(name) {
 		return errors.New("invalid expected Skill name")
-	}
-	for _, r := range name {
-		if r != '-' && !unicode.IsLower(r) && !unicode.IsNumber(r) {
-			return errors.New("invalid expected Skill name")
-		}
 	}
 	return nil
 }

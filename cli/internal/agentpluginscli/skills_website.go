@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Website discovery is explicit and deterministic: a publisher index and exact
@@ -26,9 +27,14 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 	if !interactive && !selection.yes && !opts.dryRun {
 		return skillsMissingSelection(cmd, opts, "CONFIRMATION_REQUIRED", "Pass --yes to accept installation; --dry-run reviews without applying", []skillspicker.Candidate{})
 	}
+	// Normalize once so the saved identity, default alias and lock all use the same publisher URL.
+	website, err := domain.NormalizeWebSkillURL(endpoint)
+	if err != nil {
+		return err
+	}
 	request := SkillsBatchRequest{}
 	for _, name := range selection.names {
-		request.Selections = append(request.Selections, SkillsSelection{Website: endpoint, Name: name})
+		request.Selections = append(request.Selections, SkillsSelection{Website: website, Name: name})
 	}
 	for _, target := range targets {
 		request.TargetIDs = append(request.TargetIDs, string(target))

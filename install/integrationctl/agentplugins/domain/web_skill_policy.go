@@ -57,7 +57,9 @@ func validateWebSkillEndpointPath(u *url.URL) error {
 	return nil
 }
 
-func validWebSkillName(name string) bool {
+// ValidSkillName is the one Skill-name contract shared by every acquisition,
+// environment and installer path: 1-64 lowercase letters, digits and single hyphens.
+func ValidSkillName(name string) bool {
 	if size := utf8.RuneCountInString(name); size < 1 || size > 64 || !utf8.ValidString(name) || strings.HasPrefix(name, "-") || strings.HasSuffix(name, "-") || strings.Contains(name, "--") {
 		return false
 	}
@@ -104,7 +106,7 @@ func ValidateWebSkillSourceFacts(facts WebSkillSourceFacts) error {
 }
 
 func validWebSkillPinIdentity(facts WebSkillSourceFacts) bool {
-	return validWebSkillName(facts.Skill) && facts.Normalizer == "agent-skill-package/v1" && webSkillSHA256.MatchString(facts.IndexSHA256) && strings.HasPrefix(facts.RawTreeDigest, "sha256:") && webSkillSHA256.MatchString(strings.TrimPrefix(facts.RawTreeDigest, "sha256:"))
+	return ValidSkillName(facts.Skill) && facts.Normalizer == "agent-skill-package/v1" && webSkillSHA256.MatchString(facts.IndexSHA256) && strings.HasPrefix(facts.RawTreeDigest, "sha256:") && webSkillSHA256.MatchString(strings.TrimPrefix(facts.RawTreeDigest, "sha256:"))
 }
 
 func validateWebSkillPinnedFiles(facts WebSkillSourceFacts) error {

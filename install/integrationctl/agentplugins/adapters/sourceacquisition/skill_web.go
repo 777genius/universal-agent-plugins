@@ -27,6 +27,10 @@ const (
 	webSkillTimeout    = 30 * time.Second
 )
 
+// webSkillOperationTimeout bounds a whole acquisition: up to 256 files and 32 MiB
+// can legitimately exceed a single request budget on a slow publisher.
+const webSkillOperationTimeout = 10 * time.Minute
+
 // ResolveHTTPSkill discovers exactly one named Skill and retains every listed
 // file. Its sealed snapshot contains the raw Skill, without generated metadata.
 // The caller owns the snapshot through packagedigest.Remove.
@@ -36,13 +40,15 @@ func (acquirer Acquirer) ResolveHTTPSkill(ctx context.Context, endpoint, exactNa
 	if err != nil {
 		return domain.PackageSnapshot{}, facts, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, webSkillTimeout)
+	ctx, cancel := context.WithTimeout(ctx, webSkillOperationTimeout)
 	defer cancel()
+	client := acquirer.webSkillClient()
+	defer client.CloseIdleConnections()
 	indexURL := base + "/.well-known/agent-skills/index.json"
-	body, status, contentType, err := acquirer.webSkillGET(ctx, indexURL, webSkillIndexBytes)
+	body, status, contentType, err := webSkillGET(ctx, client, indexURL, webSkillIndexBytes)
 	if err == nil && (status == http.StatusNotFound || status == http.StatusOK && webSkillHTML(body, contentType)) {
 		indexURL = base + "/.well-known/skills/index.json"
-		body, status, _, err = acquirer.webSkillGET(ctx, indexURL, webSkillIndexBytes)
+		body, status, _, err = webSkillGET(ctx, client, indexURL, webSkillIndexBytes)
 	}
 	if err != nil {
 		return domain.PackageSnapshot{}, facts, err
@@ -69,7 +75,7 @@ func (acquirer Acquirer) ResolveHTTPSkill(ctx context.Context, endpoint, exactNa
 	if err := validateWebSkillTreePaths(facts.Files); err != nil {
 		return domain.PackageSnapshot{}, domain.WebSkillSourceFacts{}, err
 	}
-	snapshot, err := acquirer.webSkillRetain(ctx, &facts, false)
+	snapshot, err := acquirer.webSkillRetain(ctx, client, &facts, false)
 	if err != nil {
 		return domain.PackageSnapshot{}, domain.WebSkillSourceFacts{}, err
 	}
@@ -88,20 +94,27 @@ func (acquirer Acquirer) AcquireHTTPSkillVerified(ctx context.Context, facts dom
 	}
 	// Avoid changing a caller-owned files slice while checking retained pins.
 	facts.Files = append([]domain.WebSkillFile(nil), facts.Files...)
-	ctx, cancel := context.WithTimeout(ctx, webSkillTimeout)
+	ctx, cancel := context.WithTimeout(ctx, webSkillOperationTimeout)
 	defer cancel()
-	return acquirer.webSkillRetain(ctx, &facts, true)
+	client := acquirer.webSkillClient()
+	defer client.CloseIdleConnections()
+	return acquirer.webSkillRetain(ctx, client, &facts, true)
 }
 
-func (acquirer Acquirer) webSkillRetain(ctx context.Context, facts *domain.WebSkillSourceFacts, verify bool) (domain.PackageSnapshot, error) {
+func (acquirer Acquirer) webSkillRetain(ctx context.Context, client *http.Client, facts *domain.WebSkillSourceFacts, verify bool) (domain.PackageSnapshot, error) {
 	workspace, err := os.MkdirTemp(acquirer.TempRoot, "agentplugins-web-skill-*")
 	if err != nil {
 		return domain.PackageSnapshot{}, errors.New("create private Skill workspace")
 	}
 	defer func() { _ = os.RemoveAll(workspace) }()
+	root, err := os.OpenRoot(workspace)
+	if err != nil {
+		return domain.PackageSnapshot{}, errors.New("open private Skill workspace")
+	}
+	defer func() { _ = root.Close() }()
 	var total int64
 	for i, file := range facts.Files {
-		body, status, _, err := acquirer.webSkillGET(ctx, file.URL, min(webSkillFileBytes, webSkillTreeBytes-total))
+		body, status, _, err := webSkillGET(ctx, client, file.URL, min(webSkillFileBytes, webSkillTreeBytes-total))
 		if err != nil {
 			return domain.PackageSnapshot{}, err
 		}
@@ -114,12 +127,8 @@ func (acquirer Acquirer) webSkillRetain(ctx context.Context, facts *domain.WebSk
 			return domain.PackageSnapshot{}, errors.New("skill file original-byte SHA256 does not match its locked checksum")
 		}
 		facts.Files[i].SHA256 = checksum
-		filename := filepath.Join(workspace, filepath.FromSlash(file.Path))
-		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
-			return domain.PackageSnapshot{}, errors.New("create private Skill file parent")
-		}
-		if err := os.WriteFile(filename, body, 0o600); err != nil {
-			return domain.PackageSnapshot{}, errors.New("write private Skill file")
+		if err := writeWebSkillFile(root, filepath.FromSlash(file.Path), body); err != nil {
+			return domain.PackageSnapshot{}, err
 		}
 	}
 	snapshot, err := acquirer.digester().SnapshotWithExecutables(ctx, workspace, domain.SourceIdentity{}, nil)
@@ -146,24 +155,51 @@ func webSkillSHA256(body []byte) string {
 	return hex.EncodeToString(digest[:])
 }
 
+// webSkillClient is built once per acquisition, so every file request reuses
+// the same connection pool. Redirects are refused and each request is bounded.
+func (acquirer Acquirer) webSkillClient() *http.Client {
+	client := acquirer.archiveHTTPClient()
+	client.Timeout = min(client.Timeout, webSkillTimeout)
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return client
+}
+
+// writeWebSkillFile creates a new file inside the workspace root. O_EXCL stops a
+// colliding name from silently replacing an earlier file on any filesystem.
+func writeWebSkillFile(root *os.Root, relative string, body []byte) error {
+	if dir := filepath.Dir(relative); dir != "." {
+		if err := root.MkdirAll(dir, 0o700); err != nil {
+			return errors.New("create private Skill file parent")
+		}
+	}
+	file, err := root.OpenFile(relative, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return errors.New("write private Skill file")
+	}
+	if _, err := file.Write(body); err != nil {
+		_ = file.Close()
+		return errors.New("write private Skill file")
+	}
+	if err := file.Close(); err != nil {
+		return errors.New("write private Skill file")
+	}
+	return nil
+}
+
 // webSkillGET inherits only the host's TLS/proxy transport. Cookies, automatic
 // authentication, content encodings and all redirects are deliberately refused.
-func (acquirer Acquirer) webSkillGET(ctx context.Context, endpoint string, limit int64) ([]byte, int, string, error) {
+func webSkillGET(ctx context.Context, client *http.Client, endpoint string, limit int64) ([]byte, int, string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil, 0, "", errors.New("create Skill HTTPS request")
 	}
 	request.Header.Set("Accept-Encoding", "identity")
-	client := acquirer.archiveHTTPClient()
-	defer client.CloseIdleConnections()
-	client.Timeout = min(client.Timeout, webSkillTimeout)
-	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	response, err := client.Do(request)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, 0, "", ctx.Err()
 		}
-		return nil, 0, "", errors.New("skill HTTPS request failed (check TLS and connectivity)")
+		return nil, 0, "", fmt.Errorf("skill HTTPS request failed (check TLS and connectivity): %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
