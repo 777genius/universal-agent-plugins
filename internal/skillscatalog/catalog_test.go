@@ -548,3 +548,70 @@ func testRequest(t *testing.T, method, target string) *http.Request {
 	}
 	return request
 }
+
+func TestProviderCooldownCapsHugeDelayAndNeverShortens(t *testing.T) {
+	entered := make(chan struct{}, 2)
+	firstRelease, secondRelease := make(chan struct{}), make(chan struct{})
+	var firstOnce, secondOnce sync.Once
+	releaseFirst := func() { firstOnce.Do(func() { close(firstRelease) }) }
+	releaseSecond := func() { secondOnce.Do(func() { close(secondRelease) }) }
+	defer releaseFirst()
+	defer releaseSecond()
+	var hits atomic.Int32
+	p := upstream(t, func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		entered <- struct{}{}
+		switch r.URL.Path {
+		case "/api/skills/all-time/0":
+			<-firstRelease
+			w.Header().Set("Retry-After", "9223372036")
+		case "/api/skills/all-time/1":
+			<-secondRelease
+			w.Header().Set("Retry-After", "15")
+		default:
+			t.Error("request escaped the provider cooldown")
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	s, err := NewService(p, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	s.now = func() time.Time { return now }
+	s.tokenAt = now
+	first, second := make(chan error, 1), make(chan error, 1)
+	go func() { _, err := s.Get(context.Background(), Request{View: Popular}); first <- err }()
+	go func() { _, err := s.Get(context.Background(), Request{View: Popular, Page: 1}); second <- err }()
+	for range 2 {
+		select {
+		case <-entered:
+		case <-time.After(3 * time.Second):
+			t.Fatal("concurrent requests did not reach provider")
+		}
+	}
+	releaseFirst()
+	firstErr := <-first
+	releaseSecond()
+	secondErr := <-second
+	var providerErr *ProviderError
+	if !errors.As(firstErr, &providerErr) || providerErr.RetryAfter != time.Hour {
+		t.Fatalf("huge cooldown was not capped: %+v", providerErr)
+	}
+	if !errors.As(secondErr, &providerErr) || providerErr.RetryAfter != 15*time.Second {
+		t.Fatalf("short positive retry changed: %+v", providerErr)
+	}
+	if !s.providerRetry.Equal(now.Add(time.Hour)) {
+		t.Fatalf("concurrent smaller delay shortened deadline: %s", s.providerRetry)
+	}
+	for page, delay := range []time.Duration{time.Hour, 15 * time.Second} {
+		key := (Request{View: Popular, Page: page}).key(p.ID())
+		if !s.failures[key].until.Equal(now.Add(delay)) {
+			t.Fatalf("incorrect failure-key deadline for page %d", page)
+		}
+	}
+	_, err = s.Get(context.Background(), Request{View: Popular, Page: 2})
+	if !errors.As(err, &providerErr) || providerErr.RetryAfter != time.Hour || hits.Load() != 2 {
+		t.Fatalf("admission ignored global deadline: %v, upstream hits %d", err, hits.Load())
+	}
+}

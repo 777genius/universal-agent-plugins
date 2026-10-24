@@ -21,9 +21,9 @@ that dependency; the authenticated `/api/v1` service is not used.
 
 Deployment inventory supplied for this service:
 
-- SSH identity/address: `iliya@37.27.125.57`.
-- Hostname: `prod-hel1-01`.
-- Machine ID: `b28fc7b17042414386eb9b114046e50c`.
+- SSH identity/address: `<operator>@<host>` from the private trusted host inventory.
+- Hostname: expected value from the trusted host inventory.
+- Machine ID: expected value from the trusted host inventory.
 - Binary: `/srv/platform/projects/universal-agent-plugins/releases/<sha>/skills-catalog-api`.
 - Active release: `/srv/platform/projects/universal-agent-plugins/current` symlink.
 - Unit: `/etc/systemd/system/uap-skills-catalog.service`.

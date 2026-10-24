@@ -45,8 +45,10 @@ func (s *Service) recordFailureLocked(key string, now time.Time, err error) erro
 	retry := 30 * time.Second
 	var providerErr *ProviderError
 	if errors.As(err, &providerErr) && providerErr.RetryAfter > 0 {
-		retry = min(providerErr.RetryAfter, time.Duration(1<<63-1)-time.Second)
-		s.providerRetry = now.Add(retry)
+		retry = min(providerErr.RetryAfter, time.Hour)
+		if deadline := now.Add(retry); deadline.After(s.providerRetry) {
+			s.providerRetry = deadline
+		}
 	}
 	s.trimFailuresLocked(now)
 	s.failures[key] = failure{until: now.Add(retry)}
