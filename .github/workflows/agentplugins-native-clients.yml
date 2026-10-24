@@ -70,7 +70,7 @@ jobs:
         shell: bash
         run: |
           project_args=()
-          if [[ '${{ matrix.client }}' == 'codex' || '${{ matrix.client }}' == 'claude' ]]; then
+          if [[ '${{ matrix.client }}' == 'codex' || '${{ matrix.client }}' == 'claude' || '${{ matrix.client }}' == 'opencode' ]]; then
             project_args+=(--project-components)
           fi
           python scripts/run-native-client-matrix.py \

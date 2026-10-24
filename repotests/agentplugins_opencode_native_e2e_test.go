@@ -65,8 +65,8 @@ func newOpenCodeNativeFixture(t *testing.T) *openCodeNativeFixture {
 
 // env returns a bounded, isolated environment for both the `opencode` CLI and
 // the `agentplugins` installer: disposable HOME/XDG roots, no inherited
-// ambient config, OPENCODE_PURE disables any implicit project/global merge
-// that could hide the owned entry.
+// ambient config. OPENCODE_PURE skips configured external plugins; project and
+// global config still merge, so effective native source remains an observation.
 func (f *openCodeNativeFixture) env(clientDir string) []string {
 	return append(nativePlatformEnvironment(f.Root, f.Home, clientDir), "AGENTPLUGINS_HOME="+f.StateHome, "OPENCODE_PURE=1")
 }

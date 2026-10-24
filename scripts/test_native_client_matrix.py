@@ -160,6 +160,15 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsClaudeNativeProjectPluginLifecycle", released.CLIENT_TESTS["claude"])
 
+    def test_source_project_proof_selects_exact_required_opencode_tests(self):
+        pattern, required = matrix.select_native_tests("opencode", project_components=True)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", released.CLIENT_TESTS["opencode"])
+
     def test_source_project_proof_rejects_released_and_unsupported_clients(self):
         for client in matrix.PROJECT_TESTS:
             with self.assertRaises(ValueError):
