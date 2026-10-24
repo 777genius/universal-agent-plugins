@@ -166,6 +166,83 @@ class CollectorTests(unittest.TestCase):
             with patch.object(research.grok.time, "monotonic", return_value=budget.deadline + 1), self.assertRaises(research.grok.CollectorDeadline):
                 research.inventory({"root": base / "root"}, budget)
 
+    def test_cleanup_is_anchored_bounded_and_preserves_primary_deadline_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary); output = base / "raw"; output.mkdir()
+            root = base / "root"; root.mkdir(); foreign = base / "foreign"; foreign.write_text("preserve")
+            (root / "link").symlink_to(foreign)
+            self.assertTrue(research.cleanup(root, root.lstat(), output)["complete"])
+            self.assertFalse(root.exists()); self.assertEqual(foreign.read_text(), "preserve")
+            root.mkdir(); held = root.lstat(); root.rename(base / "original"); root.mkdir()
+            self.assertFalse(research.cleanup(root, held, output)["complete"])
+            self.assertTrue(root.is_dir()); self.assertTrue((base / "original").is_dir())
+            root.rmdir()
+            summary = research.summary_record()
+            with patch.object(research, "verify_checkout"), \
+                    patch.object(research.os, "getuid", return_value=1001), \
+                    patch.object(research.os, "getgid", return_value=1001), \
+                    patch.object(research.os, "geteuid", return_value=1001), \
+                    patch.object(research.os, "getegid", return_value=1001), \
+                    patch.object(research.phase1.tempfile, "mkdtemp", return_value=str(base / "experiment")), \
+                    patch.object(research, "acquire", side_effect=research.grok.CollectorDeadline("inert deadline")), \
+                    patch.object(research, "cleanup", return_value={"complete": False, "error": "inert cleanup timeout"}) as clean:
+                # mkdtemp is replaced only with an inert precreated test root.
+                (base / "experiment").mkdir()
+                research.run_collection(output, summary)
+            self.assertFalse(summary["success"])
+            self.assertIn("inert deadline", summary["error"])
+            self.assertFalse(summary["cleanup"]["complete"])
+            self.assertEqual(clean.call_count, 1)
+            self.assertEqual(json.loads((output / "qoder-populated-research.json").read_text())["error"], summary["error"])
+            calls = []
+            def timed(argv, cwd, env, output, label, **kwargs):
+                calls.append(kwargs)
+                return {"exit": -9, "error": "inert deadline"}, b"", b""
+            with patch.object(research, "run_probe", side_effect=timed):
+                self.assertFalse(research.cleanup(base / "experiment", (base / "experiment").lstat(), output)["complete"])
+            self.assertEqual(calls, [{"timeout": 5}])
+
+    def test_upload_boundary_never_exposes_rejected_oversize_or_nonregular_tree(self):
+        for refused in [None, "overflow", "link", "hardlink", "directory"]:
+            with self.subTest(refused=refused), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary); raw = base / "raw"; raw.mkdir(); upload = base / "upload"
+                (raw / "safe.log").write_text("inert")
+                if refused == "overflow": (raw / "large.log").write_bytes(b"x" * 5000)
+                if refused == "link": (raw / "z").symlink_to("/foreign")
+                if refused == "hardlink": os.link(raw / "safe.log", raw / "z")
+                if refused == "directory": (raw / "z").mkdir()
+                summary = research.summary_record(); summary["success"] = True
+                with patch.object(research, "MAX_ARTIFACT", 4096):
+                    result = research.stage_artifacts(raw, upload, summary)
+                if refused:
+                    self.assertFalse(result["complete"]); self.assertFalse(summary["success"])
+                    self.assertEqual([p.name for p in upload.iterdir()], ["qoder-populated-research.json"])
+                    fallback = json.loads((upload / "qoder-populated-research.json").read_text())
+                    self.assertFalse(fallback["success"])
+                    self.assertTrue(all(fallback[key] is False for key in research.FALSE_CLAIMS))
+                else:
+                    self.assertTrue(result["complete"])
+                    self.assertEqual((upload / "safe.log").read_text(), "inert")
+                self.assertLess(sum(p.stat().st_size for p in upload.iterdir()), 4096)
+        workflow = Path(research.__file__).parent.parent / ".github/workflows/qoder-populated-research.yml"
+        self.assertIn("path: ${{ runner.temp }}/qoder-populated-upload/", workflow.read_text())
+        self.assertNotIn("path: ${{ runner.temp }}/qoder-populated-research/", workflow.read_text())
+
+    def test_source_head_is_observed_and_mismatch_stops_before_acquisition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            for observed in ["a" * 40, "b" * 40]:
+                summary = research.summary_record()
+                with patch.dict(os.environ, {"EXPECTED_COMMIT": "a" * 40}), \
+                        patch.object(research, "run_probe", return_value=({"exit": 0, "error": None}, (observed + "\n").encode(), b"")) as probe:
+                    if observed == "a" * 40:
+                        research.verify_checkout(output, summary, research.grok.Budget())
+                        self.assertEqual(summary["source_commit"], observed)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "actual git HEAD"):
+                            research.verify_checkout(output, summary, research.grok.Budget())
+                    self.assertEqual(probe.call_args[0][0], ["/usr/bin/git", "rev-parse", "HEAD"])
+
     def test_real_hosted_guard_refuses_before_any_effect(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "must-not-exist"

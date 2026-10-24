@@ -40,12 +40,12 @@ jobs:
         env:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python3 scripts/research-qoder-populated.py --output '${{ runner.temp }}/qoder-populated-research'
+        run: python3 scripts/research-qoder-populated.py --output '${{ runner.temp }}/qoder-populated-research' --upload-output '${{ runner.temp }}/qoder-populated-upload'
       - name: Preserve actual observations including failures
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: qoder-1.1.78-populated-scope-research-linux-amd64
-          path: ${{ runner.temp }}/qoder-populated-research/
+          path: ${{ runner.temp }}/qoder-populated-upload/
           if-no-files-found: error
           retention-days: 14

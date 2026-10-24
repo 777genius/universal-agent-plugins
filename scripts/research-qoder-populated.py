@@ -32,6 +32,7 @@ VERSION = phase1.VERSION
 PLUGIN_NAME = "uap-scope-research"
 MAX_ENTRIES, MAX_DEPTH, MAX_FILE, MAX_TOTAL = 4096, 32, 1 << 20, 64 << 20
 MAX_METADATA = 4096
+MAX_ARTIFACT, MAX_ARTIFACT_FILES = 64 << 20, 64
 BINARY_BYTES = 182982112
 COLLECTOR_SECONDS = 8 * 60
 STAGES = ("empty", "user-installed", "A-installed", "B-installed")
@@ -362,14 +363,148 @@ def acquire(directory, budget):
                   "archive_bytes": len(body), "binary_sha256": phase1.BINARY_SHA256, "binary_bytes": len(binary)}
 
 
+CLEANUP_CODE = r'''
+import os,stat,sys
+path,device,inode=sys.argv[1:]
+parent,name=os.path.split(path)
+pfd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+root=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=pfd)
+identity=os.fstat(root)
+if (identity.st_dev,identity.st_ino)!=(int(device),int(inode)):raise SystemExit("cleanup root identity changed")
+def clear(fd):
+    for name in os.listdir(fd):
+        item=os.stat(name,dir_fd=fd,follow_symlinks=False)
+        if stat.S_ISDIR(item.st_mode):
+            child=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+            try:
+                if not os.path.samestat(item,os.fstat(child)):raise RuntimeError("cleanup directory changed")
+                clear(child)
+            finally:os.close(child)
+            os.rmdir(name,dir_fd=fd)
+        else:os.unlink(name,dir_fd=fd)
+clear(root)
+if not os.path.samestat(identity,os.stat(name,dir_fd=pfd,follow_symlinks=False)):raise SystemExit("cleanup root replaced")
+os.close(root)
+os.rmdir(name,dir_fd=pfd)
+os.close(pfd)
+'''
+
+
+def cleanup(root, held_identity, output, label="cleanup"):
+    # No TemporaryDirectory finalizer: this inert child has its own post-budget deadline.
+    record, _, _ = run_probe([sys.executable, "-c", CLEANUP_CODE, str(root),
+                              str(held_identity.st_dev), str(held_identity.st_ino)],
+                             output, {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, output,
+                             label, timeout=5)
+    return {"complete": record["exit"] == 0 and record["error"] is None, "probe": record}
+
+
+def verify_checkout(output, summary, budget):
+    expected = os.environ.get("EXPECTED_COMMIT", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", expected):
+        raise ValueError("exact expected source commit is required")
+    record, stdout, stderr = run_probe(["/usr/bin/git", "rev-parse", "HEAD"], Path(__file__).resolve().parent.parent,
+                                      {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "GIT_CONFIG_NOSYSTEM": "1",
+                                       "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0"},
+                                      output, "source-checkout", timeout=min(5, budget.check()), limit=128)
+    summary["checkout"] = record
+    observed = stdout.decode("ascii").strip()
+    summary["observed_source_commit"] = observed
+    if record["error"] or record["exit"] != 0 or stderr or observed != expected:
+        raise ValueError("actual git HEAD differs from expected exact source commit")
+    summary["source_commit"] = observed
+
+
 def summary_record():
     return {"evidence_kind": "qoder-populated-scope-research", "version": VERSION,
-            "source_commit": os.environ.get("EXPECTED_COMMIT", ""), "success": False,
+            "expected_source_commit": os.environ.get("EXPECTED_COMMIT", "")[:40], "success": False,
             "probes": [], "inventories": {}, **FALSE_CLAIMS}
 
 
 def write_summary(output, summary):
     (output / "qoder-populated-research.json").write_text(json.dumps(summary, indent=2) + "\n")
+
+
+def copy_artifacts(output, staging, budget):
+    """Only complete stable flat ordinary files enter the eventual upload directory."""
+    before = output.lstat()
+    source_fd = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    target_fd = os.open(staging, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if identity(os.fstat(source_fd)) != identity(before):
+            raise ValueError("artifact root changed before admission")
+        files, total = [], 0
+        with os.scandir(source_fd) as entries:
+            for entry in entries:
+                budget.check()
+                if len(files) >= MAX_ARTIFACT_FILES or len(os.fsencode(entry.name)) > 128:
+                    raise ValueError("artifact entry/name bound exceeded")
+                info = os.stat(entry.name, dir_fd=source_fd, follow_symlinks=False)
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise ValueError("artifact must be flat ordinary unaliased files")
+                total += info.st_size
+                if total > MAX_ARTIFACT:
+                    raise ValueError("artifact total byte bound exceeded")
+                files.append((entry.name, info))
+        for name, info in files:
+            budget.check()
+            descriptor = os.open(name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=source_fd)
+            with os.fdopen(descriptor, "rb") as source:
+                if identity(os.fstat(source.fileno())) != identity(info):
+                    raise ValueError("artifact changed before copy")
+                target = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=target_fd)
+                with os.fdopen(target, "wb") as destination:
+                    copied = 0
+                    while True:
+                        budget.check()
+                        body = source.read(min(1 << 20, info.st_size + 1 - copied))
+                        if not body:
+                            break
+                        copied += len(body)
+                        if copied > info.st_size:
+                            raise ValueError("artifact grew during copy")
+                        destination.write(body)
+                if copied != info.st_size or identity(os.fstat(source.fileno())) != identity(info):
+                    raise ValueError("artifact changed during copy")
+            if identity(os.stat(name, dir_fd=source_fd, follow_symlinks=False)) != identity(info):
+                raise ValueError("artifact path changed after copy")
+        if identity(os.fstat(source_fd)) != identity(before) or identity(output.lstat()) != identity(before):
+            raise ValueError("artifact root changed during copy")
+        return {"files": len(files), "bytes": total}
+    finally:
+        os.close(source_fd)
+        os.close(target_fd)
+
+
+def stage_artifacts(output, upload, summary):
+    # The workflow uploads only `upload`, never raw output or this private pending tree.
+    staging = Path(phase1.tempfile.mkdtemp(prefix=upload.name + "-pending-", dir=upload.parent))
+    held = staging.lstat()
+    try:
+        with grok.Budget(5) as budget:
+            admitted = copy_artifacts(output, staging, budget)
+        if upload.exists() or upload.is_symlink():
+            raise ValueError("upload destination is not fresh")
+        staging.rename(upload)
+        return {"complete": True, **admitted}
+    except Exception as exc:
+        summary["success"] = False
+        summary["artifact_admission_error"] = f"{type(exc).__name__}: {str(exc)[:512]}"
+        # A rejected tree is never the upload source. Retain only this bounded failure record.
+        upload.mkdir(exist_ok=False)
+        fallback = {"evidence_kind": summary["evidence_kind"], "version": VERSION, "success": False,
+                    "expected_source_commit": summary.get("expected_source_commit", "")[:40],
+                    "observed_source_commit": summary.get("observed_source_commit", "")[:40],
+                    "error": str(summary.get("error", ""))[:512],
+                    "artifact_admission_error": summary["artifact_admission_error"],
+                    "stage": str(summary.get("stage", ""))[:64], "probes_recorded": len(summary.get("probes", [])),
+                    "cleanup_complete": summary.get("cleanup", {}).get("complete", False), **FALSE_CLAIMS}
+        write_summary(upload, fallback)
+        try:
+            cleanup(staging, held, output, "artifact-pending-cleanup")
+        except Exception:
+            pass  # Private rejected files remain outside the workflow upload path.
+        return {"complete": False, "error": summary["artifact_admission_error"]}
 
 
 def child_main(request_path):
@@ -390,28 +525,15 @@ def child_main(request_path):
     return 0 if summary["success"] else 1
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path)
-    parser.add_argument("--collect", type=Path, help=argparse.SUPPRESS)
-    args = parser.parse_args(argv)
+def run_collection(output, summary):
+    root = None
     try:
-        phase1.native.require_hosted("linux-amd64")
-    except RuntimeError as exc:
-        print(str(exc)[:512], file=sys.stderr)
-        return 2
-    if args.collect:
-        return child_main(args.collect)
-    if args.output is None:
-        parser.error("--output is required")
-    output = args.output.absolute()
-    output.mkdir(parents=True, exist_ok=False)
-    summary = summary_record()
-    try:
-        if os.getuid() == 0 or os.getgid() == 0:
-            raise ValueError("original hosted collector must be nonroot")
-        with grok.Budget(COLLECTOR_SECONDS) as budget, phase1.tempfile.TemporaryDirectory(prefix="qoder-populated-") as temporary:
-            root = Path(temporary)
+        if os.getuid() == 0 or os.getgid() == 0 or os.geteuid() != os.getuid() or os.getegid() != os.getgid():
+            raise ValueError("original hosted collector must retain nonroot real/effective uid/gid")
+        with grok.Budget(COLLECTOR_SECONDS) as budget:
+            verify_checkout(output, summary, budget)
+            root = Path(phase1.tempfile.mkdtemp(prefix="qoder-populated-"))
+            held = root.lstat()
             for name in ("binary", "home", "tmp", *LOCATIONS):
                 (root / name).mkdir()
             binary, summary["acquisition"] = acquire(root / "binary", budget)
@@ -431,16 +553,51 @@ def main(argv=None):
             child_path = output / "qoder-populated-research.json"
             if child_path.exists():
                 child = strict_json(read_regular(child_path, budget, 64 << 20))
-                child["acquisition"], child["wrapper"] = summary["acquisition"], record
-                summary = child
+                child["acquisition"], child["wrapper"], child["checkout"] = summary["acquisition"], record, summary["checkout"]
+                child["source_commit"] = child["observed_source_commit"] = summary["source_commit"]
+                summary.clear()
+                summary.update(child)
             if record["error"] or record["exit"] != 0:
                 summary["success"] = False
                 summary.setdefault("error", "isolated collector failed")
     except Exception as exc:
         summary["success"] = False
         summary["error"] = f"{type(exc).__name__}: {str(exc)[:512]}"
+    finally:
+        if root is not None:
+            try:
+                summary["cleanup"] = cleanup(root, held, output)
+            except Exception as exc:
+                summary["cleanup"] = {"complete": False, "error": f"{type(exc).__name__}: {str(exc)[:512]}"}
+            if not summary["cleanup"]["complete"]:
+                summary["success"] = False
     write_summary(output, summary)
-    return 0 if summary["success"] else 1
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--upload-output", type=Path)
+    parser.add_argument("--collect", type=Path, help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    try:
+        phase1.native.require_hosted("linux-amd64")
+    except RuntimeError as exc:
+        print(str(exc)[:512], file=sys.stderr)
+        return 2
+    if args.collect:
+        return child_main(args.collect)
+    if args.output is None or args.upload_output is None:
+        parser.error("--output and --upload-output are required")
+    output = args.output.absolute()
+    upload = args.upload_output.absolute()
+    if upload == output or upload.is_relative_to(output) or output.is_relative_to(upload) or upload.exists() or upload.is_symlink():
+        parser.error("raw and fresh upload directories must be separate")
+    output.mkdir(parents=True, exist_ok=False)
+    summary = summary_record()
+    run_collection(output, summary)
+    admission = stage_artifacts(output, upload, summary)
+    return 0 if summary["success"] and admission["complete"] else 1
 
 
 if __name__ == "__main__":
