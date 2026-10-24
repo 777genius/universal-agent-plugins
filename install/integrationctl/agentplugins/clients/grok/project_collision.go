@@ -65,7 +65,7 @@ func (scanner *projectFileScanner) scanRoot(root string) (bool, error) {
 		return false, err
 	}
 	for _, entry := range skills {
-		if entry.Name() == scanner.plan.DeclaredName {
+		if scanner.selectedSkillName(entry.Name()) {
 			return true, nil
 		}
 	}
@@ -132,7 +132,7 @@ func (scanner *projectFileScanner) readProjectManifest(path string, beforeOpen f
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	limit := projectManifestLimit
 	if scanner.remaining < limit {
 		limit = scanner.remaining
@@ -158,7 +158,7 @@ func projectDirectoryEntries(path string, beforeOpen func()) ([]os.DirEntry, err
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	entries, err := file.ReadDir(projectDirectoryLimit + 1)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
@@ -170,4 +170,16 @@ func projectDirectoryEntries(path string, beforeOpen func()) ([]os.DirEntry, err
 		return nil, err
 	}
 	return entries, nil
+}
+
+func (scanner *projectFileScanner) selectedSkillName(name string) bool {
+	if name == scanner.plan.DeclaredName {
+		return true
+	}
+	for _, component := range scanner.plan.Components {
+		if component.Kind == domain.ComponentSkill && component.Support != domain.SupportUnsupported && component.Name == name {
+			return true
+		}
+	}
+	return false
 }

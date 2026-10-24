@@ -112,7 +112,8 @@ func TestProjectGrokStrictObservedInspectShape(t *testing.T) {
 			t.Fatal("observed root spelling refused", err)
 		}
 	}
-	invalid := []string{strings.Replace(body, `"grokVersion":"1.0.67"`, `"grokVersion":"1.0.68"`, 1), strings.Replace(body, `"cwd":`, `"Cwd":`, 1), strings.Replace(body, `"projectRoot":`, `"ProjectRoot":`, 1), strings.Replace(body, `"enabled":false`, `"enabled":null`, 1), body + ` {}`, strings.Replace(body, `"skills":[]`, `"skills":null`, 1), strings.Replace(body, `"name":"demo"`, `"name":"demo","Name":"demo"`, 1)}
+	invalid := make([]string, 0, 10)
+	invalid = append(invalid, strings.Replace(body, `"grokVersion":"1.0.67"`, `"grokVersion":"1.0.68"`, 1), strings.Replace(body, `"cwd":`, `"Cwd":`, 1), strings.Replace(body, `"projectRoot":`, `"ProjectRoot":`, 1), strings.Replace(body, `"enabled":false`, `"enabled":null`, 1), body+` {}`, strings.Replace(body, `"skills":[]`, `"skills":null`, 1), strings.Replace(body, `"name":"demo"`, `"name":"demo","Name":"demo"`, 1))
 	for _, suffix := range []string{"//", "/./", "/../A/"} {
 		invalid = append(invalid, strings.Replace(body, `"projectRoot":"`+project+string(filepath.Separator)+`"`, `"projectRoot":"`+project+suffix+`"`, 1))
 	}
@@ -177,11 +178,11 @@ func TestProjectGrokFiniteCollisionSourcesAndBudgets(t *testing.T) {
 			case "oversized":
 				projectTestWrite(t, manifest, strings.Repeat(" ", projectManifestLimit+1))
 			case "aggregate":
-				for i := 0; i < 17; i++ {
+				for i := range 17 {
 					projectTestWrite(t, filepath.Join(root, "plugins", string(rune('a'+i)), ".grok-plugin", "plugin.json"), `{"name":"other"}`+strings.Repeat(" ", projectManifestLimit-len(`{"name":"other"}`)))
 				}
 			case "entries":
-				for i := 0; i < 129; i++ {
+				for i := range 129 {
 					projectTestWrite(t, filepath.Join(root, "plugins", string(rune(1000+i)), ".grok-plugin", "plugin.json"), `{"name":"other"}`)
 				}
 			default:
@@ -258,5 +259,26 @@ func TestProjectGrokManifestSparseCapAndExactLimit(t *testing.T) {
 	}
 	if _, err := scanner.readProjectManifest(path, nil); err == nil {
 		t.Fatal("sparse overlimit manifest admitted")
+	}
+}
+
+func TestProjectGrokSelectedSkillNameCollidesAcrossNativeSources(t *testing.T) {
+	for _, surface := range []string{".grok", ".claude"} {
+		for _, scope := range []string{"user", "ancestor", "selected"} {
+			t.Run(scope+surface, func(t *testing.T) {
+				request := projectTestRequest(t)
+				base := request.Plan.TargetContext.ProjectRoot
+				if scope == "user" {
+					base = filepath.Dir(request.Client.ConfigRoot)
+				} else if scope == "ancestor" {
+					base = filepath.Dir(base)
+				}
+				projectTestWrite(t, filepath.Join(base, surface, "skills", "docs", "SKILL.md"), "foreign selected skill")
+				finding, err := inspectProjectFiles(request.Plan, false)
+				if err != nil || finding != clients.RegistryCollision {
+					t.Fatalf("selected skill docs under plugin demo missed: %v %v", finding, err)
+				}
+			})
+		}
 	}
 }
