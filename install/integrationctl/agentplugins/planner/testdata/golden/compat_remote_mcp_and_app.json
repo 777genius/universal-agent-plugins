@@ -521,7 +521,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -836,7 +837,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },

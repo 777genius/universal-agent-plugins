@@ -18,11 +18,13 @@ const (
 	// Clients with different native transport keys require their own codec.
 	CodecMCPServers Codec = "mcpServers"
 	CodecCopilot    Codec = "copilot-mcpServers"
+	CodecKimi       Codec = "kimi-project-mcpServers"
 	CodecGemini     Codec = "gemini-mcpServers"
 	CodecCodex      Codec = "codex-mcp-servers"
 	CodecOpenCode   Codec = "opencode-mcp"
 	CodecOpenCodeV2 Codec = "opencode-v2-mcp"
 	CodecWindsurf   Codec = "windsurf-mcpServers"
+	CodecDevin      Codec = "devin-mcpServers"
 	CodecCline      Codec = "cline-mcpServers"
 )
 
@@ -220,7 +222,7 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecCopilot || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecCopilot || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline
 }
 
 func codecCollectionKey(codec Codec) string {
