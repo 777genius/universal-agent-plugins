@@ -18,6 +18,7 @@ const (
 	// Clients with different native transport keys require their own codec.
 	CodecMCPServers Codec = "mcpServers"
 	CodecGemini     Codec = "gemini-mcpServers"
+	CodecCodex      Codec = "codex-mcp-servers"
 	CodecOpenCode   Codec = "opencode-mcp"
 	CodecOpenCodeV2 Codec = "opencode-v2-mcp"
 	CodecWindsurf   Codec = "windsurf-mcpServers"
@@ -84,6 +85,13 @@ type Server struct {
 	// OpenCodeV2 carries only the pinned V2 disabled/timeout contract. Other
 	// codecs reject it rather than silently discard dialect-specific intent.
 	OpenCodeV2 *OpenCodeV2Options `json:"opencode_v2,omitempty"`
+	// CodexAuth contains only nonsecret references from compatibility hints.
+	CodexAuth *CodexAuthOptions `json:"codex_auth,omitempty"`
+}
+
+type CodexAuthOptions struct {
+	BearerTokenEnvVar string `json:"bearer_token_env_var,omitempty"`
+	OAuthResource     string `json:"oauth_resource,omitempty"`
 }
 
 // OpenCodeV2Options is a closed subset of the pinned native MCP entry schema.
@@ -167,6 +175,7 @@ type lockAcquirer func(Paths, Codec) (func() error, error)
 type Kernel struct {
 	files        FileIO
 	acquireLocks lockAcquirer
+	codexParser  CodexDocumentParser
 }
 
 func New() Kernel { return Kernel{files: conditionalOSFiles{}} }
@@ -178,6 +187,9 @@ func NewWithLockAcquirer(acquireLocks func(Paths, Codec) (func() error, error)) 
 }
 
 func validateRequest(req Request) error {
+	if req.Codec == CodecCodex && req.Paths.JSONC != "" {
+		return fmt.Errorf("codex requires one TOML config path")
+	}
 	if err := validateExactPath(req.Paths.JSON, "JSON native config path"); err != nil {
 		return err
 	}
@@ -208,10 +220,13 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecGemini || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecCline
 }
 
 func codecCollectionKey(codec Codec) string {
+	if codec == CodecCodex {
+		return "mcp_servers"
+	}
 	if codec == CodecOpenCode || codec == CodecOpenCodeV2 {
 		return "mcp"
 	}

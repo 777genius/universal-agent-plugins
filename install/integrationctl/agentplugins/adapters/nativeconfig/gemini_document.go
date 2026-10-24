@@ -10,6 +10,9 @@ import (
 // comment-aware, but trailing commas remain invalid. Keep the original AST so
 // managed entry mutations preserve comments and unrelated configuration.
 func parseCodecDocument(body []byte, jsonc bool, codec Codec) (*document, error) {
+	if codec == CodecCodex {
+		return nil, fmt.Errorf("codex TOML document parser is required")
+	}
 	if codec != CodecGemini || jsonc {
 		return parseDocument(body, jsonc)
 	}
