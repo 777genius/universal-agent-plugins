@@ -7,9 +7,10 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/creachadair/tomledit"
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 )
 
 type document struct {

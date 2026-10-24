@@ -52,3 +52,22 @@ provider contracts passed0.733s. These are new workspace executions with the
 verified Go1.26.10 toolchain/caches and one coordinated GOMAXPROCS2/-p2 process.
 Failed compile/environment attempts are not passes. Lint and final independent
 review closures remain pending; no native/client/model/MCP/trust execution.
+
+## Fresh lint closure and narrow helper correction
+
+Pinned golangci-lint2.13.2 initially reported three new concrete-backend import
+grouping issues and gocritic's pointer-to-map parameter warning. Those are
+retained failures. The helper now returns its decoded map explicitly; its
+UseNumber, trailing-input refusal and recursive exact conversion are unchanged.
+Only the caller signature and import groups changed. Complete concrete-backend
+tests passed again0.073s after this correction.
+
+The initial lint also emitted cache-write warnings because its default cache was
+under read-only /root. Subsequent actual gates explicitly used the writable
+workspace GOLANGCI_LINT_CACHE. The exact changed-code gate fromc50956de over
+nativeconfig/codextoml/Codex/providers passed0issues. The separate full-file
+revive/funlen/gocyclo/gocognit/dupl/depguard gate over those same packages also
+passed0issues. No lint baseline, architecture snapshot or dependency policy was
+changed. Fresh test results above remain attributed to their actual source
+checkpoints; no vendor/native/model/trust/MCP process executed. Two final fresh
+independent code-review closures are now requested on this corrected freeze.

@@ -9,21 +9,22 @@ import (
 	"strings"
 )
 
-func decodeTOMLJSON(body []byte, result *map[string]any) error {
+func decodeTOMLJSON(body []byte) (map[string]any, error) {
+	var result map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
-	if err := decoder.Decode(result); err != nil {
-		return err
+	if err := decoder.Decode(&result); err != nil {
+		return nil, err
 	}
 	if _, err := decoder.Token(); err != io.EOF {
-		return fmt.Errorf("codex MCP entry has trailing JSON")
+		return nil, fmt.Errorf("codex MCP entry has trailing JSON")
 	}
-	converted, err := tomlJSONValue(*result)
+	converted, err := tomlJSONValue(result)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	*result, _ = converted.(map[string]any)
-	return nil
+	result, _ = converted.(map[string]any)
+	return result, nil
 }
 
 func tomlJSONValue(value any) (any, error) {
