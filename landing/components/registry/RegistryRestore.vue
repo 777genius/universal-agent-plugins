@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const { t } = useI18n();
+const { restoreGuideUrl } = useDocsLinks();
 </script>
 
 <template>
@@ -14,7 +15,7 @@ const { t } = useI18n();
         <h2 id="restore-title">{{ t('shell.restore.title') }}</h2>
         <a
           class="registry-restore__guide"
-          href="https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine"
+          :href="restoreGuideUrl"
           target="_blank"
           rel="noreferrer"
           >{{ t('shell.restore.guide') }} <span aria-hidden="true">↗</span></a
