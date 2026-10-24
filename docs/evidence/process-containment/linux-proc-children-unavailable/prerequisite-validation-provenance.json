@@ -1,0 +1,21 @@
+{
+  "source_base": "428bdf5d49e63b78bc4783df6b766c87c8e678ca",
+  "source_state": "working candidate before frozen code review",
+  "go": "1.26.10",
+  "parallelism": "-p=1",
+  "inert_result": "PASS0.021s",
+  "runtime_result": "22 exact reviewed tests unsupported/skipped before descendant launch; NOT runtime containment qualification",
+  "runtime_log_boundary": "captured before final task-directory count refinement; prerequisite and22 guard locations unchanged; final inert actual OS.Run refusal rechecked after refinement",
+  "custom_runner_result": "PASS0.020s",
+  "vendor_or_auth_executed": false,
+  "members": {
+    "prerequisite-inert-tests.log": {
+      "bytes": 4116,
+      "sha256": "68487327795092933e10e5bd82d1419ba08c9dee7bb46a3d79177c038390f31a"
+    },
+    "prerequisite-runtime-tests.log": {
+      "bytes": 9259,
+      "sha256": "cc9e5be9e6ca3362a81936ac1734930365a2d7bd88866ff7ea27fcfb9f216470"
+    }
+  }
+}

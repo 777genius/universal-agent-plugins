@@ -144,6 +144,13 @@ func newCommandContainment(cmd *exec.Cmd) (*commandContainment, error) {
 }
 
 func newOrdinaryCommandContainment(cmd *exec.Cmd, grace time.Duration) (*commandContainment, error) {
+	return newOrdinaryCommandContainmentWithPreflight(cmd, grace, ordinaryContainmentPreflight)
+}
+
+func newOrdinaryCommandContainmentWithPreflight(cmd *exec.Cmd, grace time.Duration, preflight func() error) (*commandContainment, error) {
+	if err := preflight(); err != nil {
+		return nil, err
+	}
 	request, status, err := wrapLinuxOrdinaryCommand(cmd, grace)
 	if err != nil {
 		return nil, err
@@ -240,6 +247,11 @@ func runLinuxOrdinarySupervisor() int {
 	_ = specFile.Close()
 	if err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0); err != nil {
 		result.Error = fmt.Sprintf("establish isolated child-subreaper boundary: %v", err)
+		writeResult()
+		return 125
+	}
+	if err := ordinaryContainmentPreflight(); err != nil {
+		result.Error = fmt.Sprintf("ordinary command containment preflight: %v", err)
 		writeResult()
 		return 125
 	}
@@ -1293,7 +1305,7 @@ func liveLinuxTrackedProcess(pid int, tracked linuxTrackedProcess) (bool, error)
 
 func linuxDirectChildIdentities(pid int, deadline time.Time, limit int) (map[int]uint64, error) {
 	childrenByIdentity := make(map[int]uint64)
-	tasks, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
+	tasks, err := readBoundedLinuxTaskDirectory(fmt.Sprintf("/proc/%d/task", pid))
 	if err != nil {
 		return nil, err
 	}
@@ -1301,11 +1313,12 @@ func linuxDirectChildIdentities(pid int, deadline time.Time, limit int) (map[int
 		if !time.Now().Before(deadline) {
 			return childrenByIdentity, fmt.Errorf("Linux supervisor descendant traversal exceeded cleanup deadline while inspecting process %d", pid)
 		}
-		children, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/children", pid, task.Name()))
+		tid, parseErr := linuxTaskID(task.Name())
+		if parseErr != nil {
+			return childrenByIdentity, fmt.Errorf("invalid proc task identity: %w", parseErr)
+		}
+		children, _, err := linuxTaskChildren(pid, tid)
 		if err != nil {
-			if linuxProcessGone(err) {
-				continue
-			}
 			return nil, err
 		}
 		for _, rawChild := range strings.Fields(string(children)) {
@@ -1380,7 +1393,7 @@ func (containment *commandContainment) scanDescendants() error {
 			continue
 		}
 		seen[pid] = struct{}{}
-		tasks, err := os.ReadDir(fmt.Sprintf("/proc/%d/task", pid))
+		tasks, err := readBoundedLinuxTaskDirectory(fmt.Sprintf("/proc/%d/task", pid))
 		if err != nil {
 			if tracked, ok := containment.descendants[pid]; ok {
 				live, classifyErr := liveLinuxTrackedProcess(pid, tracked)
@@ -1393,14 +1406,13 @@ func (containment *commandContainment) scanDescendants() error {
 			continue
 		}
 		for _, task := range tasks {
-			children, err := os.ReadFile(fmt.Sprintf("/proc/%d/task/%s/children", pid, task.Name()))
+			tid, parseErr := linuxTaskID(task.Name())
+			if parseErr != nil {
+				scanErr = errors.Join(scanErr, parseErr)
+				continue
+			}
+			children, _, err := linuxTaskChildren(pid, tid)
 			if err != nil {
-				// Threads can disappear between ReadDir and opening their children
-				// file. The remaining live threads are still inspected in this same
-				// snapshot, so this race is not an ancestry blind spot.
-				if linuxProcessGone(err) {
-					continue
-				}
 				if tracked, ok := containment.descendants[pid]; ok {
 					live, classifyErr := liveLinuxTrackedProcess(pid, tracked)
 					if classifyErr != nil {

@@ -25,6 +25,7 @@ import (
 // command still needs the process supervisor. The supervisor must relaunch
 // from the running inode, not from the removed pathname.
 func TestOSRunnerSurvivesRemovedOwnExecutable(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	const helperEnv = "AGENTPLUGINS_REMOVED_SELF_EXECUTABLE"
 	if copied := os.Getenv(helperEnv); copied != "" {
 		self, err := os.Executable()
@@ -129,6 +130,7 @@ func TestOSRunnerPlannedDuplexShutdownContainsImmediateSetsidDescendant(t *testi
 }
 
 func TestOSRunnerCancellationContainsImmediateSetsidDescendant(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_RUN_CANCEL_ESCAPE_CHILD") == "1" {
 		_, _ = syscall.Setsid()
@@ -199,6 +201,7 @@ func TestDuplexCapabilityRejectsNonCgroupDelegationBeforeStart(t *testing.T) {
 }
 
 func TestOrdinaryCommandContainmentDoesNotRequireDelegatedCgroup(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	cmd := exec.Command("/bin/sh", "-c", "printf ordinary")
 	var before int
 	if err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&before)), 0, 0, 0); err != nil {
@@ -235,6 +238,7 @@ func TestOrdinaryCommandContainmentDoesNotRequireDelegatedCgroup(t *testing.T) {
 }
 
 func TestOrdinaryRunWorksWhenDelegatedCgroupIsUnavailable(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	root := t.TempDir()
 	if _, _, err := createDelegatedCgroupAt(root); err == nil {
 		t.Fatal("test fixture unexpectedly supplied a cgroup v2 delegation")
@@ -250,6 +254,7 @@ func TestOrdinaryRunWorksWhenDelegatedCgroupIsUnavailable(t *testing.T) {
 }
 
 func TestOrdinarySupervisorDescriptorsAreClosedBeforeCommandExec(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{"/bin/sh", "-c", `if printf '{"Forced":false}\n' 2>/dev/null >&5; then exit 97; fi; printf supervisor-fds-closed`},
 	})
@@ -393,6 +398,7 @@ func TestLinuxSupervisorTraversalEnforcesProcessAndDeadlineBounds(t *testing.T) 
 }
 
 func TestOSRunnerRapidSuccessfulCommandsPreserveNaturalExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	// /bin/true commonly becomes waitable before the runner can acquire its
 	// post-Start pidfd. Exercise that attachment boundary enough times to prove
 	// rapid natural exits remain ordinary successful command results.
@@ -406,6 +412,7 @@ func TestOSRunnerRapidSuccessfulCommandsPreserveNaturalExit(t *testing.T) {
 }
 
 func TestOSRunnerRapidShellCommandsWithShortLivedChildrenPreserveNaturalExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	root := t.TempDir()
 	script := root + "/client"
 	body := `#!/bin/sh
@@ -509,6 +516,7 @@ func TestLinuxTrackerTimeoutTransfersHandleOwnershipUntilJoin(t *testing.T) {
 }
 
 func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_RUN_DESCENDANT") == "1" {
 		for {
@@ -561,6 +569,7 @@ func TestOSRunnerCleansSameProcessGroupMemberAfterLeaderNaturalExit(t *testing.T
 }
 
 func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_DESCENDANT") == "1" {
 		time.Sleep(150 * time.Millisecond)
@@ -590,6 +599,7 @@ func TestOSRunnerDescendantGraceAcceptsOnlyNaturalHelperExit(t *testing.T) {
 }
 
 func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_GRACE_LONG_DESCENDANT") == "1" {
 		for {
@@ -620,6 +630,7 @@ func TestOSRunnerDescendantGraceStillRejectsForcedCleanup(t *testing.T) {
 }
 
 func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_DIAGNOSTIC_DESCENDANT") == "1" {
 		for {
@@ -673,6 +684,7 @@ func TestOSRunnerPreservesDiagnosticAndStatusWhileCleaningNaturalExitGroup(t *te
 }
 
 func TestOSRunnerTreeGraceCleansImmediateDescendantThatCreatesNewSession(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_SETSID_DESCENDANT") == "1" {
 		for {
 			time.Sleep(time.Hour)

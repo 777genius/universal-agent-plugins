@@ -43,6 +43,7 @@ func (*naturalExitBoundaryContainment) exited() (bool, error) { return false, ni
 func (*naturalExitBoundaryContainment) close() error          { return nil }
 
 func TestOSRunnerPreservesCommandOutputAndExitCode(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_OUTPUT_HELPER") == "1" {
 		fmt.Fprint(os.Stdout, "expected stdout")
 		fmt.Fprint(os.Stderr, "expected stderr")
@@ -62,6 +63,7 @@ func TestOSRunnerPreservesCommandOutputAndExitCode(t *testing.T) {
 }
 
 func TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_CLEAN_EXIT_HELPER") == "1" {
 		fmt.Fprint(os.Stdout, "clean")
 		os.Exit(0)
@@ -76,6 +78,7 @@ func TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess(t *testing.T) {
 }
 
 func TestOSRunnerBoundsStdoutAndReturnsLimitError(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_HELPER") == "1" {
 		fmt.Fprint(os.Stdout, "output beyond the configured bound")
 		os.Exit(0)
@@ -93,6 +96,7 @@ func TestOSRunnerBoundsStdoutAndReturnsLimitError(t *testing.T) {
 }
 
 func TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	marker := os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_MARKER")
 	if marker != "" {
 		chunk := []byte(strings.Repeat("x", 1024))
@@ -120,6 +124,7 @@ func TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput(t *testing.T) {
 }
 
 func TestOSRunnerStdoutLimitPreservesNonzeroExit(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_EXIT_HELPER") == "1" {
 		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
 		os.Exit(23)
@@ -137,6 +142,7 @@ func TestOSRunnerStdoutLimitPreservesNonzeroExit(t *testing.T) {
 }
 
 func TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_STDOUT_LIMIT_141_HELPER") == "1" {
 		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
 		os.Exit(141)
@@ -959,6 +965,7 @@ func requireDuplexCapability(t *testing.T) {
 }
 
 func TestOSRunnerBoundsStderrWhileRetainingDiagnosticEdges(t *testing.T) {
+	requireOrdinaryPreflight(t)
 	requireDuplexCapability(t)
 	if os.Getenv("AGENTPLUGINS_PROCESS_STDERR_HELPER") == "1" {
 		fmt.Fprint(os.Stderr, "diagnostic-start:")

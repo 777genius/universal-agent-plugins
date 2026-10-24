@@ -56,3 +56,17 @@ Production composition/caller inventory traced read-only: cli/cmd/agentplugins/c
 A successful self prerequisite query proves availability of the bounded proc interface only. Actual supported-host containment qualification still requires the unchanged real cancellation/setsid/cleanup assertions. This environment's unsupported result will remain explicitly distinct from those hosted qualifications.
 
 R2 exact 09e24c58 independently received PLAN GO from Root and apm_vercel_scope before production edits. Root approved explicit numeric cap supplement (stat 4KiB+1; children 64KiB+1; existing 1000-process traversal/deadline). These are prerequisite bounds, not runtime qualification. No bootstrap/process production source has yet been edited.
+
+## Implemented candidate and bounded validation
+
+The candidate now performs the same process-inert prerequisite in the ordinary parent constructor and again in its isolated supervisor before starting the requested command. The public OS.OrdinaryPreflight query reports that prerequisite only. Runtime task scans in both the supervisor traversal and passive parent tracker reuse the same per-call observation helper. A missing interface for a still-live task has a distinct unsupported sentinel and deliberately does not wrap ENOENT: existing ancestor traversal must not misread it as a disappeared process. Missing stat inside a still-present task and changed/malformed/permission/unknown observations fail closed.
+
+Concrete bounds are stat 4KiB plus one, children 64KiB plus one, and task-directory enumeration 1000 entries plus one, reusing the existing traversal count. A process exceeding that task enumeration budget produces an observation error; it cannot contribute an empty-tree proof. Task names and PID/starttime/state fields are parsed strictly. Operations are injected only per call in private inert test seams; there is no environment override or mutable fault global. Strict duplex cgroup handling, existing cleanup/reap deadlines and supported-host containment assertions remain unchanged.
+
+Focused local Go1.26.10 validation with -p=1:
+
+- Process inert observation/cap/identity/prelaunch tests plus existing traversal/quiescent-boundary/sole-reaper checks: PASS0.021s. Covered 10 disappearance/error subcases, exact/over byte and directory bounds, invalid identities, actual unsupported OS.Run refusal with command marker absent, and injected available empty interface retaining ordinary wrapping without starting a child.
+- The exact22 reviewed real-process tests reported explicit pre-launch unsupported capability and SKIPPED on this host (process0.004s; bootstrap0.011s). Their raw log is retained. This result is not runtime containment qualification and no manager/setsid child was launched.
+- Existing custom inert Runner captured-staging regression PASS0.020s. Custom bootstrap runners keep their existing contract.
+
+Raw selected local test logs and member hashes are saved under docs/evidence/process-containment/linux-proc-children-unavailable/. The original real failure trace/proc proof remains preserved. No vendor, native client, MCP server, model, authentication, trust change or broad suite ran for this candidate. Supported hosted Linux runtime qualification is still required. The source must receive two independent frozen-source code reviews before publication.
