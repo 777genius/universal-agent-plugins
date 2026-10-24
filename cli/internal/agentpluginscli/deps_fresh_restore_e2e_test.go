@@ -20,6 +20,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -34,6 +35,15 @@ type freshRestoreSource struct {
 func (source *freshRestoreSource) AcquireGitHubVerified(ctx context.Context, repository, commit, path, digest string) (domain.PackageSnapshot, error) {
 	source.verified = append(source.verified, freshRestoreFetch{repository, commit, path, digest})
 	snapshot, err := source.dependencyTestSource.AcquireGitHubVerified(ctx, repository, commit, path, digest)
+	if err == nil {
+		source.snapshots = append(source.snapshots, snapshot.Root)
+	}
+	return snapshot, err
+}
+
+func (source *freshRestoreSource) AcquireGit(ctx context.Context, git sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	source.verified = append(source.verified, freshRestoreFetch{git.Repository, commit, git.Path, digest})
+	snapshot, err := source.dependencyTestSource.AcquireGit(ctx, git, commit, digest)
 	if err == nil {
 		source.snapshots = append(source.snapshots, snapshot.Root)
 	}

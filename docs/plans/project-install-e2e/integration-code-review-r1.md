@@ -1,0 +1,9 @@
+# Project integration conflict resolution — independent R1
+
+Reviewed integration `daa705adbfb1681d52f8d6259db7cdf716b75195` and the bounded conflict resolution `ac58f2270a7d183c0b2b6666f1794d598f025ddd^1..ac58f2270a7d183c0b2b6666f1794d598f025ddd` in `cli/internal/agentpluginscli/deps_commands.go` on 2026-10-23. **GO.** This is a cross-merge preservation review; individual client/source implementations retain their existing independent reviews.
+
+The merge retains ChatGPT project-target preflight immediately after dependency-mutation admission and before acquiring the process lock. The authoritative installer recovery inspection remains after lock acquisition and before reading/resolving the manifest; its extraction into `requireDependencyLockRecoveryClear` preserves the previous error and `ErrRecoveryRequired` behavior. Saved target validation still runs before resolution and now rejects unsupported project targets before personal/manual guidance.
+
+The source implementation's `publishResolvedDependencyLock` remains intact and called only for a changed, writable, non-dry-run result. It still rereads and compares the manifest, populates the selected dependency store through `ensureDependencyStore`, and then writes the dependency lock. No API or source cache-population step was discarded by the ChatGPT merge.
+
+Independent bounded regression: `go test -p=2 ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run '^TestDirectSourceSavedLifecycleRealHTTPS$|^TestProjectChatGPT' -count=1 -timeout=3m` passed (internal CLI 5.619s; public CLI 0.511s), using the prescribed Go toolchain/cache and Node-enabled PATH. These tests exercise real HTTPS saved-source/cache lifecycle and unsupported project intents/saved-target refusal before effects. No native client, auth, trust or model action was performed.

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -438,7 +439,7 @@ func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {
 		ManifestDigest:   loaded.envelope.ManifestDigest,
 		ClosureDigest:    groupedAcquisitionClosureDigest(sourceKind, loaded.envelope.Source, loaded.envelope.TreeDigest, loaded.envelope.ManifestDigest),
 		SourceKind:       sourceKind,
-		Fetched:          loaded.envelope.Source.Repository != "",
+		Fetched:          loaded.envelope.Source.Repository != "" || loaded.envelope.Source.SourceKind == "git" || loaded.envelope.Source.SourceKind == "archive" && !filepath.IsAbs(loaded.envelope.Source.SourceURL),
 		Validated:        true,
 	}, nil
 }
@@ -446,6 +447,9 @@ func newAddAcquisitionProof(loaded loadedPackage) (addAcquisitionProof, error) {
 func acquisitionSourceKind(loaded loadedPackage) string {
 	if loaded.origin == domain.OriginModeDirectory {
 		return "directory"
+	}
+	if loaded.envelope.Source.SourceKind != "" {
+		return loaded.envelope.Source.SourceKind
 	}
 	if loaded.envelope.Source.Repository != "" {
 		return "github"
@@ -464,7 +468,9 @@ func acquisitionSourceKind(loaded loadedPackage) string {
 // are deliberately excluded because they may contain local, host-specific
 // paths. For local acquisitions, source kind plus the two validated package
 // identities form the closure; immutable remote acquisitions additionally bind
-// repository, subpath, and revision.
+// repository, subpath, and revision. New typed direct sources additionally bind
+// the normalized endpoint and original archive byte checksum; legacy tuples stay
+// byte-identical.
 func groupedAcquisitionClosureDigest(sourceKind string, source domain.SourceIdentity, treeDigest, manifestDigest string) string {
 	hash := sha256.New()
 	fields := []string{
@@ -475,6 +481,13 @@ func groupedAcquisitionClosureDigest(sourceKind string, source domain.SourceIden
 		strings.TrimSpace(source.ResolvedRevision),
 		strings.TrimSpace(treeDigest),
 		strings.TrimSpace(manifestDigest),
+	}
+	if source.SourceKind != "" {
+		endpoint := source.SourceURL
+		if filepath.IsAbs(endpoint) {
+			endpoint = ""
+		}
+		fields = append(fields, endpoint, source.ArchiveSHA256)
 	}
 	var size [8]byte
 	for _, field := range fields {

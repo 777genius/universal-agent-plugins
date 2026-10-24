@@ -70,7 +70,7 @@ func selectLockedLifecycle(app App, state domain.StateFileV2, requirements envir
 	if !exists {
 		return selection, nil
 	}
-	installation, err := savedAliasInstallation(state, alias, selector)
+	installation, err := savedAliasInstallation(state, alias, selector, app.environmentID())
 	if err != nil {
 		return selection, err
 	}

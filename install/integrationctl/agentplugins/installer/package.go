@@ -338,6 +338,9 @@ func (e *Engine) reuseMatchingSourceIdentity(installationID string, snapshot *do
 	if installation.Source.CanonicalSource != "" {
 		snapshot.Source.CanonicalSource = installation.Source.CanonicalSource
 	}
+	snapshot.Source.SourceKind = installation.Source.SourceKind
+	snapshot.Source.SourceURL = installation.Source.SourceURL
+	snapshot.Source.ArchiveSHA256 = installation.Source.ArchiveSHA256
 	if installation.Source.RequestedSource != "" {
 		snapshot.Source.RequestedSource = installation.Source.RequestedSource
 	}
@@ -374,16 +377,11 @@ func wrapLifecycleError(err error) error {
 
 func validateAcquiredRequest(req Request) error {
 	acquired := req.AcquiredSnapshot
-	source := acquired.Source
-	expected := "github:" + source.Repository + "@" + source.ResolvedRevision
-	if source.PackageSubpath != "" {
-		expected += "//" + source.PackageSubpath
-	}
-	if source.Repository == "" || len(source.ResolvedRevision) != 40 || (acquired.OriginMode == domain.OriginModeDirect && source.RequestedSource != expected) || source.CanonicalSource != expected {
-		return fmt.Errorf("%w: acquired source coordinates disagree", ErrInvalidRequest)
+	key, err := validateAcquiredSource(acquired, req.EnvironmentAuthority != nil)
+	if err != nil {
+		return err
 	}
 	if req.EnvironmentAuthority != nil {
-		key := "github:" + strings.ToLower(acquired.Source.Repository) + ":" + acquired.Source.PackageSubpath
 		if acquired.OriginMode == domain.OriginModeDirectory {
 			if acquired.Directory == nil {
 				return fmt.Errorf("%w: directory source is missing publication identity", ErrInvalidRequest)

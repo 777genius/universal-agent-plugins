@@ -125,6 +125,11 @@ func setRequested(pkg *LockedPackage, req Requirement) {
 		cloned.Requested = req.Git.Selector
 		pkg.Source.Git = &cloned
 	}
+	if pkg.Source.Archive != nil {
+		cloned := *pkg.Source.Archive
+		cloned.RequestedSHA256 = req.Archive.SHA256
+		pkg.Source.Archive = &cloned
+	}
 }
 
 func (solver *graphSolver) search(ctx context.Context, choices map[string]ResolvedPackage) (map[string]ResolvedPackage, map[string]graphNode, error) {
@@ -188,7 +193,7 @@ func (solver *graphSolver) choose(ctx context.Context, key string, node graphNod
 			}
 		}
 	}
-	if node.requirement.Git != nil || node.requirement.Registry.Selector.Kind == SelectorRelease {
+	if node.requirement.Git != nil || node.requirement.Archive != nil || node.requirement.Registry.Selector.Kind == SelectorRelease {
 		return solver.chooseExact(ctx, key, node, choices, last)
 	}
 	return solver.chooseCandidates(ctx, key, node, choices, last)
@@ -303,7 +308,7 @@ func conflictFor(key string, node graphNode) error {
 		if demand.requirement.Registry != nil {
 			selector = requirementSelector(demand.requirement)
 		} else {
-			selector = demand.requirement.Git.Selector
+			selector = requirementSelector(demand.requirement)
 		}
 		parts = append(parts, name+" "+string(selector.Kind)+" "+selector.Value)
 	}
