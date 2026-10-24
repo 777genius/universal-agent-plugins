@@ -24,8 +24,9 @@ func ApplyInstallIntent(registry *clients.Registry, plan *domain.DeliveryPlan, i
 	if err := intent.Validate(plan.ClientID); err != nil {
 		return err
 	}
-	if intent == domain.InstallIntentPrepare && plan.Scope != domain.ScopeUser {
-		return fmt.Errorf("preparation supports user scope only")
+	if intent == domain.InstallIntentPrepare && plan.Scope != domain.ScopeUser &&
+		!plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).Allows(intent) {
+		return fmt.Errorf("preparation is not qualified for scope %s", plan.Scope)
 	}
 	plan.InstallIntent = intent
 	if intent != domain.InstallIntentPrepare || plan.Status == domain.PlanUnsupported {

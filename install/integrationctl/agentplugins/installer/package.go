@@ -179,7 +179,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if req.ClientConfigRoot == "" || !validRoot(req.ClientConfigRoot) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id) && req.ClientExecutable == "") {
+	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
 	}
 	root := req.ClientConfigRoot
@@ -421,8 +421,12 @@ func validateAcquiredExecutables(root string, files []string) error {
 
 // Native configuration adapters need only an explicit profile. CLI registries
 // and host-profile probes also require the caller's executable authority.
-func requiresExecutable(registry *clients.Registry, id domain.ClientID) bool {
-	if domain.ClientTraitsFor(id).LifecycleKind == domain.LifecycleCLIRegistry {
+func requiresExecutable(registry *clients.Registry, id domain.ClientID, scopes ...domain.InstallScope) bool {
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind == domain.LifecycleCLIRegistry {
 		return true
 	}
 	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](registry, id)

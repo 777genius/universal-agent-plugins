@@ -108,6 +108,10 @@ func newListCommand(app App, opts *options) *cobra.Command {
 		Short: "List tracked Agent Plugins installations",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -130,6 +134,10 @@ func newInfoCommand(app App, opts *options) *cobra.Command {
 		Short: "Show lifecycle state without exposing local paths",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -174,6 +182,10 @@ func newDoctorCommand(app App, opts *options) *cobra.Command {
 		Short: "Read-only health check for clients, state, and open operations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
@@ -331,7 +343,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 					findings = append(findings, scopedFinding("unknown", "chatgpt_registration_unverified", installation, binding.ClientID, "the .app.json mapping is package-valid, but remote ChatGPT registration cannot be observed locally", "verify the mapped connection and plugin status in ChatGPT Plugins; rerun add with --activation-complete only after checking it in a new chat"))
 				}
 			}
-			if visible && client.Status == domain.DetectionDetected && bindingClient == nativeCLIRegistryOwner(bindingClient) && sharesPhysicalBackend(bindingClient) && strings.TrimSpace(client.ExecutablePath) == "" {
+			if visible && client.Status == domain.DetectionDetected && bindingClient == nativeCLIRegistryOwner(bindingClient, domain.InstallScope(binding.Scope)) && sharesPhysicalBackend(bindingClient, domain.InstallScope(binding.Scope)) && strings.TrimSpace(client.ExecutablePath) == "" {
 				findings = append(findings, scopedFinding("degraded", "copilot_cli_missing", installation, binding.ClientID, "GitHub Copilot CLI is unavailable for automatic Copilot activation", "install GitHub Copilot CLI, ensure copilot is on PATH, and rerun doctor"))
 			}
 			switch binding.Activation {
@@ -412,7 +424,7 @@ func checkManagedIntegrity(ctx context.Context, app App, client domain.DetectedC
 }
 
 func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.DetectedClient, target domain.DeliveryTarget, installation domain.Installation, binding domain.ClientBinding, expectedDigest string) []doctorFinding {
-	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID)) {
+	if !nativeConfigLifecycle(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) {
 		return nil
 	}
 	if !hasOwnedNativeProjection(binding.NativeObjects) {
@@ -427,7 +439,7 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 	outcome, err := app.Lifecycle.Activator.Activate(ctx, domain.ActivationRequest{
 		Client: client,
 		Plan: domain.DeliveryPlan{
-			ClientID: domain.ClientID(binding.ClientID), Scope: domain.InstallScope(binding.Scope),
+			ClientID: domain.ClientID(binding.ClientID), Scope: domain.InstallScope(binding.Scope), TargetContext: target.TargetContext, NativeRegistryRoot: target.NativeRegistryRoot,
 			PhysicalArtifactID: binding.PhysicalArtifact, DeclaredName: installation.DeclaredName,
 			TargetRoot: target.TargetRoot, ActivePath: target.ActivePath,
 			Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Support: domain.SupportProjected}},
@@ -488,6 +500,10 @@ func newVersionCommand(app App, opts *options) *cobra.Command {
 		Short: "Print the agentplugins binary version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}

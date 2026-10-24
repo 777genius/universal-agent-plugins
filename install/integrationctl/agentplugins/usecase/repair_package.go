@@ -180,10 +180,10 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {
-	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery) {
+	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		return session.reapplyRepairedNative(delivery)
 	}
-	if session.plan.SelectedDelivery.EffectiveTraits(session.input.Client.ClientID).UsesManagedStdioLauncher {
+	if session.plan.SelectedDelivery.EffectiveTraitsForScope(session.input.Client.ClientID, session.input.Scope).UsesManagedStdioLauncher {
 		return session.verifyRepairedLauncher(delivery)
 	}
 	_ = verifiedState

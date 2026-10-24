@@ -64,6 +64,7 @@ const (
 // mutation remains in client-specific adapters and is intentionally not part
 // of this registry.
 type ClientDefinition struct {
+	ProjectPolicy         ProjectPolicy `json:"-"`
 	ID                    ClientID
 	DisplayName           string
 	BackendFamily         string
@@ -106,14 +107,14 @@ var clientDefinitions = []ClientDefinition{
 			RequiresPersonalMappingForPrepare: true,
 		}),
 		DirectoryResolveContext7ChatGPTPreparation)),
-	clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	withProjectScope(clientDefinition(ClientCursor, "Cursor", "cursor", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	}),
-	withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
+	}), LifecycleNativeConfig),
+	withProjectScope(withoutCommands(clientDefinition(ClientCopilot, "GitHub Copilot CLI", "github-copilot", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportNative, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
-	})),
+	})), LifecycleNativeConfig),
 	withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
 		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
@@ -130,11 +131,11 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
 	}), ActivationAutomatic),
-	clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:          LifecycleNativeConfig,
 		BindsNativeProfileRoot: true,
-	}),
+	}), LifecycleNativeConfig),
 	withActivation(clientDefinition(ClientOpenCode, "OpenCode", "opencode", "managed", "prepared", false, PackagePrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:                   []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                    LifecycleNativeConfig,
@@ -356,6 +357,7 @@ type ComponentDecision struct {
 }
 
 type DeliveryPlan struct {
+	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
 	profileNamespace           string                  `json:"-"`
 	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
@@ -404,11 +406,13 @@ type DeliveryPlan struct {
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
 type DeliveryTarget struct {
-	profileAuthority *ProfileAuthority `json:"-"`
-	profileNamespace string            `json:"-"`
-	TargetAnchor     string            `json:"-"`
-	TargetRoot       string            `json:"-"`
-	ActivePath       string            `json:"-"`
+	TargetContext      TargetContext     `json:"-"`
+	NativeRegistryRoot string            `json:"-"`
+	profileAuthority   *ProfileAuthority `json:"-"`
+	profileNamespace   string            `json:"-"`
+	TargetAnchor       string            `json:"-"`
+	TargetRoot         string            `json:"-"`
+	ActivePath         string            `json:"-"`
 }
 
 type OpenAIMCPAuthHint struct {
@@ -475,6 +479,8 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
+	TargetContext         TargetContext           `json:"-"`
+	NativeRegistryRoot    string                  `json:"-"`
 	LocalEntryObservation *LocalEntryObservation  `json:"-"`
 	RemoveOwnedEntry      bool                    `json:"-"`
 	SelectedDelivery      SelectedDelivery        `json:"-"`

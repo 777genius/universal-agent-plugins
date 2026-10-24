@@ -105,11 +105,11 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 	if err != nil {
 		return err
 	}
-	observed, err := environment.Observe(view)
+	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
 	if err != nil {
 		return err
 	}
-	prepared, err := (environment.Coordinator{}).PrepareSyncFor(requirements, locked, observed, aliases, attest)
+	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, locked, observed, aliases, attest)
 	if err != nil {
 		return err
 	}

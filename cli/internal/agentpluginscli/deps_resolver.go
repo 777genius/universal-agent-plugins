@@ -279,7 +279,7 @@ func (app App) canonicalizeDependencyRequirements(ctx context.Context, requireme
 		}
 
 		selection, err := domain.ResolveDirectory(bundle.Snapshot, domain.DirectoryResolveRequest{
-			Selector: requirement.Registry.Distribution, DesiredReleaseSequence: sequence, Targets: targets, Scope: domain.ScopeUser,
+			Selector: requirement.Registry.Distribution, DesiredReleaseSequence: sequence, Targets: targets, Scope: app.scope(),
 			Operation: domain.DirectoryInstall, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
 		})
 		if err != nil {

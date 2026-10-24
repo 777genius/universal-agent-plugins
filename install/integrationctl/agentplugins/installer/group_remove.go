@@ -168,7 +168,7 @@ func removeGroupInputs(prepared *PreparedOperation) ([]usecase.RemoveInput, []Cl
 		}
 		client := prepared.clients[i]
 		live = append(live, usecase.RemoveInput{
-			Selector: prepared.plan.InstallationID, Client: client, Scope: domain.ScopeUser, SelectedDelivery: target.SelectedDelivery,
+			Selector: prepared.plan.InstallationID, Client: client, Scope: prepared.req.Scope, SelectedDelivery: target.SelectedDelivery,
 			Confirmed: true, OperationID: prepared.req.OperationID, BackendExecutable: client.ExecutablePath,
 			ExternalUninstalled: prepared.req.Targets[i].ExternalUninstalled || prepared.req.ExternalUninstalled,
 		})

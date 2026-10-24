@@ -119,7 +119,7 @@ func (service Service) repairGroup(ctx context.Context, input GroupInput) (Group
 		installation := state.Installations[index]
 		matched := false
 		for _, client := range installation.Clients {
-			if !sameNativeBackend(domain.ClientID(client.ClientID), target.Client.ClientID) || client.Scope != string(target.Scope) {
+			if !sameNativeBackend(domain.ClientID(client.ClientID), target.Client.ClientID, target.Scope) || client.Scope != string(target.Scope) {
 				continue
 			}
 			if !repairPackageRevisionMatches(client.PackageRevision, target.Envelope, installation.OriginMode == domain.OriginModeDirectory) {
@@ -457,7 +457,7 @@ func validateGroupNativeIdentityObservation(observation domain.NativeIdentityObs
 // that failure mode, so they keep going through the ordinary, immediate
 // CLI-inclusive check.
 func (service Service) observeGroupRecoveryEligibility(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) bool {
-	if !plan.SelectedDelivery.EffectiveTraits(client.ClientID).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
+	if !plan.SelectedDelivery.EffectiveTraitsForScope(client.ClientID, plan.Scope).SupportsPreparedRecovery || managed == nil || managedDigest(*managed) == "" || service.NativeObserver == nil {
 		return false
 	}
 	observation, err := service.preparedIdentityObservation(ctx, client, plan, managed)

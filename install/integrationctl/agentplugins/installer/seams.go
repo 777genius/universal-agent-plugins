@@ -44,6 +44,7 @@ func (s seamStager) StageWithPluginData(ctx context.Context, envelope domain.Pac
 		}
 	}
 	facts := s.facts
+	facts.TargetContext = plan.TargetContext
 	facts.ProfileAuthority = plan.ProfileAuthority()
 	facts.TargetPath = plan.ActivePath
 	facts.DataRoot = data
@@ -220,6 +221,7 @@ func (a seamActivator) Deactivate(ctx context.Context, request domain.Deactivati
 
 func (a seamActivator) committedFacts(request domain.ActivationRequest) (BindingFacts, error) {
 	facts := a.facts
+	facts.TargetContext = request.Plan.TargetContext
 	if a.store == nil {
 		return uncommittedFacts(facts, request.Plan.SelectedDelivery)
 	}

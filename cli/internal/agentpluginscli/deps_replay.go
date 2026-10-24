@@ -29,7 +29,7 @@ func resolveDependencySyncCandidate(ctx context.Context, app App, opts *options,
 	if err != nil {
 		return requirements, environment.Lock{}, err
 	}
-	lock, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(ctx, requirements, previous, "")
+	lock, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(ctx, requirements, previous, "")
 	if err == nil {
 		err = verifyDependencyDeclarations(ctx, app, lock)
 	}

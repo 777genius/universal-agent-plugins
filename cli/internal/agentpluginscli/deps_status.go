@@ -51,10 +51,16 @@ type dependencyStatus struct {
 
 func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	manifestPath, lockPath := app.dependencyPaths()
-	status := dependencyStatus{Scope: "user", ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
+	status := dependencyStatus{Scope: string(app.scope()), ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
 	status.ExcludedTargets = []dependencyExcludedTarget{}
 	for _, definition := range domain.ClientDefinitions() {
 		reason := installer.ClientSupportExclusionReason(app.ClientRegistry, string(definition.ID))
+		if app.scope() == domain.ScopeProject {
+			reason = ""
+			if !supportsDependencyTarget(app, string(definition.ID)) {
+				reason = "project_scope_unsupported"
+			}
+		}
 		if reason != "" && reason != "not_registered" {
 			status.ExcludedTargets = append(status.ExcludedTargets, dependencyExcludedTarget{ID: string(definition.ID), Reason: reason})
 		}
@@ -141,7 +147,7 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 	return nil
 }
 
-func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage) {
+func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage, environmentIDs ...string) {
 	_, lifecycle := environment.LifecycleFacts(binding)
 	fact.Facts = append(fact.Facts, lifecycle...)
 	fact.NextActions = dependencyNextActions(*fact)
@@ -149,7 +155,7 @@ func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.Insp
 	if binding.TreeDigest != pkg.TreeDigest || binding.Revision != lockedCommit(pkg) {
 		fact.Facts = append(fact.Facts, "not_synced")
 	}
-	if binding.Owner == nil || binding.Owner.EnvironmentID != environment.EnvironmentUserDefault {
+	if binding.Owner == nil || binding.Owner.EnvironmentID != selectedEnvironmentID(environmentIDs) {
 		fact.Facts = append(fact.Facts, "foreign")
 	}
 	if binding.ProjectionStatus != "" {
@@ -238,7 +244,7 @@ func runDependencyRecover(cmd *cobra.Command, app App, opts *options, yes bool) 
 		return lockErr
 	}
 	defer func() { _ = release() }()
-	result, recoverErr := app.Installer.RecoverEnvironment(cmd.Context(), observed, environment.EnvironmentUserDefault)
+	result, recoverErr := app.Installer.RecoverEnvironment(cmd.Context(), observed, app.environmentID())
 	if opts.format == "json" {
 		if renderErr := renderJSON(cmd.OutOrStdout(), map[string]any{"result": result, "recovery": observed.Recovery}); renderErr != nil && recoverErr == nil {
 			return renderErr
@@ -285,7 +291,7 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspection, lock environment.Lock, validLock bool) []dependencyStatusFact {
 	receipts := map[string]domain.EnvironmentReceipt{}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault {
+		if receipt.EnvironmentID == app.environmentID() {
 			receipts[receipt.Alias+"\x00"+receipt.ClientID] = receipt
 		}
 	}
@@ -324,7 +330,7 @@ func desiredDependencyFact(ctx context.Context, app App, state installer.Inspect
 	}
 	fact.InstallationID, fact.BindingID, fact.Owner = receipt.InstallationID, receipt.ClientBindingID, receipt.EnvironmentID
 	if binding, found := findInspectedEnvironmentBinding(state, receipt); found {
-		appendBindingStatusFacts(&fact, binding, pkg)
+		appendBindingStatusFacts(&fact, binding, pkg, app.environmentID())
 	} else {
 		fact.Facts = append(fact.Facts, "partial")
 	}

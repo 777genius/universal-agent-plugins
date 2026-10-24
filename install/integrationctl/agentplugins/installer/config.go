@@ -11,11 +11,14 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // Config is copied by New. Later mutation of the caller's value is ignored.
 type Config struct {
+	temporaryRoot bool
+	ProjectRoot   string `json:"-"`
 	// OpenCodeProbe defaults to the explicit-target facade. New captures and pins
 	// the allowlisted environment once; it never executes a probe.
 	OpenCodeProbe            OpenCodeProbe
@@ -60,6 +63,11 @@ type Config struct {
 
 func (c Config) resolved() (Config, error) {
 	out := c
+	if out.ProjectRoot != "" {
+		if _, err := domain.NewTargetContext(domain.ScopeProject, out.ProjectRoot, ""); err != nil {
+			return Config{}, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+		}
+	}
 	if !validRoot(out.StateRoot) {
 		return Config{}, fmt.Errorf("%w: StateRoot must be an explicit absolute clean path", ErrInvalidConfig)
 	}

@@ -69,6 +69,14 @@ func RequiresNativeProjector(id ClientID) bool {
 	return id == ClientVSCode
 }
 
+func RequiresNativeProjectorForScope(id ClientID, scope InstallScope) bool {
+	if scope != ScopeProject {
+		return RequiresNativeProjector(id)
+	}
+	definition, ok := ClientDefinitionFor(id)
+	return ok && definition.ProjectPolicy.Valid()
+}
+
 // Allows reports whether this client's table lists the intent. Validate still
 // accepts historical empty automatic intent even when the slice omits it;
 // callers that need that exception must go through Validate.
@@ -95,7 +103,11 @@ func SharesBackend(first, second ClientID) bool {
 // not ChatGPT-style personal mapping when the intent is prepare or the
 // executable names the client.
 func ShouldReadOnlyVerify(id ClientID, executable string, intent InstallIntent) bool {
-	traits := ClientTraitsFor(id)
+	return ShouldReadOnlyVerifyForScope(id, ScopeUser, executable, intent)
+}
+
+func ShouldReadOnlyVerifyForScope(id ClientID, scope InstallScope, executable string, intent InstallIntent) bool {
+	traits := (SelectedDelivery{}).EffectiveTraitsForScope(id, scope)
 	switch {
 	case traits.LifecycleKind == LifecycleNativeConfig:
 		return true
@@ -103,7 +115,7 @@ func ShouldReadOnlyVerify(id ClientID, executable string, intent InstallIntent) 
 		return strings.TrimSpace(executable) != ""
 	case traits.HonorsOpenAIMCPAuthHints:
 		return strings.TrimSpace(executable) != ""
-	case len(BackendSiblings(id)) > 0:
+	case len(BackendSiblingsForScope(id, scope)) > 0:
 		return strings.TrimSpace(executable) != ""
 	case traits.Allows(InstallIntentPrepare) && !traits.RequiresPersonalMappingForPrepare:
 		if intent == InstallIntentPrepare {

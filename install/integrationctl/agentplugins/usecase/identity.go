@@ -25,7 +25,7 @@ func (service Service) verifyManagedTarget(
 		return fmt.Errorf("managed package digest is missing; refusing %s and retaining state for reviewed recovery", operation)
 	}
 	targetClient := client
-	if sameNativeBackend(domain.ClientID(binding.ClientID), client.ClientID) {
+	if sameNativeBackend(domain.ClientID(binding.ClientID), client.ClientID, scope) {
 		// Validate the persisted path against the physical binding's canonical
 		// owner, even when the caller addressed the shared backend through its
 		// other logical surface.

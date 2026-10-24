@@ -32,7 +32,7 @@ func removeUnsupportedPortableHooks(paths ports.PathPolicy, root string, plan do
 	// A client that convention-discovers package-root hooks/ and commands/
 	// receives them as target-native surfaces; the portable-hooks strip below
 	// is only for clients with no consumer for that directory.
-	if domain.ClientTraitsFor(plan.ClientID).DiscoversNativeHooks {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).DiscoversNativeHooks {
 		return nil
 	}
 	entries, err := os.ReadDir(root)

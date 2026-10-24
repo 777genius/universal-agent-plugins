@@ -88,7 +88,7 @@ func normalizeTarget(value string) domain.ClientID {
 	return id
 }
 
-func backendExecutable(selected domain.DetectedClient, clients map[domain.ClientID]domain.DetectedClient) string {
+func backendExecutable(selected domain.DetectedClient, clients map[domain.ClientID]domain.DetectedClient, scopes ...domain.InstallScope) string {
 	if path := strings.TrimSpace(selected.ExecutablePath); path != "" {
 		return path
 	}
@@ -96,7 +96,7 @@ func backendExecutable(selected domain.DetectedClient, clients map[domain.Client
 	if definition.Capabilities.PackageMode == domain.PackageNative {
 		return selected.ExecutablePath
 	}
-	for _, sibling := range domain.BackendSiblings(selected.ClientID) {
+	for _, sibling := range domain.BackendSiblingsForScope(selected.ClientID, selectedScope(scopes)) {
 		if path := strings.TrimSpace(clients[sibling].ExecutablePath); path != "" {
 			return path
 		}
@@ -107,7 +107,7 @@ func backendExecutable(selected domain.DetectedClient, clients map[domain.Client
 // detectedSharedClient resolves a logical surface through an already detected
 // native sibling backend. It does not invent that backend from a logical
 // surface when the backend itself is absent.
-func detectedSharedClient(target domain.ClientID, clients map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, bool) {
+func detectedSharedClient(target domain.ClientID, clients map[domain.ClientID]domain.DetectedClient, scopes ...domain.InstallScope) (domain.DetectedClient, bool) {
 	client, exact := clients[target]
 	if exact && client.Status == domain.DetectionDetected {
 		return client, true
@@ -116,7 +116,7 @@ func detectedSharedClient(target domain.ClientID, clients map[domain.ClientID]do
 	if !ok || definition.Capabilities.PackageMode == domain.PackageNative {
 		return client, exact
 	}
-	for _, sibling := range domain.BackendSiblings(target) {
+	for _, sibling := range domain.BackendSiblingsForScope(target, selectedScope(scopes)) {
 		peer, found := clients[sibling]
 		if !found || peer.Status != domain.DetectionDetected {
 			continue

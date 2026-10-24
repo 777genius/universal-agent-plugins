@@ -27,8 +27,9 @@ import (
 
 // Engine is the process-local installer. It does not export Store or Kernel.
 type Engine struct {
-	cfg   Config
-	store transaction.StateStore
+	projectGuard *projectNamespaceGuard
+	cfg          Config
+	store        transaction.StateStore
 	// persistObservations enables the §5.4 PersistAuthoritativeObservations
 	// seam. Prepare still uses DryRun and does not persist.
 	persistObservations bool
@@ -41,13 +42,34 @@ func New(cfg Config) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile}}, nil
+	engine := &Engine{cfg: resolved, store: statev2.Store{Path: resolved.StateFile, ProjectRoot: resolved.ProjectRoot}, projectGuard: &projectNamespaceGuard{}}
+	if err := engine.CheckProjectNamespace(); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+	}
+	return engine, nil
 }
 
 // ClientSupported reports saved-dependency qualification for an explicit
 // registry. It is separate from existing SDK adapter registration.
 func ClientSupported(registry *clients.Registry, clientID string) bool {
 	return ClientSupportExclusionReason(registry, clientID) == ""
+}
+
+// ClientScopeSupported is the read-only saved-admission gate before source
+// acquisition. A qualified project declaration does not reopen deferred user
+// dependency support or admit remote/manual-only clients.
+func ClientScopeSupported(registry *clients.Registry, clientID string, scope domain.InstallScope) bool {
+	if scope == "" {
+		scope = domain.ScopeUser
+	}
+	if !clients.SupportsScope(registry, domain.ClientID(clientID), scope) {
+		return false
+	}
+	if scope != domain.ScopeProject {
+		return ClientSupported(registry, clientID)
+	}
+	definition, _ := domain.ClientDefinitionFor(domain.ClientID(clientID))
+	return !definition.PlansWithoutHostPresence && !definition.Traits.RequiresPersonalMappingForPrepare
 }
 
 // ClientSupportExclusionReason is the shared qualification policy for the SDK,
@@ -85,6 +107,9 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 	nativeKernel := nativeconfig.New()
 	frozenProfiles := profileClients(detected)
 	profileCheck := func(ctx context.Context) error {
+		if err := e.CheckProjectNamespace(); err != nil {
+			return err
+		}
 		for _, c := range frozenProfiles {
 			token := domain.ProfileAuthority{}
 			if c.ProfileAuthority != nil {
@@ -115,7 +140,8 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		}
 	}
 	return usecase.Service{
-		StateStore: e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager,
+		CheckNamespace: e.CheckProjectNamespace,
+		StateStore:     e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager, ProjectRoot: e.cfg.ProjectRoot,
 		Detected:          detected,
 		Activator:         seamActivator{profileCheck: profileCheck, inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
 		PluginData:        providers.PluginDataManager{Base: e.cfg.PluginDataBase},
@@ -129,6 +155,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 
 func (e *Engine) planner() planner.Planner {
 	return planner.Planner{
+		ProjectRoot: e.cfg.ProjectRoot,
 		ManagedRoot: e.cfg.ManagedRoot,
 		Paths:       pathpolicy.Policy{},
 		Registry:    e.cfg.Registry,
@@ -166,6 +193,9 @@ func (e *Engine) helperIdentity() (version, digest string) {
 }
 
 func (e *Engine) ensureDirs() error {
+	if err := e.CheckProjectNamespace(); err != nil {
+		return err
+	}
 	for _, dir := range []string{
 		filepath.Dir(e.cfg.StateFile), filepath.Dir(e.cfg.LockFile),
 		e.cfg.OperationsDir, e.cfg.PluginDataBase, e.cfg.ManagedRoot, e.cfg.TempRoot,
@@ -174,7 +204,7 @@ func (e *Engine) ensureDirs() error {
 			return err
 		}
 	}
-	return nil
+	return e.CheckProjectNamespace()
 }
 
 func newLoader() (loader.Loader, error) {
@@ -269,6 +299,9 @@ func (e *Engine) checkRequestProfiles(ctx context.Context, req Request) error {
 	return e.prevalidatePhysical(ctx)
 }
 func (e *Engine) prevalidatePhysical(ctx context.Context) error {
+	if err := e.CheckProjectNamespace(); err != nil {
+		return err
+	}
 	if err := (transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: e.planner(), StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}}).PrevalidateRecovery(ctx); err != nil {
 		return fmt.Errorf("read installation state and pending authority: %w", err)
 	}
@@ -291,7 +324,7 @@ func physicalDetected(req Request, detected map[domain.ClientID]domain.DetectedC
 func (e *Engine) captureClientProfile(ctx context.Context, installation domain.Installation, c domain.DetectedClient) (domain.DetectedClient, error) {
 	var recorded *domain.ClientBinding
 	for key, b := range installation.Clients {
-		if b.ClientID != string(c.ClientID) || b.Scope != string(domain.ScopeUser) {
+		if b.ClientID != string(c.ClientID) || b.Scope != string(e.scope()) {
 			continue
 		}
 		if recorded != nil || key != b.ClientBindingID {
@@ -317,11 +350,17 @@ func (e *Engine) captureClientProfile(ctx context.Context, installation domain.I
 		}
 	}
 	if c.ProfileAuthority != nil {
-		canonical, err := filepath.EvalSymlinks(c.ConfigRoot)
+		expected, err := e.nativeRegistryRoot(c)
+		if err != nil {
+			return c, err
+		}
+		canonical, err := filepath.EvalSymlinks(expected)
 		if err != nil || canonical != c.ProfileAuthority.Facts().CanonicalRoot {
 			return c, fmt.Errorf("selected alias differs from frozen physical profile")
 		}
-		c.ConfigRoot = canonical
+		if e.scope() == domain.ScopeUser {
+			c.ConfigRoot = canonical
+		}
 	}
 	return c, nil
 }
@@ -345,8 +384,15 @@ func (e *Engine) preparedClients(req Request) (domain.DetectedClient, map[domain
 func (e *Engine) WithTemporaryRoot(root string) (*Engine, error) {
 	cfg := e.cfg
 	cfg.TempRoot = root
+	cfg.temporaryRoot = true
 	derived, err := New(cfg)
 	if err != nil {
+		return nil, err
+	}
+	// Derived preparation observes the same selected physical namespace. A new
+	// staging directory must not reset the original engine's identity pin.
+	derived.projectGuard = e.projectGuard
+	if err := derived.CheckProjectNamespace(); err != nil {
 		return nil, err
 	}
 	// Prepare always uses DryRun; preserve the observation policy for an

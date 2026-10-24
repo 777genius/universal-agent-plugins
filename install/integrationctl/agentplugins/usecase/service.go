@@ -17,6 +17,8 @@ import (
 )
 
 type Service struct {
+	CheckNamespace       func() error `json:"-"`
+	ProjectRoot          string       `json:"-"`
 	environmentAuthority *domain.EnvironmentAuthority
 	ClientPreparation    ClientPreparation
 	// OpenCodeHosts retains the explicit legacy preparation seam for callers

@@ -90,7 +90,7 @@ func (e *Engine) groupAddInputs(req Request, envelopes []domain.PackageEnvelope,
 			return nil, nil, err
 		}
 		inputs = append(inputs, usecase.AddInput{
-			Envelope: envelopes[i], Client: client, Scope: domain.ScopeUser, DryRun: dry, Confirmed: confirmed,
+			Envelope: envelopes[i], Client: client, Scope: e.scope(), DryRun: dry, Confirmed: confirmed,
 			PersistAuthoritativeObservations: e.persistObservations,
 			InstallationID:                   req.InstallationID, OperationID: req.OperationID,
 			BackendExecutable: client.ExecutablePath,
