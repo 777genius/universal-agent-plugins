@@ -158,5 +158,5 @@ func (*ProjectAdapter) ValidateBindingProfile(registry string, binding domain.Cl
 }
 
 func workspaceAction(root string) string {
-	return fmt.Sprintf("VS Code project component files are installed for %q; open that folder, review workspace/server trust and inspect skills and MCP. Native discovery, effective Local/Copilot selection, approvals, MCP initialization and active sessions remain unobserved", root)
+	return fmt.Sprintf("After VS Code project component files are installed for %q, open that folder, review workspace/server trust and inspect skills and MCP. Native discovery, effective Local/Copilot selection, approvals, MCP initialization and active sessions remain unobserved", root)
 }
