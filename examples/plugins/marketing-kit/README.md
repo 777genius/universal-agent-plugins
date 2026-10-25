@@ -26,7 +26,7 @@ schema_version = 1
 codex = ["777genius/marketing-kit"]
 ```
 
-Run `agentplugins install` with CLI 0.1.90 or later. Review the dependency plan
+Run `agentplugins install` with CLI 0.1.91 or later. Review the dependency plan
 before confirming it. This installs the full dependency closure, including MCP
 packages; `plugin.json` alone contains only the campaign-planning skill.
 The TOML dependency contract belongs to UAP, not the portable Agent Plugins
