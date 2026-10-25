@@ -77,7 +77,7 @@ func (service Service) resume(
 	}
 	// A settled manual registration is a stable no-change outcome: this request
 	// cannot finish it, and a later one the adapter can act on will.
-	result.NoChange = !changed && (complete && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled) || service.verifiedPreparedObservationUnchanged(input, result.Plan, client, delivery, outcome))
+	result.NoChange = !changed && (complete && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled) || service.verifiedPreparedObservationUnchanged(input, result.Plan, client, delivery, outcome, complete))
 	return result, nil
 }
 
@@ -144,7 +144,10 @@ func (service Service) verifiedRegistrationUnchanged(input AddInput, plan domain
 // verifiedPreparedObservationUnchanged classifies a repeated project-only,
 // read-only observation, not lifecycle convergence. The verified existing
 // delivery is reused; every subsequent request still reobserves the client.
-func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
+func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome, nativeComplete bool) bool {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).LifecycleKind == domain.LifecycleNativeConfig {
+		return nativeComplete && service.verifiedPreparedNativeConfigUnchanged(input, plan, client, delivery, outcome)
+	}
 	return input.Scope == domain.ScopeProject && !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
 		service.clientVerifierAvailable(input, plan) && client.Materialization == domain.MaterializationMaterialized &&
 		client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
@@ -153,6 +156,26 @@ func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan
 		!input.ActivationComplete && !input.AuthComplete && !outcome.ActivationAttested && !outcome.AuthenticationAttested &&
 		(outcome.NativeEffect == "" || outcome.NativeEffect == domain.NativeEffectUnchanged) && len(outcome.NativeObjects) == 0 &&
 		preparedDeliveryUnchanged(client, delivery)
+}
+
+// A complete native projection can retain Prepared while exact file verification
+// succeeds. This classifies only that operation; it does not converge lifecycle.
+func (service Service) verifiedPreparedNativeConfigUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
+	return input.Scope == domain.ScopeProject && plan.Scope == domain.ScopeProject && client.Scope == string(domain.ScopeProject) &&
+		plan.ClientID == input.Client.ClientID && client.ClientID == string(input.Client.ClientID) && delivery.ClientID == input.Client.ClientID &&
+		plan.ActivePath != "" && plan.ActivePath == client.TargetLocator &&
+		plan.SelectedDelivery.IsZero() && client.SelectedDelivery.IsZero() && service.clientVerifierAvailable(input, plan) &&
+		len(client.NativeObjects) > 0 && reflect.DeepEqual(outcome.NativeObjects, client.NativeObjects) &&
+		preparedDeliveryUnchanged(client, delivery) && preparedNativeConfigLifecycleUnchanged(input, client, outcome)
+}
+
+func preparedNativeConfigLifecycleUnchanged(input AddInput, client domain.ClientBinding, outcome domain.ActivationOutcome) bool {
+	return outcome.Policy == domain.PolicyAllowed &&
+		client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
+		outcome.Activation == client.Activation && outcome.Verification == client.Verification && outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
+		client.NativeActivationAttempt == "" && client.PendingNativeIntent == nil && !input.ActivationComplete && !input.AuthComplete &&
+		!outcome.ActivationAttested && !outcome.AuthenticationAttested && !outcome.AuthoritativeObservation && outcome.LocalEntryObservation == nil &&
+		outcome.NativeEffect == domain.NativeEffectUnchanged
 }
 
 func preparedDeliveryUnchanged(client domain.ClientBinding, delivery domain.StagedDelivery) bool {
