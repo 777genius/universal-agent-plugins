@@ -1,5 +1,11 @@
 # Cline 3.0.73: current-source owned project lifecycle and native metadata
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-research/cline-3.0.73-current-source-linux-amd64-40182752894) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Observed on 2026-10-25 from source
 `3e175de8cfa433f2e9427a47c4e1d7a8e0da5a77`, tree
 `72bc516716ae105baffb2dc5a7ec7b8d259f7b95` in
@@ -13,7 +19,8 @@ The provider artifact is
 `12596067396`, 22,632 bytes, SHA256
 `0537bb6a4e4b551bb06c34ad43ff89446f3a2f418c6c8595212035f3779d7f09`.
 The provider ZIP contains only `research.zip`; all 106 inner flat text members
-are preserved byte-for-byte here. Binary ZIPs are not committed.
+are preserved byte-for-byte in the original repository snapshot. Binary ZIPs
+are not committed.
 `provenance.json` records both ZIP identities and every member's length/hash.
 
 ## Intake verification and admitted result
@@ -22,7 +29,9 @@ The worker independently verified the provider digest, outer/inner closure,
 bounded flat unique member names, all 90 process/in-process stdout/stderr
 length/hash pairs, the native artifact SHA256 membership, exact frontend/native
 source commit/tree agreement, all fixed stage memberships and qualification
-flags. The repository's pure `cline_project_envelope.validate` contract passes.
+flags. The repository's pure `cline_project_envelope.validate` contract passed on
+the complete captured packet; retrieve that packet from the immutable snapshot
+before repeating validation.
 Original summaries remain unchanged. No native binary was executed during
 artifact intake or interpretation.
 
@@ -87,7 +96,8 @@ project bindings. Removal reports retained plugin data and removes only exact
 owned A components. Original user/B state and native inventories remain equal
 through the A lifecycle; foreign A content also remains. The raw public JSON,
 inspection records, prepared/updated/repaired/removed files and before/after
-snapshots are preserved separately so these claims can be checked directly.
+snapshots remain in the original repository snapshot, so these claims can be
+checked against the captured bytes.
 
 ## Independent interpretation
 

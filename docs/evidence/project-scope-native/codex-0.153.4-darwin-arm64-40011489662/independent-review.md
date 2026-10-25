@@ -1,5 +1,11 @@
 # Codex project native evidence — independent macOS interpretation
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-native/codex-0.153.4-darwin-arm64-40011489662) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Reviewer codex_claude, 2026-10-23. **PASS for the bounded native project-skills discovery and production file lifecycle actually exercised**, not full Codex project MCP/runtime qualification.
 
 ## Immutable artifact and execution identity
@@ -8,7 +14,7 @@ Root identified GitHub Actions run40011489662, job120612704190, artifact12527438
 
 Runner/evidence source identity agrees: remote installer base/head `0d1319f947c7f4403691b3a60b1193baa0074ee9`, committed tree `4b8935ef80c3834f7145dd01289772a48379ba3f`, no source patch, installer SHA256 `906be0c776457c34b7fa4b9beab8df77b9be3cd6015b9ef696932acc9c8b8e76`. Measured genuine client is `codex-cli 0.153.4`, macOS arm64, binary SHA256 `b973d440acac501fd2594a43e7ca9ce41e0a65b9dfb28d0d7a7837c99e1261e3`, acquired from official rust-v0.153.4 aarch64-apple-darwin archive with recorded archive digest. This is a disposable hosted run; the runner explicitly claims no OS/process isolation and does not block network. The project subtest starts fresh app-server processes with explicit profiles and no thread/model/trust/MCP initialization.
 
-`native-tests.log` contains an actual `=== RUN TestAgentpluginsCodexNativeProjectComponentsLifecycle` followed by `--- PASS ... (2.25s)`, not SKIP. The summary's measured start/end and stage statuses correspond to the project records, separate from the two user/command suites also present in the ZIP.
+The original artifact's `native-tests.log` contains an actual `=== RUN TestAgentpluginsCodexNativeProjectComponentsLifecycle` followed by `--- PASS ... (2.25s)`, not SKIP. The summary's measured start/end and stage statuses correspond to the project records, separate from the two user/command suites also present in the ZIP.
 
 ## Raw native observations
 

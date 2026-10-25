@@ -1,5 +1,11 @@
 # VS Code 1.143.1: untrusted workspace metadata observation
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-research/vscode-1.143.1-untrusted-workspace-linux-amd64-40188310034) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Genuine hosted collection succeeded on 2026-10-25 at source
 `f48d685133105e3ec7922acf811ee30a95830ef8`, tree
 `11593c9f96d45f17fc671b53f90299927160fa33`, in
@@ -13,7 +19,8 @@ Provider artifact `vscode-1.143.1-untrusted-workspace-linux-amd64`, ID
 `12597047500`, is 22,575 bytes, SHA256
 `4621b804126db48b64930d66a308f2906c047acaeb0cf3fffb58bfd442407b07`.
 The sole outer member is `research.zip`. All 27 raw inner text members are
-preserved byte-for-byte here. `provenance.json` records both ZIP identities,
+preserved byte-for-byte in the original repository snapshot. `provenance.json`
+records both ZIP identities,
 exact source/image identities and every member length/hash. Binary ZIPs are
 not committed. No vendor code was executed during artifact intake.
 
@@ -44,7 +51,8 @@ MCP autostart `never`. No trust was granted or policy weakened.
 ## Actual metadata and its attribution
 
 The base directory below is the exact sealed task root in the raw files.
-Every raw native row is retained; names were not collapsed before attribution.
+Every raw native row remains in the original repository snapshot; names were not
+collapsed before attribution.
 
 | Probe | Parsed skills | Configured MCP metadata |
 | --- | --- | --- |

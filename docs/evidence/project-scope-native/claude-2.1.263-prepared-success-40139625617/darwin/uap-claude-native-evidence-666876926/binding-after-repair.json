@@ -1,8 +1,0 @@
-{
-  "activation": "prepared",
-  "binding_id": "client_838e85319a22435b58a580f8",
-  "evidence_kind": "owned_files_not_native_discovery",
-  "scope": "project",
-  "target_path": "/Users/runner/work/_temp/uap-native-hosted-avqt_6qz/evidence/uap-claude-native-evidence-666876926/project-A/.claude/skills/uap-commands-fixture-8dfb14e1a114",
-  "verification": "installation_verified"
-}

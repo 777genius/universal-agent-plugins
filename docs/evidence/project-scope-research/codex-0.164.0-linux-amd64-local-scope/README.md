@@ -1,5 +1,11 @@
 # Codex 0.164.0 disposable scope observations
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-research/codex-0.164.0-linux-amd64-local-scope) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Observed 2026-10-24 during the owner-authorized practical spike. This is a local
 disposable-authority experiment, not a hosted native-matrix pass, installer
 lifecycle qualification, or release evidence. No UAP production implementation

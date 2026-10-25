@@ -1,5 +1,11 @@
 # VS Code 1.143.1: genuine shipped CLI help/version
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-research/vscode-1.143.1-linux-amd64-40132182435) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Measured at reviewed source `0a34182aa7f424a52a9ff9a49177d88dbf2fb711` in
 [run 40132182435](https://github.com/777genius/universal-agent-plugins/actions/runs/40132182435),
 [job 120986058838](https://github.com/777genius/universal-agent-plugins/actions/runs/40132182435/job/120986058838),
@@ -9,8 +15,9 @@ Artifact 12576470352, `vscode-1.143.1-precode-publisher-linux-amd64`, had a
 `5f9f68cf934db20059327f77788ee4a33baaee65b47a82ab3f6478d1667fe651`.
 Its sole member is the admitted 24,354-byte `research.zip`, SHA256
 `9bfb6dca7280a56b11d8066cadbe310aa22d49ad481a0171e5aca24738937698`.
-All seven flat raw text members are preserved byte-for-byte here. The ZIPs stay
-in the task runtime; `provenance.json` records all text lengths and hashes.
+All seven flat raw text members are preserved byte-for-byte in the original
+repository snapshot. The ZIPs were not committed; `provenance.json` records all
+text lengths and hashes.
 
 ## What was verified
 
