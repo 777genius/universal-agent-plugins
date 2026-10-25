@@ -1,0 +1,94 @@
+{
+  "run_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/40182639794",
+  "job_id": 121136740348,
+  "artifact_id": 12596073531,
+  "artifact_name": "vscode-1.143.1-untrusted-workspace-linux-amd64",
+  "outer_bytes": 5185,
+  "outer_sha256": "21bad1e1d409fe33476cc2b9ec96d64aaafc38c0609d7262aec8617eb897d977",
+  "inner_bytes": 17759,
+  "inner_sha256": "17c3dfca8efaceffdb6ef807c791df351c419604fb3c7949aaf7653fc644d73d",
+  "source_commit": "37fc30df2cb0b8499c6d32520e8b32d82d7fa9da",
+  "members": {
+    "A.merged.log": {
+      "bytes": 586,
+      "sha256": "9bd9099649a4052af09250d67430c4a8a23da15b3028651d1ef0833422a295b1"
+    },
+    "Xvfb.merged.log": {
+      "bytes": 1408,
+      "sha256": "e94cc6e16b6c3a1ca246c9ac86d70cb1586bf9a160bc43f2bfa5f73edccd8e37"
+    },
+    "cleanup.stderr.log": {
+      "bytes": 321,
+      "sha256": "2e35fe8e97094b539670868e17bd25952a18f237b05480eb9a6183224b7fcae9"
+    },
+    "cleanup.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "controller.stderr.log": {
+      "bytes": 378,
+      "sha256": "8b91960103eb79ff1b9f3d4f6778da29f5bf462dfa76b7ca811d2b47d9cba2fc"
+    },
+    "controller.stdout.log": {
+      "bytes": 463,
+      "sha256": "f0fb78e2076656f499b64dfb3f617444145d0da221a6463af44488af972bb2da"
+    },
+    "go-version.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "go-version.stdout.log": {
+      "bytes": 33,
+      "sha256": "4e0b213cba780f63b02f3ab9001ee61e4101d254e0af1a8205574c19dad0f93b"
+    },
+    "helper-build.stderr.log": {
+      "bytes": 41,
+      "sha256": "b683257fca25cabaa9ba8f1ca2a8006ae11a5853fa2424b28a8f8f38d274d569"
+    },
+    "helper-build.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "root-cleanup.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "root-cleanup.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "source-checkout.stderr.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "source-checkout.stdout.log": {
+      "bytes": 41,
+      "sha256": "eab43b276d82cd631bbd75b1b88caa82f13221b472bae7373181cf63d81c71e4"
+    },
+    "system-executables.json": {
+      "bytes": 364,
+      "sha256": "c2e82bf6e074463af4160df7b0383de8529abcfe3251257407978065f62959e2"
+    },
+    "vscode-workspace-controller.json": {
+      "bytes": 4832,
+      "sha256": "d93d546da26cf3bec0c67b140a8870b3c262d66a6449959171a349994c287df6"
+    },
+    "vscode-workspace-research.json": {
+      "bytes": 6446,
+      "sha256": "50b60f5f6c385f93c539c03b0c41f4b84250ec8d3ff7d7f2bed33ad1f13dbac5"
+    },
+    "xauth.json": {
+      "bytes": 382,
+      "sha256": "6a21b49a557d0a5e8fdc5572ffc28db19568be321ddf057c98586b378d83a05f"
+    },
+    "xauth.stderr.log": {
+      "bytes": 86,
+      "sha256": "e8cde161b289053605fdc42da3a04309a93f43ca03b8e7fcd80a9604d8e35f6b"
+    },
+    "xauth.stdout.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "qualification": "failed observation; no project component contract admitted"
+}

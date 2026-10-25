@@ -3,6 +3,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -195,11 +197,87 @@ class WorkspaceCollectorTests(unittest.TestCase):
         record = {"exit": 0, "error": None}
         with tempfile.TemporaryDirectory() as root:
             path = Path(root)
-            with mock.patch.object(collector.publisher, "run_probe", return_value=(record, b"", b"")) as run:
-                self.assertTrue(collector.publisher.cleanup(path, path.stat(), path, isolated=True)["complete"])
+            with mock.patch.object(collector, "run_probe", return_value=(record, b"", b"")) as run:
+                self.assertTrue(collector.cleanup_frontend(path, path.stat(), path)["complete"])
             argv, cwd = run.call_args.args[:2]
             self.assertEqual(argv[:3], ["/usr/bin/python3", "-I", "-c"])
             self.assertEqual(cwd, Path("/"))
+
+    def cleanup_fixture(self):
+        task = Path(tempfile.mkdtemp(prefix="vscode-workspace-input-", dir="/tmp"))
+        self.addCleanup(lambda: shutil.rmtree(task, ignore_errors=True))
+        uid, gid = (65534, 65534) if os.getuid() == 0 else (os.getuid(), os.getgid())
+        if os.getuid() == 0:
+            os.chown(task, uid, gid)
+        return task, uid, gid
+
+    def cleanup_child(self, task, identity, uid, gid):
+        argv = ["/usr/bin/python3", "-I", "-c", collector.FRONTEND_CLEANUP_CODE,
+                str(task), str(identity.st_dev), str(identity.st_ino), str(uid)]
+        if os.getuid() == 0:
+            argv = ["/usr/bin/setpriv", "--reuid=" + str(uid), "--regid=" + str(gid), "--clear-groups",
+                    "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all", "--no-new-privs", *argv]
+        return subprocess.run(argv, cwd="/", env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"},
+                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=7)
+
+    def test_ordinary_uid_cleanup_removes_readonly_cache_and_preserves_external_link_target(self):
+        task, uid, gid = self.cleanup_fixture()
+        cache = task / "go-cache"
+        cache.mkdir()
+        script = cache / "mkall.sh"
+        script.write_text("inert cache asset")
+        with tempfile.TemporaryDirectory() as outside:
+            external = Path(outside) / "untouched"
+            external.write_text("outside bytes")
+            external.chmod(0o440)
+            before = external.stat()
+            link = task / "outside-link"
+            link.symlink_to(external)
+            if os.getuid() == 0:
+                os.chown(script, uid, gid)
+                os.chown(cache, uid, gid)
+                os.chown(link, uid, gid, follow_symlinks=False)
+            script.chmod(0o444)
+            cache.chmod(0o555)
+            result = self.cleanup_child(task, task.stat(), uid, gid)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(task.exists())
+            self.assertEqual(external.read_text(), "outside bytes")
+            self.assertEqual(external.stat().st_mode, before.st_mode)
+            self.assertEqual(external.stat().st_ino, before.st_ino)
+
+    def test_ordinary_uid_cleanup_refuses_replaced_root_without_mutating_replacement(self):
+        task, uid, gid = self.cleanup_fixture()
+        identity = task.stat()
+        saved = task.with_name(task.name + "-saved")
+        task.rename(saved)
+        self.addCleanup(lambda: shutil.rmtree(saved, ignore_errors=True))
+        task.mkdir()
+        sentinel = task / "keep"
+        sentinel.write_text("replacement bytes")
+        if os.getuid() == 0:
+            os.chown(sentinel, uid, gid)
+            os.chown(task, uid, gid)
+        task.chmod(0o555)
+        before = task.stat()
+        result = self.cleanup_child(task, identity, uid, gid)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(sentinel.read_text(), "replacement bytes")
+        self.assertEqual(task.stat().st_mode, before.st_mode)
+        task.chmod(0o700)
+
+    @unittest.skipUnless(os.getuid() == 0, "creating a genuinely foreign-owned directory requires the root test fixture")
+    def test_ordinary_uid_cleanup_refuses_foreign_directory_without_chmod(self):
+        task, uid, gid = self.cleanup_fixture()
+        foreign = task / "foreign-owned"
+        foreign.mkdir(mode=0o555)
+        sentinel = foreign / "keep"
+        sentinel.write_text("foreign bytes")
+        before = foreign.stat()
+        result = self.cleanup_child(task, task.stat(), uid, gid)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(sentinel.read_text(), "foreign bytes")
+        self.assertEqual(foreign.stat().st_mode, before.st_mode)
 
     def test_workflow_uploads_only_independently_admitted_zip(self):
         source = (ROOT.parent / ".github/workflows/vscode-workspace-research.yml").read_text()

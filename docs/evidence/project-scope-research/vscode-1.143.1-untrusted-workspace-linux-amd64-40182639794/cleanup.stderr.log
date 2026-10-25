@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "<string>", line 20, in <module>
+  File "<string>", line 16, in clear
+  File "<string>", line 16, in clear
+  File "<string>", line 16, in clear
+  [Previous line repeated 5 more times]
+  File "<string>", line 19, in clear
+PermissionError: [Errno 13] Permission denied: 'mkall.sh'
