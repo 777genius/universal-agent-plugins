@@ -141,3 +141,23 @@ activation, authentication, or runtime use; these are different failure stages.
 Authoring `doctor ./my-plugin` supplies project evidence only. It cannot
 replace installer doctor, repair managed state, or complete OAuth. Authors and
 installers can compare evidence through the [handoff boundary](/en/build/handoff).
+
+## Maintain a project in the current source
+
+**Source only / unreleased.** Select the same scope and project on every
+maintenance command:
+
+```sh
+agentplugins list --scope project --project-root /path/to/project
+agentplugins install --locked --scope project --project-root /path/to/project
+agentplugins repair review --target cursor --scope project --project-root /path/to/project
+agentplugins deps recover --scope project --project-root /path/to/project
+```
+
+Commit the portable `uap.toml` and `uap.lock` when you want to share dependency
+intent and pins. Keep `.uap/` receipts, recovery state and retained data local;
+back up data separately. Removal retains data and the shared content cache.
+Repair restores missing owned components and damaged managed packages; changed
+native files require review. Recovery must use the original selected project.
+
+[Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

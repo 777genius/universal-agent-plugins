@@ -72,3 +72,14 @@ silently broaden shared observation in this client-owned checkpoint.
 Two independent frozen code GOs, relevant lint gates and the newly reviewed
 current-source native evidence lane remain outstanding. Historical Cline source
 attribution and static read-only dispatch proof do not close those product gates.
+
+## Later shared composition resolution
+
+The generic observer gap above is a historical finding at this client checkpoint.
+Shared commit `b74589e814dccb957cc668a959ad73ce893bc1e0` adds mandatory runner-free
+project component ownership independently of `EnableNativeObserver`. Both the
+CLI and default SDK now use the exact local ownership path before publication,
+while Cline remains Prepared. The integration adds meaningful foreign-name,
+changed-byte, prepare-boundary, replay, repair and fresh-instance regressions;
+no vendor discovery or runtime qualification is inferred. The current contract
+is documented in [Cline project installation](../../CLINE_PROJECT_INSTALLATION.md).

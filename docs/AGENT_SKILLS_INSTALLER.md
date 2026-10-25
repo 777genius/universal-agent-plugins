@@ -58,6 +58,31 @@ Reloading the live session recovers its operation result. A lost apply response
 never implies success: the page recovers the existing operation or offers an
 explicit retry of the same confirmation.
 
+## Install Skills for one project
+
+In the current source build, the terminal flow and browser picker use the same
+explicit environment selection as complete packages:
+
+```sh
+agentplugins skills add owner/repository --ui \
+  --scope project --project-root /path/to/project
+agentplugins skills add owner/repository --skill review --target codex --no-ui --yes \
+  --scope project --project-root /path/to/project
+```
+
+The directory must already exist. The default is still `user`; with project
+scope and no `--project-root`, the invocation directory is selected without a
+parent-directory search. The picker shows only targets admitted for that scope.
+Its reviewed selection remains bound to that project when applying; a stale
+or changed environment requires a new review.
+
+Saved Skill intent and pins live in the selected project's `uap.toml` and
+`uap.lock`. Receipts, mutation locks, recovery and retained data remain local
+under `.uap/`. Pass the same scope and project on later list, update, repair,
+remove and dependency commands. Complete packages and Skills share the same
+client ownership, trust and activation rules. See [Project installation](PROJECT_INSTALLATION.md)
+and the [current client support table](PROJECT_CLIENT_SUPPORT.md).
+
 ## Discovery and validation
 
 Search in the picker matches skill names, descriptions and repository paths.
