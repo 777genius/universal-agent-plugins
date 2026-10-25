@@ -296,7 +296,7 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 		handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
 		return e.prepareAbsentRemoval(handle, installation.InstallationID), nil
 	}
-	if err := e.removalPreflight(ctx, client, binding, receipt); err != nil {
+	if err := e.removalPreflight(ctx, client, installation.DeclaredName, binding, receipt); err != nil {
 		return nil, err
 	}
 	handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
@@ -338,7 +338,7 @@ func (e *Engine) prepareAbsentRemoval(handle *PreparedOperation, installationID 
 // managed artifact digest, and owned PLUGIN_DATA. It does not lock, recover,
 // EnsureData, invoke a helper, or deactivate the client. Apply repeats it
 // before UAP Remove.
-func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedClient, binding domain.ClientBinding, receipt domain.DataReceipt) error {
+func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedClient, declaredName string, binding domain.ClientBinding, receipt domain.DataReceipt) error {
 	if err := e.validateRemovalBinding(client, binding); err != nil {
 		return err
 	}
@@ -358,6 +358,9 @@ func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedCli
 	}
 	if err := (providers.Stager{}).Verify(ctx, binding.TargetLocator, digest); err != nil {
 		return fmt.Errorf("%w: managed package was changed or is missing; refusing silent removal: %w", ErrInvalidRequest, err)
+	}
+	if err := e.confirmProjectRemovalFiles(ctx, client, declaredName, binding, target, digest); err != nil {
+		return err
 	}
 	if receipt.DataReceiptID == "" {
 		return nil
