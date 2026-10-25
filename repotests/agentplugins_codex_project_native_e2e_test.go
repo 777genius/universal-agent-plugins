@@ -21,7 +21,7 @@ func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 	}
 	f := newCodexProjectNativeFixture(t)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"project_install", "project_update", "project_missing_skill_repair", "project_remove", "project_foreign_preservation"} {
+	for _, name := range []string{"project_install", "project_unchanged_add", "project_unchanged_update", "project_update", "project_missing_skill_repair", "project_remove", "project_foreign_preservation"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	stages["native_mcp_initialization"] = nativeStage{Status: "not_evaluated", Reason: "skills-only fixture; no trust mutation or MCP initialization"}
@@ -34,6 +34,7 @@ func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 		}
 	}()
 	codexNativeProjectInstall(t, f, stages)
+	codexNativeProjectUnchanged(t, f, stages)
 	codexNativeProjectUpdate(t, f, stages)
 	codexNativeProjectRepair(t, f, stages)
 	codexNativeProjectRemove(t, f, stages)
@@ -73,6 +74,66 @@ func codexNativeProjectInstall(t *testing.T, f *codexProjectNativeFixture, stage
 	}
 	codexNativeProjectSkills(t, f, "skills-after-project-add", "echo")
 	stages["project_install"] = nativeStage{Status: "passed", Reason: "UAP project add remains prepared; genuine Codex discovers exact project-A repository skill paths and rendered bytes, with no fixture skills in project B"}
+}
+
+func codexNativeProjectUnchanged(t *testing.T, f *codexProjectNativeFixture, stages map[string]nativeStage) {
+	t.Helper()
+	for _, step := range []struct {
+		stage, label string
+		args         []string
+	}{
+		{"project_unchanged_add", "project-add-repeated", []string{"add", f.base.Package, "--no-save"}},
+		{"project_unchanged_update", "project-update-unchanged", []string{"update", commandsPluginName}},
+	} {
+		nativeAttempt(stages, step.stage, step.label+"-installer.json")
+		before := map[string]string{}
+		for _, path := range []string{
+			filepath.Join(f.base.Project, ".uap", "state-v2.json"),
+			filepath.Join(f.base.Project, ".agents", "skills", commandsGuideSkill, "SKILL.md"),
+			filepath.Join(f.base.Project, ".agents", "skills", commandsSkill("echo"), "SKILL.md"),
+		} {
+			before[path] = nativeSHA(t, path)
+		}
+		result := codexProjectAssertionEnvelope(f.run(t, step.label, step.args...))
+		codexNativeProjectPrepared(t, result)
+		commandsRequireMutated(t, step.label, result, false)
+		outcome, err := commandsTargetOutcome(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan, _ := outcome["plan"].(map[string]any)
+		if outcome["no_change"] != true || plan["client_id"] != "codex" || plan["scope"] != "project" {
+			t.Fatalf("unchanged operation lost its exact project Codex result: %v", outcome)
+		}
+		if err := commandsPlanSelection(result, "echo", "wizard"); err != nil {
+			t.Fatal(err)
+		}
+		requireUnchanged := func() {
+			t.Helper()
+			for path, digest := range before {
+				if nativeSHA(t, path) != digest {
+					t.Fatalf("%s changed stable project state or owned skill bytes: %s", step.label, path)
+				}
+			}
+		}
+		requireUnchanged()
+		codexNativeProjectSkills(t, f, "skills-after-"+step.label, "echo")
+		requireUnchanged()
+		stages[step.stage] = nativeStage{Status: "passed", Reason: "public unchanged operation reports mutated=false and no_change=true; exact project state/owned skill bytes persist before and after fresh native A/B discovery", Artifacts: []string{step.label + "-installer.json"}}
+	}
+}
+
+// A replay may use the public single-result envelope. Wrap only the assertion
+// view; commandsRunInstaller retains the original JSON bytes as evidence.
+func codexProjectAssertionEnvelope(result map[string]any) map[string]any {
+	data, _ := result["data"].(map[string]any)
+	if _, ok := data["targets"]; ok {
+		return result
+	}
+	if outcome, ok := data["result"].(map[string]any); ok {
+		return map[string]any{"data": map[string]any{"targets": []any{map[string]any{"output": map[string]any{"result": outcome}}}}}
+	}
+	return result
 }
 
 func codexNativeProjectUpdate(t *testing.T, f *codexProjectNativeFixture, stages map[string]nativeStage) {
