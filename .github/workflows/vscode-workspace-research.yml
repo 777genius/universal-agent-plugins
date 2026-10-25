@@ -1,0 +1,68 @@
+name: VS Code Untrusted Workspace Research
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/vscode-workspace-research.yml'
+      - 'scripts/research-vscode-workspace.py'
+      - 'scripts/test_vscode_workspace_research.py'
+      - 'scripts/vscode-workspace-observer/**'
+      - 'install/integrationctl/research/vscodeworkspace/**'
+      - 'scripts/research-vscode-native.py'
+      - 'scripts/native_client_research.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vscode-workspace-research-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  research:
+    name: VS Code 1.143.1 untrusted metadata only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify inert collector and observer contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_vscode_workspace_research.py'
+          python3 -m unittest discover -s scripts -p 'test_vscode_native_research.py'
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
+          node --test scripts/vscode-workspace-observer/shape.test.cjs
+          go test -p=1 ./install/integrationctl/research/vscodeworkspace
+      - name: Observe pinned untrusted workbench metadata in strict isolated trees
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/research-vscode-workspace.py --output '${{ runner.temp }}/vscode-workspace-research'
+      - name: Admit exact bounded upload envelope
+        id: upload_admission
+        if: ${{ always() }}
+        env:
+          RESEARCH_OUTPUT: ${{ runner.temp }}/vscode-workspace-research/upload/research.zip
+        run: |
+          /usr/bin/python3 -I - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          path = Path(os.environ["RESEARCH_OUTPUT"])
+          info = path.lstat()
+          if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 32 * 1024 * 1024:
+              raise SystemExit("refusing unbounded or nonregular upload envelope")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write("valid=true\n")
+          PYTHON
+      - name: Upload bounded observation including failed stages
+        if: ${{ always() && steps.upload_admission.outputs.valid == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: vscode-1.143.1-untrusted-workspace-linux-amd64
+          path: ${{ runner.temp }}/vscode-workspace-research/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14
+
