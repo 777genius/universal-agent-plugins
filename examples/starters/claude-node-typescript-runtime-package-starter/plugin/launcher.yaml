@@ -1,2 +1,0 @@
-runtime: node
-entrypoint: ./bin/claude-node-typescript-runtime-package-starter
