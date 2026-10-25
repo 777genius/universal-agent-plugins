@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "project-docs",
+  "source_commit": "3fcf6c35c57d2d5e6c593c8ecd6880b60df569a1",
+  "source_tree": "5c5297bcc0ef90298a317f9202304219700b73c4",
+  "base_commit": "e7260aeb37886993867da3b206aad37fc0734728",
+  "local_head": "e12e44e3d7f17df71de706db995660d66b9e1a22",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}
