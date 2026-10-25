@@ -81,8 +81,12 @@ is needed: portable environment values remain strings, while foreign native
 numeric values are preserved untouched. Unsupported dialect options fail rather
 than being discarded. JSONC syntax is accepted in the actual `mcp.json` file;
 there is no invented sibling `mcp.jsonc` selection.
-Admit SSE only if the immutable schema independently establishes its exact native
-tag; otherwise reject it before source acquisition rather than guessing a mapping.
+The immutable [mcpConfiguration.ts schema](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vs/workbench/contrib/mcp/common/mcpConfiguration.ts),
+reread directly on 2026-10-25, defines remote `type` and `transport` enums as
+`http`/`sse` and allows comments/trailing commas in the `servers` document. This
+supports the narrow portable SSE to native `type:sse` mapping; it is source
+schema evidence, not proof of an SSE connection or a native observed SSE row.
+Reject every other transport before acquisition rather than guessing a mapping.
 
 Reuse `shared.ProjectComponents`, `ProjectComponentMutation`, nativeconfig
 conditional writes/locks and existing scoped journal/recovery. Use distinct
