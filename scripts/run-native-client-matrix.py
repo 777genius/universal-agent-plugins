@@ -115,7 +115,7 @@ def collect_opencode_project_artifact(fixture, output):
         with zipfile.ZipFile(pending, "x", compression=zipfile.ZIP_STORED) as archive:
             archive.writestr("opencode-project-evidence.json", json.dumps({"success": False,
                 "native_discovery_qualified": False, "native_mcp_initialization_qualified": False,
-                "native_model_use_qualified": False, "artifact_admission_error": error}))
+                "native_model_use_qualified": False, "artifact_admission_error": error, "artifact_python_runtime": {"version": sys.version[:512], "implementation": sys.implementation.name[:64], "executable": sys.executable[:1024]}}))
         if destination.exists() and destination.is_dir() and not destination.is_symlink():
             os.replace(destination, pending_root / "refused-directory")
         os.replace(pending, destination)
@@ -396,7 +396,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     scratch = Path(tempfile.mkdtemp(prefix="uap-native-hosted-", dir=os.environ["RUNNER_TEMP"])).resolve()
-    identity = {"schema_version": 1, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
+    identity = {"schema_version": 1, "python_runtime": {"version": sys.version[:512], "implementation": sys.implementation.name[:64], "executable": sys.executable[:1024]}, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
     try:
         for key, rev in [("commit", "HEAD"), ("tree", "HEAD^{tree}")]:
             identity[key] = subprocess.check_output(["git", "rev-parse", rev], cwd=source, encoding="utf-8", errors="strict").strip()
