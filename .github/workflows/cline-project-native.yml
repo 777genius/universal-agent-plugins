@@ -1,0 +1,71 @@
+name: Cline Current Source Read-Only Project Gate
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cline-project-native.yml'
+      - 'cli/**'
+      - 'install/integrationctl/agentplugins/**'
+      - 'scripts/research-cline-project.py'
+      - 'scripts/cline_project_envelope.py'
+      - 'scripts/test_cline_project_*.py'
+      - 'scripts/research-cline-native.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/research-grok-native.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_project_artifacts.py'
+      - 'scripts/test_native_client_project_artifacts.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cline-project-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  research:
+    name: Cline 3.0.73 actual UAP enabled config metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify inert acquisition, publication and fixture contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_cline_project_*.py'
+          python3 -m unittest discover -s scripts -p 'test_cline_native_research.py'
+          python3 -m unittest discover -s scripts -p 'test_native_client_project_artifacts.py'
+          (cd cli && go test -p=1 ./cmd/agentplugins -run '^TestClineGate')
+      - name: Observe pinned version and read-only config from actual UAP files
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 scripts/research-cline-project.py --output '${{ runner.temp }}/cline-project-native'
+      - name: Admit only exact bounded upload ZIP
+        id: upload_admission
+        if: ${{ always() }}
+        env:
+          RESEARCH_OUTPUT: ${{ runner.temp }}/cline-project-native/upload/research.zip
+        run: |
+          /usr/bin/python3 -I - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          path = Path(os.environ['RESEARCH_OUTPUT'])
+          info = path.lstat()
+          if path.resolve() != path or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or info.st_size > 32 * 1024 * 1024:
+              raise SystemExit('refusing nonregular or unbounded upload ZIP')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('valid=true\n')
+          PYTHON
+      - name: Upload admitted evidence including failed stages
+        if: ${{ always() && steps.upload_admission.outputs.valid == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: cline-3.0.73-current-source-enabled-project-config-linux-amd64
+          path: ${{ runner.temp }}/cline-project-native/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14
