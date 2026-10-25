@@ -382,6 +382,15 @@ companion. Use exact verified Node/npm distribution bytes and
 before native network isolation. No ambient compiler/npm, lifecycle scripts or
 browser downloads. Compile tracked TypeScript with `typescript/bin/tsc`, strict
 ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
+The VS Code declarations are build-only files from the exact publisher commit:
+`vscode.d.ts` (742,500 bytes, Git blob `bd520cf7bb88454e99bd15da13c6b9c6ac56fd65`),
+`vscode.proposed.chatPromptFiles.d.ts` (13,619 bytes, blob
+`eb77adbd1a1084837ab2d7b8f669f8ecfc20f1b8`), and
+`vscode.proposed.mcpServerDefinitions.d.ts` (3,302 bytes, blob
+`81e75fe69d74e82bdfb4ca69d0e89b801e728118`). Fetch exact-commit raw source,
+verify byte count and Git blob digest, and include it only in temporary compiler
+inputs. No unpinned @types/vscode or emitted declaration runtime is introduced.
+Vendor declarations may use skipLibCheck; our observer and driver remain strict.
 playwright-core attaches to the publisher's Electron, never a substitute browser.
 Seal the emitted driver/observer package manifests and module mode together
 with the complete pinned playwright-core runtime JS/support-file closure;
