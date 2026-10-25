@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "claude",
+  "source_commit": "90ed5e8860624a8036ec527d45fd7ecbf325ec85",
+  "source_tree": "003ef4979bdb76035008ecadb470998e1f260450",
+  "base_commit": "46b4678ea66d7804311f98270b70ebd3cceb928a",
+  "local_head": "7bf45c74b19ca2054bedfb23937d5d84923f8d45",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}

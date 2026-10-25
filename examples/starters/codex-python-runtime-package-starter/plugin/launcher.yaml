@@ -1,2 +1,0 @@
-runtime: python
-entrypoint: ./bin/codex-python-runtime-package-starter
