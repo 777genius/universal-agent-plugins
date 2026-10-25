@@ -8,6 +8,14 @@ Core's separate normalization fixture fails before normalization without a
 more specific label. Full Coverage passes. These observations do not identify
 the exact cleanup cause or establish that every acquisition failure is shared.
 
+The terminal resolver takes `acquireDependencyGit`'s `DirectAcquirer` branch:
+`dependencyTestSource.AcquireGit` delegates to `Acquirer.AcquireGit`, which passes
+`native=true` into `acquireGitTransport`. GitHub shorthand and the local
+`URLForRepo` mapping do not change that branch. Its observed error is explicitly
+`acquire direct Git source`. The separate Core `AcquireGitHub` path adds
+`--filter=blob:none`; this experiment targets the positively classified terminal
+fetch without that flag and does not pretend to reproduce both call paths.
+
 The finite origin-category amendment is separate. This test-only slice observes
 the original process error at an entirely controlled local-Git boundary, before
 the public acquisition layer intentionally sanitizes it. A passing attempt is
@@ -50,6 +58,8 @@ not a fix or an explanation for the historical failure.
   All existing production and generic fixture loggers retain their prohibition
   on reading or formatting arbitrary error text. Success emits a single fixed
   completion count; no per-iteration output or additional artifacts.
+  Admission uses the existing closed classifier's generic cleanup label or its
+  recognized fixed reason suffixes; no arbitrary error text establishes a class.
 
 ## Publication and observation
 
