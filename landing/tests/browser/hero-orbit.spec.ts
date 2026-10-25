@@ -306,7 +306,7 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await expect(field.locator('canvas')).toHaveCount(0);
   await page
-    .getByRole('button', { name: 'Choose target agents: All installed agents', exact: true })
+    .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
     .click();
   await page.getByRole('checkbox', { name: /^Cursor / }).click();
   await page.keyboard.press('Escape');
@@ -372,7 +372,7 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
   await projections(page, index);
   await navigate(page, '/');
   await page
-    .getByRole('button', { name: 'Choose target agents: All installed agents', exact: true })
+    .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
     .click();
   const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT / });
   await expect(chatgpt).toBeEnabled();

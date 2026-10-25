@@ -4,7 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
-const exactCommand = 'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
+const exactCommand =
+  'npx -y universal-agent-plugins add context7 --target codex,cursor,vscode --no-save';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
