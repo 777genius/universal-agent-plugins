@@ -1,5 +1,6 @@
 """Inert admission/phase tests; no downloaded or substituted vendor executable."""
 import gzip
+import contextlib
 import hashlib
 import io
 import json
@@ -28,6 +29,18 @@ def tar_bytes(members):
 
 
 class ProjectResearchTests(unittest.TestCase):
+    def test_matrix_loads_nested_leaf_and_selects_only_its_declared_phase(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            scripts = root / "scripts"
+            leaves = scripts / "project_native_collectors"
+            leaves.mkdir(parents=True)
+            (leaves / "kimi.py").write_text("CLIENT='kimi'\nAVAILABLE_PHASES=('acquire','help')\n")
+            output = io.StringIO()
+            with patch.object(research, "SOURCE", root), patch.object(research, "__file__", str(scripts / "project_native_research.py")), patch.object(sys, "argv", ["research", "--matrix"]), contextlib.redirect_stdout(output):
+                self.assertEqual(research.main(), 0)
+            self.assertEqual(json.loads(output.getvalue()), {"include": [{"client": "kimi", "phase": "help", "host": "ubuntu-24.04"}]})
+
     def test_archive_traversal_duplicates_and_expansion_are_rejected(self):
         spec = {"format": "tar.gz", "max_expanded_bytes": 32}
         for members in ([("../escape", b"x", tarfile.REGTYPE)],
