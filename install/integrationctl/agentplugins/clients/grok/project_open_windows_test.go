@@ -3,7 +3,6 @@
 package grok
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -85,7 +84,9 @@ func TestProjectGrokWindowsReadRecheckRefusesSameObjectAncestorAlias(t *testing.
 	if anchorErr == nil {
 		t.Fatal("anchored open admitted the ancestor alias")
 	}
-	if err := stableProjectPath(aliasPath, file, info); !errors.Is(err, anchorErr) {
+	// Local handle-type refusals are fresh diagnostic errors, not sentinels.
+	// Pin the same anchored refusal while keeping the held-file identity proof.
+	if err := stableProjectPath(aliasPath, file, info); err == nil || err.Error() != anchorErr.Error() {
 		t.Fatalf("recheck did not return the anchored alias refusal: %v; want %v", err, anchorErr)
 	}
 	if err := stableProjectPath(path, file, info); err != nil {
