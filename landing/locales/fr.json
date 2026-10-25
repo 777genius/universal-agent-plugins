@@ -956,7 +956,7 @@
       "required": "Authentification requise",
       "not_required": "Aucune authentification requise",
       "unknown": "Exigences d’authentification inconnues",
-      "varies": "L’authentification varie selon l’agent",
+      "varies": "Dépend de l’agent",
       "automatic": "Les agents installés sont détectés au lancement de la commande. Sélectionnez des agents dans Installer pour voir leurs exigences.",
       "unresolved": "Aucune option d’installation n’est résolue pour ces agents. Sélectionnez un agent compatible pour vérifier ses exigences.",
       "release": "{id} · version {sequence}",

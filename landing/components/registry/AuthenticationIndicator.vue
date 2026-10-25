@@ -2,7 +2,7 @@
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverAnchor } from 'reka-ui';
 import type { AuthenticationIndicator } from '~/utils/authentication';
 
-defineProps<{ indicator: AuthenticationIndicator }>();
+const props = defineProps<{ indicator: AuthenticationIndicator }>();
 const instanceId = useId();
 const contentId = ref<string>();
 const trigger = ref<HTMLButtonElement>();
@@ -10,6 +10,15 @@ const open = ref(false);
 const pinned = ref(false);
 const pointerOpening = ref(true);
 let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+const icon = computed(() =>
+  props.indicator.varies
+    ? 'varies'
+    : props.indicator.state === 'required'
+      ? 'lock'
+      : props.indicator.state === 'not_required'
+        ? 'lock-open'
+        : 'help',
+);
 function enter() {
   if (!open.value) pointerOpening.value = true;
   clearTimeout(leaveTimer);
@@ -59,6 +68,8 @@ onBeforeUnmount(() => clearTimeout(leaveTimer));
         type="button"
         :aria-label="indicator.label"
         :data-authentication="indicator.state"
+        :data-varies="indicator.varies"
+        :data-icon="icon"
         @pointerenter="hover"
         @pointerleave="leave"
         @click="pin"
@@ -74,13 +85,20 @@ onBeforeUnmount(() => clearTimeout(leaveTimer));
           stroke-linecap="round"
           stroke-linejoin="round"
         >
-          <template v-if="indicator.state === 'required'">
-            <circle cx="8" cy="8" r="5" />
-            <path d="m11.5 11.5 9 9M17 17l3-3M14 14l3-3" />
+          <template v-if="icon === 'lock'">
+            <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+            <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+            <circle cx="12" cy="13.4" r="0.9" />
+            <path d="M12 14.3v2.3" />
           </template>
-          <template v-else-if="indicator.state === 'not_required'">
+          <template v-else-if="icon === 'lock-open'">
             <rect x="4" y="10" width="16" height="11" rx="2" />
             <path d="M8 10V6a4 4 0 0 1 7.5-2M12 15v2" />
+          </template>
+          <template v-else-if="icon === 'varies'">
+            <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+            <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+            <path d="M8.5 15.8c.9-1.4 1.9-1.4 2.9 0 .9 1.3 1.9 1.3 2.9 0" />
           </template>
           <template v-else>
             <circle cx="12" cy="12" r="9" />
@@ -106,7 +124,43 @@ onBeforeUnmount(() => clearTimeout(leaveTimer));
       >
         <div>
           <strong>{{ indicator.label }}</strong>
-          <p>{{ indicator.detail }}</p>
+          <p v-if="indicator.release" class="authentication-indicator__release">
+            {{ indicator.release }}
+          </p>
+          <ul v-if="indicator.groups.length" class="authentication-indicator__groups">
+            <li v-for="group in indicator.groups" :key="group.authentication">
+              <svg
+                aria-hidden="true"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <template v-if="group.authentication === 'required'">
+                  <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+                  <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+                  <circle cx="12" cy="13.4" r="0.9" />
+                  <path d="M12 14.3v2.3" />
+                </template>
+                <template v-else-if="group.authentication === 'not_required'">
+                  <rect x="4" y="10" width="16" height="11" rx="2" />
+                  <path d="M8 10V6a4 4 0 0 1 7.5-2M12 15v2" />
+                </template>
+                <template v-else>
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M9.5 8.5a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2.5M12 17h.01" />
+                </template>
+              </svg>
+              <span class="authentication-indicator__policy">{{ group.label }}</span>
+              <span class="authentication-indicator__clients">{{ group.clients.join(', ') }}</span>
+            </li>
+          </ul>
+          <p class="authentication-indicator__summary">{{ indicator.summary }}</p>
+          <p v-if="indicator.note" class="authentication-indicator__note">{{ indicator.note }}</p>
         </div>
       </PopoverContent>
     </PopoverPortal>
@@ -149,8 +203,42 @@ onBeforeUnmount(() => clearTimeout(leaveTimer));
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.authentication-indicator__content p {
-  margin: 6px 0 0;
+.authentication-indicator__release {
+  margin: 4px 0 0;
   color: var(--muted);
+  font-size: 0.7rem;
+}
+.authentication-indicator__groups {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.authentication-indicator__groups li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.authentication-indicator__groups svg {
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--muted);
+}
+.authentication-indicator__policy {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.authentication-indicator__clients {
+  color: var(--muted);
+}
+.authentication-indicator__summary,
+.authentication-indicator__note {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+.authentication-indicator__note {
+  margin-top: 4px;
+  font-size: 0.7rem;
 }
 </style>
