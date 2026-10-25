@@ -268,6 +268,185 @@ outside the checked-out source. One concrete shared TypeScript toolchain suffice
 - VS Code: [pinned gateway API](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vscode-dts/vscode.proposed.mcpServerDefinitions.d.ts),
   [MCP operations](https://code.visualstudio.com/docs/agents/run/manage-mcp-servers).
 
+## Kimi initial API research amendment
+
+This next slice qualifies only observed research IDs, not a product version gate
+or public-install lifecycle. Keep `kimi.help`; register `kimi.scope-observation`
+only with the following actual native observations. Kimi 2.3.2/source
+`b8dd3a134060c6e80ba4a1659335cd63b68483f2` remains the exact pin.
+
+Root owns a finite `Context.service(label, arguments, observe, project='a',
+timeout=60)` adapter. It reuses hosted admission, explicit environment,
+before/after runtime identities, selector stream limits, bounded in-memory
+capture and owned process-group cleanup. The callback receives bounded live
+snapshots and the original deadline, not an unrestricted process launcher.
+Only literal loopback HTTP is admitted, without proxies or redirects, with a
+five-second/request deadline, one MiB/body and at most 60 fixed API requests.
+The whole research collector remains limited to 360 seconds. No SDK, ACP,
+TypeScript, npm, alternate MCP fixture or direct fixture call is introduced.
+
+Root adds a separate real Git project C and supplies `ctx.native_probe`, built
+from existing `repotests/testdata/agentplugins_native_probe` by exact Go 1.26.10.
+Record compiler/probe identities; include the probe in immutable-file checks.
+Projects A/B/C and outside cwd share the one original fresh HOME. The leaf owns
+only benign uniquely named SKILL.md and `.kimi-code/mcp.json` entries in these
+roots and an independent user marker. All authored paths remain ordinary,
+single-link, bounded and outside alias traversal. MCP stdio commands select
+the exact supplied probe, per-scope argv/cwd/events file and fresh nonce using
+its existing `UAP_TEST_ROOT`, `UAP_TEST_EVENTS`, `UAP_TEST_NONCE` and
+`UAP_TEST_REVISION` contract. No tool call is sent during this initial slice.
+
+The only native service argv is `kimi web --no-open --host 127.0.0.1 --port 0`.
+The exact source accepts port zero and reports the bound port. With NO_COLOR=1,
+require `Kimi server ready`, the complete line
+`  Local:    http://127.0.0.1:<port>/#token=<token>` and a matching
+`  Token:    <token>` line. The token is 43 base64url ASCII characters.
+Read only original HOME's `.kimi-code/server.token`: ordinary same-UID parent
+mode 0700, regular/single-link token mode 0600, exact 43 bytes, no-follow held
+read with before/after identity. Its bytes must match both native banner fields.
+Register any parsed token privately immediately. Unrecognized or incomplete
+startup quarantines the raw streams; they must never enter a failure artifact.
+Validated streams are redacted before admission. HTTP uses Authorization only;
+never publish bearer-bearing fragments, query strings or exception text.
+
+Success JSON must be whole, duplicate-free, bounded, with integer `code:0`,
+`msg:'success'`, bounded request_id and the following typed data. Other exits,
+shapes and errors fail; only the two exact negative responses below are planned.
+
+| Native request | Required observation |
+| --- | --- |
+| `GET /api/v1/healthz`, no auth | HTTP 200, `data.ok:true`. |
+| `GET /api/v1/meta`, no auth | HTTP 401 and exact code 40101; proves native bearer admission. |
+| `GET /api/v1/meta`, bearer | `server_version:'2.3.2'`, nonempty server_id, ISO started_at, dangerous_bypass_auth false, backend v2, empty open_in_apps, and true websocket/file_upload/fs_query/mcp/tasks/terminal capabilities. Optional experimental_flags is a bool map; features contain typed name/state/meta; web_title is a string. |
+| `POST /api/v1/workspaces` with exact root/name for A/B/C | Distinct IDs matching `wd_[a-z0-9._-]+_[0-9a-f]{12}`, exact canonical root/name, ISO created_at/last_opened_at and initial session_count zero. |
+| `GET /api/v1/workspaces/{id}/trust` | Initially false for A/B/C. |
+| `POST /api/v1/workspaces/{A-or-B}/trust` with `{}` then GET | Native true for A/B, C remains false. Perform before preservation baseline; never forge trust state or trust C. |
+| `GET /api/v1/workspaces/{id}/skills` | Typed name/description/path/source rows select only the original-user and selected project research markers at exact SKILL.md paths. C skills may be visible: workspace trust gates MCP, not this catalog. |
+| `GET /api/v2/mcp/servers?cwd=<A/B/C/outside>` | A/B contain user plus their own entry; C/outside contain only user. Require exact project `.kimi-code/mcp.json` origin, source global, mutable false, stdio command/argv/cwd and sorted env keys. User origin is original HOME's file with mutable true. Source global denotes a file layer, not user scope by itself. |
+| `POST /api/v2/mcp/servers:test` with only `{name,cwd}` | A/B success true and native output identifies inspect_runtime; require fresh same-nonce/PID/session initialize and tools/list probe events in that request window. No inline server or direct fixture connection. C's named test returns HTTP 200 with exact code 40408 and no C probe events. |
+| Repeat A/B/C catalogs, then `POST /api/v1/shutdown` with `{}` | Protected user/B/foreign bytes remain exact; shutdown data.ok is true. If the foreground CLI remains alive, send ordinary SIGTERM to the owned group and require exit zero, closed port and reaped group within five seconds. SIGKILL fallback is failed cleanup, never a successful case. |
+
+The source pin covers web shared.ts, persistentToken.ts, privateFiles.ts,
+access-urls.ts, web/run.ts, rest-meta/meta, workspace/workspaces/skills,
+routes/v2/mcp and shutdown routes. The web launcher passes CLI version 2.3.2 to
+the server; the embedded server package version is not the reported CLI version.
+New inert contracts must cover private-token quarantine/redaction, malformed
+JSON/identity, wrong project origin, wrong probe nonce/session, the untrusted
+negative and incomplete service cleanup. Preserve all qualification flags false.
+Inspect genuine evidence before a separate two-round amendment admits the exact
+product version set {2.3.1, 2.3.2}, provider tool calls or the final public UAP
+lifecycle test `TestAgentpluginsKimiNativeProjectComponentsLifecycle`.
+
+## VS Code trusted development-host amendment
+
+Use the already pinned and observed 1.143.1 publisher, genuine Ubuntu 22.04,
+ordinary-user/NNP/zero-capability/loopback namespace, strict cgroup, authenticated
+Xvfb and normal Electron sandbox contract. Retain the existing untrusted mode.
+Add focused `trusted_*_linux.go` files to the existing `vscodeworkspace` package
+main and a closed request mode `trusted-project-v1`; absence of mode preserves
+legacy labels, observer pins, budgets and behavior. Reuse that package's private
+authority, sealing, capture, display and cleanup services directly. Do not copy
+the controller, add a process primitive, disable trust/sandboxing or export a
+new framework. Unknown modes, stages, paths and operations fail before launch.
+
+Reuse the dedicated publisher acquisition/materializer and its bounded parser.
+Exact archive: `https://vscode.download.prss.microsoft.com/dbazure/download/stable/e646868227c3e3a9e3f24277c8c7220be42c0be7/code-stable-x64-1792691793.tar.gz`,
+350,844,741 bytes, SHA256
+`48f658052e54e020a1c1be7b37ac0f9ae39f07e8ccda805c63f053cfda72b2be`.
+Actual retained inventory: 4,262 members, 1,034,475,520 expanded bytes,
+1,031,068,984 regular-file bytes, zero omitted symlinks. Do not increase the
+generic extractor caps. Verify publisher `code` (223,685,880 bytes,
+`cf8508cc7ddde30cfccc70caeda877a9a99119953c4476dcb30a3eb1a2c415e9`),
+`resources/app/out/cli.js` (275,169 bytes,
+`bd393ad6f0d28ba0aa7cd79cc685617f5187096f092009e315a4f098349f7976`),
+and `resources/app/product.json` (68,251 bytes,
+`a141a1de8ed44415c0c527b1882362e6abc25e674be052d67c09da71a27fbd7e`).
+Keep ELF-plus-cli.js version/help preflight; ELECTRON_RUN_AS_NODE=1 is confined
+to that fixed preflight and is absent from GUI execution.
+
+Freeze one minimal lock with the reviewed Node 24.21.0 archive and these packages:
+
+| Package | Version | Integrity |
+| --- | --- | --- |
+| typescript | 5.9.3 | sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw== |
+| @types/node | 22.20.1 | sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q== |
+| undici-types | 6.21.0 | sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ== |
+| playwright-core | 1.64.1 | sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ== |
+
+TypeScript 5.9.3 deliberately replaces the earlier 7.0.2 candidate: the retained
+skills-picker lock pins its JavaScript compiler, avoiding a new native compiler
+companion. Use exact verified Node/npm distribution bytes and
+`npm ci --ignore-scripts --no-audit --no-fund` in a temporary tool directory
+before native network isolation. No ambient compiler/npm, lifecycle scripts or
+browser downloads. Compile tracked TypeScript with `typescript/bin/tsc`, strict
+ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
+playwright-core attaches to the publisher's Electron, never a substitute browser.
+
+The trusted mode admits verified Node plus the sealed compiled UI driver through
+the existing strict primitive. The driver starts the exact publisher using the
+existing same-process isolation-verifier prelude. Its observed namespace must
+match the driver, and its PID must match the spawned child before execve.
+Fixed GUI argv: `code --new-window --disable-crash-reporter --locale en
+--user-data-dir <one-original-profile> --extensions-dir <owned-empty-extensions>
+--extensionDevelopmentPath <sealed-observer> --extensionTestsPath <sealed-observer>/runner.js
+--enable-proposed-api uap-research.project-runtime-observer
+--remote-debugging-port=0 <exact-A-or-B>`.
+Admit exactly one child-emitted `ws://127.0.0.1:<1024..65535>/devtools/browser/<id>`
+with no credentials/query/fragment or conflicting endpoint, and exactly one
+corresponding workbench page. Attach inside the same namespace, with no fixed
+port, outside-network, alternate-browser or generic-dialog fallback.
+
+Pinned source fixes the following finite UI grammar. Workspace startup title is
+`Do you trust the authors of the files in this folder?`; click only
+`Yes, I trust the authors` after matching the canonical folder in the details
+and keeping `Trust the authors of all files in the parent folder '{name}'`
+unchecked. Require the observer's exact folder and workspace.isTrusted true.
+Trust A/B separately before preservation baselines; A must not implicitly trust B.
+The separate `Trust Folder & Continue` flow is not an admitted fallback.
+
+The gateway broker uses errorOnUserInteraction, so start each owned MCP server
+through native UI first: `MCP: List Servers`, `Select an MCP Server`, exact
+fixture row, `Select action for '<label>'`, `Start Server`. If required, accept
+only `Trust and run MCP server <label>?` with action `Trust` and exact expected
+configuration origin URI (inspect href without navigating). Reject multi-server
+trust, Pick Trusted, unknown enablement/auth dialogs and all broad approvals.
+Source at the publisher commit: workspace.contribution.ts blob
+`6cccbced7b7c304d1e9678fab1559a584f9ecc44`, mcpCommands.ts
+`1addb6dad8938da5442b43160b4400cf4a4adbce`, mcpRegistry.ts
+`607334861d0fbcd8691e9b0a98c44b6a326c6937`, gateway broker
+`8f90bc7d6eb0e47ceee42f73986ba9767b4f8d8a`. Unknown actual UI fails and requires
+an amended interaction; source support alone is not runtime evidence.
+
+The observer uses actual workspace/chat skills/MCP definitions and
+lm.startMcpGateway, enabling only chatPromptFiles and mcpServerDefinitions.
+It never grants trust, registers replacement definitions or directly calls the
+probe. Combine the gateway label/address with exact definition command/argv/env/
+cwd and newly observed probe PID/session, nonce, revision, package/data/cwd facts.
+The stage challenge is the existing inspect_runtime write/read marker; do not
+invent extra probe arguments or returned fields. Admit initialize/list/call only
+through the vendor gateway. Keep endpoint/session secrets private.
+
+Select exact `TestAgentpluginsVSCodeNativeProjectGatewayLifecycle` for the
+existing required full A/B/user public install/no-op/update/pinned repair/restart/
+remove/repeat-remove sequence and the five `vscode.*` qualification IDs above.
+New observer sources live in `scripts/vscode-project-runtime-observer/`; the
+native test lives in `repotests/agentplugins_vscode_project_native_gateway_test.go`.
+The root owns toolchain preparation/workflow wiring; the editor owner implements
+the focused controller and observer. Lifecycle success preserves user/B/foreign
+configuration, recorded ownership and retained data. State remains Prepared.
+
+Trusted mode alone has 900 seconds total from original monotonic start,
+840 seconds work and 60 seconds final teardown/admission. Public UAP operations
+have 30 seconds; GUI stage 60 seconds; trust and each MCP-start interaction
+15 seconds within that stage; gateway requests 10 seconds/one MiB. Stop starting
+GUI stages with less than 75 seconds work remaining. Dispose gateway/DevTools,
+allow five seconds graceful shutdown, then existing strict tree teardown within
+ten seconds total. Require driver/workbench/MCP tree reaped and cgroup empty;
+final cleanup also proves Xvfb/display assets removed. Legacy 420/480-second
+limits remain unchanged. Missing protocol, identity, native UI or cleanup fails.
+This is only a trusted development-host/proposed-API path, not model/OAuth or
+released-client qualification.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
