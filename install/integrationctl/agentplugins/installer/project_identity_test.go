@@ -69,13 +69,14 @@ func newProjectFilesFixture(t *testing.T, id string, mode string) *projectFilesF
 		t.Fatal("unknown fixture mode", mode)
 	}
 	f.req = Request{Scope: domain.ScopeProject, ProjectRoot: f.project, Operation: OpInstall, PackageRoot: f.pkg, ClientID: id, ClientConfigRoot: f.user, InstallationID: "00000000-0000-4000-8000-000000000074", RequiredComponents: []string{"skills", "mcp"}}
-	if id == "cline" {
+	switch id {
+	case "cline":
 		f.skill = filepath.Join(f.project, ".cline", "skills", "docs", "SKILL.md")
 		f.config = filepath.Join(f.project, ".uap", "clients", "cline", "mcp.json")
-	} else if id == "vscode" {
+	case "vscode":
 		f.skill = filepath.Join(f.project, ".github", "skills", "docs", "SKILL.md")
 		f.config = filepath.Join(f.project, ".vscode", "mcp.json")
-	} else {
+	default:
 		f.skill = filepath.Join(f.project, ".agents", "skills", "docs", "SKILL.md")
 		f.config = filepath.Join(f.project, ".codex", "config.toml")
 	}
