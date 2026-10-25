@@ -294,7 +294,9 @@ roots and an independent user marker. All authored paths remain ordinary,
 single-link, bounded and outside alias traversal. MCP stdio commands select
 the exact supplied probe, per-scope argv/cwd/events file and fresh nonce using
 its existing `UAP_TEST_ROOT`, `UAP_TEST_EVENTS`, `UAP_TEST_NONCE` and
-`UAP_TEST_REVISION` contract. No tool call is sent during this initial slice.
+`UAP_TEST_REVISION` contract. Each entry sets documented startupTimeoutMs and
+toolTimeoutMs to 3000; the fixed sequence uses at most 36 HTTP requests within
+the shared ceiling of 60. No tool call is sent during this initial slice.
 
 The only native service argv is `kimi web --no-open --host 127.0.0.1 --port 0`.
 The exact source accepts port zero and reports the bound port. With NO_COLOR=1,
@@ -381,6 +383,11 @@ before native network isolation. No ambient compiler/npm, lifecycle scripts or
 browser downloads. Compile tracked TypeScript with `typescript/bin/tsc`, strict
 ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
 playwright-core attaches to the publisher's Electron, never a substitute browser.
+Seal the emitted driver/observer package manifests and module mode together
+with the complete pinned playwright-core runtime JS/support-file closure;
+TypeScript compilation does not bundle dependencies. Compiler/types stay in
+the build directory, npm .bin links are excluded, and native execution must not
+resolve modules from an unsealed tool cache or ambient node_modules.
 
 The trusted mode admits verified Node plus the sealed compiled UI driver through
 the existing strict primitive. The driver starts the exact publisher using the
