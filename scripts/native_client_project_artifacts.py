@@ -1,4 +1,4 @@
-"""Admit only the bounded OpenCode project envelope; never native caches.
+"""Admit bounded OpenCode or closed Cline project evidence; never native caches.
 
 Invoked by the matrix in a five-second child. Pending files stay outside the
 workflow upload directory. No recursive failure cleanup or target traversal.
@@ -106,7 +106,9 @@ def confirm_paths(packet):
     check_deadline(started)
 
 
-def read_packet(source):
+def read_packet(source, *, client="opencode"):
+    if client not in ("opencode", "cline"):
+        raise ValueError("unknown closed project evidence client")
     started = time.monotonic()
     source = Path(source)
     root = source.lstat()
@@ -161,6 +163,10 @@ def read_packet(source):
         total += len(body)
     packet = (source, root, members, started)
     confirm_paths(packet)
+    if client == "cline":
+        from cline_project_envelope import validate
+        validate(bodies)
+        return bodies, packet
     if "opencode-project-evidence.json" not in bodies:
         raise ValueError("project envelope summary missing")
     # Capture digests are checked again independently from Go's in-memory admission.
@@ -186,8 +192,8 @@ def read_packet(source):
     return bodies, packet
 
 
-def read_envelope(source):
-    return read_packet(source)[0]
+def read_envelope(source, *, client="opencode"):
+    return read_packet(source, client=client)[0]
 
 
 def write_zip(pending, bodies):
@@ -202,24 +208,44 @@ def write_zip(pending, bodies):
         raise ValueError("project ZIP overhead exceeds aggregate cap")
 
 
-def write_archive(source, destination):
+def cline_destination_parent(path, expected=None):
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or path.resolve() != path:
+        raise ValueError("Cline upload parent is not an exact ordinary directory")
+    if expected is not None and identity(info) != identity(expected):
+        raise ValueError("Cline upload parent changed before publication")
+    return info
+
+
+def write_archive(source, destination, *, client="opencode"):
+    if client not in ("opencode", "cline"):
+        raise ValueError("unknown closed project evidence client")
     source, destination = Path(source), Path(destination)
     if source.parent.stat().st_dev != destination.parent.stat().st_dev:
         raise ValueError("project envelope publication filesystem differs")
-    pending = Path(tempfile.mkdtemp(prefix="opencode-envelope-pending-", dir=source.parent)) / "evidence.zip"
+    parent = cline_destination_parent(destination.parent) if client == "cline" else None
+    pending = Path(tempfile.mkdtemp(prefix=client + "-envelope-pending-", dir=source.parent)) / "evidence.zip"
     admitted = True
     try:
-        bodies, packet = read_packet(source)
+        bodies, packet = read_packet(source, client=client)
         write_zip(pending, bodies)
         confirm_paths(packet)  # The closed ZIP contains only captured in-memory bytes.
     except (OSError, ValueError, KeyError, TypeError, TimeoutError) as error:
         admitted = False
-        bodies = {"opencode-project-evidence.json": json.dumps({"success": False,
-            "native_discovery_qualified": False, "native_mcp_initialization_qualified": False,
-            "native_model_use_qualified": False, "artifact_admission_error": str(error)[:512],
-            "artifact_python_runtime": python_runtime()}).encode()}
+        failure = {"success": False, "native_discovery_qualified": False,
+            "native_mcp_initialization_qualified": False, "native_model_use_qualified": False,
+            "artifact_admission_error": str(error)[:512], "artifact_python_runtime": python_runtime()}
+        summary_name = "opencode-project-evidence.json"
+        if client == "cline":
+            from cline_project_envelope import NATIVE, NATIVE_FALSE
+            summary_name = NATIVE
+            failure.update({key: False for key in NATIVE_FALSE})
+            failure.update(collection_complete=False, read_only_unique_marker_discovery_qualified=False)
+        bodies = {summary_name: json.dumps(failure).encode()}
         pending.unlink(missing_ok=True)
         write_zip(pending, bodies)
+    if client == "cline":
+        cline_destination_parent(destination.parent, parent)
     os.replace(pending, destination)
     return admitted
 
