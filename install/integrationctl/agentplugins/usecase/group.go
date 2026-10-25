@@ -221,6 +221,13 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.revalidateHosts(); err != nil {
 		return session.result, err
 	}
+	for _, target := range session.planned {
+		if err := session.reportGroupProgress(target, GroupProgressConfiguring); err != nil {
+			return session.result, err
+		}
+	}
+	// Callers can change any target from a progress callback. Reobserve every
+	// identity after the final callback, before building or committing state.
 	if err := session.reobserveGroupIdentity(); err != nil {
 		return session.result, err
 	}
@@ -230,11 +237,6 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			_ = transaction.UpsertEnvironmentReceipt(&session.desired, target.input.EnvironmentAuthority,
 				session.installationID, target.clientBindingID, firstEnvironmentSourceKey(target.input.EnvironmentAuthority, session.sourceID),
 				target.input.Envelope.TreeDigest, target.plan.ProfileAuthority(), "committed")
-		}
-	}
-	for _, target := range session.planned {
-		if err := session.reportGroupProgress(target, GroupProgressConfiguring); err != nil {
-			return session.result, err
 		}
 	}
 	if err := session.applyGroupKernel(); err != nil {

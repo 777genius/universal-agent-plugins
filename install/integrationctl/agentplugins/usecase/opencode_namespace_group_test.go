@@ -44,6 +44,48 @@ func TestOpenCodeNamespaceGroupEarlyConflictChangesNoTarget(t *testing.T) {
 	}
 }
 
+func TestOpenCodeNamespaceGroupCallbackConflictChangesNoTarget(t *testing.T) {
+	service, store, cursor := serviceFixture(t)
+	service.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Stager: service.Stager})
+	activator := &failNthGroupActivator{}
+	service.Activator = activator
+	openCode := domain.DetectedClient{ClientID: domain.ClientOpenCode, OpenCodeHost: contracttest.OpenCodeV1Host{}, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "opencode")}
+	if err := os.MkdirAll(openCode.ConfigRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(openCode.ConfigRoot, "opencode.json")
+	foreign := []byte(`{"mcp":{"docs_extra":{"type":"remote","url":"https://foreign.test"}}}`)
+	input := openCodePluginInput(t, openCode, "1.0.0", "sha256:namespace-callback", "sha256:namespace-callback-manifest", "sh")
+	cursorInput := openCodePluginInput(t, cursor, "1.0.0", "sha256:namespace-callback", "sha256:namespace-callback-manifest", "sh")
+	group := GroupInput{Targets: []AddInput{input, cursorInput}, OperationGroupID: "namespace-callback", Confirmed: true}
+	group.Progress = func(event GroupProgressEvent) {
+		if event.Phase == GroupProgressConfiguring && event.ClientID == domain.ClientCursor {
+			if err := os.WriteFile(config, foreign, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	result, err := service.AddGroup(t.Context(), group)
+	if err == nil || !strings.Contains(err.Error(), "MCP namespace changed before group commit") || !strings.Contains(err.Error(), "docs_extra") {
+		t.Fatalf("callback namespace conflict escaped precommit check: %v", err)
+	}
+	if result.Mutated || len(result.Receipts) != 0 || activator.calls != 0 {
+		t.Fatalf("callback refusal changed managed targets: result=%+v activations=%d", result, activator.calls)
+	}
+	state, err := store.Load()
+	if err != nil || len(state.Installations) != 0 {
+		t.Fatalf("callback refusal changed state: %+v, %v", state, err)
+	}
+	if body, err := os.ReadFile(config); err != nil || string(body) != string(foreign) {
+		t.Fatalf("callback foreign config changed: %s, %v", body, err)
+	}
+	for _, target := range result.Targets {
+		if _, err := os.Lstat(target.Plan.ActivePath); !os.IsNotExist(err) {
+			t.Fatalf("callback refusal published %s: %v", target.Plan.ClientID, err)
+		}
+	}
+}
+
 type injectOpenCodeConfigActivator struct {
 	inner    ports.ClientActivator
 	path     string
