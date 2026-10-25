@@ -1,7 +1,0 @@
-{
-  "description": "Grok packaged plugin example",
-  "mcpServers": "./.mcp.json",
-  "name": "grok-basic",
-  "skills": "./skills/",
-  "version": "0.1.0"
-}

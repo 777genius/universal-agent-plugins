@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "git-diagnostic-plan",
+  "source_commit": "18b50e1663229dfc5d7c79faf07b5402ba4c43e3",
+  "source_tree": "317583395e29227ed8340bbedce01893b3747743",
+  "base_commit": "d94d6c1b09e89634220e471cb1f2c03d758b0511",
+  "local_head": "772422310444bf235222e7ef430d49db7f376d0e",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}
