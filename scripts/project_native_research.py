@@ -249,7 +249,7 @@ class Context:
         if len(self.summary["commands"]) >= 60:
             raise ValueError("command count limit exceeded")
         record, stdout, stderr = run_probe([str(part) for part in argv], cwd, env, self.private, label,
-                                          timeout=min(timeout, self.budget.check()), limit=STREAM)
+                                          timeout=min(timeout, self.budget.check()), limit=STREAM, memory_only=True)
         self.summary["commands"].append(record)
         self.captures[record["stdout_file"]] = stdout
         self.captures[record["stderr_file"]] = stderr

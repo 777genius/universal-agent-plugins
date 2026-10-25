@@ -3,8 +3,10 @@ import gzip
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
+import sys
 import tarfile
 import unittest
 from unittest.mock import patch
@@ -128,6 +130,24 @@ class ProjectResearchTests(unittest.TestCase):
                 self.assertIs(body["artifact_admission_failed"], True)
                 self.assertTrue(all(value is False for value in body["qualification"].values()))
             self.assertIs(summary["collection_complete"], False)
+
+    def test_private_capture_never_opens_or_reads_native_writable_log_paths(self):
+        # An inert Python child exercises the real selector/capture, not a vendor.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            foreign = root / "foreign"
+            foreign.write_bytes(b"unchanged foreign authority")
+            (root / "capture.stdout.log").symlink_to(foreign)
+            (root / "capture.stderr.log").write_bytes(b"x" * 4096)
+            child = "import pathlib,sys; pathlib.Path('capture.stderr.log').unlink(); pathlib.Path('capture.stderr.log').symlink_to('foreign'); sys.stdout.write('exact observed stdout'); sys.stderr.write('e'*65)"
+            record, stdout, stderr = research.run_probe(
+                [sys.executable, "-c", child], root, {}, root, "capture", timeout=5, limit=64, memory_only=True)
+            self.assertEqual(stdout, b"exact observed stdout")
+            self.assertEqual(stderr, b"e" * 64)
+            self.assertEqual(record["error"], "output limit reached")
+            self.assertEqual(foreign.read_bytes(), b"unchanged foreign authority")
+            self.assertTrue((root / "capture.stdout.log").is_symlink())
+            self.assertTrue((root / "capture.stderr.log").is_symlink())
 
 
 if __name__ == "__main__":

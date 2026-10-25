@@ -3,6 +3,7 @@
 No acquisition, native admission guard or command selection occurs here.
 """
 import hashlib
+import io
 import os
 import resource
 import selectors
@@ -66,14 +67,21 @@ def capture_output(process, selector, streams, started, timeout, limit):
     return None
 
 
-def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT):
-    """Cap streams live without limiting unrelated native filesystem writes."""
+def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT, *, memory_only=False):
+    """Cap streams live without limiting unrelated native filesystem writes.
+
+    New private collectors use memory_only: no native-writable capture path is
+    opened or reread, and the returned bytes come from the bounded held buffers.
+    The historical on-disk behavior remains available to preserved collectors.
+    """
     stdout_path, stderr_path = output / (label + ".stdout.log"), output / (label + ".stderr.log")
     record = {"probe": label, "argv": argv, "cwd": str(cwd), "error": None}
     started, process = time.monotonic(), None
     if limit < 1 or timeout <= 0:
         raise ValueError("positive probe stream limit and timeout are required")
-    with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr, selectors.DefaultSelector() as selector:
+    stdout_target = io.BytesIO() if memory_only else stdout_path.open("wb")
+    stderr_target = io.BytesIO() if memory_only else stderr_path.open("wb")
+    with stdout_target as stdout, stderr_target as stderr, selectors.DefaultSelector() as selector:
         try:
             process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
@@ -94,7 +102,10 @@ def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT):
                     for pipe in (process.stdout, process.stderr):
                         if pipe is not None:
                             pipe.close()
-    stdout_body, stderr_body = stdout_path.read_bytes(), stderr_path.read_bytes()
+        if memory_only:
+            stdout_body, stderr_body = stdout.getvalue(), stderr.getvalue()
+    if not memory_only:
+        stdout_body, stderr_body = stdout_path.read_bytes(), stderr_path.read_bytes()
     record.update({"exit": process.returncode if process is not None else None,
                    "elapsed_seconds": round(time.monotonic() - started, 3),
                    "stdout_file": stdout_path.name, "stderr_file": stderr_path.name,
