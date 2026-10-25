@@ -311,7 +311,7 @@ func (manager Manager) Load(operationID string) (Receipt, error) {
 	if err := pathpolicy.ValidateLeafID(operationID); err != nil {
 		return Receipt{}, fmt.Errorf("unsafe directory swap operation id: %w", err)
 	}
-	body, err := os.ReadFile(manager.journalPath(operationID))
+	body, err := atomicfile.ReadFile(manager.journalPath(operationID))
 	if err != nil {
 		return Receipt{}, err
 	}
