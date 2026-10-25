@@ -23,6 +23,22 @@ type linuxTaskProcOps struct {
 	taskExists func(string) (bool, error)
 }
 
+// A release snapshot remains an error until the exact task directory is
+// independently absent. Its stable identity also preserves replacement checks.
+type linuxTaskReleaseIdentityError struct {
+	identity linuxProcessIdentity
+}
+
+func (*linuxTaskReleaseIdentityError) Error() string { return "malformed proc task stable identity" }
+
+// Retain the original observation without allowing one of its errnos to stand
+// for proven disappearance at an outer traversal boundary. No Unwrap or Is.
+type linuxTaskIdentityUncertainty struct {
+	cause error
+}
+
+func (failure *linuxTaskIdentityUncertainty) Error() string { return failure.cause.Error() }
+
 func ordinaryContainmentPreflight() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -107,6 +123,11 @@ func linuxTaskChildrenWith(pid, tid int, ops linuxTaskProcOps) ([]byte, bool, er
 	}
 	after, identityErr := linuxReadTaskIdentity(task, tid, ops)
 	if identityErr != nil {
+		//nolint:errorlint // Only the direct private parser marker carries an admitted release identity.
+		if released, ok := identityErr.(*linuxTaskReleaseIdentityError); ok && released != nil &&
+			(before.pid != released.identity.pid || before.startTime != released.identity.startTime) {
+			return nil, true, fmt.Errorf("proc task changed identity while its children interface was missing")
+		}
 		gone, observeErr := linuxTaskGoneAfterIdentityError(task, identityErr, ops)
 		return nil, !gone, observeErr
 	}
@@ -125,15 +146,29 @@ func linuxTaskChildrenWith(pid, tid int, ops linuxTaskProcOps) ([]byte, bool, er
 }
 
 func linuxTaskGoneAfterIdentityError(task string, identityErr error, ops linuxTaskProcOps) (bool, error) {
-	if !linuxProcessGone(identityErr) {
-		return false, identityErr
+	//nolint:errorlint // Wrapped or joined release markers must not authorize a disappearance probe.
+	released, direct := identityErr.(*linuxTaskReleaseIdentityError)
+	if !direct || released == nil {
+		var nested *linuxTaskReleaseIdentityError
+		if errors.As(identityErr, &nested) {
+			return false, &linuxTaskIdentityUncertainty{cause: identityErr}
+		}
+		if !linuxProcessGone(identityErr) {
+			return false, identityErr
+		}
 	}
 	exists, err := ops.taskExists(task)
 	if err != nil {
+		if released != nil {
+			return false, errors.Join(released, &linuxTaskIdentityUncertainty{cause: err})
+		}
 		return false, err
 	}
 	if !exists {
 		return true, nil
+	}
+	if released != nil {
+		return false, released
 	}
 	// A missing stat inside a still-present task is unknown observation, not
 	// evidence that the task disappeared or that its children list was empty.
@@ -169,10 +204,33 @@ func parseLinuxTaskIdentity(body []byte, tid int) (linuxProcessIdentity, error) 
 	parent, parentErr := strconv.Atoi(fields[1])
 	group, groupErr := strconv.Atoi(fields[2])
 	started, startErr := strconv.ParseUint(fields[19], 10, 64)
-	if parentErr != nil || groupErr != nil || startErr != nil || parent < 0 || group < 0 {
+	if parentErr != nil || groupErr != nil || startErr != nil || parent < 0 {
 		return linuxProcessIdentity{}, fmt.Errorf("malformed proc task stable identity")
 	}
-	return linuxProcessIdentity{pid: tid, ppid: parent, pgid: group, startTime: started, zombie: strings.IndexByte("ZXx", fields[0][0]) >= 0}, nil
+	identity := linuxProcessIdentity{pid: tid, ppid: parent, pgid: group, startTime: started, zombie: strings.IndexByte("ZXx", fields[0][0]) >= 0}
+	if group < 0 {
+		if linuxTaskReleaseRecord(fields) {
+			return linuxProcessIdentity{}, &linuxTaskReleaseIdentityError{identity: identity}
+		}
+		return linuxProcessIdentity{}, fmt.Errorf("malformed proc task stable identity")
+	}
+	return identity, nil
+}
+
+func linuxTaskReleaseRecord(fields []string) bool {
+	// do_task_stat leaves these defaults when the task's sighand was released.
+	// State is sampled earlier and does not itself establish disappearance.
+	if len(fields) < 50 || fields[1] != "0" || fields[2] != "-1" || fields[3] != "-1" {
+		return false
+	}
+	for _, field := range fields[1:] {
+		magnitude := strings.TrimPrefix(field, "-")
+		number, err := strconv.ParseUint(magnitude, 10, 64)
+		if err != nil || strconv.FormatUint(number, 10) != magnitude || strings.HasPrefix(field, "-") && number == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func validateLinuxProcChildren(body []byte) error {
