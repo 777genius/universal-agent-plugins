@@ -302,9 +302,14 @@ func (f *openCodeProjectFixture) run(t *testing.T, label, project string, args .
 		t.Fatal("public UAP operation failed; see exact bounded evidence")
 	}
 	if args[0] != "remove" {
-		openCodeAssertCompleted(t, label, result)
 		if project != "" {
+			result, err = openCodeProjectAssertionEnvelope(result)
+			if err != nil {
+				t.Fatalf("%s project result: %v", label, err)
+			}
 			codexNativeProjectPrepared(t, result)
+		} else {
+			openCodeAssertCompleted(t, label, result)
 		}
 	}
 	return result
