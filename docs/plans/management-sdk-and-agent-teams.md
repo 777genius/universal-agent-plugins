@@ -1,13 +1,54 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v7 — resumed qualification, retained-plan capacity correction and remaining dependency/security gates.
+Status: implementation plan v8 — current source qualification, authenticated host authority and explicit evidence boundaries.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
 
-## Current checkpoint — v7 (2026-10-25)
+## Current checkpoint — v8 (2026-10-25)
+
+The executable/SDK source remains
+`5224ebd5f66bbdfab0bef906dba0b089062f6073`, version
+`0.1.91+agentteams.5224ebd5f66b`. This checkpoint changes documentation only;
+advancing the documentation head does not identify different executable bytes.
+The matching SDK was rebuilt and packed from that source, with unchanged SHA-256
+`31eb798b31be66d1c4d80d1cfa094934fa786cf2b46313360b4c6a8f6bfdd96c`.
+
+[Required 40186976337](https://github.com/777genius/universal-agent-plugins/actions/runs/40186976337)
+passed all six jobs on 5224, including the complete required test lane, generated
+contract, SDK lifecycle and actual packed consumer. The retained-plan correction
+also has the real-HTTP red-before regression described in v7. Terminal UI Linux
+and macOS passed; Windows and the Go CodeQL analysis were still running/queued
+when this checkpoint was written. A neutral aggregate missing Go analysis is not
+security clearance. The documentation head must satisfy its applicable CI too.
+
+Agent Teams head `501916f1532d0c2bd48eb4867a09228116009c5f` pins these exact
+engine/SDK inputs. Its [v10 plan](https://github.com/777genius/agent-teams-ai/blob/501916f1532d0c2bd48eb4867a09228116009c5f/docs/extensions/uap-management-integration-plan.md)
+records the implemented sidecar capability, source-reference correction, packaged
+MCP cleanup and independently reviewed click-readiness correction. The desktop
+sidecar now requires an unforgeable capability before invoking managed methods;
+Host/Origin/socket checks remain additional admission checks, not authentication.
+Only owned main-frame IPC grants browser authority, distinct from the Go bearer.
+
+The [current desktop lane](https://github.com/777genius/agent-teams-ai/actions/runs/40188255677)
+adds real OpenCode MCP initialize/list/call and an exact nonce roundtrip through
+a scripted local provider after ordinary UI installation. A fresh session after
+UI removal must make no MCP connection. This is actual native tool transport,
+not live-model, account-authentication or OAuth qualification. Its clean receipt,
+current Full qualification and package matrix remain pending at this checkpoint.
+The live PR bodies record subsequent exact-revision results without relabeling
+older receipts. Current formal security disposition is still outstanding.
+
+The matrix and E1–E7 below retain their original BBC7/v6 evidence. They are not
+retroactively asserted for 5224 or a later app head. S06 multi-profile, S07/S08
+moving/bulk update, S16/S17 cancellation, S21 offline, S23 in-flight context switch
+and S27 active-run behavior retain their cited engine/renderer/admission evidence;
+the desktop journey does not execute all of them. S25/S26 remain blocked on the
+separate draft project/Host prerequisites. No unfinished adapter code is imported.
+
+## Previous checkpoint — v7 (2026-10-25)
 
 Continuation starts from published UAP `6f8e2786d046da56d933167129e514fb10ff7450`
 and Agent Teams `52fcacc3cc69c6df8882ecbb7310abfb9c4b2c19`. The v6 evidence below
@@ -39,11 +80,11 @@ branch protections remain intact. Project/Host prerequisites remain separate.
 
 ## Previous checkpoint — v6 (2026-10-25)
 
-This section and the S01–S30 matrix describe the current qualification state.
+This section and the S01–S30 matrix preserve the historical v6 qualification state.
 The v4/v5 review records below are historical evidence at their named revisions;
 their then-open tasks and counts are not assertions about the current artifacts.
 
-| Input | Current qualification pin |
+| Input | Historical v6 qualification pin |
 | --- | --- |
 | UAP source | [bbc7e98da96dd7d77db42f65da7afae84a86f799](https://github.com/777genius/universal-agent-plugins/commit/bbc7e98da96dd7d77db42f65da7afae84a86f799) |
 | Engine version | `0.1.91+agentteams.bbc7e98da96d`; compatibility baseline is the published `agentplugins-v0.1.91` tag at `4555aa53844ee0078e9036cd82638afd67f77c16` |
@@ -89,7 +130,7 @@ workstream being merged and qualified.
 
 Research began at UAP main 4555aa53844ee0078e9036cd82638afd67f77c16 and Agent Teams
 main 23617c3e825f775ea27d354d03e17a28bf612586. Those are historical design inputs;
-the v6 qualification pins and fresh prerequisite heads are recorded separately
+the historical v6 qualification pins and prerequisite heads are recorded separately
 above and below. Recheck moving prerequisite status before final integration.
 
 | Concern | Selection | Why |
@@ -234,7 +275,7 @@ Browser consumers use their trusted application backend to reach UAP. They do no
 launch a binary or obtain arbitrary local filesystem access. HTTP and IPC adapters
 must preserve equivalent validation and outcomes.
 
-## Scenario and acceptance matrix
+## Scenario and acceptance matrix — historical v6 evidence
 
 The status names distinguish layers: **engine/API verified** means the cited
 deterministic or actual-artifact checks passed; it does not imply final desktop
@@ -275,7 +316,7 @@ Evidence keys E1–E7 are defined immediately below.
 | S29 | Actual Electron install/update/remove/reopen, keyboard and narrow layout | **Pending on current app checkpoint.** Earlier real preview/install observations are historical partial evidence; current complete desktop receipt and screenshots remain required (E6). |
 | S30 | Pinned SDK/native executable in supported packaged OS/architecture | Linux x64 matched source/tarball/binary staged and executed E3/E4. Historical app signing/package results remain in its plan; current-app package matrix is pending (E7). UAP Terminal UI CI is not Electron package qualification. |
 
-### Current evidence ledger
+### Historical v6 evidence ledger
 
 **E1 — remote UAP qualification at BBC7.**
 [Required run 40176921783](https://github.com/777genius/universal-agent-plugins/actions/runs/40176921783)
@@ -544,22 +585,20 @@ fixture lifecycle and structured error), not a speculative maintained Python SDK
 
 S24 covers only the new Agent Teams feature, as required by its feature standard;
 it does not rebuild every legacy web extension API. Both adapters invoke the same
-facade. Existing application CORS settings are not mutation authority. Add a narrow
-management-route admission check: exact trusted Host/Origin and loopback client;
-refuse unauthenticated non-loopback deployment unless an existing authenticated
-trusted adapter supplies authority. Require bounded JSON mutation bodies. Test
-hostile/unknown Origin/Host and broad CORS configuration before facade invocation.
-Do not weaken UAP's own capability checks or introduce a global auth framework.
+facade. Existing application CORS settings are not mutation authority. Every
+managed sidecar method requires the separate unforgeable sidecar capability
+before facade invocation, in addition to exact Host/Origin, loopback peer and
+bounded JSON checks. The benign unauthenticated availability response cannot
+invoke the facade. Missing/forged credentials and hostile headers are refused.
 
-The desktop sidecar is a trusted-personal-local boundary. Its real socket peer,
-Host, Origin and bounded JSON checks enforce browser/network admission; they do
-not authenticate an OS account or local process. Another process able to connect
-locally can supply those headers, including a process owned by a different account
-on a shared machine. This integration does not claim hostile-local-process or
-multiuser isolation. Remote or multiuser deployment requires an authenticated
-deployment adapter before exposing mutations. The Go child's separate private
-bearer capability stays in trusted host composition and never reaches the
-renderer. IPC/HTTP parity does not turn the sidecar checks into that credential.
+Only the owned Electron main frame can obtain an authorized browser link through
+IPC; HTTP cannot grant itself authority. The browser removes the fragment and
+retains authority per tab and exact origin, including port. New grants refresh an
+existing client. Stop, restart and failed startup revoke the old capability.
+Bug reports omit fragments. The separate Go bearer remains in trusted main
+composition and never reaches the renderer. These are feature-local boundaries,
+not a new global authentication framework. A hostile process already able to read
+private browser/main memory or the same private state remains outside this claim.
 
 
 Current shared native profile files can be read by active agents. Therefore refuse/

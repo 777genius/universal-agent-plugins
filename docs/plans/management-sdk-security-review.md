@@ -4,7 +4,42 @@ Date: 2026-10-25. Independent source review; no tests, builds or native clients 
 run by this reviewer. No production code, scanner configuration, alert state or
 repository protection was changed.
 
-## Scope and gate status
+## Current follow-up audit
+
+The follow-up source review covers UAP executable source
+`5224ebd5f66bbdfab0bef906dba0b089062f6073` and Agent Teams
+`501916f1532d0c2bd48eb4867a09228116009c5f`. The files containing all 15 reported
+UAP sinks, the receipt validator and `managementAdd` are byte-unchanged from BBC7, verified
+by the targeted Git diff. The dispositions below remain applicable to those
+paths. The app follow-up source and native-tool fixture received independent
+security/application review with no remaining concrete P1/P2 identified.
+
+The app now requires a separate random sidecar capability on managed HTTP
+methods before the facade. Only owned main-frame IPC grants an authorized browser
+link. Browser storage scoped to the exact origin and tab, URL/bug-report fragment removal, regrant and
+stop/restart/startup-failure revocation supplement Host/Origin/socket checks.
+The private Go bearer is distinct and remains in main composition. This corrects
+the broader HTTP-authority concern; it does not rely on forged local headers as
+authentication. The historical app authority description below is superseded.
+
+The source-reference change retains bounded input and obvious local-path refusal
+while leaving the remote-source grammar to Go. The new isolated MCP fixture uses
+real pinned OpenCode with a controlled local provider; UAP owns MCP configuration
+and ordinary installation security assessment. No live model/OAuth pass is claimed.
+
+At this checkpoint UAP aggregate `121152944456` is neutral only because the Go
+configuration is still missing while analysis `121149748693` is queued/running.
+App aggregate `121154146461` is also unfinished. Neither is a security pass.
+Existing UAP alerts 46/47 still require formal disposition despite their source
+responses. The other historical annotation numbers are not invented from sink
+locations; the completed new scan must be checked. The connector has no alert
+dismissal operation and the available browser is not responding. No scanner,
+workflow permission, protection or alert state has been modified.
+
+This follow-up records source review, not additional test execution. Actual
+Required/desktop/package results are recorded in the plan and live PR bodies.
+
+## Historical scope and gate status
 
 | Repository / source reviewed | Aggregate check | Annotations reviewed |
 | --- | --- | --- |
@@ -16,7 +51,7 @@ production change was identified in these 18 reported locations under the
 documented personal-local deployment model. The per-location reasoning below is
 the security disposition; it is not a successful scanner result or merge approval.
 
-**Both aggregate security checks remain failing.** Successful analysis jobs do not
+**Both historical aggregate security checks failed.** Successful analysis jobs do not
 clear their findings. Formal repository security disposition remains outstanding:
 the available alert-detail API required authentication, the connector exposed no
 alert-review operation, and the browser did not provide an authenticated security
