@@ -59,10 +59,25 @@ GitHub-hosted machines. Check actual platform, `GITHUB_ACTIONS`,
 Linux. Never synthesize host eligibility locally. Inert parser/protocol tests may
 run locally; they do not qualify a vendor process.
 
+The new VS Code trusted runtime starts on the already reviewed `ubuntu-22.04`
+workspace host, preserving its ordinary-user, NNP, strict cgroup admission,
+Xvfb and standard Electron sandbox contract. Record the actual image/version.
+The earlier Ubuntu 24.04 failure is not an invitation to use `--no-sandbox`, a
+setuid-helper workaround, privileged launch or another process primitive.
+Unsupported admission fails; an image change needs its own reviewed amendment.
+See [the retained host plan](vscode-workspace-host-plan.md).
+
 Use a fresh original user profile plus separate real Git projects A/B and an
 outside cwd. A project never becomes HOME. Explicitly allowlist child environment;
 do not inherit credentials, proxies, account state, shell configuration or the
 workflow GitHub token. Do not claim a network firewall that is not implemented.
+Every new Cline child, including version/help, receives literal
+`CLINE_NO_AUTO_UPDATE=1` through the preserved runtime-environment contract.
+Refuse a pin where that documented control no longer applies. Use documented
+updater suppression for other clients where available and verify immutable
+runtime-file identities before/after observation; changed bytes cannot continue
+under the old pin. Freeze Cline tool approval explicitly rather than inheriting
+its CLI's auto-approval default; reject unexpected built-in tool requests.
 
 Exact owned A/B trust can be authored through documented native configuration or
 native UI/API before preservation baselines, following the existing
@@ -75,6 +90,12 @@ An officially supported custom provider may point to the existing scripted
 loopback fixture. Label it as a test provider; its own optional test credential
 is not vendor OAuth evidence. Never inherit or publish real credentials. Native
 local bearer tokens stay private and are redacted from artifact transcripts.
+In particular, Kimi startup raw streams, generated token files and auth/provider
+configuration stay in a private capture directory outside artifact admission.
+Parse the native token privately, redact diagnostic streams before copying them
+into the admitted evidence namespace, and upload only the closed evidence set.
+An inert admission test must reject a known token canary in JSON, transcripts
+or archive members. Do not retain bearer-bearing URLs as public source evidence.
 
 Reuse `native_client_research.run_probe`, existing native fixture/capture and
 process containment, source/provenance checks, the native MCP probe and existing
@@ -102,6 +123,51 @@ evidence and all affected qualification flags false. A required runtime case
 fails if blocked, skipped, not reached or missing evidence. Never convert an
 arbitrary nonzero exit into an expected boundary or a successful qualification.
 
+### Concrete phase and leaf contract
+
+This two-round plan gate initially authorizes shared acquisition and bounded
+research collectors, not an unobserved product change or guessed session
+protocol. `acquire` requires `<client>.acquisition`; `observe` additionally
+requires `<client>.help` and `<client>.scope-observation`. A research runtime
+attempt is separately registered as `<client>.runtime-attempt`. Cursor/Grok
+cannot enter `observe` until the reviewed immutable acquisition amendment.
+Unknown flags/schema, malformed output and unrelated failures are failures,
+not supported-boundary records. Only a measured explicit authentication or
+unsupported-native-capability response can complete a planned boundary attempt.
+
+All ten targets must be accounted for in the final matrix. A successful research
+job does not satisfy any qualification ID. The required follow-through IDs for
+an installation/discovery claim are `<client>.project-lifecycle` and
+`<client>.native-restart-removal`; a native MCP claim additionally requires
+`<client>.mcp-initialize`, `<client>.mcp-tools-list` and
+`<client>.mcp-tools-call`. An outstanding boundary remains visible and unqualified,
+never a substituted pass. After observation, freeze exact native mode/argv,
+schemas, tool approval, source entrypoint and selected Go test names in a concise
+amendment here; independently review it twice before coding that runtime slice.
+
+Collectors are closed, client-specific leaves under
+`scripts/project_native_collectors/`; their inert contracts belong in
+`scripts/test_project_native_<client>.py`. Root owns shared entrypoint,
+acquisition/host/process/artifact helpers and workflow registration. This fixes
+the initial file ownership without creating a new plugin or RPC framework.
+
+| Client ID | Owned collector | Subsequent native fixture prefix or controller | Mode to freeze after observation |
+| --- | --- | --- | --- |
+| `gemini` | `gemini.py` | `repotests/agentplugins_gemini_project_native_` | Installed settings, native session, supported Gemini loopback protocol and returned MCP tool result. |
+| `copilot` | `copilot.py` | `repotests/agentplugins_copilot_project_native_` | Offline BYOK ACP/session with empty injected MCP list and exact named-tool permission response. |
+| `kiro` | `kiro.py` | `repotests/agentplugins_kiro_project_native_` | Measured V2/V3/native ACP mode; config visibility and actual auth/startup response stay distinct. |
+| `cursor` | `cursor.py` | `cli/cmd/agentplugins/project_cursor_native_` | Genuine list/list-tools source resolution, then separately admitted tool-execution mode. |
+| `cline` | `cline.py` | `cli/cmd/agentplugins/project_cline_runtime_` | Real task using exact process MCP override, suppressed updater and explicit tool approval. |
+| `qoder` | `qoder.py` | `cli/cmd/agentplugins/project_qoder_native_` | Explicit session plugin-dir, pinned runtime/SDK, exact initialized plugin/skill source and absent-path control. |
+| `windsurf` | `windsurf.py` | `repotests/agentplugins_devin_project_native_` | Genuine Devin skills/MCP discovery; any auth-required tool tier stays separate. |
+| `kimi` | `kimi.py` | `repotests/agentplugins_kimi_project_native_` | Native authenticated local API resolves installed entry by name/cwd; native prompt tool result is a separate case. |
+| `grok` | `grok.py` | `repotests/agentplugins_grok_project_native_` | Observed plugin versus direct project path; actual source/trust/connection before any adapter change. |
+| `vscode` | `vscode.py` | `install/integrationctl/research/vscodeprojectruntime/` and `scripts/vscode-project-runtime-observer/` | Trusted native development host; correlate gateway endpoint with exact definition metadata and nonce/package/data/cwd, not label alone. |
+
+The Go prefixes above admit focused `_test.go` leaves only, preserving existing
+fixtures. The initial shared/collector PRs cannot assert these later cases are
+implemented merely because their research completed.
+
 ## Frozen candidates and initial observations
 
 Pin every executable before execution. Cursor and current Grok start with an
@@ -126,6 +192,13 @@ version/platform. Measure main and companion binaries and any Node runtime.
 New observer source uses TypeScript (`.ts`); generated JavaScript is a build
 artifact, not a new tracked `.mjs`/`.cjs` implementation. Preserve existing
 observers and reuse repository tooling rather than introducing another stack.
+Before implementing/executing an observer or SDK-backed path, a reviewed leaf
+amendment freezes exact Node, compiler/bundler and SDK versions plus integrity
+or a committed lock containing immutable resolved artifacts, the build command
+and output location. Existing CJS observers do not supply a TypeScript build
+contract by implication. No `npx`/latest resolution or package lifecycle scripts;
+emitted JavaScript stays under the job's temporary artifact/build directory,
+outside the checked-out source. One concrete shared TypeScript toolchain suffices.
 
 ### New immutable pin material already available
 
@@ -168,7 +241,7 @@ observers and reuse repository tooling rather than introducing another stack.
   [CLI](https://docs.qoder.com/cli/cli-reference).
 - Devin: [commands](https://docs.devin.ai/cli/reference/commands),
   [MCP](https://docs.devin.ai/cli/extensibility/mcp/configuration).
-- Kimi: exact [server API](https://github.com/MoonshotAI/kimi-code/blob/684bae9ea6a437f3bae98bba1dcb797a917d500b/docs/en/reference/server-api.md)
+- Kimi: exact 2.3.2 [server API](https://github.com/MoonshotAI/kimi-code/blob/b8dd3a134060c6e80ba4a1659335cd63b68483f2/docs/en/reference/server-api.md)
   and [providers](https://github.com/MoonshotAI/kimi-code/blob/684bae9ea6a437f3bae98bba1dcb797a917d500b/docs/en/configuration/providers.md).
 - Grok: [skills/plugins](https://docs.x.ai/build/features/skills-plugins-marketplaces),
   [MCP](https://docs.x.ai/build/features/mcp-servers),
