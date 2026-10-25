@@ -1,5 +1,6 @@
 """Inert process-capture regressions; no native client or hosted guard spoofing."""
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -7,11 +8,15 @@ import time
 import unittest
 from unittest.mock import patch
 
-SPEC = importlib.util.spec_from_file_location("bounded_research", Path(__file__).with_name("native_client_research.py"))
-research = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(research)
+research = None
+if os.name == "posix":
+    SPEC = importlib.util.spec_from_file_location("bounded_research", Path(__file__).with_name("native_client_research.py"))
+    research = importlib.util.module_from_spec(SPEC)
+    SPEC.loader.exec_module(research)
 
 
+
+@unittest.skipUnless(os.name == "posix", "requires POSIX resource limits, selectable pipes, sessions and killpg")
 class CaptureTests(unittest.TestCase):
     def run_child(self, root, body, label="probe", **kwargs):
         return research.run_probe([sys.executable, "-c", body], root, {}, root, label, **kwargs)
@@ -123,3 +128,14 @@ class CaptureTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NonPosixImportTests(unittest.TestCase):
+    def test_nonposix_discovery_does_not_import_posix_capture(self):
+        source = Path(__file__)
+        spec = importlib.util.spec_from_file_location("inert_nonposix_capture_tests", source)
+        module = importlib.util.module_from_spec(spec)
+        with patch.object(os, "name", "nt"), patch.object(importlib.util, "spec_from_file_location", side_effect=AssertionError("POSIX helper import on non-POSIX")):
+            spec.loader.exec_module(module)
+        self.assertIsNone(module.research)
+        self.assertTrue(module.CaptureTests.__unittest_skip__)

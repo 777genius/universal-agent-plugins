@@ -33,7 +33,10 @@ class ProjectEnvelopeTests(unittest.TestCase):
             root = Path(temp).resolve()
             source = self.fixture(root)
             destination = root / "upload.zip"
-            self.assertTrue(artifacts.write_archive(source, destination))
+            admitted = artifacts.write_archive(source, destination)
+            if not admitted:
+                with zipfile.ZipFile(destination) as archive:
+                    self.fail(archive.read("opencode-project-evidence.json").decode("utf-8"))
             with zipfile.ZipFile(destination) as archive:
                 self.assertEqual(set(archive.namelist()), {p.name for p in source.iterdir()})
                 for member in archive.infolist():

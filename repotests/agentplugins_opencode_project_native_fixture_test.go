@@ -38,7 +38,9 @@ type openCodePassiveRecorder struct {
 
 func newOpenCodePassiveRecorder(t *testing.T) *openCodePassiveRecorder {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,8 +291,8 @@ func (f *openCodeProjectFixture) run(t *testing.T, label, project string, args .
 		f.evidence["repeat_remove_contract"] = "empty stdout; exact fixed stderr; pure ExitError exit1; unchanged owned state/files"
 		return nil
 	}
-	if len(bytesTrim(r.Stderr)) != 0 {
-		t.Fatal("public UAP emitted dirty stderr; see evidence")
+	if !openCodeProjectProgress(label, r.Stderr) {
+		t.Fatal("public UAP emitted unexpected progress bytes; see evidence")
 	}
 	result, err := openCodeProjectConfig(r.Stdout)
 	if err != nil {

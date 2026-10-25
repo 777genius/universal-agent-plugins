@@ -29,7 +29,7 @@ func TestOpenCodeProjectNativeStrictJSONAndSelectedSkill(t *testing.T) {
 			t.Fatal("empty/malformed listing became discovery")
 		}
 	}
-	for _, location := range []string{filepath.Join(root, "other", "SKILL.md"), filepath.Dir(selected) + string(os.PathSeparator) + ".." + string(os.PathSeparator) + "guide" + string(os.PathSeparator) + "SKILL.md"} {
+	for _, location := range []string{filepath.Join(root, "other", "SKILL.md"), strings.Join([]string{filepath.Dir(selected), "..", "guide", "SKILL.md"}, string(os.PathSeparator))} {
 		got := map[string]openCodeProjectSkill{"guide": {Name: "guide", Location: location, Content: "inert body"}}
 		if err := openCodeProjectCheckSkills(got, want, nil); err == nil {
 			t.Fatal("foreign/traversing output normalized into selected ownership")
@@ -106,11 +106,19 @@ func TestOpenCodePassiveRecorderDetectsTCPAndHTTPWithoutMCP(t *testing.T) {
 		t.Fatal("recorder not initially empty")
 	}
 	client := &http.Client{Timeout: time.Second}
-	response, err := client.Get(r.url("inert"))
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, r.url("inert"), http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = response.Body.Close()
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Error(err)
+	}
 	if response.StatusCode != http.StatusServiceUnavailable || r.counts()[0] < 1 || r.counts()[1] != 1 {
 		t.Fatalf("passive audit missed connection/request: %v", r.counts())
 	}
@@ -126,11 +134,17 @@ func TestProjectNativeCaptureChild(t *testing.T) {
 		if err != nil || len(body) != 0 {
 			os.Exit(8)
 		}
-		fmt.Fprint(os.Stdout, `{"ok":true}`)
+		if _, err := fmt.Fprint(os.Stdout, `{"ok":true}`); err != nil {
+			os.Exit(7)
+		}
 	case "overflow":
-		fmt.Fprint(os.Stdout, strings.Repeat("x", 8192))
+		if _, err := fmt.Fprint(os.Stdout, strings.Repeat("x", 8192)); err != nil {
+			os.Exit(7)
+		}
 	case "stderr":
-		fmt.Fprint(os.Stderr, strings.Repeat("x", 8192))
+		if _, err := fmt.Fprint(os.Stderr, strings.Repeat("x", 8192)); err != nil {
+			os.Exit(7)
+		}
 	case "deadline":
 		time.Sleep(time.Second)
 	default:
@@ -261,5 +275,47 @@ func TestOpenCodeProjectConfigRejectsMalformedEnabled(t *testing.T) {
 		if openCodeProjectCheckConfig(config, map[string]string{"marker": "http://127.0.0.1:9/A"}, nil) == nil {
 			t.Fatal("malformed or disabled entry qualified", flag)
 		}
+	}
+}
+
+func TestOpenCodeProjectPublicProgressIsExactAndLabelBound(t *testing.T) {
+	resolve := "Resolving and validating one Agent Plugin package for every selected target...\n"
+	cases := map[string]string{
+		"add-user":           resolve + "Installing uap-opencode-user-control for 1 selected clients...\n",
+		"add-A":              resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
+		"add-B":              resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
+		"add-same-user":      resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
+		"add-same-A":         resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
+		"add-json":           resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
+		"repeat-add-A":       resolve + "Applying transactional client package...\n",
+		"unchanged-update-A": "Resolving and validating one updated Agent Plugin package for every selected target...\n",
+		"update-A":           "Resolving and validating one updated Agent Plugin package for every selected target...\n",
+		"intact-repair-A":    "Resolving and validating each unique exact installed package revision once...\n",
+		"missing-repair-A":   "Resolving and validating each unique exact installed package revision once...\n",
+		"remove-A":           "",
+		"remove-json":        "",
+	}
+	for label, expected := range cases {
+		t.Run(label, func(t *testing.T) {
+			if !openCodeProjectProgress(label, []byte(expected)) {
+				t.Fatal("source-established exact progress refused")
+			}
+			for _, dirty := range []string{expected + "warning\n", " " + expected, expected + "\r\n", strings.ReplaceAll(expected, "\n", "\r\n")} {
+				if dirty != expected && openCodeProjectProgress(label, []byte(dirty)) {
+					t.Fatal("changed/extra progress bytes accepted")
+				}
+			}
+			if expected != "" && openCodeProjectProgress(label, nil) {
+				t.Fatal("missing required progress admitted")
+			}
+		})
+	}
+	for _, label := range []string{"version", "initial-A-config", "git-A", "repeat-remove-A", "unknown"} {
+		if openCodeProjectProgress(label, nil) || openCodeProjectProgress(label, []byte(cases["add-A"])) {
+			t.Fatal("non-ordinary UAP lane acquired progress allowance", label)
+		}
+	}
+	if openCodeProjectProgress("repeat-add-A", []byte(cases["add-A"])) || openCodeProjectProgress("add-A", []byte(cases["repeat-add-A"])) {
+		t.Fatal("single/group imperative add progress conflated")
 	}
 }
