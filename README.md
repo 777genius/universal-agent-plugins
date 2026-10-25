@@ -178,6 +178,8 @@ source build:
 agentplugins add owner/repo --alias review --target cursor \
   --scope project --project-root /path/to/project
 agentplugins install --locked --scope project --project-root /path/to/project
+agentplugins skills add owner/repository --ui \
+  --scope project --project-root /path/to/project
 ```
 
 The portable `uap.toml` and `uap.lock` live in that project. Local receipts,
@@ -186,6 +188,9 @@ remains separate. The default scope is still user, and project scope without
 `--project-root` uses the current directory. Native capabilities and activation
 requirements depend on the client. See [Project installation](docs/PROJECT_INSTALLATION.md)
 for supported-target reporting, update/repair/removal and portable restore.
+The [current project support table](docs/PROJECT_CLIENT_SUPPORT.md) records each
+client's component paths and activation limits; user-scope compatibility below
+is a separate contract.
 
 ## Any Agent Plugins 1.0 package
 

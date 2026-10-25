@@ -43,7 +43,9 @@ and excluded targets. Dependency commands take their targets from `uap.toml`;
 they do not accept an inherited `--target` override. Explicit add, update,
 repair and removal commands retain their normal target selection rules.
 
-Clients have different native project capabilities. UAP selects the qualified
+Clients have different native project capabilities. See the
+[current project support table](PROJECT_CLIENT_SUPPORT.md) for each target's
+paths, components and remaining activation boundary. UAP selects the admitted
 adapter for that target and refuses unsupported project requests before source
 acquisition. In particular, [ChatGPT has no native project installation](CHATGPT_PROJECT_SCOPE.md),
 including with `--no-save`. A client's user installation path is never used as
@@ -72,10 +74,12 @@ the shared content store by default.
 
 ## Maintain and recover the selected project
 
-An intact locked install is a no-op. Missing or drifted owned files are
-repaired from the recorded pin. `update` explicitly advances a moving source;
-`repair` restores the installed pin instead of following the newest branch or
-archive endpoint.
+An intact locked install is a no-op. Repair restores missing owned components
+and damaged managed packages from the recorded pin. It preserves externally
+edited native skill directories and MCP entries and reports their ownership
+conflict for review. `update` explicitly advances a moving source; `repair`
+restores the installed pin instead of following the newest branch or archive
+endpoint.
 
 ```sh
 agentplugins deps sync --locked --scope project --project-root /path/to/project
@@ -128,5 +132,6 @@ UAP does not grant workspace trust or authenticate a client to make installation
 look active. Inspect the client's effective project configuration and follow
 the reported next action. [OpenCode's project guide](OPENCODE_PROJECT_SCOPE.md)
 illustrates the difference between installed configuration and observed native
-runtime. Per-client implementation and native evidence are tracked separately
-in [the reviewed client plans](plans/project-install-e2e/client-plans.md).
+runtime. The [current project support table](PROJECT_CLIENT_SUPPORT.md) links
+client guidance and evidence. The [reviewed client plans](plans/project-install-e2e/client-plans.md)
+retain the original proposals and their later observation-driven amendments.
