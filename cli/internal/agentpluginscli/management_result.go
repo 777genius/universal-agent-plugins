@@ -53,9 +53,7 @@ func (p *managementPrepared) outcome(applied dependencyApplicationResult, applyE
 			for _, next := range native.NextActions {
 				result.NextActions = append(result.NextActions, managementNativeNextAction(next.Kind, action.Alias, item.TargetId))
 			}
-			if len(native.ManualActions) > 0 {
-				result.NextActions = append(result.NextActions, managementNativeNextAction("manual", action.Alias, item.TargetId))
-			}
+			result.NextActions = append(result.NextActions, managementManualNextActions(native.ManualActions, action.Alias, item.TargetId)...)
 		}
 		result.Items = append(result.Items, item)
 	}
