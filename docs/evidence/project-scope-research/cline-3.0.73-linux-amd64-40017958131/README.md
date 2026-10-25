@@ -1,5 +1,11 @@
 # Cline 3.0.73: genuine hosted configuration observations
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-research/cline-3.0.73-linux-amd64-40017958131) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Recorded and independently interpreted on 2026-10-24. This is historical
 pre-adapter research, measured at source
 `bb8c89bf62542096a0af3aff26f21a16fee4d595`, from
@@ -8,8 +14,8 @@ and [job 120634802143](https://github.com/777genius/universal-agent-plugins/acti
 The successful artifact is `cline-3.0.73-precode-config-linux-amd64`, ID
 12532307825. Its ZIP was 9,915 bytes, SHA256
 `cec4b3dd3bf2aa7a8572c7d517f06c3529837d5e01445326d00d4a2d4f27c68c`.
-The 29 flat text members are preserved byte-for-byte here; the binary ZIP is
-not committed. `provenance.json` records each member's length and SHA256.
+The 29 flat text members are preserved byte-for-byte in the original repository
+snapshot; the binary ZIP is not committed. `provenance.json` records each member's length and SHA256.
 
 ## Verification and source attribution
 

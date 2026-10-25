@@ -1,5 +1,11 @@
 # Pinned Claude project discovery spike
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 This Linux amd64 spike ran the official Claude Code 2.1.263 binary in disposable
 user/A/B directories on 2026-10-24. It establishes the untrusted native listing
 schema, nested-cwd discovery boundary, enablement-id behavior, and native

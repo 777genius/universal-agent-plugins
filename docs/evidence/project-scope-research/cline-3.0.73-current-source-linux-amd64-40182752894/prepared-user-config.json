@@ -1,3 +1,0 @@
-{"foreignPreference":"retain-user","mcpServers":{"foreign-user":{"transport":{"type":"streamableHttp","url":"http://127.0.0.1:9/FOREIGN-user"}},
-  "uap-cline-user":{"transport":{"type":"streamableHttp","url":"http://127.0.0.1:9/USER"}}
-}}

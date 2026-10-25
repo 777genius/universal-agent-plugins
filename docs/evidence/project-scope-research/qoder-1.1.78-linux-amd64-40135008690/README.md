@@ -1,5 +1,11 @@
 # Qoder 1.1.78 populated scoped inventory: genuine hosted observations
 
+> **Historical snapshot.** The observations and qualifications below belong to
+> their recorded source. The [original repository directory](https://github.com/777genius/universal-agent-plugins/tree/3b93148c356fc5db6fe101d81d943160a5176b6d/docs/evidence/project-scope-research/qoder-1.1.78-linux-amd64-40135008690) preserves the
+> files present before raw-output cleanup. Adjacent metadata and source remain;
+> original manifests describe that snapshot, not the current directory inventory.
+> Retrieve removed raw files there; see the [project evidence index](../../PROJECT_INSTALLATION.md).
+
 Run [40135008690](https://github.com/777genius/universal-agent-plugins/actions/runs/40135008690),
 job120994562933, exact source2b0ef18146c28da9b6a9b1ef86a0fb413d950eee.
 Publisher archive and executable pins remain the reviewed1.1.78 pins. This is a
@@ -9,7 +15,8 @@ Artifact12577491506 contains45flat text members,177172uncompressed bytes. The
 20745byte GitHub ZIP has SHA256
 `88c9374cf0ddac3eebc30cf10e828a50942e444cccc07036119109c5601ec975`.
 [Provenance](provenance.json) preserves every original member length/hash; those
-45members are copied here byte-identically. The ZIP CRC, all22capture records
+45members are copied byte-identically into the original repository snapshot. The
+ZIP CRC, all22capture records
 and44stream receipts, native observed_json equality, six fixed source bodies and
 all eight complete source baselines were independently verified. The APM and
 Skillshare workers independently interpreted the actual raw observations.

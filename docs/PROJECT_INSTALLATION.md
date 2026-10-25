@@ -21,6 +21,18 @@ selection syntax, private Git credentials and archive limits. A local directory
 or local archive uses the existing imperative flow; it does not become a portable
 dependency declaration.
 
+For a complete local plugin package, select Claude Code, Codex, or both explicitly:
+
+```sh
+agentplugins add /path/to/my-plugin --target claude,codex \
+  --scope project --project-root /path/to/project
+```
+
+Use `--target claude` or `--target codex` for one client. Local input does not
+take a saved dependency `--alias`. The [project evidence index](evidence/PROJECT_INSTALLATION.md)
+separates historical failures, blocked observations and successful checks from
+the final feature-source native run; each client's activation limits still apply.
+
 ## Select the environment on every command
 
 The default scope remains `user`. An existing `uap.toml` in your current folder
