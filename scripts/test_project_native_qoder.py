@@ -1,4 +1,4 @@
-"""Inert Qoder acquisition contracts; no vendor payload is acquired or run."""
+"""Inert Qoder acquisition/help contracts; no vendor payload is acquired or run."""
 
 import ast
 import importlib.util
@@ -20,34 +20,103 @@ def load_leaf():
     return leaf
 
 
-class ForbiddenContext:
-    def __getattribute__(self, name):
-        raise AssertionError("acquisition-only collector accessed context: " + name)
+class FakeContext:
+    def __init__(self, leaf):
+        self.leaf, self.calls, self.replace = leaf, [], {}
+
+    def probe(self, label, arguments, project="a", timeout=30):
+        self.calls.append((label, arguments, project, timeout))
+        if label in self.replace:
+            return self.replace[label]
+        if label == "version":
+            return {"exit": 0, "error": None}, b"1.1.78\n", b""
+        usage = next(row[2] for row in self.leaf.HELP if row[0] == label)
+        return {"exit": 0, "error": None}, (usage + "\n\nOptions:\n  -h, --help  display help for command\n").encode(), b""
 
 
 class QoderAcquisitionContract(unittest.TestCase):
-    def test_pending_member_cannot_become_a_native_observation(self):
+    def test_import_and_fake_collection_cannot_launch_or_acquire_a_vendor(self):
         with (
             patch.object(subprocess, "Popen", side_effect=AssertionError("vendor process")) as process,
             patch.object(urllib.request, "urlopen", side_effect=AssertionError("network download")) as download,
         ):
             leaf = load_leaf()
-            self.assertEqual(leaf.AVAILABLE_PHASES, ("acquire",))
-            self.assertIs(leaf.ACQUISITION_ONLY, True)
-            self.assertIsNone(leaf.ACQUISITION["entrypoint"])
-            for context in (None, ForbiddenContext(), {"hosted": True, "native_opt_in": True}):
-                with self.subTest(context_type=type(context).__name__):
-                    with self.assertRaisesRegex(RuntimeError, "acquisition-only.*phase amendment"):
-                        leaf.collect(context)
+            self.assertEqual(leaf.AVAILABLE_PHASES, ("acquire", "help"))
+            self.assertFalse(getattr(leaf, "ACQUISITION_ONLY", False))
+            self.assertEqual(leaf.ACQUISITION["entrypoint"], "qodercli")
+            leaf.collect(FakeContext(leaf))
             process.assert_not_called()
             download.assert_not_called()
 
-    def test_flag_or_guessed_entrypoint_cannot_enable_the_collector(self):
+    def test_only_five_fixed_probes_and_help_case_are_emitted(self):
         leaf = load_leaf()
-        leaf.ACQUISITION_ONLY = False
-        leaf.ACQUISITION["entrypoint"] = "guessed/qodercli"
-        with self.assertRaisesRegex(RuntimeError, "acquisition-only"):
-            leaf.collect(ForbiddenContext())
+        ctx = FakeContext(leaf)
+        result = leaf.collect(ctx)
+        self.assertEqual(ctx.calls, [
+            ("version", ["--version"], "a", 30),
+            ("top-help", ["--help"], "a", 30),
+            ("plugins-help", ["plugins", "--help"], "a", 30),
+            ("plugins-list-help", ["plugins", "list", "--help"], "a", 30),
+            ("mcp-help", ["mcp", "--help"], "a", 30),
+        ])
+        self.assertEqual(result["cases"], [{"id": "qoder.help", "status": "passed",
+                         "reason": "Pinned fixed version/help table observed; no plugin operation, scope or runtime qualification"}])
+        self.assertEqual(result["observations"]["client_version_measured"], "1.1.78")
+        self.assertTrue(all(value is False for key, value in result["observations"].items() if key.endswith("_qualified")))
+
+    def test_process_capture_errors_and_malformed_stream_types_fail_at_first_probe(self):
+        for record, stdout, stderr in [
+            ({"exit": 1, "error": None}, b"Authentication required", b""),
+            ({"exit": 0, "error": "overflow"}, b"1.1.78\n", b""),
+            ({"exit": 0, "error": None}, b"1.1.78\n", b"warning\n"),
+            ({"exit": 0, "error": None}, b"1.1.78\n", b"\n"),
+            ({"exit": None, "error": None}, b"1.1.78\n", b""),
+            ({"exit": False, "error": None}, b"1.1.78\n", b""),
+            ({"exit": 0}, b"1.1.78\n", b""), ({}, b"1.1.78\n", b""),
+            (None, b"1.1.78\n", b""),
+            ({"exit": 0, "error": None}, "1.1.78\n", b""),
+            ({"exit": 0, "error": None}, b"1.1.78\n", ""),
+        ]:
+            with self.subTest(record=record, stdout=stdout, stderr=stderr):
+                leaf = load_leaf()
+                ctx = FakeContext(leaf)
+                ctx.replace["version"] = record, stdout, stderr
+                with self.assertRaisesRegex(ValueError, "probe did not finish cleanly"):
+                    leaf.collect(ctx)
+                self.assertEqual(len(ctx.calls), 1)
+
+    def test_wrong_version_or_unknown_help_never_becomes_a_boundary(self):
+        for label, stdout, calls in [("version", b"1.1.79\n", 1),
+                                     ("top-help", b"Authentication required\n", 2),
+                                     ("mcp-help", b"Usage: qodercli mcp-new [options]\n  -h, --help  help\n", 5)]:
+            with self.subTest(label=label):
+                leaf = load_leaf()
+                ctx = FakeContext(leaf)
+                ctx.replace[label] = {"exit": 0, "error": None}, stdout, b""
+                with self.assertRaises(ValueError):
+                    leaf.collect(ctx)
+                self.assertEqual(len(ctx.calls), calls)
+
+    def test_exact_retained_version_bytes(self):
+        leaf = load_leaf()
+        self.assertEqual(leaf.parse_version(b"1.1.78\n"), "1.1.78")
+        for body in [b"1.1.78", b"1.1.78\r\n", b"1.1.79\n", b" 1.1.78\n", b"1.1.78\nextra\n"]:
+            with self.subTest(body=body), self.assertRaisesRegex(ValueError, "version differs"):
+                leaf.parse_version(body)
+
+    def test_command_usage_is_anchored_and_help_is_required(self):
+        leaf = load_leaf()
+        parent = "Usage: qodercli plugins|plugin [options] [command]"
+        listing = "Usage: qodercli plugins list [options]"
+        for usage in (parent, listing):
+            self.assertEqual(leaf.parse_help((usage + "\n\n  -h, --help  display help for command\n").encode(), usage), usage)
+        good = (listing + "\n  -h, --help  display help for command\n").encode()
+        for body in [b"prefix\n" + good, good.replace(b"plugins list", b"plugins listings"),
+                     good.replace(b"plugins list", b"plugins"), good + (listing + "\n").encode(),
+                     good.replace(b"--help", b"--helper"), good.replace(b"--help", b"--hel"),
+                     good + b"\x1b[0m", good + b"\x00", good + b"\xff"]:
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                leaf.parse_help(body, listing)
 
     def test_reuses_preserved_reviewed_archive_and_binary_identities(self):
         # Read literal pins without importing the legacy acquisition machinery.
