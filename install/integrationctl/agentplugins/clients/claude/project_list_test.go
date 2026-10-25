@@ -54,6 +54,13 @@ func TestProjectListingRequiresExactScopePathAndNoLoadErrors(t *testing.T) {
 
 func TestProjectListingRejectsSymlinkTraversalSpelling(t *testing.T) {
 	project, other := t.TempDir(), t.TempDir()
+	for _, path := range []*string{&project, &other} {
+		physical, err := filepath.EvalSymlinks(*path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		*path = physical
+	}
 	skills := filepath.Join(project, ".claude", "skills")
 	for _, path := range []string{skills, filepath.Join(other, "sub"), filepath.Join(other, "demo-managed")} {
 		if err := os.MkdirAll(path, 0700); err != nil {
