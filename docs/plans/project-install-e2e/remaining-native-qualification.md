@@ -454,6 +454,276 @@ limits remain unchanged. Missing protocol, identity, native UI or cleanup fails.
 This is only a trusted development-host/proposed-API path, not model/OAuth or
 released-client qualification.
 
+## Gemini and Copilot runtime-attempt amendment
+
+This amendment first admits bounded, explicitly unqualified runtime research for
+the already pinned Gemini 0.65.0/Node 24.21.0 and Copilot 1.0.103 distributions.
+Wait for their genuine initial help/scope artifacts and two independent reviews
+of this subsection before implementation. Select exact
+`TestAgentpluginsGeminiNativeProjectRuntimeAttempt` and
+`TestAgentpluginsCopilotNativeProjectRuntimeAttempt`; their only research case is
+`<client>.runtime-attempt`. They cannot satisfy any of the five qualification
+IDs. Capture the actual provider request, installed tool name, native output and
+session identity, initialize/list/call events and returned result. Freeze the
+observed closed contract after inspecting genuine artifacts, with two independent
+reviews before implementing the final lifecycle. Unknown flags, schema, routes,
+tool names and auth responses fail the attempted scenario. A useful bounded
+failure capture is not a successful runtime attempt or an unsupported boundary.
+The initial attempt is deliberately one public A package add and one fresh A
+session with one write-marker tool call, followed by cleanup. A/B/outside roots
+exist, but independent user/B installation, trust negatives and the complete
+lifecycle belong to the later tests; the attempt claims none of that coverage.
+
+Copilot's candidate here is its supported headless BYOK provider path, replacing
+the earlier ACP-only candidate for these new tests. No ACP adapter, SDK, inline
+MCP definitions or generic RPC framework is introduced. Existing ACP research
+and legacy tests stay intact. Current vendor documentation identifies candidate
+flags; the exact pinned help and hosted attempt decide what is admitted.
+
+### Ownership, fixture authority and limits
+
+Own only focused `_test.go` leaves with the existing
+`repotests/agentplugins_gemini_project_native_` and
+`repotests/agentplugins_copilot_project_native_` prefixes: `provider`, `attempt`,
+`contract` and, after the later gate, `lifecycle`. Reuse `nativeFixture`, its
+existing harmless `inspect_runtime` probe, ownership/event assertions and the
+existing `httptest` scripted-provider pattern. Root owns hosted admission,
+immutable acquisition, workflow selection, bounded process/artifact integration
+and support wording. No production adapter, activation promotion or alternate
+installer is part of this slice.
+
+Use the actual built public `agentplugins` executable and production detection,
+security, source acquisition, immutable storage, installer and transactions.
+No host/security stubs or fake client executables. The verified Gemini bundle
+has the vendor Node shebang: create one recorded npm-style `bin/gemini` symlink
+to its verified `gemini.js`, with the verified Node first on PATH, for legitimate
+public detection. Check the exact link, target and runtime identities before
+and after each command. The native session itself invokes exact Node plus the
+exact bundle entrypoint. Copilot invokes its exact regular ELF. No shell shim
+or executable that fabricates a version or native result is admitted.
+
+Each attempt has 180 seconds total, 150 seconds work and 30 seconds cleanup.
+Each later lifecycle has 900 seconds total, 840 seconds work and 60 seconds
+cleanup, measured from one original monotonic start. Public UAP operations have
+30 seconds, help/list 30 seconds and each native session 60 seconds. Provider
+requests have five-second deadlines, one-second read-header limits, one MiB
+body/response limits and at most eight requests per session. Bound each native
+stdout/stderr stream to one MiB; reject truncation/overflow. Reuse existing
+ordinary `process.OS` descendant supervision and graceful-exit facilities rather
+than the older unbounded installer capture or a new process primitive. Stop
+starting lifecycle sessions with less than 75 seconds work remaining. Close
+provider listeners and prove all owned native/MCP descendants have exited before
+success. Forced termination, surviving children or incomplete cleanup fails.
+
+Every fixture uses one fresh original HOME, real Git projects A/B and an outside
+cwd; project paths never become HOME. Use independent public local packages for
+the original-user skill marker and A/B mixed skill/MCP markers. Distinct keys are
+`uapgeminia`/`uapgeminib` or `uapcopilota`/`uapcopilotb`; skill names/bodies are
+also distinct. Original-user package is skill-only. Each installed stdio entry
+selects the supplied verified probe, a separate event file, fresh nonce,
+revision, argv and cwd using the existing probe environment contract. Public
+installer output, recorded native ownership and selected installed bytes are
+authority. Fixture-authored replacement entries and direct probe calls cannot
+prove installed discovery. Foreign disabled native MCP, skill and preference
+sentinels are ordinary controlled files authored before preservation baselines.
+Validate ordinary parents, no aliases, regular/single-link leaves and bounded
+held reads before every owned read/rewrite; preserve outside sentinels.
+
+Author documented exact trust and provider/approval settings before baseline;
+UAP must leave them intact. Gemini enables folder trust in original-home settings
+and records exact canonical A/B `TRUST_FOLDER` decisions in `trustedFolders.json`.
+Its original-home policy file contains priority-100 deny-all and BOTH
+priority-200 allow rules, each selecting only the exact A or B `mcpName` plus
+`toolName='inspect_runtime'`. Do not rewrite policy between A/B sessions. Copilot
+uses exact canonical A/B `trustedFolders` in original-home `config.json` through
+the already reviewed safe held-file writer; its per-session argv narrows tool
+availability/approval without changing that file. No skip-trust, yolo,
+`mcpServers.trust`, `COPILOT_ALLOW_ALL`, blanket tool approval or forged database.
+
+The later never-trusted C subcase uses its own independent fresh original HOME,
+public installation of a distinct C mixed package and C-only named tool
+permission. Require native project-layer suppression and no C probe start;
+an empty directory alone is not a trust test. It never changes the positive
+A/B preservation baseline. Native catalogs prove skill discovery and selected
+body/path; no assumed provider prompt format or LLM skill activation is claimed.
+
+### Gemini native and provider grammar
+
+Fixed native argv is exact Node, exact `gemini.js`, `--prompt <fixed-stage-prompt>
+--approval-mode default --output-format stream-json --model gemini-2.5-flash`.
+No resume, fake-response file, injected MCP definition or extra extension.
+Original-home settings set `privacy.usageStatisticsEnabled=false`,
+`telemetry.enabled=false` and
+`experimental.adk.agentSessionNoninteractiveEnabled=false`, selecting the pinned
+legacy headless loop. Set `GOOGLE_GEMINI_BASE_URL` to the fresh literal loopback
+origin and `GOOGLE_GENAI_API_VERSION=v1beta`. Supply a fresh fixture-owned
+`GEMINI_API_KEY` required only by this loopback provider; compare its exact
+`x-goog-api-key` header privately and redact the key from all admitted artifacts.
+The pinned GATEWAY mode supports this custom endpoint. Its config code otherwise
+evaluates `loadApiKey()` before reaching the GATEWAY branch, so an explicit
+fixture key avoids accidental keychain probing. This is test-provider
+authentication, never vendor Google authentication/OAuth or an inherited account.
+
+Admit only POST
+`/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse` and optional POST
+`/v1beta/models/gemini-2.5-flash:countTokens` without query. Require literal
+loopback Host and the fixture key. JSON is whole, duplicate-free, finite and
+bounded. Top-level stream-request keys are `contents` plus optional
+`generationConfig`, `systemInstruction`, `safetySettings`, `tools`, `toolConfig`
+and `cachedContent`, recursively validated to the pinned SDK 1.30.0 converter
+types. Contents contain typed role/parts; only text, the selected functionCall
+and matching functionResponse parts are needed. Reject other part kinds/routes,
+methods, query parameters and unknown fields. Token counting admits its pinned
+contents body and returns `{"totalTokens":1}`; it supplies no runtime proof.
+
+For a positive session, require exactly the selected installed function
+declaration `mcp_<exact-server-key>_inspect_runtime` with the existing probe
+argument schema; the other project's tool must be absent. Emit one SSE
+`data: <JSON>\n\n` candidate with `index:0`, `content.role:'model'`, one
+`functionCall:{id,name,args}` part and `finishReason:'STOP'`. Name is the exact
+declaration; args contain only the existing `nonce`, `operation:'write'|'read'`
+and `marker` stage challenge. Start id as
+`<exact-tool-name>__uap_<nonce>_<stage>`: pinned `turn.ts` preserves an already
+qualified ID and otherwise prefixes it. Responses carry bounded numeric
+`usageMetadata`. Require the next native request's matching
+`functionResponse:{id,name,response:{output:<text>}}`. Pinned MCP text handling
+wraps output as `<untrusted_context>\n<probe-JSON>\n</untrusted_context>`;
+require exactly that one wrapper, remove it once and parse the inner probe facts
+JSON. Do not expect the original MCP content wrapper or silently strip arbitrary
+markup. The controlled fixture facts contain no closing-tag text needing escape.
+Compare nonce,
+revision, PID/session, argv, package/data roots, cwd and marker to the newly
+observed probe events. Only then return a text-only candidate containing exactly
+`UAP_DONE_<nonce>_<stage>` and STOP. No response echo alone passes.
+
+Pinned stdout is the finite `core/src/output/types.ts` JSONL union, with ISO
+timestamps: `init` has native `session_id`/`model`; `message` has role/content
+and optional delta; `tool_use` has tool_name/tool_id/parameters; `tool_result`
+has tool_id/status and optional output/error; `result` has status and optional
+error/stats. Require one init, a fresh nonempty native session ID, exact tool
+name/arguments and preserved call ID, successful matching tool_result, exact
+final assistant text and one terminal success. Reject error events,
+duplicate/out-of-order IDs, unknown fields, extra tool calls and unsuccessful
+terminal outcomes. Result stats, when present, follow the pinned finite numeric
+fields and bounded per-model map; they are bookkeeping. Match text-only
+tool_result.output facts independently to provider output and probe events.
+
+Pinned source closure is Gemini v0.65.0
+`packages/cli/src/nonInteractiveCli.ts`, `config/config.ts`,
+`config/settingsSchema.ts`, and core `src/core/contentGenerator.ts`,
+`core/turn.ts`, `tools/mcp-tool.ts`, `output/types.ts`,
+`output/stream-json-formatter.ts`, `utils/generateContentResponseUtilities.ts`
+and `utils/textUtils.ts`.
+Its core package pins `@google/genai` 1.30.0; that exact SDK's `src/models.ts`
+and `src/converters/_models_converters.ts` define the REST paths/conversions.
+Freeze the resolved source commits/blob identities with the genuine attempt.
+See the [policy reference](https://geminicli.com/docs/reference/policy-engine/).
+
+### Copilot native and provider grammar
+
+Candidate fixed argv is exact ELF `-p <fixed-stage-prompt> --output-format json
+--no-auto-update --disable-client-telemetry --disable-builtin-mcps
+--available-tools=<exact-observed-native-MCP-wire-name>
+--allow-tool=<exact-server-key>(inspect_runtime) --deny-tool=shell
+--deny-tool=write --deny-tool=read --deny-tool=url --deny-tool=memory`.
+These are literal argv elements, not shell expressions. Freeze each flag and
+wire name from pinned help/the hosted attempt; do not guess name sanitization or
+loosen to a wildcard/prefix. All children receive `COPILOT_OFFLINE=true` and
+`COPILOT_AUTO_UPDATE=false`. The session also receives
+`COPILOT_PROVIDER_TYPE=openai`,
+`COPILOT_PROVIDER_BASE_URL=http://127.0.0.1:<ephemeral>/v1`,
+`COPILOT_PROVIDER_WIRE_API=completions` and `COPILOT_MODEL=uap-fixture-model`.
+Provider API key/bearer and vendor credentials are absent. Supported keyless
+local-provider setup is not GitHub authentication or a claim of an OS firewall.
+
+Admit only POST `/v1/chat/completions`, literal loopback Host, exact model and
+`stream:true`. Requests use bounded typed messages and function tools.
+The closed Chat Completions candidate accepts top-level model/messages/stream,
+tools/tool_choice, stream_options, max_tokens/max_completion_tokens,
+temperature/top_p, parallel_tool_calls, stop, presence_penalty/frequency_penalty,
+seed, user, response_format and reasoning_effort, each with its documented type
+and finite bounds. Reject other fields/routes rather than returning a generic
+successful response. Message roles are system/developer/user/assistant/tool;
+content is bounded text, null for a tool-call assistant, or typed text parts.
+Function tool definitions have exact name/description/parameters and optional
+boolean strict. Assistant tool_calls have id/type:function/function name
+and JSON arguments; tool messages have exact tool_call_id and bounded content.
+The attempt records the actual subset; freeze its exact request/response union
+before qualification. No unrelated built-in tool, remote endpoint or provider
+fallback is admitted.
+
+Require the exact selected installed MCP declaration before emitting one
+`chat.completion.chunk` SSE tool call: bounded id/object/model, choices index 0,
+delta role assistant and tool_calls with index 0, unique id, type function,
+function name and arguments containing strict JSON for the existing probe args.
+Terminate that completion with `finish_reason:'tool_calls'` and `[DONE]`.
+The next native request must have role tool, exact tool_call_id and returned
+probe facts matching the fresh initialize/list/call event session and all facts
+listed above. Only then emit the exact final sentinel as content, finish_reason
+stop and `[DONE]`. Wrong-project/removed definitions must be absent. No direct
+probe call or inline MCP server flag is permitted.
+
+Exact Copilot 1.0.103 native JSONL event/session grammar is an explicit
+runtime-attempt observation prerequisite, not an invented assistant.message
+parser. Bound/privately capture the attempt; unknown event shape fails its
+admission even when the capture helps amend the parser. Freeze exact keys,
+ordering, terminal success/error and native session/tool identity from actual
+evidence before qualification. Do not fabricate client session IDs from test
+labels or treat provider/probe identity alone as native session identity.
+Primary candidates are official
+[BYOK](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-byok-models),
+[programmatic](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference)
+and [tool-control](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools)
+documentation plus the pinned binary's actual help/observation artifacts.
+
+### Later public lifecycle and qualification gate
+
+After observing/freezing those contracts and the later two independent reviews,
+select exact `TestAgentpluginsGeminiNativeProjectComponentsLifecycle` and
+`TestAgentpluginsCopilotNativeProjectComponentsLifecycle`. These tests use the
+supported imperative local-directory route from
+[project installation](../../PROJECT_INSTALLATION.md), matching existing real
+OpenCode/Cline fixtures: public `add <canonical-source> --no-save --scope project
+--project-root <A-or-B> --target <client> --format json`; original-user add uses
+explicit user scope. Local sources take no saved alias and create no portable
+dependency agreement. There is no `deps sync` claim. Later selection is by
+observed package name/installation ID or the canonical source for update.
+
+Required sequence is empty baseline; independent user/A/B install; exact native
+skill/config discovery and A/B tool write/read; identical repeat add and unchanged
+update with stable ownership/native bytes; intact repair with truthful restaging;
+A source advance and public update; exact native v2 skill/tool/result with the
+retained marker; remove precisely one receipt-owned delivered skill directory
+while the selected local source stays unchanged at v2; public repair restores
+v2 and retained data; explicit fresh-process restart; exact A removal; fresh A
+absence/no A probe events with still-functional B/user; exact recognized repeated
+removal and byte-preserving no effects. No native children remain across UAP
+mutations. Preserve original-user/B/foreign native content, receipts and plugin
+data; compare exact selected source/tree/package/binding/data locator throughout.
+Intact repair may truthfully mutate by restaging; do not require a false no-op.
+Local missing repair proves reconstruction from unchanged selected local input.
+
+Keep `TestProjectComposedSourceLifecycleSeparatesUserAndProjects` and
+`TestProjectCopilotComposedSavedLifecycle` required as separate existing TLS
+Git/ZIP/saved-dependency evidence. Their moving-source/recorded-pin proof must
+not be attributed to the new native local-directory test. Preserve legacy native
+fixture/protocol tests and Claude/Codex/OpenCode gates. Do not change production
+source or repair behavior to fit a stronger fixture claim.
+
+Final successful cases are `<client>.project-lifecycle`,
+`<client>.native-restart-removal`, `<client>.mcp-initialize`,
+`<client>.mcp-tools-list` and `<client>.mcp-tools-call`, only after their complete
+native sequence and cleanup. Evidence joins actual native process/session/tool
+identity, provider call ID and probe PID/session/nonce, returned facts and exact
+installed authority. A connected label, catalog, raw stdout or provider echo is
+insufficient. Add inert contracts for duplicate/oversized JSON, unknown routes,
+foreign/missing declarations, wrong call ID/nonce/revision/data/cwd/session,
+out-of-order streams, bad terminal results, timeout and surviving descendants.
+Required blocked/skipped/not-reached stages fail, never substitute a config pass.
+State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
+authentication false and real-model use false. Raw bounded evidence stays in
+closed CI artifacts, not Git or recursively uploaded native profiles.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
