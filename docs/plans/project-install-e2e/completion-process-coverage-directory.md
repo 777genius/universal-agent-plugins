@@ -44,3 +44,33 @@ Run affected-source configured lint, YAML parsing and exact workflow-diff checks
 Do not add a mirror test, disable coverage, change Core's informational status,
 execute a vendor client, bypass a native gate, or repeat broad suites locally.
 Publish the narrow reviewed fix promptly; final normal CI remains required.
+
+## Compatibility fixture follow-up at 2c64dc8c
+
+Removing the old name-based CLI coverage exclusion also exposes the retained
+compatibility package's test with the same name. Exact candidate
+`2c64dc8ceb98687a2f9640d93a1078524c25b0e5`, Coverage run `40208387011`,
+job `121214150623`, reports `release_compat_test.go:424`: protocol `__complete`,
+case zero, successful exit and 54 stderr bytes. Repository-wide Go-source search
+finds exactly two definitions and two explicit completion child environments.
+The agentplugins copy is corrected; `cli/cmd/plugin-kit-ai/release_compat_test.go`
+blob `eccc6f44c4691ae7c8b87da07cd725193af39379` still omits `GOCOVERDIR`.
+
+Apply the same two-line test-only correction to that compatibility copy: one
+separate sibling `t.TempDir()` and one child-only `GOCOVERDIR` allowlist entry.
+Preserve `commands.App.Execute`/`newReleaseRoot`, all 40 compatibility protocol
+cases and every stdout, zero-stderr, token and debug-file assertion. Do not
+change production or compatibility semantics, share a parent coverage/profile
+directory, inherit environment, filter output, change the already corrected
+agentplugins copy or reintroduce any workflow exclusion. Preserve the useful
+compatibility tests under the authoring capability-preservation contract.
+
+Two independent plan rounds and frozen source reviews precede publication.
+The fresh exact-source CI failure supplies the unchanged compatibility red;
+no duplicate local red is needed. After the reserved Go slot is released, run
+one bounded `-p=1 -count=1 -covermode=atomic` command selecting
+`^TestReleaseCompletionProcessStderr$` in **both** `./cli/cmd/agentplugins` and
+`./cli/cmd/plugin-kit-ai`. Both now-unexcluded paths must pass their unchanged
+assertions. Run configured affected-package lint and verify that the frozen
+implementation contains only the two planned compatibility-test lines. No
+workflow change, extra fixture, vendor process or broad local suite is needed.
