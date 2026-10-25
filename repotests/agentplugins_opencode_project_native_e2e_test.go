@@ -38,7 +38,7 @@ func TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle(t *testing.T) {
 	userBefore, otherBefore := f.snapshot(t, userRoots...), f.snapshot(t, otherRoots...)
 	nativeAttempt(f.stages, "unchanged_lifecycle", "opencode-project-evidence.json")
 	stable := f.snapshot(t, filepath.Join(f.A, ".uap", "state-v2.json"), filepath.Join(f.A, ".opencode", "skills"), filepath.Join(f.A, "opencode.jsonc"))
-	for _, step := range []struct{ label, verb, selector string }{{"repeat-add-A", "add", f.sourceA}, {"unchanged-update-A", "update", commandsPluginName}, {"intact-repair-A", "repair", commandsPluginName}} {
+	for _, step := range []struct{ label, verb, selector string }{{"repeat-add-A", "add", f.sourceA}, {"unchanged-update-A", "update", commandsPluginName}} {
 		args := []string{step.verb, step.selector}
 		if step.verb == "add" {
 			args = append(args, "--no-save")
@@ -49,8 +49,9 @@ func TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle(t *testing.T) {
 			t.Fatal("unchanged Prepared operation changed owned files/state")
 		}
 	}
+	openCodeProjectIntactRepair(t, f)
 	f.observe(t, "stable-A", f.A, f.sourceA, "A-one", "echo", false)
-	f.stages["unchanged_lifecycle"] = nativeStage{Status: "passed", Reason: "repeat add, unchanged update and intact repair report mutated=false and preserve exact state/config/skills"}
+	f.stages["unchanged_lifecycle"] = nativeStage{Status: "passed", Reason: "repeat add/update preserve exact state/config/skills; intact group repair records actual restaging with identical package/native bytes and stable Prepared ownership"}
 	nativeAttempt(f.stages, "update", "opencode-project-evidence.json")
 	commandsSwapInvocation(t, f.sourceA)
 	path := filepath.Join(f.sourceA, "skills", commandsGuideSkill, "SKILL.md")
