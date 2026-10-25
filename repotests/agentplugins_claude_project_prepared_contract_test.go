@@ -48,11 +48,12 @@ func TestClaudePreparedNativeSuppressionRequiresExactObservedShape(t *testing.T)
 	for _, change := range []string{"exact", "absent", "wrong-path", "enabled", "scope", "reason", "duplicate", "loaded"} {
 		t.Run(change, func(t *testing.T) {
 			row := sentinel()
-			rows := []map[string]any{row}
+			rows := make([]map[string]any, 1, 2)
+			rows[0] = row
 			want := true
 			switch change {
 			case "absent":
-				rows = []map[string]any{}
+				rows = make([]map[string]any, 0, 2)
 				want = false
 			case "wrong-path":
 				row["installPath"] = "/untrusted"

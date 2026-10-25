@@ -102,8 +102,8 @@ func (f *claudeProjectNativeFixture) preparedPath(t *testing.T, label string) st
 				if selected != nil {
 					t.Fatal("ambiguous project binding")
 				}
-				copy := binding
-				selected = &copy
+				copied := binding
+				selected = &copied
 			}
 		}
 	}

@@ -28,7 +28,7 @@ func activateClaudeProject(ctx context.Context, env clients.Env, request domain.
 		// Delivery ownership is established by the verified package transaction,
 		// never by a sentinel or a same-name record from another source.
 		if request.Delivery.ArtifactDigest == "" {
-			return shared.FailedActivation(outcome, "verify the owned project package", fmt.Errorf("Claude project delivery has no verified artifact digest"))
+			return shared.FailedActivation(outcome, "verify the owned project package", fmt.Errorf("the Claude project delivery has no verified artifact digest"))
 		}
 		outcome.Activation, outcome.Verification = domain.ActivationPrepared, domain.VerificationInstalled
 		outcome.UserActions = []string{observation.action()}
