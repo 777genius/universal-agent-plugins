@@ -135,6 +135,25 @@ Unknown flags/schema, malformed output and unrelated failures are failures,
 not supported-boundary records. Only a measured explicit authentication or
 unsupported-native-capability response can complete a planned boundary attempt.
 
+The initial Kimi/Cline help-only leaves explicitly declare `help`, which selects
+only acquisition and help. It cannot satisfy scope observation. Leaf
+`AVAILABLE_PHASES` (or the unconditional acquisition-only declaration) registers
+the exact initial phase in the shared research matrix; missing leaves stay
+visible as outstanding program work. The initial shared runner never emits a
+positive qualification flag, and accepts only explicit passed selected research
+IDs. Structured observations may be a JSON mapping or list; they cannot set case
+success by themselves. Raw private files are never enumerated for upload.
+
+Gemini's reviewed `gemini.js` bundle uses the exact Node **24.21.0** Linux x64
+runtime, acquired from
+`https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.xz`, SHA256
+`fd8e59d5a511510f6a298afb548f18c7d2b1be404d8b4a27d94fbe49f56cb2d6`.
+Only the exact regular `node-v24.21.0-linux-x64/bin/node` member is materialized;
+the archive is verified before extraction, version is checked before the client,
+and runtime/support-file bytes are verified before and after every probe. No npm
+installation or package lifecycle script is used. This does not authorize a
+TypeScript observer or SDK toolchain, which retains its separate amendment gate.
+
 All ten targets must be accounted for in the final matrix. A successful research
 job does not satisfy any qualification ID. The required follow-through IDs for
 an installation/discovery claim are `<client>.project-lifecycle` and
