@@ -83,3 +83,45 @@ Both independent plan rounds precede implementation. Both independent frozen
 implementation reviews precede the one hosted observation. Any behavior change
 based on its result requires its own evidence and reviewed plan. Existing full
 Required/Core/Coverage/native gates remain mandatory for the final candidate.
+
+## Runner-provider parity amendment
+
+The first observation completed successfully on source
+`14c35e9d35fcd976b5d74bcf4c02ff3986073b5e`, tree
+`cfec35f7921e4547e2e6724ddbc74080a53f5619`: run `40198070979`, job
+`121183139474`, all 512 iterations without a skip in 115.044 seconds. Its
+actual host was Ubicloud Ubuntu 24.04, image `20261021.1.0`, selected by
+`vars.CI_LINUX_RUNNER || 'ubuntu-latest'`. That result qualifies only this
+bounded observation; it neither identifies nor corrects the historical cause.
+
+The positively classified terminal failure, run `40194870304`, job
+`121173439610`, instead used the explicit `ubuntu-24.04` selector on a
+GitHub Actions runner image, version `20261012.334.1`. Core's separate,
+unclassified normalization failure used Ubicloud and a different, filtered
+`AcquireGitHub` fetch path. Do not combine these failures or infer a shared
+cause from their host names.
+
+Make one additional observation on the terminal failure's runner provider and
+OS selector. This amendment supersedes only the previous instruction to retain
+the workflow's runner expression: set `runs-on: ubuntu-24.04`. The test blob
+`f579c6b68c5d625e9e87e4e51b288990ddfcd1a4`, exact invocation, child environment,
+512-iteration count, first-error stop, containment, deadlines, permissions and
+all other workflow settings remain unchanged. Do not add a matrix, retry,
+fallback host, additional Ubicloud attempt or process behavior change.
+
+The selector does not pin the historical GitHub image version. Record the
+new observation's actual provider, image version, source SHA/tree and test
+blob, plus the named test result and absence of skips. Preserve the first
+Ubicloud result separately. A pass on either host, or a difference between the
+two results, does not by itself establish the historical failure's cause.
+A failure may supply a controlled original error for a separately reviewed
+correction; a pass remains a noncausal observation. All final-candidate
+Required/Core/Coverage/native gates remain mandatory.
+
+Two independent plan-review rounds precede this one-line workflow change;
+two independent frozen code reviews precede its one hosted invocation. Publish
+the reviewed amendment and workflow on the reproduction branch, then advance
+the focused branch once from `14c35e9d35fcd976b5d74bcf4c02ff3986073b5e` using an
+expected-head lease. Verify YAML, the exact single-line workflow diff and the
+unchanged test blob; repeat neither the already passed inert Go validation nor
+any native execution on the unsupported local executor.
