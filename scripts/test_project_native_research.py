@@ -141,8 +141,25 @@ class ProjectResearchTests(unittest.TestCase):
                 body = json.loads(archive.read("research.json"))
                 self.assertIs(body["collection_complete"], False)
                 self.assertIs(body["artifact_admission_failed"], True)
+                self.assertEqual(body["admission_reason"], "member_size")
+                self.assertGreater(body["summary_bytes"], research.STREAM)
                 self.assertTrue(all(value is False for value in body["qualification"].values()))
             self.assertIs(summary["collection_complete"], False)
+
+    def test_selected_node_receipt_retains_exact_execution_and_full_inventory_digest(self):
+        node = {"name": research.NODE["entrypoint"], "kind": "file", "bytes": 4, "sha256": hashlib.sha256(b"node").hexdigest()}
+        headers = [{"name": "node-v24.21.0-linux-x64/include/" + str(i) + ".h", "kind": "file", "bytes": 32,
+                    "sha256": "b" * 64} for i in range(8000)]
+        members = [node, *headers]
+        receipt = {"members": members, "pin_verified": True, "sha256": "a" * 64}
+        compact = research.selected_node_receipt(receipt)
+        self.assertGreater(len(json.dumps(receipt, indent=2)), research.STREAM)
+        self.assertLess(len(json.dumps(compact, indent=2)), 2048)
+        self.assertEqual(compact["members"], [node])
+        self.assertEqual(compact["inventory_member_count"], 8001)
+        self.assertEqual(compact["inventory_regular_bytes"], 4 + 8000 * 32)
+        self.assertEqual(compact["inventory_sha256"], hashlib.sha256(json.dumps(members, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+        self.assertEqual(receipt["members"], members)
 
     def test_private_capture_never_opens_or_reads_native_writable_log_paths(self):
         # An inert Python child exercises the real selector/capture, not a vendor.
