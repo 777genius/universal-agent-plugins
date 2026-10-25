@@ -57,6 +57,64 @@ def clean_environment(root):
     return {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "HOME": str(root)}
 
 
+FRONTEND_CLEANUP_CODE = r'''
+import os,stat,sys
+path,device,inode,owner=sys.argv[1:]
+device,inode,owner=int(device),int(inode),int(owner)
+parent,name=os.path.split(path)
+if parent!="/tmp" or not name.startswith("vscode-workspace-input-") or not name or owner<=0 or os.getuid()!=owner or os.geteuid()!=owner:
+    raise SystemExit("frontend cleanup authority refused")
+def same(a,b):
+    return (a.st_dev,a.st_ino,a.st_uid,stat.S_IFMT(a.st_mode))==(b.st_dev,b.st_ino,b.st_uid,stat.S_IFMT(b.st_mode))
+def owned_directory(info):
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid!=owner or info.st_dev!=device:
+        raise RuntimeError("frontend cleanup directory authority differs")
+parent_fd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+root=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent_fd)
+identity=os.fstat(root)
+if (identity.st_dev,identity.st_ino,identity.st_uid)!=(device,inode,owner) or not same(identity,os.stat(name,dir_fd=parent_fd,follow_symlinks=False)):
+    raise SystemExit("frontend cleanup root changed")
+def clear(fd,expected):
+    current=os.fstat(fd)
+    owned_directory(current)
+    if not same(current,expected):raise RuntimeError("frontend cleanup opened directory changed")
+    os.fchmod(fd,(current.st_mode&0o777)|0o700)
+    for entry in os.listdir(fd):
+        item=os.stat(entry,dir_fd=fd,follow_symlinks=False)
+        if item.st_uid!=owner or item.st_dev!=device:raise RuntimeError("frontend cleanup leaf authority differs")
+        if stat.S_ISDIR(item.st_mode):
+            child=os.open(entry,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+            try:
+                opened=os.fstat(child)
+                if not same(item,opened) or not same(opened,os.stat(entry,dir_fd=fd,follow_symlinks=False)):
+                    raise RuntimeError("frontend cleanup directory replaced")
+                clear(child,opened)
+                if not same(opened,os.stat(entry,dir_fd=fd,follow_symlinks=False)):
+                    raise RuntimeError("frontend cleanup directory replaced before removal")
+            finally:os.close(child)
+            os.rmdir(entry,dir_fd=fd)
+        else:
+            if not (stat.S_ISREG(item.st_mode) or stat.S_ISLNK(item.st_mode)):
+                raise RuntimeError("frontend cleanup unsupported leaf")
+            if not same(item,os.stat(entry,dir_fd=fd,follow_symlinks=False)):
+                raise RuntimeError("frontend cleanup leaf replaced")
+            os.unlink(entry,dir_fd=fd)
+clear(root,identity)
+if not same(identity,os.stat(name,dir_fd=parent_fd,follow_symlinks=False)):
+    raise SystemExit("frontend cleanup root replaced before removal")
+os.close(root)
+os.rmdir(name,dir_fd=parent_fd)
+os.close(parent_fd)
+'''
+
+
+def cleanup_frontend(root, identity, output):
+    record, _, _ = run_probe(["/usr/bin/python3", "-I", "-c", FRONTEND_CLEANUP_CODE,
+                              str(root), str(identity.st_dev), str(identity.st_ino), str(identity.st_uid)],
+                             Path("/"), {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, output, "cleanup", timeout=5)
+    return {"complete": record["exit"] == 0 and record["error"] is None, "probe": record}
+
+
 def digest(path):
     h = hashlib.sha256()
     with path.open("rb") as stream:
@@ -299,7 +357,7 @@ def main():
     finally:
         if root is not None:
             try:
-                summary["frontend_cleanup"] = publisher.cleanup(root, identity, output, isolated=True)
+                summary["frontend_cleanup"] = cleanup_frontend(root, identity, output)
             except Exception as exc:
                 summary["frontend_cleanup"] = {"complete": False, "error": str(exc)[:512]}
             if not summary["frontend_cleanup"]["complete"]:
