@@ -1,13 +1,43 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v6 — current architecture, named qualification evidence and remaining dependency/desktop gates.
+Status: implementation plan v7 — resumed qualification, retained-plan capacity correction and remaining dependency/security gates.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
 
-## Current checkpoint — v6 (2026-10-25)
+## Current checkpoint — v7 (2026-10-25)
+
+Continuation starts from published UAP `6f8e2786d046da56d933167129e514fb10ff7450`
+and Agent Teams `52fcacc3cc69c6df8882ecbb7310abfb9c4b2c19`. The v6 evidence below
+remains tied to its named engine bytes; it does not qualify later native changes.
+
+Independent review found a bounded-session defect: after preparing the allowed
+16 reviews, Apply also requested a new review slot and refused every retained
+plan with `REVIEW_LIMIT`. Only creation needs a new slot. Apply now retains the
+existing busy, process-lock, freshness, durable-acceptance and replay checks
+without claiming another review slot. The new real-HTTP regression reproduced
+the original refusal for dependency and local-Skill plans, then passed with the
+correction. It also preserves the seventeenth-preparation refusal and proves
+slot reuse and accepted-request deduplication. The complete management transport
+package passed on Go 1.26.10. Current applicable CI and a matched downstream
+engine/SDK source pin remain required for this correction.
+
+The previously pending clean desktop run has completed:
+[Agent Teams E2E 40183926081](https://github.com/777genius/agent-teams-ai/actions/runs/40183926081)
+passed on synthetic merge `1b00532a5db7be78a38824373d984c2ee23d7ded` (head `52fcacc3`,
+base `eb67de95`), using the BBC7 engine. Its evidence is retained as artifact
+`12595184310`. This qualifies that merge's desktop journey, not the capacity
+correction, authenticated model/tool execution, or project/worktree activation.
+
+The substantive App Full qualification run `40183926041` found one packaged-MCP
+child-isolation failure; the later edited-event no-op is not substitute evidence.
+That failure, the current package matrix, formal CodeQL disposition and the
+HTTP-sidecar authority review are being resolved before merge. Scanner rules and
+branch protections remain intact. Project/Host prerequisites remain separate.
+
+## Previous checkpoint — v6 (2026-10-25)
 
 This section and the S01–S30 matrix describe the current qualification state.
 The v4/v5 review records below are historical evidence at their named revisions;

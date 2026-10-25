@@ -19,7 +19,7 @@ func (s *Server) prepare(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "INVALID_REQUEST", "Invalid action or bounded selection", false)
 		return
 	}
-	if !s.reservePreparation(w) {
+	if !s.reservePreparation(w, true) {
 		return
 	}
 	defer func() { s.mu.Lock(); s.preparing = false; s.mu.Unlock() }()
@@ -64,7 +64,7 @@ func (s *Server) retainPrepared(ctx context.Context, w http.ResponseWriter, inpu
 	loopbackapi.WriteJSON(w, 200, review)
 }
 
-func (s *Server) reservePreparation(w http.ResponseWriter) bool {
+func (s *Server) reservePreparation(w http.ResponseWriter, needsReviewSlot bool) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed || s.preparing || len(s.running) > 0 {
@@ -77,7 +77,9 @@ func (s *Server) reservePreparation(w http.ResponseWriter) bool {
 			count++
 		}
 	}
-	if count >= 16 {
+	// Applying retained authority consumes no new review slot. Reaching the
+	// preparation limit must not prevent an existing plan from being applied.
+	if needsReviewSlot && count >= 16 {
 		writeError(w, 409, "REVIEW_LIMIT", "Wait for old reviews to expire", true)
 		return false
 	}
@@ -148,7 +150,7 @@ func (s *Server) apply(w http.ResponseWriter, r *http.Request) {
 	if s.replay(r.Context(), w, id, input.RequestId) {
 		return
 	}
-	if !s.reservePreparation(w) {
+	if !s.reservePreparation(w, false) {
 		return
 	}
 	defer func() { s.mu.Lock(); s.preparing = false; s.mu.Unlock() }()

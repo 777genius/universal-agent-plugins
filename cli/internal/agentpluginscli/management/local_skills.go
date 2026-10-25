@@ -47,7 +47,7 @@ func (s *Server) prepareLocalSkill(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if !s.reservePreparation(w) {
+	if !s.reservePreparation(w, true) {
 		return
 	}
 	defer func() { s.mu.Lock(); s.preparing = false; s.mu.Unlock() }()
