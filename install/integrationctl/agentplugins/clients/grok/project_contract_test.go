@@ -3,6 +3,7 @@ package grok
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -45,7 +46,7 @@ func projectTestRequest(t *testing.T) domain.ActivationRequest {
 	}
 	native := filepath.Join(project, ".grok")
 	active := filepath.Join(native, "plugins", "demo-0123456789ab")
-	client := domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: user, ExecutablePath: "/inert/grok-never-executed"}
+	client := domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: user, ExecutablePath: filepath.Join(base, "grok-never-executed")}
 	return domain.ActivationRequest{Client: client, DeclaredName: "demo", BackendExecutable: client.ExecutablePath, Plan: domain.DeliveryPlan{ClientID: domain.ClientGrok, Scope: domain.ScopeProject, TargetContext: target, Status: domain.PlanReady, DeclaredName: "demo", DeclaredVersion: "1.0.0", NativeRegistryRoot: native, NativeRegistryExecutable: client.ExecutablePath, TargetAnchor: native, TargetRoot: filepath.Dir(active), ActivePath: active, PhysicalArtifactID: filepath.Base(active), Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}}, Delivery: domain.StagedDelivery{ClientID: domain.ClientGrok, ActivePath: active, OwnedBase: filepath.Dir(active)}}
 }
 
@@ -107,7 +108,21 @@ func TestProjectGrokStrictObservedInspectShape(t *testing.T) {
 	}
 	body := string(result.Stdout)
 	project := request.Plan.TargetContext.ProjectRoot
-	for _, candidate := range []string{body, strings.Replace(body, `"projectRoot":"`+project+string(filepath.Separator)+`"`, `"projectRoot":"`+project+`"`, 1)} {
+	replaceRoot := func(path string) string {
+		t.Helper()
+		before, _ := json.Marshal(project + string(filepath.Separator))
+		after, _ := json.Marshal(path)
+		field := `"projectRoot":` + string(before)
+		if strings.Count(body, field) != 1 {
+			t.Fatal("fixture root field is not unique")
+		}
+		changed := strings.Replace(body, field, `"projectRoot":`+string(after), 1)
+		if changed == body {
+			t.Fatal("fixture root replacement did not change JSON")
+		}
+		return changed
+	}
+	for _, candidate := range []string{body, replaceRoot(project)} {
 		if _, err := parseProjectInspect([]byte(candidate), project); err != nil {
 			t.Fatal("observed root spelling refused", err)
 		}
@@ -115,9 +130,12 @@ func TestProjectGrokStrictObservedInspectShape(t *testing.T) {
 	invalid := make([]string, 0, 10)
 	invalid = append(invalid, strings.Replace(body, `"grokVersion":"1.0.67"`, `"grokVersion":"1.0.68"`, 1), strings.Replace(body, `"cwd":`, `"Cwd":`, 1), strings.Replace(body, `"projectRoot":`, `"ProjectRoot":`, 1), strings.Replace(body, `"enabled":false`, `"enabled":null`, 1), body+` {}`, strings.Replace(body, `"skills":[]`, `"skills":null`, 1), strings.Replace(body, `"name":"demo"`, `"name":"demo","Name":"demo"`, 1))
 	for _, suffix := range []string{"//", "/./", "/../A/"} {
-		invalid = append(invalid, strings.Replace(body, `"projectRoot":"`+project+string(filepath.Separator)+`"`, `"projectRoot":"`+project+suffix+`"`, 1))
+		invalid = append(invalid, replaceRoot(project+suffix))
 	}
 	for _, candidate := range invalid {
+		if candidate == body {
+			t.Fatal("invalid fixture is unchanged valid JSON")
+		}
 		if _, err := parseProjectInspect([]byte(candidate), project); err == nil {
 			t.Fatalf("ambiguous native source accepted: %s", candidate)
 		}
@@ -183,12 +201,19 @@ func TestProjectGrokFiniteCollisionSourcesAndBudgets(t *testing.T) {
 				}
 			case "entries":
 				for i := range 129 {
-					projectTestWrite(t, filepath.Join(root, "plugins", string(rune(1000+i)), ".grok-plugin", "plugin.json"), `{"name":"other"}`)
+					projectTestWrite(t, filepath.Join(root, "plugins", fmt.Sprintf("entry-%03d", i), ".grok-plugin", "plugin.json"), `{"name":"other"}`)
+				}
+				entries, err := os.ReadDir(filepath.Join(root, "plugins"))
+				if err != nil || len(entries) != 129 {
+					t.Fatalf("entry-budget fixture has %d entries: %v", len(entries), err)
 				}
 			default:
 				projectTestWrite(t, manifest, body)
 			}
 			finding, err := inspectProjectFiles(request.Plan, false)
+			if name == "entries" && (err == nil || !strings.Contains(err.Error(), "grok plugin directory exceeds bounded discovery entries")) {
+				t.Fatalf("entry-budget case failed for another reason: %v", err)
+			}
 			collision := name == "user grok" || name == "user claude" || name == "ancestor grok" || name == "selected claude" || name == "direct skill"
 			if collision {
 				if err != nil || finding != clients.RegistryCollision {

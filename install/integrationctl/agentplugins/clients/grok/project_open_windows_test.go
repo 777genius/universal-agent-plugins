@@ -3,6 +3,7 @@
 package grok
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -60,25 +61,34 @@ func TestProjectGrokWindowsReadRecheckRefusesSameObjectAncestorAlias(t *testing.
 	parent := filepath.Join(base, "parent")
 	path := filepath.Join(parent, "manifest.json")
 	projectTestWrite(t, path, `{"name":"demo"}`)
-	probe := filepath.Join(base, "probe")
-	if err := os.Symlink(parent, probe); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
-	if err := os.Remove(probe); err != nil {
-		t.Fatal(err)
-	}
 	file, info, err := openProjectPath(path, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	if err := os.Rename(parent, parent+"-old"); err != nil {
-		t.Fatal(err)
+	if err := stableProjectPath(path, file, info); err != nil {
+		t.Fatal("canonical open-file recheck failed", err)
 	}
-	if err := os.Symlink(parent+"-old", parent); err != nil {
-		t.Fatal(err)
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(parent, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
 	}
-	if err := stableProjectPath(path, file, info); err == nil {
-		t.Fatal("post-read same-object ancestor alias admitted")
+	aliasPath := filepath.Join(alias, "manifest.json")
+	aliasInfo, err := os.Stat(aliasPath)
+	if err != nil || !os.SameFile(info, aliasInfo) {
+		t.Fatal("alias does not name the still-open leaf", err)
+	}
+	probe, anchorErr := openProjectHandle(aliasPath, false)
+	if probe != nil {
+		_ = probe.Close()
+	}
+	if anchorErr == nil {
+		t.Fatal("anchored open admitted the ancestor alias")
+	}
+	if err := stableProjectPath(aliasPath, file, info); !errors.Is(err, anchorErr) {
+		t.Fatalf("recheck did not return the anchored alias refusal: %v; want %v", err, anchorErr)
+	}
+	if err := stableProjectPath(path, file, info); err != nil {
+		t.Fatal("canonical descriptor changed during alias check", err)
 	}
 }

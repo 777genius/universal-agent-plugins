@@ -16,20 +16,21 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-type projectGrokDetector struct{ user string }
+type projectGrokDetector struct{ user, executable string }
 
 func (d projectGrokDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
-	return []domain.DetectedClient{{ClientID: domain.ClientGrok, ConfigRoot: d.user, ExecutablePath: "/inert/grok-not-executed", Version: "1.0.67", Status: domain.DetectionDetected}}, nil
+	return []domain.DetectedClient{{ClientID: domain.ClientGrok, ConfigRoot: d.user, ExecutablePath: d.executable, Version: "1.0.67", Status: domain.DetectionDetected}}, nil
 }
 
 type projectGrokRunner struct {
-	t     *testing.T
-	calls int
+	t          *testing.T
+	calls      int
+	executable string
 }
 
 func (r *projectGrokRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	r.calls++
-	if !reflect.DeepEqual(command.Argv, []string{"/inert/grok-not-executed", "inspect", "--json"}) || command.Dir == "" {
+	if !reflect.DeepEqual(command.Argv, []string{r.executable, "inspect", "--json"}) || command.Dir == "" {
 		r.t.Fatal("unexpected global/native command", command)
 	}
 	plugins := []any{}
@@ -63,7 +64,7 @@ func configureProjectGrokJourney(app agentpluginscli.App, user string, runner *p
 		runner.t.Fatal(err)
 	}
 	app.Installer = engine
-	app.Detector = projectGrokDetector{user: user}
+	app.Detector = projectGrokDetector{user: user, executable: runner.executable}
 	app.Lifecycle.Activator = providers.Activator{Registry: app.ClientRegistry, Runner: runner}
 	app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Registry: app.ClientRegistry, Runner: runner}
 	compose := app.ForScope
@@ -84,7 +85,7 @@ func TestProjectGrokComposedSavedLifecycle(t *testing.T) {
 	journey := newProjectJourney(t, transport)
 	user := filepath.Join(journey.home, ".grok")
 	projectJourneyWrite(t, filepath.Join(user, "keep"), "original user\n")
-	runner := &projectGrokRunner{t: t}
+	runner := &projectGrokRunner{t: t, executable: filepath.Join(journey.home, "grok-not-executed")}
 	journey.app = configureProjectGrokJourney(journey.app, user, runner)
 	userBefore := securityFixtureTree(t, user)
 	for _, project := range []string{journey.a, journey.b} {

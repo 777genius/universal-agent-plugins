@@ -43,6 +43,10 @@ func newProjectCodexFixture(t *testing.T) projectCodexFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(base) })
+	base, err = filepath.EvalSymlinks(base)
+	if err != nil {
+		t.Fatal(err)
+	}
 	f := projectCodexFixture{user: filepath.Join(base, "user", ".codex"), a: filepath.Join(base, "A"), b: filepath.Join(base, "B"), source: filepath.Join(base, "source")}
 	for _, config := range []string{filepath.Join(f.user, "config.toml"), filepath.Join(f.a, ".codex", "config.toml"), filepath.Join(f.b, ".codex", "config.toml")} {
 		projectCodexWrite(t, config, "# foreign native policy\nmodel = 'foreign-model'\n[mcp_servers.foreign]\nurl='https://foreign.test/mcp' # keep server\n")

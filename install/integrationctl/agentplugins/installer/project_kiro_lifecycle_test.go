@@ -14,7 +14,10 @@ import (
 // Public SDK composition with real filesystem/state and inert stdio helper
 // bytes. No runner, native client, launcher or MCP process is executed.
 func TestProjectKiroPublicSDKStdioDataRepairRestartAndRemove(t *testing.T) {
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	user, pkg, helper := filepath.Join(base, "user", ".kiro"), filepath.Join(base, "package"), filepath.Join(base, "inert-helper")
 	kiroSDKWrite(t, helper, "inert helper bytes; never executed")
 	if err := os.Chmod(helper, 0700); err != nil {
@@ -83,7 +86,10 @@ func kiroSDKRepairUpdateRemove(t *testing.T, f *kiroSDKFixture, pkg, helper, ori
 	if got := f.apply(t, installer.OpUpdate, "unchanged"); got.Mutated {
 		t.Fatalf("unchanged=%+v", got)
 	}
-	pinned := t.TempDir()
+	pinned, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, name := range []string{"plugin.json", "mcp.json", "server.js"} {
 		kiroSDKWrite(t, filepath.Join(pinned, name), kiroSDKRead(t, filepath.Join(pkg, name)))
 	}
