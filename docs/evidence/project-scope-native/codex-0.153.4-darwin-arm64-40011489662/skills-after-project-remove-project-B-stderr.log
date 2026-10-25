@@ -1,4 +1,0 @@
-[2m2026-10-23T19:56:18.061051Z[0m [31mERROR[0m [2mcodex_app_server[0m[2m:[0m Project-local config, hooks, and exec policies are disabled in the following folders until the project is trusted, but skills still load.
-    1. /Users/runner/work/_temp/uap-native-hosted-_ocozw_w/evidence/uap-native-evidence-689709854/project-B/.codex
-       To load project-local config, hooks, and exec policies, add /Users/runner/work/_temp/uap-native-hosted-_ocozw_w/evidence/uap-native-evidence-689709854/project-B as a trusted project in /Users/runner/work/_temp/uap-native-hosted-_ocozw_w/evidence/uap-native-evidence-689709854/home/.codex/config.toml.
-

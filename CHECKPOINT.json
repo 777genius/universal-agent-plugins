@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "vscode",
+  "source_commit": "c74041953b4897c1ea85dbba71bbf80035936c87",
+  "source_tree": "d8fc973244a221db5245785193a948ed851dfc8d",
+  "base_commit": "46b4678ea66d7804311f98270b70ebd3cceb928a",
+  "local_head": "3c9f987a88e860ef68038781e1aba4bb24cde7fb",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}
