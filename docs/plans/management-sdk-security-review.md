@@ -1,10 +1,25 @@
 # Management SDK and Agent Teams security review
 
+## Reopened review of the 17 current alerts
+
+The 2026-10-25 follow-up identified a real package-link validation defect in
+alert **50**. The previous blanket conclusion below is superseded: lexical
+path cleaning before symbolic-link resolution could accept a link outside the
+package. A regression failed on the original source; component-order resolution
+now rejects it while preserving legitimate internal links and their digests.
+
+The current per-alert work, corrections, verification and remaining formal
+dispositions are recorded in
+[the remediation record](management-codeql-remediation-20261025.md). Earlier
+source reviews remain historical evidence, not a substitute for the new scan.
+The remaining sections preserve those older reports and their original
+checkpoints; the remediation record is the current disposition.
+
 Date: 2026-10-25. Independent source review; no tests, builds or native clients were
 run by this reviewer. No production code, scanner configuration, alert state or
 repository protection was changed.
 
-## Current presentation follow-up
+## Historical presentation follow-up
 
 The v9 source change adds only optional display metadata to existing retained
 local-Skill observations and review plans. The timestamp is captured when the

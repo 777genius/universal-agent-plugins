@@ -8,6 +8,12 @@ import type { RegistryPlugin } from '../types/registry';
 
 const CLI_INVOCATION = 'npx -y universal-agent-plugins';
 
+/** Encode one shell argument; safe tokens retain the familiar readable command. */
+export function shellToken(value: string): string {
+  // A comma is excluded: PowerShell treats an unquoted comma as its array operator.
+  return /^[A-Za-z0-9_./:@+=-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function communityAddSource(plugin: RegistryPlugin): string {
   const source = plugin.source;
   if (
@@ -21,14 +27,14 @@ function communityAddSource(plugin: RegistryPlugin): string {
   if (
     typeof source.path !== 'string' ||
     source.path.includes('\\') ||
+    // An apostrophe has no quoting that is correct in both POSIX shells and PowerShell.
+    source.path.includes("'") ||
     [...source.path].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
     (source.path && source.path.split('/').some((part) => !part || part === '.' || part === '..'))
   )
     throw new Error('Community source requires a relative package path');
   const selector = `github:${source.repository}@${source.revision}${source.path ? `//${source.path}` : ''}`;
-  return /^[A-Za-z0-9_./:@+-]+$/.test(selector)
-    ? selector
-    : `'${selector.replaceAll("'", "'\\''")}'`;
+  return shellToken(selector);
 }
 
 export function pluginCommands(

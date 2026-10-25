@@ -1,0 +1,57 @@
+{
+  "registryUi": {
+    "skills": {
+      "catalogType": "نوع الكتالوج",
+      "plugins": "الإضافات",
+      "skills": "المهارات",
+      "heading": "استكشف Agent Skills",
+      "intro": "اعثر على مهارة واختر وكلاءك وانسخ أمر التثبيت.",
+      "search": "البحث عن مهارات",
+      "searchPlaceholder": "ابحث بالاسم أو المستودع",
+      "clearSearch": "مسح البحث",
+      "sortLabel": "ترتيب المهارات",
+      "loaded": "عرض {count} مهارة",
+      "searchResults": "عرض {count} نتيجة بحث",
+      "stale": "عرض نتائج محفوظة بتاريخ {date}. النتائج الحديثة غير متاحة مؤقتًا.",
+      "minSearch": "أدخل حرفين على الأقل",
+      "minSearchHelp": "استخدم اسم مهارة أو مستودع، أو امسح البحث للتصفح.",
+      "loading": "جارٍ تحميل المهارات…",
+      "unavailable": "المهارات غير متاحة مؤقتًا",
+      "unavailableHelp": "حاول تحميل الكتالوج مجددًا بعد قليل.",
+      "retry": "إعادة المحاولة",
+      "noMatches": "لا توجد مهارات مطابقة",
+      "noMatchesHelp": "جرّب بحثًا أوسع أو امسح البحث للتصفح.",
+      "moreUnavailable": "تعذر تحميل المزيد من المهارات. النتائج الحالية ما زالت متاحة.",
+      "showMore": "عرض المزيد من المهارات",
+      "externalSource": "مصدر خارجي",
+      "githubSource": "المصدر على GitHub",
+      "unsupportedSource": "التثبيت من هذا المصدر غير مدعوم بعد.",
+      "chooseAgents": "اختر الوكلاء",
+      "chooseInTerminal": "اختيار الوكلاء في الطرفية",
+      "chooseInTerminalHelp": "يتيح الأمر اختيار الوكلاء قبل التثبيت.",
+      "checkedBeforeInstall": "تتحقق CLI من المصدر والمهارة قبل التثبيت.",
+      "views": {
+        "popular": "الأكثر شعبية · كل الوقت",
+        "trending": "الرائجة · 24 ساعة",
+        "hot": "الأكثر نشاطًا · آخر ساعة"
+      },
+      "metric": {
+        "all-time": "{count} تثبيت · كل الوقت",
+        "24h": "{count} تثبيت · آخر 24 ساعة",
+        "1h": "{count} تثبيت · آخر ساعة"
+      },
+      "pageHeading": "اعثر على Agent Skills",
+      "unsupportedName": "اسم المهارة في هذا الإدراج غير مدعوم. راجع المصدر للحصول على تعليمات التثبيت.",
+      "collectionShown": "عرض {count} من {total} في هذه المجموعة",
+      "headingPrefix": "اعثر على"
+    },
+    "directoryPage": {
+      "pluginDirectory": "دليل الإضافات",
+      "findAgentPlugins10": "اعثر على Agent Plugins 1.0.",
+      "useThemEverywhere": "استخدمها في كل مكان.",
+      "searchReviewedPackagesAndCommunityPluginsDiscoveredFromPublicGithubRepositories": "ابحث في الحزم المراجَعة وإضافات المجتمع المكتشفة من مستودعات GitHub العامة.",
+      "explorePlugins": "استكشف الإضافات",
+      "filterByCapabilitySourceAuthenticationOrSupportedAgent": "صفّ حسب الإمكانية أو المصدر أو المصادقة أو الوكيل المدعوم."
+    }
+  }
+}

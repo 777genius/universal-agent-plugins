@@ -9,6 +9,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 func (b *ManagementBackend) Prepare(ctx context.Context, input management.ChangeRequest, operationID string) (management.Prepared, error) {
@@ -103,7 +104,8 @@ func managementSyncRequest(snapshot environmentSnapshot, requirements environmen
 func (b *ManagementBackend) managementAdd(ctx context.Context, app App, input management.ChangeRequest, clients []string, snapshot environmentSnapshot) (environment.Requirements, environment.Lock, []string, error) {
 	requirements := cloneSavedRequirements(snapshot.Requirements)
 	source := input.Source
-	if explicitLocalPath(source) || localArchiveInput(source) {
+	spec, sourceErr := sourcespec.Parse(source)
+	if explicitLocalPath(source) || sourceErr == nil && spec.Kind == sourcespec.KindLocalArchive {
 		return requirements, environment.Lock{}, nil, managementRefusal("SOURCE_NOT_SUPPORTED", "Use a Git, HTTPS archive or signed catalog reference; local plugin paths are not supported by this API")
 	}
 	if input.Ref != "" {
