@@ -19,6 +19,10 @@ LIMIT = 1 << 20
 LABEL = re.compile(r"[a-z][a-z0-9-]{0,90}\Z")
 
 
+class ServiceDeadline(Exception):
+    pass
+
+
 def group_alive(pid):
     try:
         os.killpg(pid, 0)
@@ -205,10 +209,24 @@ class Service:
                 self._problem = "bounded service capture failed"
 
     def run(self, observe):
+        if threading.current_thread() is not threading.main_thread():
+            raise ValueError("bounded service must run on the main thread")
         record = {"probe": self.label, "argv": self.argv, "cwd": str(self.cwd), "error": None}
         result, thread, complete, forced = None, None, False, False
         cleanup = {"shutdown_acknowledged": False, "sigterm_sent": False, "forced_kill": False,
                    "group_reaped": False, "port_closed": False}
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.getitimer(signal.ITIMER_REAL)
+        alarm_started = time.monotonic()
+
+        def deadline(_signal, _frame):
+            raise ServiceDeadline("native service original work deadline")
+
+        signal.signal(signal.SIGALRM, deadline)
+        # Bound even an observer that blocks without calling snapshot/http. Keep
+        # the outer collector timer's absolute expiry when restoring it below.
+        work_left = max(0.001, self.work_deadline - alarm_started)
+        signal.setitimer(signal.ITIMER_REAL, min(work_left, previous_timer[0]) if previous_timer[0] else work_left)
         try:
             self._process = subprocess.Popen(self.argv, cwd=self.cwd, env=self.env, stdin=subprocess.DEVNULL,
                                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -223,6 +241,11 @@ class Service:
         except Exception:
             record["error"] = "service observation failed; private streams quarantined"
         finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            if previous_timer[0]:
+                left = previous_timer[0] - (time.monotonic() - alarm_started)
+                signal.setitimer(signal.ITIMER_REAL, max(0.001, left), previous_timer[1])
             cleanup["shutdown_acknowledged"] = self._shutdown
             if self._process is not None:
                 process = self._process

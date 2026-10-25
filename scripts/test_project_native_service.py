@@ -1,6 +1,7 @@
 """Exercise finite supervision with inert Python children, never vendor binaries."""
 import hashlib
 import json
+import signal
 from pathlib import Path
 import sys
 import tempfile
@@ -153,6 +154,33 @@ class ServiceTests(unittest.TestCase):
         self.assertIsNotNone(record["error"])
         self.assertLess(len(stdout + stderr), 128)
         self.assertTrue(record["cleanup"]["group_reaped"])
+
+    def test_blocked_callback_is_interrupted_without_extending_outer_deadline(self):
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.getitimer(signal.ITIMER_REAL)
+        handler = lambda *_: self.fail("outer timer unexpectedly fired")
+        signal.signal(signal.SIGALRM, handler)
+        signal.setitimer(signal.ITIMER_REAL, 20)
+        started = time.monotonic()
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                service = self.service(Path(temporary), timeout=6)
+                record, stdout, stderr, result, _, _ = service.run(lambda _service: time.sleep(10))
+            left, interval = signal.getitimer(signal.ITIMER_REAL)
+            self.assertIs(signal.getsignal(signal.SIGALRM), handler)
+            self.assertEqual(interval, 0)
+            self.assertLess(left, 19.1)
+            self.assertGreater(left, 17)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            if previous_timer[0]:
+                signal.setitimer(signal.ITIMER_REAL, max(0.001, previous_timer[0] - (time.monotonic() - started)), previous_timer[1])
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertIsNotNone(record["error"])
+        self.assertIsNone(result)
+        self.assertTrue(record["cleanup"]["group_reaped"])
+        self.assertNotIn(TOKEN.encode(), stdout + stderr)
 
     def test_http_is_fixed_loopback_bounded_and_keeps_bearer_out_of_receipts(self):
         service = self.service(Path("/tmp"))
