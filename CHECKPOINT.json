@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "cline",
+  "source_commit": "6875cb9f0fdeb53b5cf75c895209d362d4aab949",
+  "source_tree": "10c1bb5bb66696c645831b6b508e8b29e4a95a3c",
+  "base_commit": "46b4678ea66d7804311f98270b70ebd3cceb928a",
+  "local_head": "b8736db1b6a7d65a635ed7aa0489c6632c700f9a",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}
