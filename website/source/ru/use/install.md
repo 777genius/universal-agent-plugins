@@ -28,4 +28,10 @@ translationRequired: true
 причины. После подготовки файлов агенту могут потребоваться
 перезапуск, доверие к проекту или явный выбор конфигурации сеанса.
 
+Для VS Code область `project` подготавливает `.github/skills` и принадлежащие
+установке записи `servers` в `.vscode/mcp.json`. Результат остаётся Prepared:
+откройте выбранную локальную папку, проверьте доверие к проекту и серверам,
+затем навыки и настройки MCP. Удалённые рабочие области и рабочие области
+с несколькими корневыми папками этим адаптером не поддерживаются.
+
 [Руководство по установке в проект](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Текущая поддержка проектов и ограничения](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

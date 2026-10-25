@@ -51,6 +51,33 @@ acquisition. In particular, [ChatGPT has no native project installation](CHATGPT
 including with `--no-save`. A client's user installation path is never used as
 a substitute for missing project support.
 
+## VS Code project preparation
+
+Select VS Code explicitly for an existing local project folder:
+
+```sh
+agentplugins add ./my-plugin --target vscode --scope project \
+  --project-root /path/to/project --dry-run
+```
+
+Review the plan, then omit `--dry-run` to apply it. The project adapter prepares
+skills in `.github/skills/<name>` and exact MCP `servers` members in
+`.vscode/mcp.json`. That file accepts its native comments and trailing commas;
+UAP does not select an alternative `mcp.jsonc`. Unrelated servers, inputs,
+sandbox settings and comments retain their ownership.
+
+The result is **Prepared**, with verification of the installed files. Open the
+selected folder in VS Code, review workspace and server trust, and inspect its
+skills and MCP configuration. The pinned workbench observation establishes
+component metadata and project separation; it does not establish MCP startup,
+tool calls, authentication or model execution. Remote workspaces and multi-root
+workspaces are outside this project adapter's admitted scope.
+
+Go SDK composition must select the project registry with `all.Project()` or
+include the explicit `vscode.NewProject()` adapter. The default user registry
+does not admit VS Code project requests. The CLI selects the appropriate registry
+from the resolved scope before planning or source acquisition.
+
 ## Portable intent and local state
 
 | Location | Contents | Transfer with the project agreement? |

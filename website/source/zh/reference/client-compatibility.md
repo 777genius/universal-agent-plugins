@@ -22,4 +22,10 @@ localeDisposition: "english-fallback"
 运行分别验证。ChatGPT 会明确拒绝项目范围；其他目标各有组件、准备步骤和受支持
 客户端的限制。
 
+VS Code 项目准备使用 `.github/skills` 和 `.vscode/mcp.json`。
+[固定版本 VS Code 1.143.1 的观察记录](https://github.com/777genius/universal-agent-plugins/actions/runs/40188310034)验证了独立 A/B 文件夹、
+A 的重新启动及移除后的元数据，且未授予工作区信任。这仅证明元数据行为；
+适配器返回 Prepared 并验证已安装文件，不据此声称 MCP 已启动、工具已调用
+或模型已执行。
+
 [项目安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [当前项目支持情况及限制](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

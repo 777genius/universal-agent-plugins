@@ -18,6 +18,7 @@ const (
 	// Clients with different native transport keys require their own codec.
 	CodecMCPServers Codec = "mcpServers"
 	CodecCopilot    Codec = "copilot-mcpServers"
+	CodecVSCode     Codec = "vscode-project-servers"
 	CodecKimi       Codec = "kimi-project-mcpServers"
 	CodecGemini     Codec = "gemini-mcpServers"
 	CodecCodex      Codec = "codex-mcp-servers"
@@ -193,6 +194,9 @@ func validateRequest(req Request) error {
 	if req.Codec == CodecCodex && req.Paths.JSONC != "" {
 		return fmt.Errorf("codex requires one TOML config path")
 	}
+	if req.Codec == CodecVSCode && req.Paths.JSONC != "" {
+		return fmt.Errorf("VS Code requires one mcp.json config path with native JSONC syntax")
+	}
 	if err := validateExactPath(req.Paths.JSON, "JSON native config path"); err != nil {
 		return err
 	}
@@ -223,10 +227,13 @@ func validateRequest(req Request) error {
 }
 
 func supportedCodec(codec Codec) bool {
-	return codec == CodecMCPServers || codec == CodecCopilot || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline
+	return codec == CodecMCPServers || codec == CodecCopilot || codec == CodecVSCode || codec == CodecKimi || codec == CodecGemini || codec == CodecCodex || codec == CodecOpenCode || codec == CodecOpenCodeV2 || codec == CodecWindsurf || codec == CodecDevin || codec == CodecCline
 }
 
 func codecCollectionKey(codec Codec) string {
+	if codec == CodecVSCode {
+		return "servers"
+	}
 	if codec == CodecCodex {
 		return "mcp_servers"
 	}

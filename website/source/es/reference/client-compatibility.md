@@ -24,4 +24,11 @@ detección nativa y funcionamiento de MCP/modelos se verifican por separado.
 ChatGPT rechaza explícitamente este ámbito; los demás destinos tienen sus
 propias restricciones de componentes, preparación y cliente compatible.
 
+La preparación de proyectos para VS Code utiliza `.github/skills` y
+`.vscode/mcp.json`. La [observación fijada de VS Code 1.143.1](https://github.com/777genius/universal-agent-plugins/actions/runs/40188310034)
+verificó metadatos en carpetas A/B separadas, tras un nuevo inicio de A y después
+de la eliminación, sin conceder confianza al espacio de trabajo. Es evidencia
+de metadatos: el adaptador informa Prepared y verifica los archivos instalados;
+no demuestra inicio de MCP, llamadas a herramientas ni ejecución del modelo.
+
 [Guía de instalación por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Compatibilidad y límites actuales por proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

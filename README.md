@@ -192,6 +192,10 @@ The [current project support table](docs/PROJECT_CLIENT_SUPPORT.md) records each
 client's component paths and activation limits; user-scope compatibility below
 is a separate contract.
 
+VS Code project scope prepares `.github/skills` and owned `.vscode/mcp.json`
+servers for one local folder. Its Prepared result leaves workspace/server trust
+and runtime selection to the client. See [VS Code project preparation](docs/PROJECT_INSTALLATION.md#vs-code-project-preparation).
+
 ## Any Agent Plugins 1.0 package
 
 Install from the registry, a local folder, or a GitHub repository pinned to an

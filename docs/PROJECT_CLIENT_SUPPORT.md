@@ -29,7 +29,7 @@ selection, reload, trust or session work can remain.
 | Windsurf / Devin | Current observed Devin Local: `.devin/skills` and `.devin/mcp_config.json` | Prepared; new delivery requires the observed `devin` 3000.11.205 harness. Legacy Cascade and an unrelated UI executable are not substitutes. |
 | Kimi Code | `.kimi-code/skills` and `.kimi-code/mcp.json` | Prepared; new delivery requires observed `kimi` 2.3.1 and the selected skill directory's nearest Git root. The user plugin registry stays separate. |
 | ChatGPT | No supported native project filesystem installation | Explicit refusal before source acquisition, including `--no-save`; the existing user/manual path is preserved. See [ChatGPT scope](CHATGPT_PROJECT_SCOPE.md). |
-| VS Code | Project adapter pending shipped-workbench observation and implementation | The reviewed collector observes metadata only. This row does not advertise implemented project support. |
+| VS Code | `.github/skills` and exact `servers` members in `.vscode/mcp.json`, including native JSONC syntax | Prepared with installed-file verification for one local folder. Open that folder and review workspace/server trust; observed metadata does not prove MCP startup or model execution. See [VS Code preparation](PROJECT_INSTALLATION.md#vs-code-project-preparation) and [pinned metadata evidence](evidence/project-scope-research/vscode-1.143.1-untrusted-workspace-linux-amd64-40188310034/README.md). |
 
 ## What the verification establishes
 

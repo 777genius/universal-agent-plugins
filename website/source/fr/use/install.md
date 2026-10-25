@@ -28,4 +28,11 @@ sont sélectionnables ; les cibles indisponibles peuvent rester visibles avec le
 motif. Après la préparation des fichiers, le client peut demander
 un redémarrage, la confiance de l’espace de travail ou une configuration de session.
 
+Pour VS Code, la portée projet prépare `.github/skills` et les entrées
+`servers` appartenant à l’installation dans `.vscode/mcp.json`. Le résultat reste
+Prepared : ouvrez le dossier local sélectionné, examinez la confiance accordée
+à l’espace de travail et aux serveurs, puis vérifiez les compétences et les
+réglages MCP. Cet adaptateur ne prend pas en charge les espaces distants ni
+les espaces comportant plusieurs dossiers racines.
+
 [Guide d’installation par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Compatibilité et limites actuelles par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
