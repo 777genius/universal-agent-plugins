@@ -61,6 +61,9 @@ func projectServer(codec Codec, server Server, placeholders Placeholders) (map[s
 	if codec == CodecCopilot {
 		return projectCopilotServer(server, placeholders)
 	}
+	if codec == CodecVSCode {
+		return projectVSCodeServer(server, placeholders)
+	}
 	return projectBaseServer(codec, server, placeholders)
 }
 

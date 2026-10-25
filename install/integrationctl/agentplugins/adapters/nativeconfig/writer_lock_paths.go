@@ -38,6 +38,9 @@ type writerLockTarget struct {
 }
 
 func writerLockTargets(paths Paths, codec Codec) ([]writerLockTarget, error) {
+	if codec == CodecVSCode && paths.JSONC != "" {
+		return nil, fmt.Errorf("VS Code requires one mcp.json config path with native JSONC syntax")
+	}
 	if err := validateExactPath(paths.JSON, "JSON native config path"); err != nil {
 		return nil, err
 	}

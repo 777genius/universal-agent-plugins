@@ -13,6 +13,11 @@ func parseCodecDocument(body []byte, jsonc bool, codec Codec) (*document, error)
 	if codec == CodecCodex {
 		return nil, fmt.Errorf("codex TOML document parser is required")
 	}
+	// VS Code's actual mcp.json accepts comments and trailing commas. It has
+	// no alternative JSONC filename; preserve its native AST in that one file.
+	if codec == CodecVSCode {
+		return parseDocument(body, true)
+	}
 	if (codec != CodecGemini && codec != CodecDevin) || jsonc {
 		return parseDocument(body, jsonc)
 	}
