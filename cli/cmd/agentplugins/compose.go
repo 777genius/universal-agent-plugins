@@ -115,6 +115,9 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 	directoryManager := dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations-v2")}
 	mutationLock := processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}
 	clientRegistry := clientregistry.Default()
+	if projectRoot != "" {
+		clientRegistry = clientregistry.Project()
+	}
 	paths := pathpolicy.Policy{}
 	nativeKernel := nativeconfig.New()
 	helperExecutable, err := os.Executable()
