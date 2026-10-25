@@ -17,13 +17,14 @@ func (delegate dependencyDiagnosticDelegate) Run(ctx context.Context, command so
 }
 
 type dependencyDiagnosticSecretError struct{}
+type dependencyDiagnosticContextKey struct{}
 
 func (*dependencyDiagnosticSecretError) Error() string {
 	panic("Git argv/stream/credential error text must not be read")
 }
 
 func TestDependencyGitDiagnosticPreservesCallAndOmitsAllPayloads(t *testing.T) {
-	ctx := context.WithValue(t.Context(), struct{}{}, "secret context")
+	ctx := context.WithValue(t.Context(), dependencyDiagnosticContextKey{}, "secret context")
 	command := sourceacquisition.Command{Dir: "/secret/path", Args: []string{"-C", "/secret/repository", "fetch", "secret argument"}, Stdin: []byte("secret input")}
 	body, original := []byte("secret output"), &dependencyDiagnosticSecretError{}
 	calls, reports := 0, 0
@@ -41,7 +42,7 @@ func TestDependencyGitDiagnosticPreservesCallAndOmitsAllPayloads(t *testing.T) {
 	}}
 	for range 6 {
 		got, err := runner.Run(ctx, command)
-		if err != original || &got[0] != &body[0] {
+		if reflect.ValueOf(err) != reflect.ValueOf(original) || &got[0] != &body[0] {
 			t.Fatal("diagnostic changed original bytes/error")
 		}
 	}
@@ -60,7 +61,7 @@ func TestDependencyGitDiagnosticSuccessIsSilentAndClassesAreFixed(t *testing.T) 
 	for _, tc := range []struct {
 		err  error
 		want string
-	}{{context.Canceled, "context_cancelled"}, {context.DeadlineExceeded, "context_deadline"}, {processadapter.ErrOrdinaryContainmentUnsupported, "ordinary_unsupported"}, {processadapter.ErrStdoutLimitExceeded, "stdout_limit"}, {errors.New("secret error"), "other_git_or_process"}} {
+	}{{context.Canceled, "context_canceled"}, {context.DeadlineExceeded, "context_deadline"}, {processadapter.ErrOrdinaryContainmentUnsupported, "ordinary_unsupported"}, {processadapter.ErrStdoutLimitExceeded, "stdout_limit"}, {errors.New("secret error"), "other_git_or_process"}} {
 		if got := dependencyGitDiagnosticClass(tc.err); got != tc.want {
 			t.Fatalf("diagnostic class=%q want=%q", got, tc.want)
 		}

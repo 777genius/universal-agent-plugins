@@ -21,6 +21,7 @@ func (f projectGitDiagnosticDelegate) Run(ctx context.Context, command sourceacq
 }
 
 type projectGitInspectionTrap struct{}
+type projectGitDiagnosticContextKey struct{}
 
 func (*projectGitInspectionTrap) Error() string {
 	panic("argv/stdout/stderr/secret cause must not be inspected")
@@ -40,7 +41,7 @@ func projectGitDiagnosticFixture(t *testing.T) (projectGitDiagnosticRunner, stri
 
 func TestProjectGitDiagnosticPreservesOneCallInputsAndExactResult(t *testing.T) {
 	r, dir, logs := projectGitDiagnosticFixture(t)
-	ctx := context.WithValue(t.Context(), struct{}{}, "inert")
+	ctx := context.WithValue(t.Context(), projectGitDiagnosticContextKey{}, "inert")
 	command := sourceacquisition.Command{Dir: dir, Args: []string{"init", "--quiet", filepath.Join(dir, "repository")}, Stdin: []byte("same input"), MaxOutputBytes: 17}
 	body, original := []byte("same returned bytes"), &projectGitInspectionTrap{}
 	calls := 0
@@ -52,7 +53,7 @@ func TestProjectGitDiagnosticPreservesOneCallInputsAndExactResult(t *testing.T) 
 		return body, original
 	})
 	got, err := r.Run(ctx, command)
-	if calls != 1 || err != original || &got[0] != &body[0] || len(*logs) != 1 {
+	if calls != 1 || reflect.ValueOf(err) != reflect.ValueOf(original) || &got[0] != &body[0] || len(*logs) != 1 {
 		t.Fatal("original call/result/error identity changed")
 	}
 	if strings.Contains((*logs)[0], "secret") || !strings.Contains((*logs)[0], "phase=init") || !strings.Contains((*logs)[0], "cause=cause_omitted") {
@@ -65,7 +66,7 @@ func TestProjectGitDiagnosticOnlyAdmitsNativeKnownFixtureAuthority(t *testing.T)
 		t.Run(kind, func(t *testing.T) {
 			r, dir, logs := projectGitDiagnosticFixture(t)
 			repo := filepath.Join(dir, "repository")
-			var returned error = errors.New("read stable proc identity failed")
+			returned := errors.New("read stable proc identity failed")
 			r.delegate = projectGitDiagnosticDelegate(func(context.Context, sourceacquisition.Command) ([]byte, error) { return nil, returned })
 			if kind == "origin-registered" {
 				returned = nil
@@ -75,10 +76,11 @@ func TestProjectGitDiagnosticOnlyAdmitsNativeKnownFixtureAuthority(t *testing.T)
 				}
 				returned = errors.New("read stable proc identity failed")
 			}
-			args := []string{"-C", repo, "ls-remote", "--symref", "--", r.recorder.endpoint, "HEAD"}
+			args := make([]string, 0, 10)
+			args = append(args, "-C", repo, "ls-remote", "--symref", "--", r.recorder.endpoint, "HEAD")
 			switch kind {
 			case "origin-registered", "origin-unregistered":
-				args = []string{"-C", repo, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", strings.Repeat("1", 40)}
+				args = append(args[:0], "-C", repo, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "origin", strings.Repeat("1", 40))
 			case "unknown-grammar":
 				args = append(args, "unreviewed")
 			case "external-endpoint":
@@ -104,7 +106,7 @@ func TestProjectGitDiagnosticOnlyAdmitsNativeKnownFixtureAuthority(t *testing.T)
 				returned = &projectGitInspectionTrap{}
 			}
 			_, err := r.Run(t.Context(), sourceacquisition.Command{Dir: dir, Args: args, NativeCredentials: true})
-			if err != returned || len(*logs) != 1 {
+			if reflect.ValueOf(err) != reflect.ValueOf(returned) || len(*logs) != 1 {
 				t.Fatal("delegate outcome or accounting changed")
 			}
 			omitted := strings.Contains((*logs)[0], "cause=cause_omitted")
@@ -145,7 +147,7 @@ func TestProjectGitDiagnosticClassesCountsAndUnknownPhaseNeverInferAcquisition(t
 	for _, tc := range []struct {
 		err   error
 		class string
-	}{{context.Canceled, "context_cancelled"}, {context.DeadlineExceeded, "context_deadline"}, {processadapter.ErrOrdinaryContainmentUnsupported, "ordinary_unsupported"}, {processadapter.ErrStdoutLimitExceeded, "stdout_limit"}, {&projectGitInspectionTrap{}, "other_git_or_process"}} {
+	}{{context.Canceled, "context_canceled"}, {context.DeadlineExceeded, "context_deadline"}, {processadapter.ErrOrdinaryContainmentUnsupported, "ordinary_unsupported"}, {processadapter.ErrStdoutLimitExceeded, "stdout_limit"}, {&projectGitInspectionTrap{}, "other_git_or_process"}} {
 		if got := projectGitDiagnosticClass(tc.err); got != tc.class {
 			t.Fatal(got, tc.class)
 		}
@@ -165,7 +167,7 @@ func TestProjectGitDiagnosticClassesCountsAndUnknownPhaseNeverInferAcquisition(t
 	r.recorder.counts["init"] = 65535
 	original = &projectGitInspectionTrap{}
 	for range 8 {
-		if _, err := r.Run(t.Context(), command); err != original {
+		if _, err := r.Run(t.Context(), command); reflect.ValueOf(err) != reflect.ValueOf(original) {
 			t.Fatal("diagnostic saturation changed real error")
 		}
 	}
