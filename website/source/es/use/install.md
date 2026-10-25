@@ -20,7 +20,7 @@ translationRequired: true
 seleccionar explícitamente un proyecto para paquetes y Agent Skills:
 
 ```sh
-agentplugins add owner/repo --target cursor \
+agentplugins add owner/repo --alias review --target cursor \
   --scope project --project-root /path/to/project
 agentplugins skills add owner/repository --ui \
   --scope project --project-root /path/to/project

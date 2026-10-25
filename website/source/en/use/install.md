@@ -146,7 +146,7 @@ Continue with [maintaining installed plugins](./manage).
 project selection for packages and Agent Skills:
 
 ```sh
-agentplugins add owner/repo --target cursor \
+agentplugins add owner/repo --alias review --target cursor \
   --scope project --project-root /path/to/project
 agentplugins skills add owner/repository --ui \
   --scope project --project-root /path/to/project
