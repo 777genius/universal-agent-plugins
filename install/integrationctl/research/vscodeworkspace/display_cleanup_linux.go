@@ -23,7 +23,7 @@ func (c *controller) cleanupDisplay() error {
 	return c.cleanupCreatedDisplayParent()
 }
 func (c *controller) cleanupDisplayAsset(path string) error {
-	expected := c.displayAssets[path]
+	asset, recorded := c.displayAssets[path]
 	current, err := os.Lstat(path)
 	if os.IsNotExist(err) {
 		return nil
@@ -31,7 +31,7 @@ func (c *controller) cleanupDisplayAsset(path string) error {
 	if err != nil {
 		return err
 	}
-	if expected == nil || !sameFile(expected, current) {
+	if !recorded || asset.verify(path) != nil || !sameFile(asset.info, current) {
 		return fmt.Errorf("display asset identity changed; not removed")
 	}
 	parent := filepath.Dir(path)

@@ -269,7 +269,11 @@ func (c *controller) displayReady(ctx context.Context, proof isolationProof) err
 				if ae != nil || !sameFile(info, after) {
 					return fmt.Errorf("display socket changed during readiness")
 				}
-				c.displayAssets = map[string]os.FileInfo{"/tmp/.X93-lock": lockInfo, "/tmp/.X11-unix/X93": info}
+				assets, holdErr := holdDisplayAssets("/tmp/.X93-lock", "/tmp/.X11-unix/X93", lockInfo, info)
+				if holdErr != nil {
+					return holdErr
+				}
+				c.displayAssets = assets
 				return nil
 			}
 			if !os.IsNotExist(se) {
@@ -390,6 +394,7 @@ func (c *controller) execute() (resultErr error) {
 		} else {
 			c.displayCleanupErr = c.unprovedDisplayCleanup()
 		}
+		c.displayCleanupErr = errors.Join(c.displayCleanupErr, c.closeDisplayAssets())
 		resultErr = errors.Join(resultErr, c.displayCleanupErr)
 	}()
 	if err := c.fixtures(); err != nil {
