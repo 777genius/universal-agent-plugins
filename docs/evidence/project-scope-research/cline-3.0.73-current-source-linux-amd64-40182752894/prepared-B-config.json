@@ -1,0 +1,3 @@
+{"foreignPreference":"retain-b","mcpServers":{"foreign-b":{"transport":{"type":"streamableHttp","url":"http://127.0.0.1:9/FOREIGN-b"}},
+  "uap-cline-b":{"transport":{"type":"streamableHttp","url":"http://127.0.0.1:9/B-ONE"}}
+}}

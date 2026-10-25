@@ -29,8 +29,15 @@ its ordinary user settings again. IDE forwarding is a separate unverified path.
 The historical hosted Cline 3.0.73 research positively observed project skill
 paths and explicit MCP file selection. Its raw output and exact source closure
 are [preserved here](evidence/project-scope-research/cline-3.0.73-linux-amd64-40017958131/README.md).
-That collector did not run UAP's project lifecycle. New current-source hosted
-product evidence remains required, including honest same-name precedence limits.
+That collector did not run UAP's project lifecycle. The separate
+[current-source Cline 3.0.73 observation](evidence/project-scope-research/cline-3.0.73-current-source-linux-amd64-40182752894/README.md)
+now records public UAP user/A/B installation, replay, update, repair, removal
+and read-only native metadata at its exact source. It observed enabled MCP
+registrations in the actual prepared files and unique project skill paths.
+Same-name user/A/B skill reads selected the user skill in that table, so a
+project receipt does not promise the same-name project skill is effective.
+Project activation, MCP initialization and independent active-session versions
+remain unqualified.
 
 ## Ownership and maintenance
 

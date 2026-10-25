@@ -128,3 +128,17 @@ tree1e20df5bfc2aa72a58b30034cb3ba27912e44ff4.
 
 The workflow file content is byte-identical to the disabled draft in374d427d.
 No genuine hosted result is claimed by either approval or by this promotion.
+
+## Genuine current-source observation received
+
+Run `40182752894` passed on source
+`3e175de8cfa433f2e9427a47c4e1d7a8e0da5a77`, tree
+`72bc516716ae105baffb2dc5a7ec7b8d259f7b95`. Its
+[raw current-source evidence and interpretation](../../evidence/project-scope-research/cline-3.0.73-current-source-linux-amd64-40182752894/README.md)
+preserve all 106 text members, source/ZIP identities and 90 stream hashes.
+Unique selected project skills and exact enabled process-MCP source metadata
+were observed through the public owned lifecycle. Same-name inventory selected
+the user skill in user/A/B; that precedence stage remains blocked for independent
+active versions. All runtime/trust/model/IDE/session flags remain false. This
+new checkpoint does not rewrite the historical pre-adapter collector or qualify
+later untested source revisions.
