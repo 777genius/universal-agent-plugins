@@ -76,6 +76,12 @@ func finishOperation(op Operation, outcome Outcome, err error, panicked bool) Op
 	}
 	if outcome.Result.Outcome != "" {
 		result := outcome.Result
+		if result.LocalSkillBackup != nil {
+			backup := *result.LocalSkillBackup
+			observedAt := op.UpdatedAt
+			backup.RecordedAt = &observedAt
+			result.LocalSkillBackup = &backup
+		}
 		if result.Items == nil {
 			result.Items = []OperationItem{}
 		}
@@ -213,11 +219,30 @@ func (s *Server) environmentOperations(ctx context.Context) ([]Operation, []Loca
 				pending = append(pending, op)
 			}
 		}
-		if len(backups) < 100 && op.ResolvedBy == "" && op.Result != nil && op.Result.LocalSkillBackup != nil && time.Since(op.UpdatedAt) < resultRetention {
-			backups = append(backups, *op.Result.LocalSkillBackup)
+		if len(backups) < 100 && op.ResolvedBy == "" && time.Since(op.UpdatedAt) < resultRetention {
+			if backup := localSkillRestorePoint(op); backup != nil {
+				backups = append(backups, *backup)
+			}
 		}
 	}
 	return pending, backups, nil
+}
+
+// Restore labels come only from the retained operation, never a client-provided
+// timestamp/action or list position. Legacy observations retain an unknown action.
+func localSkillRestorePoint(op Operation) *LocalSkillBackup {
+	if op.Action != LocalSkill || op.LocalSkill == nil || op.Result == nil || op.Result.LocalSkillBackup == nil {
+		return nil
+	}
+	backup := *op.Result.LocalSkillBackup
+	if backup.OperationId != op.OperationId || backup.RootId != op.LocalSkill.RootId || backup.SkillName != op.LocalSkill.SkillName {
+		return nil
+	}
+	if backup.RecordedAt == nil && !op.UpdatedAt.IsZero() {
+		observedAt := op.UpdatedAt
+		backup.RecordedAt = &observedAt
+	}
+	return &backup
 }
 
 func pendingOperation(op Operation) bool {

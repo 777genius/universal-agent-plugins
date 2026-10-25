@@ -72,10 +72,16 @@ func TestManagementLocalSkillCreateEditDeleteRestore(t *testing.T) {
 	}
 	before := localSkillDigest([]byte("# Draft\n"))
 	edit := localSkillPrepare(t, b, localSkillTestRequest(localSkillTestFile("SKILL.md", &before, []byte("# Reviewed\n"))), strings.Repeat("2", 64))
-	localSkillApply(t, edit)
+	edited := localSkillApply(t, edit)
+	if edited.Result.LocalSkillBackup == nil || edited.Result.LocalSkillBackup.OriginalAction != "upsert" {
+		t.Fatal("edit backup lost its original action", edited)
+	}
 	deleted := localSkillApply(t, localSkillPrepare(t, b, management.LocalSkillRequest{Action: management.LocalSkillRequestAction("delete"), RootId: "project-local", SkillName: "draft"}, strings.Repeat("3", 64)))
-	if deleted.Result.LocalSkillBackup == nil {
+	if deleted.Result.LocalSkillBackup == nil || deleted.Result.LocalSkillBackup.OriginalAction != "delete" {
 		t.Fatal("delete did not retain reversible data")
+	}
+	if edited.Result.LocalSkillBackup.SkillName != deleted.Result.LocalSkillBackup.SkillName || edited.Result.LocalSkillBackup.OperationId == deleted.Result.LocalSkillBackup.OperationId {
+		t.Fatal("same-name edit and delete backups lost their distinct identities")
 	}
 	if _, err := os.Stat(filepath.Join(root, "draft")); !os.IsNotExist(err) {
 		t.Fatal("delete retained active Skill", err)

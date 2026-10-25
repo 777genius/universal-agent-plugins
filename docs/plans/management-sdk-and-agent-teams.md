@@ -1,13 +1,61 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v8 — current source qualification, authenticated host authority and explicit evidence boundaries.
+Status: implementation plan v9 — distinguishable restore points, useful security review and matched-artifact requalification.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
 
-## Current checkpoint — v8 (2026-10-25)
+## Current checkpoint — v9 (2026-10-25)
+
+The actual Agent Teams desktop journey now passed on head
+`42c412648cd513f4ca2d9656aaf5ceff71e2e323`, synthetic merge
+`7349c4ded9d9662ae87015efbe72fedf6a63c241`, with executable source 5224:
+[run 40189232897](https://github.com/777genius/agent-teams-ai/actions/runs/40189232897).
+The [complete receipt](https://github.com/777genius/agent-teams-ai/pull/989#issuecomment-6397195988)
+records real OpenCode MCP initialize/list/call, an exact nonce returned to the
+scripted provider, and a fresh native session with no MCP connection after UI
+removal. Its 19 screenshots and zero renderer errors also cover the existing
+install/copy/update/remove/edit/restart/restore and signed-registry journey. It
+qualifies those exact bytes, not live-model/OAuth behavior or the changes below.
+
+The screenshot review identified two concrete P2 usability issues, now corrected
+without a new history service, scanner policy or installer implementation:
+
+- Same-name local restore points previously had identical labels. Optional
+  `recordedAt` and `originalAction` now come from the existing durable operation
+  outcome. A restore plan includes the selected, identity-checked `restorePoint`.
+  Old observations retain a known timestamp but do not invent an original action.
+  These are display fields; the existing private receipt, snapshot, ownership,
+  mutation lock and stale-plan checks remain authoritative.
+- Non-CLI security review previously returned only a warning count. It now
+  projects bounded, trusted static reasons for seven verified lintai v0.1.3 rule
+  codes, including the actual insecure-HTTP MCP warning. Raw finding messages and
+  paths are not exposed. Unknown rules and unpublished/omitted findings receive
+  honest fallback text. Blocking findings and explicit existing CLI acceptance
+  retain their prior behavior.
+
+Both slices received independent source review with no remaining P1/P2 finding.
+The complete management transport package and actual local-Skill backend tests
+passed. A restart regression distinguishes same-name edit/delete observations,
+binds the selected review to the same point, covers legacy/invalid identity
+metadata and confirms stale Apply refusal. Eleven focused warning/CLI compatibility
+tests passed after the new warning assertions failed against the old code. Both
+DTOs were produced by the pinned upstream generators; SDK build and typecheck
+passed. No generated DTO was edited by hand.
+
+This checkpoint changes executable source and generated SDK types. Agent Teams
+must repack that committed SDK, pin its matching engine source, and rerun the
+current desktop/package/Full qualification gates. The strengthened desktop
+journey checks both restore labels and the exact selected confirmation, plus a
+specific warning reason before Apply. The previous 5224 Python/native receipt is
+[preserved separately](https://github.com/777genius/universal-agent-plugins/pull/500#issuecomment-6397042144);
+it is not relabeled for this new source. Formal CodeQL disposition and the
+separate S25/S26 project/Host prerequisites remain open. No protection, scanner
+query or approval gate is bypassed.
+
+## Previous checkpoint — v8 (2026-10-25)
 
 The executable/SDK source remains
 `5224ebd5f66bbdfab0bef906dba0b089062f6073`, version

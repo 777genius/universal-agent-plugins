@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -114,11 +115,62 @@ func (adapter *dependencyInstaller) authorize(ctx context.Context, loaded *loade
 		return errors.New("scanner unavailable")
 	}
 	if adapter.previewWarnings != nil && loaded.security.Counts.Warnings > 0 {
-		*adapter.previewWarnings = append(*adapter.previewWarnings, fmt.Sprintf("%d security warning(s) for pinned content", loaded.security.Counts.Warnings))
+		*adapter.previewWarnings = append(*adapter.previewWarnings, dependencySecurityWarnings(loaded.security)...)
 	}
 	if loaded.security.Counts.Blocking > 0 && !adapter.opts.acceptSecurityRisk {
 		return fmt.Errorf("%w: %d blocking findings", installer.ErrAssessmentRejected, loaded.security.Counts.Blocking)
 	}
 	loaded.securityAuthorized = true
 	return ctx.Err()
+}
+
+// These public summaries follow the pinned lintai v0.1.3 rule metadata in
+// crates/lintai-ai-security/src/registry/{json,github_workflow}.rs. Raw finding
+// messages and paths can contain source-controlled secrets, so they are never
+// forwarded to management diagnostics. Unknown rules keep their safe identity.
+var dependencySecurityWarningReasons = map[string]string{
+	"SEC302": "configuration contains an insecure http:// endpoint",
+	"SEC324": "GitHub Actions workflow uses a third-party action that is not pinned to a full commit SHA",
+	"SEC325": "GitHub Actions workflow interpolates untrusted expression data directly inside a run command",
+	"SEC326": "GitHub Actions pull_request_target workflow checks out untrusted pull request head content",
+	"SEC327": "GitHub Actions workflow grants GITHUB_TOKEN write-all permissions",
+	"SEC328": "GitHub Actions workflow combines explicit write-capable permissions with a third-party action",
+	"SEC329": "MCP config launches an external package dynamically at runtime",
+}
+
+func dependencySecurityWarnings(assessment *domain.SecurityAssessment) []string {
+	var warnings []string
+	published := 0
+	for _, finding := range assessment.Findings {
+		if finding.Disposition != "warning" {
+			continue
+		}
+		published++
+		if len(warnings) < securityFindingPreviewLimit {
+			warnings = append(warnings, publicSecurityWarning(finding.Code))
+		}
+	}
+	if omitted := published - len(warnings); omitted > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d additional %s omitted from this bounded preview", omitted, plural(omitted, "warning", "warnings")))
+	}
+	if unavailable := assessment.Counts.Warnings - published; unavailable > 0 {
+		warnings = append(warnings, fmt.Sprintf("%d additional %s; details unavailable", unavailable, plural(unavailable, "warning", "warnings")))
+	}
+	return warnings
+}
+
+func publicSecurityWarning(code string) string {
+	if len(code) < 6 || len(code) > 9 || code[:3] != "SEC" {
+		return "Security warning; details unavailable"
+	}
+	for _, digit := range code[3:] {
+		if digit < '0' || digit > '9' {
+			return "Security warning; details unavailable"
+		}
+	}
+	reason, ok := dependencySecurityWarningReasons[code]
+	if !ok {
+		reason = "security warning; details unavailable"
+	}
+	return prompt.SafeText(code + ": " + reason)
 }

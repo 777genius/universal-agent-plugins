@@ -36,6 +36,7 @@ func (s *Server) prepareLocalSkill(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "INVALID_REQUEST", "Invalid bounded local Skill selection", false)
 		return
 	}
+	var restorePoint *LocalSkillBackup
 	if string(input.Action) == "restore" {
 		record, err := s.store.byOperation(input.RestoreOperationId)
 		if err != nil {
@@ -46,6 +47,7 @@ func (s *Server) prepareLocalSkill(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 409, "RECOVERY_CONTEXT_MISMATCH", "Restore must reference the same retained local Skill operation", false)
 			return
 		}
+		restorePoint = localSkillRestorePoint(record.Operation)
 	}
 	if !s.reservePreparation(w, true) {
 		return
@@ -64,7 +66,7 @@ func (s *Server) prepareLocalSkill(w http.ResponseWriter, r *http.Request) {
 	}
 	identity := &LocalSkillIdentity{RootId: input.RootId, SkillName: input.SkillName}
 	request := ChangeRequest{Action: LocalSkill, OperationId: input.RestoreOperationId}
-	s.retainPrepared(ctx, w, request, operationID, prepared, identity)
+	s.retainPrepared(ctx, w, request, operationID, prepared, identity, restorePoint)
 }
 
 // Base64 preserves the editor's binary import feature. The larger cap is local

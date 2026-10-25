@@ -962,6 +962,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Diagnostic'
+        restorePoint:
+          $ref: '#/components/schemas/LocalSkillBackup'
+          description: Selected retained local Skill backup, bound to the validated restore operation
+            and root/Skill identity. Display-only; the prepared backend remains the authority to restore.
       description: Diagnostic review of a retained Go prepared object. Cannot be replayed as authority.
         An unaccepted handle expires and is invalid after restart. Apply rechecks current facts.
     ApplyRequest:
@@ -1333,6 +1337,24 @@ components:
         path:
           type: string
           maxLength: 4096
+        recordedAt:
+          type: string
+          format: date-time
+          description: Time the original operation outcome was durably observed. For older records,
+            the retained operation's known updatedAt is used; omitted when no timestamp is available.
+        originalAction:
+          type: string
+          enum:
+          - upsert
+          - delete
+          - restore
+          x-enum-varnames:
+          - LocalSkillBackupOriginalActionUpsert
+          - LocalSkillBackupOriginalActionDelete
+          - LocalSkillBackupOriginalActionRestore
+          x-go-type-skip-optional-pointer: true
+          description: Original local action whose previous files this backup preserves. Omitted for
+            older records that did not retain the action; callers must not infer it from list order.
       description: Engine-owned reversible copy of the previous local Skill. Restore uses operationId
         and a fresh review; path is display-only and is never accepted as authority.
     LocalSkillIdentity:

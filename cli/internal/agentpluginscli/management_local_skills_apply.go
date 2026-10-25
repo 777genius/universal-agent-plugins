@@ -399,7 +399,7 @@ func (p *managementLocalSkill) localSuccess(mutated bool, receipt *localSkillRec
 		result.Outcome = "unchanged"
 	}
 	if receipt != nil && receipt.BeforeExists {
-		result.LocalSkillBackup = &management.LocalSkillBackup{OperationId: p.operationID, RootId: p.root.Id, SkillName: p.input.SkillName, Path: filepath.Join(p.backend.localSkillBackupRoot(), receipt.BackupName)}
+		result.LocalSkillBackup = &management.LocalSkillBackup{OperationId: p.operationID, RootId: p.root.Id, SkillName: p.input.SkillName, Path: filepath.Join(p.backend.localSkillBackupRoot(), receipt.BackupName), OriginalAction: management.LocalSkillBackupOriginalAction(p.input.Action)}
 	}
 	return management.Outcome{State: management.Succeeded, Result: result, Diagnostics: []management.Diagnostic{}}
 }

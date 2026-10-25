@@ -402,6 +402,8 @@ export interface components {
             actions: components["schemas"]["PlanAction"][];
             warnings: components["schemas"]["Diagnostic"][];
             conflicts: components["schemas"]["Diagnostic"][];
+            /** @description Selected retained local Skill backup, bound to the validated restore operation and root/Skill identity. Display-only; the prepared backend remains the authority to restore. */
+            restorePoint?: components["schemas"]["LocalSkillBackup"];
         };
         /** @description Caller-generated stable ID, e.g. a UUID. Retain it before apply. Repeat the same accepted request to recover a lost response; never generate another ID automatically. Deduplication precedes plan lookup/expiry checks. Different accepted input conflicts. */
         ApplyRequest: {
@@ -504,6 +506,16 @@ export interface components {
             rootId: string;
             skillName: string;
             path: string;
+            /**
+             * Format: date-time
+             * @description Time the original operation outcome was durably observed. For older records, the retained operation's known updatedAt is used; omitted when no timestamp is available.
+             */
+            recordedAt?: string;
+            /**
+             * @description Original local action whose previous files this backup preserves. Omitted for older records that did not retain the action; callers must not infer it from list order.
+             * @enum {string}
+             */
+            originalAction?: "upsert" | "delete" | "restore";
         };
         LocalSkillIdentity: {
             rootId: string;

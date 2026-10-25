@@ -95,6 +95,14 @@ authoritative ownership, checks the full reviewed tree and uses the existing
 provides reversible local deletion. Restore names an accepted local operation and
 its root/Skill identity; changed backups or local edits block restoration.
 
+Restore-point labels use optional `recordedAt` and `originalAction` metadata from
+the retained outcome. The environment list and a restore plan's `restorePoint`
+describe the same operation/root/Skill identity. Older observations keep their
+known operation timestamp, but an unrecorded original action stays absent; hosts
+must show an unknown-action fallback rather than infer it from list order or IDs.
+This metadata is display-only and never replaces the backend's receipt, ownership,
+snapshot or mutation-lock checks.
+
 The guarantee covers participating tools sharing the canonical UAP state and locks.
 An independently configured foreign state store cannot be inferred to have no native
 ownership; normal integrations must not create a private store for the same profile.

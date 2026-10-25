@@ -37,12 +37,12 @@ func (s *Server) prepare(w http.ResponseWriter, r *http.Request) {
 		writeBackendError(w, err)
 		return
 	}
-	s.retainPrepared(ctx, w, input, operationID, prepared, nil)
+	s.retainPrepared(ctx, w, input, operationID, prepared, nil, nil)
 }
 
 // retainPrepared is the sole place where a backend's retained authority receives
 // a public review identity. Ordinary and local Skill changes share this lifecycle.
-func (s *Server) retainPrepared(ctx context.Context, w http.ResponseWriter, input ChangeRequest, operationID string, prepared Prepared, localSkill *LocalSkillIdentity) {
+func (s *Server) retainPrepared(ctx context.Context, w http.ResponseWriter, input ChangeRequest, operationID string, prepared Prepared, localSkill *LocalSkillIdentity, restorePoint *LocalSkillBackup) {
 	if prepared == nil {
 		writeError(w, 500, "INVALID_PREPARATION", "No prepared authority was retained", false)
 		return
@@ -59,6 +59,7 @@ func (s *Server) retainPrepared(ctx context.Context, w http.ResponseWriter, inpu
 	review.ContextId = s.opts.ContextID
 	review.ExpiresAt = time.Now().Add(s.opts.PlanLifetime).UTC()
 	review.Action = input.Action
+	review.RestorePoint = restorePoint
 	normalizePlan(&review)
 	s.plans[review.PlanId] = &planEntry{localSkill: localSkill, review: review, prepared: prepared, operationID: operationID, request: input}
 	loopbackapi.WriteJSON(w, 200, review)

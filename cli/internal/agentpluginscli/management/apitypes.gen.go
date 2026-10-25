@@ -148,6 +148,27 @@ func (e EnvironmentEntryUpdateStatus) Valid() bool {
 	}
 }
 
+// Defines values for LocalSkillBackupOriginalAction.
+const (
+	LocalSkillBackupOriginalActionDelete  LocalSkillBackupOriginalAction = "delete"
+	LocalSkillBackupOriginalActionRestore LocalSkillBackupOriginalAction = "restore"
+	LocalSkillBackupOriginalActionUpsert  LocalSkillBackupOriginalAction = "upsert"
+)
+
+// Valid indicates whether the value is a known member of the LocalSkillBackupOriginalAction enum.
+func (e LocalSkillBackupOriginalAction) Valid() bool {
+	switch e {
+	case LocalSkillBackupOriginalActionDelete:
+		return true
+	case LocalSkillBackupOriginalActionRestore:
+		return true
+	case LocalSkillBackupOriginalActionUpsert:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LocalSkillRequestAction.
 const (
 	Delete  LocalSkillRequestAction = "delete"
@@ -371,10 +392,19 @@ type EnvironmentEntryUpdateStatus string
 // LocalSkillBackup Engine-owned reversible copy of the previous local Skill. Restore uses operationId and a fresh review; path is display-only and is never accepted as authority.
 type LocalSkillBackup struct {
 	OperationId string `json:"operationId"`
-	Path        string `json:"path"`
-	RootId      string `json:"rootId"`
-	SkillName   string `json:"skillName"`
+
+	// OriginalAction Original local action whose previous files this backup preserves. Omitted for older records that did not retain the action; callers must not infer it from list order.
+	OriginalAction LocalSkillBackupOriginalAction `json:"originalAction,omitempty"`
+	Path           string                         `json:"path"`
+
+	// RecordedAt Time the original operation outcome was durably observed. For older records, the retained operation's known updatedAt is used; omitted when no timestamp is available.
+	RecordedAt *time.Time `json:"recordedAt,omitempty"`
+	RootId     string     `json:"rootId"`
+	SkillName  string     `json:"skillName"`
 }
+
+// LocalSkillBackupOriginalAction Original local action whose previous files this backup preserves. Omitted for older records that did not retain the action; callers must not infer it from list order.
+type LocalSkillBackupOriginalAction string
 
 // LocalSkillFile defines model for LocalSkillFile.
 type LocalSkillFile struct {
@@ -481,7 +511,10 @@ type Plan struct {
 	ContextId   string       `json:"contextId"`
 	ExpiresAt   time.Time    `json:"expiresAt"`
 	PlanId      string       `json:"planId"`
-	Warnings    []Diagnostic `json:"warnings"`
+
+	// RestorePoint Engine-owned reversible copy of the previous local Skill. Restore uses operationId and a fresh review; path is display-only and is never accepted as authority.
+	RestorePoint *LocalSkillBackup `json:"restorePoint,omitempty"`
+	Warnings     []Diagnostic      `json:"warnings"`
 }
 
 // PlanAction defines model for PlanAction.

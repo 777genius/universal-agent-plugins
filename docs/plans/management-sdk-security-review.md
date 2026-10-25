@@ -4,7 +4,37 @@ Date: 2026-10-25. Independent source review; no tests, builds or native clients 
 run by this reviewer. No production code, scanner configuration, alert state or
 repository protection was changed.
 
-## Current follow-up audit
+## Current presentation follow-up
+
+The v9 source change adds only optional display metadata to existing retained
+local-Skill observations and review plans. The timestamp is captured when the
+outcome is observed; the original action comes from the backend's actual local
+request. The selected restore point is copied only after operation/root/Skill
+identity validation. Private receipt parsing, exact operation-ID validation,
+path containment, ownership, snapshot and mutation-lock checks are unchanged.
+The file containing historical sinks 46/47 now also records the original action
+in its successful outcome; the sink guards themselves are unchanged. Therefore
+the earlier whole-file byte-identity statement below applies only to its named
+5224 checkpoint, not to this later file revision.
+
+Non-CLI warning presentation now uses seven static public reasons independently
+checked against pinned lintai v0.1.3 rule metadata. It never forwards arbitrary
+finding messages or paths. Safe numeric unknown SEC codes remain identifiable
+with unavailable-detail text; published findings omitted by the preview bound
+and findings absent from signed projections are accounted for separately.
+Warning presentation does not modify blocking assessment or risk acceptance.
+Independent source review found no remaining P1/P2 in either presentation change.
+
+Agent Teams' latest completed desktop run on `42c4126` passed the actual native
+MCP roundtrip and removal assertions after closing the owned child's unused
+stdin. Current app annotation 581 concerns the existing harness evaluator;
+selectors and runtime values are JSON-encoded, while source input is entered as
+text. Alert 577 is historical. Source-level responses for current alerts 580/581
+and UAP 46/47 are not formal GitHub alert dismissals. A completed new aggregate
+scan and formal repository disposition remain required; no suppressions or
+privileged workflow workaround were introduced.
+
+## Previous follow-up audit (5224 / 501916f)
 
 The follow-up source review covers UAP executable source
 `5224ebd5f66bbdfab0bef906dba0b089062f6073` and Agent Teams
