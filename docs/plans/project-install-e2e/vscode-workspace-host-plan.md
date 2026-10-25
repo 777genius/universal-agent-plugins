@@ -73,3 +73,13 @@ Neither this amendment nor a host launch alone qualifies project support.
 The independent correction for cleanup of read-only Go module-cache directories
 is a separate slice. Integrate both reviewed fixes for the next observation;
 preserve this first failure and its raw evidence unchanged.
+
+## Independent review record
+
+Both `popular_clients` and `ci_sdk` independently read the exact `8ae4b9bb`
+plan and primary-source support. R1: GO, with no unresolved source-plan finding.
+Both then gave explicit final R2 GO on the unchanged plan, retaining the
+compatibility-hypothesis wording and all strict admission and observation gates.
+The actual image version will be verified in the exact job's official GitHub
+setup log and linked to that head and bounded artifact. No new diagnostic
+command or inherited environment authority is introduced.
