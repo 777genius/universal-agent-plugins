@@ -1,6 +1,6 @@
 # Qoder: project-owned Prepared skill bundle after genuine observation
 
-2026-10-24. R1 plan only. Two independent plan rounds precede adapter changes,
+2026-10-24. R2 plan only. Two independent plan rounds precede adapter changes,
 then two frozen code GOs precede publication. This plan follows the
 [owner scope contract](../../PROJECT_INSTALL_OWNER_SCOPE.md): all supported agents
 receive an explicit project path, while preparation, native discovery and runtime
@@ -40,7 +40,7 @@ project environment lock, state receipts, digest verifier and directory transact
 No second installer, client-ID switch in generic core, global cwd mutation or new
 schema is needed. Project behavior is isolated in the Qoder adapter.
 
-- Default user scope preserves current behavior. Dispatch the project branch if
+- Default user scope preserves current behavior. Dispatch the project branch before any existing Qoder PromoteNativeReady, list/install/uninstall, runner or executable availability helper if
   either plan/target scope is project or ProjectRoot is nonempty; reject mixed
   labels rather than falling through to user lifecycle.
 - Require the exact client, both project scope fields, canonical existing project
@@ -58,13 +58,20 @@ schema is needed. Project behavior is isolated in the Qoder adapter.
 
 ## Projection and local ownership
 
-Reuse the existing Qoder projector's `.qoder-plugin/plugin.json` skill layout and
-standard skill files. It must produce only the selected native skill surface.
-No project MCP reference, executable launcher, auth hint, hook or agent projection
-is admitted. Inspect source auxiliary native metadata so an unselected raw
-`.mcp.json` or manifest declaration cannot silently re-enable an unsupported
-component in the prepared native view. Preserve immutable source bytes; projection
-of a managed copy may suppress an unselected native surface explicitly.
+The actual importable native view is a closed subdirectory
+`<active>/.agentplugins-qoder-native/`, containing only the generated
+`.qoder-plugin/plugin.json` and selected `skills/<name>/` trees (including
+rendered eligible commands and their selected skill assets). Reuse the existing
+Qoder manifest/skill encoding, not a second loader. Reject a source collision
+with the reserved projection subdirectory before publishing. Keep original
+standard package/source payload outside that native view and preserve immutable
+source bytes. Manual import must point at this exact view, never the whole
+managed package. Unknown root auxiliary native files therefore cannot cross the
+import boundary: no raw `.mcp.json`, hooks, agents or other native discovery
+surface is copied into this closed view. Verify its complete allowed path set,
+manifest skill declaration and absent unselected native resources before final
+file verification. Do not solve this by merely omitting mcpServers while copying
+an authored raw native config/hook into the same importable root.
 
 Validate staging as a real contained direct child of the exact managed base and
 active path as the exact selected physical artifact. Reuse the prepared namespace
@@ -72,8 +79,14 @@ scanner, which already recognizes `.qoder-plugin/plugin.json`, for duplicate,
 foreign and malformed manifest claims. Existing full managed-directory digest and
 receipt checks remain required; RegistryClear is only namespace evidence.
 
-Native project branch of RegistryInspector performs only the selected local
-prepared-package checks and never calls plugins list/install/uninstall. A native
+The project PreparedRegistryInspector carries local package/namespace findings.
+The project branch of InspectNativeRegistry validates exact authority and then
+returns neutral RegistryClear; it must never return a positive RegistryExpected
+merely because a prepared package exists. Errors/collisions may still refuse.
+That neutral native finding cannot set NativeDiscoveryReconciled. A project
+NativeRegistryExecutable stays empty, so NativeDiscoveryAttempted also stays
+false even when the SDK enables its observer with a supplied forbidden runner.
+Neither branch calls plugins list/install/uninstall. A native
 same-name user row is not a collision for materializing an independently owned
 bundle; it does not make that bundle active. Before first add, a clear absent
 managed target is admissible; an unowned same-name/physical claim refuses. With
@@ -111,10 +124,10 @@ project data remains untouched. Ordinary status remains host-free.
 
 ## Native use and explicit remaining limitation
 
-User actions identify the exact compatible bundle directory and project working
-directory. The observed native importer accepts local `.qoder-plugin/plugin.json`
+User actions identify the exact compatible native view directory
+`<active>/.agentplugins-qoder-native/` and project working directory. The observed native importer accepts local `.qoder-plugin/plugin.json`
 and skill files. If an operator chooses native registration, the explicit argv
-is `plugins install <exact-bundle> --scope project --json` from the selected
+is `plugins install <exact-native-view> --scope project --json` from the selected
 project directory; UAP does not execute it. Explain that this operation writes
 the user's native registry/cache, and same-name/same-version replacement remains
 unqualified. Require operator review of existing native registrations/cache before
@@ -136,10 +149,15 @@ work requires its own two plan rounds and actual native evidence before promotio
 ## Concrete acceptance and finite verification
 
 1. Provider contracts compose actual loader/planner/stager/package verifier with
-   a forbidden runner. Check exact `.uap` layout, `.qoder-plugin` skill declaration,
+   a forbidden runner. Check exact `.uap` layout, the closed native-view path set and `.qoder-plugin` skill declaration,
    portable command rendering/withholding, unsupported MCP/hook/agent exclusion,
    original profile, all malformed scope/root/delivery/receipt combinations and
-   direct adapter attestation refusal. Require zero native commands.
+   direct adapter attestation refusal. Require zero native commands. In both
+   observer-enabled+forbidden-runner and default/disabled compositions require
+   managed ReceiptReconciled=true with NativeDiscoveryAttempted=false and
+   NativeDiscoveryReconciled=false; a positive prepared finding never becomes
+   positive native registration. Retain the existing actual unresolved-attempt
+   recovery fences if a broader composer already created an attempt.
 2. Real public SDK default/no-runner and forbidden-runner paths install/replay/
    update/intact and missing/drift repair/remove/reopen with Prepared file facts,
    byte-stable unchanged state, exact mutation flags and preserved user/A/B/data.
@@ -163,3 +181,24 @@ work requires its own two plan rounds and actual native evidence before promotio
 Final matrix must label this Qoder route **project-owned Prepared skill bundle**.
 Native project registration/cache ownership, actual loaded selection, MCP, trust,
 authentication, model and session restart remain blocked/not evaluated as above.
+
+## Independent R1 review record
+
+R1 exact55df20ac (published identical tree as4cc8d905) received Root and
+Skillshare architecture GOs after both independently interpreted the genuine
+artifact. Root required neutral native findings so local prepared files cannot
+become NativeDiscoveryReconciled. Skillshare required a closed importable native
+surface and bypass of all user native-ready/runner/CLI helpers on every project
+entry. R2 incorporates those conditions above. No adapter code has been written.
+
+
+## Independent final R2 review record
+
+Exact3038d3ce8e359d5bbf083f5cb152c49e76628f87 received independent final
+plan GOs from Root and Skillshare before adapter implementation. Both read the
+complete frozen plan and accepted the closed native view, reserved-source path
+refusal, neutral project native finding, early user-helper bypass, exact package
+receipt verification and explicit manual native-cache lifetime limits. The genuine
+research evidence remains inventory evidence only; no native qualification is
+added. Implementation now proceeds under that plan and requires two independent
+frozen code reviews before publication.

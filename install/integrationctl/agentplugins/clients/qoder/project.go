@@ -20,7 +20,10 @@ func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
 	return clients.SelectionLayout{File: ".mcp.json", Nested: true}
 }
 
-func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if projectRequested(in.Plan) {
+		return projectBundle(ctx, in)
+	}
 	manifest := shared.ManifestFromEnvelope(in.Envelope, shared.WithAuthorNameEmail())
 	if shared.ComponentKindPresent(in.Plan.Components, domain.ComponentSkill) {
 		manifest["skills"] = "./skills/"

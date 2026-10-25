@@ -77,7 +77,7 @@ func (service Service) resume(
 	}
 	// A settled manual registration is a stable no-change outcome: this request
 	// cannot finish it, and a later one the adapter can act on will.
-	result.NoChange = complete && !changed && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled)
+	result.NoChange = !changed && (complete && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled) || service.verifiedPreparedObservationUnchanged(input, result.Plan, client, delivery, outcome))
 	return result, nil
 }
 
@@ -139,6 +139,25 @@ func (service Service) verifiedRegistrationUnchanged(input AddInput, plan domain
 		outcome.Authentication == domain.AuthenticationNotChecked &&
 		(plan.Authentication == domain.AuthenticationNotChecked || plan.Authentication == domain.AuthenticationNotRequired) &&
 		!input.AuthComplete && !outcome.AuthenticationAttested && len(outcome.UserActions) == 0
+}
+
+// verifiedPreparedObservationUnchanged classifies a repeated project-only,
+// read-only observation, not lifecycle convergence. The verified existing
+// delivery is reused; every subsequent request still reobserves the client.
+func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
+	return input.Scope == domain.ScopeProject && !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
+		service.clientVerifierAvailable(input, plan) && client.Materialization == domain.MaterializationMaterialized &&
+		client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
+		outcome.Activation == client.Activation && outcome.Verification == client.Verification &&
+		outcome.Authentication == client.Authentication && outcome.Policy == client.Policy &&
+		!input.ActivationComplete && !input.AuthComplete && !outcome.ActivationAttested && !outcome.AuthenticationAttested &&
+		(outcome.NativeEffect == "" || outcome.NativeEffect == domain.NativeEffectUnchanged) && len(outcome.NativeObjects) == 0 &&
+		preparedDeliveryUnchanged(client, delivery)
+}
+
+func preparedDeliveryUnchanged(client domain.ClientBinding, delivery domain.StagedDelivery) bool {
+	return delivery.ActivePath == client.TargetLocator && delivery.ArtifactDigest != "" &&
+		delivery.ArtifactDigest == managedDigest(client) && reflect.DeepEqual(delivery.NativeObjects, client.NativeObjects)
 }
 
 // clientVerifierAvailable asks the activator whether an exact client-side
@@ -333,6 +352,10 @@ func lifecycleOutcome(client domain.ClientBinding) domain.ActivationOutcome {
 }
 
 func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput, result AddResult, client domain.ClientBinding) (domain.ActivationOutcome, error) {
+	if preparedProjectFileCandidate(input, result.Plan) {
+		delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
+		return service.observePreparedProjectFiles(ctx, input, result.Plan, result.InstallationID, client, delivery)
+	}
 	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) {
 		return domain.ActivationOutcome{}, nil
 	}

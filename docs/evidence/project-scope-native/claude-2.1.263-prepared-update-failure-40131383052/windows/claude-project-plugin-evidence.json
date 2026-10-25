@@ -1,0 +1,121 @@
+{
+  "arch": "amd64",
+  "artifact_sha256": {
+    "01-claude-version.log": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185",
+    "add-installer-stderr.log": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934",
+    "add-installer.json": "771a4e14151e643fcfe04dc86a0f18322e7896075b2761f8e8d03471edcb6b13",
+    "add-repeated-installer-stderr.log": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934",
+    "add-repeated-installer.json": "311517367fccd64249309271c2181947df09fcf212b24fcce95ca7639b5efa26",
+    "after-add-native-A.json": "9b85d710633d1999859e16cf9a18caa874b1abdfed1d936507256efe250f63e9",
+    "after-add-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-add-native-A.stdout.log": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5",
+    "after-add-native-B.json": "7e3bc30d01aa3656c142351c37c2d541e74f3ba28cbbb576d92997ce541e6355",
+    "after-add-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-add-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-repeated-add-native-A.json": "78512fd811c107b64d9bd703885133c1af587b43dbfbf074728276312b260de6",
+    "after-repeated-add-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-repeated-add-native-A.stdout.log": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5",
+    "after-repeated-add-native-B.json": "73c7e7c75753499c7d40e9f4dcb9a52ac9d2ad310b5f668ddcf9eafa25e4391c",
+    "after-repeated-add-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-repeated-add-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "binding-after-add.json": "abba1d1782c7125f3eac537ba29c73aac1c47ea7b4ef6b01e0561f3b9ddd9a2e",
+    "update-unchanged-installer-stderr.log": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10",
+    "update-unchanged-installer.json": "d99b403497c03cdb88913c4fb53d11a09314a61b70c5090e6ff71d16b67f7742"
+  },
+  "client": "claude",
+  "client_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03",
+  "client_version_measured": "2.1.263 (Claude Code)",
+  "finished_utc": "2026-10-24T21:14:58.6400134Z",
+  "installer_sha256": "b40474a495d276134785e9cc157d589811a7a6276a7a76598a8d8a232d023b92",
+  "native_surface": "fresh bounded native project lists prove suppression; owned file lifecycle is prepared; no trust/model/MCP initialization",
+  "os": "windows",
+  "project_contract": "untrusted_prepared_v1",
+  "scanner": {
+    "archive_sha256": "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+    "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453",
+    "platform": "windows-amd64",
+    "route": "prepopulated supported scanner cache; ordinary CLI security assessment",
+    "source_tag": "v0.1.3",
+    "version": "0.1.3"
+  },
+  "source_identity": {
+    "installer_base_commit": "75cece1488cdab0674b4817ea7a30ea95f7aad06",
+    "installer_patch_sha256": [],
+    "installer_source_state": "committed",
+    "installer_tree": "c302aa9bc97127b89504c9e6de049abfcf5ef580"
+  },
+  "stages": {
+    "absent_repair": {
+      "status": "not_evaluated",
+      "reason": "not reached"
+    },
+    "command_skill_discovery": {
+      "status": "blocked",
+      "reason": "project trust is not granted; filesystem projection does not prove native discovery"
+    },
+    "explicit_invocation_enforced": {
+      "status": "not_evaluated",
+      "reason": "no trust, MCP initialization, model invocation or explicit invocation enforcement is exercised"
+    },
+    "install": {
+      "status": "passed",
+      "reason": "production initial add installed owned files as Prepared+Installed; native project scan remains suppressed",
+      "artifacts": [
+        "add-installer.json",
+        "binding-after-add.json"
+      ]
+    },
+    "intact_repair": {
+      "status": "not_evaluated",
+      "reason": "not reached"
+    },
+    "invocation_change_update": {
+      "status": "not_evaluated",
+      "reason": "not reached"
+    },
+    "native_mcp_initialization": {
+      "status": "not_evaluated",
+      "reason": "no trust, MCP initialization, model invocation or explicit invocation enforcement is exercised"
+    },
+    "native_skill_discovery": {
+      "status": "blocked",
+      "reason": "project trust is not granted; filesystem projection does not prove native discovery"
+    },
+    "native_suppression_boundary": {
+      "status": "not_evaluated",
+      "reason": "not reached"
+    },
+    "prepared_command_projection": {
+      "status": "passed",
+      "reason": "owned projected files contain exact rendered ordinary command bytes; this is filesystem evidence"
+    },
+    "prepared_explicit_command_withheld": {
+      "status": "passed",
+      "reason": "plan and owned projected files withhold the explicit-only command; no native loaded-skill claim"
+    },
+    "project_scope_preservation": {
+      "status": "not_evaluated",
+      "reason": "not reached"
+    },
+    "real_model_command_use": {
+      "status": "not_evaluated",
+      "reason": "no trust, MCP initialization, model invocation or explicit invocation enforcement is exercised"
+    },
+    "remove": {
+      "status": "not_evaluated",
+      "reason": "not reached"
+    },
+    "unchanged_add": {
+      "status": "passed",
+      "reason": "repeated add reobserved real suppression without file/state mutation"
+    },
+    "unchanged_update": {
+      "status": "failed",
+      "reason": "Attempt started but did not complete its assertions; inspect the test failure and transcript",
+      "artifacts": [
+        "update-unchanged-installer.json"
+      ]
+    }
+  },
+  "started_utc": "2026-10-24T21:14:53.9220098Z"
+}

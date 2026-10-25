@@ -17,14 +17,23 @@ var (
 )
 
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
+	if projectRequested(request.Plan) {
+		return false
+	}
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
+func (*Adapter) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+	if projectRequested(plan) {
+		return validateProjectPlan(client, plan) == nil
+	}
 	return shared.HasListingCLI(backendExecutable)
 }
 
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if projectRequested(request.Plan) {
+		return activateProject(ctx, env, request)
+	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -138,6 +147,9 @@ func verifyAbsent(ctx context.Context, env clients.Env, executable, name string)
 }
 
 func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
+		return deactivateProject(ctx, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {
 		outcome.ExternalRemovalComplete = true

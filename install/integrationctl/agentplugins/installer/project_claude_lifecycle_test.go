@@ -41,7 +41,11 @@ func TestProjectClaudePublicInstallerLifecycleSeparatesUserAndProjects(t *testin
 		}
 		claudeSDKWrite(t, filepath.Join(f.dataRoot, "keep.txt"), "retained scoped data\n")
 		binding := f.binding(t)
-		if binding.Activation != domain.ActivationActive || binding.Scope != string(f.request.Scope) {
+		wantActivation := domain.ActivationActive
+		if project != "" {
+			wantActivation = domain.ActivationPrepared
+		}
+		if binding.Activation != wantActivation || binding.Scope != string(f.request.Scope) {
 			t.Fatalf("SDK scoped binding=%+v", binding)
 		}
 		fixtures = append(fixtures, f)
@@ -117,8 +121,8 @@ func claudeSDKInterruptedUpdateAndRestart(t *testing.T, f *claudeSDKFixture) {
 	fresh.dataRoot = f.dataRoot
 	*f = *fresh
 	f.apply(t, installer.OpRepair, "repair-after-process-restart")
-	if binding := f.binding(t); binding.Activation != domain.ActivationActive {
-		t.Fatalf("fresh public SDK did not reobserve exact project identity=%+v", binding)
+	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+		t.Fatalf("fresh public SDK did not preserve blocked project discovery=%+v", binding)
 	}
 }
 
@@ -132,4 +136,46 @@ func claudeSDKRepairPinned(t *testing.T, f *claudeSDKFixture, original string) {
 	f.request.PackageRoot, f.request.SourceRoot = pinned, f.packageRoot
 	f.apply(t, installer.OpRepair, "repair-installed-pin")
 	f.request.PackageRoot, f.request.SourceRoot = f.packageRoot, ""
+}
+
+func TestProjectClaudePreparedInitialAddReplayStatusAndChangedBytes(t *testing.T) {
+	base := t.TempDir()
+	project := filepath.Join(base, "A")
+	user := filepath.Join(base, "user", ".claude")
+	pkg := filepath.Join(base, "package")
+	claudeSDKWrite(t, filepath.Join(user, "settings.json"), `{"foreign":true}`)
+	claudeSDKWrite(t, filepath.Join(project, ".claude", "settings.json"), `{"foreign":true}`)
+	claudeSDKWrite(t, filepath.Join(pkg, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"prepared-initial","version":"1.0.0"}`)
+	sourceSkill := filepath.Join(pkg, "skills", "docs", "SKILL.md")
+	claudeSDKWrite(t, sourceSkill, "---\nname: docs\ndescription: Inert project marker\n---\nVersion one.\n")
+	f := newClaudeSDKFixture(t, base, project, user, pkg)
+	f.request.RequiredComponents = []string{"skills"}
+	f.apply(t, installer.OpInstall, "initial-untrusted-no-receipt")
+	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+		t.Fatalf("initial untrusted binding=%+v", binding)
+	}
+	calls := f.runner.calls
+	view, err := f.engine.Inspect(t.Context())
+	if err != nil || view.Recovery.Required || f.runner.calls != calls {
+		t.Fatalf("host-free status=%+v,%v calls=%d/%d", view, err, f.runner.calls, calls)
+	}
+	replay := f.apply(t, installer.OpInstall, "repeat-blocked-add")
+	if replay.Outcome != installer.OutcomeUnchanged || replay.Mutated || f.runner.calls <= calls {
+		t.Fatalf("stable prepared replay=%+v calls=%d/%d", replay, f.runner.calls, calls)
+	}
+	binding := f.binding(t)
+	installed := filepath.Join(binding.TargetLocator, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md")
+	before := claudeSDKBytes(t, installed)
+	claudeSDKWrite(t, sourceSkill, "---\nname: docs\ndescription: Updated project marker\n---\nVersion two.\n")
+	updated := f.apply(t, installer.OpUpdate, "changed-bytes-still-blocked")
+	if updated.Outcome == installer.OutcomeUnchanged || !updated.Mutated || claudeSDKBytes(t, installed) == before {
+		t.Fatalf("changed owned bytes called unchanged=%+v", updated)
+	}
+	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared {
+		t.Fatalf("changed bytes promoted discovery=%+v", binding)
+	}
+	f.apply(t, installer.OpRemove, "remove-inactive-owned-project")
+	if _, err := os.Stat(binding.TargetLocator); !os.IsNotExist(err) {
+		t.Fatalf("inactive owned artifact survived=%v", err)
+	}
 }

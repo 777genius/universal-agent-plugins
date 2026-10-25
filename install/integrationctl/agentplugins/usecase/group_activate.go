@@ -37,7 +37,7 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 
 func (session *groupSession) activateOneGroupTarget(plannedIndex int, target plannedGroupTarget) error {
 	previousObservation := target.plan.LocalEntryObservation.Clone()
-	outcome, nativeComplete, activationErr := session.activateGroupDelivery(target)
+	outcome, delivery, nativeComplete, activationErr := session.activateGroupDelivery(target)
 	previousNativeObjects := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previousNativeObjects = target.managed.NativeObjects
@@ -46,10 +46,13 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	if lifecycleChanged {
 		session.result.Mutated = true
 	}
-	if !nativeComplete && activationErr == nil {
+	preparedUnchanged := target.noChange && target.managed != nil && activationErr == nil &&
+		session.service.verifiedPreparedObservationUnchanged(target.input, target.plan, *target.managed, delivery, outcome)
+	if !nativeComplete && !preparedUnchanged && activationErr == nil {
 		// An incomplete projection that re-activated successfully changed the
-		// target. A failure before or during activation claims no mutation; the
-		// recorded lifecycle change, if any, is the evidence.
+		// target unless fresh evidence proves the exact existing Prepared delivery.
+		// This does not make registration complete. A failure before or during
+		// activation claims no mutation; any recorded lifecycle change is the evidence.
 		target.noChange = false
 	}
 	session.assignActivationOutcome(target, outcome, activationErr, persistErr, lifecycleChanged)
@@ -83,7 +86,7 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	return nil
 }
 
-func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, bool, error) {
+func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, domain.StagedDelivery, bool, error) {
 	delivery := target.delivery
 	nativeComplete := true
 	if target.noChange && target.managed != nil {
@@ -96,7 +99,7 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 			// rather than a state refusal.
 			outcome := lifecycleOutcome(*target.managed)
 			outcome.NativeEffect = domain.NativeEffectUnchanged
-			return outcome, false, err
+			return outcome, delivery, false, err
 		}
 	}
 	previous := []domain.NativeObjectOwnership(nil)
@@ -115,7 +118,7 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 	}
 	activationErr = session.normalizeActivationError(target, &outcome, activationErr)
 	session.preserveNoChangeActivation(target, &outcome, activationErr)
-	return outcome, nativeComplete, activationErr
+	return outcome, delivery, nativeComplete, activationErr
 }
 
 func (session *groupSession) normalizeActivationError(target plannedGroupTarget, outcome *domain.ActivationOutcome, activationErr error) error {
@@ -159,12 +162,14 @@ func (session *groupSession) preserveNoChangeActivation(target plannedGroupTarge
 }
 
 func (session *groupSession) assignActivationOutcome(target plannedGroupTarget, outcome domain.ActivationOutcome, activationErr, persistErr error, lifecycleChanged bool) {
+	mutated := !target.noChange || lifecycleChanged || outcome.NativeEffect == domain.NativeEffectCommitted
 	for _, resultIndex := range target.resultIndexes {
 		session.result.Targets[resultIndex].Activation = outcome
-		session.result.Targets[resultIndex].Mutated = !target.noChange || lifecycleChanged
-		if lifecycleChanged {
+		session.result.Targets[resultIndex].Mutated = mutated
+		if mutated {
 			session.result.Targets[resultIndex].NoChange = false
 		}
+		session.result.Mutated = session.result.Mutated || session.result.Targets[resultIndex].Mutated
 		switch {
 		case persistErr != nil:
 			session.result.Targets[resultIndex].GroupPhase = GroupTargetExternalFailed

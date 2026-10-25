@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
 
 // Production loader/planner/rendering/staging and provider lifecycle, with an
@@ -50,7 +51,7 @@ func TestProjectClaudeComposedProjectionListingAndScopeIsolation(t *testing.T) {
 }
 
 func TestProjectClaudeWrongDisabledOrUnknownNativeListingRefuses(t *testing.T) {
-	for _, condition := range []string{"user-scope", "wrong-project", "disabled", "malformed"} {
+	for _, condition := range []string{"user-scope", "wrong-project", "malformed"} {
 		t.Run(condition, func(t *testing.T) {
 			f := newClaudeProjectFixture(t)
 			switch condition {
@@ -108,5 +109,78 @@ func TestProjectClaudeChangedContextRefusesBeforeNativeListing(t *testing.T) {
 				t.Fatal("changed authority reached native runner")
 			}
 		})
+	}
+}
+
+func TestProjectClaudeBlockedDiscoveryIsPreparedAndInactiveRemovalIsOwned(t *testing.T) {
+	for _, condition := range []string{"disabled", "suppressed", "suppressed-user"} {
+		t.Run(condition, func(t *testing.T) {
+			f := newClaudeProjectFixture(t)
+			if condition == "disabled" {
+				f.runner.enabled = false
+			} else {
+				f.runner.suppressed = true
+			}
+			f.runner.otherSource = condition == "suppressed-user"
+			beforeUser, beforeB := projectGeminiInventory(t, f.user), projectGeminiInventory(t, f.other)
+			for _, verify := range []bool{false, true} {
+				f.request.VerifyOnly = verify
+				out, err := f.activator().Activate(t.Context(), f.request)
+				if err != nil || out.Activation != domain.ActivationPrepared || out.Verification != domain.VerificationInstalled || out.ActivationAttested || len(out.UserActions) == 0 {
+					t.Fatalf("blocked observation=%+v,%v", out, err)
+				}
+			}
+			request := f.removal()
+			if _, err := f.activator().Deactivate(t.Context(), request); err == nil {
+				t.Fatal("blocked native evidence silently removed formerly active binding")
+			}
+			request.CurrentActivation = domain.ActivationPrepared
+			out, err := f.activator().Deactivate(t.Context(), request)
+			if err != nil || !out.ExternalRemovalComplete || !out.ArtifactRemovalAllowed {
+				t.Fatalf("inactive removal admission=%+v,%v", out, err)
+			}
+			if !reflect.DeepEqual(beforeUser, projectGeminiInventory(t, f.user)) || !reflect.DeepEqual(beforeB, projectGeminiInventory(t, f.other)) {
+				t.Fatal("blocked lifecycle changed other scope")
+			}
+		})
+	}
+}
+
+func TestProjectClaudeSuppressionDoesNotSupplyOwnershipOrDiscovery(t *testing.T) {
+	f := newClaudeProjectFixture(t)
+	f.runner.suppressed = true
+	observer := providers.NativeIdentityObserver{Registry: f.registry, Runner: f.runner, Stager: f.stager}
+	binding := domain.ClientBinding{NativeObjects: f.request.Delivery.NativeObjects}
+	observe := func(managed *domain.ClientBinding) domain.NativeIdentityObservation {
+		t.Helper()
+		out, err := observer.ObserveNativeIdentity(t.Context(), f.request.Client, f.request.Plan, managed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out.NativeDiscoveryReconciled {
+			t.Fatal("suppression reconciled native discovery")
+		}
+		return out
+	}
+	if out := observe(&binding); out.State != domain.NativeIdentityManaged || !out.ReceiptReconciled {
+		t.Fatalf("owned suppressed=%+v", out)
+	}
+	if out := observe(nil); out.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("unowned exact destination was adopted: %+v", out)
+	}
+	if err := os.RemoveAll(f.request.Plan.ActivePath); err != nil {
+		t.Fatal(err)
+	}
+	if out := observe(nil); out.State != domain.NativeIdentityAbsent {
+		t.Fatalf("clear initial destination=%+v", out)
+	}
+	f.runner.suppressed, f.runner.enabled = false, false
+	if out := observe(nil); out.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("unowned disabled native candidate was adopted: %+v", out)
+	}
+	f.runner.suppressed = true
+	projectGeminiWrite(t, filepath.Join(f.request.Plan.TargetRoot, "foreign-same-name", ".claude-plugin", "plugin.json"), `{"name":"demo"}`)
+	if out := observe(nil); out.State != domain.NativeIdentityUnmanaged {
+		t.Fatalf("suppression hid foreign project artifact: %+v", out)
 	}
 }

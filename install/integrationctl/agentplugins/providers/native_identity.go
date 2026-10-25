@@ -72,7 +72,7 @@ func (observer NativeIdentityObserver) ObserveNativeIdentity(ctx context.Context
 	return observer.observeIdentity(ctx, client, plan, managed, true)
 }
 
-// ObservePreparedIdentity inspects only filesystem-backed package identities.
+// ObservePreparedIdentity inspects filesystem-backed package and project component identities.
 // It deliberately excludes native CLI discovery so dry-run cannot launch the
 // detected client executable.
 func (observer NativeIdentityObserver) ObservePreparedIdentity(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (domain.NativeIdentityObservation, error) {
@@ -94,6 +94,11 @@ func (observer NativeIdentityObserver) observeIdentity(ctx context.Context, clie
 		return domain.NativeIdentityObservation{State: domain.NativeIdentityIndeterminate}, err
 	}
 	prepared, preparedErr := observer.inspectPreparedRegistry(client.ClientID, plan, name, managed != nil)
+	if !includeNativeRegistry {
+		local, localErr := observer.inspectPreparedProjectFiles(ctx, client, plan, managed)
+		prepared = combinePreparedFindings(prepared, local)
+		preparedErr = errors.Join(preparedErr, localErr)
+	}
 	if preparedErr != nil {
 		prepared = registryIndeterminate
 	}

@@ -60,6 +60,22 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	if err := selection.validate(opts, interactive); err != nil {
 		return renderSkillsCommandIssue(cmd, opts, err)
 	}
+	var err error
+	app, err = app.forOptions(opts)
+	if err != nil {
+		return renderSkillsCommandIssue(cmd, opts, err)
+	}
+	requested, err := parseTargetOption(opts.target)
+	if err != nil {
+		return renderSkillsCommandIssue(cmd, opts, err)
+	}
+	targets := make([]string, 0, len(requested))
+	for _, target := range requested {
+		targets = append(targets, string(target))
+	}
+	if err := app.checkSkillsContext(targets); err != nil {
+		return renderSkillsCommandIssue(cmd, opts, err)
+	}
 	if err := cmd.Context().Err(); err != nil {
 		return err
 	}
