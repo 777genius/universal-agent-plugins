@@ -1,0 +1,1 @@
+UAP_VSCODE_ISOLATION_V1 {"pid":5211,"network_namespace":4026532250,"parent_network_namespace":4026531840,"uid":1001,"gid":1001,"euid":1001,"egid":1001,"groups":[],"interfaces":["lo"],"capabilities_zero":true,"no_new_privileges":true}
