@@ -1,7 +1,0 @@
-{
-  "hooks": {
-    "Stop": [{ "hooks": [{ "type": "command", "command": "./bin/claude-go-starter Stop" }] }],
-    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "./bin/claude-go-starter PreToolUse" }] }],
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "./bin/claude-go-starter UserPromptSubmit" }] }]
-  }
-}

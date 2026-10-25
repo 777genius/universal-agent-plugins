@@ -1,1 +1,0 @@
-# claude-python-starterAgent skill stub. Reference your plugin binary after `make build`, e.g. `./bin/claude-python-starter`.
