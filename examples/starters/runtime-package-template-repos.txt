@@ -1,2 +1,0 @@
-codex-python-runtime-package-starter plugin-kit-ai-starter-codex-python-runtime-package
-claude-node-typescript-runtime-package-starter plugin-kit-ai-starter-claude-node-typescript-runtime-package

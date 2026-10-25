@@ -1,8 +1,0 @@
-Usage: cline config [options]
-
-Show current configuration
-
-Options:
-  --json          Output as JSON
-  --config <dir>  configuration directory
-  -h, --help      display help for command
