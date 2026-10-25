@@ -89,7 +89,7 @@ const stableCategoryOptions = computed(() => {
     { value: 'all', label: t('registryUi.catalog.allCategories') },
     ...filters.value.categories.map((item) => ({
       value: item,
-      label: item === 'marketing' ? 'Marketing' : item,
+      label: item === 'marketing' ? t('registryUi.catalog.marketingCategory') : item,
     })),
   ];
   previousCategoryOptions = stableOptions(next, previousCategoryOptions);

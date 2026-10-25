@@ -5,6 +5,7 @@ import { catalogCategories } from '../utils/catalogCategories.ts';
 test('Marketing covers the kit, CRM and two exact upstream package paths', () => {
   for (const [repository, path] of [
     ['777genius/universal-agent-plugins', 'examples/plugins/marketing-kit'],
+    ['777genius/universal-agent-plugins-registry', 'plugins/marketing-kit'],
     ['777genius/universal-agent-plugins', 'plugins/hubspot-crm'],
     ['wondelai/skills', 'plugins/marketing-cro'],
     ['sickn33/agentic-awesome-skills', 'plugins/agentic-bundle-aas-marketing-seo-growth'],

@@ -581,6 +581,7 @@
       "explorePlugins": "Explore plugins",
       "searchByCapabilityComponentOrSource": "Search by capability, component, or source.",
       "allCategories": "All categories",
+      "marketingCategory": "Marketing",
       "allComponents": "All components",
       "allSources": "All sources",
       "upstreamPackages": "Upstream packages",
