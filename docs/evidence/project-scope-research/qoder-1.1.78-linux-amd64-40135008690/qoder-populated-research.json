@@ -1,0 +1,4927 @@
+{
+  "evidence_kind": "qoder-populated-scope-research",
+  "version": "1.1.78",
+  "expected_source_commit": "2b0ef18146c28da9b6a9b1ef86a0fb413d950eee",
+  "success": true,
+  "probes": [
+    {
+      "probe": "version",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "--version"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.333,
+      "stdout_file": "version.stdout.log",
+      "stderr_file": "version.stderr.log",
+      "stdout_bytes": 7,
+      "stderr_bytes": 0,
+      "stdout_sha256": "c4686cb8ea686d3220f88295494aaebff51a91ac90d64a6b5eb48b27d6ce6fde",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "install-help",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "install",
+        "--help"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.335,
+      "stdout_file": "install-help.stdout.log",
+      "stderr_file": "install-help.stderr.log",
+      "stdout_bytes": 681,
+      "stderr_bytes": 0,
+      "stdout_sha256": "b2a99711c310da0df75a1918b42fe82870bcfc198221213e46bd48e79c0ec96e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "list-help",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--help"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.335,
+      "stdout_file": "list-help.stdout.log",
+      "stderr_file": "list-help.stderr.log",
+      "stdout_bytes": 531,
+      "stderr_bytes": 0,
+      "stdout_sha256": "9d29ee8027c2862585f860bea7e53bc5253654137ee88fd6ce8df49ef31e167b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "uninstall-help",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "uninstall",
+        "--help"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.307,
+      "stdout_file": "uninstall-help.stdout.log",
+      "stderr_file": "uninstall-help.stderr.log",
+      "stdout_bytes": 606,
+      "stderr_bytes": 0,
+      "stdout_sha256": "8d43b1ec885561af42110e20bf202ad858b0ad7787c533ac1d13105acfcc3ca9",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "empty-user-cwd-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.387,
+      "stdout_file": "empty-user-cwd-list.stdout.log",
+      "stderr_file": "empty-user-cwd-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": []
+    },
+    {
+      "probe": "empty-project-A-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-A",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.378,
+      "stdout_file": "empty-project-A-list.stdout.log",
+      "stderr_file": "empty-project-A-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": []
+    },
+    {
+      "probe": "empty-project-B-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-B",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.374,
+      "stdout_file": "empty-project-B-list.stdout.log",
+      "stderr_file": "empty-project-B-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": []
+    },
+    {
+      "probe": "user-installed-install",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "install",
+        "/tmp/qoder-populated-w490rb05/sources/user",
+        "--scope",
+        "user",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.378,
+      "stdout_file": "user-installed-install.stdout.log",
+      "stderr_file": "user-installed-install.stderr.log",
+      "stdout_bytes": 164,
+      "stderr_bytes": 0,
+      "stdout_sha256": "3e59512de5812417e02837d98f003aca1bc1e6d8ed5551507f43bad75610d03d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": {
+        "ok": true,
+        "pluginId": "uap-scope-research@local",
+        "version": "0.9.0",
+        "path": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0"
+      }
+    },
+    {
+      "probe": "user-installed-user-cwd-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.387,
+      "stdout_file": "user-installed-user-cwd-list.stdout.log",
+      "stderr_file": "user-installed-user-cwd-list.stderr.log",
+      "stdout_bytes": 662,
+      "stderr_bytes": 0,
+      "stdout_sha256": "09c3e318bcb0cc98840d7a9cf74bb834d203379604b1263194b928f0fd8b54b4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "user-installed-project-A-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-A",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.38,
+      "stdout_file": "user-installed-project-A-list.stdout.log",
+      "stderr_file": "user-installed-project-A-list.stderr.log",
+      "stdout_bytes": 662,
+      "stderr_bytes": 0,
+      "stdout_sha256": "09c3e318bcb0cc98840d7a9cf74bb834d203379604b1263194b928f0fd8b54b4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "user-installed-project-B-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-B",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.382,
+      "stdout_file": "user-installed-project-B-list.stdout.log",
+      "stderr_file": "user-installed-project-B-list.stderr.log",
+      "stdout_bytes": 662,
+      "stderr_bytes": 0,
+      "stdout_sha256": "09c3e318bcb0cc98840d7a9cf74bb834d203379604b1263194b928f0fd8b54b4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "A-installed-install",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "install",
+        "/tmp/qoder-populated-w490rb05/sources/A",
+        "--scope",
+        "project",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-A",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.385,
+      "stdout_file": "A-installed-install.stdout.log",
+      "stderr_file": "A-installed-install.stderr.log",
+      "stdout_bytes": 164,
+      "stderr_bytes": 0,
+      "stdout_sha256": "57f14dbb71c4ea336113cd4c7b5b828455e2978a166fe2ed2251bffe8a0e923f",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": {
+        "ok": true,
+        "pluginId": "uap-scope-research@local",
+        "version": "1.0.0",
+        "path": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0"
+      }
+    },
+    {
+      "probe": "A-installed-user-cwd-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.366,
+      "stdout_file": "A-installed-user-cwd-list.stdout.log",
+      "stderr_file": "A-installed-user-cwd-list.stderr.log",
+      "stdout_bytes": 1383,
+      "stderr_bytes": 0,
+      "stdout_sha256": "d3a12745ed090574358c657bf98f0fbf9a8fbba07c3486a7435d99f4dd30d0b1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.0.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-A",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0",
+          "installedAt": "2026-10-24T22:08:10.193Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert A research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "A-installed-project-A-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-A",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.375,
+      "stdout_file": "A-installed-project-A-list.stdout.log",
+      "stderr_file": "A-installed-project-A-list.stderr.log",
+      "stdout_bytes": 1383,
+      "stderr_bytes": 0,
+      "stdout_sha256": "d3a12745ed090574358c657bf98f0fbf9a8fbba07c3486a7435d99f4dd30d0b1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.0.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-A",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0",
+          "installedAt": "2026-10-24T22:08:10.193Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert A research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "A-installed-project-B-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-B",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.378,
+      "stdout_file": "A-installed-project-B-list.stdout.log",
+      "stderr_file": "A-installed-project-B-list.stderr.log",
+      "stdout_bytes": 1383,
+      "stderr_bytes": 0,
+      "stdout_sha256": "d3a12745ed090574358c657bf98f0fbf9a8fbba07c3486a7435d99f4dd30d0b1",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.0.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-A",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0",
+          "installedAt": "2026-10-24T22:08:10.193Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert A research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "B-installed-install",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "install",
+        "/tmp/qoder-populated-w490rb05/sources/B",
+        "--scope",
+        "project",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-B",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.391,
+      "stdout_file": "B-installed-install.stdout.log",
+      "stderr_file": "B-installed-install.stderr.log",
+      "stdout_bytes": 164,
+      "stderr_bytes": 0,
+      "stdout_sha256": "d702b21a249daad6c9fa897dcaa07914a3ea3c6b70bc57145cc49fc4963aa3ac",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": {
+        "ok": true,
+        "pluginId": "uap-scope-research@local",
+        "version": "1.1.0",
+        "path": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.1.0"
+      }
+    },
+    {
+      "probe": "B-installed-user-cwd-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/user-cwd",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.383,
+      "stdout_file": "B-installed-user-cwd-list.stdout.log",
+      "stderr_file": "B-installed-user-cwd-list.stderr.log",
+      "stdout_bytes": 2104,
+      "stderr_bytes": 0,
+      "stdout_sha256": "446f9d8525d200e95d425af0f689220803cbefa3545af314becf029b7e7c602e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.0.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-A",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0",
+          "installedAt": "2026-10-24T22:08:10.193Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert A research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.1.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-B",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.1.0",
+          "installedAt": "2026-10-24T22:08:12.859Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert B research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "B-installed-project-A-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-A",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.386,
+      "stdout_file": "B-installed-project-A-list.stdout.log",
+      "stderr_file": "B-installed-project-A-list.stderr.log",
+      "stdout_bytes": 2104,
+      "stderr_bytes": 0,
+      "stdout_sha256": "446f9d8525d200e95d425af0f689220803cbefa3545af314becf029b7e7c602e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.0.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-A",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0",
+          "installedAt": "2026-10-24T22:08:10.193Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert A research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.1.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-B",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.1.0",
+          "installedAt": "2026-10-24T22:08:12.859Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert B research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    },
+    {
+      "probe": "B-installed-project-B-list",
+      "argv": [
+        "/tmp/qoder-populated-w490rb05/binary/qoder",
+        "plugins",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/qoder-populated-w490rb05/project-B",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.366,
+      "stdout_file": "B-installed-project-B-list.stdout.log",
+      "stderr_file": "B-installed-project-B-list.stderr.log",
+      "stdout_bytes": 2104,
+      "stderr_bytes": 0,
+      "stdout_sha256": "446f9d8525d200e95d425af0f689220803cbefa3545af314becf029b7e7c602e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true,
+      "observed_json": [
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "0.9.0",
+          "scope": "user",
+          "enabled": true,
+          "canDisable": true,
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/0.9.0",
+          "installedAt": "2026-10-24T22:08:07.501Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert USER research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.0.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-A",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.0.0",
+          "installedAt": "2026-10-24T22:08:10.193Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert A research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        },
+        {
+          "id": "uap-scope-research@local",
+          "name": "uap-scope-research",
+          "source": "uap-scope-research@local",
+          "version": "1.1.0",
+          "scope": "project",
+          "enabled": true,
+          "canDisable": true,
+          "projectPath": "/tmp/qoder-populated-w490rb05/project-B",
+          "installPath": "/tmp/qoder-populated-w490rb05/home/.qoder/plugins/cache/local/uap-scope-research/1.1.0",
+          "installedAt": "2026-10-24T22:08:12.859Z",
+          "description": "Inert scoped research fixture",
+          "resources": {
+            "skills": [
+              {
+                "name": "marker",
+                "description": "Inert B research marker"
+              }
+            ],
+            "agents": [],
+            "mcpServers": [],
+            "commands": [],
+            "hooks": []
+          }
+        }
+      ]
+    }
+  ],
+  "inventories": {
+    "empty-before": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "a72cd66e0614876fde43a491383edfdcb262771b1fdc4f59b3773836b6b6990f",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d30342d3537345a2d616a736b6e362d7032343536",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "empty-after": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "8dda02961aaf40fed4fd3118297ae245b44d04be41a23f58981f12df75a7f8f4",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d30362d3431395a2d617269616c712d7032353032",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "user-installed-before": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "8dda02961aaf40fed4fd3118297ae245b44d04be41a23f58981f12df75a7f8f4",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d30362d3431395a2d617269616c712d7032353032",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "user-installed-after": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "f3f960f3e0288ca5060f14a23b440acebe01dbad2d5a957c43d74a46af9bd268",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d30392d3039385a2d7262656436672d7032353632",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/manifest.json": {
+        "mode": "0o644",
+        "size": 677,
+        "kind": "file",
+        "sha256": "de153e7a835758e98385298e8697bb98143f5620359b7a0b3a00860cccc5d58f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/qodercli.log": {
+        "mode": "0o644",
+        "size": 10076,
+        "kind": "file",
+        "sha256": "708a9719dac391615ba95ddaa3585fd40eca4b86fdcb04fe3a73d565eb814f34"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "04c6451092c7d6be3f3d7ebd20a4e09de7a7e5e53b5a260642623bde0bd14152"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "2c41d31d3a9e24402304f152cf60fc9a9f604b8230c17795ef4ad4e9198e352b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "e1773a23a3a951161c84e2743f8367130501b94460d06f0aa8380600e06a334c"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "ee854966283cb8b6d2059ebe4a347a205c352339ea74b8ae4c1a629fa6662e5e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "daac07ec01259286107d03e547b4b3926da945bd7ca2c357823c4d4791453019"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "5567acfe57bc46890067c820c6a92072c8ec6cef5e5235212896cdac7f396e16"
+      },
+      "home/.qoder/plugins": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "home/.qoder/plugins/installed_plugins_v2.json": {
+        "mode": "0o644",
+        "size": 310,
+        "kind": "file",
+        "sha256": "cbb5d70c46e9005470b35a1e82c827024facb79f343d334f94afabf329f05ec4"
+      },
+      "home/.qoder/settings.json": {
+        "mode": "0o600",
+        "size": 66,
+        "kind": "file",
+        "sha256": "a81ec84331eeeab50ace0da9ce7bb344fb89b64f1ab00b10b46d6ead2554fc99"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "A-installed-before": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "f3f960f3e0288ca5060f14a23b440acebe01dbad2d5a957c43d74a46af9bd268",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d30392d3039385a2d7262656436672d7032353632",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/manifest.json": {
+        "mode": "0o644",
+        "size": 677,
+        "kind": "file",
+        "sha256": "de153e7a835758e98385298e8697bb98143f5620359b7a0b3a00860cccc5d58f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/qodercli.log": {
+        "mode": "0o644",
+        "size": 10076,
+        "kind": "file",
+        "sha256": "708a9719dac391615ba95ddaa3585fd40eca4b86fdcb04fe3a73d565eb814f34"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "04c6451092c7d6be3f3d7ebd20a4e09de7a7e5e53b5a260642623bde0bd14152"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "2c41d31d3a9e24402304f152cf60fc9a9f604b8230c17795ef4ad4e9198e352b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "e1773a23a3a951161c84e2743f8367130501b94460d06f0aa8380600e06a334c"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "ee854966283cb8b6d2059ebe4a347a205c352339ea74b8ae4c1a629fa6662e5e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "daac07ec01259286107d03e547b4b3926da945bd7ca2c357823c4d4791453019"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "5567acfe57bc46890067c820c6a92072c8ec6cef5e5235212896cdac7f396e16"
+      },
+      "home/.qoder/plugins": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "home/.qoder/plugins/installed_plugins_v2.json": {
+        "mode": "0o644",
+        "size": 310,
+        "kind": "file",
+        "sha256": "cbb5d70c46e9005470b35a1e82c827024facb79f343d334f94afabf329f05ec4"
+      },
+      "home/.qoder/settings.json": {
+        "mode": "0o600",
+        "size": 66,
+        "kind": "file",
+        "sha256": "a81ec84331eeeab50ace0da9ce7bb344fb89b64f1ab00b10b46d6ead2554fc99"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "A-installed-after": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "eb96af0546f71e00a0089e8f0dda88df8e9e56d18300460f8eabb9ed2e2e8bd7",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d31312d3736315a2d61696e3269612d7032363236",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/manifest.json": {
+        "mode": "0o644",
+        "size": 677,
+        "kind": "file",
+        "sha256": "de153e7a835758e98385298e8697bb98143f5620359b7a0b3a00860cccc5d58f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/qodercli.log": {
+        "mode": "0o644",
+        "size": 10076,
+        "kind": "file",
+        "sha256": "708a9719dac391615ba95ddaa3585fd40eca4b86fdcb04fe3a73d565eb814f34"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "04c6451092c7d6be3f3d7ebd20a4e09de7a7e5e53b5a260642623bde0bd14152"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "2c41d31d3a9e24402304f152cf60fc9a9f604b8230c17795ef4ad4e9198e352b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "e1773a23a3a951161c84e2743f8367130501b94460d06f0aa8380600e06a334c"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "ee854966283cb8b6d2059ebe4a347a205c352339ea74b8ae4c1a629fa6662e5e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "daac07ec01259286107d03e547b4b3926da945bd7ca2c357823c4d4791453019"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "5567acfe57bc46890067c820c6a92072c8ec6cef5e5235212896cdac7f396e16"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577/manifest.json": {
+        "mode": "0o644",
+        "size": 679,
+        "kind": "file",
+        "sha256": "c00d7ff8acf37b37bf5e9756be2b57b7c771336e96fc5e4307ce45d800d45db0"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577/qodercli.log": {
+        "mode": "0o644",
+        "size": 10082,
+        "kind": "file",
+        "sha256": "feef5986694336cdc8e66a32a1edc806666d3f4acce2e4d5e510d74adea1ebd1"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "11da7c063bbd57c096a8e34f7c4bfa3027b4a6686b59e3a876932164afa4ab0d"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "721bd3dab11fe57df05bb28bdeb18fe10f66fe96b9b3b6f9880aca07f583eb36"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "5a792da01315eed566962017cf880d3107d9d8e1f965a85d4398f9a9e238247a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "5914e7f2e646dffdb42d567f27f246023c99588996f6d997069beb8be07dd1d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "3743b4adf2b10af7e60fd8e02b74332ea9ecd72c39c68f7cc3d35673471f5d8e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "c2add02414f013500203cbc6911550237c225825940332586b96eb7e6bcb8a8a"
+      },
+      "home/.qoder/plugins": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "home/.qoder/plugins/installed_plugins_v2.json": {
+        "mode": "0o644",
+        "size": 612,
+        "kind": "file",
+        "sha256": "ef3d92ad9f830071bd6cb6ac414e55684ce65fc0ce8ebac255fc0063dd851cdd"
+      },
+      "home/.qoder/settings.json": {
+        "mode": "0o600",
+        "size": 66,
+        "kind": "file",
+        "sha256": "a81ec84331eeeab50ace0da9ce7bb344fb89b64f1ab00b10b46d6ead2554fc99"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "B-installed-before": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "eb96af0546f71e00a0089e8f0dda88df8e9e56d18300460f8eabb9ed2e2e8bd7",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d31312d3736315a2d61696e3269612d7032363236",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/manifest.json": {
+        "mode": "0o644",
+        "size": 677,
+        "kind": "file",
+        "sha256": "de153e7a835758e98385298e8697bb98143f5620359b7a0b3a00860cccc5d58f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/qodercli.log": {
+        "mode": "0o644",
+        "size": 10076,
+        "kind": "file",
+        "sha256": "708a9719dac391615ba95ddaa3585fd40eca4b86fdcb04fe3a73d565eb814f34"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "04c6451092c7d6be3f3d7ebd20a4e09de7a7e5e53b5a260642623bde0bd14152"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "2c41d31d3a9e24402304f152cf60fc9a9f604b8230c17795ef4ad4e9198e352b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "e1773a23a3a951161c84e2743f8367130501b94460d06f0aa8380600e06a334c"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "ee854966283cb8b6d2059ebe4a347a205c352339ea74b8ae4c1a629fa6662e5e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "daac07ec01259286107d03e547b4b3926da945bd7ca2c357823c4d4791453019"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "5567acfe57bc46890067c820c6a92072c8ec6cef5e5235212896cdac7f396e16"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577/manifest.json": {
+        "mode": "0o644",
+        "size": 679,
+        "kind": "file",
+        "sha256": "c00d7ff8acf37b37bf5e9756be2b57b7c771336e96fc5e4307ce45d800d45db0"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577/qodercli.log": {
+        "mode": "0o644",
+        "size": 10082,
+        "kind": "file",
+        "sha256": "feef5986694336cdc8e66a32a1edc806666d3f4acce2e4d5e510d74adea1ebd1"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "11da7c063bbd57c096a8e34f7c4bfa3027b4a6686b59e3a876932164afa4ab0d"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "721bd3dab11fe57df05bb28bdeb18fe10f66fe96b9b3b6f9880aca07f583eb36"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "5a792da01315eed566962017cf880d3107d9d8e1f965a85d4398f9a9e238247a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "5914e7f2e646dffdb42d567f27f246023c99588996f6d997069beb8be07dd1d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "3743b4adf2b10af7e60fd8e02b74332ea9ecd72c39c68f7cc3d35673471f5d8e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "c2add02414f013500203cbc6911550237c225825940332586b96eb7e6bcb8a8a"
+      },
+      "home/.qoder/plugins": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "home/.qoder/plugins/installed_plugins_v2.json": {
+        "mode": "0o644",
+        "size": 612,
+        "kind": "file",
+        "sha256": "ef3d92ad9f830071bd6cb6ac414e55684ce65fc0ce8ebac255fc0063dd851cdd"
+      },
+      "home/.qoder/settings.json": {
+        "mode": "0o600",
+        "size": 66,
+        "kind": "file",
+        "sha256": "a81ec84331eeeab50ace0da9ce7bb344fb89b64f1ab00b10b46d6ead2554fc99"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    },
+    "B-installed-after": {
+      "home": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "home/.qoder": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/.auth/.credential-transaction": {
+        "mode": "0o600",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/.qoder/.auth/machine_id": {
+        "mode": "0o600",
+        "size": 36,
+        "kind": "file",
+        "sha256": "c56817ea2f4339ab288d2dd7e10c2aef149d3d0cf21fd309fb9e14bd6200d726"
+      },
+      "home/.qoder/installation_id": {
+        "mode": "0o644",
+        "size": 36,
+        "kind": "file",
+        "sha256": "897bac458a8d1241ae35d8faa2204888a85f6c1f722ed7c48819c71a56e21dd8"
+      },
+      "home/.qoder/logs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/latest": {
+        "mode": "0o777",
+        "size": 42,
+        "kind": "symlink_metadata_only",
+        "type": "0o120000",
+        "target_bytes": 42,
+        "target_sha256": "637555a7632cb94edc53936648b1e51f817eb7840632a69480c47bb46a42c027",
+        "target_hex": "72756e732f323032362d31302d32345432322d30382d31342d3435365a2d3569337069702d7032363839",
+        "target_followed": false
+      },
+      "home/.qoder/logs/runs": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/manifest.json": {
+        "mode": "0o644",
+        "size": 573,
+        "kind": "file",
+        "sha256": "c4985ae0a1f07b780bc10fb62db6eaa1be1609b2b4bffd2e00f1e018b427ee98"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-02-801Z-1f0cr6-p2412/qodercli.log": {
+        "mode": "0o644",
+        "size": 4273,
+        "kind": "file",
+        "sha256": "39fc2a2d0149b656f40d59c855471fa65fb368ce812ff9abcb719721cfec6bbf"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/manifest.json": {
+        "mode": "0o644",
+        "size": 600,
+        "kind": "file",
+        "sha256": "f3ab07c3621e3b90c24c30462a9dc570793bd31e0ce110fbaebf1acc8b05af8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-391Z-zgrsgp-p2427/qodercli.log": {
+        "mode": "0o644",
+        "size": 4270,
+        "kind": "file",
+        "sha256": "1cba9a3a4cbe7259df5ad36b4cf54b41db34d96e8f9a99a11df032d5f659823f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "987e3e665d83633e7910692cdc73082390fdea967e7a706cd4e63bd289b7d8fa"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-03-984Z-wf1zyu-p2441/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "7ea94caf5affbc387ff337a8e33388b24e39c9109d441061e8c43628c8b8469b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/manifest.json": {
+        "mode": "0o644",
+        "size": 602,
+        "kind": "file",
+        "sha256": "56b8037b4e406efade1667b59f66e0259fd46e08a2bb29ae88a9c73f9d1eed8f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-04-574Z-ajskn6-p2456/qodercli.log": {
+        "mode": "0o644",
+        "size": 4268,
+        "kind": "file",
+        "sha256": "dfa566dbe6ce204a5c16b05681179d899d724c3f74bd5dcc5a2abb8cde71ccad"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "9334e50500734ba70e2827229c715941ed8382dafd05b8a9baabd0e92de216d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-141Z-5hu2q9-p2470/qodercli.log": {
+        "mode": "0o644",
+        "size": 9758,
+        "kind": "file",
+        "sha256": "9e4aff6f34e6531750d28032142344822e6e8dfaab1e88f69e7ddbe1afd5c031"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "57717726d63c818b317ef34ae4aa213dcc97fa1b89bd196139681f51b2e15f70"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-05-784Z-mymuet-p2488/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "53c32cd1fd0189b2b6f46dfb7730cf689dce639f570e22122a1536583f81270e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "9f37bb99ec640515ccb225c67309c98863970279fca8496370d30da182caeed5"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-06-419Z-arialq-p2502/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c1de9782ab8f07c0a48dd931b3561a326e2418dec3ee90d900104fc42c2a3433"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/manifest.json": {
+        "mode": "0o644",
+        "size": 677,
+        "kind": "file",
+        "sha256": "de153e7a835758e98385298e8697bb98143f5620359b7a0b3a00860cccc5d58f"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-182Z-zhe18s-p2516/qodercli.log": {
+        "mode": "0o644",
+        "size": 10076,
+        "kind": "file",
+        "sha256": "708a9719dac391615ba95ddaa3585fd40eca4b86fdcb04fe3a73d565eb814f34"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "04c6451092c7d6be3f3d7ebd20a4e09de7a7e5e53b5a260642623bde0bd14152"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-07-817Z-f051yw-p2532/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "2c41d31d3a9e24402304f152cf60fc9a9f604b8230c17795ef4ad4e9198e352b"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "e1773a23a3a951161c84e2743f8367130501b94460d06f0aa8380600e06a334c"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-08-460Z-5brizv-p2547/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "ee854966283cb8b6d2059ebe4a347a205c352339ea74b8ae4c1a629fa6662e5e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "daac07ec01259286107d03e547b4b3926da945bd7ca2c357823c4d4791453019"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-098Z-rbed6g-p2562/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "5567acfe57bc46890067c820c6a92072c8ec6cef5e5235212896cdac7f396e16"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577/manifest.json": {
+        "mode": "0o644",
+        "size": 679,
+        "kind": "file",
+        "sha256": "c00d7ff8acf37b37bf5e9756be2b57b7c771336e96fc5e4307ce45d800d45db0"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-09-867Z-za1ydy-p2577/qodercli.log": {
+        "mode": "0o644",
+        "size": 10082,
+        "kind": "file",
+        "sha256": "feef5986694336cdc8e66a32a1edc806666d3f4acce2e4d5e510d74adea1ebd1"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "11da7c063bbd57c096a8e34f7c4bfa3027b4a6686b59e3a876932164afa4ab0d"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-10-507Z-p74onh-p2593/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "721bd3dab11fe57df05bb28bdeb18fe10f66fe96b9b3b6f9880aca07f583eb36"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "5a792da01315eed566962017cf880d3107d9d8e1f965a85d4398f9a9e238247a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-130Z-qbb6q5-p2610/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "5914e7f2e646dffdb42d567f27f246023c99588996f6d997069beb8be07dd1d8"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "3743b4adf2b10af7e60fd8e02b74332ea9ecd72c39c68f7cc3d35673471f5d8e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-11-761Z-ain2ia-p2626/qodercli.log": {
+        "mode": "0o644",
+        "size": 9412,
+        "kind": "file",
+        "sha256": "c2add02414f013500203cbc6911550237c225825940332586b96eb7e6bcb8a8a"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-12-528Z-rki4q7-p2642": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-12-528Z-rki4q7-p2642/manifest.json": {
+        "mode": "0o644",
+        "size": 679,
+        "kind": "file",
+        "sha256": "1fa68e860fbe14a8de02b89b144a5765eace1401bd9b01f77c2dc476142bff6e"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-12-528Z-rki4q7-p2642/qodercli.log": {
+        "mode": "0o644",
+        "size": 10081,
+        "kind": "file",
+        "sha256": "1ce0f4e9d448c1a58c99a21579c0ab5acb03a773a64f1d39523bf57041800321"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-13-176Z-2o12xh-p2657": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-13-176Z-2o12xh-p2657/manifest.json": {
+        "mode": "0o644",
+        "size": 597,
+        "kind": "file",
+        "sha256": "bb6888c0580e2ca120cac89b9eb73958bfae1dba498b38b38f93b0597a6e0fe0"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-13-176Z-2o12xh-p2657/qodercli.log": {
+        "mode": "0o644",
+        "size": 9413,
+        "kind": "file",
+        "sha256": "ad466d9eda1e99f1c60f42d2cdda81dd460d1531249898ea59fc1d77f607df52"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-13-814Z-yq75wj-p2673": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-13-814Z-yq75wj-p2673/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "267daf6da72edb1c91d16792e294a80df72626a9c214ac451c6784e015ecfe22"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-13-814Z-yq75wj-p2673/qodercli.log": {
+        "mode": "0o644",
+        "size": 9414,
+        "kind": "file",
+        "sha256": "a7c83404d6d35ee9493442e7429d1513091c5616fd9464b5d3ab4fe32da2e589"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-14-456Z-5i3pip-p2689": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-14-456Z-5i3pip-p2689/manifest.json": {
+        "mode": "0o644",
+        "size": 599,
+        "kind": "file",
+        "sha256": "f4c583e14f3b0373eef44b18f01bb46f69a3b0ca4ca4fb582e67a61cb569afe2"
+      },
+      "home/.qoder/logs/runs/2026-10-24T22-08-14-456Z-5i3pip-p2689/qodercli.log": {
+        "mode": "0o644",
+        "size": 9415,
+        "kind": "file",
+        "sha256": "c60e69e01bae27cf5c08bbe0a3bb8b56bdac8f6bf51d372a5c339bd8b9b8c039"
+      },
+      "home/.qoder/plugins": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/0.9.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.0.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.1.0": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.1.0/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.1.0/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.1.0/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.1.0/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/plugins/cache/local/uap-scope-research/1.1.0/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      },
+      "home/.qoder/plugins/installed_plugins_v2.json": {
+        "mode": "0o644",
+        "size": 914,
+        "kind": "file",
+        "sha256": "c4f91e4ef73efaa2e2b3e06ebbf1b9c5b5ca35343a2db742caf77e9141feedf7"
+      },
+      "home/.qoder/settings.json": {
+        "mode": "0o600",
+        "size": 66,
+        "kind": "file",
+        "sha256": "a81ec84331eeeab50ace0da9ce7bb344fb89b64f1ab00b10b46d6ead2554fc99"
+      },
+      "home/.qoder/tmp": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/.qoder/tmp/telemetry/active-runs": {
+        "mode": "0o700",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/config/git/ignore": {
+        "mode": "0o644",
+        "size": 72,
+        "kind": "file",
+        "sha256": "3088d2496f7d98d3a18cb4b7568ff2373cfc2bbe73756611dbb8d1441a99e436"
+      },
+      "home/data": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/git-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-cache": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "home/npm-global-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/npm-user-config": {
+        "mode": "0o644",
+        "size": 0,
+        "kind": "file",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "home/state": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "user-cwd": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "project-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-user/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+      },
+      "source-user/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-user/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 66,
+        "kind": "file",
+        "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+      },
+      "source-A": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-A/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+      },
+      "source-A/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-A/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+      },
+      "source-B": {
+        "kind": "directory",
+        "mode": "0o755",
+        "size": 4096
+      },
+      "source-B/.qoder-plugin": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/.qoder-plugin/plugin.json": {
+        "mode": "0o644",
+        "size": 99,
+        "kind": "file",
+        "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+      },
+      "source-B/skills": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker": {
+        "mode": "0o755",
+        "size": 4096,
+        "kind": "directory"
+      },
+      "source-B/skills/marker/SKILL.md": {
+        "mode": "0o644",
+        "size": 60,
+        "kind": "file",
+        "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+      }
+    }
+  },
+  "project_ownership_qualified": false,
+  "native_activation_qualified": false,
+  "loaded_skills_qualified": false,
+  "mcp_qualified": false,
+  "trust_qualified": false,
+  "model_qualified": false,
+  "authentication_qualified": false,
+  "native_session_restart_qualified": false,
+  "isolation": {
+    "uid": 1001,
+    "gid": 1001,
+    "euid": 1001,
+    "egid": 1001,
+    "groups": [],
+    "network_namespace": "net:[4026532216]",
+    "parent_network_namespace": "net:[4026531833]",
+    "interfaces": [
+      "lo"
+    ],
+    "no_new_privs": "1",
+    "capabilities": {
+      "CapInh": "0000000000000000",
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000",
+      "CapAmb": "0000000000000000"
+    }
+  },
+  "native_environment": {
+    "HOME": "/tmp/qoder-populated-w490rb05/home",
+    "USERPROFILE": "/tmp/qoder-populated-w490rb05/home",
+    "XDG_CONFIG_HOME": "/tmp/qoder-populated-w490rb05/home/config",
+    "XDG_CACHE_HOME": "/tmp/qoder-populated-w490rb05/home/cache",
+    "XDG_STATE_HOME": "/tmp/qoder-populated-w490rb05/home/state",
+    "XDG_DATA_HOME": "/tmp/qoder-populated-w490rb05/home/data",
+    "NPM_CONFIG_CACHE": "/tmp/qoder-populated-w490rb05/home/npm-cache",
+    "NPM_CONFIG_USERCONFIG": "/tmp/qoder-populated-w490rb05/home/npm-user-config",
+    "NPM_CONFIG_GLOBALCONFIG": "/tmp/qoder-populated-w490rb05/home/npm-global-config",
+    "GIT_CONFIG_GLOBAL": "/tmp/qoder-populated-w490rb05/home/git-config",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_TERMINAL_PROMPT": "0",
+    "PATH": "/usr/bin:/bin",
+    "TMPDIR": "/tmp/qoder-populated-w490rb05/tmp",
+    "LANG": "C.UTF-8"
+  },
+  "fixture_pins": {
+    "/tmp/qoder-populated-w490rb05/sources/user/.qoder-plugin/plugin.json": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3",
+    "/tmp/qoder-populated-w490rb05/sources/user/skills/marker/SKILL.md": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126",
+    "/tmp/qoder-populated-w490rb05/sources/A/.qoder-plugin/plugin.json": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64",
+    "/tmp/qoder-populated-w490rb05/sources/A/skills/marker/SKILL.md": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7",
+    "/tmp/qoder-populated-w490rb05/sources/B/.qoder-plugin/plugin.json": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef",
+    "/tmp/qoder-populated-w490rb05/sources/B/skills/marker/SKILL.md": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+  },
+  "source_baseline": {
+    "source-user": {
+      "kind": "directory",
+      "mode": "0o755",
+      "size": 4096
+    },
+    "source-user/.qoder-plugin": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-user/.qoder-plugin/plugin.json": {
+      "mode": "0o644",
+      "size": 99,
+      "kind": "file",
+      "sha256": "9ad640227db1b182b244402d0cd110ff1233fa7bd6e3c64b3367c54f88863fe3"
+    },
+    "source-user/skills": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-user/skills/marker": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-user/skills/marker/SKILL.md": {
+      "mode": "0o644",
+      "size": 66,
+      "kind": "file",
+      "sha256": "8a8e9dfd726588615d9873ed1415613eb8189830682ab71a5689f42b09fb5126"
+    },
+    "source-A": {
+      "kind": "directory",
+      "mode": "0o755",
+      "size": 4096
+    },
+    "source-A/.qoder-plugin": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-A/.qoder-plugin/plugin.json": {
+      "mode": "0o644",
+      "size": 99,
+      "kind": "file",
+      "sha256": "4304965902e15c82d65312f81d1b7bd7ea6e7ec3a57eadcbdd4e23b89ec48e64"
+    },
+    "source-A/skills": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-A/skills/marker": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-A/skills/marker/SKILL.md": {
+      "mode": "0o644",
+      "size": 60,
+      "kind": "file",
+      "sha256": "7dca4d363bf4b90e4295be2528d598c62c9eef8b6c1ee89851c8d5a888adbdd7"
+    },
+    "source-B": {
+      "kind": "directory",
+      "mode": "0o755",
+      "size": 4096
+    },
+    "source-B/.qoder-plugin": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-B/.qoder-plugin/plugin.json": {
+      "mode": "0o644",
+      "size": 99,
+      "kind": "file",
+      "sha256": "181ad24d7795939792bc864a46aa73f66c22e4df1b53c3918f9436b0ae7c18ef"
+    },
+    "source-B/skills": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-B/skills/marker": {
+      "mode": "0o755",
+      "size": 4096,
+      "kind": "directory"
+    },
+    "source-B/skills/marker/SKILL.md": {
+      "mode": "0o644",
+      "size": 60,
+      "kind": "file",
+      "sha256": "e3889929ded7e2721213d8f93b7582046abf71efbeda908854e1566abb5fabe8"
+    }
+  },
+  "fixed_fixture_bodies": {
+    "/tmp/qoder-populated-w490rb05/sources/user/.qoder-plugin/plugin.json": "{\"name\": \"uap-scope-research\", \"version\": \"0.9.0\", \"description\": \"Inert scoped research fixture\"}\n",
+    "/tmp/qoder-populated-w490rb05/sources/user/skills/marker/SKILL.md": "---\nname: marker\ndescription: Inert USER research marker\n---\nUSER\n",
+    "/tmp/qoder-populated-w490rb05/sources/A/.qoder-plugin/plugin.json": "{\"name\": \"uap-scope-research\", \"version\": \"1.0.0\", \"description\": \"Inert scoped research fixture\"}\n",
+    "/tmp/qoder-populated-w490rb05/sources/A/skills/marker/SKILL.md": "---\nname: marker\ndescription: Inert A research marker\n---\nA\n",
+    "/tmp/qoder-populated-w490rb05/sources/B/.qoder-plugin/plugin.json": "{\"name\": \"uap-scope-research\", \"version\": \"1.1.0\", \"description\": \"Inert scoped research fixture\"}\n",
+    "/tmp/qoder-populated-w490rb05/sources/B/skills/marker/SKILL.md": "---\nname: marker\ndescription: Inert B research marker\n---\nB\n"
+  },
+  "stage": "B-installed",
+  "acquisition": {
+    "url": "https://qoder-ide.oss-accelerate.aliyuncs.com/qodercli/releases/1.1.78/qodercli-linux-x64.tar.gz",
+    "version": "1.1.78",
+    "archive_integrity": "sha256:5e3213d2d4256c86c5ad2c8bf73fd392f92ba80d0d38f822806542805a48a8ea",
+    "archive_bytes": 78115289,
+    "binary_sha256": "0da0976e13fe00bc28f725d6fe7c2f0fe9fa9a8c37eeb2ee4e80ad4c0fc58953",
+    "binary_bytes": 182982112
+  },
+  "wrapper": {
+    "probe": "isolated-collector",
+    "argv": [
+      "/usr/bin/sudo",
+      "-n",
+      "/usr/bin/unshare",
+      "--net",
+      "--",
+      "/usr/bin/setpriv",
+      "--reuid=1001",
+      "--regid=1001",
+      "--clear-groups",
+      "--inh-caps=-all",
+      "--ambient-caps=-all",
+      "--bounding-set=-all",
+      "--no-new-privs",
+      "/usr/bin/env",
+      "-i",
+      "PATH=/usr/bin:/bin",
+      "LANG=C.UTF-8",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "GITHUB_ACTIONS=true",
+      "RUNNER_ENVIRONMENT=github-hosted",
+      "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED=1",
+      "EXPECTED_COMMIT=2b0ef18146c28da9b6a9b1ef86a0fb413d950eee",
+      "/usr/bin/python3",
+      "/home/runner/work/universal-agent-plugins/universal-agent-plugins/scripts/research-qoder-populated.py",
+      "--collect",
+      "/tmp/qoder-populated-w490rb05/request.json"
+    ],
+    "cwd": "/tmp/qoder-populated-w490rb05",
+    "error": null,
+    "exit": 0,
+    "elapsed_seconds": 12.559,
+    "stdout_file": "isolated-collector.stdout.log",
+    "stderr_file": "isolated-collector.stderr.log",
+    "stdout_bytes": 0,
+    "stderr_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "checkout": {
+    "probe": "source-checkout",
+    "argv": [
+      "/usr/bin/git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "cwd": "/home/runner/work/universal-agent-plugins/universal-agent-plugins",
+    "error": null,
+    "exit": 0,
+    "elapsed_seconds": 0.003,
+    "stdout_file": "source-checkout.stdout.log",
+    "stderr_file": "source-checkout.stderr.log",
+    "stdout_bytes": 41,
+    "stderr_bytes": 0,
+    "stdout_sha256": "4291bd51263f1b9d3595e402a286ce3f37d93df2592669a78f1a168afe6300de",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "source_commit": "2b0ef18146c28da9b6a9b1ef86a0fb413d950eee",
+  "observed_source_commit": "2b0ef18146c28da9b6a9b1ef86a0fb413d950eee",
+  "cleanup": {
+    "complete": true,
+    "probe": {
+      "probe": "cleanup",
+      "argv": [
+        "/usr/bin/python3",
+        "-c",
+        "\nimport os,stat,sys\npath,device,inode=sys.argv[1:]\nparent,name=os.path.split(path)\npfd=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\nroot=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=pfd)\nidentity=os.fstat(root)\nif (identity.st_dev,identity.st_ino)!=(int(device),int(inode)):raise SystemExit(\"cleanup root identity changed\")\ndef clear(fd):\n    for name in os.listdir(fd):\n        item=os.stat(name,dir_fd=fd,follow_symlinks=False)\n        if stat.S_ISDIR(item.st_mode):\n            child=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)\n            try:\n                if not os.path.samestat(item,os.fstat(child)):raise RuntimeError(\"cleanup directory changed\")\n                clear(child)\n            finally:os.close(child)\n            os.rmdir(name,dir_fd=fd)\n        else:os.unlink(name,dir_fd=fd)\nclear(root)\nif not os.path.samestat(identity,os.stat(name,dir_fd=pfd,follow_symlinks=False)):raise SystemExit(\"cleanup root replaced\")\nos.close(root)\nos.rmdir(name,dir_fd=pfd)\nos.close(pfd)\n",
+        "/tmp/qoder-populated-w490rb05",
+        "2049",
+        "9181606"
+      ],
+      "cwd": "/home/runner/work/_temp/qoder-populated-research",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.037,
+      "stdout_file": "cleanup.stdout.log",
+      "stderr_file": "cleanup.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

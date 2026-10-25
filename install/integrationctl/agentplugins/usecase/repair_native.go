@@ -23,6 +23,9 @@ func (session *repairSession) repairNative() (AddResult, error) {
 	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
 	if clientVerifyErr != nil {
+		if retainPreparedProjectVerificationFailure(&session.result, verified, clientVerifyErr) {
+			return session.result, clientVerifyErr
+		}
 		if session.recordedAbsenceRepairable(verified, clientVerifyErr) {
 			return session.reapplyIntactNative(delivery)
 		}

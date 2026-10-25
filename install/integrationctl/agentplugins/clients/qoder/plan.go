@@ -2,6 +2,7 @@ package qoder
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -17,7 +18,14 @@ var (
 // "name@local" id Qoder registers plugins by. An '@' in the name would make
 // every registration, verification, and uninstall addressable to a different
 // plugin, so such packages never reach target resolution.
-func (*Adapter) CheckPlanPrecondition(_ clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if projectRequested(*plan) || in.TargetContext.Scope == domain.ScopeProject || in.TargetContext.ProjectRoot != "" {
+		if plan.Scope != domain.ScopeProject || in.TargetContext.Scope != domain.ScopeProject {
+			return fmt.Errorf("qoder project plan scope mismatch")
+		}
+		_, err := projectRoot(in.Client, in.TargetContext)
+		return err
+	}
 	if qualifiedPluginName(plan.DeclaredName) {
 		return nil
 	}
@@ -31,6 +39,18 @@ func (*Adapter) CheckPlanPrecondition(_ clients.PlanInput, plan *domain.Delivery
 // RefinePlan promotes on the Qoder CLI: the package lands in the managed root,
 // so readiness is the CLI's ability to register it, not a config root to write.
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if projectRequested(*plan) || in.TargetContext.Scope == domain.ScopeProject || in.TargetContext.ProjectRoot != "" {
+		if err := validateProjectPlan(in.Client, *plan); err != nil {
+			return err
+		}
+		if plan.Status != domain.PlanUnsupported {
+			plan.Status, plan.Activation = domain.PlanReady, domain.ActivationPrepared
+			for _, action := range projectActions(*plan) {
+				plan.UserActions = shared.AppendUnique(plan.UserActions, action)
+			}
+		}
+		return nil
+	}
 	shared.PromoteNativeReady(plan, in.Client.ExecutablePath, shared.OnlyNativeComponents(plan.Components))
 	if plan.Status == domain.PlanUnsupported {
 		return nil

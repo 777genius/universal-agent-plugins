@@ -82,7 +82,7 @@ func TestQoderClientDefinition(t *testing.T) {
 	if capabilities.AppSupport != SupportUnsupported || capabilities.ExtensionSupport != SupportUnsupported {
 		t.Fatalf("Qoder app/extension support = %+v", capabilities)
 	}
-	if want := []InstallScope{ScopeUser}; !reflect.DeepEqual(capabilities.Scopes, want) {
+	if want := []InstallScope{ScopeUser, ScopeProject}; !reflect.DeepEqual(capabilities.Scopes, want) {
 		t.Fatalf("Qoder scopes = %v, want %v", capabilities.Scopes, want)
 	}
 	if definition.Traits.LifecycleKind != LifecycleCLIRegistry || !definition.Traits.Allows(InstallIntentAutomatic) {
