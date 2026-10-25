@@ -130,16 +130,10 @@ func TestProjectPreparedGroupPublicLifecycleAndHandoff(t *testing.T) {
 	if repaired.Outcome != OutcomeCompleted || !repaired.Mutated || !reflect.DeepEqual(native(), beforeNative) {
 		t.Fatalf("native repair %+v", repaired)
 	}
-	// Each public single removal is already admitted for these clients. Group
-	// removal's historical SDK beta guard is a separate reviewed scope change.
-	f.req.Targets = nil
-	for _, target := range []ClientTarget{{ClientID: "cline", ClientConfigRoot: f.user}, {ClientID: "codex", ClientConfigRoot: codexUser}} {
-		f.req.ClientID, f.req.ClientConfigRoot = target.ClientID, target.ClientConfigRoot
-		f.reopen(t)
-		removed := f.apply(t, OpRemove)
-		if removed.Outcome != OutcomeCompleted || !removed.Mutated {
-			t.Fatalf("remove %+v", removed)
-		}
+	f.reopen(t)
+	removed := f.apply(t, OpRemove)
+	if removed.Outcome != OutcomeCompleted || !removed.Mutated {
+		t.Fatalf("remove %+v", removed)
 	}
 	for _, path := range []string{f.skill, nativePaths[2]} {
 		if _, err := os.Stat(path); !os.IsNotExist(err) {

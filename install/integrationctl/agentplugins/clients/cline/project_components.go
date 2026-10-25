@@ -106,11 +106,11 @@ func validateClineProjectSelection(plan domain.DeliveryPlan, objects []domain.Na
 	}
 	owned := clineProjectOwned(objects)
 	if len(owned) != len(selected) {
-		return fmt.Errorf("Cline delivered component selection is incomplete")
+		return fmt.Errorf("cline delivered component selection is incomplete")
 	}
 	for _, object := range owned {
 		if !selected[object.ObjectID] {
-			return fmt.Errorf("Cline delivered component differs from selection")
+			return fmt.Errorf("cline delivered component differs from selection")
 		}
 	}
 	return clineProjectComponents(plan.TargetContext.ProjectRoot).ValidateObjects(owned)

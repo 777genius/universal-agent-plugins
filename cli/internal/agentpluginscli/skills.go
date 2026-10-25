@@ -98,7 +98,7 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 		return err
 	}
 	defer session.cleanup()
-	browser := selection.ui || interactive && !selection.noUI && !opts.dryRun && len(selection.names) == 0 && !request.PathSet && !session.source.ExactPath && opts.target == ""
+	browser := selection.useBrowserPicker(interactive, opts, request.PathSet, session.source.ExactPath)
 	if browser {
 		handled, err := runSkillsBrowser(cmd, app, opts, session, selection.ui)
 		if handled || err != nil {
@@ -107,6 +107,10 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	}
 	return runSkillsTerminal(cmd, app, opts, session, selection.names, interactive, selection.yes)
 }
+func (selection *skillsAddOptions) useBrowserPicker(interactive bool, opts *options, pathSet, exactPath bool) bool {
+	return selection.ui || interactive && !selection.noUI && !opts.dryRun && len(selection.names) == 0 && !pathSet && !exactPath && opts.target == ""
+}
+
 func runSkillsBrowser(cmd *cobra.Command, app App, opts *options, session *skillsCatalogSession, explicit bool) (bool, error) {
 	if !skillspicker.Bundled() {
 		if explicit {

@@ -34,7 +34,7 @@ func TestProjectSkillsPickerReportsScopedDestinations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			detected := []domain.DetectedClient{}
+			detected := make([]domain.DetectedClient, 0, 4)
 			for _, id := range []domain.ClientID{domain.ClientClaude, domain.ClientCodex, domain.ClientGemini, domain.ClientChatGPT} {
 				root := filepath.Join(journey.home, "."+string(id))
 				if unsafe && id == domain.ClientCodex {
@@ -59,7 +59,7 @@ func TestProjectSkillsPickerReportsScopedDestinations(t *testing.T) {
 			}
 			endpoint.Fragment = ""
 			origin := strings.TrimSuffix(endpoint.String(), "/")
-			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, origin+"/api/v1/targets", nil)
+			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, origin+"/api/v1/targets", http.NoBody)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -69,7 +69,11 @@ func TestProjectSkillsPickerReportsScopedDestinations(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer response.Body.Close()
+			defer func() {
+				if err := response.Body.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
 			if response.StatusCode != http.StatusOK {
 				t.Fatalf("target API status: %d", response.StatusCode)
 			}

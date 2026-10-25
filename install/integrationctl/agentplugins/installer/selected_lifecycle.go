@@ -107,7 +107,7 @@ func (e *Engine) confirmRemoveBindings(ctx context.Context, prepared *PreparedOp
 			return fmt.Errorf("%w: persisted removal authority changed", ErrPlanChanged)
 		}
 		if found {
-			if err := e.confirmRemovalPreflight(ctx, client, binding, receipt, state); err != nil {
+			if err := e.confirmRemovalPreflight(ctx, client, live.DeclaredName, binding, receipt, state); err != nil {
 				return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 			}
 		}
@@ -246,16 +246,16 @@ func (e *Engine) confirmRemoveDispatch(ctx context.Context, prepared *PreparedOp
 	// Keep the already recorded Service attempt in the comparison. An observer
 	// cannot replace any binding, settings identity or receipt authority, even
 	// when it returns an error or cancellation. Check before baseline capture.
-	return scope, scope.confirm(e.confirmRemovalPreflight(ctx, request.Client, binding, receipt, state))
+	return scope, scope.confirm(e.confirmRemovalPreflight(ctx, request.Client, current.DeclaredName, binding, receipt, state))
 }
 
-func (e *Engine) confirmRemovalPreflight(ctx context.Context, client domain.DetectedClient, binding domain.ClientBinding, receipt domain.DataReceipt, approved domain.StateFileV2) error {
+func (e *Engine) confirmRemovalPreflight(ctx context.Context, client domain.DetectedClient, declaredName string, binding domain.ClientBinding, receipt domain.DataReceipt, approved domain.StateFileV2) error {
 	manager := dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}
 	journals, err := manager.ListOpen()
 	if err != nil {
 		return errors.Join(ErrPlanChanged, err)
 	}
-	cause := e.removalPreflight(ctx, client, binding, receipt)
+	cause := e.removalPreflight(ctx, client, declaredName, binding, receipt)
 	after, err := manager.ListOpen()
 	if err != nil || !reflect.DeepEqual(after, journals) {
 		cause = errors.Join(cause, ErrPlanChanged, err)
