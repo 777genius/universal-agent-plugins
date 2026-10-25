@@ -53,7 +53,7 @@ func TestClaudePreparedNativeSuppressionRequiresExactObservedShape(t *testing.T)
 			want := true
 			switch change {
 			case "absent":
-				rows = []map[string]any{}
+				rows = make([]map[string]any, 0, 2)
 				want = false
 			case "wrong-path":
 				row["installPath"] = "/untrusted"
