@@ -3,6 +3,7 @@ package pluginkitairepo_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,17 +20,18 @@ func TestAgentpluginsClaudeNativeTrustedProjectDiscovery(t *testing.T) {
 	nativeRequireDisposable(t)
 	f := newClaudeProjectNativeFixture(t)
 	trust, err := json.Marshal(map[string]any{"projects": map[string]any{
-		f.project:      map[string]any{"hasTrustDialogAccepted": true},
-		f.otherProject: map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.project):      map[string]any{"hasTrustDialogAccepted": true},
+		filepath.ToSlash(f.otherProject): map[string]any{"hasTrustDialogAccepted": true},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.keep(t, filepath.Join(f.base.ConfigDir, ".claude.json"), string(trust))
+	nativeWrite(t, filepath.Join(f.base.ConfigDir, ".claude.json"), trust, 0600)
+	nativeWrite(t, filepath.Join(f.base.Root, "trust-profile-authored.json"), trust, 0600)
 	nativeJSON(t, filepath.Join(f.base.Root, "trust-fixture.json"), map[string]any{"authored_before_baseline": true, "config_path": filepath.Join(f.base.ConfigDir, ".claude.json"), "configuration": json.RawMessage(trust), "production_trust_mutation": false})
 	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"install", "native_project_discovery", "remove", "scope_preservation"} {
+	for _, name := range []string{"profile_initialization", "install", "native_project_discovery", "remove", "scope_preservation"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	stages["native_mcp_initialization"] = nativeStage{Status: "not_evaluated", Reason: "skills-only listing/details fixture"}
@@ -37,6 +39,10 @@ func TestAgentpluginsClaudeNativeTrustedProjectDiscovery(t *testing.T) {
 	evidence := claudeProjectNativeIdentity(t, f)
 	evidence["project_contract"], evidence["native_surface"] = "trusted_project_discovery_v1", "documented fixture-authored exact project trust; genuine plugin list/details and owned skill bytes; no MCP/model/authentication claim"
 	defer f.writeEvidence(t, evidence, stages)
+	defer claudeTrustedRecordProfile(t, f, "trust-profile-final.json")
+	nativeAttempt(stages, "profile_initialization", "trust-profile-initialized.json")
+	claudeTrustedInitializeProfile(t, f, trust)
+	stages["profile_initialization"] = nativeStage{Status: "passed", Reason: "fixed genuine A/B initialization preserved authored trust and foreign files; one native-produced profile baseline remained byte exact through fixed second A/B controls"}
 	c := commandsNativeClient{target: "claude", pkg: f.base.PackageRoot, run: f.run}
 	nativeAttempt(stages, "install", "trusted-add-installer.json")
 	added := c.succeed(t, "trusted-add", "add", c.pkg)
@@ -87,6 +93,10 @@ func claudeTrustedProjectObservation(t *testing.T, f *claudeProjectNativeFixture
 		if result.Exit != 0 || result.Error != "" || result.Deadline || result.StdoutLimit || result.StderrLimit {
 			t.Fatal("bounded trusted native observation failed; raw evidence retained")
 		}
+		profile := claudeTrustedRecordProfile(t, f, prefix+"-profile.json")
+		if err := validateClaudeTrustedProfile(profile, f.project, f.otherProject); err != nil {
+			t.Fatal(err)
+		}
 		f.requireForeign(t)
 		return result.Stdout
 	}
@@ -95,41 +105,8 @@ func claudeTrustedProjectObservation(t *testing.T, f *claudeProjectNativeFixture
 		want            bool
 	}{{"A", f.project, present}, {"B", f.otherProject, false}} {
 		body := capture(selected.suffix, selected.project, "plugin", "list", "--json")
-		value, err := shared.DecodeUniqueJSONValue(json.NewDecoder(bytes.NewReader(body)))
-		rows, ok := value.([]any)
-		if err != nil || !json.Valid(body) || !ok {
-			t.Fatal("native trusted plugin list is not a unique whole JSON array")
-		}
-		count := 0
-		for _, item := range rows {
-			row, ok := item.(map[string]any)
-			if !ok {
-				t.Fatal("native plugin list row is not an object")
-			}
-			if row["id"] == "(suppressed)@skills-dir" {
-				t.Fatal("trusted control returned native project suppression")
-			}
-			if row["id"] != claudeCommandsPluginID {
-				continue
-			}
-			for _, key := range []string{"errors", "notes"} {
-				if value, exists := row[key]; exists {
-					items, ok := value.([]any)
-					if !ok || len(items) != 0 {
-						t.Fatal("trusted native candidate has malformed/nonempty errors or notes")
-					}
-				}
-			}
-			count++
-			if !selected.want || row["scope"] != "project" || row["enabled"] != true || row["version"] != "1.0.0" || row["installPath"] != managed {
-				t.Fatalf("wrong trusted project native identity: %+v", row)
-			}
-			if project, exists := row["projectPath"]; exists && project != f.project {
-				t.Fatal("native project attribution differs")
-			}
-		}
-		if count != 0 && !selected.want || count != 1 && selected.want {
-			t.Fatal("native trusted project identity absent or duplicated")
+		if err := validateClaudeTrustedListing(body, f.project, managed, selected.want); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if present {
@@ -142,4 +119,44 @@ func claudeTrustedProjectObservation(t *testing.T, f *claudeProjectNativeFixture
 			t.Fatal(err)
 		}
 	}
+}
+
+func validateClaudeTrustedListing(body []byte, project, managed string, present bool) error {
+	value, err := shared.DecodeUniqueJSONValue(json.NewDecoder(bytes.NewReader(body)))
+	rows, ok := value.([]any)
+	if err != nil || !json.Valid(body) || !ok {
+		return fmt.Errorf("native trusted plugin list is not a unique whole JSON array")
+	}
+	count := 0
+	for _, item := range rows {
+		row, ok := item.(map[string]any)
+		if !ok {
+			return fmt.Errorf("native plugin list row is not an object")
+		}
+		if row["id"] == "(suppressed)@skills-dir" {
+			return fmt.Errorf("trusted control returned native project suppression")
+		}
+		if row["id"] != claudeCommandsPluginID {
+			continue
+		}
+		for _, key := range []string{"errors", "notes"} {
+			if value, exists := row[key]; exists {
+				items, ok := value.([]any)
+				if !ok || len(items) != 0 {
+					return fmt.Errorf("trusted native candidate has malformed/nonempty errors or notes")
+				}
+			}
+		}
+		count++
+		if !present || row["scope"] != "project" || row["enabled"] != true || row["version"] != "1.0.0" || row["installPath"] != managed {
+			return fmt.Errorf("wrong trusted project native identity")
+		}
+		if value, exists := row["projectPath"]; exists && value != project {
+			return fmt.Errorf("native project attribution differs")
+		}
+	}
+	if count != 0 && !present || count != 1 && present {
+		return fmt.Errorf("native trusted project identity absent or duplicated")
+	}
+	return nil
 }
