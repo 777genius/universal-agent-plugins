@@ -39,6 +39,8 @@ _UNTRUSTED = (
     "Warning: MCP servers are configured but disabled because this folder is untrusted.",
     "User-level servers are also suppressed in untrusted folders to prevent accidental side-effects.",
 )
+_RIPGREP_FALLBACK = b"Ripgrep is not available. Falling back to GrepTool.\n"
+_CONFIG_COMMANDS = (("skills", "list", "--all"), ("mcp", "list"))
 
 
 def _text(body):
@@ -122,7 +124,12 @@ def _write(path, document, owned):
 
 def _probe(ctx, owned, label, arguments, project="a"):
     record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
-    if record.get("exit") != 0 or record.get("error") or _text(stderr):
+    # The pinned client reports its optional native search-backend fallback
+    # while loading configuration. Actual hosted run 40238929259 measured this
+    # exact 52-byte warning on a successful skills command. Keep those bytes in
+    # evidence; version/help and every other diagnostic remain strict.
+    known_stderr = tuple(arguments) in _CONFIG_COMMANDS and stderr == _RIPGREP_FALLBACK
+    if type(record.get("exit")) is not int or record["exit"] != 0 or record.get("error") or (stderr and not known_stderr):
         raise ValueError("Gemini probe did not finish cleanly: " + label)
     for path, body in owned.items():
         _unchanged(path, body)

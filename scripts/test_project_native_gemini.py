@@ -114,6 +114,42 @@ class GeminiCollectorTests(unittest.TestCase):
             gemini.collect(ctx)
         self.assertFalse(any(call[0].startswith("empty-") for call in ctx.calls))
 
+    def test_exact_optional_ripgrep_warning_is_limited_to_config_commands(self):
+        for arguments in gemini._CONFIG_COMMANDS:
+            ctx = self.context()
+            ctx.replace["observed"] = ({"exit": 0, "error": None}, b"actual output", gemini._RIPGREP_FALLBACK)
+            self.assertEqual(gemini._probe(ctx, {}, "observed", arguments), b"actual output")
+        for arguments in (("--version",), ("--help",), ("skills", "list"), ("mcp", "list", "extra")):
+            ctx = self.context()
+            ctx.replace["observed"] = ({"exit": 0}, b"actual output", gemini._RIPGREP_FALLBACK)
+            with self.subTest(arguments=arguments), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", arguments)
+
+    def test_optional_warning_does_not_hide_failure_or_other_diagnostics(self):
+        cases = [(0, None, gemini._RIPGREP_FALLBACK + b"error\n"),
+                 (0, None, gemini._RIPGREP_FALLBACK.rstrip(b"\n")),
+                 (0, None, gemini._RIPGREP_FALLBACK.replace(b"\n", b"\r\n")),
+                 (0, None, b" \n"), (0, None, b"Authentication required\n"),
+                 (1, None, gemini._RIPGREP_FALLBACK),
+                 (False, None, gemini._RIPGREP_FALLBACK),
+                 (0, "timeout", gemini._RIPGREP_FALLBACK)]
+        for exit_code, error, stderr in cases:
+            ctx = self.context()
+            ctx.replace["observed"] = ({"exit": exit_code, "error": error}, b"actual output", stderr)
+            with self.subTest(exit=exit_code, error=error, stderr=stderr), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", ("skills", "list", "--all"))
+
+    def test_successful_builtin_listing_with_exact_warning_remains_empty_control(self):
+        ctx = self.context()
+        body = (b"Discovered Agent Skills:\n\nantigravity-support [Enabled] [Built-in]\n"
+                b"  Description: Publisher-provided skill\n  Location:    /bundle/builtin/antigravity-support/SKILL.md\n\n"
+                b"skill-creator [Enabled] [Built-in]\n  Description: Publisher-provided skill\n"
+                b"  Location:    /bundle/builtin/skill-creator/SKILL.md\n\n")
+        ctx.replace["empty-a-skills"] = ({"exit": 0}, body, gemini._RIPGREP_FALLBACK)
+        result = gemini.collect(ctx)
+        self.assertEqual(len(result["cases"]), 2)
+        self.assertFalse(result["observations"]["mcp_tools_call_qualified"])
+
     def test_cross_project_skill_is_not_discovery_success(self):
         ctx = self.context()
         ctx.replace["configured-a-skills"] = ({"exit": 0}, skill_text([
