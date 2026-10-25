@@ -37,6 +37,8 @@ observed host condition, not an explanation for the hosted fetch failure.
 - Expose `process.OrdinarySupervisorFailureClass(error) string`, which uses
   structural matching and returns a fixed known label or the empty string.
   It must never call `Error()` or inspect command/output/environment text.
+  The helper builds on every GOOS: only the Linux supervisor produces these
+  carriers, and unrelated errors on any platform return the empty class.
 - Preserve existing child exit handling, forced-cleanup causality, stable
   handles, status/EOF/trailing-data checks, limits, deadlines and fail-closed
   admission. Existing error strings and unwrap/Is behavior remain unchanged
