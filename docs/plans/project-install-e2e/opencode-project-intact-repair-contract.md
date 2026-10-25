@@ -37,9 +37,10 @@ Change only this native project's assertion flow and narrow pure contracts:
   directory, native config and native skills before/after and require identical
   byte/mode inventories. Keep the following fresh `stable-A` config/skill pair.
 - Compare the complete before/after binding, excluding only `UpdatedAt` and the
-  appended transaction receipt history. Require the old receipt prefix exactly
-  preserved and exactly one new committed `directory_swap` receipt with matching
-  binding/path and identical nonempty before/after package digests. All other
+  appended transaction receipt history. Require the nonempty old receipt prefix
+  exactly preserved and exactly one new committed `directory_swap` receipt with
+  matching binding/path and before/after digests equal to the last owned package
+  receipt's nonempty after digest. All other
   binding fields, including identity, selected delivery, package revision,
   native ownership, profile authority, lifecycle, authentication, policy and
   pending-attempt fields remain exact; explicitly refuse unresolved attempts.
