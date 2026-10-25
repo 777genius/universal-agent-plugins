@@ -20,22 +20,22 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 		return err
 	}
 	if request.DeclaredName != "" && request.DeclaredName != request.Plan.DeclaredName {
-		return fmt.Errorf("Cline delivered name differs")
+		return fmt.Errorf("cline delivered name differs")
 	}
 	if request.ActivationComplete {
-		return fmt.Errorf("Cline project session discovery cannot be established by activation attestation")
+		return fmt.Errorf("cline project session discovery cannot be established by activation attestation")
 	}
 	if request.Plan.Status == domain.PlanUnsupported || !shared.OnlyNativeComponents(request.Plan.Components) {
-		return fmt.Errorf("Cline project requires supported skills and MCP components")
+		return fmt.Errorf("cline project requires supported skills and MCP components")
 	}
 	if request.Delivery.ClientID != "" && request.Delivery.ClientID != domain.ClientCline {
-		return fmt.Errorf("Cline delivered client differs")
+		return fmt.Errorf("cline delivered client differs")
 	}
 	if request.Delivery.ActivePath != "" && request.Delivery.ActivePath != request.Plan.ActivePath {
-		return fmt.Errorf("Cline delivered package differs")
+		return fmt.Errorf("cline delivered package differs")
 	}
 	if request.Delivery.OwnedBase != "" && request.Delivery.OwnedBase != request.Plan.TargetRoot {
-		return fmt.Errorf("Cline delivered base differs")
+		return fmt.Errorf("cline delivered base differs")
 	}
 	layout := clineProjectComponents(root)
 	if err := layout.ValidateObjects(clineProjectOwned(request.PreviousNativeObjects)); err != nil {
@@ -55,10 +55,10 @@ func activateClineProject(ctx context.Context, env clients.Env, request domain.A
 		return domain.ActivationOutcome{}, err
 	}
 	if request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot {
-		return domain.ActivationOutcome{}, fmt.Errorf("Cline project delivery is incomplete or differs from plan")
+		return domain.ActivationOutcome{}, fmt.Errorf("cline project delivery is incomplete or differs from plan")
 	}
 	if request.DeclaredName != request.Plan.DeclaredName {
-		return domain.ActivationOutcome{}, fmt.Errorf("Cline delivered name differs")
+		return domain.ActivationOutcome{}, fmt.Errorf("cline delivered name differs")
 	}
 	if err := validateClineProjectSelection(request.Plan, request.Delivery.NativeObjects); err != nil {
 		return domain.ActivationOutcome{}, err

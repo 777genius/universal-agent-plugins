@@ -297,7 +297,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 	if !ok {
 		return Result{Operation: OpRemove, Outcome: OutcomeIncomplete, Reason: "client is not installed"}, fmt.Errorf("%w: client %s is not installed", ErrInvalidRequest, prepared.client.ClientID)
 	}
-	if err := e.removalPreflight(ctx, prepared.client, binding, receipt); err != nil {
+	if err := e.removalPreflight(ctx, prepared.client, installation.DeclaredName, binding, receipt); err != nil {
 		return Result{Operation: OpRemove, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	helper, _ := e.helper()

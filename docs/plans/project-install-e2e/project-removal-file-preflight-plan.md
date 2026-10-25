@@ -1,4 +1,4 @@
-# Project removal: observe owned native files before an attempt — R1
+# Project removal: observe owned native files before an attempt — R2
 
 The new real Cline+Codex grouped removal test exposed a specific pre-existing
 SDK gap. A foreign replacement of an owned native skill is preserved and removal
@@ -32,8 +32,9 @@ Invoke the existing providers.NativeIdentityObserver.ObservePreparedIdentity wit
 real Stager, nativeconfig kernel and registry, with Runner omitted. It already
 validates canonical project/original user context and combines prepared registry
 and scoped file ownership. Require no error, NativeIdentityManaged, exact recorded
-managed digest and ReceiptReconciled, with no NativeDiscoveryAttempted or
-NativeDiscoveryReconciled. Unknown, collision, mismatch, unavailable inspector or
+managed digest and ReceiptReconciled, with NativeDiscoveryState exactly
+NativeIdentityAbsent and neither NativeDiscoveryAttempted nor
+NativeDiscoveryReconciled. An empty or unknown discovery state is not absence. Unknown, collision, mismatch, unavailable inspector or
 read errors refuse. Missing native objects retain existing allowed absence;
 a missing/changed managed package still refuses under the earlier package guard.
 No observation becomes native discovery or runtime/activation evidence.
@@ -45,6 +46,13 @@ approved installation from already-loaded state, not an extra mutable lookup.
 Clone the supplied ownership slice and observation/authority values so an
 inspector cannot mutate the frozen in-memory comparison basis. Keep existing
 whole-state/journal callback comparisons and profile checks in place.
+
+This is a repeated read-only fence, not exclusion of every concurrent filesystem
+writer. A foreign change after the last pre-attempt observation may still be
+refused inside the native adapter after an attempt has been persisted. Preserve
+that pending evidence and uncertainty; never clear it to manufacture a no-change
+result. The no-attempt acceptance cases concern foreign content already present
+at preparation or introduced after Prepare but before Apply observes the files.
 
 ## Finite acceptance
 
@@ -68,3 +76,10 @@ whole-state/journal callback comparisons and profile checks in place.
 Two independent plan rounds precede this shared preflight source edit, and two
 frozen code reviews follow. The group admission change remains a separate slice;
 its strong foreign-file acceptance is currently failing as described above.
+
+## Independent R1 critique resolved
+
+Both APM and Skillshare reviewed R1 commit ce4c9443e49986f03120bbc789f72afe7c769204
+and gave architecture GO. R2 makes the positive absent discovery-state requirement
+explicit and limits the no-attempt claim to the actual observation boundaries.
+No source or native effect contract changed during either plan review.

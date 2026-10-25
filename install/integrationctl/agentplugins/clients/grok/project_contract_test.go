@@ -268,9 +268,10 @@ func TestProjectGrokSelectedSkillNameCollidesAcrossNativeSources(t *testing.T) {
 			t.Run(scope+surface, func(t *testing.T) {
 				request := projectTestRequest(t)
 				base := request.Plan.TargetContext.ProjectRoot
-				if scope == "user" {
+				switch scope {
+				case "user":
 					base = filepath.Dir(request.Client.ConfigRoot)
-				} else if scope == "ancestor" {
+				case "ancestor":
 					base = filepath.Dir(base)
 				}
 				projectTestWrite(t, filepath.Join(base, surface, "skills", "docs", "SKILL.md"), "foreign selected skill")

@@ -20,21 +20,21 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 		return nil
 	}
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || binding.ClientID != "cline" || binding.NativeProfileRoot != root {
-		return fmt.Errorf("Cline project binding scope or namespace differs")
+		return fmt.Errorf("cline project binding scope or namespace differs")
 	}
 	if err := pathpolicy.ValidateLeafID(binding.PhysicalArtifact); err != nil {
 		return err
 	}
 	expected := filepath.Join(root, ".uap", "managed", "clients", "cline", binding.PhysicalArtifact)
 	if binding.TargetLocator != expected {
-		return fmt.Errorf("Cline project binding artifact differs")
+		return fmt.Errorf("cline project binding artifact differs")
 	}
 	if err := pathpolicy.RequireContainedChild(root, expected); err != nil {
 		return err
 	}
 	for _, object := range binding.NativeObjects {
 		if object.Kind == "managed_package_directory" && (object.Path != expected || object.ManagedDigest == "") {
-			return fmt.Errorf("Cline project package ownership differs")
+			return fmt.Errorf("cline project package ownership differs")
 		}
 	}
 	return clineProjectComponents(root).ValidateObjects(clineProjectOwned(binding.NativeObjects))
@@ -46,13 +46,13 @@ func validateClineProjection(root string, plan domain.DeliveryPlan, active bool)
 	}
 	if active {
 		if root != plan.ActivePath {
-			return fmt.Errorf("Cline active package differs from plan")
+			return fmt.Errorf("cline active package differs from plan")
 		}
 	} else if filepath.Dir(root) != plan.TargetRoot || !strings.HasPrefix(filepath.Base(root), ".agentplugins-staging-") {
-		return fmt.Errorf("Cline staging differs from exact selected target")
+		return fmt.Errorf("cline staging differs from exact selected target")
 	}
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
-		return fmt.Errorf("Cline package path must be absolute and clean")
+		return fmt.Errorf("cline package path must be absolute and clean")
 	}
 	if err := pathpolicy.RequireContainedChild(plan.TargetContext.ProjectRoot, root); err != nil {
 		return err
@@ -62,7 +62,7 @@ func validateClineProjection(root string, plan domain.DeliveryPlan, active bool)
 		return err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("Cline package must be a real directory")
+		return fmt.Errorf("cline package must be a real directory")
 	}
 	return nil
 }

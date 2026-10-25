@@ -18,7 +18,7 @@ func inspectClineProject(client domain.DetectedClient, plan domain.DeliveryPlan,
 	}
 	if managed != nil {
 		if managed.Scope != "project" || managed.ClientID != "cline" || managed.PhysicalArtifact != plan.PhysicalArtifactID || managed.TargetLocator != plan.ActivePath {
-			return clients.RegistryIndeterminate, fmt.Errorf("Cline project binding differs from selected artifact")
+			return clients.RegistryIndeterminate, fmt.Errorf("cline project binding differs from selected artifact")
 		}
 		if err := New().ValidateBindingProfile(root, *managed); err != nil {
 			return clients.RegistryIndeterminate, err
@@ -38,7 +38,7 @@ func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, o
 		return clients.RegistryIndeterminate, err
 	}
 	if name != plan.DeclaredName {
-		return clients.RegistryIndeterminate, fmt.Errorf("Cline project prepared name differs")
+		return clients.RegistryIndeterminate, fmt.Errorf("cline project prepared name differs")
 	}
 	// Native file targets are inspected by InspectNativeRegistry with complete
 	// receipts; the core independently verifies the managed package digest.
