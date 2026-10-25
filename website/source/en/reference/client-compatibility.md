@@ -260,3 +260,13 @@ has its own installer, package, and transcript digests. It proves no browser
 tool call, model, OAuth, or runtime claim for the current candidate. New results
 must identify their own source SHA and client/OS versions before replacing any
 pending cell.
+
+## Current source project scope
+
+**Source only / unreleased.** The historical release and native observations
+above retain their original scope. Project installation has a separate per-client
+contract: installed ownership, native discovery and MCP/model operation are
+reported separately. ChatGPT project scope refuses explicitly; other targets
+have their own component, preparation or harness restrictions.
+
+[Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

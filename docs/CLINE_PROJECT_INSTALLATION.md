@@ -48,11 +48,13 @@ sessions can retain configuration until restarted.
 
 ## SDK host admission boundary
 
-The production CLI composes the namespace-aware observer used by the Cline
-project tests. The existing SDK `EnableNativeObserver=false` default/opt-out
-currently falls back to observing the managed package only. Component mutation
-still preserves foreign files, but a native component collision can then be
-reported after managed-package delivery with an incomplete state. This generic
-composition gap is under separate integration review; the opt-out path is not
-qualified for the stronger pre-delivery collision guarantee. No native discovery
-or command execution should be needed to perform local ownership checks.
+Both the production CLI and the default SDK compose mandatory local ownership
+checks for project component delivery. Setting `EnableNativeObserver=false`
+disables optional live native discovery; it does not disable exact skill/MCP
+file checks. Those local checks require no client runner and preserve Prepared
+semantics. Foreign names or changed owned files are refused before managed
+publication, including after a fresh SDK instance reopens the project.
+
+The installed-file observer and a native client's effective configuration are
+different evidence. Neither the default SDK nor enabling a live observer can
+turn Cline's project preparation into an active session through attestation.

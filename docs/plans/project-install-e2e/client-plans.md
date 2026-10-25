@@ -9,6 +9,17 @@ project core PR, with incremental reviewed commits. No native-client proof was
 executed while preparing these plans. PATH inventory found only `code`; that
 alone is not client identification or compatibility evidence.
 
+## Current delivery supersedes the original classification
+
+The table and individual proposals below are the original reviewed plans, not
+an assertion of today's delivered capabilities. Subsequent pinned observations
+changed three decisions: Qoder now exposes an explicit Prepared skills-only
+manual import view with a separate native global cache; Grok project preparation
+withholds MCP; VS Code requires its shipped-workbench observation and a separately
+reviewed adapter. Preserve those historical proposals when interpreting reviews.
+Use [current project support](../../PROJECT_CLIENT_SUPPORT.md) and the later
+client evidence/amendments for the implemented contract.
+
 ## Governing decisions and shared contract
 
 Read repository AGENTS, capability preservation, and active owner decisions.

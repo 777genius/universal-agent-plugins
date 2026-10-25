@@ -35,12 +35,13 @@ func (projectJourneySecurity) Evaluate(context.Context, domain.SecurityEvaluatio
 }
 
 type projectJourneyTransport struct {
-	server   *httptest.Server
-	endpoint string
-	repo     string
-	remote   string
-	mu       sync.Mutex
-	archive  []byte
+	server     *httptest.Server
+	endpoint   string
+	repo       string
+	remote     string
+	mu         sync.Mutex
+	archive    []byte
+	diagnostic *projectGitDiagnostic
 }
 
 type projectJourney struct {
@@ -149,6 +150,9 @@ func projectJourneyArchive(t *testing.T, root string) []byte {
 
 func newProjectJourney(t *testing.T, transport *projectJourneyTransport) projectJourney {
 	t.Helper()
+	if transport.diagnostic == nil {
+		transport.diagnostic = &projectGitDiagnostic{counts: map[string]uint16{}, endpoint: transport.server.URL + "/repo.git", log: func(record string) { t.Log(record) }}
+	}
 	journey := projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}
 	journey.cache = filepath.Join(journey.home, "uap")
 	for _, native := range []string{filepath.Join(journey.home, ".gemini"), filepath.Join(journey.a, ".gemini"), filepath.Join(journey.b, ".gemini")} {
@@ -174,9 +178,9 @@ func configureProjectJourney(app agentpluginscli.App, home string, transport *pr
 	app.SecurityIndex, app.DirectoryClient, app.DiscoveryClient = nil, nil, nil
 	app.SecurityEvaluator = projectJourneySecurity{}
 	app.SecurityEvaluatorForDryRun = func(string) ports.PackageSecurityEvaluator { return projectJourneySecurity{} }
-	app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: home, HTTPClient: transport.server.Client()}
+	app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: home, HTTPClient: transport.server.Client(), Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: home}}
 	app.SourceAcquirerForDryRun = func(root string) agentpluginscli.SourceAcquirer {
-		return sourceacquisition.Acquirer{TempRoot: root, HTTPClient: transport.server.Client()}
+		return sourceacquisition.Acquirer{TempRoot: root, HTTPClient: transport.server.Client(), Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: root}}
 	}
 	app.DirectoryClientForDryRun, app.CommitDirectoryPreview = nil, nil
 	compose := app.ForScope

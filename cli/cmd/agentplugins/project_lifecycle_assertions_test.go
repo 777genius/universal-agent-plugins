@@ -33,8 +33,15 @@ func (journey projectJourney) execute(project string, args ...string) (string, e
 
 func (journey projectJourney) run(t *testing.T, project string, args ...string) string {
 	t.Helper()
+	var sequence uint64
+	if journey.transport != nil && journey.transport.diagnostic != nil {
+		sequence = journey.transport.diagnostic.failureSequence()
+	}
 	output, err := journey.execute(project, args...)
 	if err != nil {
+		if journey.transport != nil && journey.transport.diagnostic != nil {
+			journey.transport.diagnostic.outsideInvocations(sequence)
+		}
 		t.Fatalf("%v in project %q: %v\n%s", args, project, err, output)
 	}
 	return output

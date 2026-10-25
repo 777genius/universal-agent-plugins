@@ -127,7 +127,7 @@
       "LocalActions": null,
       "LocalEntryObservation": null,
       "LocalPreparationAuthorized": false,
-      "NativeRegistryExecutable": "\u003croot\u003e/bin/cline",
+      "NativeRegistryExecutable": "",
       "NativeRegistryRoot": "\u003croot\u003e/clients/cline",
       "OpenCodeHost": null,
       "PackageMode": "native",
