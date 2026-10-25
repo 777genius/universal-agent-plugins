@@ -26,3 +26,19 @@ func validateDisplayReady(lock []byte, lockInfo, socketInfo os.FileInfo, proof i
 	}
 	return nil
 }
+
+func (c *controller) retainReadyDisplay(lock []byte, lockInfo, socketInfo os.FileInfo, proof isolationProof) error {
+	if e := validateDisplayReady(lock, lockInfo, socketInfo, proof); e != nil {
+		return e
+	}
+	after, ae := os.Lstat("/tmp/.X11-unix/X93")
+	if ae != nil || !sameFile(socketInfo, after) {
+		return fmt.Errorf("display socket changed during readiness")
+	}
+	assets, holdErr := holdDisplayAssets("/tmp/.X93-lock", "/tmp/.X11-unix/X93", lockInfo, socketInfo)
+	if holdErr != nil {
+		return holdErr
+	}
+	c.displayAssets = assets
+	return nil
+}
