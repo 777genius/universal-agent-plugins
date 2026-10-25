@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os/exec"
-	"reflect"
 	"sync"
 	"time"
 )
@@ -88,7 +87,7 @@ func projectNativeErrorKind(err, contextErr error) string {
 	if err == nil {
 		return ""
 	}
-	if reflect.TypeOf(err) == reflect.TypeFor[*exec.ExitError]() {
+	if _, ok := err.(*exec.ExitError); ok {
 		return "exit"
 	}
 	return "capture"

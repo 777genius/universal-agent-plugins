@@ -3,7 +3,6 @@ package pluginkitairepo_test
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -83,39 +82,13 @@ func openCodeProjectJSON(body []byte) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
+	if _, err = decoder.Token(); err != io.EOF {
 		return nil, fmt.Errorf("JSON has trailing bytes")
 	}
 	return value, nil
 }
 
 type openCodeProjectSkill struct{ Name, Location, Content string }
-
-// Public progress is a closed source-derived contract. Native and Git stderr
-// never use this allowance; repeated removal has its separate exact refusal.
-func openCodeProjectProgress(label string, body []byte) bool {
-	resolve := "Resolving and validating one Agent Plugin package for every selected target...\n"
-	var expected string
-	switch label {
-	case "add-user":
-		expected = resolve + "Installing uap-opencode-user-control for 1 selected clients...\n"
-	case "add-A", "add-B", "add-same-user", "add-same-A", "add-json":
-		expected = resolve + "Installing uap-commands-fixture for 1 selected clients...\n"
-	case "repeat-add-A":
-		// Existing same-scope binding dispatches runAddLoaded before the group
-		// Installing line. The real public-source fixture measures this branch.
-		expected = resolve + "Applying transactional client package...\n"
-	case "unchanged-update-A", "update-A":
-		expected = "Resolving and validating one updated Agent Plugin package for every selected target...\n"
-	case "intact-repair-A", "missing-repair-A":
-		expected = "Resolving and validating each unique exact installed package revision once...\n"
-	case "remove-A", "remove-json":
-		expected = ""
-	default:
-		return false
-	}
-	return string(body) == expected
-}
 
 func openCodeProjectSkills(body []byte) (map[string]openCodeProjectSkill, error) {
 	value, err := openCodeProjectJSON(body)
