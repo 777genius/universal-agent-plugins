@@ -21,7 +21,10 @@ func claudeSDKBytes(t *testing.T, path string) string {
 }
 
 func TestProjectClaudePublicInstallerLifecycleSeparatesUserAndProjects(t *testing.T) {
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	user, pkg := filepath.Join(base, "user", ".claude"), filepath.Join(base, "package")
 	for _, root := range []string{user, filepath.Join(base, "A", ".claude"), filepath.Join(base, "B", ".claude")} {
 		claudeSDKWrite(t, filepath.Join(root, "settings.json"), `{"foreign":true}`)
@@ -139,7 +142,10 @@ func claudeSDKRepairPinned(t *testing.T, f *claudeSDKFixture, original string) {
 }
 
 func TestProjectClaudePreparedInitialAddReplayStatusAndChangedBytes(t *testing.T) {
-	base := t.TempDir()
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	project := filepath.Join(base, "A")
 	user := filepath.Join(base, "user", ".claude")
 	pkg := filepath.Join(base, "package")

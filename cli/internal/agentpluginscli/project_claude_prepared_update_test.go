@@ -67,6 +67,11 @@ func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command
 func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T) {
 	client := fixtureClient(t, domain.ClientClaude)
 	f := newCLIFixture(t, []domain.DetectedClient{client})
+	physicalRoot, resolveErr := filepath.EvalSymlinks(f.root)
+	if resolveErr != nil {
+		t.Fatal(resolveErr)
+	}
+	f.root = physicalRoot
 	project := filepath.Join(f.root, "A")
 	other := filepath.Join(f.root, "B")
 	for _, p := range []string{project, other, client.ConfigRoot} {
