@@ -26,7 +26,7 @@ import native_client_project_artifacts as artifacts
 
 
 def adjacent(name, filename):
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(filename))
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).parent / filename)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
