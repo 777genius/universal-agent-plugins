@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -68,8 +69,15 @@ func TestResolveInternalLinkTraversesComponentsInFilesystemOrder(t *testing.T) {
 func TestSnapshotPreservesLegalDirectoryLinks(t *testing.T) {
 	root := t.TempDir()
 	write(t, filepath.Join(root, "dir", "file"), []byte("inside package"), 0o600)
-	for name, target := range map[string]string{"alias": ".", "directory": "dir", "copy": "directory/../alias/dir/file"} {
-		if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
+	// Single-component targets keep the same stored spelling on every host.
+	// Create directory targets before their links so Windows records their type.
+	links := []struct{ name, target, file string }{
+		{"alias", ".", "dir/file"},
+		{"directory", "dir", "file"},
+		{"linked", "directory", "file"},
+	}
+	for _, link := range links {
+		if err := os.Symlink(link.target, filepath.Join(root, link.name)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -77,12 +85,63 @@ func TestSnapshotPreservesLegalDirectoryLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer Remove(snapshot)
+	t.Cleanup(func() {
+		if err := Remove(snapshot); err != nil {
+			t.Errorf("remove snapshot: %v", err)
+		}
+	})
+	for _, link := range links {
+		body, err := os.ReadFile(filepath.Join(snapshot.Root, link.name, filepath.FromSlash(link.file)))
+		if err != nil || string(body) != "inside package" {
+			t.Fatalf("internal directory link %q content = %q, %v", link.name, body, err)
+		}
+		if target, err := os.Readlink(filepath.Join(snapshot.Root, link.name)); err != nil || target != link.target {
+			t.Fatalf("original relative link %q changed: %q, %v", link.name, target, err)
+		}
+	}
+}
+
+func TestSnapshotEnforcesNativeLinkTargetPolicy(t *testing.T) {
+	root := t.TempDir()
+	write(t, filepath.Join(root, "dir", "file"), []byte("inside package"), 0o600)
+	const originalTarget = "directory/../alias/dir/file"
+	for _, link := range []struct{ name, target string }{
+		{"alias", "."},
+		{"directory", "dir"},
+		{"copy", originalTarget},
+	} {
+		if err := os.Symlink(link.target, filepath.Join(root, link.name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Windows Symlink stores native backslashes. Such text is outside the
+	// portable package policy; it must be rejected rather than normalized.
+	if target, err := os.Readlink(filepath.Join(root, "copy")); err != nil || target != filepath.FromSlash(originalTarget) {
+		t.Fatalf("native link spelling = %q, %v", target, err)
+	}
+	snapshot, err := (Builder{TempRoot: t.TempDir()}).Snapshot(context.Background(), root, domain.SourceIdentity{})
+	if err == nil {
+		t.Cleanup(func() {
+			if err := Remove(snapshot); err != nil {
+				t.Errorf("remove snapshot: %v", err)
+			}
+		})
+	}
+	if runtime.GOOS == "windows" {
+		const refusal = `inspect package tree: unsafe symlink "copy": target must be a non-empty relative UTF-8 path using forward slashes`
+		if err == nil || err.Error() != refusal {
+			t.Fatalf("native backslash link refusal = %v; want %q", err, refusal)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
 	body, err := os.ReadFile(filepath.Join(snapshot.Root, "copy"))
 	if err != nil || string(body) != "inside package" {
 		t.Fatalf("internal link content = %q, %v", body, err)
 	}
-	if target, err := os.Readlink(filepath.Join(snapshot.Root, "copy")); err != nil || target != "directory/../alias/dir/file" {
+	if target, err := os.Readlink(filepath.Join(snapshot.Root, "copy")); err != nil || target != originalTarget {
 		t.Fatalf("original relative link changed: %q, %v", target, err)
 	}
 }

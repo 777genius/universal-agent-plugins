@@ -116,6 +116,28 @@ unrecognized mitigation or suppressing the query.
   after a justified fix require specific source reasoning and formal GitHub
   disposition; no query suppression or protection bypass is authorized here.
 
-This record describes the source corrections and verification gates. It does
-not assert that the GitHub alerts have already been closed or that a new
-candidate has passed CI before those results exist.
+## First published correction and platform follow-up
+
+The first correction was published and immediately pushed as
+`ae51ac682180438e7ef374f13e5f52ecbbd3c5ee`. Both language analyzers in
+[CodeQL run 40206182045](https://github.com/777genius/universal-agent-plugins/actions/runs/40206182045)
+completed successfully on merge `d98a0d6f903d9a46f66ac1668bb928d4086c9179`.
+The findings aggregate `121207725081` still fails with **13 alerts: two Critical
+and eleven High**, down from fifteen. This count does not identify the two
+cleared alert IDs; unavailable per-alert API state is not inferred from it.
+
+The native authoring matrix exposed a portability error in the new positive
+test fixture. On Windows, Go's `os.Symlink` changes forward slashes in the native
+link target to backslashes; the existing portable package policy correctly
+rejects that target before the roundtrip assertion. Artifact `12603114757`,
+SHA-256 `ba8e7f51cca15ef95287b37c77bb3f2e25761a25f269b2c2d3cc2810fff09978`,
+records this exact Windows arm64 failure. The follow-up separates an unconditional
+portable directory-link roundtrip from the multi-component native-link policy:
+the latter must be rejected on Windows and must retain its original target and
+content on POSIX. All component-order validator cases still run on every OS;
+there is no skipped security assertion or relaxed production link policy.
+Snapshot cleanup errors are also checked, correcting the new test's lint error.
+
+The changed test candidate still requires fresh platform and scanner results.
+This record does not assert that all GitHub alerts have closed or that an
+unfinished candidate has passed CI.
