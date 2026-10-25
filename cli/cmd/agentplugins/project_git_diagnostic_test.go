@@ -144,6 +144,10 @@ func projectGitDiagnosticCause(err error, locators ...string) string {
 	if len(value) > 8192 || !utf8.ValidString(value) {
 		return "cause_omitted"
 	}
+	// process.OS can attach stderr beneath the native transport wrapper.
+	if strings.Contains(value, "client diagnostic:") {
+		return "cause_omitted"
+	}
 	if projectGitDiagnosticCredential.MatchString(value) {
 		return "cause_omitted"
 	}

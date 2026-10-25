@@ -116,7 +116,7 @@ func TestProjectGitDiagnosticOnlyAdmitsNativeKnownFixtureAuthority(t *testing.T)
 }
 
 func TestProjectGitDiagnosticCauseInputRedactionAndFinalASCIIBytesAreBounded(t *testing.T) {
-	for _, input := range []string{strings.Repeat("x", 8193), string([]byte{0xff}), "Authorization: Bearer private", "password=inert", "token:private", "cookie=value"} {
+	for _, input := range []string{strings.Repeat("x", 8193), string([]byte{0xff}), "Authorization: Bearer private", "password=inert", "token:private", "cookie=value", "process cleanup failed (client diagnostic: opaque_payload_927)"} {
 		if got := projectGitDiagnosticCause(errors.New(input), "/known/root"); got != "cause_omitted" {
 			t.Fatal("unsafe/oversized input was admitted")
 		}
