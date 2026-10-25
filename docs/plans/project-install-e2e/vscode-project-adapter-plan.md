@@ -35,12 +35,18 @@ remote and multi-root contexts at the project adapter boundary. Target authority
 is the canonical existing project root plus the original detected user profile.
 Never substitute HOME, a profile directory or a package path for scope.
 
-Add explicit project composition in `clients/all` and select it in
+Add explicit `clients/all.Project()` registry composition and select it in
 `cli/cmd/agentplugins/compose.go` after canonical scope resolution, before detection,
 planning or acquisition. Default composition and authoring/user routes retain
 `vscode.New()`. SDK callers choose the explicit project registry/constructor;
 missing project composition fails with actionable admission rather than falling
 back to the Copilot adapter. Keep generic packages free of concrete client imports.
+`NewProject` detection reports the actual VS Code executable and original VS Code
+profile; the Copilot executable/profile never supplies presence or registry
+authority. The project constructor explicitly rejects non-project operations,
+and the retained user constructor rejects project requests in its plan preflight,
+so a global capability declaration cannot admit a Copilot fallback. Put scope
+selection in composition, not new concrete-client switches in generic core code.
 
 After evidence admission, declare VS Code `LifecycleNativeConfig` project policy
 in the existing client table. Project backend family is `vscode`, distinct from
@@ -57,7 +63,8 @@ Record native registry root `<project>/.vscode`; managed packages and plugin dat
 remain under the existing selected `.uap` namespace.
 
 Add a narrow `nativeconfig.CodecVSCode` with `servers`, explicit `type:stdio`
-and `type:http`/`type:sse` transports and the pinned editor schema's
+and portable `streamable-http` mapped to native `type:http`, using the pinned
+editor schema's
 command/args/env/cwd or url/headers subset. Preserve all unrelated top-level
 members, inputs, sandbox fields, comments, other entries and enablement. Own only
 the complete exact managed member; unknown/changed fields inside it invalidate
@@ -66,6 +73,8 @@ is needed: portable environment values remain strings, while foreign native
 numeric values are preserved untouched. Unsupported dialect options fail rather
 than being discarded. JSONC syntax is accepted in the actual `mcp.json` file;
 there is no invented sibling `mcp.jsonc` selection.
+Admit SSE only if the immutable schema independently establishes its exact native
+tag; otherwise reject it before source acquisition rather than guessing a mapping.
 
 Reuse `shared.ProjectComponents`, `ProjectComponentMutation`, nativeconfig
 conditional writes/locks and existing scoped journal/recovery. Use distinct
@@ -109,3 +118,11 @@ frozen implementation independently, resolve findings, then integrate into #499
 with original traceability. Update the capability matrix and five-language
 project guidance to describe preparation and actual observed limits. Do not
 rename historical release evidence or claim a new release.
+
+## R1 independent review resolution
+
+ROOT reviewed `c230d66` and gave conditional architecture GO, requiring concrete
+SDK project composition, actual VS Code host authority, explicit retained-user
+project refusal, and proven transport spelling. This revision specifies those
+boundaries, streamable-http to http mapping, and conditional SSE support. Native
+observation and independent final plan review remain required before code.
