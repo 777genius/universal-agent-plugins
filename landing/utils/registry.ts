@@ -1274,6 +1274,7 @@ export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
     'hubspot-crm': 'hubspot',
     'hubspot-developer': 'hubspot',
     linear: 'linear',
+    'marketing-kit': 'marketing-kit',
     neon: 'neon',
     notion: 'notion',
     playwright: 'playwright',

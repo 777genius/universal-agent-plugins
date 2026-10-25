@@ -14,3 +14,5 @@ publisher mark.
 
 All artwork is served from this directory. No remote images, executable SVG
 content, or package-selected logo paths are used.
+
+- `marketing-kit.svg`: original campaign megaphone vector created for this repository, under the repository’s MIT license.
