@@ -180,6 +180,46 @@ func TestAcceptedReplaySurvivesExpiryAndNewCapturedContext(t *testing.T) {
 	}
 }
 
+func TestUnacceptedExpiredReviewDoesNotConsumeRequestIdentity(t *testing.T) {
+	expired, fresh := &testPrepared{}, &testPrepared{}
+	var preparations atomic.Int32
+	s := newTestServer(t, "", "captured", &testBackend{makePlan: func(ChangeRequest, string) Prepared {
+		if preparations.Add(1) == 1 {
+			return expired
+		}
+		return fresh
+	}})
+	review := prepareTest(t, s, ChangeRequest{Action: Sync})
+	s.mu.Lock()
+	entry := s.plans[review.PlanId]
+	entry.review.ExpiresAt = time.Now().Add(-time.Minute)
+	s.mu.Unlock()
+	const requestID = "expired-review-123456"
+	var refusal APIError
+	requestJSON(t, s, "POST", "/api/v1/plans/"+review.PlanId+"/apply", ApplyRequest{RequestId: requestID}, 409, &refusal)
+	if refusal.Code != "PLAN_STALE" || expired.calls.Load() != 0 {
+		t.Fatal("unaccepted expired review reached backend effects", refusal, expired.calls.Load())
+	}
+	s.mu.Lock()
+	accepted, running := entry.acceptedRequest, len(s.running)
+	s.mu.Unlock()
+	if accepted != "" || running != 0 {
+		t.Fatal("expired review was accepted", accepted, running)
+	}
+	if record, err := s.store.byRequest(requestID); err != nil || record != nil {
+		t.Fatal("expired review reserved durable request identity", record, err)
+	}
+
+	replacement := prepareTest(t, s, ChangeRequest{Action: Sync})
+	op := applyTest(t, s, replacement, requestID)
+	if done := awaitTerminal(t, s, op.OperationId); done.State != Succeeded || fresh.calls.Load() != 1 || expired.calls.Load() != 0 {
+		t.Fatal("fresh review could not use the refused request identity", done, fresh.calls.Load(), expired.calls.Load())
+	}
+	if record, err := s.store.byRequest(requestID); err != nil || record == nil || record.Operation.PlanId != replacement.PlanId {
+		t.Fatal("request identity was not accepted for the fresh review", record, err)
+	}
+}
+
 func TestSharedManagementLockAdmitsOnlyOneOwner(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	first := &testPrepared{apply: func(ctx context.Context) (Outcome, error) {
