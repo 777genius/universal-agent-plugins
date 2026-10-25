@@ -21,8 +21,11 @@ Unlink still requires the existing strict tree-reaped success, captured exact
 asset metadata, root-owned sticky parent and final named identity validation.
 Readiness failure or unproved teardown grants no global unlink authority. Never
 replace that gate with a successful close or a missing child handle. Add held
-identity verification to the cleanup boundary; close failures remain explicit
-collection failures. No native argv, privilege, trust, cgroup or policy change.
+identity verification to the cleanup boundary: for a present named asset, a
+missing/closed handle or changed held identity refuses unlink. Close every held
+handle after each existing execute cleanup branch, joining close failures into
+the original failure and explicit collection failure. No native argv, privilege,
+trust, cgroup or policy change.
 
 Keep the original wrong-PID/owner/type/replacement assertions. Make the
 replacement test retain the original lock descriptor through unlink/recreation,
