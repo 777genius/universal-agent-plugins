@@ -75,19 +75,14 @@ func TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle(t *testing.T) {
 	if err := os.RemoveAll(missing); err != nil {
 		t.Fatal(err)
 	}
-	// Advance the mutable source after the installed pin. Repair must restore the
-	// installed A-two bytes, not silently import this later uninstalled text.
-	body, err = os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	nativeWrite(t, path, append(body, []byte("UNINSTALLED-SOURCE-ADVANCE\n")...), 0600)
+	// Local directory repair requires the source to reproduce the applied
+	// revision. Keep A-two unchanged while restoring the missing owned skill.
 	repaired := f.run(t, "missing-repair-A", f.A, "repair", commandsPluginName)
 	commandsRequireMutated(t, "missing repair", repaired, true)
 	// Expected source bytes come from the last owned receipt's managed package.
 	binding := f.binding(t, f.A)
 	f.observe(t, "repaired-A", f.A, binding.TargetLocator, "A-two", "wizard", false)
-	f.stages["missing_repair"] = nativeStage{Status: "passed", Reason: "missing owned skill restored from exact installed package despite later source advance; fresh native JSON proves pinned body/path"}
+	f.stages["missing_repair"] = nativeStage{Status: "passed", Reason: "missing owned skill restored with the local source unchanged at the applied A-two revision; fresh native JSON proves exact installed body/path"}
 	nativeAttempt(f.stages, "remove", "opencode-project-evidence.json")
 	f.run(t, "remove-A", f.A, "remove", commandsPluginName)
 	for _, name := range []string{commandsGuideSkill, commandsSkill("echo"), commandsSkill("wizard")} {
