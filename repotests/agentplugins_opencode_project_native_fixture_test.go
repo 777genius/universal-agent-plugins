@@ -317,7 +317,7 @@ func (f *openCodeProjectFixture) run(t *testing.T, label, project string, args .
 func (f *openCodeProjectFixture) binding(t *testing.T, project string) domain.ClientBinding {
 	t.Helper()
 	s, err := (statev2.Store{Path: filepath.Join(project, ".uap", "state-v2.json"), ProjectRoot: project}).Load()
-	if err != nil || len(s.Installations) != 1 {
+	if err != nil || len(s.Installations) != 1 || len(s.Installations[0].Clients) != 1 {
 		t.Fatalf("project installed state: %v", err)
 	}
 	for _, b := range s.Installations[0].Clients {
