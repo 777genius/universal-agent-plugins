@@ -28,6 +28,10 @@ activation/authentication attestation. Retain exact project scope/identity and
 available verifier requirements. Unknown, missing, committed or uncertain effect,
 changed/missing/foreign ownership, or any contradictory outcome cannot qualify.
 
+Carry the existing `activeNativeDelivery` completion proof into this classifier
+from its two existing callers. The native-config branch requires that proof and
+a nonempty receipt set; the nonnative branch ignores it and retains its guards.
+
 This reports the completed file verification as an unchanged operation. It does
 not make the lifecycle converged, grant trust, promote Prepared, or qualify MCP,
 authentication or model behavior. Every repeat retains the existing fresh
