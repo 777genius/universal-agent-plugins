@@ -262,19 +262,7 @@ func (c *controller) displayReady(ctx context.Context, proof isolationProof) err
 			}
 			info, se := os.Lstat("/tmp/.X11-unix/X93")
 			if se == nil {
-				if e := validateDisplayReady(lock, lockInfo, info, proof); e != nil {
-					return e
-				}
-				after, ae := os.Lstat("/tmp/.X11-unix/X93")
-				if ae != nil || !sameFile(info, after) {
-					return fmt.Errorf("display socket changed during readiness")
-				}
-				assets, holdErr := holdDisplayAssets("/tmp/.X93-lock", "/tmp/.X11-unix/X93", lockInfo, info)
-				if holdErr != nil {
-					return holdErr
-				}
-				c.displayAssets = assets
-				return nil
+				return c.retainReadyDisplay(lock, lockInfo, info, proof)
 			}
 			if !os.IsNotExist(se) {
 				return se
