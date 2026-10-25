@@ -1,6 +1,0 @@
-package: skillspicker
-generate:
-  models: true
-output: ../../cli/internal/agentpluginscli/skillspicker/apitypes.gen.go
-output-options:
-  skip-prune: true

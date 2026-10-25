@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "qoder",
+  "source_commit": "8d9aa10e7fc14238cd6abbd980ead3b75179325d",
+  "source_tree": "4f170c9758bd2682d731377db76d1e5ca71f7e63",
+  "base_commit": "49a5549d7912bfe34ef97d4bf6db8254c45f090d",
+  "local_head": "4ead80660a5b3b114d95304843cbf8d3b014add9",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}
