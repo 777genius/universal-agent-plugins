@@ -1,6 +1,0 @@
-api_version: v1
-name: opencode-basic
-version: 0.1.0
-description: OpenCode workspace-config example
-targets:
-    - opencode
