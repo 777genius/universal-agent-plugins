@@ -59,14 +59,29 @@ timeouts, profiles, command/environment construction or native admission.
    containment or a successful identity. Do not wrap a gone sentinel. Admit
    this new marker only by its direct private nonnil pointer type; wrappers,
    joins and unrelated errors with the same text do not acquire its authority.
+   Detect a private marker nested in a wrapper or join before entering the
+   existing gone-error path. Return a private opaque uncertainty error for that
+   whole input, including marker-plus-ENOENT/ESRCH combinations. The uncertainty
+   carrier retains the exact original error object and delegates its text but
+   intentionally exposes no `Unwrap` or `Is` method: the caller's existing
+   `linuxProcessGone` must never mistake that uncertainty for disappearance.
 3. At the existing identity-error boundary, allow exactly one independent
    `taskExists` observation for this marker, in addition to the unchanged
    existing gone-error path. Only a positively absent task directory permits
    the existing gone result. A still-present directory returns the original
    release error unchanged. A permission or unknown directory-observation
    failure remains failed and retains both the release cause and the new
-   observation error. Do not retry a stat read, sleep, or treat uncertainty
-   as an empty children list.
+   observation error. Join the direct release marker with an opaque uncertainty
+   carrier holding the observation error; do not expose an observation errno
+   through the public unwrap chain. The marker remains discoverable as the
+   original parse cause, while the exact observation object remains available
+   in its private carrier. This also protects against a broken observer
+   returning an error that wraps or joins a gone errno. The production
+   `linuxTaskDirectoryExists` already normalizes ordinary missing-directory
+   errors to `(false, nil)`; document and test that contract separately.
+   Existing unrelated gone-error handling and `linuxProcessGone` itself stay
+   unchanged. Do not retry a stat read, sleep, or treat uncertainty as an empty
+   children list.
 4. If the marker follows a valid initial identity and a missing children
    interface, compare its carried PID/start time with that initial identity
    before the directory observation. Preserve the existing changed-identity
@@ -93,6 +108,12 @@ Also cover direct-marker admission, non-gone/error-text compatibility, wrapped
 or joined marker refusal, same-text unrelated errors, wrong TID, truncated or
 nonnumeric fields, noncanonical decimal spellings, other negative groups and
 invalid start time. Unknown malformed input must not call `taskExists` at all.
+Include marker-plus-ENOENT/ESRCH inputs and wrapped/joined gone observation
+errors: assert no directory-based acceptance, exact retained cause objects and
+`linuxProcessGone == false` through the real contextual wrappers/joins. Test
+the real directory observer's absent/present/error normalization with inert
+temporary filesystem entries. Error classification must not read arbitrary
+error text, including through the opaque uncertainty carrier.
 Preserve the current valid/live, missing-interface, changed-identity, genuinely
 gone and prelaunch-refusal contracts. Verify that failed observations retain
 their exact cause and do not become unsupported containment or disappearance.
