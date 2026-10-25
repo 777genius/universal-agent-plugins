@@ -86,10 +86,7 @@ func (OSRunner) Run(ctx context.Context, command Command) ([]byte, error) {
 		return nil, fmt.Errorf("git %s failed: %w: %s", strings.Join(command.Args, " "), err, strings.TrimSpace(string(output)))
 	}
 	if result.ExitCode != 0 {
-		if command.NativeCredentials {
-			return nil, fmt.Errorf("native Git authentication or transport failed (exit %d); configure Git credentials or SSH access and retry", result.ExitCode)
-		}
-		return nil, fmt.Errorf("git %s failed with exit code %d: %s", strings.Join(command.Args, " "), result.ExitCode, strings.TrimSpace(string(output)))
+		return nil, gitTransportExitFailure(command, result.ExitCode, output)
 	}
 	// Blob callers require byte-exact stdout; diagnostic stderr is never content.
 	return append([]byte(nil), result.Stdout...), nil
