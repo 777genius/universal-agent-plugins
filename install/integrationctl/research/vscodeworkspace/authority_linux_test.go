@@ -182,6 +182,11 @@ func TestDisplayMetadataRejectsWrongPIDOwnerTypeAndReplacedAsset(t *testing.T) {
 	if validateDisplayReady(body, lockInfo, lockInfo, proof) == nil {
 		t.Fatal("ordinary file became display socket")
 	}
+	held, err := holdDisplayAsset(lock, lockInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = held.file.Close() }()
 	if err := os.Remove(lock); err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +199,9 @@ func TestDisplayMetadataRejectsWrongPIDOwnerTypeAndReplacedAsset(t *testing.T) {
 	}
 	if sameFile(lockInfo, replacement) {
 		t.Fatal("replacement retained display-unlink authority")
+	}
+	if held.verify(lock) == nil || os.SameFile(lockInfo, replacement) {
+		t.Fatal("replacement reused a retained kernel identity")
 	}
 	if string(mustReadInert(t, lock)) != string(body) {
 		t.Fatal("replacement bytes changed")

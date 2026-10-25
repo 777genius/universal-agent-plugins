@@ -98,7 +98,7 @@ type controller struct {
 	cookie               string
 	children             []childRecord
 	observations         []map[string]any
-	displayAssets        map[string]os.FileInfo
+	displayAssets        map[string]heldDisplayAsset
 	createdDisplayParent os.FileInfo
 	displayCleanupErr    error
 }
