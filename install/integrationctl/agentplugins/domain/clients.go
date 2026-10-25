@@ -158,12 +158,12 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleNativeConfig,
 	}), LifecycleNativeConfig),
-	clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleCLIRegistry,
 		DiscoversNativeHooks:     true,
 		HonorsOpenAIMCPAuthHints: true,
-	}),
+	}), LifecyclePrepared),
 }
 
 func withActivation(definition ClientDefinition, activation ActivationMode) ClientDefinition {

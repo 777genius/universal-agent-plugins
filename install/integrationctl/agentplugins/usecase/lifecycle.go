@@ -352,6 +352,10 @@ func lifecycleOutcome(client domain.ClientBinding) domain.ActivationOutcome {
 }
 
 func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput, result AddResult, client domain.ClientBinding) (domain.ActivationOutcome, error) {
+	if preparedProjectFileCandidate(input, result.Plan) {
+		delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
+		return service.observePreparedProjectFiles(ctx, input, result.Plan, result.InstallationID, client, delivery)
+	}
 	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) {
 		return domain.ActivationOutcome{}, nil
 	}

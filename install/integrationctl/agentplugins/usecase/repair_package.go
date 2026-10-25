@@ -183,6 +183,9 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 }
 
 func (session *repairSession) reactivateRepaired(delivery domain.StagedDelivery, verifiedState domain.ActivationOutcome) (AddResult, error) {
+	if preparedProjectFileCandidate(session.input, session.plan) {
+		return session.verifyRepairedProjectFiles(delivery)
+	}
 	if nativeLifecycleClient(session.input.Client.ClientID, session.plan.SelectedDelivery, session.input.Scope) {
 		return session.reapplyRepairedNative(delivery)
 	}

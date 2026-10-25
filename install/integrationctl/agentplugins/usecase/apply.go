@@ -350,6 +350,9 @@ func (session *applySession) persistReadOnlyObservation(current domain.ClientBin
 	}
 	verified, verifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, current)
 	if verifyErr != nil {
+		if retainPreparedProjectVerificationFailure(&session.result, verified, verifyErr) {
+			return true, session.result, verifyErr
+		}
 		if verified.Activation != "" && !session.input.DryRun && (session.input.Confirmed || session.input.PersistAuthoritativeObservations && verified.AuthoritativeObservation) {
 			session.result.Activation = verified
 			changed, updateErr := session.service.persistAuthoritativeObservation(session.ctx, session.input, session.installationID, session.clientBindingID, current, verified)

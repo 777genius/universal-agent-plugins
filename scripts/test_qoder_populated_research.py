@@ -1,5 +1,6 @@
 """Inert Qoder scope collector contracts; no vendor execution or guard spoofing."""
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -10,6 +11,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import mock_open, patch
+from types import SimpleNamespace
 
 SPEC = importlib.util.spec_from_file_location("qoder_scope_research", Path(__file__).with_name("research-qoder-populated.py"))
 research = importlib.util.module_from_spec(SPEC)
@@ -119,6 +121,82 @@ class CollectorTests(unittest.TestCase):
             (root / "d").mkdir(); (root / "d/e").mkdir()
             with patch.object(research, "MAX_DEPTH", 0), self.assertRaises(research.InventoryError):
                 research.inventory({"root": root}, research.grok.Budget())
+
+    def test_exact_native_log_alias_is_only_bounded_literal_metadata(self):
+        for target_kind in ("file", "directory", "fifo", "dangling", "self", "nonutf8"):
+            with self.subTest(target_kind=target_kind), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary); home = base / "home"; logs = home / ".qoder/logs"; logs.mkdir(parents=True)
+                foreign = base / "foreign"
+                if target_kind == "file": foreign.write_text("foreign data must never be read")
+                if target_kind == "directory": foreign.mkdir()
+                if target_kind == "fifo": os.mkfifo(foreign)
+                target = os.fsencode(foreign) if target_kind not in ("self", "nonutf8") else b"latest" if target_kind == "self" else b"\xff-literal"
+                alias = logs / "latest"; os.symlink(target, os.fsencode(alias))
+                real_open, real_stat = os.open, os.stat
+                def no_target_open(path, *args, **kwargs):
+                    self.assertNotIn(path, (str(foreign), os.fsencode(foreign), target))
+                    return real_open(path, *args, **kwargs)
+                def no_target_stat(path, *args, **kwargs):
+                    self.assertNotIn(path, (str(foreign), os.fsencode(foreign), target))
+                    return real_stat(path, *args, **kwargs)
+                with patch.object(research.os, "open", side_effect=no_target_open), patch.object(research.os, "stat", side_effect=no_target_stat):
+                    result = research.inventory({"home": home}, research.grok.Budget(), native_log_alias=True)
+                record = result["home/.qoder/logs/latest"]
+                self.assertEqual(record["kind"], "symlink_metadata_only")
+                self.assertFalse(record["target_followed"])
+                self.assertEqual(record["target_bytes"], len(target))
+                self.assertEqual(bytes.fromhex(record["target_hex"]), target)
+                self.assertEqual(record["target_sha256"], hashlib.sha256(target).hexdigest())
+                with self.assertRaises(research.InventoryError):
+                    research.inventory({"home": home}, research.grok.Budget())
+                for label in ("source-user", "source-A", "source-B", "another-home"):
+                    with self.assertRaises(research.InventoryError):
+                        research.inventory({label: home}, research.grok.Budget(), native_log_alias=True)
+                with patch.object(research, "MAX_TOTAL", len(target) - 1), self.assertRaises(research.InventoryError):
+                    research.inventory({"home": home}, research.grok.Budget(), native_log_alias=True)
+
+    def test_native_log_alias_admission_refuses_before_read_and_rechecks_bytes_identity_budget(self):
+        for failure in ("oversize", "negative", "hardlink", "length", "replacement", "deadline"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary); home = base / "home"; logs = home / ".qoder/logs"; logs.mkdir(parents=True)
+                alias = logs / "latest"; alias.symlink_to("inert-target")
+                if failure == "hardlink": os.link(alias, base / "outside-alias", follow_symlinks=False)
+                budget = research.grok.Budget()
+                real_stat, real_readlink = os.stat, os.readlink
+                calls = []
+                def metadata(path, *args, **kwargs):
+                    info = real_stat(path, *args, **kwargs)
+                    if path == "latest" and failure in ("oversize", "negative"):
+                        fields = {name: getattr(info, name) for name in ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")}
+                        fields["st_size"] = research.MAX_METADATA + 1 if failure == "oversize" else -1
+                        return SimpleNamespace(**fields)
+                    return info
+                def link(path, *args, **kwargs):
+                    calls.append(path)
+                    self.assertIsInstance(path, bytes)
+                    if failure in ("oversize", "negative", "hardlink"):
+                        self.fail("inadmissible metadata reached readlink")
+                    target = real_readlink(path, *args, **kwargs)
+                    if failure == "length": return target + b"x"
+                    if failure == "replacement": alias.unlink(); alias.symlink_to("replacement")
+                    if failure == "deadline": budget.deadline = time.monotonic() - 1
+                    return target
+                with patch.object(research.os, "stat", side_effect=metadata), patch.object(research.os, "readlink", side_effect=link), self.assertRaises(research.InventoryError) as raised:
+                    research.inventory({"home": home}, budget, native_log_alias=True)
+                self.assertEqual(raised.exception.partial["home/.qoder/logs/latest"]["kind"], "refused")
+                self.assertEqual(len(calls), 0 if failure in ("oversize", "negative", "hardlink") else 1)
+
+    def test_native_log_alias_optin_never_admits_an_intermediate_or_other_alias(self):
+        for intermediate in (False, True):
+            with self.subTest(intermediate=intermediate), tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary); home = base / "home"; (home / ".qoder").mkdir(parents=True)
+                foreign = base / "foreign"; foreign.mkdir()
+                if intermediate: (home / ".qoder/logs").symlink_to(foreign, target_is_directory=True)
+                else:
+                    (home / ".qoder/logs").mkdir()
+                    (home / ".qoder/logs/not-latest").symlink_to("inert")
+                with patch.object(research.os, "readlink", side_effect=AssertionError("unexpected alias readlink")), self.assertRaises(research.InventoryError):
+                    research.inventory({"home": home}, research.grok.Budget(), native_log_alias=True)
 
     def test_inventory_preopen_symlink_swap_never_reads_foreign_file(self):
         with tempfile.TemporaryDirectory() as temporary:
