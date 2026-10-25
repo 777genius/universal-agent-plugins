@@ -4,8 +4,12 @@
 later). The restore guide is on the docs site:
 [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine).
 
-`agentplugins deps` manages one current-user environment in
-`AGENTPLUGINS_HOME` (default: `os.UserConfigDir()/agentplugins`). `uap.toml` records intent and `uap.lock` records exact
+`agentplugins deps` manages the selected dependency environment. By default it
+uses the current-user environment in `AGENTPLUGINS_HOME` (default:
+`os.UserConfigDir()/agentplugins`). With `--scope project`, it uses the selected
+existing project's `uap.toml` and `uap.lock`, with local mutable state under
+`.uap/`. See [Project installation](PROJECT_INSTALLATION.md) for root selection,
+client boundaries and restore commands. `uap.toml` records intent and `uap.lock` records exact
 sources, package versions, package digests and dependency edges in one lock. The files are portable; local receipts, the
 verified package store, profile paths and `PLUGIN_DATA` are not.
 
@@ -96,8 +100,9 @@ author's selected agents. Package-local locks do not select consumer pins.
 Both files still contribute to the immutable package tree digest when present.
 `plugin.json` remains authoritative for standard identity and components;
 `uap.toml` is a UAP manager contract, not an Agent Plugins 1.0 component.
-Project-scoped installation and `[dev-dependencies]` are not supported by this
-workflow yet; the latter is rejected as an unknown field.
+Project-scoped installation uses this same manifest and lock contract through
+the qualified project adapters. `[dev-dependencies]` remains unsupported and is
+rejected as an unknown field.
 
 `uap.lock` remains version 1 and is the sole dependency lock. Each node records
 its exact `version` and immediate `required_by` consumers/selectors, with no
@@ -156,7 +161,7 @@ locked state. It accepts `--locked`, `--yes` and `--external-uninstalled` with
 the same fail-closed meaning as `deps sync`, and with a positional source it
 behaves as `agentplugins add` for that one package.
 
-The saved dependency workflow supports the 11 qualified local clients: Codex, Claude,
+The default user-scope saved dependency workflow supports the 11 qualified local clients: Codex, Claude,
 Cursor, Copilot, Kiro, Gemini, OpenCode, Cline, Windsurf, Grok Build and
 Kimi Code. `deps status` prints the scope, exact manifest/lock paths, supported
 targets and `excluded_targets`, including before `deps init`. ChatGPT is listed
@@ -166,7 +171,7 @@ and is reported as `dependency_management_deferred`; its existing imperative
 adapter and explicitly registered SDK APIs remain available. Initialization creates a private root when necessary
 and never overwrites an existing manifest.
 
-Each mutating target must be detected with an explicit local profile. CLI
+Each mutating target must be detected with an explicit local profile. In user scope, CLI
 registries (Codex, Claude, Cursor, Copilot, Kiro, Grok) also need an
 explicit absolute executable, as does OpenCode's host-version probe. Native
 configuration clients (Gemini, Cline, Windsurf, Kimi) do not require an executable.
@@ -183,13 +188,13 @@ component support alone does not trigger repeated lifecycle updates.
 
 | Status fact | Meaning and follow-up |
 | --- | --- |
-| `activation_manual` | Prepared materialized artifact; verify activation in the client, then use `agentplugins add <same-source> --target <agent> --activation-complete`. |
-| `activation_prepared` | Validated prepared artifact; complete the client's manual steps and attest activation with the same command. |
+| `activation_manual` | Prepared materialized artifact; follow the client's manual steps and use `--activation-complete` only where that adapter supports attestation. |
+| `activation_prepared` | Validated prepared artifact; follow the reported next action. Project configuration can remain prepared until native discovery is observed. |
 | `auth_unverified`, `auth_pending`, `auth_failed` | Authentication remains separate from activation; complete authentication and use `--auth-complete` when required. |
 | `partial` | Failed/unverified activation or incomplete materialization; inspect and retry the failed lifecycle after addressing the cause. |
 
 Manual readiness remains visible and stops automatic repeated installation.
-It does not claim observed native activation. For Cursor, explicit `--activation-complete` uses the existing composed provider's
+It does not claim observed native activation. For user-scope Cursor, explicit `--activation-complete` uses the existing composed provider's
 operator-attestation contract. Its active/installation-verified state is attested,
 not observed runtime discovery. Authentication can still remain `auth_unverified`;
 this does not require repeating activation. Codex with an unknown
@@ -197,8 +202,9 @@ plugin-list contract also retains manual readiness rather than repeating update
 on every sync. Failed/not-run verification and unmaterialized packages never
 qualify as ready. Persisted lifecycle convergence semantics are unchanged.
 
-Dependency commands always use manifest targets. They reject inherited
-`--target` and `--scope project`. Use `--dry-run` for a temporary preview;
+Dependency commands always use manifest targets. They reject an inherited
+`--target` override and accept explicit `--scope project` for the selected
+project environment. Use `--dry-run` for a temporary preview;
 it does not write the lock, store, state, profiles or persistent scanner cache.
 Native-only/YAML packages and implicit compatibility fallbacks are not part of
 this dependency flow.
@@ -260,9 +266,12 @@ agentplugins deps import --install
 ```
 
 The optional `[directory]` argument overrides the exchange folder, which defaults
-to the current working directory. Export always reads the global user environment;
-import always writes it. `AGENTPLUGINS_HOME` selects that environment as usual.
-A project manifest in the current folder does not become export's source.
+to the current working directory. Without scope flags, export reads the global
+user environment and import writes it; `AGENTPLUGINS_HOME` selects that
+environment as usual. A project manifest in the current folder does not change
+the default scope. With `--scope project`, both commands use the selected
+project environment. Choose a separate exchange directory because the portable
+pair already lives in the project root; see [project restore](PROJECT_INSTALLATION.md#restore-in-another-checkout).
 
 Plain export/import transfers only `uap.toml` and `uap.lock`, preserving their
 exact bytes, comments and formatting. It validates the complete source pair
@@ -343,7 +352,7 @@ removed. If manual external uninstall is still pending, repeat `remove` with
 manifest table has gone. Package data and the content store remain retained.
 
 Saved targets must be registered local clients supported by the typed installer.
-ChatGPT mixed with local targets is rejected before source acquisition: prepare
+In user scope, ChatGPT mixed with local targets is rejected before source acquisition: prepare
 ChatGPT separately, or explicitly choose the imperative `--no-save` flow. Explicit local paths, discovery sources,
 ChatGPT-only preparation and `--no-save` keep the imperative flow; JSON reports
 `environment.saved=false` and its reason. `--no-save` never overrides an existing
@@ -358,7 +367,7 @@ reconciliation. An external editor can still race a rename; the session rechecks
 published bytes before applying each binding and refuses a changed plan.
 
 
-ChatGPT uses the existing manual preparation path, separate from reproducible
+In user scope, ChatGPT uses the existing manual preparation path, separate from reproducible
 local profile installation: `agentplugins add <source> --target chatgpt` prepares
 an eligible package and marketplace without saving a dependency. App bindings
 must come from signed Directory evidence or the verified personal mapping path.
@@ -367,8 +376,12 @@ in a new chat, and can attest with `--activation-complete`. External uninstall
 precedes `remove --external-uninstalled`. This does not install a local stdio
 server into ChatGPT or claim automatic remote connector registration.
 
+All ChatGPT project requests are explicitly unsupported; `--no-save` does not
+override that boundary. See [ChatGPT and project scope](CHATGPT_PROJECT_SCOPE.md).
+
 These flows share one installer lifecycle, ownership receipts, immutable package
-store and locks. They do not enable project scope, expand the separately qualified
+store and locks. Project scope selects separate mutable ownership through that
+same lifecycle. These changes do not expand the separately qualified
 local-file facade route, or publish a CLI/npm/site release. Adapter contract tests
 use disposable profiles, fixture native processes and a small trusted helper
 fixture whose real digest/copy/metadata contracts are exercised; they are not qualification

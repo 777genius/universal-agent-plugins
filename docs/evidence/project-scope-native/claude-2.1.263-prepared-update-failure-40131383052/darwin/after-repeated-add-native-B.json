@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/Users/runner/work/_temp/uap-native-hosted-4fkh5g8r/bin/claude",
+    "plugin",
+    "list",
+    "--json"
+  ],
+  "cwd": "/Users/runner/work/_temp/uap-native-hosted-4fkh5g8r/evidence/uap-claude-native-evidence-3367966848/project-B",
+  "deadline": false,
+  "elapsed_ms": 163,
+  "error": "",
+  "exit": 0,
+  "expected_suppression": false,
+  "stderr_limit": false,
+  "stdout_limit": false
+}

@@ -1,0 +1,248 @@
+{
+	"GoVersion": "go1.26.10",
+	"Path": "github.com/777genius/plugin-kit-ai/cli/cmd/agentplugins",
+	"Main": {
+		"Path": "github.com/777genius/plugin-kit-ai/cli",
+		"Version": "v0.0.0-20261024233519-1bc5b898d808"
+	},
+	"Deps": [
+		{
+			"Path": "charm.land/bubbles/v2",
+			"Version": "v2.0.0",
+			"Sum": "h1:tE3eK/pHjmtrDiRdoC9uGNLgpopOd8fjhEe31B/ai5s="
+		},
+		{
+			"Path": "charm.land/bubbletea/v2",
+			"Version": "v2.0.2",
+			"Sum": "h1:4CRtRnuZOdFDTWSff9r8QFt/9+z6Emubz3aDMnf/dx0="
+		},
+		{
+			"Path": "charm.land/huh/v2",
+			"Version": "v2.0.3",
+			"Sum": "h1:2cJsMqEPwSywGHvdlKsJyQKPtSJLVnFKyFbsYZTlLkU="
+		},
+		{
+			"Path": "charm.land/lipgloss/v2",
+			"Version": "v2.0.1",
+			"Sum": "h1:6Xzrn49+Py1Um5q/wZG1gWgER2+7dUyZ9XMEufqPSys="
+		},
+		{
+			"Path": "github.com/777genius/plugin-kit-ai/install/integrationctl",
+			"Version": "(devel)"
+		},
+		{
+			"Path": "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins",
+			"Version": "(devel)"
+		},
+		{
+			"Path": "github.com/atotto/clipboard",
+			"Version": "v0.1.4",
+			"Sum": "h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4="
+		},
+		{
+			"Path": "github.com/catppuccin/go",
+			"Version": "v0.2.0",
+			"Sum": "h1:ktBeIrIP42b/8FGiScP9sgrWOss3lw0Z5SktRoithGA="
+		},
+		{
+			"Path": "github.com/charmbracelet/colorprofile",
+			"Version": "v0.4.2",
+			"Sum": "h1:BdSNuMjRbotnxHSfxy+PCSa4xAmz7szw70ktAtWRYrY="
+		},
+		{
+			"Path": "github.com/charmbracelet/ultraviolet",
+			"Version": "v0.0.0-20260205113103-524a6607adb8",
+			"Sum": "h1:eyFRbAmexyt43hVfeyBofiGSEmJ7krjLOYt/9CF5NKA="
+		},
+		{
+			"Path": "github.com/charmbracelet/x/ansi",
+			"Version": "v0.11.6",
+			"Sum": "h1:GhV21SiDz/45W9AnV2R61xZMRri5NlLnl6CVF7ihZW8="
+		},
+		{
+			"Path": "github.com/charmbracelet/x/exp/ordered",
+			"Version": "v0.1.0",
+			"Sum": "h1:55/qLwjIh0gL0Vni+QAWk7T/qRVP6sBf+2agPBgnOFE="
+		},
+		{
+			"Path": "github.com/charmbracelet/x/exp/strings",
+			"Version": "v0.0.0-20240722160745-212f7b056ed0",
+			"Sum": "h1:qko3AQ4gK1MTS/de7F5hPGx6/k1u0w4TeYmBFwzYVP4="
+		},
+		{
+			"Path": "github.com/charmbracelet/x/term",
+			"Version": "v0.2.2",
+			"Sum": "h1:xVRT/S2ZcKdhhOuSP4t5cLi5o+JxklsoEObBSgfgZRk="
+		},
+		{
+			"Path": "github.com/charmbracelet/x/termios",
+			"Version": "v0.1.1",
+			"Sum": "h1:o3Q2bT8eqzGnGPOYheoYS8eEleT5ZVNYNy8JawjaNZY="
+		},
+		{
+			"Path": "github.com/charmbracelet/x/windows",
+			"Version": "v0.2.2",
+			"Sum": "h1:IofanmuvaxnKHuV04sC0eBy/smG6kIKrWG2/jYn2GuM="
+		},
+		{
+			"Path": "github.com/clipperhouse/displaywidth",
+			"Version": "v0.11.0",
+			"Sum": "h1:lBc6kY44VFw+TDx4I8opi/EtL9m20WSEFgwIwO+UVM8="
+		},
+		{
+			"Path": "github.com/clipperhouse/uax29/v2",
+			"Version": "v2.7.0",
+			"Sum": "h1:+gs4oBZ2gPfVrKPthwbMzWZDaAFPGYK72F0NJv2v7Vk="
+		},
+		{
+			"Path": "github.com/creachadair/tomledit",
+			"Version": "v0.0.29",
+			"Sum": "h1:dB5CbdwJMpn/fmfAPTAAleXF/KJwY0Ggc1eL/zvZRgk="
+		},
+		{
+			"Path": "github.com/dlclark/regexp2",
+			"Version": "v1.12.0",
+			"Sum": "h1:0j4c5qQmnC6XOWNjP3PIXURXN2gWx76rd3KvgdPkCz8="
+		},
+		{
+			"Path": "github.com/dustin/go-humanize",
+			"Version": "v1.0.1",
+			"Sum": "h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY="
+		},
+		{
+			"Path": "github.com/lucasb-eyer/go-colorful",
+			"Version": "v1.3.0",
+			"Sum": "h1:2/yBRLdWBZKrf7gB40FoiKfAWYQ0lqNcbuQwVHXptag="
+		},
+		{
+			"Path": "github.com/mattn/go-runewidth",
+			"Version": "v0.0.20",
+			"Sum": "h1:WcT52H91ZUAwy8+HUkdM3THM6gXqXuLJi9O3rjcQQaQ="
+		},
+		{
+			"Path": "github.com/mitchellh/hashstructure/v2",
+			"Version": "v2.0.2",
+			"Sum": "h1:vGKWl0YJqUNxE8d+h8f6NJLcCJrgbhC4NcD46KavDd4="
+		},
+		{
+			"Path": "github.com/muesli/cancelreader",
+			"Version": "v0.2.2",
+			"Sum": "h1:3I4Kt4BQjOR54NavqnDogx/MIoWBFa0StPA8ELUXHmA="
+		},
+		{
+			"Path": "github.com/pelletier/go-toml/v2",
+			"Version": "v2.3.0",
+			"Sum": "h1:k59bC/lIZREW0/iVaQR8nDHxVq8OVlIzYCOJf421CaM="
+		},
+		{
+			"Path": "github.com/rivo/uniseg",
+			"Version": "v0.4.7",
+			"Sum": "h1:WUdvkW8uEhrYfLC4ZzdpI2ztxP1I582+49Oc5Mq64VQ="
+		},
+		{
+			"Path": "github.com/santhosh-tekuri/jsonschema/v6",
+			"Version": "v6.0.3",
+			"Sum": "h1:1EYB5IzjZawrrnELUi78f9fPu57HuXjmddZPjrls/28="
+		},
+		{
+			"Path": "github.com/spf13/cobra",
+			"Version": "v1.10.2",
+			"Sum": "h1:DMTTonx5m65Ic0GOoRY2c16WCbHxOOw6xxezuLaBpcU="
+		},
+		{
+			"Path": "github.com/spf13/pflag",
+			"Version": "v1.0.9",
+			"Sum": "h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY="
+		},
+		{
+			"Path": "github.com/tailscale/hujson",
+			"Version": "v0.0.0-20260302212456-ecc657c15afd",
+			"Sum": "h1:Rf9uhF1+VJ7ZHqxrG8pJ6YacmHvVCmByDmGbAWCc/gA="
+		},
+		{
+			"Path": "github.com/xo/terminfo",
+			"Version": "v0.0.0-20220910002029-abceb7e1c41e",
+			"Sum": "h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no="
+		},
+		{
+			"Path": "golang.org/x/mod",
+			"Version": "v0.40.0",
+			"Sum": "h1:hUv+3cXcdRHz08UmSiOob7sadHig73uo5bkXxQ/tvUs="
+		},
+		{
+			"Path": "golang.org/x/sync",
+			"Version": "v0.22.0",
+			"Sum": "h1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek="
+		},
+		{
+			"Path": "golang.org/x/sys",
+			"Version": "v0.44.0",
+			"Sum": "h1:ildZl3J4uzeKP07r2F++Op7E9B29JRUy+a27EibtBTQ="
+		},
+		{
+			"Path": "golang.org/x/term",
+			"Version": "v0.34.0",
+			"Sum": "h1:O/2T7POpk0ZZ7MAzMeWFSg6S5IpWd/RXDlM9hgM3DR4="
+		},
+		{
+			"Path": "golang.org/x/text",
+			"Version": "v0.40.0",
+			"Sum": "h1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs="
+		},
+		{
+			"Path": "gopkg.in/yaml.v3",
+			"Version": "v3.0.1",
+			"Sum": "h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA="
+		}
+	],
+	"Settings": [
+		{
+			"Key": "-buildmode",
+			"Value": "exe"
+		},
+		{
+			"Key": "-compiler",
+			"Value": "gc"
+		},
+		{
+			"Key": "-trimpath",
+			"Value": "true"
+		},
+		{
+			"Key": "DefaultGODEBUG",
+			"Value": "cryptocustomrand=1,httpservecontentmaxranges=1,tlssecpmlkem=0,urlstrictcolons=0"
+		},
+		{
+			"Key": "CGO_ENABLED",
+			"Value": "1"
+		},
+		{
+			"Key": "GOARCH",
+			"Value": "amd64"
+		},
+		{
+			"Key": "GOOS",
+			"Value": "linux"
+		},
+		{
+			"Key": "GOAMD64",
+			"Value": "v1"
+		},
+		{
+			"Key": "vcs",
+			"Value": "git"
+		},
+		{
+			"Key": "vcs.revision",
+			"Value": "1bc5b898d8085e707fb405ed0c8f84ca2454157f"
+		},
+		{
+			"Key": "vcs.time",
+			"Value": "2026-10-24T23:35:19Z"
+		},
+		{
+			"Key": "vcs.modified",
+			"Value": "false"
+		}
+	]
+}

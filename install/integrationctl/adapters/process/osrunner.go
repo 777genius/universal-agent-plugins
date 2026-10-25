@@ -709,7 +709,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 		return capturedResult, withDuplexDiagnostic(errors.Join(ctxErr, capturedErr, stdoutErr), stderr.Bytes())
 	}
 	if termination.forcedMembers {
-		return capturedResult, withDuplexDiagnostic(errors.Join(fmt.Errorf("process left live descendants that required forced cleanup"), capturedErr, stdoutErr), stderr.Bytes())
+		return capturedResult, withDuplexDiagnostic(errors.Join(ErrOrdinaryForcedCleanup, capturedErr, stdoutErr), stderr.Bytes())
 	}
 	if stdoutErr != nil {
 		return capturedResult, explicitStdoutError(capturedResult, capturedErr, stdoutErr, waitErr)

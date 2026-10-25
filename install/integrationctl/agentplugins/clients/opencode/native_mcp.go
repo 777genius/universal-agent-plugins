@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 
@@ -15,6 +16,14 @@ import (
 )
 
 func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, allowMissing bool) error {
+	return verifyOpenCodeNativeLayout(userOpenCodeLayout(configRoot), activePath, objects, kernel, allowMissing)
+}
+
+func verifyOpenCodeNativeLayout(layout openCodeNativeLayout, activePath string, objects []domain.NativeObjectOwnership, kernel nativeconfig.Kernel, allowMissing bool) error {
+	configRoot := layout.Root
+	if err := layout.validate(); err != nil {
+		return err
+	}
 	if err := kernel.RequireFileIO(); err != nil {
 		return err
 	}
@@ -25,20 +34,20 @@ func VerifyOpenCodeNativeObjects(configRoot, activePath string, objects []domain
 		if err != nil {
 			return err
 		}
-		if err := validateOpenCodeProjection(configRoot, activePath, projection); err != nil {
+		if err := validateOpenCodeProjection(layout, activePath, projection); err != nil {
 			return err
 		}
 	}
 	for _, object := range OpenCodeObjects(objects) {
-		if err := verifyOpenCodeObject(configRoot, projection, object, kernel, allowMissing); err != nil {
+		if err := verifyOpenCodeObject(layout, projection, object, kernel, allowMissing); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func verifyOpenCodeObject(configRoot string, projection OpenCodeProjection, object domain.NativeObjectOwnership, kernel nativeconfig.Kernel, allowMissing bool) error {
-	if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+func verifyOpenCodeObject(layout openCodeNativeLayout, projection OpenCodeProjection, object domain.NativeObjectOwnership, kernel nativeconfig.Kernel, allowMissing bool) error {
+	if err := validateOpenCodeObject(layout, projection, object); err != nil {
 		return err
 	}
 	if object.Kind == openCodeSkillKind {
@@ -76,7 +85,8 @@ func verifyOpenCodeMCP(projection OpenCodeProjection, object domain.NativeObject
 	return nil
 }
 
-func validateOpenCodeProjection(configRoot, activePath string, projection OpenCodeProjection) error {
+func validateOpenCodeProjection(layout openCodeNativeLayout, activePath string, projection OpenCodeProjection) error {
+	configRoot := layout.Root
 	if !shared.SameCleanPath(projection.ConfigJSON, filepath.Join(configRoot, "opencode.json")) ||
 		!shared.SameCleanPath(projection.ConfigJSONC, filepath.Join(configRoot, "opencode.jsonc")) ||
 		!shared.SameCleanPath(projection.PackageRoot, activePath) {
@@ -243,24 +253,47 @@ func openCodeMCPDesiredRequests(kernel nativeconfig.Kernel, paths nativeconfig.P
 	return result, nil
 }
 
-func validateOpenCodeObject(configRoot string, projection OpenCodeProjection, object domain.NativeObjectOwnership) error {
+func validateOpenCodeObject(layout openCodeNativeLayout, projection OpenCodeProjection, object domain.NativeObjectOwnership) error {
 	if object.LogicalName == "" || object.ManagedDigest == "" {
 		return fmt.Errorf("OpenCode native object is incomplete")
 	}
 	if _, _, err := nativeconfig.OpenCodeCodecForKind(object.Kind); err != nil {
 		return err
 	}
-	expected := expectedOpenCodeObjectPath(configRoot, projection, object)
+	if layout.Scope == domain.ScopeProject {
+		if err := validateProjectOpenCodeObjectIdentity(object); err != nil {
+			return err
+		}
+	}
+	expected := expectedOpenCodeObjectPath(layout, projection, object)
 	if expected == "" {
 		return fmt.Errorf("unsupported OpenCode native object kind %q", object.Kind)
 	}
 	if !shared.SameCleanPath(expected, object.Path) {
 		return fmt.Errorf("OpenCode native object %q has an untrusted path", object.LogicalName)
 	}
-	return pathpolicy.RequireContainedChild(configRoot, object.Path)
+	return pathpolicy.RequireContainedChild(layout.Root, object.Path)
 }
 
-func expectedOpenCodeObjectPath(configRoot string, projection OpenCodeProjection, object domain.NativeObjectOwnership) string {
+func validateProjectOpenCodeObjectIdentity(object domain.NativeObjectOwnership) error {
+	prefix := "opencode-mcp:"
+	if object.Kind == openCodeSkillKind {
+		if object.LogicalName != strings.TrimSpace(object.LogicalName) {
+			return fmt.Errorf("opencode project skill name is padded")
+		}
+		if err := pathpolicy.ValidateLeafID(object.LogicalName); err != nil {
+			return err
+		}
+		prefix = "opencode-skill:"
+	}
+	if object.ObjectID != prefix+object.LogicalName || !filepath.IsAbs(object.Path) || filepath.Clean(object.Path) != object.Path {
+		return fmt.Errorf("opencode project object identity is not exact")
+	}
+	return nil
+}
+
+func expectedOpenCodeObjectPath(layout openCodeNativeLayout, projection OpenCodeProjection, object domain.NativeObjectOwnership) string {
+	configRoot := layout.Root
 	switch object.Kind {
 	case OpenCodeMCPObjectKind, OpenCodeV2MCPObjectKind:
 		if projection.ConfigPath != "" {
@@ -271,32 +304,32 @@ func expectedOpenCodeObjectPath(configRoot string, projection OpenCodeProjection
 		}
 		return ""
 	case openCodeSkillKind:
-		return filepath.Join(configRoot, "skills", object.LogicalName)
+		return filepath.Join(layout.Skills, object.LogicalName)
 	default:
 		return ""
 	}
 }
 
-func preflightOpenCodeObjects(configRoot, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
+func preflightOpenCodeObjects(layout openCodeNativeLayout, activePath string, projection OpenCodeProjection, previous, desired []domain.NativeObjectOwnership) error {
 	if err := preflightOpenCodeCodecs(projection, previous, desired); err != nil {
 		return err
 	}
 	previousByID, desiredByID := shared.ObjectMap(previous), shared.ObjectMap(desired)
 	for _, object := range previous {
-		if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+		if err := validateOpenCodeObject(layout, projection, object); err != nil {
 			return err
 		}
 	}
-	if err := preflightDesiredOpenCodeObjects(configRoot, projection, previousByID, desiredByID); err != nil {
+	if err := preflightDesiredOpenCodeObjects(layout, projection, previousByID, desiredByID); err != nil {
 		return err
 	}
 	_ = activePath
 	return nil
 }
 
-func preflightDesiredOpenCodeObjects(configRoot string, projection OpenCodeProjection, previousByID, desiredByID map[string]domain.NativeObjectOwnership) error {
+func preflightDesiredOpenCodeObjects(layout openCodeNativeLayout, projection OpenCodeProjection, previousByID, desiredByID map[string]domain.NativeObjectOwnership) error {
 	for id, object := range desiredByID {
-		if err := validateOpenCodeObject(configRoot, projection, object); err != nil {
+		if err := validateOpenCodeObject(layout, projection, object); err != nil {
 			return err
 		}
 		if prior, replacing := previousByID[id]; replacing {

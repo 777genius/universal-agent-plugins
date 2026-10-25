@@ -22,7 +22,7 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 		if authority == nil {
 			return nil, errors.New("mixed owned and unmanaged repair requires separate selections")
 		}
-		binding, err := selectedRepairBinding(installation, target, domain.ScopeUser)
+		binding, err := selectedRepairBinding(installation, target, app.scope())
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions 
 		return renderDependencySync(cmd, opts, actions, true)
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
-	results, err := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, Bindings: actions}, true)
+	results, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: actions}, true)
 	if renderErr := renderDependencyResults(cmd, opts, actions, results, err); err == nil {
 		err = renderErr
 	}

@@ -16,7 +16,7 @@ var _ clients.ActiveNativeProjector = (*Adapter)(nil)
 // ProjectActiveNative validates the verified package's requested projection.
 // Cursor's package layout owns no profile entries. The lifecycle retains any
 // separately acknowledged Stop receipt; a planned receipt is not ownership.
-func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) ([]domain.NativeObjectOwnership, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -25,6 +25,12 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 	}
 	if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
 		return nil, err
+	}
+	if plan.Scope == domain.ScopeProject {
+		if err := validateCursorProjectStdio(root, envelope, plan, dataPath); err != nil {
+			return nil, err
+		}
+		return cursorProjectObjects(root, envelope, plan)
 	}
 	return nil, nil
 }
@@ -36,6 +42,12 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 	}
 	if err := projectCursor(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath); err != nil {
 		return nil, err
+	}
+	if in.Plan.Scope == domain.ScopeProject {
+		if err := projectCursorStdio(in); err != nil {
+			return nil, err
+		}
+		return cursorProjectObjects(in.StagingPath, in.Envelope, in.Plan)
 	}
 	return nil, nil
 }

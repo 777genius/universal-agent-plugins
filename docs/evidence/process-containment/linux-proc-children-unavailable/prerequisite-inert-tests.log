@@ -1,0 +1,46 @@
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/same_live_task_has_no_interface
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/task_exits_after_initial_identity
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/task_is_replaced
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/missing_stat_inside_present_task_is_unknown
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/permission_is_not_unsupported
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/unknown_read_failure
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/ESRCH_for_still_live_task_is_not_unsupported
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/malformed_before_identity
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/malformed_after_identity
+=== RUN   TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/available_empty_interface
+--- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/same_live_task_has_no_interface (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/task_exits_after_initial_identity (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/task_is_replaced (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/missing_stat_inside_present_task_is_unknown (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/permission_is_not_unsupported (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/unknown_read_failure (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/ESRCH_for_still_live_task_is_not_unsupported (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/malformed_before_identity (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/malformed_after_identity (0.00s)
+    --- PASS: TestLinuxTaskChildrenMissingInterfaceRequiresPositiveLiveIdentity/available_empty_interface (0.00s)
+=== RUN   TestOrdinaryMissingLiveChildrenRefusesBeforeWrappingOrLaunch
+--- PASS: TestOrdinaryMissingLiveChildrenRefusesBeforeWrappingOrLaunch (0.00s)
+=== RUN   TestOrdinaryActualUnsupportedPreflightCannotLaunch
+--- PASS: TestOrdinaryActualUnsupportedPreflightCannotLaunch (0.00s)
+=== RUN   TestBoundedProcObservationsAndStrictIdentities
+--- PASS: TestBoundedProcObservationsAndStrictIdentities (0.00s)
+=== RUN   TestOrdinaryAvailableEmptyProcInterfacePermitsWrapping
+--- PASS: TestOrdinaryAvailableEmptyProcInterfacePermitsWrapping (0.00s)
+=== RUN   TestProcTaskEnumerationAndNamesAreBounded
+--- PASS: TestProcTaskEnumerationAndNamesAreBounded (0.01s)
+=== RUN   TestBoundedProcessWaitReturnsAtTheRealDeadline
+--- PASS: TestBoundedProcessWaitReturnsAtTheRealDeadline (0.00s)
+=== RUN   TestSupervisorEmptyBoundaryRequiresQuiescentErrorFreePasses
+--- PASS: TestSupervisorEmptyBoundaryRequiresQuiescentErrorFreePasses (0.00s)
+=== RUN   TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage
+=== RUN   TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage/reused_PID
+=== RUN   TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage/changed_parent
+--- PASS: TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage (0.00s)
+    --- PASS: TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage/reused_PID (0.00s)
+    --- PASS: TestLinuxSupervisorTraversalRejectsChangedChildIdentityAndParentage/changed_parent (0.00s)
+=== RUN   TestLinuxSupervisorTraversalEnforcesProcessAndDeadlineBounds
+--- PASS: TestLinuxSupervisorTraversalEnforcesProcessAndDeadlineBounds (0.00s)
+PASS
+ok  	github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process	0.021s

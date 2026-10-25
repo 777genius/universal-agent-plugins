@@ -174,3 +174,23 @@ func TestQoderListingLocalDeadlineStopsOSProcess(t *testing.T) {
 		t.Fatalf("stalled producer completed after deadline: %v", err)
 	}
 }
+
+// Genuine unchanged bytes from run40135008690/source2b0ef181, the preserved
+// B-installed-project-A-list stream. Global inventory has repeated ids with
+// different scope/projectPath/version; legacy user mutation must not collapse it.
+func TestQoderGenuineScopedGlobalInventoryCannotBecomeUniqueUserOwnership(t *testing.T) {
+	body, err := os.ReadFile("testdata/qoder-1.1.78-scoped-global-list.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(body, &rows); err != nil || len(rows) != 3 {
+		t.Fatalf("raw fixture: %v %v", rows, err)
+	}
+	if rows[0]["scope"] != "user" || rows[1]["scope"] != "project" || rows[2]["scope"] != "project" || rows[1]["projectPath"] == rows[2]["projectPath"] || rows[0]["id"] != rows[2]["id"] {
+		t.Fatal("genuine inventory fixture lost global scoped shape")
+	}
+	if _, err := parseList(body); !errors.Is(err, errUnknownList) {
+		t.Fatalf("global repeated ids became one owned user entry: %v", err)
+	}
+}

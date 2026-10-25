@@ -28,14 +28,22 @@ func ActivateGeminiNativeWithKernel(ctx context.Context, request domain.Activati
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
+	root, err := geminiPlanRoot(request.Client, request.Plan)
+	if err != nil {
+		return err
+	}
+	return applyGeminiNativeMutationWithKernel(root, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, kernel)
 }
 
 func DeactivateGeminiNativeWithKernel(ctx context.Context, request domain.DeactivationRequest, kernel nativeconfig.Kernel) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return applyGeminiNativeMutationWithKernel(request.Client.ConfigRoot, "", request.NativeObjects, nil, kernel)
+	root, err := geminiNativeRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
+	if err != nil {
+		return err
+	}
+	return applyGeminiNativeMutationWithKernel(root, "", request.NativeObjects, nil, kernel)
 }
 
 func VerifyGeminiNativeObjects(configRoot string, objects []domain.NativeObjectOwnership, allowMissing bool, kernel nativeconfig.Kernel) error {

@@ -1,0 +1,97 @@
+{
+  "acquisition": "local_directory",
+  "arch": "amd64",
+  "artifact_sha256": {
+    "01-claude-version.log": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185",
+    "02-skills-after-add-list.log": "dd72d09e7ca019e94a83d02d2e5b8d60bac242352cb386020de1fad777c2f235",
+    "03-skills-after-add-details.log": "3b2a2b11779d6134b2f5d88366123d51cbdb2dc9c048c32d5807f2724486e527",
+    "04-skills-after-unchanged-update-list.log": "dd72d09e7ca019e94a83d02d2e5b8d60bac242352cb386020de1fad777c2f235",
+    "05-skills-after-unchanged-update-details.log": "3b2a2b11779d6134b2f5d88366123d51cbdb2dc9c048c32d5807f2724486e527",
+    "06-skills-after-invocation-change-list.log": "dd72d09e7ca019e94a83d02d2e5b8d60bac242352cb386020de1fad777c2f235",
+    "07-skills-after-invocation-change-details.log": "f5d337af34556fee5c032c1ebe98cb2a7952cc58012e60f8f7357e3db7117032",
+    "08-skills-after-intact-repair-list.log": "dd72d09e7ca019e94a83d02d2e5b8d60bac242352cb386020de1fad777c2f235",
+    "09-skills-after-intact-repair-details.log": "f5d337af34556fee5c032c1ebe98cb2a7952cc58012e60f8f7357e3db7117032",
+    "10-list-before-absent-repair.log": "dd72d09e7ca019e94a83d02d2e5b8d60bac242352cb386020de1fad777c2f235",
+    "11-skills-after-absent-repair-list.log": "dd72d09e7ca019e94a83d02d2e5b8d60bac242352cb386020de1fad777c2f235",
+    "12-skills-after-absent-repair-details.log": "f5d337af34556fee5c032c1ebe98cb2a7952cc58012e60f8f7357e3db7117032",
+    "13-skills-after-remove-list.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "add-installer-stderr.log": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934",
+    "add-installer.json": "6d26e78cd7954b1118cf2515c8928a24412d32822395f650f672bc5c2f96fecd",
+    "remove-installer-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "remove-installer.json": "32328b55490adbe5fad5f4858b16244dc6eeab2409014bce19d51043717b9e5f",
+    "repair-absent-installer-stderr.log": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f",
+    "repair-absent-installer.json": "a8df3d5ee904d95b67a65ce9518bcf9f30ccf457bedc42eebe77e2d61ab163ce",
+    "repair-intact-installer-stderr.log": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f",
+    "repair-intact-installer.json": "68397315a3f9a08ff7ba3069537587f3c7f7f6b538266a3ed814bf7a4da29e02",
+    "update-invocation-change-installer-stderr.log": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10",
+    "update-invocation-change-installer.json": "ecec0e12a5a8f6e0814bd0dd9b411d3f223e909d6748a21f45fc06d3c2266bbc",
+    "update-unchanged-installer-stderr.log": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10",
+    "update-unchanged-installer.json": "6a53239d38904b8191948faaf54b72b5f9e8333f5f8e9fa0a4bfd95805c7ef14"
+  },
+  "client": "claude",
+  "client_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03",
+  "client_version_measured": "2.1.263 (Claude Code)",
+  "finished_utc": "2026-10-24T22:44:57.9587805Z",
+  "installer_sha256": "8dff69684ba79422b0fbad72b91c978aa76dbb9bee1c66c3d8c7acdcfd5ca76f",
+  "native_surface": "claude plugin list --json and plugin details; installed SKILL.md bytes",
+  "os": "windows",
+  "scanner": {
+    "archive_sha256": "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+    "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453",
+    "platform": "windows-amd64",
+    "route": "prepopulated supported scanner cache; ordinary CLI security assessment",
+    "source_tag": "v0.1.3",
+    "version": "0.1.3"
+  },
+  "source_identity": {
+    "installer_base_commit": "428bdf5d49e63b78bc4783df6b766c87c8e678ca",
+    "installer_patch_sha256": [],
+    "installer_source_state": "committed",
+    "installer_tree": "94f69fd2a2e60040c0718dfec6ea4a778be78a6a"
+  },
+  "stages": {
+    "absent_repair": {
+      "status": "passed",
+      "reason": "the deleted managed artifact was rebuilt with the rendered command skill"
+    },
+    "command_skill_discovery": {
+      "status": "passed",
+      "reason": "the client itself lists the ordinary command as a plugin skill with the exact rendered bytes"
+    },
+    "explicit_command_withheld": {
+      "status": "passed",
+      "reason": "the explicit-only command is no planned component, carries an explicit_invocation_not_enforceable warning and is absent from the client's own skill listing"
+    },
+    "explicit_invocation_enforced": {
+      "status": "not_evaluated",
+      "reason": "no client declares explicit-invocation enforcement yet, so explicit-only commands are withheld"
+    },
+    "install": {
+      "status": "passed",
+      "artifacts": [
+        "add-installer.json"
+      ]
+    },
+    "intact_repair": {
+      "status": "passed",
+      "reason": "repair of an intact package with current command rules succeeded and left the client skills unchanged"
+    },
+    "invocation_change_update": {
+      "status": "passed",
+      "reason": "after the commands swapped invocation flags, update delivered the newly ordinary command and the client no longer lists the newly explicit-only one"
+    },
+    "real_model_command_use": {
+      "status": "not_evaluated",
+      "reason": "no model, login or OAuth is used"
+    },
+    "remove": {
+      "status": "passed",
+      "reason": "the client lists no plugin skill after remove"
+    },
+    "unchanged_update": {
+      "status": "passed",
+      "reason": "update of the unchanged package: mutated=false, byte-identical installer state, same client skills and bytes"
+    }
+  },
+  "started_utc": "2026-10-24T22:44:44.7728312Z"
+}

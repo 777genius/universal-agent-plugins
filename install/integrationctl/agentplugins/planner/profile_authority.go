@@ -13,7 +13,7 @@ var _ ports.PhysicalProfileAuthority = Planner{}
 
 func (p Planner) CaptureProfileAuthority(ctx context.Context, client domain.DetectedClient) (domain.ProfileAuthority, error) {
 	if a, ok := clients.As[clients.PhysicalProfileAuthority](p.Registry, client.ClientID); ok {
-		token, err := a.CaptureProfileAuthority(ctx, client)
+		token, err := p.captureProfileAuthority(ctx, client, a)
 		if err != nil {
 			return domain.ProfileAuthority{}, err
 		}
@@ -23,6 +23,30 @@ func (p Planner) CaptureProfileAuthority(ctx context.Context, client domain.Dete
 		return token, a.RevalidateProfileAuthority(ctx, client.ClientID, token)
 	}
 	return domain.ProfileAuthority{}, nil
+}
+
+func (p Planner) captureProfileAuthority(ctx context.Context, client domain.DetectedClient, user clients.PhysicalProfileAuthority) (domain.ProfileAuthority, error) {
+	if p.ProjectRoot == "" {
+		return user.CaptureProfileAuthority(ctx, client)
+	}
+	project, ok := clients.As[clients.ProjectPhysicalAuthority](p.Registry, client.ClientID)
+	if !ok {
+		return domain.ProfileAuthority{}, fmt.Errorf("project physical authority capture is required")
+	}
+	target, err := domain.NewTargetContext(domain.ScopeProject, p.ProjectRoot, client.ConfigRoot)
+	if err != nil {
+		return domain.ProfileAuthority{}, err
+	}
+	layout, ok := clients.As[clients.NativeRegistryLayout](p.Registry, client.ClientID)
+	if !ok {
+		return domain.ProfileAuthority{}, fmt.Errorf("project native registry layout is required")
+	}
+	root, _ := layout.NativeRegistry(clients.PlanInput{Client: client, TargetContext: target})
+	token, err := project.CaptureProjectAuthority(ctx, client, target, root)
+	if err == nil && token.Facts().CanonicalRoot != root {
+		return token, fmt.Errorf("project authority differs from native registry")
+	}
+	return token, err
 }
 func (p Planner) RevalidateProfileAuthority(ctx context.Context, id domain.ClientID, token domain.ProfileAuthority) error {
 	if a, ok := clients.As[clients.PhysicalProfileAuthority](p.Registry, id); ok {

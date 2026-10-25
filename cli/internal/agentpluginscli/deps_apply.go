@@ -30,12 +30,12 @@ type dependencySyncRequest struct {
 	attestation                      *environment.Attestation
 }
 
-func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock) ([]dependencyAction, error) {
-	observations, err := environment.Observe(view)
+func dependencyActions(view installer.Inspection, requirements environment.Requirements, lock environment.Lock, environmentIDs ...string) ([]dependencyAction, error) {
+	observations, err := environment.ObserveForEnvironment(view, selectedEnvironmentID(environmentIDs))
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := (environment.Coordinator{}).PrepareSync(requirements, lock, observations)
+	prepared, err := (environment.Coordinator{EnvironmentID: selectedEnvironmentID(environmentIDs)}).PrepareSync(requirements, lock, observations)
 	return prepared.Bindings, err
 }
 
@@ -78,7 +78,7 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	if err != nil {
 		return err
 	}
-	actions, err := dependencyActions(state, request.requirements, request.lock)
+	actions, err := dependencyActions(state, request.requirements, request.lock, app.environmentID())
 	if err != nil {
 		return err
 	}
@@ -182,7 +182,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		return err
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, beforeApply: request.checkInputs}
-	results, applyErr := (environment.Coordinator{Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: lock.ManifestDigest, Bindings: actions}, true)
+	results, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), ManifestDigest: lock.ManifestDigest, Bindings: actions}, true)
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
@@ -221,6 +221,9 @@ func (app App) canonicalizeDependencySyncRequirements(ctx context.Context, requi
 }
 
 func requireDependencyMutationReady(app App) error {
+	if err := app.checkProjectNamespace(); err != nil {
+		return err
+	}
 	if guard, ok := app.StateStore.(interface{ RequireMutationReady() error }); ok {
 		return guard.RequireMutationReady()
 	}
@@ -358,14 +361,14 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 	}
 	if len(request.aliases) > 0 {
 		var observed []environment.BindingObservation
-		observed, err = environment.Observe(state)
+		observed, err = environment.ObserveForEnvironment(state, app.environmentID())
 		if err == nil {
 			var selected environment.PreparedSync
-			selected, err = (environment.Coordinator{}).PrepareSyncFor(requirements, lock, observed, request.aliases, request.attestation)
+			selected, err = (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, lock, observed, request.aliases, request.attestation)
 			actions = selected.Bindings
 		}
 	} else {
-		actions, err = dependencyActions(state, requirements, lock)
+		actions, err = dependencyActions(state, requirements, lock, app.environmentID())
 	}
 	if err != nil {
 		return nil, err

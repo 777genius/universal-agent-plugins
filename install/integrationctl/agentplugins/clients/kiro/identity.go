@@ -17,9 +17,19 @@ var _ clients.RegistryInspector = (*Adapter)(nil)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (*Adapter) InspectNativeRegistry(ctx context.Context, _ clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
+	}
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		if _, err := kiroProjectPlanRoot(client, plan); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if managed != nil {
+			if err := validateKiroProjectBinding(plan.NativeRegistryRoot, plan.PhysicalArtifactID, *managed); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+		}
 	}
 	return inspectKiroRegistry(plan, managed)
 }

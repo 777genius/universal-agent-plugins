@@ -40,6 +40,8 @@ type PreparedOperation struct {
 
 func (p *PreparedOperation) Plan() Plan {
 	out := p.plan
+	out.Scope = p.req.Scope
+	out.TargetContext = domain.TargetContext{Scope: p.req.Scope, ProjectRoot: p.req.ProjectRoot, UserConfigRoot: p.client.ConfigRoot}
 	out.ProfileAuthority = domain.CloneProfileAuthority(p.plan.ProfileAuthority)
 	out.Client.ProfileAuthority = domain.CloneProfileAuthority(p.plan.Client.ProfileAuthority)
 	if p.plan.OpenCodeProfile != nil {
@@ -95,14 +97,14 @@ func (p *PreparedOperation) closeLocked() error {
 // Prepare captures a sealed snapshot for install or inspects owned state for remove.
 // It does not mutate installed client config or the Notifications runtime ledger.
 func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, error) {
-	if (req.ActivationComplete || req.AuthComplete) && (req.Operation == OpRemove || len(req.Targets) > 0) {
-		return nil, fmt.Errorf("%w: completion attestation requires a single mutating target", ErrInvalidRequest)
+	if err := validatePrepareInput(ctx, req); err != nil {
+		return nil, err
 	}
-	if ctx == nil {
-		return nil, fmt.Errorf("%w: context is required", ErrInvalidRequest)
+	if req.Scope == "" {
+		req.Scope = domain.ScopeUser
 	}
-	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
-		return nil, fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
+	if err := e.validatePrepareContext(req); err != nil {
+		return nil, err
 	}
 	copied := clonePrepareRequest(req)
 	if len(copied.Targets) == 1 {
@@ -247,7 +249,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		hints = req.AcquiredSnapshot.Compatibility
 	}
 	preview, err := dry(svc, usecase.AddInput{
-		Envelope: handle.envelope, Client: handle.client, Scope: domain.ScopeUser, DryRun: true, Confirmed: false,
+		Envelope: handle.envelope, Client: handle.client, Scope: e.scope(), DryRun: true, Confirmed: false,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: hints,
@@ -294,7 +296,7 @@ func (e *Engine) prepareRemove(ctx context.Context, req Request) (*PreparedOpera
 		handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
 		return e.prepareAbsentRemoval(handle, installation.InstallationID), nil
 	}
-	if err := e.removalPreflight(ctx, client, binding, receipt); err != nil {
+	if err := e.removalPreflight(ctx, client, installation.DeclaredName, binding, receipt); err != nil {
 		return nil, err
 	}
 	handle := &PreparedOperation{engine: e, req: req, client: client, detected: detected, recorded: state}
@@ -336,7 +338,7 @@ func (e *Engine) prepareAbsentRemoval(handle *PreparedOperation, installationID 
 // managed artifact digest, and owned PLUGIN_DATA. It does not lock, recover,
 // EnsureData, invoke a helper, or deactivate the client. Apply repeats it
 // before UAP Remove.
-func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedClient, binding domain.ClientBinding, receipt domain.DataReceipt) error {
+func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedClient, declaredName string, binding domain.ClientBinding, receipt domain.DataReceipt) error {
 	if err := e.validateRemovalBinding(client, binding); err != nil {
 		return err
 	}
@@ -347,7 +349,7 @@ func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedCli
 	if digest == "" {
 		return fmt.Errorf("%w: managed package digest is missing; refusing removal", ErrInvalidRequest)
 	}
-	target, err := e.planner().ResolveTarget(ctx, client, domain.ScopeUser, binding.PhysicalArtifact)
+	target, err := e.planner().ResolveTarget(ctx, client, e.scope(), binding.PhysicalArtifact)
 	if err != nil {
 		return fmt.Errorf("%w: resolve managed removal target: %w", ErrInvalidRequest, err)
 	}
@@ -356,6 +358,9 @@ func (e *Engine) removalPreflight(ctx context.Context, client domain.DetectedCli
 	}
 	if err := (providers.Stager{}).Verify(ctx, binding.TargetLocator, digest); err != nil {
 		return fmt.Errorf("%w: managed package was changed or is missing; refusing silent removal: %w", ErrInvalidRequest, err)
+	}
+	if err := e.confirmProjectRemovalFiles(ctx, client, declaredName, binding, target, digest); err != nil {
+		return err
 	}
 	if receipt.DataReceiptID == "" {
 		return nil
@@ -487,4 +492,18 @@ func clonePrepareRequest(req Request) Request {
 		copied.AcquiredSnapshot = &acquired
 	}
 	return copied
+}
+
+func validatePrepareInput(ctx context.Context, req Request) error {
+	if (req.ActivationComplete || req.AuthComplete) && (req.Operation == OpRemove || len(req.Targets) > 0) {
+		return fmt.Errorf("%w: completion attestation requires a single mutating target", ErrInvalidRequest)
+	}
+	if ctx == nil {
+		return fmt.Errorf("%w: context is required", ErrInvalidRequest)
+	}
+	if req.ExecutableFiles != nil && len(req.Targets) > 0 {
+		return fmt.Errorf("%w: explicit snapshot executable inventory requires a single target", ErrInvalidRequest)
+	}
+
+	return nil
 }

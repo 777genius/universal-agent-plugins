@@ -11,11 +11,14 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // Config is copied by New. Later mutation of the caller's value is ignored.
 type Config struct {
+	temporaryRoot bool
+	ProjectRoot   string `json:"-"`
 	// OpenCodeProbe defaults to the explicit-target facade. New captures and pins
 	// the allowlisted environment once; it never executes a probe.
 	OpenCodeProbe            OpenCodeProbe
@@ -28,9 +31,10 @@ type Config struct {
 	// Registry is the explicit set of client adapters supported by this
 	// executable. Nil is rejected rather than silently enabling every client.
 	Registry *clients.Registry
-	// EnableNativeObserver composes the namespace-aware client observer for
-	// repair and recovery. Callers that provide a real command runner should
-	// enable it; leaving it off retains the filesystem-only compatibility path.
+	// EnableNativeObserver enables live client discovery for repair and recovery
+	// when Runner is supplied. Project filesystem ownership checks remain
+	// mandatory when it is disabled or no runner is available. User scope keeps
+	// its existing filesystem-only compatibility path when disabled.
 	EnableNativeObserver bool
 	Runner               ports.CommandRunner
 	// ServerName selects the declared MCP server whose args the host may replace.
@@ -60,6 +64,11 @@ type Config struct {
 
 func (c Config) resolved() (Config, error) {
 	out := c
+	if out.ProjectRoot != "" {
+		if _, err := domain.NewTargetContext(domain.ScopeProject, out.ProjectRoot, ""); err != nil {
+			return Config{}, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+		}
+	}
 	if !validRoot(out.StateRoot) {
 		return Config{}, fmt.Errorf("%w: StateRoot must be an explicit absolute clean path", ErrInvalidConfig)
 	}

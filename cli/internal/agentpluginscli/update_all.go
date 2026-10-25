@@ -11,7 +11,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 type updateAllInstallation struct {
@@ -90,7 +89,7 @@ func (session *updateAllSession) load() (bool, error) {
 	session.installations = installations
 	session.ownedAliases = map[string][]string{}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID != environment.EnvironmentUserDefault {
+		if receipt.EnvironmentID != session.app.environmentID() {
 			continue
 		}
 		aliases := session.ownedAliases[receipt.InstallationID]

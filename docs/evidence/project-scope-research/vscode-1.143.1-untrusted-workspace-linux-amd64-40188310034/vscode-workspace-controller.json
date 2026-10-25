@@ -1,0 +1,294 @@
+{
+  "children": [
+    {
+      "label": "A",
+      "argv": [
+        "/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/code",
+        "--new-window",
+        "--disable-crash-reporter",
+        "--user-data-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/A/profile",
+        "--extensions-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/A/extensions",
+        "--extensionDevelopmentPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer",
+        "--extensionTestsPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer/runner.cjs",
+        "--enable-proposed-api",
+        "uap-research.workspace-observer",
+        "/tmp/uap-vscode-sealed-3399636247/projects/A"
+      ],
+      "cwd": "/tmp/uap-vscode-sealed-3399636247/projects/A",
+      "isolation": {
+        "pid": 5213,
+        "uid": 1001,
+        "gid": 1001,
+        "euid": 1001,
+        "egid": 1001,
+        "network_namespace": 4026532313,
+        "parent_network_namespace": 4026531840,
+        "groups": [],
+        "interfaces": [
+          "lo"
+        ],
+        "capabilities_zero": true,
+        "no_new_privileges": true
+      },
+      "diagnostics": "verifier-prefixed merged stdout/stderr; planned teardown may truncate final diagnostic tail; task-cookie bytes redacted",
+      "merged_file": "A.merged.log",
+      "merged_bytes": 40157,
+      "merged_sha256": "cc332ca5291b81798e8268b7e7b0d27163f4fb861964941706c9b1447d680874",
+      "merged_overflow": false,
+      "planned_stop": true,
+      "tree_reaped": true,
+      "error": ""
+    },
+    {
+      "label": "B",
+      "argv": [
+        "/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/code",
+        "--new-window",
+        "--disable-crash-reporter",
+        "--user-data-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/B/profile",
+        "--extensions-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/B/extensions",
+        "--extensionDevelopmentPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer",
+        "--extensionTestsPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer/runner.cjs",
+        "--enable-proposed-api",
+        "uap-research.workspace-observer",
+        "/tmp/uap-vscode-sealed-3399636247/projects/B"
+      ],
+      "cwd": "/tmp/uap-vscode-sealed-3399636247/projects/B",
+      "isolation": {
+        "pid": 5444,
+        "uid": 1001,
+        "gid": 1001,
+        "euid": 1001,
+        "egid": 1001,
+        "network_namespace": 4026532313,
+        "parent_network_namespace": 4026531840,
+        "groups": [],
+        "interfaces": [
+          "lo"
+        ],
+        "capabilities_zero": true,
+        "no_new_privileges": true
+      },
+      "diagnostics": "verifier-prefixed merged stdout/stderr; planned teardown may truncate final diagnostic tail; task-cookie bytes redacted",
+      "merged_file": "B.merged.log",
+      "merged_bytes": 39276,
+      "merged_sha256": "cad5061dad944b7c7131d79cdaa5c74b968d19db95591dd36ea5b989f5b3a252",
+      "merged_overflow": false,
+      "planned_stop": true,
+      "tree_reaped": true,
+      "error": ""
+    },
+    {
+      "label": "A-restart",
+      "argv": [
+        "/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/code",
+        "--new-window",
+        "--disable-crash-reporter",
+        "--user-data-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/A-restart/profile",
+        "--extensions-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/A-restart/extensions",
+        "--extensionDevelopmentPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer",
+        "--extensionTestsPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer/runner.cjs",
+        "--enable-proposed-api",
+        "uap-research.workspace-observer",
+        "/tmp/uap-vscode-sealed-3399636247/projects/A"
+      ],
+      "cwd": "/tmp/uap-vscode-sealed-3399636247/projects/A",
+      "isolation": {
+        "pid": 5658,
+        "uid": 1001,
+        "gid": 1001,
+        "euid": 1001,
+        "egid": 1001,
+        "network_namespace": 4026532313,
+        "parent_network_namespace": 4026531840,
+        "groups": [],
+        "interfaces": [
+          "lo"
+        ],
+        "capabilities_zero": true,
+        "no_new_privileges": true
+      },
+      "diagnostics": "verifier-prefixed merged stdout/stderr; planned teardown may truncate final diagnostic tail; task-cookie bytes redacted",
+      "merged_file": "A-restart.merged.log",
+      "merged_bytes": 40083,
+      "merged_sha256": "a6cbdaf98ef60dfe02d0785eb8054b4c869760ecfa3dc79fff02fd8ea3118184",
+      "merged_overflow": false,
+      "planned_stop": true,
+      "tree_reaped": true,
+      "error": ""
+    },
+    {
+      "label": "A-after-removal",
+      "argv": [
+        "/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/code",
+        "--new-window",
+        "--disable-crash-reporter",
+        "--user-data-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/A-after-removal/profile",
+        "--extensions-dir",
+        "/tmp/uap-vscode-sealed-3399636247/probes/A-after-removal/extensions",
+        "--extensionDevelopmentPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer",
+        "--extensionTestsPath",
+        "/tmp/uap-vscode-sealed-3399636247/observer/runner.cjs",
+        "--enable-proposed-api",
+        "uap-research.workspace-observer",
+        "/tmp/uap-vscode-sealed-3399636247/projects/A"
+      ],
+      "cwd": "/tmp/uap-vscode-sealed-3399636247/projects/A",
+      "isolation": {
+        "pid": 5874,
+        "uid": 1001,
+        "gid": 1001,
+        "euid": 1001,
+        "egid": 1001,
+        "network_namespace": 4026532313,
+        "parent_network_namespace": 4026531840,
+        "groups": [],
+        "interfaces": [
+          "lo"
+        ],
+        "capabilities_zero": true,
+        "no_new_privileges": true
+      },
+      "diagnostics": "verifier-prefixed merged stdout/stderr; planned teardown may truncate final diagnostic tail; task-cookie bytes redacted",
+      "merged_file": "A-after-removal.merged.log",
+      "merged_bytes": 40046,
+      "merged_sha256": "f0caa906539e3bf8bcdb3617bea17f66a8a0a5e7a29857c8578ad9f395e49de6",
+      "merged_overflow": false,
+      "planned_stop": true,
+      "tree_reaped": true,
+      "error": ""
+    },
+    {
+      "label": "Xvfb",
+      "argv": [
+        "/usr/bin/Xvfb",
+        ":93",
+        "-screen",
+        "0",
+        "1024x768x24",
+        "-nolisten",
+        "tcp",
+        "-auth",
+        "/tmp/uap-vscode-sealed-3399636247/auth/authority"
+      ],
+      "cwd": "/tmp/uap-vscode-sealed-3399636247",
+      "isolation": {
+        "pid": 5211,
+        "uid": 1001,
+        "gid": 1001,
+        "euid": 1001,
+        "egid": 1001,
+        "network_namespace": 4026532250,
+        "parent_network_namespace": 4026531840,
+        "groups": [],
+        "interfaces": [
+          "lo"
+        ],
+        "capabilities_zero": true,
+        "no_new_privileges": true
+      },
+      "diagnostics": "verifier-prefixed merged stdout/stderr; planned teardown may truncate final diagnostic tail; task-cookie bytes redacted",
+      "merged_file": "Xvfb.merged.log",
+      "merged_bytes": 234,
+      "merged_sha256": "4b57b7e0057675bc004f922ca23c5c382e6dbdf3be9595f410bb754862ab53a3",
+      "merged_overflow": false,
+      "planned_stop": true,
+      "tree_reaped": true,
+      "error": ""
+    }
+  ],
+  "cleanup": {
+    "complete": true,
+    "error": "",
+    "stderr_bytes": 0,
+    "stderr_file": "root-cleanup.stderr.log",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stdout_bytes": 0,
+    "stdout_file": "root-cleanup.stdout.log",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "collection_complete": true,
+  "diagnostics": "verifier-prefixed merged streams; planned teardown may truncate trailing diagnostics; API result is separate",
+  "error": "",
+  "evidence_kind": "vscode-pinned-untrusted-workspace-research",
+  "executable_hashes": {
+    "code": "cf8508cc7ddde30cfccc70caeda877a9a99119953c4476dcb30a3eb1a2c415e9",
+    "resources/app/node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/linux-x64/rg": "193906679498de4d939345b937fa24e0e69a03c244bd70c859f5e41232713f21",
+    "resources/app/out/cli.js": "bd393ad6f0d28ba0aa7cd79cc685617f5187096f092009e315a4f098349f7976",
+    "resources/app/product.json": "a141a1de8ed44415c0c527b1882362e6abc25e674be052d67c09da71a27fbd7e"
+  },
+  "native_mcp_initialization_qualified": false,
+  "native_project_qualified": false,
+  "native_runtime_qualified": false,
+  "observations": [
+    {
+      "attribution": {
+        "connection_attempts": "not instrumented",
+        "mcp": "passed",
+        "mcp_source": "unique sealed marker URL inference; API provides no config-file origin",
+        "native_project_qualified": false,
+        "same_name": "all native rows retained; no simultaneous activation claim",
+        "skills": "passed"
+      },
+      "error": "",
+      "metadata_collected": true,
+      "probe": "A"
+    },
+    {
+      "attribution": {
+        "connection_attempts": "not instrumented",
+        "mcp": "passed",
+        "mcp_source": "unique sealed marker URL inference; API provides no config-file origin",
+        "native_project_qualified": false,
+        "same_name": "all native rows retained; no simultaneous activation claim",
+        "skills": "passed"
+      },
+      "error": "",
+      "metadata_collected": true,
+      "probe": "B"
+    },
+    {
+      "attribution": {
+        "connection_attempts": "not instrumented",
+        "mcp": "passed",
+        "mcp_source": "unique sealed marker URL inference; API provides no config-file origin",
+        "native_project_qualified": false,
+        "same_name": "all native rows retained; no simultaneous activation claim",
+        "skills": "passed"
+      },
+      "error": "",
+      "metadata_collected": true,
+      "probe": "A-restart"
+    },
+    {
+      "attribution": {
+        "connection_attempts": "not instrumented",
+        "mcp": "passed",
+        "mcp_source": "unique sealed marker URL inference; API provides no config-file origin",
+        "native_project_qualified": false,
+        "same_name": "all native rows retained; no simultaneous activation claim",
+        "skills": "passed"
+      },
+      "error": "",
+      "metadata_collected": true,
+      "probe": "A-after-removal"
+    }
+  ],
+  "publisher_commit": "e646868227c3e3a9e3f24277c8c7220be42c0be7",
+  "source_commit": "f48d685133105e3ec7922acf811ee30a95830ef8",
+  "version": "1.143.1"
+}

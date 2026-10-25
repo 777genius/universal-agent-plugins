@@ -1,0 +1,86 @@
+{
+  "acquisition": "local_directory",
+  "arch": "amd64",
+  "artifact_sha256": {
+    "client-version-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "client-version.log": "616dba4e87de2b1f07e61fe30ff4a5b3b075986c986c466ac5d244597eac0f36",
+    "project-add-installer-stderr.log": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934",
+    "project-add-installer.json": "5338259e8dfbfc0828184add1086faef0c33125d6dbc625c140983dc3933142b",
+    "project-remove-installer-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "project-remove-installer.json": "5b6f2a0a6782090cd4d48c3328ca26d886ff0dc1755a483d3ce911fec79d64f9",
+    "project-repair-installer-stderr.log": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f",
+    "project-repair-installer.json": "d99d1067efe1a78debd34cc3b3722b5e497886fb1bb3620760ab02ecb086825f",
+    "project-update-installer-stderr.log": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10",
+    "project-update-installer.json": "063b4e9a6433b38e645122a4d3346855cdf7feb60284c6b472c66a75f19d7669",
+    "skills-after-project-add-project-A-rpc.jsonl": "eba0d1614e66e8d4a94f47999801fef80b5045f080a591b311a8e1084671813d",
+    "skills-after-project-add-project-A-stderr.log": "eb22bf6c481b4721a0fbec2d8f0e44a4a9892c65a13bb074b02cb1a6f2d39a90",
+    "skills-after-project-add-project-B-rpc.jsonl": "635fc0a26f171ec93eff732ca16ecffe9c6afb52d855fca4473f2b9413ccff51",
+    "skills-after-project-add-project-B-stderr.log": "e0c2a92bcd88fb3abfab0107f6f0fba303aacc279196a175b645c9f15f1d2db7",
+    "skills-after-project-remove-project-B-rpc.jsonl": "0f3afdadd46dee6ac888ed3c2778f7acab3c6a6ee9d7d3728cbf437dab13c856",
+    "skills-after-project-remove-project-B-stderr.log": "4918a33910da19c3bb2e09c6a06d53cf6b0e61efecd8790235b7daabe07ce1f4",
+    "skills-after-project-remove-project-rpc.jsonl": "b56e196c42779d5c968258ee0d96e82d34d816399cff002c88157866d3c780f9",
+    "skills-after-project-remove-project-stderr.log": "0ebb5cd2d734b49decdbba9cbd66feaa94f8d09c74ff0ebe3c4b2712170d0b21",
+    "skills-after-project-repair-project-A-rpc.jsonl": "d6fa181b938a7b35d2dbe5820a081cea797c2b27af4f190867fc323ed68947ec",
+    "skills-after-project-repair-project-A-stderr.log": "4ae36a540a22cfa7723c26de21bde0708563ce7e2844e2641a153bf25fc148b0",
+    "skills-after-project-repair-project-B-rpc.jsonl": "3c0fda86c90a50a9b55a6776fbb4bc932327c0b8662fcb003659124b7e5df7c6",
+    "skills-after-project-repair-project-B-stderr.log": "13d9b7da79f4f861c9f96e244b7cfbd2fec5160f6d391bf33b82712e19b16b6f",
+    "skills-after-project-update-project-A-rpc.jsonl": "40a3ce2e319392e04e6f6e99469e830e353269e893cd0b3f9f1533a79557cb51",
+    "skills-after-project-update-project-A-stderr.log": "1c7cdb7421a727b60518f82001e7710f3ff104a8abee5cf8a66621a7b17e7fc0",
+    "skills-after-project-update-project-B-rpc.jsonl": "b2b49095756ca4545951fbe7827da4fc61e755b11fc2aef8563169775f7d0485",
+    "skills-after-project-update-project-B-stderr.log": "02afdc26e0b23985cde0806412b2507e6e94f5a9944d8bec39107bde69239c16",
+    "skills-with-project-command-missing-rpc.jsonl": "9e126beb67593258cb5ca99e871c3650b537106b32824fa065a4b9b968e20cce",
+    "skills-with-project-command-missing-stderr.log": "c51b08d7843868931bad297661b7dce59e59516db06a17564ede6576c43f2a12"
+  },
+  "client": "codex",
+  "client_sha256": "444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b",
+  "client_version_measured": "codex-cli 0.153.4",
+  "finished_utc": "2026-10-23T20:25:04.2686768Z",
+  "installer_sha256": "0cc170ea89ffb92aec3e75f9a097f79f5e7476492b30e4351887945489ec452f",
+  "native_surface": "fresh app-server skills/list with exact selected-project repository paths; no thread/model/trust/MCP initialization",
+  "os": "windows",
+  "scanner": {
+    "archive_sha256": "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+    "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453",
+    "platform": "windows-amd64",
+    "route": "prepopulated supported scanner cache; ordinary CLI security assessment",
+    "source_tag": "v0.1.3",
+    "version": "0.1.3"
+  },
+  "source_identity": {
+    "installer_base_commit": "0d1319f947c7f4403691b3a60b1193baa0074ee9",
+    "installer_patch_sha256": [],
+    "installer_source_state": "committed",
+    "installer_tree": "4b8935ef80c3834f7145dd01289772a48379ba3f"
+  },
+  "stages": {
+    "model_use": {
+      "status": "not_evaluated",
+      "reason": "discovery-only RPC; no thread or model request"
+    },
+    "native_mcp_initialization": {
+      "status": "not_evaluated",
+      "reason": "skills-only fixture; no trust mutation or MCP initialization"
+    },
+    "project_foreign_preservation": {
+      "status": "passed",
+      "reason": "user config/cache and both projects' foreign configuration and skills retain exact bytes"
+    },
+    "project_install": {
+      "status": "passed",
+      "reason": "UAP project add remains prepared; genuine Codex discovers exact project-A repository skill paths and rendered bytes, with no fixture skills in project B"
+    },
+    "project_missing_skill_repair": {
+      "status": "passed",
+      "reason": "fresh Codex observes the missing owned directory before repair and exact restored command skill after UAP repair"
+    },
+    "project_remove": {
+      "status": "passed",
+      "reason": "fresh native Codex processes list no removed fixture skills in either project after UAP removal"
+    },
+    "project_update": {
+      "status": "passed",
+      "reason": "UAP update replaces the command skill after invocation rules swap; fresh Codex discovery sees only the newly ordinary command with exact bytes"
+    }
+  },
+  "started_utc": "2026-10-23T20:25:00.6082889Z"
+}

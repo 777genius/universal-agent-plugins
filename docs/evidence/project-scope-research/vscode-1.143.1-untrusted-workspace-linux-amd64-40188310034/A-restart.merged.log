@@ -1,0 +1,506 @@
+UAP_VSCODE_ISOLATION_V1 {"pid":5658,"network_namespace":4026532313,"parent_network_namespace":4026531840,"uid":1001,"gid":1001,"euid":1001,"egid":1001,"groups":[],"interfaces":["lo"],"capabilities_zero":true,"no_new_privileges":true}
+Unable to revert mtime: /usr/share/fonts/truetype/lato
+Unable to revert mtime: /usr/share/fonts/truetype/liberation
+Unable to revert mtime: /usr/share/fonts/truetype/noto
+Unable to revert mtime: /usr/share/fonts/truetype/lato
+Unable to revert mtime: /usr/share/fonts/truetype/liberation
+Unable to revert mtime: /usr/share/fonts/truetype/noto
+Unable to create argv.json configuration file in /tmp/uap-vscode-sealed-3399636247/home/.vscode/argv.json, falling back to defaults (Error: EACCES: permission denied, mkdir '/tmp/uap-vscode-sealed-3399636247/home/.vscode')
+[5658:1025/112021.497975:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[5658:1025/112021.507825:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[5658:1025/112021.508830:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[5658:1025/112021.511192:ERROR:dbus/object_proxy.cc:572] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[90m[main 2026-10-25T11:20:21.618Z][0m [node-compile-cache] main: packaged cache inactive (status: disabled, configured: /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node-compile-cache/main, active: none)
+[91m[main 2026-10-25T11:20:21.650Z][0m Error: Unable to retrieve mac address (unexpected format)
+    at F_ (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:58:4889)
+    at G5 (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:58:5213)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:58:5132
+    at async ZD (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:103:100630)
+    at async nM (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:103:100975)
+    at async Promise.all (index 0)
+    at async Xs.startup (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:161:13169)
+    at async fP.startup (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:192:55975)
+[90m[main 2026-10-25T11:20:21.658Z][0m StorageMainService: creating application shared storage
+[5658:1025/112021.743643:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[90m[main 2026-10-25T11:20:21.743Z][0m [shared storage] Creating shared storage database at ':memory:' (wasCreated: true)
+[90m[main 2026-10-25T11:20:21.744Z][0m [shared storage] Initializing fallback application storage (path: in-memory)
+[5730:1025/112021.759716:ERROR:gpu/ipc/client/command_buffer_proxy_impl.cc:285] ContextResult::kTransientFailure: Failed to send GpuControl.CreateCommandBuffer.
+[91m[main 2026-10-25T11:20:21.777Z][0m gn [Error]: Unable to read file '/tmp/uap-vscode-sealed-3399636247/home/.vscode/argv.json' (Error: Unable to resolve nonexistent file '/tmp/uap-vscode-sealed-3399636247/home/.vscode/argv.json')
+    at ea.restoreReadError (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:183:10637)
+    at ea.doReadFileStream (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:183:10420)
+    at async ea.doReadFile (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:183:9670)
+    at async Xs.updateCrashReporterEnablement (file:///tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/mainImpl.js:161:30775) {
+  fileOperationResult: 1,
+  options: { preferUnbuffered: true }
+}
+[90m[main 2026-10-25T11:20:21.782Z][0m [shared storage] Fallback application storage initialized with 3 items
+Via 'product.json#extensionEnabledApiProposals' extension 'github.vscode-pull-request-github' wants API proposal 'agentsWindowActivation' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+[90m[main 2026-10-25T11:20:23.112Z][0m update#disable - updates are disabled by user preference
+[90m[main 2026-10-25T11:20:23.112Z][0m update#setState disabled
+[RemoteAgentHost] Reconciling: desired=[], current=[]
+[5658:1025/112023.124118:ERROR:dbus/bus.cc:406] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[AgentHost:renderer] Acquiring MessagePort to agent host...
+[90m[main 2026-10-25T11:20:23.152Z][0m AgentHostProcessManager: agent host started
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey=undefined conversationKey=undefined modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[LM] Failed to request chat control data Offline
+[AgentHost:renderer] MessagePort acquired, creating client...
+Started local extension host with pid 5812.
+Started initializing default profile extensions in extensions installation folder. file:///tmp/uap-vscode-sealed-3399636247/probes/A-restart/extensions
+[91m[main 2026-10-25T11:20:23.981Z][0m [AgentHost:stderr] (node:5756) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `exe --trace-deprecation ...` to show where the warning was created)
+
+[RemoteAgentHostProtocol] Sending initialize: address=local clientId=b7b4b0b9-035e-4ba7-8b66-8d158051a43d requestId=1
+[RemoteAgentHostProtocol] Initialized: address=local clientId=b7b4b0b9-035e-4ba7-8b66-8d158051a43d durationMs=844
+[AgentHost:renderer] Protocol connection established; clientId=b7b4b0b9-035e-4ba7-8b66-8d158051a43d
+[91m[main 2026-10-25T11:20:24.038Z][0m [AgentHost:stderr] Unhandled Promise Rejection:  Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+[91m[main 2026-10-25T11:20:24.156Z][0m [AgentHost:stderr] Unhandled Promise Rejection:  Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+[AccountPolicyGate] apply: state=inactive, reason=undefined, isRestricted=false
+Completed initializing default profile extensions in extensions installation folder. file:///tmp/uap-vscode-sealed-3399636247/probes/A-restart/extensions
+Loading development extension at /tmp/uap-vscode-sealed-3399636247/observer
+Extension 'github.copilot-chat' appears in product.json but enables LESS API proposals than the extension wants.
+package.json (LOSES): agentSessionsWorkspace
+speech
+agentsWindowConfiguration
+chatDebug
+chatHooks
+envIsConnectionMetered
+extensionsAny
+newSymbolNamesProvider
+interactive
+codeActionAI
+activeComment
+commentReveal
+contribCommentThreadAdditionalMenu
+contribCommentsViewThreadMenus
+contribChatEditorInlineGutterMenu
+documentFiltersExclusive
+embeddings
+findTextInFiles
+findTextInFiles2
+languageModelToolSupportsModel
+findFiles2
+textSearchProvider
+terminalDataWriteEvent
+terminalExecuteCommandEvent
+terminalSelection
+terminalQuickFixProvider
+mappedEditsProvider
+aiRelatedInformation
+aiSettingsSearch
+chatParticipantAdditions
+defaultChatParticipant
+contribSourceControlInputBoxMenu
+authLearnMore
+authIssuers
+testObserver
+aiTextSearchProvider
+chatParticipantPrivate
+chatProvider
+contribDebugCreateConfiguration
+chatReferenceDiagnostic
+textSearchProvider2
+chatReferenceBinaryData
+languageModelSystem
+languageModelCapabilities
+languageModelPricing
+languageModelRateLimit
+inlineCompletionsAdditions
+chatStatusItem
+chatInputNotification
+taskProblemMatcherStatus
+contribLanguageModelToolSets
+textDocumentChangeReason
+resolvers
+taskExecutionTerminal
+dataChannels
+languageModelThinkingPart
+chatSessionsProvider
+devDeviceId
+contribEditorContentMenu
+chatPromptFiles
+mcpServerDefinitions
+tabInputMultiDiff
+workspaceTrust
+environmentPower
+terminalTitle
+toolInvocationApproveCombination
+chatSessionCustomizationProvider
+product.json (WINS): agentSessionsWorkspace
+agentsWindowConfiguration
+interactive
+terminalDataWriteEvent
+terminalExecuteCommandEvent
+terminalSelection
+terminalQuickFixProvider
+chatParticipantAdditions
+defaultChatParticipant
+embeddings
+chatProvider
+mappedEditsProvider
+aiRelatedInformation
+aiSettingsSearch
+codeActionAI
+findTextInFiles
+findTextInFiles2
+textSearchProvider
+textSearchProvider2
+activeComment
+commentReveal
+contribSourceControlInputBoxMenu
+contribCommentEditorActionsMenu
+contribCommentThreadAdditionalMenu
+contribCommentsViewThreadMenus
+contribChatEditorInlineGutterMenu
+extensionAffinity
+newSymbolNamesProvider
+findFiles2
+chatReferenceDiagnostic
+extensionsAny
+authLearnMore
+testObserver
+aiTextSearchProvider
+documentFiltersExclusive
+chatParticipantPrivate
+contribDebugCreateConfiguration
+inlineCompletionsAdditions
+chatReferenceBinaryData
+languageModelSystem
+languageModelCapabilities
+languageModelThinkingPart
+languageModelToolSupportsModel
+chatStatusItem
+taskProblemMatcherStatus
+contribLanguageModelToolSets
+textDocumentChangeReason
+resolvers
+taskExecutionTerminal
+dataChannels
+chatSessionsProvider
+chatSessionCustomizationProvider
+devDeviceId
+contribEditorContentMenu
+tokenInformation
+toolInvocationApproveCombination
+chatPromptFiles
+mcpServerDefinitions
+tabInputMultiDiff
+workspaceTrust
+chatHooks
+chatDebug
+envIsConnectionMetered
+environmentPower
+terminalTitle
+languageModelPricing
+chatInputNotification
+speech
+DELTA: authIssuers
+languageModelRateLimit
+Proceeding with EXTRA proposals (authIssuers, languageModelRateLimit) because extension is in development mode. Still, this EXTENSION WILL BE BROKEN unless product.json is updated.
+Failed to resolve MCP server 'uap-user' from gallery: Offline: Offline
+Failed to resolve MCP server 'uap-a' from gallery: Offline: Offline
+Offline: Offline: Offline
+    at sRt.queryRawGalleryExtensions (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1746:56135)
+    at async sRt.queryGalleryExtensions (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1746:51373)
+    at async sRt.getExtensionsUsingQueryApi (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1746:43611)
+    at async sRt.getExtensionsUsingResourceApi (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1746:44980)
+    at async sRt.getExtensions (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1746:42545)
+    at async ise.getExtensions (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3815:22515)
+    at async ise.onDidChangeRunningExtensions (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3815:19518)
+Unknown channel: agentHostClientByokLm
+Unknown channel: agentHostClientProxy
+[91m[main 2026-10-25T11:20:25.035Z][0m [AgentHost:stderr] rejected promise not handled within 1 second: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+stack trace: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29
+Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+Unknown channel: agentHostClientProxy
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[91m[main 2026-10-25T11:20:25.139Z][0m [AgentHost:stderr] rejected promise not handled within 1 second: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+stack trace: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29
+
+[91m[main 2026-10-25T11:20:25.140Z][0m [AgentHost:stderr] Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[91m[main 2026-10-25T11:20:25.375Z][0m [AgentHost:stderr] Unhandled Promise Rejection:  Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+[RemoteAgentHostProtocol] Request 2 failed: {
+  code: -32603,
+  message: 'Error: Cannot call write after a stream was destroyed\n' +
+    '    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/connection.js:1089:44\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)'
+}
+[AgentHostSessionList] Failed to refresh sessions { code: -32603 }
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[RemoteAgentHost] Reconciling: desired=[], current=[]
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+Settings Sync: Account status changed from uninitialized to unavailable
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[AgentHost] No signed-in session resolved for resource: https://api.github.com/repos
+[91m[main 2026-10-25T11:20:25.832Z][0m [AgentHost:stderr] Unhandled Promise Rejection:  Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+[RemoteAgentHostProtocol] Request 3 failed: {
+  code: -32603,
+  message: 'Error: Cannot call write after a stream was destroyed\n' +
+    '    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/connection.js:1089:44\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)'
+}
+[AgentHostSessionList] Failed to refresh sessions { code: -32603 }
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+Unable to write file 'vscode-userdata:/tmp/uap-vscode-sealed-3399636247/probes/A-restart/profile/User/settings.json' (NoPermissions (FileSystemError): Error: EACCES: permission denied, open '/tmp/uap-vscode-sealed-3399636247/probes/A-restart/profile/User/settings.json.vsctmp'): Error: Unable to write file 'vscode-userdata:/tmp/uap-vscode-sealed-3399636247/probes/A-restart/profile/User/settings.json' (NoPermissions (FileSystemError): Error: EACCES: permission denied, open '/tmp/uap-vscode-sealed-3399636247/probes/A-restart/profile/User/settings.json.vsctmp')
+    at owe.writeFile (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:5419:92390)
+    at async vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1707:22639
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[91m[main 2026-10-25T11:20:26.376Z][0m [AgentHost:stderr] rejected promise not handled within 1 second: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+stack trace: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29
+Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+Offline: Offline: Offline
+    at Xrr (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:5425:54431)
+    at async bqt.logAndRequest (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:635:10540)
+    at async kmt.doFetchAlerts (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:5918:7655)
+    at async kmt.fetchAlerts (vscode-file://vscode-app/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:5918:7563)
+[91m[main 2026-10-25T11:20:26.832Z][0m [AgentHost:stderr] rejected promise not handled within 1 second: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+stack trace: Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29
+
+[91m[main 2026-10-25T11:20:26.832Z][0m [AgentHost:stderr] Error [ERR_STREAM_DESTROYED]: Cannot call write after a stream was destroyed
+    at _write (node:internal/streams/writable:493:11)
+    at Writable.write (node:internal/streams/writable:512:10)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:88:29
+    at new Promise (<anonymous>)
+    at WritableStreamWrapper.write (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/node/ril.js:78:16)
+    at TeardownResilientStreamMessageWriter.doWrite (/tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:99:33)
+    at /tmp/uap-vscode-sealed-3399636247/publisher/VSCode-linux-x64/resources/app/node_modules.asar/vscode-jsonrpc/lib/common/messageWriter.js:90:29 {
+  code: 'ERR_STREAM_DESTROYED'
+}
+
+[ChatModelSelection] event=no-model-at-toolbar-build surface="workbench" sessionKey="local" conversationKey="vscode-chat-session://local/ODk4ZjAyYzYtMTYzYi00YjQ0LTkzYjMtZDEzY2JkNTFlYmI3" modelTarget=undefined storageKey="chat.currentLanguageModel.panel" widgetViewKind="view"
+[AccountPolicyGate] apply: state=inactive, reason=undefined, isRestricted=false

@@ -37,6 +37,7 @@ type groupProgressRow struct {
 // groupProgressBoard owns only terminal presentation. The use case emits
 // observed checkpoints and remains independent of terminal control sequences.
 type groupProgressBoard struct {
+	scope           domain.InstallScope
 	mu              sync.Mutex
 	writer          io.Writer
 	theme           terminaltheme.Theme
@@ -57,11 +58,11 @@ func startGroupProgressBoard(app App, opts *options, selected []domain.DetectedC
 	if !terminaltheme.IsTerminal(terminaltheme.Unwrap(writer)) {
 		return nil
 	}
-	return newGroupProgressBoard(writer, selected)
+	return newGroupProgressBoard(writer, selected, app.scope())
 }
 
-func newGroupProgressBoard(writer io.Writer, selected []domain.DetectedClient) *groupProgressBoard {
-	board := &groupProgressBoard{writer: writer, theme: terminaltheme.For(writer)}
+func newGroupProgressBoard(writer io.Writer, selected []domain.DetectedClient, scopes ...domain.InstallScope) *groupProgressBoard {
+	board := &groupProgressBoard{scope: selectedScope(scopes), writer: writer, theme: terminaltheme.For(writer)}
 	for _, client := range selected {
 		label := prompt.SafeText(clientDisplayName(client))
 		if width := ansi.StringWidth(label); width > board.width {
@@ -84,7 +85,7 @@ func (board *groupProgressBoard) observe(event usecase.GroupProgressEvent) {
 	changed := false
 	for index := range board.rows {
 		row := &board.rows[index]
-		if !progressRowMatches(row.id, event.ClientID) || row.step == progressFinished {
+		if !progressRowMatches(row.id, event.ClientID, board.scope) || row.step == progressFinished {
 			continue
 		}
 		var next groupProgressStep
@@ -241,9 +242,9 @@ func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
 	return strings.Join(parts, arrow)
 }
 
-func progressRowMatches(row, event domain.ClientID) bool {
+func progressRowMatches(row, event domain.ClientID, scopes ...domain.InstallScope) bool {
 	if row == event {
 		return true
 	}
-	return domain.SharesBackend(row, event)
+	return domain.SameClientBackendForScope(row, event, selectedScope(scopes))
 }

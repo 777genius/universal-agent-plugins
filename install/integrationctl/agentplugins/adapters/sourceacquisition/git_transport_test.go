@@ -110,7 +110,10 @@ func TestNativeHTTPSGitPublicAndPrivateCredentialHelper(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", home)
 			endpoint := server.URL + "/repo.git"
 			source := sourcespec.Git{URL: endpoint}
-			acquirer := Acquirer{TempRoot: t.TempDir()}
+			diagnostic := &nativeTransportDiagnosticRunner{delegate: OSRunner{}, operation: "resolve", report: func(operation, class, status string) {
+				t.Logf("native HTTPS Git diagnostic: operation=%s class=%s exit_status=%s", operation, class, status)
+			}}
+			acquirer := Acquirer{TempRoot: t.TempDir(), Runner: diagnostic}
 			configureNativeFixtureCredentials(t, home, server.URL, false)
 			if private {
 				_, err := acquirer.ResolveGit(t.Context(), source, "default", false)
@@ -126,6 +129,7 @@ func TestNativeHTTPSGitPublicAndPrivateCredentialHelper(t *testing.T) {
 			if resolved.Resolution.Commit != commit {
 				t.Fatalf("resolved %s, expected %s", resolved.Resolution.Commit, commit)
 			}
+			diagnostic.operation = "acquire"
 			snapshot, err := acquirer.AcquireGit(t.Context(), source, commit, "")
 			if err != nil {
 				t.Fatal(err)

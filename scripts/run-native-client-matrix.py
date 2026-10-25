@@ -72,6 +72,54 @@ REQUIRED_TESTS = {
     "claude": {"TestAgentpluginsClaudeNativeLifecycle", "TestAgentpluginsClaudeNativeRuntimeLifecycle", "TestAgentpluginsClaudeNativeCommandsLifecycle"},
     "opencode": {"TestAgentpluginsOpenCodeNativeLifecycle", "TestAgentpluginsOpenCodeNativeToolCollision", "TestAgentpluginsOpenCodeNativeRuntimeExtended", "TestAgentpluginsOpenCodeNativeCommandsLifecycle"},
 }
+PROJECT_TESTS = {
+    "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery"},
+    "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
+}
+
+
+def select_native_tests(client, project_components=False, released=False):
+    """Keep current-source project proof separate from released user evidence."""
+    if not project_components:
+        return PATTERNS[client], REQUIRED_TESTS[client]
+    if released or client not in PROJECT_TESTS:
+        raise ValueError("project proof requires a qualified current-source client, not a released/draft installer")
+    required = REQUIRED_TESTS[client] | PROJECT_TESTS[client]
+    return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
+
+
+def collect_opencode_project_artifact(fixture, output):
+    """Only the new admitted envelope, in a finite child; never copy its raw tree."""
+    destination = output / (fixture.name + ".zip")
+    error = None
+    try:
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name("native_client_project_artifacts.py")),
+                                 str(fixture), str(destination)], stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, timeout=5, check=False)
+        if result.returncode:
+            error = "project envelope child refused (exit " + str(result.returncode) + ")"
+    except (OSError, subprocess.TimeoutExpired) as failure:
+        error = type(failure).__name__ + ": project envelope child failed or exceeded five seconds"
+    try:
+        info = destination.lstat()
+        valid = not destination.is_symlink() and destination.is_file() and info.st_nlink == 1 and info.st_size <= 32 << 20
+    except OSError:
+        valid = False
+    if error or not valid:
+        error = error or "project envelope archive admission refused"
+        # Write outside upload and atomically replace the final leaf, including
+        # a refused symlink; never open its target. No recursive failure cleanup.
+        pending_root = Path(tempfile.mkdtemp(prefix="opencode-fallback-", dir=fixture.parent))
+        pending = pending_root / "failure.zip"
+        with zipfile.ZipFile(pending, "x", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("opencode-project-evidence.json", json.dumps({"success": False,
+                "native_discovery_qualified": False, "native_mcp_initialization_qualified": False,
+                "native_model_use_qualified": False, "artifact_admission_error": error, "artifact_python_runtime": {"version": sys.version[:512], "implementation": sys.implementation.name[:64], "executable": sys.executable[:1024]}}))
+        if destination.exists() and destination.is_dir() and not destination.is_symlink():
+            os.replace(destination, pending_root / "refused-directory")
+        os.replace(pending, destination)
+    return error
 
 
 def require_verified_pin(pin):
@@ -321,6 +369,7 @@ def main():
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--prepared-input", type=Path)
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
+    parser.add_argument("--project-components", action="store_true", help="also require current-source project lifecycle evidence with explicit discovery limits; never released/draft proof")
     args = parser.parse_args()
     draft.validate(args)
     if args.release_state == "draft" and args.producer_source is None:
@@ -329,6 +378,11 @@ def main():
         parser.error("public mode must not receive --producer-source")
     if bool(args.release_tag) != bool(args.release_commit):
         parser.error("--release-tag and --release-commit must be supplied together")
+    try:
+        pattern, required_tests = select_native_tests(args.client, args.project_components,
+            bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only)
+    except ValueError as error:
+        parser.error(str(error))
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
     if args.prepare_only:
@@ -342,7 +396,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     scratch = Path(tempfile.mkdtemp(prefix="uap-native-hosted-", dir=os.environ["RUNNER_TEMP"])).resolve()
-    identity = {"schema_version": 1, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
+    identity = {"schema_version": 1, "python_runtime": {"version": sys.version[:512], "implementation": sys.implementation.name[:64], "executable": sys.executable[:1024]}, "client": args.client, "target": args.target, "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "isolation": "disposable GitHub-hosted machine; explicit subprocess environments and fresh profiles; no OS/process isolation from runner or later steps", "network": "not blocked; scripted loopback model endpoints; no real-model or OAuth proof", "status": "failed", "scratch": str(scratch)}
     try:
         for key, rev in [("commit", "HEAD"), ("tree", "HEAD^{tree}")]:
             identity[key] = subprocess.check_output(["git", "rev-parse", rev], cwd=source, encoding="utf-8", errors="strict").strip()
@@ -430,11 +484,15 @@ def main():
                 raise RuntimeError(f"released installer version mismatch: {measured!r}")
         prefix = "AGENTPLUGINS_" + args.client.upper()
         env[prefix + "_NATIVE_E2E"] = "1"
+        if args.project_components:
+            env[prefix + "_PROJECT_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
         env[prefix + "_VERSION"] = {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
-        command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + PATTERNS[args.client]]
+        command = [str(tests), "-test.v", "-test.timeout=15m", "-test.run=" + pattern]
         identity["test_command"] = command
+        identity["required_tests"] = sorted(required_tests)
+        identity["project_components"] = args.project_components
         with (output / "native-tests.log").open("w", encoding="utf-8") as transcript:
             result = subprocess.run(command, cwd=project, env=env, stdout=transcript, stderr=subprocess.STDOUT, timeout=930)
         identity["exit_code"] = result.returncode
@@ -444,17 +502,27 @@ def main():
         skipped = re.findall(r"^\s*--- SKIP: ([^\s]+)", log, re.M)
         identity["passed_tests"] = sorted(passed)
         identity["skipped_tests"] = skipped
-        if result.returncode or skipped or not REQUIRED_TESTS[args.client].issubset(passed):
+        if result.returncode or skipped or not required_tests.issubset(passed):
             raise RuntimeError("native suite failed, skipped, or omitted a required test; inspect transcript")
         identity["status"] = "passed"
     finally:
         identity["finished_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         # Keep structured evidence and transcripts, never copy client caches,
         # profile databases, source payload binaries, or ephemeral client auth.
+        native_passed = identity["status"] == "passed"
+        project_artifact_errors = []
         evidence_dir = scratch / "evidence"
         allowed = {".json", ".jsonl", ".log"}
         if evidence_dir.exists():
             for fixture in evidence_dir.iterdir():
+                if fixture.name.startswith("uap-opencode-project-work-"):
+                    continue
+                if fixture.name.startswith("uap-opencode-project-admitted-"):
+                    if args.client == "opencode" and args.project_components:
+                        error = collect_opencode_project_artifact(fixture, output)
+                        if error:
+                            project_artifact_errors.append(error)
+                    continue
                 if not fixture.is_dir():
                     continue
                 for path in fixture.iterdir():
@@ -462,8 +530,13 @@ def main():
                         destination = output / fixture.name / path.name
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(path, destination)
+        if project_artifact_errors:
+            identity["status"] = "failed"
+            identity["project_artifact_admission_errors"] = project_artifact_errors
         identity["artifact_sha256"] = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in output.rglob("*") if p.is_file()}
         (output / "runner-evidence.json").write_text(json.dumps(identity, indent=2) + "\n", encoding="utf-8")
+        if native_passed and project_artifact_errors:
+            raise RuntimeError("new OpenCode project artifact admission failed; bounded failure evidence retained")
 
 
 if __name__ == "__main__":

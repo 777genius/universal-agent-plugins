@@ -9,9 +9,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -31,7 +31,7 @@ func CacheKey(subject domain.SecuritySubject, requirement domain.SecurityRequire
 }
 
 func (cache FileCache) Load(key string) (domain.SecurityAssessment, bool) {
-	body, err := os.ReadFile(filepath.Join(cache.Root, key+".json"))
+	body, err := atomicfile.ReadFile(filepath.Join(cache.Root, key+".json"))
 	if err != nil || len(body) > 1<<20 {
 		return domain.SecurityAssessment{}, false
 	}
@@ -81,10 +81,7 @@ func (cache FileCache) Store(key string, assessment domain.SecurityAssessment) e
 		return err
 	}
 	target := filepath.Join(cache.Root, key+".json")
-	if runtime.GOOS == "windows" {
-		_ = os.Remove(target)
-	}
-	if err := os.Rename(temporaryName, target); err != nil {
+	if err := atomicfile.Replace(temporaryName, target); err != nil {
 		return fmt.Errorf("commit security cache entry: %w", err)
 	}
 	return nil

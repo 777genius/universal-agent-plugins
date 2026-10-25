@@ -1,0 +1,8 @@
+{
+	"GOARCH": "amd64",
+	"GOHOSTARCH": "amd64",
+	"GOHOSTOS": "linux",
+	"GOOS": "linux",
+	"GOROOT": "/opt/hostedtoolcache/go/1.26.10/x64",
+	"GOVERSION": "go1.26.10"
+}

@@ -30,8 +30,12 @@ func (activator Activator) requireRegistry() error {
 	return nil
 }
 
-func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel) error {
-	if domain.ClientTraitsFor(id).LifecycleKind != domain.LifecycleNativeConfig {
+func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, scopes ...domain.InstallScope) error {
+	scope := domain.ScopeUser
+	if len(scopes) > 0 && scopes[0] != "" {
+		scope = scopes[0]
+	}
+	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind != domain.LifecycleNativeConfig {
 		return nil
 	}
 	return kernel.RequireFileIO()
@@ -90,7 +94,7 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 	if err := activator.requireRegistry(); err != nil {
 		return domain.DeactivationOutcome{}, err
 	}
-	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel()); err != nil {
+	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel(), request.TargetContext.Scope); err != nil {
 		return domain.DeactivationOutcome{}, err
 	}
 	if lifecycle, ok := clients.As[clients.Lifecycle](activator.Registry, request.Client.ClientID); ok {
@@ -106,7 +110,7 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 	if err := activator.requireRegistry(); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel()); err != nil {
+	if err := requireNativeConfigKernel(request.Client.ClientID, activator.nativeConfigKernel(), request.Plan.Scope); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {

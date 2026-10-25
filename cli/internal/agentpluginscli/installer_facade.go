@@ -23,7 +23,7 @@ func useInstallerFacadeForLocalAdd(app App, opts *options, loaded loadedPackage,
 	if !domain.ClientTraitsFor(targets[0]).QualifiedLocalInstallerFacade {
 		return false
 	}
-	if !automatedMutation(app, opts) || opts.scope != string(domain.ScopeUser) || loaded.origin != domain.OriginModeDirect {
+	if !automatedMutation(app, opts) || loaded.origin != domain.OriginModeDirect {
 		return false
 	}
 	if loaded.envelope.FormatID != domain.FormatIDAgentPluginsV1 || loaded.envelope.Source.SourceBindingHint != "direct-local" || loaded.envelope.SnapshotRoot == "" {
@@ -49,7 +49,7 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 		return err
 	}
 	installation, exists := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name)
-	groupOutput := !exists || !installationHasTarget(installation, selected.ClientID, string(domain.ScopeUser))
+	groupOutput := !exists || !installationHasTarget(installation, selected.ClientID, string(app.scope()))
 	operationID, err := newOperationGroupID()
 	if err != nil {
 		return err
@@ -60,11 +60,11 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 		Reason:     "authorized by the CLI security policy",
 	}
 	request := installer.Request{
-		Operation: installer.OpInstall, PackageRoot: loaded.envelope.SnapshotRoot,
+		Scope: app.scope(), ProjectRoot: app.ProjectRoot, Operation: installer.OpInstall, PackageRoot: loaded.envelope.SnapshotRoot,
 		SourceRoot:      loaded.envelope.Source.CanonicalSource,
 		ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		ClientID:        string(selected.ClientID), ClientConfigRoot: selected.ConfigRoot,
-		ClientExecutable: backendExecutable(selected, detected), OperationID: operationID,
+		ClientExecutable: backendExecutable(selected, detected, app.scope()), ClientVersion: selected.Version, OperationID: operationID,
 		RequiredComponents: requiredFacadeComponents(loaded.envelope), Assessment: &assessment,
 	}
 	prepared, err := app.Installer.Prepare(ctx, request)
@@ -113,7 +113,7 @@ func facadePlanAddResult(plan installer.Plan, envelope domain.PackageEnvelope) u
 	out := usecase.AddResult{
 		InstallationID: plan.InstallationID,
 		Plan: domain.DeliveryPlan{
-			ClientID: clientID, Scope: domain.ScopeUser, Status: domain.PlanStatus(delivery.Status),
+			ClientID: clientID, Scope: plan.Scope, TargetContext: plan.TargetContext, Status: domain.PlanStatus(delivery.Status),
 			PackageMode: domain.PackageMode(delivery.PackageMode), DeclaredName: envelope.Manifest.Name,
 			DeclaredVersion: envelope.Manifest.Version, ActivePath: plan.TargetPath,
 			InstallIntent: domain.InstallIntent(delivery.InstallIntent), PhysicalArtifactID: delivery.PhysicalArtifactID,

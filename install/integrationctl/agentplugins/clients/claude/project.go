@@ -32,6 +32,10 @@ func (*Adapter) StagingBase(plan domain.DeliveryPlan) string {
 // ValidateTargetLayout requires the planned target root to be the exact
 // configured skills directory under the Claude config root.
 func (*Adapter) ValidateTargetLayout(plan domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		_, err := claudePlanProjectRoot(domain.DetectedClient{ConfigRoot: plan.TargetContext.UserConfigRoot}, plan)
+		return err
+	}
 	if filepath.Clean(plan.TargetRoot) != filepath.Join(filepath.Clean(plan.TargetAnchor), "skills") {
 		return fmt.Errorf("the Claude Code delivery target root must be the exact configured skills directory")
 	}

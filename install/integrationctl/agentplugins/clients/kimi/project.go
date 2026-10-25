@@ -19,9 +19,15 @@ var _ clients.ActiveNativeProjector = (*Adapter)(nil)
 // writing. Everything Kimi owns — the projected manifest included — lives
 // inside the managed package directory the stager already digest-verified, so
 // after the manifest identity check there is no external ownership to rebuild.
-func (*Adapter) ProjectActiveNative(ctx context.Context, root string, _ domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, data string) ([]domain.NativeObjectOwnership, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		if err := validateKimiActive(root, envelope, plan, data); err != nil {
+			return nil, err
+		}
+		return kimiProjectObjects(root, envelope, plan)
 	}
 	if err := verifyManifest(root, plan.DeclaredName); err != nil {
 		return nil, err
@@ -30,6 +36,9 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, _ domain.P
 }
 
 func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if in.Plan.Scope == domain.ScopeProject || in.Plan.TargetContext.Scope == domain.ScopeProject {
+		return projectKimiComponents(ctx, in)
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

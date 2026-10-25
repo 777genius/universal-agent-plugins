@@ -17,6 +17,9 @@ func (app App) PrepareSkills(ctx context.Context, input SkillsBatchRequest) (pla
 	if len(input.Selections) == 0 || len(input.TargetIDs) == 0 {
 		return nil, errors.New("explicit skills and targets required")
 	}
+	if err := app.checkSkillsContext(input.TargetIDs); err != nil {
+		return nil, err
+	}
 	preview, cleanup, err := dependencyPreviewApp(app, &options{dryRun: true})
 	if err != nil {
 		return nil, err
@@ -58,7 +61,7 @@ func (candidate *skillsBatchCandidate) resolve(ctx context.Context, app App) (en
 	if err := validateDependencyTargets(app, candidate.requirements); err != nil {
 		return environment.Lock{}, nil, nil, err
 	}
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true}}).Resolve(ctx, candidate.requirements, candidate.previous, "")
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true}}).Resolve(ctx, candidate.requirements, candidate.previous, "")
 	if err != nil {
 		return environment.Lock{}, nil, nil, err
 	}
@@ -107,11 +110,11 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	if view.Recovery.Required {
 		return nil, nil, nil, installer.ErrRecoveryRequired
 	}
-	observed, err := environment.Observe(view)
+	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	prepared, err := (environment.Coordinator{}).PrepareSyncFor(requirements, lock, observed, aliases, nil)
+	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, lock, observed, aliases, nil)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -123,7 +126,7 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 		return nil, nil, nil, err
 	}
 	paths := skillBindingPaths(view, prepared.Bindings)
-	adapter := &dependencyInstaller{app: app, opts: &options{}, detected: detected, previewPaths: paths}
+	adapter := &dependencyInstaller{app: app, opts: app.skillsOptions(), detected: detected, previewPaths: paths}
 	if len(warnings) > 0 {
 		adapter.previewWarnings = warnings[0]
 	}

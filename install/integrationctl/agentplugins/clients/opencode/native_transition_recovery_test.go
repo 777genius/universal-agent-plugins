@@ -37,9 +37,19 @@ func transitionTestWrite(t *testing.T, path string, body []byte) {
 	}
 }
 func providerTransitionFixture(t *testing.T) transitionFixtureData {
+	return providerTransitionFixtureScope(t, domain.ScopeUser)
+}
+func providerTransitionFixtureScope(t *testing.T, scope domain.InstallScope) transitionFixtureData {
 	t.Helper()
 	root := t.TempDir()
 	config, active := filepath.Join(root, "config"), filepath.Join(root, "package")
+	user, project := config, ""
+	layout := userOpenCodeLayout(config)
+	if scope == domain.ScopeProject {
+		config, project = filepath.Join(root, "project"), filepath.Join(root, "project")
+		active = filepath.Join(project, ".uap", "managed", "package")
+		layout = projectOpenCodeLayout(project)
+	}
 	paths := transitionPaths(config)
 	transitionTestWrite(t, paths.JSON, []byte("{ // keep user trivia\n\"theme\":\"fixture\",\"mcp\":{}}"))
 	// JSONC keeps exact user comments, whitespace and original permissions.
@@ -69,7 +79,7 @@ func providerTransitionFixture(t *testing.T) transitionFixtureData {
 	next := old
 	next.Kind = OpenCodeV2MCPObjectKind
 	next.ManagedDigest = desired.Digest
-	oldSkill := domain.NativeObjectOwnership{ObjectID: "opencode-skill:skill", Kind: openCodeSkillKind, LogicalName: "skill", Path: filepath.Join(config, "skills", "skill"), SourceRelative: "skills/skill", ProtectionClass: "managed"}
+	oldSkill := domain.NativeObjectOwnership{ObjectID: "opencode-skill:skill", Kind: openCodeSkillKind, LogicalName: "skill", Path: filepath.Join(layout.Skills, "skill"), SourceRelative: "skills/skill", ProtectionClass: "managed"}
 	transitionTestWrite(t, filepath.Join(oldSkill.Path, "SKILL.md"), []byte("source skill\n"))
 	oldSkill.ManagedDigest, err = shared.DigestSkillDirectory(oldSkill.Path)
 	if err != nil {
@@ -81,8 +91,8 @@ func providerTransitionFixture(t *testing.T) transitionFixtureData {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := domain.NativeAttemptIdentity{OperationID: "TEST-attempt", InstallationID: "TEST-installation", BindingID: domain.ComputeClientBindingID("TEST-installation", "opencode", "user", active), NativeRoot: config}
-	b := domain.ClientBinding{ClientBindingID: id.BindingID, ClientID: "opencode", Scope: "user", TargetLocator: active, PhysicalArtifact: domain.ComputePhysicalArtifactID("demo", id.InstallationID), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired, Verification: domain.VerificationPackageValid, Policy: domain.PolicyAllowed, NativeActivationAttempt: id.OperationID, NativeObjects: []domain.NativeObjectOwnership{old, oldSkill}, PackageRevision: &domain.ClientPackageRevision{TreeDigest: "sha256:tree", ManifestDigest: "sha256:manifest"}}
+	id := domain.NativeAttemptIdentity{OperationID: "TEST-attempt", InstallationID: "TEST-installation", BindingID: domain.ComputeClientBindingID("TEST-installation", "opencode", string(scope), active), NativeRoot: config}
+	b := domain.ClientBinding{ClientBindingID: id.BindingID, ClientID: "opencode", Scope: string(scope), NativeProfileRoot: config, TargetLocator: active, PhysicalArtifact: domain.ComputePhysicalArtifactID("demo", id.InstallationID), Materialization: domain.MaterializationMaterialized, Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotRequired, Verification: domain.VerificationPackageValid, Policy: domain.PolicyAllowed, NativeActivationAttempt: id.OperationID, NativeObjects: []domain.NativeObjectOwnership{old, oldSkill}, PackageRevision: &domain.ClientPackageRevision{TreeDigest: "sha256:tree", ManifestDigest: "sha256:manifest"}}
 	artifact, err := (packagesnapshot.Builder{}).Build(context.Background(), active)
 	if err != nil {
 		t.Fatal(err)
@@ -95,27 +105,39 @@ func providerTransitionFixture(t *testing.T) transitionFixtureData {
 	b.NativeObjects = append(b.NativeObjects, packageObject)
 	state := domain.StateFileV2{SchemaVersion: domain.StateSchemaVersion, Installations: []domain.Installation{{InstallationID: id.InstallationID, DeclaredName: "demo", Source: domain.SourceBinding{SourceBindingID: "src_demo", RequestedSource: "demo", CanonicalSource: "https://fixture.invalid/demo", ResolvedRevision: "abc", TreeDigest: "sha256:tree"}, Package: domain.PackageBinding{LoaderKind: domain.LoaderKindAgentPlugins, FormatID: domain.FormatIDAgentPluginsV1, SchemaURI: domain.PluginSchemaV1, DeclaredName: "demo", ManifestDigest: "sha256:manifest"}, Clients: map[string]domain.ClientBinding{id.BindingID: b}}}}
 	store := statev2.Store{Path: filepath.Join(root, "state.json")}
+	if project != "" {
+		store.Path, store.ProjectRoot = filepath.Join(project, ".uap", "state.json"), project
+	}
 	if err := store.Save(state); err != nil {
 		t.Fatal(err)
 	}
-	return transitionFixtureData{request: domain.ActivationRequest{NativeAttempt: id, Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: config}, Delivery: domain.StagedDelivery{ActivePath: active, NativeObjects: []domain.NativeObjectOwnership{next, newSkill, packageObject}}, PreviousNativeObjects: b.NativeObjects}, store: store, source: source}
+	return transitionFixtureData{request: domain.ActivationRequest{NativeAttempt: id, Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: user}, Plan: domain.DeliveryPlan{Scope: scope, NativeRegistryRoot: config, TargetContext: domain.TargetContext{Scope: scope, ProjectRoot: project, UserConfigRoot: user}}, Delivery: domain.StagedDelivery{ActivePath: active, NativeObjects: []domain.NativeObjectOwnership{next, newSkill, packageObject}}, PreviousNativeObjects: b.NativeObjects}, store: store, source: source}
 }
 func freshTransitions(f transitionFixtureData) NativeTransitions {
-	return NativeTransitions{PackageVerifier: transitionTestPackageVerifier{}, State: transaction.Kernel{StateStore: statev2.Store{Path: f.store.Path}}, Kernel: nativeconfig.New()}
+	return NativeTransitions{ProjectRoot: f.store.ProjectRoot, PackageVerifier: transitionTestPackageVerifier{}, State: transaction.Kernel{StateStore: f.store}, Kernel: nativeconfig.New()}
 }
 
 // Reopened recovery must infer bytes/state, never trust a phase. Each crash
 // occurs after real persisted preimage/rename/write/state/cleanup effects.
 func TestNativeTransitionReopensEveryDurableBoundary(t *testing.T) {
+	testTransitionDurableBoundaries(t, domain.ScopeUser)
+}
+
+func TestProjectOpenCodeTransitionReopensEveryDurableBoundary(t *testing.T) {
+	testTransitionDurableBoundaries(t, domain.ScopeProject)
+}
+
+func testTransitionDurableBoundaries(t *testing.T, scope domain.InstallScope) {
+	t.Helper()
 	for _, crash := range []string{"prepared", "backup", "skill", "native", "state", "cleanup"} {
 		t.Run(crash, func(t *testing.T) {
-			f := providerTransitionFixture(t)
+			f := providerTransitionFixtureScope(t, scope)
 			t0 := freshTransitions(f)
 			executable, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)
 			}
-			wire := transitionCrashWire{Identity: f.request.NativeAttempt, ActivePath: f.request.Delivery.ActivePath, Previous: f.request.PreviousNativeObjects, Desired: f.request.Delivery.NativeObjects, StatePath: f.store.Path}
+			wire := transitionCrashWire{Identity: f.request.NativeAttempt, ActivePath: f.request.Delivery.ActivePath, Previous: f.request.PreviousNativeObjects, Desired: f.request.Delivery.NativeObjects, StatePath: f.store.Path, ProjectRoot: f.store.ProjectRoot, UserRoot: f.request.Client.ConfigRoot}
 			body, _ := json.Marshal(wire)
 			fixture := filepath.Join(filepath.Dir(f.store.Path), "TEST-child.json")
 			transitionTestWrite(t, fixture, body)
@@ -160,15 +182,19 @@ func TestNativeTransitionReopensEveryDurableBoundary(t *testing.T) {
 			if codec != want {
 				t.Fatalf("confirmed receipt codec %s, want %s", codec, want)
 			}
-			if err := VerifyOpenCodeNativeObjects(f.request.Client.ConfigRoot, "", b.NativeObjects, nativeconfig.New(), false); err != nil {
+			layout, err := openCodeActivationLayout(f.request)
+			if err != nil {
 				t.Fatal(err)
 			}
-			content, err := os.ReadFile(filepath.Join(f.request.Client.ConfigRoot, "skills", "skill", "SKILL.md"))
+			if err := verifyOpenCodeNativeLayout(layout, "", b.NativeObjects, nativeconfig.New(), false); err != nil {
+				t.Fatal(err)
+			}
+			content, err := os.ReadFile(filepath.Join(layout.Skills, "skill", "SKILL.md"))
 			if err != nil || string(content) != skill {
 				t.Fatal("wrong recovered skill", err)
 			}
 			if want == nativeconfig.CodecOpenCode {
-				body, _ := os.ReadFile(transitionPaths(f.request.Client.ConfigRoot).JSONC)
+				body, _ := os.ReadFile(transitionPaths(layout.Root).JSONC)
 				if !bytes.Equal(body, f.source) {
 					t.Fatal("source recovery changed exact foreign bytes")
 				}
@@ -181,9 +207,9 @@ func TestNativeTransitionReopensEveryDurableBoundary(t *testing.T) {
 }
 
 type transitionCrashWire struct {
-	Identity              domain.NativeAttemptIdentity
-	ActivePath, StatePath string
-	Previous, Desired     []domain.NativeObjectOwnership
+	Identity                                     domain.NativeAttemptIdentity
+	ActivePath, StatePath, ProjectRoot, UserRoot string
+	Previous, Desired                            []domain.NativeObjectOwnership
 }
 
 // This inert compiled TEST child is always exercised by the parent matrix;
@@ -203,9 +229,17 @@ func TestNativeTransitionCrashChild(t *testing.T) {
 	}
 	crash := args[1]
 	request := domain.ActivationRequest{NativeAttempt: wire.Identity, Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: wire.Identity.NativeRoot}, Delivery: domain.StagedDelivery{ActivePath: wire.ActivePath, NativeObjects: wire.Desired}, PreviousNativeObjects: wire.Previous}
-	f := transitionFixtureData{request: request, store: statev2.Store{Path: wire.StatePath}}
+	if wire.ProjectRoot != "" {
+		request.Client.ConfigRoot = wire.UserRoot
+		request.Plan = domain.DeliveryPlan{Scope: domain.ScopeProject, NativeRegistryRoot: wire.ProjectRoot, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: wire.ProjectRoot, UserConfigRoot: wire.UserRoot}}
+	}
+	layout, err := openCodeActivationLayout(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := transitionFixtureData{request: request, store: statev2.Store{Path: wire.StatePath, ProjectRoot: wire.ProjectRoot}}
 	transitions := freshTransitions(f)
-	p, err := prepareOpenCodeNativeApply(request.Client.ConfigRoot, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, nativeconfig.New(), shared.RenameDirectoryExclusive, os.RemoveAll)
+	p, err := prepareOpenCodeNativeApplyLayout(layout, request.Delivery.ActivePath, request.PreviousNativeObjects, request.Delivery.NativeObjects, nativeconfig.New(), shared.RenameDirectoryExclusive, os.RemoveAll)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +248,7 @@ func TestNativeTransitionCrashChild(t *testing.T) {
 		t.Fatal(err)
 	}
 	txn := &openCodeSkillTxn{durable: true, rename: shared.RenameDirectoryExclusive, removeAll: os.RemoveAll, backups: map[string]openCodeBackup{}, installed: map[string]domain.NativeObjectOwnership{}}
-	if err := txn.createRoot(request.Client.ConfigRoot); err != nil {
+	if err := txn.createLayoutRoot(layout); err != nil {
 		t.Fatal(err)
 	}
 	staged, err := txn.stageDesired(request.Delivery.ActivePath, shared.ObjectMap(p.desired))

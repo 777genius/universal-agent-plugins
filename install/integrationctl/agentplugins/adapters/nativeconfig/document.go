@@ -12,9 +12,11 @@ import (
 )
 
 type document struct {
-	ast   hujson.Value
-	root  *hujson.Object
-	jsonc bool
+	ast           hujson.Value
+	root          *hujson.Object
+	jsonc         bool
+	commentsOnly  bool
+	codexDocument CodexDocument
 }
 
 func parseDocument(body []byte, jsonc bool) (*document, error) {
@@ -35,7 +37,12 @@ func parseDocument(body []byte, jsonc bool) (*document, error) {
 	return &document{ast: ast, root: root, jsonc: jsonc}, nil
 }
 
-func newDocument(jsonc bool) (*document, error) { return parseDocument([]byte("{}\n"), jsonc) }
+func (kernel Kernel) newDocument(jsonc bool, codec Codec) (*document, error) {
+	if codec == CodecCodex {
+		return kernel.parseDocument(nil, jsonc, codec)
+	}
+	return kernel.parseDocument([]byte("{}\n"), jsonc, codec)
+}
 
 func rejectDuplicateKeys(value *hujson.Value, path string) error {
 	switch node := value.Value.(type) {
@@ -146,11 +153,23 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 func (doc *document) render() ([]byte, error) {
+	if doc.codexDocument != nil {
+		return doc.renderCodexDocument()
+	}
+	if doc.commentsOnly {
+		geminiRemoveTrailingCommas(&doc.ast)
+	}
 	body := doc.ast.Pack()
 	if !doc.jsonc && !json.Valid(body) {
 		return nil, fmt.Errorf("rendered native config is not strict JSON")
 	}
-	if _, err := parseDocument(body, doc.jsonc); err != nil {
+	var err error
+	if doc.commentsOnly {
+		_, err = parseCodecDocument(body, false, CodecGemini)
+	} else {
+		_, err = parseDocument(body, doc.jsonc)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("validate rendered native config: %w", err)
 	}
 	return body, nil

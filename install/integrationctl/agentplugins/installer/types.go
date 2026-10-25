@@ -33,6 +33,8 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
+	Scope       domain.InstallScope
+	ProjectRoot string `json:"-"`
 	// Completion flags attest explicit host-observed lifecycle completion.
 	ActivationComplete, AuthComplete bool
 	physical                         map[domain.ClientID]domain.DetectedClient
@@ -54,10 +56,13 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
-	InstallationID       string
-	OperationID          string
-	Selector             string
-	RequiredComponents   []string
+	// ClientVersion is host-observed evidence for the selected executable.
+	// It is operational input, never portable package or diagnostic metadata.
+	ClientVersion      string `json:"-"`
+	InstallationID     string
+	OperationID        string
+	Selector           string
+	RequiredComponents []string
 	// Assessment is a host decision for these exact local bytes. It is copied
 	// and digest-checked by Prepare. Confirmation of the filesystem plan does
 	// not create or alter this security decision.
@@ -94,10 +99,11 @@ type ClientTarget struct {
 // TargetFacts is the request-scoped host view of one existing client binding.
 // BindingID ties host-owned profile and executable paths to UAP-owned state.
 type TargetFacts struct {
-	ClientID   string
-	BindingID  string
-	ConfigRoot string
-	Executable string
+	TargetContext domain.TargetContext `json:"-"`
+	ClientID      string
+	BindingID     string
+	ConfigRoot    string
+	Executable    string
 }
 
 // Decision is host UI confirmation, outside mutation locks.
@@ -107,6 +113,7 @@ type Decision struct {
 
 // BindingFacts is the typed committed-binding view for host seams.
 type BindingFacts struct {
+	TargetContext    domain.TargetContext     `json:"-"`
 	ProfileAuthority *domain.ProfileAuthority `json:"-"`
 	// SelectedDelivery is immutable operational authority, excluded from diagnostic JSON.
 	SelectedDelivery                           domain.SelectedDelivery `json:"-"`
@@ -118,6 +125,8 @@ type BindingFacts struct {
 // Plan is an immutable copy for presentation. Operational paths are included
 // because the embedding host already chose explicit roots.
 type Plan struct {
+	Scope              domain.InstallScope
+	TargetContext      domain.TargetContext     `json:"-"`
 	ProfileAuthority   *domain.ProfileAuthority `json:"-"`
 	OpenCodeProfile    *opencodehost.Profile    `json:",omitempty"`
 	OpenCodeSelections []opencodehost.Selection `json:",omitempty"`

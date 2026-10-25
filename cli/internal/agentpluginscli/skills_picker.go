@@ -61,6 +61,9 @@ func (app App) skillSourceAcquirer(scratch string) (skillsource.Acquirer, error)
 	return skillsource.Acquirer{Acquirer: a}, nil
 }
 func (app App) openSkillsCatalog(ctx context.Context, input SkillsPickerRequest) (*skillsCatalogSession, error) {
+	if err := app.checkSkillsContext(nil); err != nil {
+		return nil, err
+	}
 	scratch, err := os.MkdirTemp("", "agentplugins-skills-")
 	if err != nil {
 		return nil, err
@@ -198,6 +201,9 @@ func (s *skillsCatalogSession) preview(ctx context.Context, id string) (skillspi
 	return preview, nil
 }
 func (app App) skillsTargets(ctx context.Context) ([]skillspicker.Target, error) {
+	if err := app.checkSkillsContext(nil); err != nil {
+		return nil, err
+	}
 	if app.Detector == nil {
 		return nil, errors.New("client detector unavailable")
 	}
@@ -211,19 +217,34 @@ func (app App) skillsTargets(ctx context.Context) ([]skillspicker.Target, error)
 	}
 	targets := []skillspicker.Target{}
 	for _, id := range domain.SupportedClientIDs() {
-		if !supportsDependencyTarget(app, string(id)) {
+		supported := supportsDependencyTarget(app, string(id))
+		if !supported && app.scope() != domain.ScopeProject {
 			continue
 		}
 		definition, _ := domain.ClientDefinitionFor(id)
 		client, ok := byID[id]
-		available := ok && client.DetectionError == nil && client.Status == domain.DetectionDetected
-		target := skillspicker.Target{Id: string(id), Label: definition.DisplayName, Scope: "user", DisplayPath: client.ConfigRoot, Available: available}
-		if !available {
+		available := supported && ok && client.DetectionError == nil && client.Status == domain.DetectionDetected
+		target := skillspicker.Target{Id: string(id), Label: definition.DisplayName, Scope: string(app.scope()), Available: available}
+		if app.scope() == domain.ScopeUser {
+			target.DisplayPath = client.ConfigRoot
+		}
+		if !supported {
+			reason := "This client does not support project installation"
+			target.Reason = &reason
+		} else if !available {
 			reason := "This client is not detected; install or configure it before selecting it"
 			if client.DetectionError != nil {
 				reason = "Client configuration could not be inspected safely"
 			}
 			target.Reason = &reason
+		} else {
+			path, err := app.skillsTargetPath(client)
+			if err != nil {
+				reason := "Client project configuration could not be inspected safely"
+				target.Available, target.Reason = false, &reason
+			} else {
+				target.DisplayPath = path
+			}
 		}
 		targets = append(targets, target)
 	}

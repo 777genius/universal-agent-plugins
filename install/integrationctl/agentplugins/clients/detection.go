@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"context"
 	"io/fs"
 	"os"
 
@@ -84,3 +85,9 @@ type ProfileBindingValidator interface {
 
 // PhysicalProfileAuthority is the single optional port, shared with the planner.
 type PhysicalProfileAuthority = ports.PhysicalProfileAuthority
+
+// ProjectPhysicalAuthority captures the existing authority token for the real
+// project registry, without replacing the detected user's ConfigRoot.
+type ProjectPhysicalAuthority interface {
+	CaptureProjectAuthority(context.Context, domain.DetectedClient, domain.TargetContext, string) (domain.ProfileAuthority, error)
+}

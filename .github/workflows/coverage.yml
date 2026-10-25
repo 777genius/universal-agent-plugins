@@ -38,11 +38,10 @@ jobs:
           mkdir -p coverage
           mapfile -t root_packages < <(go list ./... | grep -v '/repotests$')
           go test -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage/root.out "${root_packages[@]}"
-          # These tests recursively execute the instrumented test binary with an
-          # intentionally minimal environment and assert byte-exact stderr. They
-          # remain covered by Required; Go's GOCOVERDIR warning makes them
-          # incompatible with coverage instrumentation itself.
-          go test -count=1 -timeout=20m -skip '^TestReleaseCompletionProcessStderr$' -covermode=atomic -coverprofile=coverage/cli.out ./cli/...
+          go test -count=1 -timeout=20m -covermode=atomic -coverprofile=coverage/cli.out ./cli/...
+          # The version-probe test re-executes its instrumented test binary with
+          # an intentionally minimal environment. Go's missing-GOCOVERDIR warning
+          # changes the probe output; Required still runs it without coverage.
           go test -count=1 -timeout=20m -skip '^TestExecutableVersionProbeIsSanitizedAndIsolated$' -covermode=atomic -coverprofile=coverage/integrationctl.out ./install/integrationctl/...
           # Nested module: do not use a parent-relative ./agentplugins/... glob.
           # That pattern needs go.work; GOWORK=off fails loud instead of covering
