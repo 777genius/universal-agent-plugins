@@ -6,7 +6,12 @@ import (
 	"testing"
 )
 
-func projectListFixture(t *testing.T) (string, string, string, map[string]any, map[string]any, map[string]any) {
+type claudeProjectListFixture struct {
+	root, user, active          string
+	selected, other, suppressed map[string]any
+}
+
+func projectListFixture(t *testing.T) claudeProjectListFixture {
 	t.Helper()
 	base := t.TempDir()
 	root := filepath.Join(base, "A")
@@ -15,7 +20,7 @@ func projectListFixture(t *testing.T) (string, string, string, map[string]any, m
 	selected := map[string]any{"id": "demo@skills-dir", "scope": "project", "enabled": true, "installPath": active, "projectPath": root}
 	other := map[string]any{"id": "demo@skills-dir", "scope": "user", "enabled": true, "installPath": filepath.Join(user, "skills", "demo-user")}
 	suppressed := map[string]any{"id": "(suppressed)@skills-dir", "version": "unknown", "scope": "project", "enabled": false, "installPath": "", "notes": []string{claudeUntrustedProjectNote}}
-	return root, user, active, selected, other, suppressed
+	return claudeProjectListFixture{root: root, user: user, active: active, selected: selected, other: other, suppressed: suppressed}
 }
 
 func TestProjectObservationSeparatesBlockedDiscoveryFromIdentity(t *testing.T) {
@@ -31,7 +36,9 @@ func TestProjectObservationSeparatesBlockedDiscoveryFromIdentity(t *testing.T) {
 		{"foreign-project", projectListForeign}, {"other-project", projectListUnknown}, {"load-errors", projectListUnknown}, {"load-notes", projectListUnknown},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			root, user, active, selected, other, suppressed := projectListFixture(t)
+			fixture := projectListFixture(t)
+			root, user, active := fixture.root, fixture.user, fixture.active
+			selected, other, suppressed := fixture.selected, fixture.other, fixture.suppressed
 			rows := []map[string]any{}
 			switch test.name {
 			case "exact":
@@ -100,7 +107,8 @@ func TestProjectObservationSeparatesBlockedDiscoveryFromIdentity(t *testing.T) {
 func TestProjectSuppressionRejectsMalformedNearMisses(t *testing.T) {
 	for _, change := range []string{"id", "scope", "version", "enabled", "path", "notes-string", "notes-empty", "notes-blank", "notes-type", "notes-long", "extra", "mixed-malformed", "duplicate-key", "trailing"} {
 		t.Run(change, func(t *testing.T) {
-			root, user, active, _, _, sentinel := projectListFixture(t)
+			fixture := projectListFixture(t)
+			root, user, active, sentinel := fixture.root, fixture.user, fixture.active, fixture.suppressed
 			switch change {
 			case "id":
 				sentinel["id"] = "suppressed@skills-dir"

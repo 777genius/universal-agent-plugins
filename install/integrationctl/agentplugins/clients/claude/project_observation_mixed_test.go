@@ -56,7 +56,9 @@ func TestProjectObservationPreservesCompleteMixedRowResults(t *testing.T) {
 
 func mixedProjectListFixtures(t *testing.T) (string, string, string, map[string]map[string]any) {
 	t.Helper()
-	root, user, active, selected, other, suppressed := projectListFixture(t)
+	fixture := projectListFixture(t)
+	root, user, active := fixture.root, fixture.user, fixture.active
+	selected, other, suppressed := fixture.selected, fixture.other, fixture.suppressed
 	foreign := maps.Clone(selected)
 	foreign["installPath"] = active + "-foreign"
 	disabledForeign := maps.Clone(foreign)

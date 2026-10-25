@@ -1,10 +1,7 @@
 package pluginkitairepo_test
 
 import (
-	"context"
-	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -49,59 +46,6 @@ func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 			t.Fatalf("foreign user/project configuration changed: %s", path)
 		}
 	}
-}
-
-func (f *claudeProjectNativeFixture) command(t *testing.T, project, label string, args ...string) []byte {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), claudeNativeCommandTimeout)
-	defer cancel()
-	command := exec.CommandContext(ctx, f.client, args...)
-	command.Dir, command.Env = project, f.base.env(filepath.Dir(f.client))
-	body, err := command.CombinedOutput()
-	f.base.record(t, label, body)
-	if err != nil {
-		t.Fatalf("Claude project read-only command %q: %v\n%s", args, err, body)
-	}
-	f.requireForeign(t)
-	return body
-}
-
-func (f *claudeProjectNativeFixture) listedPath(t *testing.T, project, label string) string {
-	t.Helper()
-	body := f.command(t, project, label, "plugin", "list", "--json")
-	var entries []claudePluginListEntry
-	if err := json.Unmarshal(body, &entries); err != nil {
-		t.Fatal(err)
-	}
-	path := ""
-	for _, entry := range entries {
-		if entry.ID != claudeCommandsPluginID {
-			continue
-		}
-		if path != "" || entry.Scope != "project" || !entry.Enabled || entry.InstallPath != filepath.Clean(entry.InstallPath) || filepath.Dir(entry.InstallPath) != filepath.Join(project, ".claude", "skills") {
-			t.Fatalf("nonexact project listing=%+v", entry)
-		}
-		nativeRequireContained(t, project, entry.InstallPath)
-		path = entry.InstallPath
-	}
-	return path
-}
-
-func (f *claudeProjectNativeFixture) skills(t *testing.T, label string) map[string]string {
-	t.Helper()
-	path := f.listedPath(t, f.project, label+"-project-A-list")
-	if other := f.listedPath(t, f.otherProject, label+"-project-B-list"); other != "" {
-		t.Fatalf("selected project plugin leaked into project B: %s", other)
-	}
-	if path == "" {
-		return nil
-	}
-	details := f.command(t, f.project, label+"-project-A-details", "plugin", "details", claudeCommandsPluginID)
-	found, err := claudeDiscoveredSkills(string(details), path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return found
 }
 
 func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...string) (map[string]any, error) {
