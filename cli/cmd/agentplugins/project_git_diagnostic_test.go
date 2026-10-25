@@ -106,7 +106,7 @@ func (d *projectGitDiagnostic) countSnapshot() string {
 func projectGitDiagnosticClass(err error) string {
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "context_cancelled"
+		return "context_canceled"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "context_deadline"
 	case errors.Is(err, processadapter.ErrOrdinaryContainmentUnsupported):
