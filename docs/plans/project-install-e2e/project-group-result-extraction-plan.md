@@ -32,3 +32,21 @@ mutation/targets/actions, rather than tests of helper layout. Re-run bounded
 installer full-file architecture lint and changed-source correctness lint.
 Two independent plan rounds precede the extraction and two frozen code reviews
 follow; this plan does not claim the current lint failure is already fixed.
+
+## R2 — exact wrapped identity and overlapping classification
+
+APM and Claude independently gave R1 PLAN GO on exact3bd3f4a2181eefb7c1130c4477148c0fb9882fb2
+after reading the whole current finishGroup and this plan. The helper receives
+and returns the same already-wrapped nonnil error object; finishGroup's existing
+wrapLifecycleError may wrap its original input before any state read, and that
+behavior is preserved. No nil-helper call is introduced. No load-error branch,
+attachment, project completion, pending logic or reporting call moves.
+
+Add a small actual finishGroup result table using joined errors: PlanChanged
+alone selects plan_changed; PlanChanged plus ProjectionRefreshRequired selects
+update_required; either plus ProjectionPinChangeRequired selects pin_change_required.
+The existing textual update marker keeps its same position. Assert the same
+wrapped identity/cause, known mutation (never NoChange), live target/failure facts
+and freshly attached project manual guidance survive every classification.
+This pins the externally reported precedence, not the private function layout.
+No production extraction has happened. Obtain both final R2 plan GOs first.
