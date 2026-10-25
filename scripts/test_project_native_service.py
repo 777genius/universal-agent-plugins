@@ -182,6 +182,58 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(record["cleanup"]["group_reaped"])
         self.assertNotIn(TOKEN.encode(), stdout + stderr)
 
+    def test_near_outer_deadline_refuses_launch_before_cleanup_could_be_interrupted(self):
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.getitimer(signal.ITIMER_REAL)
+        started = time.monotonic()
+        handler = lambda *_: self.fail("unexpected outer expiry")
+        signal.signal(signal.SIGALRM, handler)
+        signal.setitimer(signal.ITIMER_REAL, 2)
+        try:
+            with tempfile.TemporaryDirectory() as temporary, patch.object(live.subprocess, "Popen") as launch:
+                service = self.service(Path(temporary), CHILD.replace("lambda *_:exit(0)", "signal.SIG_IGN"), timeout=6)
+                with self.assertRaisesRegex(ValueError, "insufficient original deadline"):
+                    service.run(lambda _service: time.sleep(10))
+                launch.assert_not_called()
+            self.assertIs(signal.getsignal(signal.SIGALRM), handler)
+            self.assertGreater(signal.getitimer(signal.ITIMER_REAL)[0], 1)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            if previous_timer[0]:
+                signal.setitimer(signal.ITIMER_REAL, max(0.001, previous_timer[0] - (time.monotonic() - started)), previous_timer[1])
+
+    def test_expiring_outer_timer_is_restored_only_after_forced_child_reap(self):
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        previous_timer = signal.getitimer(signal.ITIMER_REAL)
+        started, expired = time.monotonic(), []
+        signal.signal(signal.SIGALRM, lambda *_: expired.append(time.monotonic()))
+        signal.setitimer(signal.ITIMER_REAL, 5.4)
+        try:
+            child = CHILD.replace("lambda *_:exit(0)", "signal.SIG_IGN")
+            with tempfile.TemporaryDirectory() as temporary:
+                service = self.service(Path(temporary), child, timeout=10)
+
+                def observe(current):
+                    self.ready(current)
+                    time.sleep(10)
+
+                record, _, _, result, _, _ = service.run(observe)
+                reaped_at = time.monotonic()
+                self.assertIsNotNone(service._process.returncode)
+                self.assertFalse(live.group_alive(service._process.pid))
+            time.sleep(0.02)
+            self.assertTrue(record["cleanup"]["forced_kill"])
+            self.assertIsNotNone(record["error"])
+            self.assertIsNone(result)
+            self.assertTrue(expired)
+            self.assertGreaterEqual(expired[0], reaped_at)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+            if previous_timer[0]:
+                signal.setitimer(signal.ITIMER_REAL, max(0.001, previous_timer[0] - (time.monotonic() - started)), previous_timer[1])
+
     def test_http_is_fixed_loopback_bounded_and_keeps_bearer_out_of_receipts(self):
         service = self.service(Path("/tmp"))
         for origin in ("http://localhost:54321", "https://127.0.0.1:54321", "http://127.0.0.1:54321/path", "http://127.0.0.1:22"):
