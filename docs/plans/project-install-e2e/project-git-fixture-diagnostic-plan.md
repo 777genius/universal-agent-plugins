@@ -62,3 +62,56 @@ Publish only after two plan rounds and two fresh code reviews. The next genuine
 Required run will either preserve a bounded nested failure class/cause or pass
 the unchanged test; one passing run alone does not explain the prior failures.
 No failure is labelled flaky and no native qualification follows.
+
+## R2 — concrete review corrections, superseding conflicting R1 wording
+
+Root's source trace and Claude's independent R1 both confirmed that
+OSRunner.Run intentionally includes argv and merged streams in nonnative errors.
+The cause paragraph above is narrowed as follows; it does not authorize logging
+an arbitrary wrapped error.
+
+1. **Nonnative causes are always omitted.** If NativeCredentials is false, emit
+   only the fixed operation/class and literal cause_omitted; do not call Error(),
+   scan, quote or retain that wrapper text. This applies even to a known init,
+   config, checkout or tree operation. Unknown grammar/authority also omits cause.
+   Preserve the original error object and bytes to the caller without wrapping.
+
+2. **Positive cause admission is exact and bounded.** Only NativeCredentials=true
+   plus an explicitly known HTTPS127.0.0.1 fixture endpoint with no userinfo,
+   query or fragment and known disposable workspace/repository operands can
+   admit cause text. That OSRunner branch already avoids Git argv/streams in its
+   native-error wrapper. After obtaining its existing error string, require
+   valid UTF-8 and at most8192 input bytes; oversized/invalid input is omitted
+   before any URI/credential scan or quoting. This does not claim a bound on an
+   arbitrary externally implemented Error() method; the production delegate is
+   the unchanged known OSRunner, and the test seam has only inert finite errors.
+   Redact known locator operands and all remaining URI forms, omit credential-
+   style assignments/headers, then cap the final quoted ASCII cause at2048 bytes.
+
+3. **Counts are observational, not acquisition-phase proof.** The transport
+   recorder is shared across Resolve/Acquire and scope reconstruction. With no
+   observed Runner error, emit exactly “no observed Runner failure; remaining
+   source phase undetermined.” Workspace creation can fail before the first
+   command, and later validation/snapshot can fail outside invocations.
+   Neither aggregate counts nor a final checkout proves a complete acquisition.
+   Remove the R1 suggestion that this uniquely identifies a snapshot failure.
+
+4. **All accounting is finite.** Store only the closed fixed label/class map,
+   saturate each operation count at65535, and emit at most four failure records
+   per transport, each with a fixed-size count snapshot. Unknown labels use one
+   fixed unknown slot. Saturation only suppresses diagnostics; delegate calls
+   and returned results are untouched. No URL, argv, output stream or environment
+   is retained in successful-operation accounting.
+
+5. **Pin negative observations in inert tests.** A known nonnative init error
+   deliberately contains argv, stdout/stderr and a credential marker; assert
+   Error() is not inspected and none reaches diagnostic output. Include
+   unknown/native external-URI authority, oversized native error text, control/
+   Unicode escaping, URI userinfo/query, credential-style headers/assignments,
+   pre-command empty counts, prior Resolve counts, four-record saturation and
+   exact original context/Command/bytes/error identity. Every omitted-cause case
+   retains fixed diagnostic facts and the real unchanged failure to its caller.
+
+These refinements preserve the original test-only scope and no-retry/no-budget/
+no-guard/no-product-output invariants. R1 reviews authorize this revised plan
+for final R2 review, not implementation. No diagnostic source has been written.
