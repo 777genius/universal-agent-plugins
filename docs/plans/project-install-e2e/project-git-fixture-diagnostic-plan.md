@@ -115,3 +115,32 @@ an arbitrary wrapped error.
 These refinements preserve the original test-only scope and no-retry/no-budget/
 no-guard/no-product-output invariants. R1 reviews authorize this revised plan
 for final R2 review, not implementation. No diagnostic source has been written.
+
+## Implemented candidate and author checks
+
+The implementation is based on published d94d6c1b09e89634220e471cb1f2c03d758b0511,
+not the earlier plan branch's product tree. Only the two approved plan commits
+were cherry-picked. Root and Claude independently returned final PLAN GO for
+772422310444bf235222e7ef430d49db7f376d0e before source edits.
+
+Production acquirer/runner/process/CLI behavior is unchanged. Four test files
+add the private wrapper, its finite contracts and existing fixture wiring.
+Known native origin fetch receives cause text only after an observed successful
+exact fixture remote-add in the same owned workspace. This uses one bounded
+provenance slot; unknown grammar or another remote-add invalidates it. Failure
+to qualify only omits diagnostics and cannot alter the delegated result.
+
+- Initial five private inert contracts: PASS0.176s.
+- Final endpoint query/fragment precision plus the same contracts: PASS0.033s.
+  No vendor, Git transport, model or MCP process was used by these contracts.
+- One predeclared unchanged TLS source-lifecycle plus cold-transfer selection
+  ran once: FAIL9.913s. Both Git branches refused their first init because this
+  local host lacks the ordinary proc prerequisite. The new fixed diagnostics
+  recorded phase=init, class=ordinary_unsupported, cause=cause_omitted and
+  counts init:1/all others:0. ZIP branches produced no failure. This is the
+  known local prerequisite refusal, not a reproduction or explanation of the
+  genuine hosted later immutable-fetch failures. No skip, retry or guard change
+  was made. Full log is preserved in the task runtime as
+  apm-recovery/git-diagnostic-source-lifecycle.log.
+- Fresh source/code reviews and configured changed-source lint remain gates.
+  No native-client or hosted failure diagnosis is promoted from local checks.
