@@ -18,12 +18,7 @@ translationRequired: true
 
 **仅适用于源码构建，尚未发布。** 每条维护命令都应选择相同的范围和项目：
 
-```sh
-agentplugins list --scope project --project-root /path/to/project
-agentplugins install --locked --scope project --project-root /path/to/project
-agentplugins repair review --target cursor --scope project --project-root /path/to/project
-agentplugins deps recover --scope project --project-root /path/to/project
-```
+[维护命令见英文部分](/en/use/manage#maintain-a-project-in-the-current-source)。
 
 如需共享依赖及其固定版本，可将可移植的 `uap.toml` 和 `uap.lock` 纳入版本控制。
 `.uap/` 中的所有权记录、恢复状态和保留数据留在本地；数据应单独备份。

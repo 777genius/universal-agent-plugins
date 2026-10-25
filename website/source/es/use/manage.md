@@ -19,12 +19,7 @@ translationRequired: true
 **Solo código fuente; aún no publicado.** Selecciona el mismo ámbito y proyecto
 en cada comando de mantenimiento:
 
-```sh
-agentplugins list --scope project --project-root /path/to/project
-agentplugins install --locked --scope project --project-root /path/to/project
-agentplugins repair review --target cursor --scope project --project-root /path/to/project
-agentplugins deps recover --scope project --project-root /path/to/project
-```
+[Los comandos de mantenimiento están en la sección inglesa](/en/use/manage#maintain-a-project-in-the-current-source).
 
 Guarda los archivos portables `uap.toml` y `uap.lock` en el control de versiones
 para compartir dependencias y revisiones. Mantén locales los registros de

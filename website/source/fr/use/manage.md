@@ -19,12 +19,7 @@ translationRequired: true
 **Code source uniquement ; fonctionnalité non publiée.** Choisissez la même
 portée et le même projet pour chaque commande de maintenance :
 
-```sh
-agentplugins list --scope project --project-root /path/to/project
-agentplugins install --locked --scope project --project-root /path/to/project
-agentplugins repair review --target cursor --scope project --project-root /path/to/project
-agentplugins deps recover --scope project --project-root /path/to/project
-```
+[Les commandes de maintenance figurent dans la section anglaise](/en/use/manage#maintain-a-project-in-the-current-source).
 
 Versionnez les fichiers portables `uap.toml` et `uap.lock` pour partager les
 dépendances et leurs révisions. Les traces de propriété, la récupération et les

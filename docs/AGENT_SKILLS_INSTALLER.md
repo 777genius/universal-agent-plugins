@@ -72,8 +72,9 @@ agentplugins skills add owner/repository --skill review --target codex --no-ui -
 
 The directory must already exist. The default is still `user`; with project
 scope and no `--project-root`, the invocation directory is selected without a
-parent-directory search. The picker shows only targets admitted for that scope.
-Its reviewed selection remains bound to that project when applying; a stale
+parent-directory search. Only targets admitted for that scope can be selected in the picker. Unavailable
+targets can remain visible with a reason. Its reviewed selection remains bound
+to that project when applying; a stale
 or changed environment requires a new review.
 
 Saved Skill intent and pins live in the selected project's `uap.toml` and

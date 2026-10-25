@@ -19,15 +19,11 @@ translationRequired: true
 **仅适用于源码构建，尚未发布。** 兼容的源码构建支持为插件包和 Agent Skills
 显式选择项目：
 
-```sh
-agentplugins add owner/repo --alias review --target cursor \
-  --scope project --project-root /path/to/project
-agentplugins skills add owner/repository --ui \
-  --scope project --project-root /path/to/project
-```
+[源码构建的命令示例见英文部分](/en/use/install#project-installation-in-the-current-source)。
 
 目录必须已存在。默认范围仍为 `user`；使用 `project` 而未指定 `--project-root`
-时，会选择当前执行目录，不搜索父目录。浏览器和终端使用相同的范围，只展示该范围
-支持的目标。文件准备完成后，客户端可能仍需重启、信任工作区或显式选择会话配置。
+时，会选择当前执行目录，不搜索父目录。浏览器和终端使用相同的范围；只有受支持
+且可用的目标才能被选择。不可用的目标可以继续显示，并说明原因。文件准备完成后，
+客户端可能仍需重启、信任工作区或显式选择会话配置。
 
 [项目安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [当前项目支持情况及限制](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

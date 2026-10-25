@@ -19,17 +19,13 @@ translationRequired: true
 **Code source uniquement ; fonctionnalité non publiée.** Une compilation
 compatible permet de choisir explicitement un projet pour les paquets et Agent Skills :
 
-```sh
-agentplugins add owner/repo --alias review --target cursor \
-  --scope project --project-root /path/to/project
-agentplugins skills add owner/repository --ui \
-  --scope project --project-root /path/to/project
-```
+[Les commandes pour la compilation depuis les sources figurent dans la section anglaise](/en/use/install#project-installation-in-the-current-source).
 
 Le dossier doit exister. La portée par défaut reste `user` ; `project` sans
 `--project-root` choisit le dossier courant sans rechercher ses parents.
-Le navigateur et le terminal utilisent la même portée et proposent uniquement
-les cibles admises. Après la préparation des fichiers, le client peut demander
+Le navigateur et le terminal utilisent la même portée. Seules les cibles admises
+sont sélectionnables ; les cibles indisponibles peuvent rester visibles avec le
+motif. Après la préparation des fichiers, le client peut demander
 un redémarrage, la confiance de l’espace de travail ou une configuration de session.
 
 [Guide d’installation par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Compatibilité et limites actuelles par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

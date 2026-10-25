@@ -19,17 +19,13 @@ translationRequired: true
 **Только сборка из исходников; функция ещё не выпущена.** Совместимая
 сборка позволяет явно выбрать проект для пакетов и Agent Skills:
 
-```sh
-agentplugins add owner/repo --alias review --target cursor \
-  --scope project --project-root /path/to/project
-agentplugins skills add owner/repository --ui \
-  --scope project --project-root /path/to/project
-```
+[Команды для сборки из исходников приведены в английском разделе](/en/use/install#project-installation-in-the-current-source).
 
 Каталог должен существовать. По умолчанию используется `user`; область
 `project` без `--project-root` выбирает текущий каталог без поиска в родительских
-папках. Браузерный и терминальный выбор используют одну область и показывают
-доступные для неё агенты. После подготовки файлов агенту могут потребоваться
+папках. Браузерный и терминальный выбор используют одну область. Выбирать можно
+только доступные цели; недоступные агенты могут оставаться видимыми с объяснением
+причины. После подготовки файлов агенту могут потребоваться
 перезапуск, доверие к проекту или явный выбор конфигурации сеанса.
 
 [Руководство по установке в проект](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Текущая поддержка проектов и ограничения](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

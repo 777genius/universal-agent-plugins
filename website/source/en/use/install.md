@@ -154,8 +154,9 @@ agentplugins skills add owner/repository --ui \
 
 The directory must already exist. The default remains `user`; project scope
 without `--project-root` selects the invocation directory without searching
-parents. Browser and terminal selection use the same scope and show only
-admitted targets. The selected client can require reload, trust or explicit
+parents. Browser and terminal selection use the same scope. Only admitted
+targets can be selected; the picker can keep unavailable targets visible with a
+reason. The selected client can require reload, trust or explicit
 session configuration after its files are prepared.
 
 [Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

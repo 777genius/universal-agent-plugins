@@ -19,12 +19,7 @@ translationRequired: true
 **Только сборка из исходников; функция ещё не выпущена.** В каждой команде
 обслуживания указывайте ту же область и тот же проект:
 
-```sh
-agentplugins list --scope project --project-root /path/to/project
-agentplugins install --locked --scope project --project-root /path/to/project
-agentplugins repair review --target cursor --scope project --project-root /path/to/project
-agentplugins deps recover --scope project --project-root /path/to/project
-```
+[Команды обслуживания приведены в английском разделе](/en/use/manage#maintain-a-project-in-the-current-source).
 
 Для совместного использования зависимостей сохраняйте переносимые `uap.toml`
 и `uap.lock` в системе контроля версий. Записи владения, восстановление и данные
