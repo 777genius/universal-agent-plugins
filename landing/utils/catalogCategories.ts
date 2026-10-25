@@ -11,7 +11,5 @@ export function catalogCategories(
   declared: string[] = [],
 ): string[] {
   const identity = `${source.repository.toLowerCase()}/${source.path}`;
-  return marketingSources.has(identity)
-    ? [...new Set([...declared, 'marketing'])]
-    : declared;
+  return marketingSources.has(identity) ? [...new Set([...declared, 'marketing'])] : declared;
 }

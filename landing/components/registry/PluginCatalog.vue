@@ -87,7 +87,10 @@ function stableOptions(next: FilterOption[], previous: FilterOption[]) {
 const stableCategoryOptions = computed(() => {
   const next = [
     { value: 'all', label: t('registryUi.catalog.allCategories') },
-    ...filters.value.categories.map((item) => ({ value: item, label: item === 'marketing' ? 'Marketing' : item })),
+    ...filters.value.categories.map((item) => ({
+      value: item,
+      label: item === 'marketing' ? 'Marketing' : item,
+    })),
   ];
   previousCategoryOptions = stableOptions(next, previousCategoryOptions);
   return previousCategoryOptions;
