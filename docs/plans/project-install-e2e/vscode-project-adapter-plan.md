@@ -27,7 +27,8 @@ model/skill execution, active-session isolation or effective Local/Copilot selec
 
 ## Small dedicated backend
 
-Add `vscode.NewProject()` returning a distinct project adapter; preserve `New()`
+Add `vscode.NewProject()` returning a distinct project adapter type without
+embedding `Adapter` or `Local` and promoting their methods; preserve `New()`
 and `NewLocal()` source and user/Local/TEST behavior. Reuse existing detection,
 but implement every project lifecycle/identity/layout capability explicitly so
 the Copilot CLI backend cannot be reached by project calls. Reject user/local,
@@ -47,6 +48,13 @@ authority. The project constructor explicitly rejects non-project operations,
 and the retained user constructor rejects project requests in its plan preflight,
 so a global capability declaration cannot admit a Copilot fallback. Put scope
 selection in composition, not new concrete-client switches in generic core code.
+The retained user adapter must not implement `ProjectTargetLayout`, keeping
+`clients.SupportsScope(all.Default(), vscode, project)==false` even after the
+domain capability is declared. The project adapter implements
+`UsesNativeRegistryExecutable()==false` and exact native-file registry inspection.
+Wire the same selected project registry through detection, planning, staging,
+SDK facade, activation, identity observation and maintenance; scope switching
+rebuilds composition before any source acquisition.
 
 After evidence admission, declare VS Code `LifecycleNativeConfig` project policy
 in the existing client table. Project backend family is `vscode`, distinct from
@@ -126,3 +134,11 @@ SDK project composition, actual VS Code host authority, explicit retained-user
 project refusal, and proven transport spelling. This revision specifies those
 boundaries, streamable-http to http mapping, and conditional SSE support. Native
 observation and independent final plan review remain required before code.
+
+The independent Claude/Codex critic gave R1 architecture GO on `c230d66` after
+checking existing user/Local adapters and shared ownership. This revision also
+closes its distinct-type, executable-free registry inspection, default registry
+scope refusal, and consistently selected composition clarifications. Evidence
+admission is component-specific: observing skills does not qualify the MCP
+dialect, and observing MCP does not qualify a skill path. Either missing native
+contract remains an outstanding component gate.
