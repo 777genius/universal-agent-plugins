@@ -146,3 +146,18 @@ scope refusal, and consistently selected composition clarifications. Evidence
 admission is component-specific: observing skills does not qualify the MCP
 dialect, and observing MCP does not qualify a skill path. Either missing native
 contract remains an outstanding component gate.
+
+## Final R2 review receipt
+
+Both independent critics gave conditional final R2 PLAN GO on immutable
+`d80c8bbe8fc9a6cb869e5ea0b86fab82549ee3d2`:
+
+- ROOT verified explicit project composition/default refusal, exact native
+  transport mapping and ownership scope without claiming runtime qualification.
+- Claude/Codex independently reread the immutable publisher schema through the
+  GitHub connector and verified the distinct type, consistent registry wiring,
+  `servers`/JSONC shape and `http`/`sse` mappings against source.
+
+These source-only approvals satisfy the concrete design review gate. They do
+not satisfy or remove the genuine workspace artifact and independent component
+interpretation gate, which remained queued at this review checkpoint.
