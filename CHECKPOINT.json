@@ -1,0 +1,10 @@
+{
+  "kind": "source-recovery-checkpoint",
+  "lane": "fixture",
+  "source_commit": "6e08fc0dec6524a9cadc4d35e2cfa9319f94dfd7",
+  "source_tree": "67071de35f5b09091ccf15da93135c3c57017464",
+  "base_commit": "46b4678ea66d7804311f98270b70ebd3cceb928a",
+  "local_head": "b24201c4d33e6720d6212180863a122168f35c8d",
+  "review_status": "not inferred from checkpoint",
+  "execution": "This branch head contains metadata only and no workflows."
+}
