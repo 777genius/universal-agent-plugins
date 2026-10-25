@@ -115,11 +115,11 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:  LifecycleCLIRegistry,
 	})), LifecycleNativeConfig),
-	withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
+	withProjectScope(withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,
 		InstallIntents:            []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:             LifecycleCLIRegistry,
-	})),
+	})), LifecycleNativeConfig),
 	withProjectScope(clientDefinition(ClientKiro, "Kiro", "kiro", "managed", "native", true, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:      []InstallIntent{InstallIntentAutomatic, InstallIntentPrepare},
 		LifecycleKind:       LifecycleCLIRegistry,

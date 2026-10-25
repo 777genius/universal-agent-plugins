@@ -14,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/vscode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -49,7 +50,7 @@ func newProjectFilesFixture(t *testing.T, id string, mode string) *projectFilesF
 	deathWrite(t, filepath.Join(f.pkg, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"files-observer","version":"1.0.0"}`)
 	deathWrite(t, filepath.Join(f.pkg, "skills", "docs", "SKILL.md"), deathSkill("docs", "original"))
 	deathWrite(t, filepath.Join(f.pkg, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"http://127.0.0.1:9/inert"}}}`)
-	registry, err := clients.NewRegistry(cline.New(), codex.New())
+	registry, err := clients.NewRegistry(cline.New(), codex.New(), vscode.NewProject())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +72,9 @@ func newProjectFilesFixture(t *testing.T, id string, mode string) *projectFilesF
 	if id == "cline" {
 		f.skill = filepath.Join(f.project, ".cline", "skills", "docs", "SKILL.md")
 		f.config = filepath.Join(f.project, ".uap", "clients", "cline", "mcp.json")
+	} else if id == "vscode" {
+		f.skill = filepath.Join(f.project, ".github", "skills", "docs", "SKILL.md")
+		f.config = filepath.Join(f.project, ".vscode", "mcp.json")
 	} else {
 		f.skill = filepath.Join(f.project, ".agents", "skills", "docs", "SKILL.md")
 		f.config = filepath.Join(f.project, ".codex", "config.toml")
@@ -193,7 +197,7 @@ func TestProjectFileAdmissionWithoutLiveObserver(t *testing.T) {
 }
 
 func TestProjectFileLifecycleWithoutLiveObserver(t *testing.T) {
-	for _, id := range []string{"cline", "codex"} {
+	for _, id := range []string{"cline", "codex", "vscode"} {
 		t.Run(id, func(t *testing.T) {
 			f := newProjectFilesFixture(t, id, "disabled-with-runner")
 			other := f.untouched(t)

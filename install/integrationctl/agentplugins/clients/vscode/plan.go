@@ -2,6 +2,7 @@ package vscode
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -12,7 +13,18 @@ import (
 var (
 	_ clients.NativeRegistryLayout = (*Adapter)(nil)
 	_ clients.PlanRefiner          = (*Adapter)(nil)
+	_ clients.PlanPrecondition     = (*Adapter)(nil)
 )
+
+// CheckPlanPrecondition keeps the retained user/Copilot backend separate from
+// the explicitly composed workspace adapter, even if static metadata declares
+// project support.
+func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject || plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
+		return fmt.Errorf("VS Code project installation requires vscode.NewProject or clients/all.Project composition")
+	}
+	return nil
+}
 
 // NativeRegistry points at the Copilot installation VS Code discovers: the
 // package is registered through the CLI of the sibling this client shares the
