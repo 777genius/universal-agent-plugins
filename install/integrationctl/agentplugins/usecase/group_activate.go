@@ -47,7 +47,7 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 		session.result.Mutated = true
 	}
 	preparedUnchanged := target.noChange && target.managed != nil && activationErr == nil &&
-		session.service.verifiedPreparedObservationUnchanged(target.input, target.plan, *target.managed, delivery, outcome)
+		session.service.verifiedPreparedObservationUnchanged(target.input, target.plan, *target.managed, delivery, outcome, nativeComplete)
 	if !nativeComplete && !preparedUnchanged && activationErr == nil {
 		// An incomplete projection that re-activated successfully changed the
 		// target unless fresh evidence proves the exact existing Prepared delivery.
