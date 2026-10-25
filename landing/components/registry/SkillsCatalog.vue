@@ -116,7 +116,7 @@ const staleDate = computed(() => {
     </div>
     <div class="catalog-meta">
       <div aria-live="polite">
-        <p v-if="query.trim() && !searchTooShort" class="catalog-count">
+        <p v-if="query.trim() && !searchTooShort && !loading && !failed" class="catalog-count">
           {{ t('registryUi.skills.searchResults', { count: n(displayed.length) }) }}
         </p>
         <p v-else-if="!loading && !searchTooShort && displayed.length" class="catalog-count">

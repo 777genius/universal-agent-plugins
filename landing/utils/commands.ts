@@ -10,7 +10,8 @@ const CLI_INVOCATION = 'npx -y universal-agent-plugins';
 
 /** Encode one shell argument; safe tokens retain the familiar readable command. */
 export function shellToken(value: string): string {
-  return /^[A-Za-z0-9_./:@+,=-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+  // A comma is excluded: PowerShell treats an unquoted comma as its array operator.
+  return /^[A-Za-z0-9_./:@+=-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function communityAddSource(plugin: RegistryPlugin): string {
