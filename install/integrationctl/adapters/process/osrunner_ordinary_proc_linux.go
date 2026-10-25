@@ -137,7 +137,7 @@ func linuxTaskGoneAfterIdentityError(task string, identityErr error, ops linuxTa
 	}
 	// A missing stat inside a still-present task is unknown observation, not
 	// evidence that the task disappeared or that its children list was empty.
-	return false, fmt.Errorf("existing proc task identity is unavailable: %s", identityErr.Error())
+	return false, withOrdinaryCleanupOrigin("task_identity_unavailable", fmt.Errorf("existing proc task identity is unavailable: %s", identityErr.Error()))
 }
 
 func linuxReadTaskIdentity(task string, tid int, ops linuxTaskProcOps) (linuxProcessIdentity, error) {
