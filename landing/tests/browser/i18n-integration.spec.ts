@@ -43,7 +43,7 @@ for (const locale of publishedLocales) {
         ]);
         await expect(restore.getByRole('link', { name: copy.guide! })).toHaveAttribute(
           'href',
-          'https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md#restore-on-another-machine',
+          /\/docs\/en\/use\/manage\.html#restore-on-another-machine$/,
         );
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });

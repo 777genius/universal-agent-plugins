@@ -8,6 +8,7 @@ export const docsAvailability = {
   // current support limits.
   supportBoundary: 'build/',
   customLogicGuide: 'guide/build-custom-plugin-logic.html',
+  restoreOnAnotherMachine: 'use/manage.html',
 } as const;
 export type DocsPageId = keyof typeof docsAvailability;
 export const ownedDocsRoot = 'https://777genius.github.io/universal-agent-plugins/docs/';
