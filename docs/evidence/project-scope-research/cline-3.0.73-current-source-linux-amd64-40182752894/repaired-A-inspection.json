@@ -1,0 +1,40 @@
+{
+  "StateRoot": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/A/.uap",
+  "Installations": [
+    {
+      "SourceKey": "github::",
+      "InstallationID": "942c3806-570d-438c-8bc1-5e1cceeb96e2",
+      "TreeDigest": "sha256:ca4909cb3edebedda2c797087bd292a2c4637764a34c1db1513ce81c0d8f8df0",
+      "Bindings": [
+        {
+          "LifecycleConverged": false,
+          "ClientID": "cline",
+          "BindingID": "client_4003f71d041d0b85c58efec9",
+          "Scope": "project",
+          "TargetPath": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/A/.uap/managed/clients/cline/uap-cline-a-package-0f8e27b9e447",
+          "DataRoot": "",
+          "TreeDigest": "sha256:ca4909cb3edebedda2c797087bd292a2c4637764a34c1db1513ce81c0d8f8df0",
+          "Materialization": "materialized",
+          "Activation": "prepared",
+          "Authentication": "not_checked",
+          "Verification": "installation_verified",
+          "Revision": "",
+          "Owner": null,
+          "ProjectionDigest": "sha256:46777957f3cfbf041e4bb99b89a685bcf922df069ac91f3f1e63b3b792bec28b",
+          "ProjectionStatus": ""
+        }
+      ],
+      "DataRetained": false,
+      "DataRoots": null
+    }
+  ],
+  "Recovery": {
+    "StateDigest": "sha256:4a674f3417f4a92a96584e05016b9f0e95c4ece0c316358517b13ee1948191fd",
+    "Required": false,
+    "Journals": null,
+    "NativeIntents": null,
+    "Receipts": null,
+    "Reason": ""
+  },
+  "EnvironmentReceipts": null
+}

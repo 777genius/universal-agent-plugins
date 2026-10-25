@@ -1,0 +1,20 @@
+{
+  "B": {
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.cline/skills/foreign-b/SKILL.md": "600:120:0fc0f5301310ee74febae1265d7ef1d80846ff9904bee928890f6ca4c8081224",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.cline/skills/uap-cline-b/SKILL.md": "644:144:c5545f22a76081666da3b2352f9e8ea7e445cbcb6d1a775799d452b60b8ba902",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/clients/cline/mcp.json": "600:227:b87ad427a7460711b0ef826e59d2ed197e1897d9ec73325618c12f31d609f3ad",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/data/caller-owned/keep.txt": "600:26:b77832994312f8e62d5faf79448a14c52182809ba284f921025a1544d24bb3a5",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/managed/clients/cline/uap-cline-b-package-c803cde6e469/.agentplugins-cline-native.json": "644:159:71fdbb3669d9bbf16fa3a311c0eda36c099cfd4b6c91312d4401d8b6deb86845",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/managed/clients/cline/uap-cline-b-package-c803cde6e469/mcp.json": "644:198:f306a3ad30031caf2c9fc6e0cefa1e21f80212b8c3d171811669d2a25c48798d",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/managed/clients/cline/uap-cline-b-package-c803cde6e469/plugin.json": "644:119:94a8a14e0858dd89a236faae8a801f1b74d268beb12201b53654366683b2be83",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/managed/clients/cline/uap-cline-b-package-c803cde6e469/skills/uap-cline-b/SKILL.md": "644:144:c5545f22a76081666da3b2352f9e8ea7e445cbcb6d1a775799d452b60b8ba902",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/mutation.lock": "600:61:b66facfdfaa43df8c0dcd07e57f95ebc54115ea9d88da814a56a4a9dfde19b70",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/B/.uap/state-v2.json": "600:5382:f93b27a85055dd91105a6143003378c581813bc0bbd383c8205335673e0b4582"
+  },
+  "user": {
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/home/.cline/data/settings/cline_mcp_settings.json": "600:238:0066b578cd9f4185e501337b65b75c4989565c0ed77582dd52b93d3c4d764717",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/home/.cline/skills/foreign-user/SKILL.md": "600:123:088204317df3c936614068eee5eb692467a4ee768f61a692ccbef8f931b7126e",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/home/.cline/skills/uap-cline-user/SKILL.md": "644:145:1fdd7bf55a557e2af72904c7305d032c1f69076a586e0f14222824776edea58e",
+    "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/installer-state/state-v2.json": "600:5399:dbf8643ddf523c14ca33c7d21e354f917070dd61049cb33befcdc84c3dd027ee"
+  }
+}

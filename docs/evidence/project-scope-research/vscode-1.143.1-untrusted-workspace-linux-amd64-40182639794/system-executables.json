@@ -1,0 +1,12 @@
+{
+  "/usr/bin/Xvfb": {
+    "bytes": 2064864,
+    "sha256": "6b27845931670c8c9b3ce7423696a452ce3cab1c7f316ce5f7ea7f1297fa2f84",
+    "version": "not inferred from binary identity"
+  },
+  "/usr/bin/xauth": {
+    "bytes": 56280,
+    "sha256": "ffcb5f569bf9fce94cbf37f5d61790d463508c6122511a5f4c6e280d3633086e",
+    "version": "not inferred from binary identity"
+  }
+}
