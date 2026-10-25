@@ -52,11 +52,17 @@ reader, which remains a required refusal control.
 
 Use the pinned standard library instead of custom unsafe Windows ABI buffers.
 Root methods handle native alignment, UTF-16 byte lengths, Unicode names and
-long paths. A root is opened on the cleaned parent directory; every operation
+long paths. Convert relative caller paths lexically to cleaned absolute paths
+without resolving links; relative inputs therefore retain their existing
+current-directory meaning. A root is opened on the cleaned parent directory; every operation
 receives only the generated temporary or target basename. Root follows the
 parent directory as the existing path APIs do, but prevents a leaf traversal
-from escaping that parent. Absolute or outside leaf symlinks therefore fail
-closed. No broader filesystem or ownership API is changed.
+from escaping that parent. For reads, absolute or outside leaf symlinks
+therefore fail closed. Rename acts on the final link entry itself rather than
+following it; `atomicfile.Write` retains its existing explicit Lstat refusal
+of a symlink or nonregular target. Cache publication does not falsely acquire
+an existing symlink-refusal guarantee: its prior Windows implementation also
+replaced the link entry. No broader filesystem or ownership API is changed.
 
 The existing `atomicfile.Write` call sites include filesystem-port writes,
 safe mutation and directory-swap journals; state-v2; native configuration and
@@ -81,8 +87,11 @@ filesystem reader is edited.
    behavior remains `os.ReadFile`. A private Windows `openReadFile` opens
    `os.Root` on `filepath.Dir` and calls `Root.Open` on `filepath.Base`.
    Root closure is checked before returning the file; if it fails after opening
-   the file, close the file as well and retain both failures. ReadFile uses
-   `io.ReadAll` and a checked file close, retaining errors with `errors.Join`.
+   the file, close the file as well and retain all failures. ReadFile uses
+   `io.ReadAll` and a checked file close. Return any original open/read/rename
+   error object unchanged when closing succeeds; only join when an additional
+   close failure occurs. Do not unconditionally call `errors.Join(err, nil)`:
+   the changed concrete type would break existing `os.IsNotExist` callers.
    This small private decomposition allows a test to hold the exact production
    read handle without a global hook or additional exported handle API.
    Keep existing decoding, ownership checks,
@@ -132,6 +141,9 @@ network. Native Windows contracts must distinguish these cases:
   old target bytes and absence of leaked temporary files on refusal. Include
   Unicode and long-parent-path names. Existing ordinary write/read and strict
   journal/cache validation contracts remain required.
+- Missing-parent and missing-leaf read contracts each require both
+  `os.IsNotExist(err)` and `errors.Is(err, os.ErrNotExist)`. Preserve the existing journal missing-load
+  test and caller unchanged; it must keep recognizing the original failure.
 
 Run only necessary affected-package contracts, vet and configured lint with
 the actual CI merge base plus the unfiltered size/architecture gate. Native
