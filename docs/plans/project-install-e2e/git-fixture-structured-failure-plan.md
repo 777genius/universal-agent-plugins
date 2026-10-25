@@ -85,3 +85,15 @@ job and finite output from the focused run. A passing attempt does not identify
 the historical cause; a failing attempt can establish only the observed fixed
 category and integer status. Any concrete behavior correction requires its own
 reviewed evidence. Full final Required/Coverage/Core/native gates remain.
+
+## R2 amendment: preserve the existing forced-cleanup failure category
+
+`runExplicit` also fails when `termination.forcedMembers` is true, even if the
+supervisor's Error is empty. ROOT will add `process.ErrOrdinaryForcedCleanup`
+with the exact current text, `process left live descendants that required forced
+cleanup`, and substitute it only for the constant `fmt.Errorf` in that existing
+ordinary-runner branch. Preserve the surrounding joins, branch, status and timing;
+leave the duplex runner unchanged. An inert contract verifies exact text and
+`errors.Is` identity. CI/SDK adds an `errors.Is` fixture classification returning
+the fixed `ordinary_forced_cleanup` label. Existing context/output precedence,
+four-record caps, original delegate results and all no-Error-read traps remain.
