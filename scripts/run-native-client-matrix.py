@@ -74,7 +74,7 @@ REQUIRED_TESTS = {
 }
 PROJECT_TESTS = {
     "codex": {"TestAgentpluginsCodexNativeProjectComponentsLifecycle", "TestAgentpluginsCodexNativeTrustedProjectMCP"},
-    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle"},
+    "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
 
