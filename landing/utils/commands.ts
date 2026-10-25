@@ -27,6 +27,8 @@ function communityAddSource(plugin: RegistryPlugin): string {
   if (
     typeof source.path !== 'string' ||
     source.path.includes('\\') ||
+    // An apostrophe has no quoting that is correct in both POSIX shells and PowerShell.
+    source.path.includes("'") ||
     [...source.path].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127) ||
     (source.path && source.path.split('/').some((part) => !part || part === '.' || part === '..'))
   )
