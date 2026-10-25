@@ -187,13 +187,18 @@ func TestProjectProcessDeathChild(t *testing.T) {
 
 func deathKillAtBarrier(t *testing.T, base, boundary string, verify func(deathBarrier)) deathBarrier {
 	t.Helper()
+	return deathKillAtBarrierChild(t, "TestProjectProcessDeathChild", base, boundary, verify)
+}
+
+func deathKillAtBarrierChild(t *testing.T, childTest, base, boundary string, verify func(deathBarrier)) deathBarrier {
+	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, executable, "-test.run=^TestProjectProcessDeathChild$", "-test.timeout=25s", "--", base, boundary)
+	command := exec.CommandContext(ctx, executable, "-test.run=^"+childTest+"$", "-test.timeout=25s", "--", base, boundary)
 	stdin, err := command.StdinPipe()
 	if err != nil {
 		t.Fatal(err)

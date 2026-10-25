@@ -245,8 +245,12 @@ type deathBarrier struct {
 func deathProveBoundary(t *testing.T, base, boundary string, before domain.ClientBinding, oldConfig string) deathBarrier {
 	t.Helper()
 	project := filepath.Join(base, "A")
+	clientID, profile, skillRoot, config := "codex", project, filepath.Join(project, ".agents", "skills"), filepath.Join(project, ".codex", "config.toml")
+	if before.ClientID == "vscode" {
+		clientID, profile, skillRoot, config = "vscode", filepath.Join(project, ".vscode"), filepath.Join(project, ".github", "skills"), filepath.Join(project, ".vscode", "mcp.json")
+	}
 	binding := deathBinding(t, base, project)
-	if binding.Scope != string(domain.ScopeProject) || binding.ClientID != "codex" || binding.NativeProfileRoot != project || binding.ClientBindingID != before.ClientBindingID || binding.TargetLocator != before.TargetLocator || binding.DataReceiptID == "" || binding.DataReceiptID != before.DataReceiptID {
+	if binding.Scope != string(domain.ScopeProject) || binding.ClientID != clientID || binding.NativeProfileRoot != profile || binding.ClientBindingID != before.ClientBindingID || binding.TargetLocator != before.TargetLocator || binding.DataReceiptID == "" || binding.DataReceiptID != before.DataReceiptID {
 		t.Fatalf("boundary changed selected scope, binding or data authority: %+v", binding)
 	}
 	if binding.NativeActivationAttempt == "" || binding.PendingNativeIntent != nil || recordedBindingDigest(binding, "") == "" || recordedBindingDigest(binding, "") == recordedBindingDigest(before, "") {
@@ -258,13 +262,13 @@ func deathProveBoundary(t *testing.T, base, boundary string, before domain.Clien
 	if deathRead(t, filepath.Join(binding.TargetLocator, "skills", deathComponent, "SKILL.md")) != deathSkill(deathComponent, deathNewVersion) {
 		t.Fatal("managed package was not replaced before the barrier")
 	}
-	if deathRead(t, filepath.Join(project, ".codex", "config.toml")) != oldConfig {
+	if deathRead(t, config) != oldConfig {
 		t.Fatal("MCP config changed before its admitted commit boundary")
 	}
-	native := filepath.Join(project, ".agents", "skills", deathComponent, "SKILL.md")
+	native := filepath.Join(skillRoot, deathComponent, "SKILL.md")
 	want := deathOldVersion
 	barrier := deathBarrier{Boundary: boundary, TargetPath: binding.TargetLocator, AttemptID: binding.NativeActivationAttempt, BindingID: binding.ClientBindingID}
-	backups, err := filepath.Glob(filepath.Join(project, ".agents", "skills", ".agentplugins-native-*"))
+	backups, err := filepath.Glob(filepath.Join(skillRoot, ".agentplugins-native-*"))
 	if err != nil {
 		t.Fatal(err)
 	}
