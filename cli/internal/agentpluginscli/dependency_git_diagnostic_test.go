@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync/atomic"
 
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -13,14 +14,15 @@ import (
 // argv and streams, so even a disposable repository's error text is never read.
 type dependencyGitDiagnosticRunner struct {
 	delegate sourceacquisition.Runner
-	report   func(string, string)
+	report   func(string, string, string)
 	failures atomic.Uint32
 }
 
 func (runner *dependencyGitDiagnosticRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
 	body, err := runner.delegate.Run(ctx, command)
 	if err != nil && runner.failures.Add(1) <= 4 {
-		runner.report(dependencyGitDiagnosticPhase(command.Args), dependencyGitDiagnosticClass(err))
+		class, status := dependencyGitDiagnosticClass(err)
+		runner.report(dependencyGitDiagnosticPhase(command.Args), class, status)
 	}
 	return body, err
 }
@@ -38,17 +40,25 @@ func dependencyGitDiagnosticPhase(args []string) string {
 	return "unknown"
 }
 
-func dependencyGitDiagnosticClass(err error) string {
+func dependencyGitDiagnosticClass(err error) (string, string) {
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "context_canceled"
+		return "context_canceled", "unavailable"
 	case errors.Is(err, context.DeadlineExceeded):
-		return "context_deadline"
+		return "context_deadline", "unavailable"
 	case errors.Is(err, processadapter.ErrOrdinaryContainmentUnsupported):
-		return "ordinary_unsupported"
+		return "ordinary_unsupported", "unavailable"
 	case errors.Is(err, processadapter.ErrStdoutLimitExceeded):
-		return "stdout_limit"
-	default:
-		return "other_git_or_process"
+		return "stdout_limit", "unavailable"
+	case errors.Is(err, processadapter.ErrOrdinaryForcedCleanup):
+		return "ordinary_forced_cleanup", "unavailable"
 	}
+	if class := processadapter.OrdinarySupervisorFailureClass(err); class != "" {
+		return class, "unavailable"
+	}
+	var exit interface{ GitTransportExitCode() int }
+	if errors.As(err, &exit) {
+		return "git_exit", strconv.Itoa(exit.GitTransportExitCode())
+	}
+	return "other_git_or_process", "unavailable"
 }

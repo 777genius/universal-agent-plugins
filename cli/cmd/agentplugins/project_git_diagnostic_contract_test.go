@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -147,8 +148,8 @@ func TestProjectGitDiagnosticClassesCountsAndUnknownPhaseNeverInferAcquisition(t
 	for _, tc := range []struct {
 		err   error
 		class string
-	}{{context.Canceled, "context_canceled"}, {context.DeadlineExceeded, "context_deadline"}, {processadapter.ErrOrdinaryContainmentUnsupported, "ordinary_unsupported"}, {processadapter.ErrStdoutLimitExceeded, "stdout_limit"}, {&projectGitInspectionTrap{}, "other_git_or_process"}} {
-		if got := projectGitDiagnosticClass(tc.err); got != tc.class {
+	}{{context.Canceled, "context_canceled"}, {context.DeadlineExceeded, "context_deadline"}, {processadapter.ErrOrdinaryContainmentUnsupported, "ordinary_unsupported"}, {processadapter.ErrStdoutLimitExceeded, "stdout_limit"}, {processadapter.ErrOrdinaryForcedCleanup, "ordinary_forced_cleanup"}, {errors.Join(context.Canceled, processadapter.ErrOrdinaryForcedCleanup), "context_canceled"}, {&exec.ExitError{}, "other_git_or_process"}, {&projectGitInspectionTrap{}, "other_git_or_process"}} {
+		if got, status := projectGitDiagnosticClass(tc.err); got != tc.class || status != "unavailable" {
 			t.Fatal(got, tc.class)
 		}
 	}
@@ -182,6 +183,29 @@ func TestProjectGitDiagnosticClassesCountsAndUnknownPhaseNeverInferAcquisition(t
 	r.recorder.outsideInvocations(0)
 	if len(*logs) != 1 || !strings.Contains((*logs)[0], "init:0") || !strings.Contains((*logs)[0], "undetermined") {
 		t.Fatal("pre-command failure inferred snapshot")
+	}
+}
+
+type projectGitDiagnosticExitError struct {
+	projectGitInspectionTrap
+	code int
+}
+
+func (err *projectGitDiagnosticExitError) GitTransportExitCode() int { return err.code }
+
+func TestProjectGitDiagnosticRecognizesPositiveExitWithoutReadingError(t *testing.T) {
+	runner, dir, logs := projectGitDiagnosticFixture(t)
+	original := errors.Join(&projectGitDiagnosticExitError{code: 128})
+	body := []byte("secret original output")
+	runner.delegate = projectGitDiagnosticDelegate(func(context.Context, sourceacquisition.Command) ([]byte, error) {
+		return body, original
+	})
+	got, err := runner.Run(t.Context(), sourceacquisition.Command{Dir: dir, Args: []string{"unknown", "secret argument"}})
+	if reflect.ValueOf(err) != reflect.ValueOf(original) || &got[0] != &body[0] || len(*logs) != 1 {
+		t.Fatal("positive exit diagnostics changed delegated identity or count")
+	}
+	if !strings.Contains((*logs)[0], "class=git_exit exit_status=128 cause=cause_omitted") || strings.Contains((*logs)[0], "secret") {
+		t.Fatal("positive exit category read an argv/stream-bearing error")
 	}
 }
 

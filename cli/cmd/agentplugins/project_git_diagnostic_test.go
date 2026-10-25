@@ -75,7 +75,8 @@ func (r projectGitDiagnosticRunner) Run(ctx context.Context, command sourceacqui
 	if command.NativeCredentials && known && owned && projectGitDiagnosticEndpoint(d.endpoint) && (endpointExplicit || phase == "fetch" && d.lastConfiguredRepo == repo) {
 		cause = projectGitDiagnosticCause(err, d.endpoint, r.root, command.Dir, repo)
 	}
-	d.log(fmt.Sprintf("project Git diagnostic phase=%s class=%s cause=%s counts=%s", phase, projectGitDiagnosticClass(err), cause, d.countSnapshot()))
+	class, status := projectGitDiagnosticClass(err)
+	d.log(fmt.Sprintf("project Git diagnostic phase=%s class=%s exit_status=%s cause=%s counts=%s", phase, class, status, cause, d.countSnapshot()))
 	return body, err
 }
 
@@ -103,19 +104,27 @@ func (d *projectGitDiagnostic) countSnapshot() string {
 	return strings.Join(values, ",")
 }
 
-func projectGitDiagnosticClass(err error) string {
+func projectGitDiagnosticClass(err error) (string, string) {
 	switch {
 	case errors.Is(err, context.Canceled):
-		return "context_canceled"
+		return "context_canceled", "unavailable"
 	case errors.Is(err, context.DeadlineExceeded):
-		return "context_deadline"
+		return "context_deadline", "unavailable"
 	case errors.Is(err, processadapter.ErrOrdinaryContainmentUnsupported):
-		return "ordinary_unsupported"
+		return "ordinary_unsupported", "unavailable"
 	case errors.Is(err, processadapter.ErrStdoutLimitExceeded):
-		return "stdout_limit"
-	default:
-		return "other_git_or_process"
+		return "stdout_limit", "unavailable"
+	case errors.Is(err, processadapter.ErrOrdinaryForcedCleanup):
+		return "ordinary_forced_cleanup", "unavailable"
 	}
+	if class := processadapter.OrdinarySupervisorFailureClass(err); class != "" {
+		return class, "unavailable"
+	}
+	var exit interface{ GitTransportExitCode() int }
+	if errors.As(err, &exit) {
+		return "git_exit", strconv.Itoa(exit.GitTransportExitCode())
+	}
+	return "other_git_or_process", "unavailable"
 }
 
 func projectGitDiagnosticEndpoint(endpoint string) bool {

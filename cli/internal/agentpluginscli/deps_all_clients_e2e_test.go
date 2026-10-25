@@ -64,8 +64,8 @@ func newDependencyHarness(t *testing.T, repo string, clients []domain.DetectedCl
 	f.app.DependenciesRoot, f.app.EnvironmentLockPath, f.app.EnvironmentStoreRoot = root, filepath.Join(root, "environment.lock"), filepath.Join(root, "store")
 	f.app.SecurityEvaluator = dependencyTestScanner{}
 	source := &dependencyTestSource{Acquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir(), URLForRepo: func(string) string { return repo }}}
-	source.Runner = &dependencyGitDiagnosticRunner{delegate: sourceacquisition.OSRunner{}, report: func(phase, class string) {
-		t.Logf("dependency Git diagnostic phase=%s class=%s", phase, class)
+	source.Runner = &dependencyGitDiagnosticRunner{delegate: sourceacquisition.OSRunner{}, report: func(phase, class, status string) {
+		t.Logf("dependency Git diagnostic phase=%s class=%s exit_status=%s", phase, class, status)
 	}}
 	f.app.SourceAcquirer = source
 	if err := os.MkdirAll(root, 0700); err != nil {

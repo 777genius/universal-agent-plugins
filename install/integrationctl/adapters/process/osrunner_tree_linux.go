@@ -65,8 +65,9 @@ type linuxOrdinarySupervisorSpec struct {
 }
 
 type linuxOrdinarySupervisorResult struct {
-	Forced bool
-	Error  string
+	Forced       bool
+	Error        string
+	FailureStage string `json:",omitempty"`
 }
 
 func init() {
@@ -241,17 +242,20 @@ func runLinuxOrdinarySupervisor() int {
 	var spec linuxOrdinarySupervisorSpec
 	if err := json.NewDecoder(specFile).Decode(&spec); err != nil {
 		result.Error = fmt.Sprintf("decode supervisor request: %v", err)
+		result.FailureStage = ordinarySupervisorRequestDecode
 		writeResult()
 		return 125
 	}
 	_ = specFile.Close()
 	if err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0); err != nil {
 		result.Error = fmt.Sprintf("establish isolated child-subreaper boundary: %v", err)
+		result.FailureStage = ordinarySupervisorSubreaperSetup
 		writeResult()
 		return 125
 	}
 	if err := ordinaryContainmentPreflight(); err != nil {
 		result.Error = fmt.Sprintf("ordinary command containment preflight: %v", err)
+		result.FailureStage = ordinarySupervisorPreflight
 		writeResult()
 		return 125
 	}
@@ -263,6 +267,7 @@ func runLinuxOrdinarySupervisor() int {
 	child.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := child.Start(); err != nil {
 		result.Error = fmt.Sprintf("start supervised command: %v", err)
+		result.FailureStage = ordinarySupervisorCommandStart
 		writeResult()
 		return 125
 	}
@@ -279,6 +284,7 @@ func runLinuxOrdinarySupervisor() int {
 	result.Forced = forced
 	if cleanupErr != nil {
 		result.Error = cleanupErr.Error()
+		result.FailureStage = ordinarySupervisorDescendantCleanup
 	}
 	writeResult()
 	if waitErr == nil {
@@ -797,7 +803,11 @@ func (containment *commandContainment) terminateSupervisor() terminationResult {
 	if exited {
 		statusErr = containment.readSupervisorResult()
 		if containment.supervisorResult.Error != "" {
-			statusErr = errors.Join(statusErr, errors.New(containment.supervisorResult.Error))
+			stage := ""
+			if statusErr == nil {
+				stage = containment.supervisorResult.FailureStage
+			}
+			statusErr = errors.Join(statusErr, ordinarySupervisorError(stage, containment.supervisorResult.Error))
 		}
 	}
 	return terminationResult{
@@ -824,6 +834,9 @@ func (containment *commandContainment) readSupervisorResult() error {
 			}
 			err = fmt.Errorf("isolated ordinary-command supervisor returned trailing status data: %w", trailingErr)
 		}
+	}
+	if err == nil && containment.supervisorResult.FailureStage != "" && containment.supervisorResult.Error == "" {
+		err = fmt.Errorf("isolated ordinary-command supervisor returned a failure stage without an error")
 	}
 	closeErr := containment.supervisorStatus.Close()
 	containment.supervisorStatus = nil
