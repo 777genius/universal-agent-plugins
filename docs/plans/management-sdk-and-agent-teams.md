@@ -1,11 +1,35 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v5 — final review dispositions incorporated; remaining end-to-end gates are explicit.
+Status: implementation plan v6 — current architecture, named qualification evidence and remaining dependency/desktop gates.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
+
+## Current checkpoint — v6 (2026-10-25)
+
+This section and the S01–S30 matrix describe the current qualification state.
+The v4/v5 review records below are historical evidence at their named revisions;
+their then-open tasks and counts are not assertions about the current artifacts.
+
+| Input | Current qualification pin |
+| --- | --- |
+| UAP source | [bbc7e98da96dd7d77db42f65da7afae84a86f799](https://github.com/777genius/universal-agent-plugins/commit/bbc7e98da96dd7d77db42f65da7afae84a86f799) |
+| Engine version | `0.1.91+agentteams.bbc7e98da96d`; compatibility baseline is the published `agentplugins-v0.1.91` tag at `4555aa53844ee0078e9036cd82638afd67f77c16` |
+| Linux x64 engine SHA-256 | `fcddfe935e8bfbdbe45b2131aa934240c0e2e2e236fb8c3c84c624a95b9c1b76` |
+| Vendored `@uap/management-sdk` tarball SHA-256 | `31eb798b31be66d1c4d80d1cfa094934fa786cf2b46313360b4c6a8f6bfdd96c`; provenance names the same UAP source |
+| Agent Teams checkpoint | [e1798241e114fe6b530541e398491a8d14d1323d](https://github.com/777genius/agent-teams-ai/commit/e1798241e114fe6b530541e398491a8d14d1323d) |
+| Actual native consumer used locally | OpenCode `1.18.34`, SHA-256 `9ca0b9953d49997601655e54f846a3efa464f237e47c6f1b04716d0f2e64c4c2` |
+
+At this pin, UAP Required and Terminal UI CI, actual signed-registry install/remove,
+and unchanged native SDK and independent Python lifecycles passed. The separate
+aggregate CodeQL gate is failing with 15 alerts. The [independent security
+review](management-sdk-security-review.md) records the complete source disposition;
+formal repository disposition remains pending. Final current-app
+Electron qualification and package gates remain open; app CI evidence is tied to
+its exact revision in E6. Native project/worktree installation remains
+dependency-blocked. No public release or completed merge is claimed.
 
 ## Outcome and scope
 
@@ -31,12 +55,12 @@ accurately reflect the engine used. Unsupported project/local scopes are refused
 never silently downgraded. Complete project/worktree qualification depends on that
 workstream being merged and qualified.
 
-## Research baseline and selected tools
+## Design baseline and selected tools
 
-Inspected UAP main 4555aa53844ee0078e9036cd82638afd67f77c16 and Agent Teams main
-23617c3e825f775ea27d354d03e17a28bf612586. Recheck moving prerequisites before final
-integration. UAP project PRs #472/#475/#480 and Agent Teams Host migration #982
-were open drafts at this baseline.
+Research began at UAP main 4555aa53844ee0078e9036cd82638afd67f77c16 and Agent Teams
+main 23617c3e825f775ea27d354d03e17a28bf612586. Those are historical design inputs;
+the v6 qualification pins and fresh prerequisite heads are recorded separately
+above and below. Recheck moving prerequisite status before final integration.
 
 | Concern | Selection | Why |
 | --- | --- | --- |
@@ -91,7 +115,7 @@ application behavior with executable acceptance tests.
 7. Agent Teams owns current project/profile/runtime selection, actual execution
    cwd, active-run policy, and UI. Both IPC and HTTP call the same feature facade.
 
-Initial public surface:
+Implemented public surface:
 
 - session/capabilities and engine/API version;
 - verified catalog search/details and standalone-Skill candidate discovery;
@@ -102,8 +126,12 @@ Initial public surface:
 - operations.get, operations.wait in SDK, and explicit operations.cancel;
 - fresh inspection and retained recovery preparation.
 
-Finalize exact field names in a reviewed OpenAPI schema before integration.
-There is no arbitrary execute-command or arbitrary-filesystem endpoint.
+The authored [OpenAPI schema](../../contracts/management/openapi.yaml) is the wire
+source of truth. Shared application use cases remain inside the CLI module; the
+existing public Go installer SDK is preserved. No new in-process Go Management
+API, daemon, second transport or arbitrary execute-command/filesystem endpoint
+was added. Native configuration/authentication workflows remain represented by
+capabilities, readiness and required actions, not a universal OAuth/secrets manager.
 
 ## Lifecycle invariants
 
@@ -178,41 +206,208 @@ must preserve equivalent validation and outcomes.
 
 ## Scenario and acceptance matrix
 
-All rows must have an implementation/qualification status and evidence before
-claiming support. Dependency-blocked rows remain visibly blocked.
+The status names distinguish layers: **engine/API verified** means the cited
+deterministic or actual-artifact checks passed; it does not imply final desktop
+qualification. **Desktop pending** requires S29/current-app evidence.
+**Blocked** requires a separately merged and qualified prerequisite.
+Evidence keys E1–E7 are defined immediately below.
 
-| ID | Scenario | Required outcome / evidence |
+| ID | Scenario and required outcome | Current status and evidence |
 | --- | --- | --- |
-| S01 | Catalog/search/detail | Real verified catalog; distribution identity and policy reasons preserved |
-| S02 | Registry plugin install | TS -> real Go -> saved manifest/lock -> actual native files/config -> authoritative inspect |
-| S03 | Standalone Skill install | Candidate selection, immutable pin, managed ownership and native discovery |
-| S04 | Local Skill authoring | Existing local create/edit/import/remove continues for unowned destinations |
-| S05 | Managed Skill protection | Backend rejects direct edit/import overwrite/delete; explicit local copy works |
-| S06 | Add client target / separate profile context | Source pin reused where supported; same-client profiles use separate captured environments; no sibling overwrite |
-| S07 | Update one/selected | One candidate graph; unselected pins unchanged; per-binding results |
-| S08 | Update all | Saved moving dependencies included; exact pins/blocked/unavailable reported |
-| S09 | Locked restore | Exact content and normalization restored into a fresh environment |
-| S10 | Remove | Only selected owned bindings removed; retained data and sibling state reported |
-| S11 | Repair/drift | Recorded pin used; modified/unowned content never silently overwritten |
-| S12 | Source/alias conflict | Actionable refusal before effects |
-| S13 | Lost response/repeated apply | Same accepted request observed; no duplicate mutation |
-| S14 | Conflicting request ID | Same ID with different input rejected |
-| S15 | Process restart after acceptance/effect | Interrupted state correlated to receipts; no blind replay; recover/sync verified |
-| S16 | Cancel before durable effect | Cancelled with no manifest/lock/native changes |
-| S17 | Cancel after durable effect | Partial/incomplete or complete result wins truthfully; recovery next action |
-| S18 | Changed root/profile/manifest | Stale plan rejected; fresh prepare needed |
-| S19 | Expired plan | Old handle rejected without effects |
-| S20 | Missing runtime/auth/manual activation | Materialized distinct from ready; specific action and inspection |
-| S21 | Offline/unavailable catalog | Installed state usable; freshness explicitly unknown |
-| S22 | Revoked/suspended/unsupported source | Policy refusal and safe remaining actions preserved |
-| S23 | Multiple projects/tabs | A's late response cannot overwrite B; operation remains captured in A |
-| S24 | HTTP/IPC | Same feature facade, parity validation/outcomes; no renderer token leakage |
-| S25 | Project scope | Qualified project adapter + explicit root; no fallback to user scope |
-| S26 | Worktree launch | Exact locked environment materialized at actual execution cwd before new run |
-| S27 | Active affected profile | Mutation refused/deferred before effects while a run uses shared roots; unaffected profiles remain usable |
-| S28 | Bad executable/version/process exit | Bounded startup, useful error, cleanup, no latest download |
-| S29 | Electron install/update/remove/reopen | Real clicks, screenshots, actual UAP process and native artifact assertions |
-| S30 | Packaged app | Pinned UAP executable packaged/resolved for supported OS/architecture |
+| S01 | Catalog/search/detail; verified distribution and policy identity | Actual signed catalog verified at BBC7: 30 entries, 28 available, freshness current (E3); generated/API gates E1. |
+| S02 | Registry plugin install through TS → Go → manifest/lock → native state | Actual reviewed `cloudflare-docs` install and removal passed with native OpenCode JSONC assertions (E3). Desktop catalog flow remains S29. |
+| S03 | Standalone Skill discovery, immutable candidate, managed installation | Retained catalog/preview and website byte-freeze tests in [management_skills_test.go](../../cli/internal/agentpluginscli/management_skills_test.go) pass E1. BBC7 Python pinned standalone-Git Skill installation and native-byte proof passed E5; desktop pending. |
+| S04 | Local Skill create/edit/import/remove and reversible restore | Go authoring/locking/byte checks E1; actual local create/edit/delete, restart-visible backup and exact restore passed E4. Import/editor UI is part of pending S29, not inferred from SDK calls. |
+| S05 | Managed Skill protection and explicit independent local copy | Physical ownership/race tests E1 and actual edited-native refusal/preservation E4. App backend copy/protection regressions and e179's actual local-copy binary-byte check are E6. The complete desktop sequence remains pending. |
+| S06 | Add target with retained source pin; isolate captured profile contexts | [Target-only pin preservation](../../install/integrationctl/agentplugins/environment/model_test.go), [registry multi-target identity](../../cli/internal/agentpluginscli/management_registry_test.go), and captured-profile refusal tests pass E1. Separate same-client captures remain the supported model; no multi-profile desktop E2E claimed. |
+| S07 | Update one/selected in one candidate graph, retain unselected pins | [Selected graph test](../../install/integrationctl/agentplugins/environment/selected_update_test.go) passes E1; exact-commit update preserves the actual lock in E4. Moving-range and multi-selection desktop interaction are not exercised by the current S29 harness; their cited proof is at the engine layer. |
+| S08 | Update all saved moving dependencies, report exact pins/exclusions | Implemented through shared selected-graph preparation and one candidate lock; graph/outdated tests E1. This is not an actual all-clients moving-update E2E claim. |
+| S09 | Locked restore into a fresh environment | [Portable fresh restore](../../cli/internal/agentpluginscli/deps_fresh_restore_e2e_test.go) and [mixed-source TOML lifecycle](../../cli/internal/agentpluginscli/deps_toml_cutover_test.go) pass E1. Actual desktop fresh-worktree restore is blocked under S26. |
+| S10 | Remove only selected owned bindings, preserve unrelated data/state | Native registry MCP removal E3 and native Skill removal E4 passed; removal/attestation regression coverage E1. Local-copy survival through desktop removal remains S29. |
+| S11 | Repair recorded native state while preserving changed/unowned content | Native-projection, typed conflict and rollback tests E1/E2; ordinary repair, edited-byte refusal and fresh recovery after explicit manual preservation passed E4. |
+| S12 | Refuse source/alias/authority conflicts before effects | Manifest/graph and [reserved registry authority](../../cli/internal/agentpluginscli/management_registry_test.go) tests pass E1; no borrowing installed eligibility from a future reserved ID. |
+| S13 | Lost response/repeated apply observes the same accepted request | Durable replay tests E1; actual lost accepted response, owned-process SIGKILL and same-identity observation passed E4. No automatic mutation retry. |
+| S14 | Same request ID with different input conflicts | [Transport identity tests](../../cli/internal/agentpluginscli/management/server_test.go) and SDK structured-conflict tests pass E1. |
+| S15 | Restart after acceptance/effect; fresh, proved recovery without blind replay | Deterministic native/local/publication recovery tests E1; BBC7 E4 actually observed an interrupted operation and fresh successful recovery with native-byte/deduplication assertions. |
+| S16 | Cancellation before durable effects changes no desired/native state | [Lifecycle cancellation](../../cli/internal/agentpluginscli/management_lifecycle_test.go) and [transport cancellation](../../cli/internal/agentpluginscli/management/server_test.go) tests pass E1; E6 includes the renderer terminal-cancel refresh regression. The current S29 harness does not exercise a real desktop cancellation. |
+| S17 | Cancellation after effects remains truthful and recoverable | [Manifest-only failure](../../cli/internal/agentpluginscli/management_recovery_test.go) and [canceled-partial retention](../../cli/internal/agentpluginscli/management/recovery_test.go) tests pass E1; no global rollback guarantee. |
+| S18 | Root/profile/manifest or observed-file drift invalidates preparation | Canonical context, local tree/mode and apply-time ownership tests pass E1. Lexical and physical aliases are both checked; unresolved absolute ownership fails closed. |
+| S19 | Unaccepted expired plan refuses before acceptance or effects | New `TestUnacceptedExpiredReviewDoesNotConsumeRequestIdentity` passes E1/E2: PLAN_STALE, zero Apply calls, no durable request record, fresh plan can reuse that refused ID. Accepted replay after expiry remains separately passing. |
+| S20 | Missing runtime/auth/manual steps do not imply readiness | Availability and readiness tests E1; exact public restart/cleanup instruction tests E2. Success retains distinct materialization/activation/authentication/verification axes; no authenticated model execution claimed. |
+| S21 | Catalog unavailable/offline does not erase installed state or mean current | Existing directory/outdated error handling and app independent environment/catalog regressions E1/E6. Actual current signed feed is E3; no complete offline desktop run claimed. |
+| S22 | Revoked/suspended/unsupported source retains policy refusal | Signed-directory and recorded-release policy tests E1; new reserved-ID handling preserves bound-state/revocation checks. E3 qualifies one eligible distribution, not every policy branch. |
+| S23 | A's late response cannot overwrite B or retarget accepted work | Go stable environment/captured-context tests E1 and deterministic app deferred-response/context regressions E6. Ordinary navigation/reopen in S29 does not qualify an in-flight context switch or multi-project isolation; the current harness does not exercise those cases. |
+| S24 | IPC/HTTP share the feature facade, validation and public outcomes | Go protected transport tests E1 and app socket/Host/Origin/CORS parity regressions E6. The e179 partial desktop run proved same-environment HTTP reads, Host/Origin refusal, actual local create/delete and idempotent Apply (E6). This does not make the full S29 run passing. |
+| S25 | Qualified native project installation with an explicit project root | **Blocked** on UAP #472/#475/#480 and integration beneath qualified Host ownership (#982); unsupported scope is refused, not counted as installed. |
+| S26 | Exact locked environment at actual worktree execution cwd before launch | **Blocked** on the same project/Host prerequisites. Local project Skill authoring and user-scope restore do not qualify native worktree activation. |
+| S27 | Active/preparing affected runtime and mutations share admission | App launch/mutation fence, generation and resource-extension regressions E6. Final real active-run desktop proof remains pending; no immutable-run snapshot claim. |
+| S28 | Bad executable/version/exit is bounded, owns only its child | SDK actual child/bootstrap/close tests E1 and missing-native-executable tests; matched native artifact started successfully in E3/E4. No implicit latest download. |
+| S29 | Actual Electron install/update/remove/reopen, keyboard and narrow layout | **Pending on current app checkpoint.** Earlier real preview/install observations are historical partial evidence; current complete desktop receipt and screenshots remain required (E6). |
+| S30 | Pinned SDK/native executable in supported packaged OS/architecture | Linux x64 matched source/tarball/binary staged and executed E3/E4. Historical app signing/package results remain in its plan; current-app package matrix is pending (E7). UAP Terminal UI CI is not Electron package qualification. |
+
+### Current evidence ledger
+
+**E1 — remote UAP qualification at BBC7.**
+[Required run 40176921783](https://github.com/777genius/universal-agent-plugins/actions/runs/40176921783)
+passed all six jobs: required tests, four module lint jobs and Management SDK.
+The SDK job checks generated contract drift, build/typecheck, protocol/owned-process
+tests and a packed consumer. [Terminal UI run 40176921781](https://github.com/777genius/universal-agent-plugins/actions/runs/40176921781)
+passed Windows, Linux and macOS. These are results for the named UAP runtime source,
+not current-app Full qualification or a public release.
+The separate [aggregate CodeQL check on PR #500](https://github.com/777genius/universal-agent-plugins/pull/500/checks)
+(`121120190376`) reports **failure with 15 alerts**. The [security review](management-sdk-security-review.md)
+traces all 15 locations and the three App annotations, finding no concrete exploit
+in the reported paths under the documented authority model. Formal repository
+security disposition is still pending; this source review does not clear the gate.
+Both language-analysis jobs succeeded; that does not clear the aggregate security
+gate. No all-checks or all-security qualification is claimed.
+
+**E2 — focused response and expiry regressions.**
+After restoring the exact BBC7 files, Go 1.26.10 passed the five selected tests below
+in 3.588s with bounded compiler resources:
+
+- `TestManagementOutcomePreservesPublicManualInstructions`
+- `TestManagementManualInstructionsBounded`
+- `TestManagementRecoveryPreservesEditedNativeSkillUntilExplicitResolution`
+- `TestManagementRepairPreservesEditedSkillBesideRenderedCommand`
+- `TestManagementRecoveryPreservesKnownManualReadiness`
+
+The S19 addition was published separately at
+[3c3452f48b73363af4871cb178cca03f87ea9523](https://github.com/777genius/universal-agent-plugins/commit/3c3452f48b73363af4871cb178cca03f87ea9523).
+Its unaccepted-expiry test and the existing accepted-replay-after-expiry test
+passed together locally in 0.047s and are included in BBC7's current CI.
+No sleep is used: the retained review expiry is changed under the session mutex.
+
+**E3 — actual signed official registry lifecycle at BBC7.**
+The packed SDK consumer observed the current verified directory (30 entries,
+28 available), selected the reviewed `cloudflare-docs` `0.4.13-uap.1` distribution
+`777genius/cloudflare-docs-bridge`, installed it through actual Go, checked the
+authoritative OpenCode JSONC entry and exact remote MCP URL, then removed the
+binding and entry while retaining valid JSONC. Install and removal both succeeded.
+Local receipt: `uap-official-catalog-bbc7e98da96d-r2-evidence.json`.
+This proves native configuration, not an authenticated/model/MCP conversation.
+The earlier harness assertion used a client ID where the catalog returns a
+captured target ID; correcting that assertion did not change installation policy.
+
+**E4 — actual unchanged native SDK lifecycle at BBC7.**
+The first rerun with mutable state under `/tmp/uap-runtime-a0f1bffd2cea` passed,
+exit 0 in 116.49s. Source, engine and real OpenCode bytes match the pins above.
+Receipt: `uap-native-sdk-bbc7e98da96d-isolated-evidence.json`;
+log: `bbc7e98da96d-native-sdk-isolated.log`; run metadata:
+`bbc7e98da96d-native-sdk-isolated-run.json`.
+All eight scenario checks passed, including exact native Skill/portable-command
+discovery, withheld explicit-only command, pinned update, repair, edited-content
+preservation and explicit fresh recovery, retained accepted history, removal and
+local create/edit/delete/restart-visible restore. Lost accepted response plus
+SIGKILL actually produced interrupted operation
+`fbda4a6900cb260e510328eae563a6413d446557235df966ff9242f103f844b7`;
+fresh recovery `d17c314ca388203daf152c7d886923613f2e5a4ff57d7b278bb8ecd43f4e3979`
+succeeded and proved native bytes and no duplicate dependency.
+No scenario assertion or production engine code was changed for this rerun.
+
+**E5 — independent Python HTTP lifecycle at BBC7.**
+The unchanged standard-library [Python protocol client](../../contracts/management/python_smoke.py)
+passed in the isolated temporary root, exit 0 in 23.27s. Client SHA-256:
+`c2d85c755ec8c057e313c9ab269d0645fe872c4ef1ee73a18e5204e107ec3940`.
+It discovered and previewed a pinned Git standalone Skill, retained its prepared
+plan through two catalog discards, applied it, and replayed the same accepted
+request. Operation `c5a93f9b13ab4e1c1608d8139f3fff5e2e0fa89e2b8b15941d37b6b88b0a6e0d`
+succeeded with one observed entry. Real OpenCode discovered the exact captured
+native Skill path; installed bytes matched SHA-256
+`07f73f7836f0e929a84bd85943cbac7b26746ee0c4642b4e117b866d681276b0`.
+Receipt: `uap-python-skill-bbc7e98da96d-isolated-evidence.json`;
+log: `bbc7e98da96d-python-skill-isolated.log`; run metadata:
+`bbc7e98da96d-python-skill-isolated-run.json`.
+No timeout, scenario assertion or public protocol code changed. The first BBC7
+run in synced scratch timed out waiting for an accepted response; its receipt/log
+remain failed evidence.
+
+**E6 — Agent Teams implementation and desktop gates.**
+Current app source is `e1798241e114fe6b530541e398491a8d14d1323d`, including the
+reviewed copy-dialog seed correction and nine passing focused tests. Its remote
+[Full CI run 40180747963](https://github.com/777genius/agent-teams-ai/actions/runs/40180747963)
+succeeded: Full Qualification (`121132486698`), canonical TypeScript validation
+(`121131296750`), all four test shards, three lint jobs and the Windows ledger
+passed. These results qualify only that named source checkpoint; subsequent
+test-harness changes require their own applicable current-head qualification.
+See the [app integration plan](https://github.com/777genius/agent-teams-ai/blob/e1798241e114fe6b530541e398491a8d14d1323d/docs/extensions/uap-management-integration-plan.md)
+and [desktop qualification procedure](https://github.com/777genius/agent-teams-ai/blob/e1798241e114fe6b530541e398491a8d14d1323d/docs/extensions/uap-management-e2e.md)
+for its owned evidence. The actual e179 partial desktop receipt,
+`app-e1798241-desktop/evidence.json`, records native Skill discovery, a 760-pixel
+layout without horizontal overflow, source keyboard navigation, same-environment
+sidecar reads, rejected Origin/Host, actual HTTP local create/delete and idempotent
+Apply, and a managed-to-local copy with exact binary bytes. The run then failed
+because the harness clicked Update while that control was still disabled. Its
+successful stages remain scoped evidence; the run is not a full S29 pass. The
+harness does not exercise moving-range/multi-selection updates, real cancellation,
+or an in-flight multi-project context switch. Those behaviors have only their
+separately identified engine/renderer proof, not an inferred desktop result.
+
+The separate e179 [remote desktop run 40180747881](https://github.com/777genius/agent-teams-ai/actions/runs/40180747881)
+failed with `ENOENT` while reading the copied `assets/sample.bin`; a local
+exploratory run reproduced it. The harness could accept the previous install's
+Completed state when the copy dialog closed before the new copy operation had
+finished. A harness-only completion-correlation correction is being reviewed;
+neither this diagnosis nor the earlier local copy-byte success is a full run pass.
+
+The complete current-app Electron lifecycle and platform package matrix remain
+pending. At the named ede65 revision, aggregate App CodeQL check
+`121128225094` also remained **failure with three annotations**; their source
+disposition is in the [security review](management-sdk-security-review.md), with
+formal resolution still outstanding. Full Qualification does not replace the
+separate platform package or security gates, and a prior screenshot or scoped
+check does not complete S29.
+
+**E7 — artifacts and packaged application.**
+Agent Teams provenance, the vendored archive and staged `runtime.json` bind the
+same BBC7 source, version and digests above. Local artifact handoff is
+`bbc7e98da96d-artifact-handoff.json`; SDK package verification is
+`sdk-packs/bbc7e98da96dd7d77db42f65da7afae84a86f799/verified-package.json`.
+Historical macOS ad-hoc signing and platform package smoke are retained in the app
+plan. Current app package/signing checks must pass before claiming S30 complete;
+no release-certificate, notarization or public-release result is inferred.
+
+The named local receipts/logs are retained in the task's `build-evidence` handoff;
+they are distinct from committed executable tests and linked remote CI.
+
+### Qualification environment correction and retained failures
+
+Earlier BBC7 SDK runs used mutable fixtures under synced `/workspace/scratch`.
+One observed interrupted acceptance and then an empty owned Skill directory; a
+filtered filesystem trace on another fresh fixture failed earlier, before SIGKILL:
+the harness successfully renamed the edited live guide into its preservation
+directory, but the old live path reappeared with a different inode and the same
+edited bytes. No traced process recreated that path. The echo Skill still matched
+its recorded native digest. Background scratch synchronization has a writable
+receiver for that tree; it is the leading external-resurrection mechanism.
+
+This is an environment diagnosis, not an engine publication/WAL fix. OpenCode's
+publisher already copies and verifies a private tree before exclusive rename.
+Ownership refused the externally changed live bytes correctly. The original
+failed fixtures, receipts and logs are retained, including
+`uap-native-sdk-bbc7e98da96d-r2-evidence.json` and
+`bbc7e98da96d-native-sdk-strace-analysis.json`. Trace SHA-256:
+`9fb9d1114bd318473bec5fa2557748dda309727fa44c23545fd5f15aa5844248`.
+Mutable native/UI/protocol fixtures and live logs belong in an isolated temporary
+directory outside synchronized scratch; copy completed immutable evidence back
+after process exit. E4 and E5 then passed unchanged. Never weaken content guards or
+discard a failed receipt to make qualification green.
+
+### Unmerged project/Host prerequisites
+
+Fresh status check for v6: all four PRs remain **open drafts**. They have not been
+imported into this integration.
+
+| Prerequisite | Observed head |
+| --- | --- |
+| [UAP #472](https://github.com/777genius/universal-agent-plugins/pull/472) | `a0d1b5f30f890c36925caecdda5f59725245b167` |
+| [UAP #475](https://github.com/777genius/universal-agent-plugins/pull/475) | `e630a5b0ac1cd94443cf710f93a79acb8274ac38` |
+| [UAP #480](https://github.com/777genius/universal-agent-plugins/pull/480) | `2c767ea0a2eb3e3e2640afcff0fbab5cfa31973b` |
+| [Agent Teams Host #982](https://github.com/777genius/agent-teams-ai/pull/982) | `3b351f32474111bb9bd7943d1e6b5a06a3da5e84` |
+
+S25/S26 require the relevant adapter behavior and Host ownership to be merged and
+qualified together. User-scope success, local project authoring and explicit
+unsupported-scope refusal do not satisfy those scenarios.
 
 ## Agent Teams implementation and UX
 
@@ -326,6 +521,17 @@ trusted adapter supplies authority. Require bounded JSON mutation bodies. Test
 hostile/unknown Origin/Host and broad CORS configuration before facade invocation.
 Do not weaken UAP's own capability checks or introduce a global auth framework.
 
+The desktop sidecar is a trusted-personal-local boundary. Its real socket peer,
+Host, Origin and bounded JSON checks enforce browser/network admission; they do
+not authenticate an OS account or local process. Another process able to connect
+locally can supply those headers, including a process owned by a different account
+on a shared machine. This integration does not claim hostile-local-process or
+multiuser isolation. Remote or multiuser deployment requires an authenticated
+deployment adapter before exposing mutations. The Go child's separate private
+bearer capability stays in trusted host composition and never reaches the
+renderer. IPC/HTTP parity does not turn the sidecar checks into that credential.
+
+
 Current shared native profile files can be read by active agents. Therefore refuse/
 defer affected-context mutations while a run uses those roots, with an actionable
 stop/defer message; unaffected contexts are allowed. No false immutable-run promise.
@@ -338,7 +544,11 @@ merged, qualified project engine. Capability refusal tests are fallback evidence
 not a passing project installation. Never merge unfinished prerequisite adapters
 or mark dependent scenarios passed to satisfy a checklist.
 
-## Delivery sequence and review checkpoints
+## Historical delivery sequence and review checkpoints
+
+M0–M5 record the order and review gates used to deliver this work. They are not a
+new implementation backlog. Current support and remaining work are governed by
+the v6 scenario matrix and evidence ledger, not by historical milestone wording.
 
 M0 Research and plan:
 - Commit/push v1 and open draft PRs in UAP and Agent Teams.
@@ -399,23 +609,61 @@ substitute. A small native-agent handshake complements materialization tests.
 Existing CI does not automatically click the new UI. Add a focused management E2E
 entrypoint and workflow path triggers. GitHub Full qualification remains mandatory.
 
-Initial local environment has a full disk. Isolated temporary in-memory workspace
-was authorized and cloned successfully; production/test execution still needs
-toolchain/dependency preparation. Do not claim any test passed until executed.
+The original full-disk environment and temporary in-memory checkout are historical.
+Current runtime fixtures must avoid the synchronized scratch tree as documented
+above. Coordinate bounded heavy jobs in the shared environment; a stopped or
+resource-constrained full check is not a passing check. Record exact source pins,
+terminal outcomes and actual native observations before claiming qualification.
 
-## Open questions to settle by experiment
+## Current implementation decisions and regression boundaries
 
-| Question | Resolution method / owner |
+| Decision | Implemented authority / evidence |
 | --- | --- |
-| Minimum shared extraction without Cobra leakage | Implement S02 vertical slice; review exact dependency ports |
-| Acceptance/result persistence and crash boundary | Correlate current installer OperationID/receipts, deterministic S15 barriers |
-| Manifest succeeds but lock publication fails | Existing publication path fault injection; truthful partial/recovery result |
-| General managed Skill ownership inventory | Inspect authoritative binding materialization roots; server-side bypass tests |
-| Cross-repository artifacts | Decided: exact-source SDK tarball vendored with digest; same source builds native binary during app build/CI |
-| Project/worktree readiness | Recheck separate project PR qualification; keep capability truthful |
-| Host migration timing | Recheck #982 before final integration; bind beneath captured ownership if landed |
-| Cross-platform binary launch/package lifetime | Node helper contract and existing packaged matrix; no implicit latest |
-| External examples and generator behavior | Run pinned generation with --check and compile small actual SDK consumer |
+| Shared application seam | CLI-internal typed preparation and existing installer/coordinator; [management backend](../../cli/internal/agentpluginscli/management_backend.go), not a new public Go management facade or second installer |
+| Contract and process | [OpenAPI source](../../contracts/management/openapi.yaml), generated DTOs, one loopback HTTP transport, pure TS client and separate owned-process Node entrypoint |
+| Accepted identity / recovery | Durable observation records plus original installer receipts/journals; retained typed plans are never serialized executable jobs |
+| Bulk updates / portable restore | Existing selected resolver policy, one graph/lock; selected graph and fresh-restore tests cited in S07–S09 |
+| General local ownership | Canonical CLI state plus shared locks; Go local authoring with physical-path checks, dirswap and exact retained undo |
+| Profile authority | Immutable captured host context; stable durable environment identity remains visible across context changes |
+| Runtime/project ownership | Existing Agent Teams mutation/launch admission; native project/worktree behavior remains blocked on the table above |
+| Artifacts and language portability | Same-source vendored TS package/native build; independent Python uses the same public HTTP contract without another maintained SDK |
+
+The published follow-ups preserve these concrete boundaries:
+
+- **Physical paths and modes:** lexical containment and physical canonical
+  comparisons both apply to persisted CLI ownership, including aliases with a
+  missing leaf. An existing dangling/unresolvable absolute ownership path fails
+  closed. Non-path native selectors do not become filesystem ownership. Newly
+  desired Windows modes match what that filesystem reports; observed read-only
+  modes remain intact and mode drift invalidates a local review.
+- **Registry identity:** a reserved ID for an unbound future install is not proof
+  that an installed signed release exists. Multi-target preparation shares its
+  reserved installation correctly; missing existing bound authority remains stale
+  and another release cannot borrow old installation eligibility.
+- **OpenCode configuration selection:** Skills-only effects do not own a config
+  choice that OpenCode itself may populate as schema-only JSONC. Actual new,
+  replacement or final-removal MCP effects still check the recorded config
+  selector. The regression covers all four cases and preserves unrelated config.
+- **Native content and readiness:** complete recovery checks every owned Skill and
+  MCP projection. Typed changed-content refusal crosses the public boundary only
+  with proven effect classification; failed rollback remains uncertain.
+  Materialization and successful installation do not imply authentication.
+- **Public follow-up instructions:** adapter-authored `ActivationOutcome.UserActions`
+  already become `installer.Result.ManualActions`. Management now retains each
+  valid public instruction as a bound `NextAction{kind: manual}`, including exact
+  restart and separate cleanup advice, while preserving successful outcome state.
+  Validation permits at most 32 instructions per native binding result and 4,096
+  Unicode code points per instruction; invalid input uses safe generic guidance,
+  never a truncated command. Private native reasons, errors and `LocalActions`
+  remain filtered. No client-name heuristics, adapter rewrite or new schema was
+  introduced.
+- **Expired unaccepted reviews:** S19 proves refusal before backend Apply or durable
+  acceptance, without consuming the request identity; known accepted replay is
+  resolved before expiry and remains unchanged.
+
+These corrections are covered by the current E1 gates and focused E2 evidence.
+They do not expand unsupported project capabilities or authorize changes to the
+frozen VS Code implementation.
 
 ## Anti-overengineering budget
 
@@ -430,7 +678,34 @@ both repos, separate generated schema/types and focused tests. This is a plannin
 range, not a target; prioritize shared behavior and delete unnecessary wrappers.
 Any material expansion requires a recorded reason and critic review.
 
-## Review log
+The reviewed checkpoint exceeds that original combined estimate. An exact GitHub
+comparison of UAP BBC7 against main `a6beceba`, and Agent Teams e179 against main
+`eb67de9`, excludes unrelated main merges and records:
+
+| Handwritten runtime/build scope | Files | Added lines | Removed lines |
+| --- | --- | --- | --- |
+| UAP Go/SDK production and build tools | 90 | 6,027 | 331 |
+| Agent Teams runtime/feature code | 54 | 4,072 | 182 |
+| Combined | 144 | 10,099 | 513 |
+
+The combined net change is 9,586 lines; the maintained TS SDK itself accounts for
+339 handwritten lines at this checkpoint. These named-checkpoint counts exclude
+tests, generated files, schemas/configuration, localization, documentation and
+the vendored SDK archive; they are not an estimate of future revisions.
+
+Independent review accepted the additional scope because durable acceptance and
+reconciliation, Go-only local Skill editing with retained undo, and shared host
+mutation/launch authority implement concrete required behaviors. The result still
+has one native engine, one wire contract and one maintained language SDK, with no
+daemon, second installer or new frontend framework. This records the expansion
+and its rationale rather than treating the original planning range as achieved.
+
+## Historical review log
+
+These entries preserve the evidence and decisions available at each revision.
+Their counts, candidate pins and then-open gates are historical; v6 status is the
+matrix and evidence ledger above. In particular, v4/v5 are retained rather than
+retroactively relabeling old tests as current-artifact qualification.
 
 - v1: source/primary-tool research incorporated; three read-only research reports
   identified HTTP parity, native identity preservation, backend Skill ownership,
@@ -483,7 +758,7 @@ implementation review remains a separate gate.
 
 Plan direction is approved for implementation subject to these explicit gates.
 
-### v4 implementation evidence and critic dispositions
+### v4 implementation evidence and critic dispositions (historical)
 
 - Separate stable `environmentId` (canonical state root + existing user environment
   + scope) from immutable `contextId` (dependency root, captured targets, profile
@@ -528,7 +803,7 @@ Plan direction is approved for implementation subject to these explicit gates.
 The implementation retains one HTTP contract, one native engine and one language
 SDK. No daemon, generic file lease, parallel installer or public release was added.
 
-### v5 final implementation review and remaining qualification
+### v5 final implementation review and remaining qualification (historical)
 
 Independent final review found four blocking issues; its minimal corrections are
 accepted without adding another installer, scheduler, persistence layer or protocol:
