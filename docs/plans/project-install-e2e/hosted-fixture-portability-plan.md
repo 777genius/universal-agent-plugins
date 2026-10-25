@@ -1,4 +1,4 @@
-# Hosted project fixture portability correction — R1
+# Hosted project fixture portability correction — R2
 
 This is a fixture-only follow-up to the twice-reviewed canonical seed plan.
 Actual source46b4678 hosted Core fast run40145167029 failed the macOS project
@@ -53,3 +53,33 @@ Compile the Windows-only test and obtain actual hosted Windows/macOS passes afte
 integration. A compile is not execution. Record exact reviewed source and commands.
 Two independent plan rounds precede these new Grok fixture edits; frozen code is
 reviewed independently before integration and publication to the working PR.
+
+## R1 critique and finite R2 map
+
+Independent APM and Skillshare R1 architecture GOs reviewed b24201c. R2 pins
+the following finite source locations; there are no production edits.
+
+| File | Fixture correction |
+| --- | --- |
+| providers/project_codex_fixture_test.go | Physicalize existing short MkdirTemp seed before child paths |
+| installer/project_kimi_lifecycle_test.go | Physicalize positive base and immutable source-copy seed |
+| installer/project_kiro_lifecycle_test.go | Physicalize positive base and immutable source-copy seed |
+| clients/grok/project_contract_test.go | Escaped exact root-field replacement,129 unique entries and inert absolute request identity |
+| clients/grok/project_open_windows_test.go | Canonical positive and same-open-object ancestor-alias recheck negative |
+| cli/cmd/agentplugins/project_grok_e2e_test.go | One canonical absolute inert executable identity in detector and runner |
+
+The first five paths are under install/integrationctl/agentplugins. Keep each
+noncanonical suffix literal; never use filepath.Join to clean a traversal
+negative. JSON replacement must alter the selected field exactly once and every
+negative must differ from the valid original. Existing wrong-type, folded-key and
+duplicate-key negatives remain. The129-entry case must prove129 distinct directory
+entries, then require the existing bounded-discovery-entries refusal specifically.
+
+The Windows descriptor remains open through canonical positive, alias SameFile
+proof, rejected recheck and a second canonical positive. The anchored no-reparse
+open of the alias must return the same refusal as the recheck, so a generic closed
+handle or changed-metadata failure cannot satisfy the case. Keep the separate
+before-leaf actual swap negative and do not claim a post-open rename occurred.
+
+Record source-only review, Linux runs, Windows compile-only and actual hosted
+Windows/macOS execution separately. A missing hosted pass remains open.
