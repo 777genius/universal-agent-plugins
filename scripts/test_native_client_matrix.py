@@ -150,6 +150,7 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertEqual(required, matrix.REQUIRED_TESTS["codex"] | matrix.PROJECT_TESTS["codex"])
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsCodexNativeProjectComponentsLifecycle", released.CLIENT_TESTS["codex"])
+        self.assertNotIn("TestAgentpluginsCodexNativeTrustedProjectMCP", released.CLIENT_TESTS["codex"])
 
     def test_source_project_proof_selects_exact_required_claude_tests(self):
         pattern, required = matrix.select_native_tests("claude", project_components=True)
@@ -159,6 +160,7 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertEqual(required, matrix.REQUIRED_TESTS["claude"] | matrix.PROJECT_TESTS["claude"])
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsClaudeNativeProjectPreparedLifecycle", released.CLIENT_TESTS["claude"])
+        self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectDiscovery", released.CLIENT_TESTS["claude"])
 
     def test_source_project_proof_selects_exact_required_opencode_tests(self):
         pattern, required = matrix.select_native_tests("opencode", project_components=True)
