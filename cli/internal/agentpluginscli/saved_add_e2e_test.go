@@ -95,6 +95,15 @@ func newSavedJourney(t *testing.T, repo string) savedJourney {
 	f.app.EnvironmentStoreRoot = filepath.Join(root, "store")
 	f.app.SecurityEvaluator = dependencyTestScanner{}
 	source := &savedJourneySource{Acquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir(), URLForRepo: func(string) string { return repo }}}
+	diagnostic := &dependencyGitDiagnosticRunner{delegate: sourceacquisition.OSRunner{}, report: func(phase, class, status string) {
+		t.Logf("saved-source Git diagnostic: phase=%s class=%s exit_status=%s", phase, class, status)
+	}}
+	source.Runner = diagnostic
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("saved-source Git diagnostic: delegated_failures=%d", diagnostic.failures.Load())
+		}
+	})
 	f.app.SourceAcquirer = source
 	return savedJourney{cli: f, runner: runner, source: source}
 }
