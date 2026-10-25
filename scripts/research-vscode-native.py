@@ -339,9 +339,11 @@ os.close(pfd)
 '''
 
 
-def cleanup(root, identity, output):
-    record, _, _ = run_probe([sys.executable, "-c", CLEANUP_CODE, str(root), str(identity.st_dev), str(identity.st_ino)],
-                              output, {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, output, "cleanup", timeout=5)
+def cleanup(root, identity, output, *, isolated=False):
+    interpreter = ["/usr/bin/python3", "-I"] if isolated else [sys.executable]
+    cwd = Path("/") if isolated else output
+    record, _, _ = run_probe(interpreter + ["-c", CLEANUP_CODE, str(root), str(identity.st_dev), str(identity.st_ino)],
+                              cwd, {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, output, "cleanup", timeout=5)
     return {"complete": record["exit"] == 0 and record["error"] is None, "probe": record}
 
 
@@ -396,7 +398,7 @@ def artifact_bound(output):
     return files
 
 
-def publish_artifacts(output, summary):
+def publish_artifacts(output, summary, allowed_names=None):
     """Publish one bounded ZIP, or only a bounded failure ZIP, to upload/."""
     stage = output / "upload"
     error = None
@@ -407,6 +409,8 @@ def publish_artifacts(output, summary):
     temporary.unlink()
     try:
         files = artifact_bound(output)
+        if allowed_names is not None and any(path.name not in allowed_names for path, _ in files):
+            raise ValueError("research artifact name is outside the closed workspace table")
         descriptor = os.open(temporary, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "w+b") as container, zipfile.ZipFile(container, "w", compression=zipfile.ZIP_STORED) as archive:
             total = 0
