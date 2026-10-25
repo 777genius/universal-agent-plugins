@@ -233,3 +233,38 @@ func TestFinishProjectGroupStateFailureCannotHideObservedEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestFinishGroupFailurePrecedenceRetainsObservedFacts(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		cause   error
+		reason  string
+		outcome Outcome
+	}{
+		{"ordinary", errors.New("activation failed"), "activation failed", OutcomeIncomplete},
+		{"plan", ErrPlanChanged, "plan_changed", OutcomeConflict},
+		{"refresh", errors.Join(ErrPlanChanged, usecase.ErrProjectionRefreshRequired), "update_required", OutcomeConflict},
+		{"text", errors.Join(ErrPlanChanged, errors.New("run update separately")), "update_required", OutcomeConflict},
+		{"pin", errors.Join(ErrPlanChanged, usecase.ErrProjectionPinChangeRequired), "pin_change_required", OutcomeConflict},
+		{"all", errors.Join(ErrPlanChanged, usecase.ErrProjectionRefreshRequired, usecase.ErrProjectionPinChangeRequired), "pin_change_required", OutcomeConflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newProjectGroupReportFixture(t)
+			f.got.Mutated = true
+			f.got.Targets[0].Failure = &usecase.GroupTargetFailure{Stage: "activation", Message: "observed failure"}
+			engine := Engine{store: groupReportingStore{state: f.state}}
+			initial := Result{Binding: BindingFacts{BindingID: "host-fact"}, ManualActions: []string{"host action"}}
+			got, err := engine.finishGroup(f.prepared, initial, true, f.got, tc.cause)
+			if !errors.Is(err, tc.cause) || err.Error() != wrapLifecycleError(tc.cause).Error() || got.Outcome != tc.outcome || got.Reason != tc.reason || !got.Mutated || got.NoChange {
+				t.Fatalf("failure classification %+v %v", got, err)
+			}
+			wantActions := []string{"host action"}
+			for _, target := range f.got.Targets {
+				wantActions = append(wantActions, target.Activation.UserActions...)
+			}
+			if got.Binding.BindingID != f.prepared.plan.Targets[0].BindingID || !reflect.DeepEqual(got.ManualActions, wantActions) || len(got.Targets) != 2 || got.Targets[0].Failure == nil || got.Targets[0].Failure.Message != "observed failure" {
+				t.Fatalf("observed facts lost: binding=%q actions=%v targets=%+v", got.Binding.BindingID, got.ManualActions, got.Targets)
+			}
+		})
+	}
+}

@@ -33,7 +33,7 @@ func (*Adapter) ProjectTargetRoot(client domain.DetectedClient, mode domain.Pack
 		return "", "", err
 	}
 	if managed != filepath.Join(root, ".uap", "managed") {
-		return "", "", fmt.Errorf("Cline project managed root differs from selected project")
+		return "", "", fmt.Errorf("cline project managed root differs from selected project")
 	}
 	return shared.ManagedTargetRoot(client, mode, managed)
 }
@@ -44,17 +44,17 @@ func clineProjectRoot(client domain.DetectedClient, target domain.TargetContext,
 		return "", err
 	}
 	if client.ClientID != domain.ClientCline || selected.Scope != domain.ScopeProject || selected.UserConfigRoot != client.ConfigRoot || client.ConfigRoot == "" {
-		return "", fmt.Errorf("Cline project requires matching scope and original user profile")
+		return "", fmt.Errorf("cline project requires matching scope and original user profile")
 	}
 	root := selected.ProjectRoot
 	if clineRootsOverlap(root, client.ConfigRoot) {
-		return "", fmt.Errorf("Cline project must not overlap the original user profile")
+		return "", fmt.Errorf("cline project must not overlap the original user profile")
 	}
 	if err := pathpolicy.RequireContainedChild(filepath.Dir(client.ConfigRoot), client.ConfigRoot); err != nil {
 		return "", err
 	}
 	if planned != "" && planned != root {
-		return "", fmt.Errorf("Cline project namespace differs from selected project")
+		return "", fmt.Errorf("cline project namespace differs from selected project")
 	}
 	for _, child := range []string{filepath.Join(root, ".cline", "skills"), filepath.Join(root, ".uap", "clients", "cline", "mcp.json")} {
 		if err := pathpolicy.RequireContainedChild(root, child); err != nil {
@@ -66,14 +66,14 @@ func clineProjectRoot(client domain.DetectedClient, target domain.TargetContext,
 
 func clineProjectPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan) (string, error) {
 	if plan.ClientID != domain.ClientCline || plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject || plan.NativeRegistryExecutable != "" {
-		return "", fmt.Errorf("Cline project requires exact client, scope and file-only namespace")
+		return "", fmt.Errorf("cline project requires exact client, scope and file-only namespace")
 	}
 	root, err := clineProjectRoot(client, plan.TargetContext, plan.NativeRegistryRoot)
 	if err != nil {
 		return "", err
 	}
 	if plan.NativeRegistryRoot != root {
-		return "", fmt.Errorf("Cline project namespace is missing")
+		return "", fmt.Errorf("cline project namespace is missing")
 	}
 	if err := pathpolicy.ValidateLeafID(plan.PhysicalArtifactID); err != nil {
 		return "", err
@@ -81,7 +81,7 @@ func clineProjectPlanRoot(client domain.DetectedClient, plan domain.DeliveryPlan
 	managed := filepath.Join(root, ".uap", "managed")
 	target := filepath.Join(managed, "clients", "cline")
 	if plan.TargetAnchor != managed || plan.TargetRoot != target || plan.ActivePath != filepath.Join(target, plan.PhysicalArtifactID) {
-		return "", fmt.Errorf("Cline managed package differs from selected project")
+		return "", fmt.Errorf("cline managed package differs from selected project")
 	}
 	return root, pathpolicy.RequireContainedChild(root, plan.ActivePath)
 }

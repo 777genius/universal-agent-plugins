@@ -65,21 +65,7 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	}
 	attachGroupAttemptResult(&result, got)
 	if err != nil {
-		result.Outcome = OutcomeIncomplete
-		result.Reason = err.Error()
-		if errors.Is(err, ErrPlanChanged) {
-			result.Outcome = OutcomeConflict
-			result.Reason = "plan_changed"
-		}
-		if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
-			result.Outcome = OutcomeConflict
-			result.Reason = "update_required"
-		}
-		if errors.Is(err, usecase.ErrProjectionPinChangeRequired) {
-			result.Outcome = OutcomeConflict
-			result.Reason = "pin_change_required"
-		}
-		return result, err
+		return failedGroupResult(result, err)
 	}
 	if prepared.req.Scope == domain.ScopeProject {
 		if loadErr != nil {
@@ -108,6 +94,24 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 	e.report(ProgressVerify)
 	e.report(ProgressComplete)
 	return result, nil
+}
+
+func failedGroupResult(result Result, err error) (Result, error) {
+	result.Outcome = OutcomeIncomplete
+	result.Reason = err.Error()
+	if errors.Is(err, ErrPlanChanged) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "plan_changed"
+	}
+	if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "update_required"
+	}
+	if errors.Is(err, usecase.ErrProjectionPinChangeRequired) {
+		result.Outcome = OutcomeConflict
+		result.Reason = "pin_change_required"
+	}
+	return result, err
 }
 
 func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {

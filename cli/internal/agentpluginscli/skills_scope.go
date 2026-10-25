@@ -19,7 +19,7 @@ func (app App) checkSkillsContext(targets []string) error {
 			return err
 		}
 		if root != app.ProjectRoot {
-			return fmt.Errorf("Skills project root must be canonical")
+			return fmt.Errorf("skills project root must be canonical")
 		}
 	}
 	if err := app.checkProjectNamespace(); err != nil {
