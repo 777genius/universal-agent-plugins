@@ -96,7 +96,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect
     .poll(
       async () => {
-        const intro = await page.locator('.catalog .section-heading > p').last().innerText();
+        const intro = await page.locator('.unified-catalog__heading > p').innerText();
         return [...intro.matchAll(/([\d,]+) (?:reviewed plugins?|community packages?)/g)]
           .map((match) => Number(match[1].replaceAll(',', '')))
           .reduce((sum, count) => sum + count, 0);
@@ -338,7 +338,7 @@ test.describe('mobile navigation and catalog', () => {
       const nuxt = app?.$nuxt || app?.config.globalProperties.$nuxt;
       return Boolean(app?.config.globalProperties.$router && nuxt?.isHydrating === false);
     });
-    await page.locator('.catalog .section-heading').scrollIntoViewIfNeeded();
+    await page.locator('#unified-catalog-title').scrollIntoViewIfNeeded();
 
     const toggle = page.locator('.catalog-filter-toggle');
     await expect(toggle).toBeVisible();
@@ -482,7 +482,7 @@ test('community install controls use the full panel width for long sources', asy
   }
 });
 
-test('directory filters and reviewed detail keep automatic detection as the default', async ({
+test('directory filters and reviewed detail keep terminal agent choice as the default', async ({
   page,
 }) => {
   await page.goto('./plugins');
@@ -495,7 +495,12 @@ test('directory filters and reviewed detail keep automatic detection as the defa
   await gitlabCard.getByRole('link', { name: 'GitLab', exact: true }).click();
   await expect(page).toHaveURL(/\/plugins\/gitlab\/?$/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'GitLab', exact: true })).toBeVisible();
-  await expect(page.getByText('All installed agents')).toBeVisible();
+  await expect(
+    page.getByRole('button', {
+      name: 'Choose target agents: Choose agents in terminal',
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Run with npx' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
     'npx -y universal-agent-plugins add',

@@ -191,6 +191,9 @@ export default defineNuxtConfig({
       discoveryKeyID,
       discoveryPublicKey,
       muxPlaybackId,
+      skillsCatalogEndpoint:
+        process.env.NUXT_PUBLIC_SKILLS_CATALOG_ENDPOINT ||
+        'https://api.universal-agent-plugins.com/v1/skills',
     },
   },
 });
