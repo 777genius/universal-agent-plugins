@@ -269,4 +269,10 @@ contract: installed ownership, native discovery and MCP/model operation are
 reported separately. ChatGPT project scope refuses explicitly; other targets
 have their own component, preparation or harness restrictions.
 
+VS Code project preparation uses `.github/skills` and `.vscode/mcp.json`.
+The [pinned VS Code 1.143.1 observation](https://github.com/777genius/universal-agent-plugins/actions/runs/40188310034) verified metadata in
+separate A/B folders, a fresh A launch and removal, with workspace trust ungranted.
+This is metadata evidence; the adapter reports Prepared and installed-file
+verification, without claiming MCP startup, tool calls or model execution.
+
 [Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)

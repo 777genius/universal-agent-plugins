@@ -46,4 +46,11 @@ localeDisposition: "current-translation"
 проекта для ChatGPT явно отклоняется; у остальных целей действуют собственные
 ограничения компонентов, подготовки и поддерживаемого клиента.
 
+Подготовка проекта для VS Code использует `.github/skills` и `.vscode/mcp.json`.
+[Наблюдение VS Code 1.143.1](https://github.com/777genius/universal-agent-plugins/actions/runs/40188310034) подтвердило метаданные в отдельных
+папках A и B, после нового запуска A и после удаления; доверие к рабочей области
+не предоставлялось. Это свидетельство о метаданных. Адаптер сообщает Prepared
+и проверку установленных файлов, не заявляя запуск MCP, вызов инструментов
+или выполнение модели.
+
 [Руководство по установке в проект](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Текущая поддержка проектов и ограничения](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
