@@ -136,11 +136,15 @@ network. Native Windows contracts must distinguish these cases:
   old bytes through the retained reader. The deterministic held-reader contract
   exercises the former remove-before-rename path directly; no stress loop or
   additional concurrent-store experiment is added.
-- Readonly targets, directory targets, unsafe target symlinks where available,
-  missing paths and permanent errors continue to fail appropriately. Verify
+- Readonly targets, directory targets, missing paths and permanent errors
+  continue to fail appropriately. Verify
   old target bytes and absence of leaked temporary files on refusal. Include
   Unicode and long-parent-path names. Existing ordinary write/read and strict
   journal/cache validation contracts remain required.
+- The existing target-link Lstat refusal stays byte-identical in production;
+  existing Unix symlink guard tests remain required. This bounded Windows
+  observation does not newly qualify symlink creation or refusal: the historic
+  Windows symlink test skips, and it is outside the four named native tests.
 - Missing-parent and missing-leaf read contracts each require both
   `os.IsNotExist(err)` and `errors.Is(err, os.ErrNotExist)`. Preserve the existing journal missing-load
   test and caller unchanged; it must keep recognizing the original failure.
