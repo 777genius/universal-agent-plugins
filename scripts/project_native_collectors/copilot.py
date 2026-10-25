@@ -34,6 +34,15 @@ HELP = (
 )
 
 
+def parse_version(body):
+    # Genuine hosted 1.0.103 output includes this nonexecuted update hint.
+    expected = ("GitHub Copilot CLI " + VERSION + ".\n"
+                "Run 'copilot update' to check for updates.\n").encode()
+    if body != expected:
+        raise ValueError("Copilot version differs from immutable pin")
+    return VERSION
+
+
 def _unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -177,9 +186,7 @@ def collect(ctx):
                    for path in projects.values())):
         raise ValueError("Copilot requires distinct projects and original user home")
     owned = {}
-    version = _probe(ctx, owned, "version", ("--version",)).decode("utf-8", errors="strict").strip()
-    if version != "GitHub Copilot CLI " + VERSION + ".":
-        raise ValueError("Copilot version differs from immutable pin")
+    version = parse_version(_probe(ctx, owned, "version", ("--version",)))
     for label, arguments, token in HELP:
         if token not in _probe(ctx, owned, label, arguments).decode("utf-8", errors="strict"):
             raise ValueError("unrecognized pinned Copilot help: " + label)

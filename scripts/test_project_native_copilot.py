@@ -27,7 +27,7 @@ class FakeContext:
             return replacement() if callable(replacement) else replacement
         record = {"exit": 0, "error": None}
         if label == "version":
-            return record, b"GitHub Copilot CLI 1.0.103.\n", b""
+            return record, b"GitHub Copilot CLI 1.0.103.\nRun 'copilot update' to check for updates.\n", b""
         if label.endswith("help"):
             return record, b"copilot --json COPILOT_PROVIDER_BASE_URL", b""
         if label.startswith("empty-"):
@@ -56,6 +56,7 @@ class CopilotCollectorTests(unittest.TestCase):
         result = copilot.collect(ctx)
         self.assertEqual({row["id"] for row in result["cases"]}, {"copilot.help", "copilot.scope-observation"})
         facts = result["observations"]
+        self.assertEqual(facts["client_version_measured"], "1.0.103")
         self.assertTrue(all(row["status"] == "passed" for row in result["cases"]))
         self.assertFalse(any(value for key, value in facts.items() if key.endswith("_qualified")))
         self.assertEqual(set(facts["scopes"]["a"]["mcp"]), {copilot.NAMES["user"], copilot.NAMES["a"]})
@@ -168,6 +169,20 @@ class CopilotCollectorTests(unittest.TestCase):
 
 
 class CopilotParserTests(unittest.TestCase):
+    def test_exact_hosted_version_and_nonexecuted_update_hint(self):
+        # Run 40235287357 attempt 2, artifact 12615867201: 71 stdout bytes.
+        observed = b"GitHub Copilot CLI 1.0.103.\nRun 'copilot update' to check for updates.\n"
+        self.assertEqual(len(observed), 71)
+        self.assertEqual(copilot.parse_version(observed), "1.0.103")
+        for body in [observed.replace(b"1.0.103", b"1.0.104"),
+                     observed.replace(b"copilot update", b"copilot login"),
+                     observed.replace(b"1.0.103.", b"1.0.103"),
+                     b"GitHub Copilot CLI 1.0.103.\n", observed.rstrip(b"\n"),
+                     b"\n" + observed, observed + b"extra\n",
+                     observed + b"Authentication required\n", b"\xff" + observed]:
+            with self.subTest(body=body), self.assertRaisesRegex(ValueError, "version differs"):
+                copilot.parse_version(body)
+
     def test_duplicate_json_keys_nonfinite_and_trailing_data_fail(self):
         for body in [b'{"mcpServers":{},"mcpServers":{}}', b'{"mcpServers":{},"x":NaN}',
                      b'{"mcpServers":{}} trailing', b'\xff']:
