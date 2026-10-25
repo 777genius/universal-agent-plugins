@@ -116,6 +116,19 @@ class ProjectResearchTests(unittest.TestCase):
                 research.run("kimi", "help", output)
             self.assertFalse(output.exists())
 
+    def test_oversized_evidence_retains_only_closed_failure_receipt(self):
+        summary = {"commands": [], "collection_complete": True, "observations": "x" * (research.STREAM + 1)}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            research.publish(summary, None, root)
+            with zipfile.ZipFile(root / "upload/research.zip") as archive:
+                self.assertEqual(archive.namelist(), ["research.json"])
+                body = json.loads(archive.read("research.json"))
+                self.assertIs(body["collection_complete"], False)
+                self.assertIs(body["artifact_admission_failed"], True)
+                self.assertTrue(all(value is False for value in body["qualification"].values()))
+            self.assertIs(summary["collection_complete"], False)
+
 
 if __name__ == "__main__":
     unittest.main()

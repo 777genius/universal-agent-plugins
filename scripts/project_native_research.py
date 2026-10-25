@@ -38,7 +38,7 @@ Budget, BudgetReader = legacy.Budget, legacy.BudgetReader
 SOURCE = Path(__file__).resolve().parent.parent
 CLIENTS = ("gemini", "copilot", "kiro", "cursor", "cline", "qoder", "windsurf", "kimi", "grok", "vscode")
 ORIGINS = {"github.com", "downloads.cursor.com", "registry.npmjs.org", "prod.download.cli.kiro.dev",
-           "qoder-ide.oss-accelerate.aliyuncs.com", "x.ai", "downloads.devin.ai", "update.code.visualstudio.com"}
+           "qoder-ide.oss-accelerate.aliyuncs.com", "x.ai", "static.devin.ai", "update.code.visualstudio.com"}
 PHASE_CASES = {"acquire": ("acquisition",), "help": ("acquisition", "help"),
                "observe": ("acquisition", "help", "scope-observation")}
 QUALIFICATION_CASES = ("project-lifecycle", "native-restart-removal", "mcp-initialize", "mcp-tools-list", "mcp-tools-call")
@@ -145,7 +145,14 @@ def acquire(spec, budget, *, node=False):
         raise ValueError("compressed archive cap refused")
     # No ambient proxy or credential handlers; HTTPS redirects are checked before
     # reading and TLS verification remains the Python default.
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    class HTTPSRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, request, fp, code, message, headers, newurl):
+            target = urllib.parse.urlsplit(newurl)
+            if target.scheme != "https" or target.username or target.password:
+                raise ValueError("unsafe acquisition redirect refused")
+            return super().redirect_request(request, fp, code, message, headers, newurl)
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), HTTPSRedirect())
     with opener.open(spec["url"], timeout=min(90, budget.check())) as response:
         if urllib.parse.urlsplit(response.url).scheme != "https":
             raise ValueError("non-HTTPS acquisition redirect refused")
@@ -339,6 +346,23 @@ def admit_bodies(bodies, secrets):
     json.loads(bodies["research.json"])
 
 
+def publish(summary, ctx, output):
+    """Admission failures retain only a fixed, bounded failure receipt."""
+    destination = output / "upload"
+    destination.mkdir(mode=0o700)
+    pending = destination / "research.zip"
+    try:
+        bodies = evidence(summary, ctx.captures if ctx else {}, ctx.secrets if ctx else [])
+        artifacts.write_zip(pending, bodies)
+    except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile):
+        summary["collection_complete"] = False
+        summary["artifact_admission_failed"] = True
+        pending.unlink(missing_ok=True)
+        failure = {"collection_complete": False, "artifact_admission_failed": True,
+                   "qualification": {name: False for name in QUALIFICATION_CASES}}
+        artifacts.write_zip(pending, {"research.json": json.dumps(failure).encode()})
+
+
 def run(client, phase, output):
     native.require_hosted("linux-amd64")
     if output.resolve() != output or output.exists() or SOURCE == output or SOURCE in output.parents:
@@ -384,7 +408,10 @@ def run(client, phase, output):
                 result = leaf.collect(ctx)
                 if not isinstance(result, dict) or set(result) - {"observations", "cases", "unobserved"}:
                     raise ValueError("invalid collector result")
-                summary["observations"] = result.get("observations", {})
+                observations = result.get("observations", {})
+                if not isinstance(observations, (dict, list)):
+                    raise ValueError("observations must be structured JSON metadata")
+                summary["observations"] = observations
                 summary["cases"].extend(result["cases"])
                 summary["unobserved"] = result.get("unobserved", [])
             validate_cases(client, phase, summary["cases"])
@@ -392,10 +419,7 @@ def run(client, phase, output):
     except Exception as error:
         summary["error"] = type(error).__name__ + ": " + str(error)[:512]
     finally:
-        bodies = evidence(summary, ctx.captures if ctx else {}, ctx.secrets if ctx else [])
-        destination = output / "upload"
-        destination.mkdir(mode=0o700)
-        artifacts.write_zip(destination / "research.zip", bodies)
+        publish(summary, ctx, output)
         # A short CI log contains no native transcript or private profile.
         print(json.dumps({key: summary.get(key) for key in ("client", "phase", "collection_complete", "source_commit", "source_tree")}))
     return 0 if summary["collection_complete"] else 1
