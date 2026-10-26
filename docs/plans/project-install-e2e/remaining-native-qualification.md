@@ -903,6 +903,141 @@ Change only the deadline test in install/integrationctl/research/vscodeworkspace
 
 Two independent reviews of this exact plan precede implementation. Review the exact implementation independently, then run the focused actual deadline/Trusted inert contracts and changed-lines lint using the existing shared caches. The corrected scanner-content candidate b1f23a707894d83e7d3f3315304a54de6f265374 remains independently reviewable; this is a separate test-only correction. Genuine hosted untrusted/trusted runs remain mandatory and all unobserved native stages remain unqualified.
 
+### VS Code Required-lane lint completion
+
+The published scanner-content and short-uptime corrections are reviewed local
+source `ea13f5bd067752b12da917972373a7c2c61bfa0a`, tree
+`355cd394b6caf21a17e230949a3040f00ad1963e`, published as
+`73f6b9c3e26709409d8ad9e1502683675683ebad`. Focused trusted contracts pass;
+the genuine hosted UID/mount and complete editor lifecycle remain mandatory.
+Do not fold this separate lint completion into those earlier evidence claims.
+
+An unfiltered golangci-lint 2.13.2 run over the VS Code controller package found
+37 issues. All are introduced by this VS Code PR relative to exact program
+parent `b16b5c5d28cdc734856ac414521d40d9c8d8dfd5`, rather than inherited
+parent debt. The six trusted files below are absent at that parent. The other
+three parent blobs are `69769e21d82a22da8f9beeaa5cac63dad587491c`
+(bootstrap), `df94165a627843df50e9a33534fd25ed1e568923` (workbench), and
+`20ee7541e104e2a693cf6741271e0e1cc413ef00` (files), independently checked
+through the GitHub file API and against the local parent source.
+
+| File below `install/integrationctl/research/vscodeworkspace/` | Findings |
+| --- | --- |
+| `trusted_fixture_linux.go` | 14: errcheck 3, funlen 3, gocognit 4, gocyclo 3, revive 1 |
+| `trusted_contract_linux.go` | 3: funlen, gocognit, gocyclo |
+| `trusted_lifecycle_linux.go` | 3: funlen, gocognit, gocyclo |
+| `trusted_observe_linux.go` | 9: funlen 2, gocognit 3, gocyclo 3, staticcheck 1 |
+| `trusted_receipt_linux_test.go` | 2: errcheck, prealloc |
+| `trusted_lifecycle_linux_test.go` | 1: predeclared `copy` name shadowing |
+| `bootstrap_linux.go` | 1: file length crossed 500 lines |
+| `workbench_linux.go` | 1: file length crossed 500 lines |
+| `files_linux.go` | 3: preserved default-limit parser wrappers became unused |
+
+Clear these actual Required-lane findings through cohesive extractions and the
+small correctness/style fixes below. Keep the existing package, Linux build
+tags, original entry points and concrete fixture authority. Do not change
+production adapters or installer behavior, linter settings/baselines, directives,
+client pins, native argv/environment, process primitives, time budgets, trust,
+permissions, source/receipt identity, event grammar, artifact membership or
+qualification. No generic runner, validation framework or alternate engine is
+introduced. New helper files are in this same controller package only.
+
+#### Concrete extraction and preservation map
+
+- `copyTrustedTools`: extract the existing bounded filesystem-walk callback into
+  a named tool-entry copier using the same context, root/target, UID, expected
+  and seen maps and one original entry counter. Keep manifest checks before the
+  walk, exact per-entry check/copy/seen order, complete-member check, package
+  validation, final manifest rehash and output write in their present order.
+  This is a finite fixture helper, not a reusable copy abstraction.
+- `trustedFixtures`: extract the contiguous home/profile/foreign-user setup and
+  project/source setup into named fixture helpers. Keep nonce creation and
+  trusted-state initialization first, existing directory/settings/foreign/user
+  writes in their present order, then A/B/user project/source creation, scanner
+  preparation and protected-baseline registration. Preserve every literal and
+  original ownership boundary. Keep scanner sealing before native execution.
+- Move the existing package capture/digest functions into
+  `trusted_package_linux.go`; extract only their walk callback to reduce nested
+  complexity, retaining the same captured-entry order, counter/byte/depth bounds,
+  parent checks, ordinary IO, context checks and both distinct digest framings.
+  Move receipt functions into `trusted_receipt_linux.go`; leave fixture/state
+  and preservation helpers in `trusted_fixture_linux.go`, below its file limit.
+- `trustedReceipt`: separate exact state read/parse/selection, immutable selected
+  source/package validation, generic binding validation and project-only
+  data/locator validation into named helpers. Keep every existing condition,
+  error and first-failure order. Retain the one-client iteration and original
+  assignment order for Data, Skill, Binding and Installation, then compare
+  source/native skill bytes and validate object ownership.
+- `trustedReceiptObjects`: separate untransformed-source comparisons/digest,
+  project executable/skill ownership and native MCP receipt construction from
+  final ownership-inventory comparison. Keep source checks before installed
+  digest, executable checks before skill/MCP checks, exact independent expected
+  projection and strict inventory equality. Do not derive expectations from
+  native output or combine acquired and installed framing.
+- `trustedSequence`: keep its original entry point and replace contiguous blocks
+  with named phase helpers: empty baselines; user/A/B add and receipts; installed
+  A/B observations and B protection; unchanged A reconciliation/repair; changed
+  A source/update; missing A repair/restart; A removal and B observation; repeated
+  A removal; final asset/event capture. Pass only the exact existing old-package,
+  retained snapshots and event bytes between phases. Preserve shallow snapshot
+  semantics, unprotect/reprotect order, all public argv/labels and native stage
+  order. Only the original final point may set Complete=true.
+- `validateTrustedObservation`: split closed driver/proof/exit checks, closed
+  observer/context/PID/skill checks, per-selected-server definition/UI checks,
+  gateway-call/fresh-probe/facts checks and event correlation into named helpers
+  in `trusted_observation_validation_linux.go`. Preserve strict object keys,
+  normalization of authored expectations only, check/error order, cardinality,
+  namespace/PID exclusions and single-session admission. Set Sessions[session]
+  only after the same event-history/prefix and initialize/list/call validation.
+  The De Morgan rewrite of the exit refusal must accept exactly the existing
+  zero-exit/no-signal or nil-code/SIGTERM alternatives.
+- `validateTrustedProbeEvents`: extract per-line decode/identity/time validation
+  and the existing finite initialize/list/call transition/count block into named
+  helpers in `trusted_probe_events_linux.go`. Keep bounds 3..32, exact event
+  grammar, ordering, permitted repeated list, required counts and error strings.
+- `trustedObserve`: extract driver request/result-path/frame preparation, the
+  existing bounded result-poll callback and partial-observation capture. Keep
+  the initial original-work-budget/asset admission, exact sealed request paths
+  and GUI argv/env, 65-second context, 25-ms poll, start timestamp immediately
+  before the same strictInput call, partial evidence on failure, final asset
+  recheck, successful-stage append and observations append in the same order.
+  No helper starts a fresh task budget or new process.
+- Move `finish`/`publish` intact from bootstrap into `sealed_output_linux.go`,
+  and the four closed observation-envelope/context/policy/identity validators
+  intact from workbench into `observation_envelope_linux.go`. Retain names and
+  callers. Adjust imports only; this clears the two file-size findings without
+  changing cleanup, publication or untrusted observer behavior.
+- Preserve `readJSONValue`, `readJSONObject` and `readJSONArray` and their 256-item
+  semantics. Route the existing default-limit parse through those wrappers;
+  let the 4096-item trusted-manifest path retain the parameterized functions.
+  Preserve depth limits, duplicate-key rejection, trailing-input checks and
+  token order. Do not delete wrappers, add implicit fallback or widen either
+  input's supported limits.
+- Explicitly check the three previously unchecked deferred descriptor closes at
+  their current cleanup points, joining close errors with the original result
+  without masking it; successful behavior and defer order remain unchanged.
+  The receipt test checks snapshot removal in its existing deferred cleanup.
+  Preallocate only the existing expected-argument slice capacity, and rename the
+  local `copy` variable without changing its independent pointer copy.
+
+Before implementation, obtain root and an independent second plan review of
+this exact text and address findings. Preserve the reviewed pre-lint source as
+its own commit. No source is retired: the moves retain every implementation and
+legacy entry point, and helper extraction preserves the existing contracts.
+
+After independent implementation review, run the entire affected controller
+package's inert tests, including its legacy/untrusted, scanner, receipt, closed
+JSON and deadline contracts, plus the existing Python frontend/toolchain and
+wrapper contracts that bind these names/entry points. The privileged hosted
+UID/mount test remains explicitly skipped locally and required on the genuine
+runner. Run unfiltered golangci-lint 2.13.2 on this entire package and its whole-
+file size/architecture checks, require zero issues, and inspect the diff for
+unchanged command tables, literal settings, guard/order and cleanup behavior.
+Use the already approved private temporary/cache capacity for validation;
+execute no vendor binaries locally. Commit/push only after independent code GO
+and these checks, then inspect fresh genuine hosted artifacts before claiming
+any native completion or merge qualification.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for

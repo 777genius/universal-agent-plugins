@@ -94,7 +94,7 @@ func trustedReceiptFixture(t *testing.T, scope string) (*controller, domain.Stat
 		if err := c.trustedJSON(config, map[string]any{"servers": map[string]any{p.Name: expected}}); err != nil {
 			t.Fatal(err)
 		}
-		args, env := []string{}, map[string]string{}
+		args, env := make([]string, 0, len(expected["args"].([]any))), map[string]string{}
 		for _, value := range expected["args"].([]any) {
 			args = append(args, value.(string))
 		}
@@ -302,7 +302,11 @@ func TestTrustedCapturedPackageDigestMatchesAcquiredSourceFraming(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer packagedigest.Remove(snapshot)
+	defer func() {
+		if err := packagedigest.Remove(snapshot); err != nil {
+			t.Error(err)
+		}
+	}()
 	if got != snapshot.TreeDigest {
 		t.Fatal("captured digest differs from real installer framing")
 	}

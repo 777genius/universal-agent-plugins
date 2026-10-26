@@ -349,7 +349,13 @@ func uniqueJSONArrayLimit(body []byte, arrayLimit int) (any, error) {
 	}
 	dec := json.NewDecoder(strings.NewReader(string(body)))
 	dec.UseNumber()
-	value, err := readJSONValueLimit(dec, 0, arrayLimit)
+	var value any
+	var err error
+	if arrayLimit == 256 {
+		value, err = readJSONValue(dec, 0)
+	} else {
+		value, err = readJSONValueLimit(dec, 0, arrayLimit)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -375,8 +381,14 @@ func readJSONValueLimit(dec *json.Decoder, depth, arrayLimit int) (any, error) {
 	}
 	switch delimiter {
 	case '{':
+		if arrayLimit == 256 {
+			return readJSONObject(dec, depth)
+		}
 		return readJSONObjectLimit(dec, depth, arrayLimit)
 	case '[':
+		if arrayLimit == 256 {
+			return readJSONArray(dec, depth)
+		}
 		return readJSONArrayLimit(dec, depth, arrayLimit)
 	default:
 		return nil, fmt.Errorf("unexpected JSON delimiter")

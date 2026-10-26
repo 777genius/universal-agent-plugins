@@ -71,9 +71,9 @@ func TestTrustedDeadlineKeepsOriginalOriginAndClosedMode(t *testing.T) {
 		case "observer-substitution":
 			changed.ObserverRoot = "/tmp/other"
 		case "scanner-pin":
-			copy := *in.Trusted
-			copy.ScannerArchiveSHA256 = strings.Repeat("e", 64)
-			changed.Trusted = &copy
+			cloned := *in.Trusted
+			cloned.ScannerArchiveSHA256 = strings.Repeat("e", 64)
+			changed.Trusted = &cloned
 		case "zero-origin":
 			changed.StartNS = 0
 		case "negative-origin":

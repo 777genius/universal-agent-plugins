@@ -164,44 +164,7 @@ func copyTrustedTools(ctx context.Context, in trustedInput, target string, uid i
 	defer func() { _ = root.Close() }()
 	seen, entries := map[string]bool{}, 0
 	err = fs.WalkDir(root.FS(), ".", func(relative string, _ os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		entries++
-		if entries > 8192 || strings.Count(relative, "/") > 32 {
-			return fmt.Errorf("trusted tool tree exceeds bound")
-		}
-		path := filepath.Join(in.ToolsRoot, relative)
-		info, err := anchoredInfo(path)
-		if err != nil {
-			return err
-		}
-		owner, err := statUID(info)
-		if err != nil || int64(owner) != int64(uid) {
-			return fmt.Errorf("trusted tool input owner differs")
-		}
-		if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-			return os.Mkdir(filepath.Join(target, relative), 0755)
-		}
-		if relative == "manifest.json" {
-			if !regular(info, trustedManifestLimit) {
-				return fmt.Errorf("trusted manifest is not ordinary")
-			}
-			return nil
-		}
-		entry, ok := expected[filepath.ToSlash(relative)]
-		if !ok || !regular(info, 256<<20) || info.Size() != entry.Bytes {
-			return fmt.Errorf("unlisted, aliased or changed trusted tool file")
-		}
-		actual, err := copyOrdinary(ctx, path, filepath.Join(target, relative), uid, entry.Executable)
-		if err != nil || actual != entry.SHA256 {
-			return fmt.Errorf("trusted tool bytes differ: %s", relative)
-		}
-		seen[entry.Path] = true
-		return nil
+		return copyTrustedToolEntry(ctx, in.ToolsRoot, target, uid, expected, seen, &entries, relative, walkErr)
 	})
 	if err != nil {
 		return manifest, err
@@ -220,4 +183,45 @@ func copyTrustedTools(ctx context.Context, in trustedInput, target string, uid i
 		return manifest, err
 	}
 	return manifest, nil
+}
+
+func copyTrustedToolEntry(ctx context.Context, source, target string, uid int, expected map[string]trustedToolFile, seen map[string]bool, entries *int, relative string, walkErr error) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	*entries++
+	if *entries > 8192 || strings.Count(relative, "/") > 32 {
+		return fmt.Errorf("trusted tool tree exceeds bound")
+	}
+	path := filepath.Join(source, relative)
+	info, err := anchoredInfo(path)
+	if err != nil {
+		return err
+	}
+	owner, err := statUID(info)
+	if err != nil || int64(owner) != int64(uid) {
+		return fmt.Errorf("trusted tool input owner differs")
+	}
+	if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		return os.Mkdir(filepath.Join(target, relative), 0755)
+	}
+	if relative == "manifest.json" {
+		if !regular(info, trustedManifestLimit) {
+			return fmt.Errorf("trusted manifest is not ordinary")
+		}
+		return nil
+	}
+	entry, ok := expected[filepath.ToSlash(relative)]
+	if !ok || !regular(info, 256<<20) || info.Size() != entry.Bytes {
+		return fmt.Errorf("unlisted, aliased or changed trusted tool file")
+	}
+	actual, err := copyOrdinary(ctx, path, filepath.Join(target, relative), uid, entry.Executable)
+	if err != nil || actual != entry.SHA256 {
+		return fmt.Errorf("trusted tool bytes differ: %s", relative)
+	}
+	seen[entry.Path] = true
+	return nil
 }

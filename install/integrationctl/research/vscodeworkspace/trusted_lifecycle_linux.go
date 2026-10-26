@@ -34,175 +34,26 @@ func trustedUnchanged(before map[string]map[string]string) error {
 
 func (c *controller) trustedSequence(_ context.Context) (resultErr error) {
 	f := c.trustedState
-	// The same exact original-user skill is native-discovered in both workspaces
-	// before UAP installation. Trust is granted separately through native UI.
-	for _, scope := range []string{"a", "b"} {
-		if err := trustedSystem("/usr/bin/git"); err != nil {
-			return err
-		}
-		body, err := c.trustedCommand("git-"+scope, f.Projects[scope], []string{"/usr/bin/git", "-c", "init.defaultBranch=main", "init", "--quiet"}, 0)
-		if err != nil {
-			return err
-		}
-		if len(body) != 0 {
-			return fmt.Errorf("git baseline emitted unexpected diagnostics")
-		}
-		if err := c.trustedObserve("empty-"+scope, scope, "prompt", "read", false); err != nil {
-			return err
-		}
+	if err := c.trustedEmptyBaselines(); err != nil {
+		return err
 	}
-	for _, scope := range []string{"user", "a", "b"} {
-		if err := c.trustedUAP("add-"+scope, scope, true, false, "add", f.Packages[scope].Source, "--no-save"); err != nil {
-			return err
-		}
-		if err := c.trustedReceipt(scope); err != nil {
-			return err
-		}
-		if scope == "user" {
-			if err := c.trustedPreserveUser(); err != nil {
-				return err
-			}
-		} else if err := c.trustedProtect(f.Packages[scope].Binding.TargetLocator); err != nil {
-			return err
-		}
+	if err := c.trustedAddPackages(); err != nil {
+		return err
 	}
-	for _, scope := range []string{"a", "b"} {
-		if err := c.trustedObserve("installed-"+scope, scope, "persisted", "write", true); err != nil {
-			return err
-		}
+	if err := c.trustedInstalledBaselines(); err != nil {
+		return err
 	}
-	for _, path := range []string{filepath.Join(f.Projects["b"], ".uap"), filepath.Join(f.Projects["b"], ".vscode"), filepath.Join(f.Projects["b"], ".github")} {
-		if err := c.trustedProtect(path); err != nil {
-			return err
-		}
+	if err := c.trustedStableA(); err != nil {
+		return err
 	}
-	a := f.Packages["a"]
-	aState := filepath.Join(f.Projects["a"], ".uap", "state-v2.json")
-	aConfig := filepath.Join(f.Projects["a"], ".vscode", "mcp.json")
-	stable, err := trustedSnapshot(aState, aConfig, a.Skill, a.Binding.TargetLocator)
+	old, err := c.trustedUpdateA()
 	if err != nil {
 		return err
 	}
-	if err := c.trustedUAP("repeat-add-a", "a", false, false, "add", a.Source, "--no-save"); err != nil {
+	if err := c.trustedRepairA(old); err != nil {
 		return err
 	}
-	if err := trustedUnchanged(stable); err != nil {
-		return err
-	}
-	if err := c.trustedUAP("unchanged-update-a", "a", false, false, "update", a.Name); err != nil {
-		return err
-	}
-	if err := trustedUnchanged(stable); err != nil {
-		return err
-	}
-	nativeStable, err := trustedSnapshot(aConfig, a.Skill)
-	if err != nil {
-		return err
-	}
-	if err := c.trustedUAP("intact-repair-a", "a", true, false, "repair", a.Name); err != nil {
-		return err
-	}
-	if err := trustedUnchanged(nativeStable); err != nil {
-		return err
-	}
-	if err := c.trustedReceipt("a"); err != nil {
-		return err
-	}
-	if err := c.trustedObserve("stable-a", "a", "persisted", "read", true); err != nil {
-		return err
-	}
-	// The only authored source replacement happens while every native child is
-	// stopped. Missing repair below keeps this selected local v2 input unchanged;
-	// moving-source/recorded-pin proof belongs to the retained TLS Git/ZIP gates.
-	old := *f.Packages["a"]
-	delete(f.Protected, old.Source)
-	if err := c.trustedSource("a", "a-two"); err != nil {
-		return err
-	}
-	// Only the reviewed public update may replace A's managed payload. B and
-	// the actual original-user package remain frozen across this operation.
-	delete(f.Protected, old.Binding.TargetLocator)
-	if err := c.trustedUAP("update-a", "a", true, false, "update", f.Packages["a"].Source); err != nil {
-		return err
-	}
-	if err := c.trustedReceipt("a"); err != nil {
-		return err
-	}
-	if err := c.trustedProtect(f.Packages["a"].Binding.TargetLocator); err != nil {
-		return err
-	}
-	a = f.Packages["a"]
-	if a.Installation.Source.TreeDigest == old.Installation.Source.TreeDigest || a.Installation.InstallationID != old.Installation.InstallationID || a.Binding.ClientBindingID != old.Binding.ClientBindingID || a.Data != old.Data {
-		return fmt.Errorf("changed source update lost recorded installation/data identity")
-	}
-	if err := c.trustedObserve("updated-a", "a", "persisted", "read", true); err != nil {
-		return err
-	}
-	if a.Skill != filepath.Join(f.Projects["a"], ".github", "skills", a.Name, "SKILL.md") {
-		return fmt.Errorf("missing-component operation outside receipt-owned skill")
-	}
-	if _, err := readOrdinary(a.Skill, 1<<20); err != nil {
-		return err
-	}
-	if err := os.Remove(a.Skill); err != nil {
-		return err
-	}
-	if err := os.Remove(filepath.Dir(a.Skill)); err != nil {
-		return err
-	}
-	if err := c.trustedUAP("missing-repair-a", "a", true, false, "repair", a.Name); err != nil {
-		return err
-	}
-	if err := c.trustedReceipt("a"); err != nil {
-		return err
-	}
-	if f.Packages["a"].Data != old.Data {
-		return fmt.Errorf("repair replaced retained data identity")
-	}
-	if err := c.trustedObserve("repaired-a", "a", "persisted", "read", true); err != nil {
-		return err
-	}
-	if err := c.trustedObserve("restart-a", "a", "persisted", "read", true); err != nil {
-		return err
-	}
-	retainedData, err := trustedSnapshot(a.Data)
-	if err != nil {
-		return err
-	}
-	beforeEvents, err := trustedEvents(filepath.Join(f.Root, "a-events.jsonl"))
-	if err != nil {
-		return err
-	}
-	delete(f.Protected, a.Binding.TargetLocator)
-	if err := c.trustedUAP("remove-a", "a", true, false, "remove", a.Name); err != nil {
-		return err
-	}
-	for _, path := range []string{filepath.Dir(a.Skill), a.Binding.TargetLocator} {
-		if _, err := os.Lstat(path); !os.IsNotExist(err) {
-			return fmt.Errorf("removed owned package/skill survives")
-		}
-	}
-	if err := c.trustedObserve("removed-a", "a", "persisted", "read", false); err != nil {
-		return err
-	}
-	if err := c.trustedObserve("remaining-b", "b", "persisted", "read", true); err != nil {
-		return err
-	}
-	afterEvents, err := trustedEvents(filepath.Join(f.Root, "a-events.jsonl"))
-	if err != nil || !bytes.Equal(afterEvents, beforeEvents) {
-		return fmt.Errorf("removed A produced new native events")
-	}
-	if err := trustedUnchanged(retainedData); err != nil {
-		return err
-	}
-	retainedA, err := trustedSnapshot(filepath.Join(f.Projects["a"], ".uap"), filepath.Join(f.Projects["a"], ".vscode"), filepath.Join(f.Projects["a"], ".github"))
-	if err != nil {
-		return err
-	}
-	if err := c.trustedUAP("repeat-remove-a", "a", false, true, "remove", a.Name); err != nil {
-		return err
-	}
-	if err := trustedUnchanged(retainedA); err != nil {
+	if err := c.trustedRemoveA(); err != nil {
 		return err
 	}
 	if err := c.checkTrustedAssets(); err != nil {
@@ -257,4 +108,217 @@ func (c *controller) trustedSummary(summary map[string]any, runErr, cleanupErr e
 	if c.trustedState != nil {
 		summary["completed_stages"] = c.trustedState.Stages
 	}
+}
+
+func (c *controller) trustedEmptyBaselines() error {
+	f := c.trustedState
+	// The same exact original-user skill is native-discovered in both workspaces
+	// before UAP installation. Trust is granted separately through native UI.
+	for _, scope := range []string{"a", "b"} {
+		if err := trustedSystem("/usr/bin/git"); err != nil {
+			return err
+		}
+		body, err := c.trustedCommand("git-"+scope, f.Projects[scope], []string{"/usr/bin/git", "-c", "init.defaultBranch=main", "init", "--quiet"}, 0)
+		if err != nil {
+			return err
+		}
+		if len(body) != 0 {
+			return fmt.Errorf("git baseline emitted unexpected diagnostics")
+		}
+		if err := c.trustedObserve("empty-"+scope, scope, "prompt", "read", false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *controller) trustedAddPackages() error {
+	f := c.trustedState
+	for _, scope := range []string{"user", "a", "b"} {
+		if err := c.trustedUAP("add-"+scope, scope, true, false, "add", f.Packages[scope].Source, "--no-save"); err != nil {
+			return err
+		}
+		if err := c.trustedReceipt(scope); err != nil {
+			return err
+		}
+		if scope == "user" {
+			if err := c.trustedPreserveUser(); err != nil {
+				return err
+			}
+		} else if err := c.trustedProtect(f.Packages[scope].Binding.TargetLocator); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *controller) trustedInstalledBaselines() error {
+	f := c.trustedState
+	for _, scope := range []string{"a", "b"} {
+		if err := c.trustedObserve("installed-"+scope, scope, "persisted", "write", true); err != nil {
+			return err
+		}
+	}
+	for _, path := range []string{filepath.Join(f.Projects["b"], ".uap"), filepath.Join(f.Projects["b"], ".vscode"), filepath.Join(f.Projects["b"], ".github")} {
+		if err := c.trustedProtect(path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *controller) trustedStableA() error {
+	f := c.trustedState
+	a := f.Packages["a"]
+	aState := filepath.Join(f.Projects["a"], ".uap", "state-v2.json")
+	aConfig := filepath.Join(f.Projects["a"], ".vscode", "mcp.json")
+	stable, err := trustedSnapshot(aState, aConfig, a.Skill, a.Binding.TargetLocator)
+	if err != nil {
+		return err
+	}
+	if err := c.trustedUAP("repeat-add-a", "a", false, false, "add", a.Source, "--no-save"); err != nil {
+		return err
+	}
+	if err := trustedUnchanged(stable); err != nil {
+		return err
+	}
+	if err := c.trustedUAP("unchanged-update-a", "a", false, false, "update", a.Name); err != nil {
+		return err
+	}
+	if err := trustedUnchanged(stable); err != nil {
+		return err
+	}
+	nativeStable, err := trustedSnapshot(aConfig, a.Skill)
+	if err != nil {
+		return err
+	}
+	if err := c.trustedUAP("intact-repair-a", "a", true, false, "repair", a.Name); err != nil {
+		return err
+	}
+	if err := trustedUnchanged(nativeStable); err != nil {
+		return err
+	}
+	if err := c.trustedReceipt("a"); err != nil {
+		return err
+	}
+	if err := c.trustedObserve("stable-a", "a", "persisted", "read", true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *controller) trustedUpdateA() (trustedPackage, error) {
+	f := c.trustedState
+	// The only authored source replacement happens while every native child is
+	// stopped. Missing repair below keeps this selected local v2 input unchanged;
+	// moving-source/recorded-pin proof belongs to the retained TLS Git/ZIP gates.
+	old := *f.Packages["a"]
+	delete(f.Protected, old.Source)
+	if err := c.trustedSource("a", "a-two"); err != nil {
+		return trustedPackage{}, err
+	}
+	// Only the reviewed public update may replace A's managed payload. B and
+	// the actual original-user package remain frozen across this operation.
+	delete(f.Protected, old.Binding.TargetLocator)
+	if err := c.trustedUAP("update-a", "a", true, false, "update", f.Packages["a"].Source); err != nil {
+		return trustedPackage{}, err
+	}
+	if err := c.trustedReceipt("a"); err != nil {
+		return trustedPackage{}, err
+	}
+	if err := c.trustedProtect(f.Packages["a"].Binding.TargetLocator); err != nil {
+		return trustedPackage{}, err
+	}
+	a := f.Packages["a"]
+	if a.Installation.Source.TreeDigest == old.Installation.Source.TreeDigest || a.Installation.InstallationID != old.Installation.InstallationID || a.Binding.ClientBindingID != old.Binding.ClientBindingID || a.Data != old.Data {
+		return trustedPackage{}, fmt.Errorf("changed source update lost recorded installation/data identity")
+	}
+	if err := c.trustedObserve("updated-a", "a", "persisted", "read", true); err != nil {
+		return trustedPackage{}, err
+	}
+	return old, nil
+}
+
+func (c *controller) trustedRepairA(old trustedPackage) error {
+	f := c.trustedState
+	a := f.Packages["a"]
+	if a.Skill != filepath.Join(f.Projects["a"], ".github", "skills", a.Name, "SKILL.md") {
+		return fmt.Errorf("missing-component operation outside receipt-owned skill")
+	}
+	if _, err := readOrdinary(a.Skill, 1<<20); err != nil {
+		return err
+	}
+	if err := os.Remove(a.Skill); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Dir(a.Skill)); err != nil {
+		return err
+	}
+	if err := c.trustedUAP("missing-repair-a", "a", true, false, "repair", a.Name); err != nil {
+		return err
+	}
+	if err := c.trustedReceipt("a"); err != nil {
+		return err
+	}
+	if f.Packages["a"].Data != old.Data {
+		return fmt.Errorf("repair replaced retained data identity")
+	}
+	if err := c.trustedObserve("repaired-a", "a", "persisted", "read", true); err != nil {
+		return err
+	}
+	if err := c.trustedObserve("restart-a", "a", "persisted", "read", true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *controller) trustedRemoveA() error {
+	f := c.trustedState
+	a := f.Packages["a"]
+	retainedData, err := trustedSnapshot(a.Data)
+	if err != nil {
+		return err
+	}
+	beforeEvents, err := trustedEvents(filepath.Join(f.Root, "a-events.jsonl"))
+	if err != nil {
+		return err
+	}
+	delete(f.Protected, a.Binding.TargetLocator)
+	if err := c.trustedUAP("remove-a", "a", true, false, "remove", a.Name); err != nil {
+		return err
+	}
+	for _, path := range []string{filepath.Dir(a.Skill), a.Binding.TargetLocator} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			return fmt.Errorf("removed owned package/skill survives")
+		}
+	}
+	if err := c.trustedObserve("removed-a", "a", "persisted", "read", false); err != nil {
+		return err
+	}
+	if err := c.trustedObserve("remaining-b", "b", "persisted", "read", true); err != nil {
+		return err
+	}
+	afterEvents, err := trustedEvents(filepath.Join(f.Root, "a-events.jsonl"))
+	if err != nil || !bytes.Equal(afterEvents, beforeEvents) {
+		return fmt.Errorf("removed A produced new native events")
+	}
+	if err := trustedUnchanged(retainedData); err != nil {
+		return err
+	}
+	return c.trustedRepeatRemoveA(a)
+}
+
+func (c *controller) trustedRepeatRemoveA(a *trustedPackage) error {
+	f := c.trustedState
+	retainedA, err := trustedSnapshot(filepath.Join(f.Projects["a"], ".uap"), filepath.Join(f.Projects["a"], ".vscode"), filepath.Join(f.Projects["a"], ".github"))
+	if err != nil {
+		return err
+	}
+	if err := c.trustedUAP("repeat-remove-a", "a", false, true, "remove", a.Name); err != nil {
+		return err
+	}
+	if err := trustedUnchanged(retainedA); err != nil {
+		return err
+	}
+	return nil
 }
