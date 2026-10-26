@@ -110,6 +110,105 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.kimi_members({"lifecycle.json": json.dumps(result).encode()}, self.source)
 
+    def cli_result(self, client):
+        result = {key: value for key, value in self.result().items() if key != "provider_kind"}
+        result.update({"client": client, "version": runtime.CLI_ATTEMPTS[client],
+                       "source_identity": {"installer_base_commit": self.source["source_commit"],
+                                           "installer_tree": self.source["source_tree"],
+                                           "installer_source_state": "committed", "installer_patch_sha256": []}})
+        return result
+
+    def test_fixed_cli_attempts_cannot_turn_captured_output_into_success(self):
+        for client in runtime.CLI_ATTEMPTS:
+            with self.subTest(client=client):
+                result = self.cli_result(client)
+                self.assertTrue(runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(result).encode()}, self.source, client)["test_failed"])
+                for change in ({"test_failed": False}, {"runtime_attempt_complete": True}, {"version": "latest"},
+                               {"source_identity": {}}, {"qualification": {key: 0 for key in runtime.shared.QUALIFICATION_CASES}}):
+                    with self.assertRaises(ValueError):
+                        runtime.cli_attempt_members({"runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source, client)
+
+    def test_cli_member_table_rejects_partial_commands_provider_and_profiles(self):
+        summary = {"runtime-attempt.json": json.dumps(self.cli_result("qoder")).encode()}
+        for extra in ({"git-a.stdout.log": b""}, {"provider-request-1.json": b"{}"}, {"profile.json": b"{}"}):
+            with self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**summary, **extra}, self.source, "qoder")
+        command = {"argv": ["/owned/qodercli", "--version"], "cwd": "/owned/outside", "exit": 0,
+                   "error": False, "deadline": False, "elapsed_ms": 1,
+                   "cleanup": "full descendant supervision; forced cleanup fails"}
+        bodies = {**summary, "version.stdout.log": b"1.1.78\n", "version.stderr.log": b"",
+                  "version.command.json": json.dumps(command).encode()}
+        runtime.cli_attempt_members(bodies, self.source, "qoder")
+        for field, value in (("deadline", 0), ("elapsed_ms", -1), ("cleanup", "assumed"), ("extra", True)):
+            with self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "version.command.json": json.dumps({**command, field: value}).encode()}, self.source, "qoder")
+
+    def cline_result(self):
+        return {**self.cli_result("qoder"), "client": "cline", "version": "3.0.73"}
+
+    def test_cline_capture_is_unqualified_and_provider_key_is_never_admitted(self):
+        result = self.cline_result()
+        base = {"runtime-attempt.json": json.dumps(result).encode()}
+        self.assertTrue(runtime.cline_members(base, self.source)["test_failed"])
+        for change in ({"test_failed": False}, {"runtime_attempt_complete": True}, {"version": "3.0.74"},
+                       {"source_identity": {}}, {"qualification": {key: 0 for key in runtime.shared.QUALIFICATION_CASES}}):
+            with self.assertRaises(ValueError):
+                runtime.cline_members({"runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source)
+        for extra in ({"profile.json": b"{}"}, {"provider-3.request.json": b"{}"}, {"version.stdout.log": b""},
+                      {"native-acp.jsonl": b""}, {"native-acp.error.log": b"failure"},
+                      {"probe-events.jsonl": b"uap-cline-private-0123456789abcdef"}):
+            with self.assertRaises(ValueError):
+                runtime.cline_members({**base, **extra}, self.source)
+
+    def test_cline_provider_captures_require_actual_contiguous_request_receipts(self):
+        base = {"runtime-attempt.json": json.dumps(self.cline_result()).encode()}
+        provider = {"requests": 1, "responses": 0, "exact_call_issued": False, "single_call_approved": False,
+                    "error": True, "transport": "loopback scripted OpenAI chat-completions SSE; no real model"}
+        body = {**base, "provider.json": json.dumps(provider).encode(), "provider-1.request.json": b"{}"}
+        runtime.cline_members(body, self.source)
+        for extra in ({"provider-2.response.log": b"data"}, {"provider-2.request.json": b"{}"},
+                      {"provider.json": json.dumps({**provider, "requests": True}).encode()}):
+            with self.assertRaises(ValueError):
+                runtime.cline_members({**body, **extra}, self.source)
+
+    def test_cline_unit_receipts_cannot_select_foreign_or_inconsistent_control_groups(self):
+        unit = "uap-cline-project-" + "a" * 32 + ".service"
+        absent = b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n"
+        self.assertEqual(runtime.cline_unit_state(absent, unit)["LoadState"], "not-found")
+        for body in (absent + b"LoadState=loaded\n", absent.replace(b"inactive", b"active"),
+                     b"LoadState=loaded\nActiveState=active\nControlGroup=/system.slice/ssh.service\n",
+                     absent + b"MainPID=1\n"):
+            with self.assertRaises(ValueError):
+                runtime.cline_unit_state(body, unit)
+        for name in ("ssh.service", "uap-cline-project-*.service", "../" + unit):
+            with self.assertRaises(ValueError):
+                runtime.cline_unit_state(absent, name)
+
+    def test_cline_service_is_exact_nonroot_delegation_with_original_clock_and_empty_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            test = root / "project-native.test"
+            test.write_bytes(b"inert never executed")
+            env = {key: "fixture" for key in runtime.CLINE_ENV}
+            env.update({"PATH": "/usr/bin:/bin", "AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT": "1", "HOME": "/fixture/${LITERAL}"})
+            unit = "uap-cline-project-" + "b" * 32 + ".service"
+            origin = 123456789012345
+            argv = runtime.cline_service_argv(test, env, root, unit, 1001, 1001, origin)
+            self.assertEqual(argv[:3], ["/usr/bin/sudo", "-n", "/usr/bin/systemd-run"])
+            for argument in ("--uid=1001", "--gid=1001", "--property=Delegate=yes", "--property=NoNewPrivileges=yes",
+                             "--property=KillMode=control-group", "--property=RuntimeMaxSec=180s",
+                             "--expand-environment=no", "HOME=/fixture/${LITERAL}",
+                             "AGENTPLUGINS_PROJECT_NATIVE_STARTED_NS=" + str(origin), "AGENTPLUGINS_CLINE_SYSTEMD_UNIT=" + unit):
+                self.assertIn(argument, argv)
+            index = argv.index("/usr/bin/env")
+            self.assertEqual(argv[index + 1], "-i")
+            self.assertEqual(argv[-5:], [str(test), "-test.run=^TestAgentpluginsClineNativeProjectRuntimeAttempt$", "-test.count=1", "-test.v", "-test.timeout=180s"])
+            for selected, selected_unit, uid, stamp in (({**env, "LD_PRELOAD": "unexpected"}, unit, 1001, origin),
+                    ({**env, "HOME": "first\nsecond"}, unit, 1001, origin), (env, "ssh.service", 1001, origin),
+                    (env, unit, 0, origin), (env, unit, 1001, 0)):
+                with self.assertRaises(ValueError):
+                    runtime.cline_service_argv(test, selected, root, selected_unit, uid, 1001, stamp)
+
 
 if __name__ == "__main__":
     unittest.main()
