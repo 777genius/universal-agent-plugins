@@ -55,7 +55,7 @@ for (const scenario of [
       expect(state.label).toBe(scenario.copy);
       expect(state.announcement.trim()).toBe('');
       expect(state.textareas).toBe(textareas);
-      await expect(snippet.locator('code')).toHaveText(command);
+      await expect(snippet.locator('code')).toHaveText(command, { useInnerText: true });
     }
   });
 }
