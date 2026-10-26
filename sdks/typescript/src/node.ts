@@ -150,7 +150,11 @@ export async function startUap(options: StartOptions) {
     const session = await client.session({ signal: startup.signal });
     verifySession(session, bootstrap, options.requiredCapabilities ?? []);
     if (processExited || child.pid === undefined) throw new ManagementError('PROCESS_EXITED', 'The engine exited during readiness verification.');
-    return { client, session, pid: child.pid, close };
+    return {
+      client, session, pid: child.pid, close,
+      /** True only after Node confirms this owned child's exit; HTTP errors do not imply exit. */
+      get hasExited(): boolean { return child.exitCode !== null || child.signalCode !== null; },
+    };
   } catch (error) {
     await close();
     throw error;

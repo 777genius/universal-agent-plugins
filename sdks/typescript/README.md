@@ -79,6 +79,15 @@ helper verifies the authenticated session before returning. Optional
 if necessary. Interrupted accepted work requires subsequent inspection/recovery.
 Closing a view or aborting a wait must not close a shared host instance.
 
+The read-only `hasExited` property reports confirmed termination of that exact
+owned child. It stays false for HTTP failures while the child is alive. The SDK
+does not reconnect or restart automatically. A host may reconnect after confirmed
+exit using the same captured authority, but must validate the new session and
+inspect durable outstanding operations before admitting more work. Keep mutation
+fences and original accepted/uncertain request identities until that inspection
+and request-specific observation settle them. Unaccepted in-memory review handles
+expire with the old process; do not silently reprepare or replay them.
+
 ## Prepare, accept and observe
 
 ```ts

@@ -4,6 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { startUap, type StartupConfiguration } from '../dist/node.js';
 import { ManagementError } from '../dist/index.js';
@@ -29,6 +30,36 @@ test('real owned child performs private authenticated bootstrap and repeat close
   assert.equal((await host.client.session()).apiVersion, 1);
   await Promise.all([host.close(), host.close()]);
   await assert.rejects(host.client.session());
+});
+
+test('exposes confirmed child exit without treating a failed HTTP request as death', async () => {
+  const host = await startUap(options());
+  try {
+    assert.equal(host.hasExited, false);
+    await assert.rejects(host.client.session({ signal: AbortSignal.abort() }));
+    assert.equal(host.hasExited, false);
+    assert.equal((await host.client.session()).apiVersion, 1);
+    await host.close();
+    assert.equal(host.hasExited, true);
+    await host.close();
+    assert.equal(host.hasExited, true);
+  } finally {
+    await host.close();
+  }
+});
+
+test('reports external termination of the exact owned child after readiness', async () => {
+  const host = await startUap(options());
+  try {
+    assert.equal(host.hasExited, false);
+    process.kill(host.pid, 'SIGKILL');
+    const deadline = Date.now() + 2_000;
+    while (!host.hasExited && Date.now() < deadline) await delay(10);
+    assert.equal(host.hasExited, true);
+    await assert.rejects(host.client.session());
+  } finally {
+    await host.close();
+  }
 });
 
 for (const [mode, code] of [['version','UNSUPPORTED_API_VERSION'], ['remote','INVALID_BOOTSTRAP'], ['mismatch','SESSION_MISMATCH'], ['malformed','INVALID_BOOTSTRAP'], ['oversized','BOOTSTRAP_TOO_LARGE'], ['exit','PROCESS_EXITED'], ['timeout','STARTUP_TIMEOUT'], ['environment-missing','SESSION_MISMATCH'], ['environment-empty','SESSION_MISMATCH'], ['environment-number','SESSION_MISMATCH']] as const) {
