@@ -25,7 +25,7 @@ func TestProjectVersionUnionIsIDBoundAtomicAndPreservesEmptyCascadeRoot(t *testi
 		}
 		detector := &projectVersionDetector{probed: []domain.DetectedClient{observedKimi, observedDevin}}
 		detected := map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: kimi, domain.ClientWindsurf: devin}
-		err := ensureSelectedProjectVersions(context.Background(), App{Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi, domain.ClientWindsurf, domain.ClientKimi}, detected)
+		err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi, domain.ClientWindsurf, domain.ClientKimi}, detected)
 		if (err != nil) != failure || detector.broadCalls != 0 || !reflect.DeepEqual(detector.targets, [][]domain.ClientID{{domain.ClientKimi, domain.ClientWindsurf}}) {
 			t.Fatalf("finite union probe differs: %v %+v", err, detector)
 		}
@@ -71,7 +71,7 @@ func TestProjectDevinVersionProbeRejectsWrongIDAndUnboundResults(t *testing.T) {
 				detector.err = errors.New("targeted version failure")
 			}
 			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: original}
-			if err := ensureSelectedProjectVersions(context.Background(), App{Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientWindsurf}, detected); err == nil {
+			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientWindsurf}, detected); err == nil {
 				t.Fatal("unbound Devin version was accepted")
 			}
 			if !reflect.DeepEqual(detected[domain.ClientWindsurf], original) || detector.broadCalls != 0 {
@@ -106,7 +106,7 @@ func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *test
 			}
 			detector := &projectVersionDetector{err: errors.New("must not probe")}
 			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: client}
-			if err := ensureSelectedProjectVersions(context.Background(), App{Scope: scope, Detector: detector}, opts, []domain.ClientID{target}, detected); err != nil || len(detector.targets) != 0 || detector.broadCalls != 0 {
+			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: scope, Detector: detector}, opts, []domain.ClientID{target}, detected); err != nil || len(detector.targets) != 0 || detector.broadCalls != 0 {
 				t.Fatalf("ineligible Devin operation executed a version probe: %v", err)
 			}
 		})
@@ -120,7 +120,7 @@ func TestProjectDevinDependencyVersionsRespectCompleteActionSet(t *testing.T) {
 			observed := client
 			observed.Version = "3000.11.205"
 			detector := &projectVersionDetector{probed: []domain.DetectedClient{observed}}
-			adapter := &dependencyInstaller{app: App{Scope: domain.ScopeProject, Detector: detector}, opts: &options{}, detected: map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: client}}
+			adapter := &dependencyInstaller{app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, opts: &options{}, detected: map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: client}}
 			actions := []dependencyAction{{ClientID: "windsurf", Action: kind}}
 			if kind == "invalid-later-target" {
 				actions = []dependencyAction{{ClientID: "windsurf", Action: environment.ActionInstall}, {ClientID: "gemini", Action: environment.ActionInstall}}

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -18,6 +19,16 @@ func devinVersionTestHome(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return home
+}
+
+func devinVersionEnvironmentForDetector(t *testing.T, detector Detector) ([]string, error) {
+	t.Helper()
+	profile, ok := clients.As[clients.HostVersionProbeEnvironment](detector.Registry, domain.ClientWindsurf)
+	if !ok {
+		t.Fatal("selected adapter lacks its original-host version environment capability")
+	}
+	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, ExecutablePath: filepath.Join(detector.HomeDir, "devin")}
+	return profile.VersionProbeEnvironmentForHost(detector.host(), client)
 }
 
 func TestDevinVersionEnvironmentPreservesOriginalHostAndLegacyAuthority(t *testing.T) {
@@ -86,13 +97,13 @@ func TestDevinVersionEnvironmentWindowsKeysAreOriginalAndFinite(t *testing.T) {
 	detector := testDetector(home, nil)
 	detector.GOOS = "windows"
 	detector.Environment = map[string]string{"APPDATA": filepath.Join(home, "roaming"), "LOCALAPPDATA": filepath.Join(home, "local"), "XDG_CONFIG_HOME": "irrelevant-canary", "DEVIN_API_KEY": "auth-canary"}
-	env, err := detector.devinVersionEnvironment()
+	env, err := devinVersionEnvironmentForDetector(t, detector)
 	want := []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + detector.Environment["APPDATA"], "LOCALAPPDATA=" + detector.Environment["LOCALAPPDATA"]}
 	if err != nil || !reflect.DeepEqual(env, want) {
 		t.Fatalf("Windows original environment differs: %v (%v)", env, err)
 	}
 	delete(detector.Environment, "APPDATA")
-	if _, err := detector.devinVersionEnvironment(); err == nil {
+	if _, err := devinVersionEnvironmentForDetector(t, detector); err == nil {
 		t.Fatal("missing original Windows APPDATA admitted")
 	}
 }
@@ -152,7 +163,7 @@ func TestDevinVersionEnvironmentUsesInjectedFilesystemProbes(t *testing.T) {
 		}
 		return os.Lstat(path)
 	}
-	if _, err := detector.devinVersionEnvironment(); !errors.Is(err, boundary) {
+	if _, err := devinVersionEnvironmentForDetector(t, detector); !errors.Is(err, boundary) {
 		t.Fatalf("environment validation ignored injected host probes: %v", err)
 	}
 }

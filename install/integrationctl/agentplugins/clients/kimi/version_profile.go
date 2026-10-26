@@ -9,9 +9,17 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-var _ clients.VersionProbeEnvironment = (*Adapter)(nil)
+var (
+	_ clients.VersionProbeEnvironment   = (*Adapter)(nil)
+	_ clients.ProjectVersionRequirement = (*Adapter)(nil)
+)
+
+func (*Adapter) RequiresProjectVersion(client domain.DetectedClient) bool {
+	return client.ClientID == domain.ClientKimi
+}
 
 // Kimi bootstraps native workers and staged-update handling before printing its
 // version. Bind its supported profile/cache controls without inventing a HOME.

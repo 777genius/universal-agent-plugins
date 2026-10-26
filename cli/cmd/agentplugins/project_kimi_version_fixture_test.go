@@ -29,9 +29,13 @@ func (d *projectKimiVersionDetector) Detect(context.Context) ([]domain.DetectedC
 	}, nil
 }
 
-func (d *projectKimiVersionDetector) DetectWithVersionProbe(context.Context) ([]domain.DetectedClient, error) {
+func (d *projectKimiVersionDetector) DetectWithVersionProbe(ctx context.Context) ([]domain.DetectedClient, error) {
 	d.broad++
-	return nil, fmt.Errorf("fixture refuses broad version execution")
+	rows, err := d.Detect(ctx)
+	if err != nil {
+		return rows, err
+	}
+	return rows, fmt.Errorf("fixture refuses broad version execution")
 }
 
 func (d *projectKimiVersionDetector) DetectTargetsWithVersionProbe(ctx context.Context, targets []domain.ClientID) ([]domain.DetectedClient, error) {

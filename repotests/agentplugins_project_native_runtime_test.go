@@ -296,7 +296,7 @@ func TestProjectNativeRuntimeValidationContracts(t *testing.T) {
 		}
 	})
 	t.Run("bounded scalar types", func(t *testing.T) {
-		if !projectNativeRuntimeText("abc", 3) || projectNativeRuntimeText("abcd", 3) || projectNativeRuntimeText("a\x00b", 3) || projectNativeRuntimeText(3, 3) {
+		if !projectNativeRuntimeText("abc", 3) || projectNativeRuntimeText("abcd", 3) || !projectNativeRuntimeText("abcd", 4) || projectNativeRuntimeText("a\x00b", 3) || projectNativeRuntimeText(3, 3) {
 			t.Fatal("bounded text contract differs")
 		}
 		if !projectNativeRuntimeNumber(json.Number("2"), 1, 3, true) || !projectNativeRuntimeNumber(json.Number("2.5"), 1, 3, false) {

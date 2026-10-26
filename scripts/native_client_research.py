@@ -31,10 +31,22 @@ def child_limits():
 
 
 def kill_group(process):
+    group_id = process.pid
     try:
-        os.killpg(process.pid, signal.SIGKILL)
+        os.killpg(group_id, signal.SIGKILL)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        # Darwin may refuse a group whose sole leader has already exited.
+        # After reaping, prove absence without a destructive PID-reuse retry.
+        if process.poll() is not None:
+            try:
+                os.killpg(group_id, 0)
+            except ProcessLookupError:
+                return
+            except OSError:
+                pass
+        raise
 
 
 def capture_output(process, selector, streams, started, timeout, limit):

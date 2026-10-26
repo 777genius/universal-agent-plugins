@@ -179,15 +179,16 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		var environment []string
-		if profile, ok := adapter.(clients.VersionProbeEnvironment); ok {
+		switch profile := adapter.(type) {
+		case clients.VersionProbeEnvironment:
 			var err error
 			environment, err = profile.VersionProbeEnvironment(client.ConfigRoot)
 			if err != nil {
 				return client, err
 			}
-		} else if client.ClientID == domain.ClientWindsurf && primaryDevinExecutable(client.ExecutablePath) {
+		case clients.HostVersionProbeEnvironment:
 			var err error
-			environment, err = detector.devinVersionEnvironment()
+			environment, err = profile.VersionProbeEnvironmentForHost(host, client)
 			if err != nil {
 				return client, err
 			}

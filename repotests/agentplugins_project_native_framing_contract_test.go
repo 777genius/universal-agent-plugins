@@ -61,6 +61,8 @@ func projectNativeFramingEntries(t *testing.T, root string) []packagedigest.Capt
 func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T) {
 	for _, adapter := range []clients.Adapter{qoder.New(), grok.New(), kiro.New(), windsurf.New(), cline.New()} {
 		t.Run(string(adapter.ID()), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
 			if domain.ClientTraitsFor(adapter.ID()).QualifiedLocalInstallerFacade {
 				t.Fatal("selected public add route no longer uses the lifecycle Stager")
 			}
@@ -77,7 +79,7 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 					t.Fatal(err)
 				}
 			}
-			snapshot, err := (packagedigest.Builder{TempRoot: t.TempDir()}).Snapshot(t.Context(), source, domain.SourceIdentity{})
+			snapshot, err := (packagedigest.Builder{TempRoot: t.TempDir()}).Snapshot(ctx, source, domain.SourceIdentity{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,12 +92,12 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			envelope, err := (loader.Loader{Registry: schemas}).LoadSnapshot(t.Context(), snapshot)
+			envelope, err := (loader.Loader{Registry: schemas}).LoadSnapshot(ctx, snapshot)
 			if err != nil {
 				t.Fatal(err)
 			}
 			sourceEntries := projectNativeFramingEntries(t, snapshot.Root)
-			sourceDigest, err := packagedigest.DigestCaptured(t.Context(), sourceEntries)
+			sourceDigest, err := packagedigest.DigestCaptured(ctx, sourceEntries)
 			if err != nil || sourceDigest != snapshot.TreeDigest || envelope.TreeDigest != sourceDigest {
 				t.Fatalf("acquired source identity changed: %s %s %s, %v", sourceDigest, snapshot.TreeDigest, envelope.TreeDigest, err)
 			}
@@ -108,7 +110,7 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 				client.ExecutablePath, client.ConfigRoot, client.Version = filepath.Join(root, "devin"), "", "3000.11.205"
 			}
 			planning := planner.Planner{ProjectRoot: project, ManagedRoot: filepath.Join(project, ".uap", "managed"), Paths: pathpolicy.Policy{}, Registry: registry}
-			plan, err := planning.Plan(t.Context(), domain.PlanRequest{Envelope: envelope, Client: client, Scope: domain.ScopeProject, ProjectRoot: project, PhysicalArtifactID: "framing-probe-0123456789ab"})
+			plan, err := planning.Plan(ctx, domain.PlanRequest{Envelope: envelope, Client: client, Scope: domain.ScopeProject, ProjectRoot: project, PhysicalArtifactID: "framing-probe-0123456789ab"})
 			if err != nil || plan.Status != domain.PlanReady {
 				t.Fatalf("actual selected project plan: %+v, %v", plan, err)
 			}
@@ -119,12 +121,12 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 				t.Fatal(err)
 			}
 			stager := providers.Stager{Registry: registry, Paths: pathpolicy.Policy{}, LauncherSource: launcher, PluginDataRoot: filepath.Join(project, ".uap", "data")}
-			delivery, err := stager.Stage(t.Context(), envelope, plan, "inert-framing", domain.CompatibilityHints{})
+			delivery, err := stager.Stage(ctx, envelope, plan, "inert-framing", domain.CompatibilityHints{})
 			if err != nil {
 				t.Fatal(err)
 			}
 			entries := projectNativeFramingEntries(t, delivery.StagingPath)
-			got, err := projectNativeRuntimeInstalledDigest(t.Context(), entries)
+			got, err := projectNativeRuntimeInstalledDigest(ctx, entries)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -132,7 +134,7 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 			for _, object := range delivery.NativeObjects {
 				if object.Kind == "managed_package_directory" {
 					managed++
-					if object.ManagedDigest != got || object.Path != plan.ActivePath || stager.Verify(t.Context(), delivery.StagingPath, got) != nil {
+					if object.ManagedDigest != got || object.Path != plan.ActivePath || stager.Verify(ctx, delivery.StagingPath, got) != nil {
 						t.Fatalf("held digest differs from actual selected Stager object: %+v, %s", object, got)
 					}
 				}
@@ -140,8 +142,8 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 			if managed != 1 {
 				t.Fatal("actual managed package receipt missing or duplicated")
 			}
-			newer, err := packagedigest.DigestCaptured(t.Context(), entries)
-			if err != nil || newer == got || stager.Verify(t.Context(), delivery.StagingPath, newer) == nil {
+			newer, err := packagedigest.DigestCaptured(ctx, entries)
+			if err != nil || newer == got || stager.Verify(ctx, delivery.StagingPath, newer) == nil {
 				t.Fatal("newer source framing accepted as installed ownership")
 			}
 			if adapter.ID() == domain.ClientKiro || adapter.ID() == domain.ClientWindsurf {
@@ -149,7 +151,7 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 					t.Fatalf("mixed managed launcher projection was not staged: %v", err)
 				}
 			}
-			if err := stager.Discard(t.Context(), delivery); err != nil {
+			if err := stager.Discard(ctx, delivery); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -157,8 +159,10 @@ func TestProjectNativeInstalledFramingMatchesActualSelectedStagers(t *testing.T)
 }
 
 func TestProjectNativeInstalledFramingRetainsCapturedPolicyAndDistinctInputs(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 	valid := []packagedigest.CapturedEntry{{Path: "bin", Kind: "directory"}, {Path: "bin/probe", Kind: "file", Executable: true, Content: []byte("owned")}}
-	baseline, err := projectNativeRuntimeInstalledDigest(t.Context(), valid)
+	baseline, err := projectNativeRuntimeInstalledDigest(ctx, valid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +171,7 @@ func TestProjectNativeInstalledFramingRetainsCapturedPolicyAndDistinctInputs(t *
 		{{Path: "bin", Kind: "directory"}, {Path: "bin/probe", Kind: "file", Content: []byte("owned")}},
 		{{Path: "bin", Kind: "directory"}, {Path: "bin/probe", Kind: "file", Executable: true, Content: []byte("owned")}, {Path: "empty", Kind: "directory"}},
 	} {
-		got, err := projectNativeRuntimeInstalledDigest(t.Context(), changed)
+		got, err := projectNativeRuntimeInstalledDigest(ctx, changed)
 		if err != nil || got == baseline {
 			t.Fatal("changed content, executable mode or directory membership retained digest")
 		}
@@ -177,13 +181,13 @@ func TestProjectNativeInstalledFramingRetainsCapturedPolicyAndDistinctInputs(t *
 		{{Path: "Alias", Kind: "file"}, {Path: "alias", Kind: "file"}}, {{Path: "parent/file", Kind: "file"}},
 		{{Path: "file", Kind: "file"}, {Path: "link", Kind: "symlink", Target: "file"}},
 	} {
-		if _, err := projectNativeRuntimeInstalledDigest(t.Context(), invalid); err == nil {
+		if _, err := projectNativeRuntimeInstalledDigest(ctx, invalid); err == nil {
 			t.Fatal("unsafe captured policy or nonordinary entry accepted")
 		}
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if _, err := projectNativeRuntimeInstalledDigest(ctx, valid); err == nil {
-		t.Fatal("cancelled held digest continued")
+	canceled, stop := context.WithCancel(ctx)
+	stop()
+	if _, err := projectNativeRuntimeInstalledDigest(canceled, valid); err == nil {
+		t.Fatal("canceled held digest continued")
 	}
 }

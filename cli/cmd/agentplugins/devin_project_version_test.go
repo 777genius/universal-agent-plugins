@@ -26,9 +26,13 @@ func (d *devinProjectVersionDetector) Detect(context.Context) ([]domain.Detected
 	return []domain.DetectedClient{{ClientID: domain.ClientWindsurf, ExecutablePath: d.executable, Status: domain.DetectionDetected}}, nil
 }
 
-func (d *devinProjectVersionDetector) DetectWithVersionProbe(context.Context) ([]domain.DetectedClient, error) {
+func (d *devinProjectVersionDetector) DetectWithVersionProbe(ctx context.Context) ([]domain.DetectedClient, error) {
 	d.broad++
-	return nil, fmt.Errorf("fixture refuses broad version execution")
+	rows, err := d.Detect(ctx)
+	if err != nil {
+		return rows, err
+	}
+	return rows, fmt.Errorf("fixture refuses broad version execution")
 }
 
 func (d *devinProjectVersionDetector) DetectTargetsWithVersionProbe(ctx context.Context, targets []domain.ClientID) ([]domain.DetectedClient, error) {

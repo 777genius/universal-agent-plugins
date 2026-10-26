@@ -1205,6 +1205,183 @@ canaries, plus direct and saved public lifecycle/no-probe controls. Both
 independent plan reviews precede implementation. Genuine hosted startup and
 later full lifecycle/MCP proof remain separate required gates.
 
+## Observed Darwin completed-process cleanup correction
+
+Genuine baseline [run 40367376473](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473),
+job [121728625314](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473/job/121728625314),
+at Gemini source `6f8ea1173b8b1d343688299b5864ee7c1e1a86d7` failed its
+inert capture contracts before vendor execution. The reported host is macOS
+15.7.9 / 24G830, image `macos-15-arm64` `20260907.0337.1`.
+The finite stdout child wrote 129 bytes against a 128-byte bound and exited.
+Final cleanup's original `killpg(pid, SIGKILL)` raised `PermissionError:
+[Errno 1] Operation not permitted` before the child wait and normal overflow
+receipt. The same head's Codex macOS job `121728625811` passed all 75 contracts.
+Neither that pass nor the later missing-artifact error qualifies the failed job.
+
+Apple's published macOS 15-era XNU tag `xnu-11417.140.69`, commit
+`43a90889846e00bfb5cf1d255cdc0a701a1e05a4`, explains a narrow possible race:
+`bsd/kern/kern_sig.c` blob `d32c03ce89f56531a419436fd0ef0e944e0d8331`
+filters zombie group members and returns POSIX EPERM when an existing group has
+no eligible live member. An unreaped, already exited sole leader can therefore
+produce this result. The actual log has no process-state telemetry; this is a
+source-backed timing inference, not an observed zombie state or a claim that
+this public source exactly matches the runner's kernel binary.
+
+Change only `scripts/native_client_research.py:kill_group` and its inert
+contracts. Preserve the first group-wide SIGKILL and existing missing-group
+handling. Capture the original numeric group ID before that call. If and only
+if the first call raises PermissionError, poll the original Popen child once.
+A still-live child preserves the original permission failure. After its exit
+is observed, issue one read-only signal-zero check against the identical
+original group ID. Accept only ProcessLookupError from that check, proving
+that the group is now absent. A successful check, repeated permission denial
+or another ordinary OS error preserves the original permission failure.
+Unexpected exceptions and interruption remain failures.
+
+The new refusal branch must not retry a destructive signal after reaping,
+signal a different group or individual child, escalate privileges, sleep,
+retry without a bound or suppress arbitrary EPERM. An extant, reused or
+unrepresentable group cannot become successful cleanup. In the same XNU
+snapshot, `bsd/kern/kern_fork.c` blob
+`9a6e5335a40d3a5acd390f5069ab2fa3b73cd784` reserves IDs against process,
+group and session identities; `bsd/kern/kern_proc.c` blob
+`060913ab13ed90608124e6b2c773911c2dc7ca1b` removes an empty group when
+destroyed. Reaping a sole leader may end that reservation. The signal-zero
+check avoids adding a destructive retry against a potentially reused ID.
+
+Keep the shared helper's existing callers, first cleanup attempt, five-second
+child wait, descendant handling, pipe closure, output caps, original deadlines
+and error receipts. Do not alter collector argv/environment, native admission,
+acquisition, trust, permissions, token quarantine, artifacts or qualification.
+The common service retains its independent normal-exit, process-group,
+closed-port and forced-cleanup refusal rules.
+
+Deterministic inert tests must prove: a live child refuses without an absence
+probe; an exited child checks the same group once; only a now-absent group is
+accepted; a present group, repeated EPERM and unrelated OS error preserve the
+original error; and this branch sends no second destructive signal. Retain the
+real-process exact EOF/overflow, separate-stream, inherited-pipe descendant,
+capture-interruption and non-POSIX import controls. Local Linux contracts do
+not qualify the observed macOS race; the original hosted macOS contract remains
+required. Two independent plan rounds precede implementation, followed by
+independent code review and exact-source validation.
+
+## Observed selected-version architecture and lint correction
+
+Genuine Windsurf run [40375582347](https://github.com/777genius/universal-agent-plugins/actions/runs/40375582347),
+`test-core` job `121757629831`, fails the existing architecture ratchet before
+native execution: `cli/internal/agentpluginscli` newly names two client identity
+constants, and `adapters/clientdetect` names one. The reviewed Kimi/Devin runtime
+scope is unchanged, but the dispatch belongs behind the repository's injected
+client capability contract. Start from integrated source
+`f047ae1162d5320c03eb80fa7f11167ad3e81616`, tree
+`c39c6fd3a31f890566eb7b00a912768cf4004f1f`, in isolated
+`/tmp/uap-completion-cli-arch`. No product code is changed under this plan until
+root R1 and an independent shell/capture R2 approve it.
+
+### Adapter-owned project version requirement
+
+Add one small optional interface to the existing `clients` contract:
+`ProjectVersionRequirement`, with pure method
+`RequiresProjectVersion(client domain.DetectedClient) bool`. It expresses only
+whether that adapter's already selected detected host needs a version before a
+project mutation. It performs no filesystem observation or execution and does
+not declare a version supported. Kimi implements it with its existing requirement;
+Windsurf implements it only for an absolute clean selected primary executable
+whose case-normalized basename is `devin` or `devin.exe`. Factor that same pure
+primary-executable predicate inside `clients/windsurf` for its existing exact
+version admission guard, without changing its accepted version or identity
+checks. Legacy Windsurf/editor primaries and secondary Devin surfaces stay
+ineligible. No other shipped adapter implements this new capability.
+
+The generic CLI helper looks up this capability through
+`clients.As[clients.ProjectVersionRequirement](app.ClientRegistry, id)`, using
+the registry already injected by the composition root. Remove the two client-ID
+branches and their basename policy from generic CLI production code. Preserve
+status/error/executable/missing-version filtering, ordered ID deduplication,
+complete target/action validation, one existing targeted detector batch, exact
+one-result-per-requested-ID identity checks, validation of all results before
+copying only Version, and every already reviewed exclusion. The current default
+registry still yields exactly the Kimi + primary-Devin union; this membership
+lives in adapter implementations rather than another generic identity table.
+
+Do not construct/import `clients/all` in the library or replace constants with
+strings, aliases, hidden callbacks or AST tricks. A missing injected registry
+returns the existing `clients.ErrRegistryRequired` before any new child, rather
+than assembling a default. A registered adapter without the capability requests
+no new version; missing targeted detector capability retains the existing
+unknown-version refusal. Known versions remain original facts. The user,
+dry-run, read-only, unchanged/removal and Skills preview/Check boundaries remain
+as reviewed, and SDK Discover/Prepare gains no process execution.
+
+### Adapter-owned original-host version environment
+
+Preserve the existing `VersionProbeEnvironment(configRoot string)` interface and
+all Kimi/Codex/Gemini implementations and semantics. Add a separate narrowly
+optional adapter interface `HostVersionProbeEnvironment`, with method
+`VersionProbeEnvironmentForHost(host clients.Host, client domain.DetectedClient)
+([]string, error)`. This is an adapter environment-policy hook, not another
+native execution/probing interface. The existing generic detector already has
+the original `clients.Host` used for surface discovery and retains exclusive
+ownership of whether/when to probe, argv, process primitive, isolated cwd,
+timeouts, output bounds and synchronous cleanup.
+
+After its existing profile-based environment hook, the generic detector may
+dispatch the host-based hook by interface. Remove its Windsurf identity branch.
+Only `clients/windsurf` implements this new hook. Move the existing Devin
+environment builder/validation into that client package and express filesystem
+validation through existing `Host.CanonicalDirectory` and `Host.Lstat`, with
+HomeDir/GOOS/Env from that same Host. This relocates useful implementation; it
+does not retire its capability or replace injected probes with direct OS reads.
+
+For a non-Devin primary this hook returns no custom environment, retaining the
+pre-existing legacy version path. For the selected primary Devin it returns
+exactly the already reviewed original HOME and finite explicit XDG or Windows
+values, including required Windows APPDATA. Preserve canonical spelling,
+ordinary existing HOME, no aliases, optional absent final leaf only with an
+existing ordinary immediate parent, no creation and no ambient credential,
+proxy, loader or shell values. ConfigRoot remains the legacy Cascade authority,
+including empty, and never supplies HOME/XDG. Invalid original facts fail before
+the child. Retain the legacy callback's refusal when it cannot carry a required
+environment; there is no PATH-only fallback. Kimi's exact three-variable
+profile/cache/updater environment and its path checks remain unchanged.
+
+### Mechanical lint corrections
+
+Keep both public fixture broad-probe traps counted and deliberately failing.
+Have `DetectWithVersionProbe` return their ordinary inert discovery rows alongside
+the intentional refusal error instead of an unconditionally nil first result;
+no vendor executes and no caller may accept the failed result. Add explicit
+compile-time detector-port assertions where useful to bind the required method
+signatures. Convert the existing Kimi alias test's value comparisons into an
+equivalent tagged switch. Lowercase moved Devin error-message prefixes. No
+lint suppressions, fake success, skipped cases or removed safety assertions.
+
+### Files and bounded verification
+
+Expected production changes are the two optional interfaces in
+`clients/detection.go`; adapter-owned requirement methods in `clients/kimi` and
+`clients/windsurf`; relocated Wind host-environment implementation and shared
+primary predicate; generic interface dispatch in
+`adapters/clientdetect/detector.go`; and capability lookup in
+`cli/internal/agentpluginscli/project_version_preflight.go`. Preserve existing
+mutation wiring. Update the meaningful adapter/detector/helper/public fixtures
+for the injected registry and moved policy, plus the specified lint-only test
+lines. No native collector/workflow or unrelated client behavior changes.
+
+Require the unchanged `TestClientIDBudgetDoesNotGrow`, baseline-current, layer
+boundaries and contract dependency closure to pass without editing their code,
+baseline or allowlists. Add pure adapter tests and a default-registry contract
+that only the two intended adapters request a new project version, with primary
+and legacy selection cases. Keep cross-client coexistence, empty ConfigRoot,
+atomic failed-result and no-capability/no-registry controls. Preserve original
+HOME/XDG/Windows environment and unsafe-path/canary tests through the real
+adapter/detector seam. Run the focused helper/preview tests, direct and saved TLS
+ZIP public lifecycle controls, and affected-package lint. Existing saved Git
+tests remain required and unmodified; an unavailable OSRunner `/proc` capability
+is reported without a waiver or full-suite pass claim. All native runtime
+qualification continues to require genuine hosted evidence.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
