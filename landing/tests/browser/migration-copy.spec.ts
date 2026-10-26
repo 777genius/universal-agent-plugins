@@ -2,6 +2,54 @@ import { hydrated } from './i18n-state.helpers';
 import { expect, test } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 
+for (const scenario of [
+  { name: 'registry', path: './agents/codex/', selector: '.agent-page__install .command-snippet', copy: 'Copy command', copied: 'Command copied' },
+  { name: 'download', path: './download/', selector: '.download-section__steps .command-snippet', copy: 'Copy', copied: 'Copied' },
+]) {
+  test(`${scenario.name} copy refuses false success and cleans up after browser denial`, async ({ page }) => {
+    await page.addInitScript(() => {
+      let writes = 0;
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async () => {
+          if (++writes > 1) throw new DOMException('Clipboard denied', 'NotAllowedError');
+        } },
+      });
+      Object.defineProperty(document, 'execCommand', {
+        configurable: true,
+        value: () => {
+          document.documentElement.dataset.copyFallback = 'attempted';
+          if (document.documentElement.dataset.copyFallbackThrows === 'true') {
+            throw new DOMException('Copy denied', 'NotAllowedError');
+          }
+          return false;
+        },
+      });
+    });
+    await page.goto(scenario.path);
+    await hydrated(page);
+    const snippet = page.locator(scenario.selector).first();
+    const button = snippet.getByRole('button');
+    const command = await snippet.locator('code').innerText();
+    const textareas = await page.locator('textarea').count();
+    await button.click();
+    await expect(button).toHaveAccessibleName(scenario.copied);
+    for (const throws of [false, true]) {
+      await page.evaluate((throws) => {
+        delete document.documentElement.dataset.copyFallback;
+        document.documentElement.dataset.copyFallbackThrows = String(throws);
+      }, throws);
+      await button.click();
+      await expect(page.locator('html')).toHaveAttribute('data-copy-fallback', 'attempted');
+      await expect(button).toHaveAccessibleName(scenario.copy);
+      if (scenario.name === 'registry') await expect(snippet.getByRole('status')).toHaveText('');
+      else await expect(snippet.getByRole('status')).toHaveCount(0);
+      await expect(page.locator('textarea')).toHaveCount(textareas);
+      await expect(snippet.locator('code')).toHaveText(command);
+    }
+  });
+}
+
 test('download has one title, a readable version, and current client support', async ({ page }) => {
   await page.route('https://api.github.com/repos/**/releases/latest', (route) =>
     route.fulfill({
