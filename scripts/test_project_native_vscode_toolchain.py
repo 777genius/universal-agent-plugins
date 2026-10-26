@@ -11,6 +11,38 @@ from project_native_research import Budget
 
 
 class CompilerTests(unittest.TestCase):
+    def test_npm_configs_are_distinct_empty_private_files_and_reject_changes(self):
+        for mutation in (None, "contents", "replacement", "mode", "symlink", "hardlink"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary)
+                environment, identities = compiler.npm_configs(home)
+                paths = [Path(environment["NPM_CONFIG_" + scope + "CONFIG"]) for scope in ("USER", "GLOBAL")]
+                self.assertNotEqual(paths[0], paths[1])
+                self.assertNotEqual(paths[0].stat().st_ino, paths[1].stat().st_ino)
+                for path in paths:
+                    self.assertEqual(path.read_bytes(), b"")
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                path = paths[0]
+                if mutation == "contents":
+                    path.write_bytes(b"registry=https://unreviewed.invalid\n")
+                elif mutation == "replacement":
+                    path.rename(home / "original-config")
+                    compiler.write_new(path, b"")
+                elif mutation == "mode":
+                    path.chmod(0o644)
+                elif mutation == "symlink":
+                    path.unlink()
+                    path.symlink_to(paths[1])
+                elif mutation == "hardlink":
+                    (home / "linked-config").hardlink_to(path)
+                if mutation:
+                    with self.assertRaises(ValueError):
+                        compiler.verify_npm_configs(identities)
+                else:
+                    compiler.verify_npm_configs(identities)
+                    with self.assertRaises(FileExistsError):
+                        compiler.npm_configs(home)
+
     def test_minimal_lock_has_only_four_exact_integrity_pinned_packages(self):
         manifest, lock = compiler.package_lock()
         self.assertIs(manifest["private"], True)

@@ -65,6 +65,30 @@ def write_new(path, body, executable=False):
     path.chmod(0o700 if executable else 0o600)
 
 
+def npm_configs(home):
+    """npm requires distinct user/global paths even when both are empty."""
+    if home.resolve() != home or not stat.S_ISDIR(home.lstat().st_mode):
+        raise ValueError("ordinary compiler home required for npm config")
+    environment, identities = {}, {}
+    for scope in ("user", "global"):
+        path = home / ("npm-" + scope + "-config")
+        write_new(path, b"")
+        info = path.lstat()
+        environment["NPM_CONFIG_" + scope.upper() + "CONFIG"] = str(path)
+        identities[path] = (shared.artifacts.identity(info), info.st_uid, info.st_gid)
+    verify_npm_configs(identities)
+    return environment, identities
+
+
+def verify_npm_configs(identities):
+    for path, expected in identities.items():
+        info = path.lstat()
+        if (stat.S_IMODE(info.st_mode) != 0o600 or info.st_uid != os.getuid()
+                or (shared.artifacts.identity(info), info.st_uid, info.st_gid) != expected
+                or ordinary_bytes(path, 0) != b""):
+            raise ValueError("isolated empty npm config identity changed")
+
+
 def package_lock():
     dependencies = {name: version for name, (version, _) in PACKAGES.items() if name != "undici-types"}
     manifest = {"name": "uap-vscode-research-compiler", "version": "1.0.0", "private": True,
@@ -224,8 +248,10 @@ def prepare(root, sources, budget, capture):
     home, temp = root / "home", root / "tmp"
     home.mkdir(mode=0o700)
     temp.mkdir(mode=0o700)
+    config_environment, config_identities = npm_configs(home)
+    identities.update({path: hashlib.sha256(b"").hexdigest() for path in config_identities})
     env = {"HOME": str(home), "TMPDIR": str(temp), "PATH": str(node.parent) + ":/usr/bin:/bin", "LANG": "C.UTF-8",
-           "NPM_CONFIG_USERCONFIG": "/dev/null", "NPM_CONFIG_GLOBALCONFIG": "/dev/null",
+           **config_environment,
            "NPM_CONFIG_CACHE": str(root / "npm-cache"), "NPM_CONFIG_UPDATE_NOTIFIER": "false",
            "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1"}
     shared.verify_files(identities, budget)
@@ -237,7 +263,9 @@ def prepare(root, sources, budget, capture):
         body = json.dumps(value, sort_keys=True, indent=2).encode() + b"\n"
         write_new(root / name, body)
         identities[root / name] = hashlib.sha256(body).hexdigest()
+    verify_npm_configs(config_identities)
     capture("trusted-npm-ci", [node, npm, "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--registry=https://registry.npmjs.org"], root, env, 120)
+    verify_npm_configs(config_identities)
     shared.verify_files(identities, budget)
     for name, (version, _) in PACKAGES.items():
         package = json.loads(ordinary_bytes(root / "node_modules" / name / "package.json", 128 << 10))
