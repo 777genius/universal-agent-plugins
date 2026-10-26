@@ -802,6 +802,30 @@ reviewed. A closed artifact or successful build cannot qualify a failed,
 skipped, absent or otherwise unobserved native test. Raw profiles are never
 recursively uploaded, and the workflow publishes only these two named ZIPs.
 
+The reviewed Gemini registration uses the exact
+`TestAgentpluginsGeminiNativeProjectRuntimeAttempt` with the same 180-second
+attempt bound. A successful attempt additionally requires all command triples,
+both installed snapshots, provider requests, probe events, actual native
+session/call identifiers and returned probe facts. Its five lifecycle
+qualification flags remain false. Pinned Gemini source adds only the exact
+`wait_for_previous` boolean property to the provider-visible tool schema;
+validate that property exactly before comparing the original probe schema.
+Never add it to the emitted tool arguments. The fixture API key is registered,
+redacted and checked again at closed artifact admission.
+
+The Kimi registration selects only
+`TestAgentpluginsKimiNativeProjectComponentsLifecycle` and its original
+900-second total/840-second work budget. It observes public local-source
+installation, reconciliation, update, missing-component repair, fresh native
+processes and removal through Kimi's authenticated local API. Named native MCP
+tests prove initialize/list; tools-call stays false. As with the reviewed local
+Gemini/Copilot sequence, repair uses unchanged selected local input. Moving-source
+and recorded-pin behavior remains separately required in
+`TestProjectComposedSourceLifecycleSeparatesUserAndProjects` and
+`TestProjectCopilotComposedSavedLifecycle`; it is not attributed to these native
+local-directory observations. The checked source-root override and canonical
+Python executable are explicit inputs, with no ambient auth or loader variables.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
