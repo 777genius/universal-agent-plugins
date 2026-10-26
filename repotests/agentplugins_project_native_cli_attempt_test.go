@@ -638,8 +638,11 @@ func projectNativeCLIClosedView(root, name string, skill []byte) error {
 		}
 		return nil
 	})
-	if err != nil || !reflect.DeepEqual(seen, expected) {
-		return fmt.Errorf("closed receipt-selected Qoder native view failed: %v", err)
+	if err != nil {
+		return fmt.Errorf("closed receipt-selected Qoder native view failed: %w", err)
+	}
+	if !reflect.DeepEqual(seen, expected) {
+		return fmt.Errorf("closed receipt-selected Qoder native view membership differs")
 	}
 	return nil
 }
