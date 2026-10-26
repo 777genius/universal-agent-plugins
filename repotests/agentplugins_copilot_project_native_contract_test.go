@@ -21,7 +21,7 @@ func copilotProjectContractRequest() map[string]any {
 }
 
 func TestCopilotProjectNativeReturnedFactsRequireExactInstalledAuthorityAndEvents(t *testing.T) {
-	for _, kind := range []string{"valid", "nonce", "revision", "root", "data", "cwd", "session", "event-session", "out-of-order", "call-missing", "duplicate-call"} {
+	for _, kind := range []string{"valid", "nonce", "revision", "root", "data", "cwd", "session", "event-session", "out-of-order", "call-missing", "duplicate-call", "field-case", "extra-event-field"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			f := &copilotProjectAttempt{base: &nativeFixture{Root: root, Nonce: "nonce", Events: filepath.Join(root, "events.jsonl")}, binding: domain.ClientBinding{TargetLocator: filepath.Join(root, "managed")}, data: filepath.Join(root, "data")}
@@ -45,6 +45,12 @@ func TestCopilotProjectNativeReturnedFactsRequireExactInstalledAuthorityAndEvent
 				var value any
 				if method == "tools/call" {
 					value = facts
+					if kind == "extra-event-field" {
+						var object map[string]any
+						_ = json.Unmarshal(copilotProjectContractBody(t, facts), &object)
+						object["unknown"] = true
+						value = object
+					}
 				}
 				_ = json.NewEncoder(&events).Encode(map[string]any{"method": method, "pid": facts.PID, "session": session, "nonce": facts.Nonce, "timestamp": time.Now().UTC().Format(time.RFC3339Nano), "facts": value})
 			}
@@ -63,7 +69,15 @@ func TestCopilotProjectNativeReturnedFactsRequireExactInstalledAuthorityAndEvent
 			case "session":
 				facts.Session = "foreign"
 			}
-			err := f.validateFacts(string(copilotProjectContractBody(t, facts)))
+			body := copilotProjectContractBody(t, facts)
+			if kind == "field-case" {
+				var object map[string]any
+				_ = json.Unmarshal(body, &object)
+				object["Nonce"] = object["nonce"]
+				delete(object, "nonce")
+				body = copilotProjectContractBody(t, object)
+			}
+			err := f.validateFacts(string(body))
 			if (err == nil) != (kind == "valid") {
 				t.Fatalf("facts admission %s: %v", kind, err)
 			}

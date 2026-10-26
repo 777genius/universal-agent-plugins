@@ -204,7 +204,7 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 		t.Fatal(err)
 	}
 	projectNativeRuntimeWrite(t, filepath.Join(f.base.Package, "skills", "uapcopilota", "SKILL.md"), []byte("---\nname: uapcopilota\ndescription: Disposable Copilot project proof\n---\nUAP_COPILOT_A_ONE_"+f.base.Nonce+"\n"), 0600)
-	server := map[string]any{"type": "stdio", "command": "./bin/probe", "args": []string{"argument with spaces", "${PLUGIN_ROOT}/argument", "${UNKNOWN}"}, "cwd": ".", "env": map[string]string{"UAP_TEST_ROOT": f.base.Root, "UAP_TEST_EVENTS": f.base.Events, "UAP_TEST_NONCE": f.base.Nonce, "UAP_TEST_REVISION": "A-one", "UAP_TEST_LITERAL": "literal ${UNKNOWN} $HOME", "UAP_TEST_ONCE": "${PLUGIN_ROOT}/${UNKNOWN}"}}
+	server := map[string]any{"type": "stdio", "command": "./bin/probe", "args": []string{"argument with spaces", "${PLUGIN_ROOT}/argument", "${UNKNOWN}"}, "cwd": "${PLUGIN_ROOT}", "env": map[string]string{"UAP_TEST_ROOT": f.base.Root, "UAP_TEST_EVENTS": f.base.Events, "UAP_TEST_NONCE": f.base.Nonce, "UAP_TEST_REVISION": "A-one", "UAP_TEST_LITERAL": "literal ${UNKNOWN} $HOME", "UAP_TEST_ONCE": "${PLUGIN_ROOT}/${UNKNOWN}"}}
 	nativeJSON(t, filepath.Join(f.base.Package, "mcp.json"), map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{"uapcopilota": server}})
 	f.immutable[filepath.Join(f.base.Package, "bin", "probe")] = nativeSHA(t, filepath.Join(f.base.Package, "bin", "probe"))
 	r = f.command(t, "add-A", f.base.Project, f.env(), []string{f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json"}, 30*time.Second)
@@ -266,8 +266,13 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 	f.check(t)
 }
 func (f *copilotProjectAttempt) validateFacts(body string) error {
-	if _, err := projectNativeRuntimeJSON([]byte(body)); err != nil {
+	value, err := projectNativeRuntimeJSON([]byte(body))
+	if err != nil {
 		return err
+	}
+	object, ok := value.(map[string]any)
+	if !ok || projectNativeRuntimeKeys(object, "nonce revision cwd argv plugin_root plugin_data literal once marker pid session", "") != nil {
+		return fmt.Errorf("probe facts fields differ")
 	}
 	var facts nativeFacts
 	decoder := json.NewDecoder(strings.NewReader(body))
@@ -311,6 +316,10 @@ func (f *copilotProjectAttempt) validateFacts(body string) error {
 		}
 		methods[method]++
 		if method == "tools/call" {
+			object, ok := m["facts"].(map[string]any)
+			if !ok || projectNativeRuntimeKeys(object, "nonce revision cwd argv plugin_root plugin_data literal once marker pid session", "") != nil {
+				return fmt.Errorf("probe event facts fields differ")
+			}
 			encoded, _ := json.Marshal(m["facts"])
 			var observed nativeFacts
 			if json.Unmarshal(encoded, &observed) != nil || !reflect.DeepEqual(observed, facts) {
