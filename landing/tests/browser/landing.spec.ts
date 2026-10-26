@@ -176,6 +176,12 @@ test('below-fold sections reveal quickly on scroll without animating the hero', 
 }) => {
   await page.setViewportSize({ width: 1280, height: 480 });
   await page.goto('./');
+  await hydrated(page);
+  // The enhancement establishes its hidden state and observer in two frames.
+  await page.evaluate(async () => {
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+  });
 
   await expect(page.locator('.hero-shell')).not.toHaveClass(/scroll-reveal/);
   await expect(page.locator('#plugins')).toHaveClass(/scroll-reveal/);

@@ -15,7 +15,9 @@ func (e *Engine) removalRequiresExternalUninstalled(client domain.DetectedClient
 		return false
 	}
 	return policy.RequiresExternalUninstalled(clients.Env{Runner: e.cfg.Runner}, domain.DeactivationRequest{
-		Client: client, DeclaredName: installation.DeclaredName,
+		TargetContext:      domain.TargetContext{Scope: e.scope(), ProjectRoot: e.cfg.ProjectRoot, UserConfigRoot: client.ConfigRoot},
+		NativeRegistryRoot: firstNonEmpty(binding.NativeProfileRoot, client.ConfigRoot),
+		Client:             client, DeclaredName: installation.DeclaredName,
 		CurrentActivation: binding.Activation, SelectedDelivery: binding.SelectedDelivery,
 		LocalEntryObservation: binding.LocalEntryObservation.Clone(),
 		RemoveOwnedEntry:      binding.SelectedDelivery.OwnsProfileEntry(binding.NativeObjects),

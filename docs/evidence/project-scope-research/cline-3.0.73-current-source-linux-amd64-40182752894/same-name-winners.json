@@ -1,0 +1,41 @@
+{
+  "same-A": [
+    {
+      "description": "SAME-USER",
+      "frontmatter": {
+        "description": "SAME-USER",
+        "disable-model-invocation": true,
+        "name": "uap-cline-shared"
+      },
+      "instructions": "SAME-USER\nInert text only. No command, model, hook or server execution.",
+      "name": "uap-cline-shared",
+      "path": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/home/.cline/skills/uap-cline-shared/SKILL.md"
+    }
+  ],
+  "same-B": [
+    {
+      "description": "SAME-USER",
+      "frontmatter": {
+        "description": "SAME-USER",
+        "disable-model-invocation": true,
+        "name": "uap-cline-shared"
+      },
+      "instructions": "SAME-USER\nInert text only. No command, model, hook or server execution.",
+      "name": "uap-cline-shared",
+      "path": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/home/.cline/skills/uap-cline-shared/SKILL.md"
+    }
+  ],
+  "same-user": [
+    {
+      "description": "SAME-USER",
+      "frontmatter": {
+        "description": "SAME-USER",
+        "disable-model-invocation": true,
+        "name": "uap-cline-shared"
+      },
+      "instructions": "SAME-USER\nInert text only. No command, model, hook or server execution.",
+      "name": "uap-cline-shared",
+      "path": "/home/runner/work/_temp/uap-cline-project-gate-soqc_vrr/fixtures/uap-cline-project-4114749539/home/.cline/skills/uap-cline-shared/SKILL.md"
+    }
+  ]
+}

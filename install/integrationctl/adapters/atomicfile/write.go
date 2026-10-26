@@ -54,7 +54,7 @@ func Write(path string, data []byte, mode os.FileMode) error {
 		cleanup()
 		return fmt.Errorf("close atomic file temp: %w", err)
 	}
-	if err := os.Rename(tempPath, path); err != nil {
+	if err := Replace(tempPath, path); err != nil {
 		cleanup()
 		return fmt.Errorf("replace atomic file target: %w", err)
 	}

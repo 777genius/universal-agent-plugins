@@ -42,7 +42,7 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 		if err := selectedDetectionError(target, detected); err != nil {
 			return nil, nil, err
 		}
-		client, ok := detectedSharedClient(target, detected)
+		client, ok := detectedSharedClient(target, detected, app.scope())
 		if plansWithoutHostPresence(target) && !ok {
 			client = syntheticUndetectedClient(target)
 			detected[target] = client
@@ -62,14 +62,17 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 // the other member of the Copilot/VS Code shared backend. This is safe only for
 // compatibility and lifecycle checks of an already-recorded physical binding;
 // explicit user targets must continue through the strict preflight above.
-func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) ([]domain.DetectedClient, error) {
+func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient, scopes ...domain.InstallScope) ([]domain.DetectedClient, error) {
 	selected := make([]domain.DetectedClient, 0, len(bindingTargets))
 	seen := make(map[domain.ClientID]struct{}, len(bindingTargets))
 	for _, target := range bindingTargets {
 		if err := selectedDetectionError(target, detected); err != nil {
 			return nil, err
 		}
-		client, ok := clientplanner.DetectedPhysicalClient(target, detected)
+		client, ok := detected[target]
+		if selectedScope(scopes) == domain.ScopeUser {
+			client, ok = clientplanner.DetectedPhysicalClient(target, detected)
+		}
 		if plansWithoutHostPresence(target) && !ok {
 			client = syntheticUndetectedClient(target)
 			ok = true
@@ -102,7 +105,7 @@ func resolveInstalledBindingTargets(ctx context.Context, app App, bindingTargets
 	for _, client := range clients {
 		detected[client.ClientID] = client
 	}
-	resolved, err := preflightInstalledBindings(bindingTargets, detected)
+	resolved, err := preflightInstalledBindings(bindingTargets, detected, app.scope())
 	if err != nil {
 		return nil, err
 	}

@@ -51,7 +51,8 @@
       },
       "PackageMode": "compatibility_projection",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "projected"
     },
@@ -87,7 +88,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -123,7 +125,8 @@
       },
       "PackageMode": "compatibility_projection",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "projected"
     },
@@ -160,7 +163,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -197,7 +201,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -234,7 +239,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -271,7 +277,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -308,7 +315,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -345,7 +353,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -382,7 +391,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
@@ -418,7 +428,8 @@
       },
       "PackageMode": "native",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "native"
     },
@@ -455,7 +466,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },
@@ -492,7 +504,8 @@
       },
       "PackageMode": "prepared_package",
       "Scopes": [
-        "user"
+        "user",
+        "project"
       ],
       "SkillSupport": "prepared"
     },

@@ -19,64 +19,10 @@ import (
 )
 
 func newDepsCommand(app App, opts *options) *cobra.Command {
-	command := &cobra.Command{Use: "deps", Short: "Manage the portable user dependency environment"}
+	command := &cobra.Command{Use: "deps", Short: "Manage the portable dependency environment"}
 	var locked, yes bool
-	command.AddCommand(&cobra.Command{
-		Use: "init", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return initializeDependencies(cmd, app, opts)
-		},
-	})
-	command.AddCommand(&cobra.Command{
-		Use: "lock", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			result, err := runDependencyLock(cmd.Context(), app, opts, "", true)
-			if err != nil {
-				return err
-			}
-			return renderDependencyLock(cmd, opts, result)
-		},
-	})
-	command.AddCommand(&cobra.Command{
-		Use: "update <alias>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			result, err := runDependencyLock(cmd.Context(), app, opts, args[0], true)
-			if err != nil {
-				return err
-			}
-			return renderDependencyLock(cmd, opts, result)
-		},
-	})
-	command.AddCommand(&cobra.Command{
-		Use: "status", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return runDependencyStatus(cmd, app, opts)
-		},
-	})
-	sync := &cobra.Command{
-		Use: "sync", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := validateDepsOptions(opts); err != nil {
-				return err
-			}
-			return runDependencySync(cmd, app, opts, locked, yes)
-		},
-	}
-	sync.Flags().BoolVar(&opts.externalUninstalled, "external-uninstalled", false, "attest removed targets were uninstalled manually or never imported")
-	sync.Flags().BoolVar(&locked, "locked", false, "require an exact existing lock and never resolve refs")
-	sync.Flags().BoolVar(&yes, "yes", false, "confirm the complete preflighted sync without an interactive prompt")
-	command.AddCommand(sync)
-	command.AddCommand(newDependencyTransferCommand(app, opts, "export"))
-	command.AddCommand(newDependencyTransferCommand(app, opts, "import"))
-	command.AddCommand(newDependencyTreeCommand(app, opts))
-	command.AddCommand(newDependencyRecoverCommand(app, opts, &yes))
+	command.AddCommand(newDependencyInitCommand(app, opts), newDependencyLockCommand(app, opts, false), newDependencyLockCommand(app, opts, true), newDependencyStatusCommand(app, opts), newDependencySyncCommand(app, opts, &locked, &yes))
+	command.AddCommand(newDependencyTransferCommand(app, opts, "export"), newDependencyTransferCommand(app, opts, "import"), newDependencyTreeCommand(app, opts), newDependencyRecoverCommand(app, opts, &yes))
 	return command
 }
 
@@ -87,9 +33,6 @@ func validateDepsOptions(opts *options) error {
 func validateEnvironmentOptions(command string, opts *options) error {
 	if opts.target != "" {
 		return fmt.Errorf("%s uses uap.toml targets only; inherited --target is not allowed", command)
-	}
-	if opts.scope != "user" {
-		return fmt.Errorf("%s supports --scope user only", command)
 	}
 	return validateCommonOptions(opts)
 }
@@ -106,6 +49,9 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 	if err := requireDependencyMutationReady(app); err != nil {
 		return dependencyLockResult{}, err
 	}
+	if err := app.preflightProjectDependencyTargets(); err != nil {
+		return dependencyLockResult{}, err
+	}
 	if allowWrite && !opts.dryRun {
 		release, lockErr := processlock.Lock{Path: app.EnvironmentLockPath}.Acquire(ctx)
 		if lockErr != nil {
@@ -113,14 +59,8 @@ func runDependencyLock(ctx context.Context, app App, opts *options, updateAlias 
 		}
 		defer func() { _ = release() }()
 	}
-	if app.Installer != nil {
-		view, err := app.Installer.Inspect(ctx)
-		if err != nil {
-			return dependencyLockResult{}, err
-		}
-		if view.Recovery.Required {
-			return dependencyLockResult{}, installer.ErrRecoveryRequired
-		}
+	if err := requireDependencyLockRecoveryClear(ctx, app); err != nil {
+		return dependencyLockResult{}, err
 	}
 	manifestPath, lockPath := app.dependencyPaths()
 	manifestBefore, manifestReadErr := os.ReadFile(manifestPath)
@@ -165,6 +105,20 @@ func publishResolvedDependencyLock(ctx context.Context, app App, manifestPath, l
 	}
 	if err := writeDependencyLock(lockPath, locked); err != nil {
 		return err
+	}
+	return nil
+}
+
+func requireDependencyLockRecoveryClear(ctx context.Context, app App) error {
+	if app.Installer == nil {
+		return nil
+	}
+	view, err := app.Installer.Inspect(ctx)
+	if err != nil {
+		return err
+	}
+	if view.Recovery.Required {
+		return installer.ErrRecoveryRequired
 	}
 	return nil
 }
@@ -296,6 +250,9 @@ func initializeDependencies(cmd *cobra.Command, app App, opts *options) error {
 
 func validateDependencyTargets(app App, requirements environment.Requirements) error {
 	for target := range requirements.Targets {
+		if app.scope() == domain.ScopeProject && !supportsDependencyTarget(app, target) {
+			return fmt.Errorf("%s does not support project scope", target)
+		}
 		if definition, ok := domain.ClientDefinitionFor(domain.ClientID(target)); ok && (definition.PlansWithoutHostPresence || definition.Traits.RequiresPersonalMappingForPrepare) {
 			return fmt.Errorf("%s is prepared manually and cannot be a saved dependency target; use agentplugins add <source> --target %s (not saved)", definition.DisplayName, target)
 		}
@@ -331,7 +288,7 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 	if hadPrevious {
 		previousPin = &previous
 	}
-	locked, err := (environment.Coordinator{Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
 	if err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err
 	}
@@ -346,6 +303,10 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 func newDependencyRecoverCommand(app App, opts *options, yes *bool) *cobra.Command {
 	recovery := &cobra.Command{
 		Use: "recover", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -370,5 +331,5 @@ func supportedDependencyTargets(app App) []string {
 // all explicitly registered legacy capabilities; this flow admits only the
 // owner's qualified dependency targets.
 func supportsDependencyTarget(app App, target string) bool {
-	return app.Installer != nil && app.Installer.SupportsClient(target) && installer.ClientSupported(app.ClientRegistry, target)
+	return app.Installer != nil && installer.ClientScopeSupported(app.ClientRegistry, target, app.scope())
 }

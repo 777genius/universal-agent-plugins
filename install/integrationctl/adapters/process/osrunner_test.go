@@ -48,6 +48,7 @@ func TestOSRunnerPreservesCommandOutputAndExitCode(t *testing.T) {
 		fmt.Fprint(os.Stderr, "expected stderr")
 		os.Exit(7)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append([]string(nil), os.Environ()...)
 	environment = append(environment, "AGENTPLUGINS_PROCESS_OUTPUT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
@@ -66,6 +67,7 @@ func TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess(t *testing.T) {
 		fmt.Fprint(os.Stdout, "clean")
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_CLEAN_EXIT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerCleanExitWithoutOtherGroupMembersRemainsSuccess"}, Env: environment,
@@ -80,6 +82,7 @@ func TestOSRunnerBoundsStdoutAndReturnsLimitError(t *testing.T) {
 		fmt.Fprint(os.Stdout, "output beyond the configured bound")
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerBoundsStdoutAndReturnsLimitError"}, Env: environment, StdoutLimitBytes: 6,
@@ -104,6 +107,7 @@ func TestOSRunnerStdoutLimitStopsProducerBeforeRemainingOutput(t *testing.T) {
 		_ = os.WriteFile(marker, []byte("producer completed"), 0o600)
 		os.Exit(0)
 	}
+	requireOrdinaryPreflight(t)
 	marker = filepath.Join(t.TempDir(), "completed")
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_MARKER="+marker)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -124,6 +128,7 @@ func TestOSRunnerStdoutLimitPreservesNonzeroExit(t *testing.T) {
 		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
 		os.Exit(23)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_EXIT_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitPreservesNonzeroExit"}, Env: environment, StdoutLimitBytes: 16,
@@ -141,6 +146,7 @@ func TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands(
 		_, _ = os.Stdout.Write([]byte(strings.Repeat("x", 4097)))
 		os.Exit(141)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append(os.Environ(), "AGENTPLUGINS_PROCESS_STDOUT_LIMIT_141_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{
 		Argv: []string{os.Args[0], "-test.run=TestOSRunnerStdoutLimitPreservesConventionalPipeExitCodeForGenericCommands"}, Env: environment, StdoutLimitBytes: 16,
@@ -966,6 +972,7 @@ func TestOSRunnerBoundsStderrWhileRetainingDiagnosticEdges(t *testing.T) {
 		fmt.Fprint(os.Stderr, ":diagnostic-end")
 		os.Exit(9)
 	}
+	requireOrdinaryPreflight(t)
 	environment := append([]string(nil), os.Environ()...)
 	environment = append(environment, "AGENTPLUGINS_PROCESS_STDERR_HELPER=1")
 	result, err := (OS{}).Run(context.Background(), ports.Command{

@@ -69,6 +69,10 @@ func newSearchCommand(app App, opts *options) *cobra.Command {
 		Short: "Search signed Agent Plugin discovery metadata without downloading packages",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}

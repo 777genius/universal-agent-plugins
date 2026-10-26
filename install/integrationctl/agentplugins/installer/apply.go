@@ -24,6 +24,9 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 		return Result{}, err
 	}
 	defer func() {
+		if result.Binding.ClientID != "" {
+			result.Binding.TargetContext = preparedTargetContext(prepared, result.Binding.ClientID)
+		}
 		prepared.mu.Lock()
 		prepared.busy = false
 		if err == nil {
@@ -188,7 +191,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		return Result{Operation: prepared.req.Operation, Outcome: OutcomeConflict, Reason: "plan_changed"}, err
 	}
 	added, err := call(svc, usecase.AddInput{
-		Envelope: prepared.envelope, Client: prepared.client, Scope: domain.ScopeUser, Confirmed: true,
+		Envelope: prepared.envelope, Client: prepared.client, Scope: e.scope(), Confirmed: true,
 		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
 		BackendExecutable: prepared.req.ClientExecutable,
 		OriginMode:        prepared.snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(prepared.snapshot.Directory),
@@ -294,7 +297,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 	if !ok {
 		return Result{Operation: OpRemove, Outcome: OutcomeIncomplete, Reason: "client is not installed"}, fmt.Errorf("%w: client %s is not installed", ErrInvalidRequest, prepared.client.ClientID)
 	}
-	if err := e.removalPreflight(ctx, prepared.client, binding, receipt); err != nil {
+	if err := e.removalPreflight(ctx, prepared.client, installation.DeclaredName, binding, receipt); err != nil {
 		return Result{Operation: OpRemove, Outcome: OutcomeIncomplete, Reason: err.Error()}, err
 	}
 	helper, _ := e.helper()
@@ -304,7 +307,7 @@ func (e *Engine) applyRemove(ctx context.Context, prepared *PreparedOperation) (
 		return removalConflict(Result{Operation: OpRemove, Binding: prepared.facts}, err)
 	}
 	removed, err := svc.Remove(ctx, usecase.RemoveInput{
-		Selector: prepared.plan.InstallationID, Client: prepared.client, Scope: domain.ScopeUser,
+		Selector: prepared.plan.InstallationID, Client: prepared.client, Scope: e.scope(),
 		Confirmed: true, OperationID: prepared.req.OperationID, BackendExecutable: prepared.req.ClientExecutable,
 		ExternalUninstalled: prepared.req.ExternalUninstalled, SelectedDelivery: prepared.plan.SelectedDelivery,
 		EnvironmentAuthority: prepared.req.EnvironmentAuthority,

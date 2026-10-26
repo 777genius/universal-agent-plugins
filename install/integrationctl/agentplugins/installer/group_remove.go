@@ -114,12 +114,14 @@ func (e *Engine) planRemoveGroup(ctx context.Context, handle *PreparedOperation,
 		// An absent selected target has no authority to dispatch. Keep its zero
 		// selection and report absence; a present historical zero stays historical.
 		if (found && binding.SelectedDelivery.IsZero() || !found && !selectedCapable) && target.ClientID != "claude" && target.ClientID != "codex" {
-			return nil, fmt.Errorf("%w: historical group removal requires Claude/Codex", ErrUnsupported)
+			if !e.projectGroupRemovalSupported(req, target.ClientID) {
+				return nil, fmt.Errorf("%w: historical group removal requires Claude/Codex", ErrUnsupported)
+			}
 		}
 		if found {
 			item.SelectedDelivery = binding.SelectedDelivery
 			item.TreeDigest = recordedBindingDigest(binding, installation.Source.TreeDigest)
-			if err := e.removalPreflight(ctx, client, binding, receipt); err != nil {
+			if err := e.removalPreflight(ctx, client, installation.DeclaredName, binding, receipt); err != nil {
 				return nil, err
 			}
 			item.TargetPath = binding.TargetLocator
@@ -137,6 +139,13 @@ func (e *Engine) planRemoveGroup(ctx context.Context, handle *PreparedOperation,
 		handle.plan.NoChange = true
 	}
 	return handle, nil
+}
+
+// Project clients retain the same per-binding preflight and frozen removal
+// authority below. This only narrows the historical SDK admission restriction.
+func (e *Engine) projectGroupRemovalSupported(req Request, clientID string) bool {
+	return req.Scope == domain.ScopeProject && req.ProjectRoot != "" && req.ProjectRoot == e.cfg.ProjectRoot &&
+		ClientScopeSupported(e.cfg.Registry, clientID, domain.ScopeProject)
 }
 
 func setRemoveGroupPrimary(handle *PreparedOperation, client domain.DetectedClient, item PlanTarget, binding domain.ClientBinding, receipt domain.DataReceipt) {
@@ -170,7 +179,7 @@ func removeGroupInputs(prepared *PreparedOperation) ([]usecase.RemoveInput, []Cl
 		}
 		client := prepared.clients[i]
 		live = append(live, usecase.RemoveInput{
-			Selector: prepared.plan.InstallationID, Client: client, Scope: domain.ScopeUser, SelectedDelivery: target.SelectedDelivery,
+			Selector: prepared.plan.InstallationID, Client: client, Scope: prepared.req.Scope, SelectedDelivery: target.SelectedDelivery,
 			Confirmed: true, OperationID: prepared.req.OperationID, BackendExecutable: client.ExecutablePath,
 			ExternalUninstalled: prepared.req.Targets[i].ExternalUninstalled || prepared.req.ExternalUninstalled,
 		})
@@ -199,7 +208,7 @@ func (e *Engine) preflightRemoveGroup(ctx context.Context, prepared *PreparedOpe
 			err := fmt.Errorf("%w: client %s is not installed", ErrInvalidRequest, client.ClientID)
 			return err
 		}
-		if err := e.removalPreflight(ctx, client, binding, receipt); err != nil {
+		if err := e.removalPreflight(ctx, client, installation.DeclaredName, binding, receipt); err != nil {
 			return err
 		}
 	}

@@ -40,3 +40,15 @@ landing/test-results/
 dist/
 dist
 .env
+
+# Local project state and generated verification output.
+/.uap/
+/coverage/
+/evidence-intake/
+
+# Disposable outputs of the retained historical Claude scope probes.
+/docs/evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24/fixture-user/
+/docs/evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24/projects/
+/docs/evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24/observations/
+/docs/evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24/tmp/
+/docs/evidence/project-scope-native/claude-2.1.263-linux-amd64-spike-2026-10-24/saved-user-fixture/

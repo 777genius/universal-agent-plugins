@@ -1,0 +1,608 @@
+{
+  "artifact_id": 12578221090,
+  "zip_bytes": 398277,
+  "zip_sha256": "269077ce2ae9e88aefa1d8a539fb194ea93fd4ec4c66f384a76865121e181b48",
+  "zip_crc_checked": true,
+  "members": [
+    {
+      "name": "native-tests.log",
+      "bytes": 1173,
+      "sha256": "f17f0fa3abf048f94d59a4bd20fe6ec03f01c85bc2a94c3c423c654c83d725e1"
+    },
+    {
+      "name": "runner-evidence.json",
+      "bytes": 19703,
+      "sha256": "3668152bea3c6b223698cdb3a50eb6b616cf1eb762ca3a0d59e9cccbd0721fa4"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/01-claude-version.log",
+      "bytes": 22,
+      "sha256": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/02-add-v1.log",
+      "bytes": 4408,
+      "sha256": "7b8be042a11b1b11d1ef71cd1280120ba206076cd6c0098d3ae57ca6467c1d1d"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/03-list-after-install.log",
+      "bytes": 296,
+      "sha256": "e05a4bd907e99c330aaa797daeea395af983773dfcdff46ab521830eaa6ff232"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/04-details-after-install.log",
+      "bytes": 601,
+      "sha256": "f6d3b225f3f8d90d64fafe36b5ebe8c1ed46bf6867fa68f9897c08bbcda50b64"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/05-mcp-list-after-install.log",
+      "bytes": 1266,
+      "sha256": "32fe2e78e244a328f5cf83f8a6c8e72e9e2db3bd5e18e774b7381fca1bf3ae9a"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/06-update-v2.log",
+      "bytes": 2157,
+      "sha256": "67a15913bde0f4e8c6ad220f77820fc2fc197a25f44709cc669dca7d7ef7b870"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/07-list-after-version-update.log",
+      "bytes": 296,
+      "sha256": "00e0bfb35c45c0e78a5d790bafc172fe707a7e14c38cbe59826d48906417dfa6"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/08-update-same-version.log",
+      "bytes": 2157,
+      "sha256": "c462167e4c64a1c2b74e7d68723241786b3738c9f141a0f5efd8cdd22db73cfd"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/09-update-unchanged.log",
+      "bytes": 2175,
+      "sha256": "f6865e9acd1507ea421527c2b2e9fe0d224cce0fe95dc03c53bdbe6d904c7420"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/10-repair-absent.log",
+      "bytes": 1981,
+      "sha256": "f2451e8eb2ae4d68ab7f2a25fce150ffc421b08aa01d813316925e3aedfac704"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/11-list-after-repair.log",
+      "bytes": 296,
+      "sha256": "00e0bfb35c45c0e78a5d790bafc172fe707a7e14c38cbe59826d48906417dfa6"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/12-details-after-repair.log",
+      "bytes": 601,
+      "sha256": "61091ab19d98cc042ceb8919e12a7bd1efcef34cc8166fb2ca79296909c16831"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/13-remove-blocked-by-foreign-content.log",
+      "bytes": 1106,
+      "sha256": "e36c3fb960fade53bafca2570d4a57e660dc125d2563280d63ab2666a77bb450"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/14-remove.log",
+      "bytes": 1008,
+      "sha256": "ca0cf263cacd02d9b12ff11c283b48ed9560bfdfdb013375619639dc409fb103"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/15-list-after-remove.log",
+      "bytes": 275,
+      "sha256": "d31b52f9ea36ed5c5e6b6b5ac9a95f465059a7d197a1e3995d3b1e98baecb305"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/16-repeat-remove.log",
+      "bytes": 63,
+      "sha256": "9f7e8a6d254b5cfd57ccbb292dd645cb88a62042fc82f7c940dacec0abbcff53"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/evidence.json",
+      "bytes": 4197,
+      "sha256": "a91556466bdd6c52344217ee64117154160760106e936e685d8fad2506f58a6c"
+    },
+    {
+      "name": "uap-claude-native-evidence-2149198670/remove-inventory-diff.json",
+      "bytes": 1969,
+      "sha256": "cbbb57653f25f743adecf46538fb2dff02040b6f50faee23b7e33d56c94d969f"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/01-claude-version.log",
+      "bytes": 22,
+      "sha256": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/02-skills-after-add-list.log",
+      "bytes": 298,
+      "sha256": "e45cd54f06b996c52bb8d67753043215c498a4b01e94e30005c585d229e03c73"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/03-skills-after-add-details.log",
+      "bytes": 624,
+      "sha256": "3b2a2b11779d6134b2f5d88366123d51cbdb2dc9c048c32d5807f2724486e527"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/04-skills-after-unchanged-update-list.log",
+      "bytes": 298,
+      "sha256": "e45cd54f06b996c52bb8d67753043215c498a4b01e94e30005c585d229e03c73"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/05-skills-after-unchanged-update-details.log",
+      "bytes": 624,
+      "sha256": "3b2a2b11779d6134b2f5d88366123d51cbdb2dc9c048c32d5807f2724486e527"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/06-skills-after-invocation-change-list.log",
+      "bytes": 298,
+      "sha256": "e45cd54f06b996c52bb8d67753043215c498a4b01e94e30005c585d229e03c73"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/07-skills-after-invocation-change-details.log",
+      "bytes": 632,
+      "sha256": "c32582063bb87ca7aac4508ce1b649191ae435252cf33afbc0372e9d8133d482"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/08-skills-after-intact-repair-list.log",
+      "bytes": 298,
+      "sha256": "e45cd54f06b996c52bb8d67753043215c498a4b01e94e30005c585d229e03c73"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/09-skills-after-intact-repair-details.log",
+      "bytes": 632,
+      "sha256": "c32582063bb87ca7aac4508ce1b649191ae435252cf33afbc0372e9d8133d482"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/10-list-before-absent-repair.log",
+      "bytes": 298,
+      "sha256": "e45cd54f06b996c52bb8d67753043215c498a4b01e94e30005c585d229e03c73"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/11-skills-after-absent-repair-list.log",
+      "bytes": 298,
+      "sha256": "e45cd54f06b996c52bb8d67753043215c498a4b01e94e30005c585d229e03c73"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/12-skills-after-absent-repair-details.log",
+      "bytes": 632,
+      "sha256": "c32582063bb87ca7aac4508ce1b649191ae435252cf33afbc0372e9d8133d482"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/13-skills-after-remove-list.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/add-installer-stderr.log",
+      "bytes": 156,
+      "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/add-installer.json",
+      "bytes": 3724,
+      "sha256": "199b3d3dd999aa86bdf07f64e15403944d2f96ca494dd53ef6edbeffbe336fed"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/commands-evidence.json",
+      "bytes": 5612,
+      "sha256": "67284c1c082f6887c7e3e07c6e325cb803cc39f5597e7d6b0b300a9705241723"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/remove-installer-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/remove-installer.json",
+      "bytes": 1304,
+      "sha256": "e781b71e7d52dbf68710b9de262ab44d521fc34915ce906aab79e00f8190e26f"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/repair-absent-installer-stderr.log",
+      "bytes": 78,
+      "sha256": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/repair-absent-installer.json",
+      "bytes": 2155,
+      "sha256": "c09caa33c6cfe0c33176f7dcf20a9ca69ade51518f05156793e3a115d32dac7c"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/repair-intact-installer-stderr.log",
+      "bytes": 78,
+      "sha256": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/repair-intact-installer.json",
+      "bytes": 2155,
+      "sha256": "8c7187b6cbbc4fbac632959eebdecc91ea865df6dedc2669c42da211ee9aabb4"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/update-invocation-change-installer-stderr.log",
+      "bytes": 87,
+      "sha256": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/update-invocation-change-installer.json",
+      "bytes": 2322,
+      "sha256": "ba4334a94932b3d4a9700d1624f0066e3ea7791a05e5eb61a6d612d97de370c8"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/update-unchanged-installer-stderr.log",
+      "bytes": 87,
+      "sha256": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10"
+    },
+    {
+      "name": "uap-claude-native-evidence-3075974034/update-unchanged-installer.json",
+      "bytes": 2340,
+      "sha256": "f57967e66fda2b95cdde9e378e34c34926ab5ef58d1998e7486738db26a2a8e1"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/01-claude-version.log",
+      "bytes": 22,
+      "sha256": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/add-installer-stderr.log",
+      "bytes": 156,
+      "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/add-installer.json",
+      "bytes": 4227,
+      "sha256": "51b38d67f9d7c913e1abe012775efcddd3a6d587a3a97a1896cdc70ac8ad44e9"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/add-repeated-installer-stderr.log",
+      "bytes": 156,
+      "sha256": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/add-repeated-installer.json",
+      "bytes": 2756,
+      "sha256": "5ea1994ece17a0b46e98b034a60e6e992c81760a9adbcf537668c5b4b007e7e0"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-add-native-A.json",
+      "bytes": 401,
+      "sha256": "72ff1eb64df99ecb676641312b08b887be65ae2b92b35f7cf4ebcf660e22902d"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-add-native-A.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-add-native-A.stdout.log",
+      "bytes": 419,
+      "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-add-native-B.json",
+      "bytes": 402,
+      "sha256": "57b81cedb3c7c40e638404f6b7655f25ff51003c70e005319350d4821f580da3"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-add-native-B.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-add-native-B.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-owned-directory-loss-native-A.json",
+      "bytes": 402,
+      "sha256": "cd2e882f234ff656e80d5cb2db4a94e61ef39c386a569e67acb8880fd60b1fc4"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-owned-directory-loss-native-A.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-owned-directory-loss-native-A.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-owned-directory-loss-native-B.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-owned-directory-loss-native-B.json",
+      "bytes": 402,
+      "sha256": "e309ac269bfb1a785ec1fce86bfa5c23e9c2a1b3da73e5ad66328e7df97b32d2"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-owned-directory-loss-native-B.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-remove-native-A.json",
+      "bytes": 402,
+      "sha256": "956209b3fa2d84c9910bb0033d2a555ad9ef122eb5025117de27a872038bb2a6"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-remove-native-A.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-remove-native-A.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-remove-native-B.json",
+      "bytes": 402,
+      "sha256": "cba3fb0fde3f2a19b36801eb2115729a2e1bfe8a63ea0bc6be3d50944101cc93"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-remove-native-B.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-remove-native-B.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repair-native-A.json",
+      "bytes": 401,
+      "sha256": "6e1e7e35642ca32841a00017c5fc4b6b561079977d2312c44bc2a12595df7999"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repair-native-A.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repair-native-A.stdout.log",
+      "bytes": 419,
+      "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repair-native-B.json",
+      "bytes": 402,
+      "sha256": "512a3b1df605cf7f22c6d8cc6b33c965a8d5d053606ad5fafdf23dea4db3f709"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repair-native-B.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repair-native-B.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repeated-add-native-A.json",
+      "bytes": 401,
+      "sha256": "bca261df54aa2ddddf4a9525be887a96d622534bbccf98e66e73e564ae0e1698"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repeated-add-native-A.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repeated-add-native-A.stdout.log",
+      "bytes": 419,
+      "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repeated-add-native-B.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repeated-add-native-B.json",
+      "bytes": 402,
+      "sha256": "8f7a7c1ce4565e162cdca887103d7f5964cb8a66ac8255ba573fb2915b7ceec5"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-repeated-add-native-B.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-update-native-A.json",
+      "bytes": 401,
+      "sha256": "f0a9c71d7d67b1368019d820c1969196c0c03b83e6e22c97b53e30cea50008e8"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-update-native-A.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-update-native-A.stdout.log",
+      "bytes": 419,
+      "sha256": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-update-native-B.json",
+      "bytes": 402,
+      "sha256": "d3b4637bcea7ec7fad007f69e74b8f52b439465d6cce831ca182bfead906c009"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-update-native-B.stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/after-update-native-B.stdout.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/binding-after-add.json",
+      "bytes": 379,
+      "sha256": "71b7df6e6c1f9263122897b21e9bcc1cc2fe0b389aa00efaf6c1864f09386ccb"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/binding-after-repair.json",
+      "bytes": 379,
+      "sha256": "71b7df6e6c1f9263122897b21e9bcc1cc2fe0b389aa00efaf6c1864f09386ccb"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/binding-after-update.json",
+      "bytes": 379,
+      "sha256": "71b7df6e6c1f9263122897b21e9bcc1cc2fe0b389aa00efaf6c1864f09386ccb"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/claude-project-plugin-evidence.json",
+      "bytes": 9918,
+      "sha256": "867a019d5f4f6492f541a9b99f489ee62882daf9d494e18acaacedc54e2cc8a4"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/remove-installer-stderr.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/remove-installer.json",
+      "bytes": 1446,
+      "sha256": "f0e26700d32f82303cf79fa2cafb4fb09a34f0731970dc4e603df4c0cfdf4910"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/repair-absent-installer-stderr.log",
+      "bytes": 78,
+      "sha256": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/repair-absent-installer.json",
+      "bytes": 2666,
+      "sha256": "296aca41b8ab64984bac576992b172638d7cb451cd53c10ef00213f89fb64df6"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/repair-intact-installer-stderr.log",
+      "bytes": 78,
+      "sha256": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/repair-intact-installer.json",
+      "bytes": 2666,
+      "sha256": "617e2e61b96c53300cd3173ddc8ffa3f578d31a1ad37976d7a92a7a23c64cbae"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/update-invocation-change-installer-stderr.log",
+      "bytes": 87,
+      "sha256": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/update-invocation-change-installer.json",
+      "bytes": 2833,
+      "sha256": "8efe9fffa841055fe6215b8ffa8a9d4f2b97f92538788363180131f4644bea76"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/update-unchanged-installer-stderr.log",
+      "bytes": 87,
+      "sha256": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10"
+    },
+    {
+      "name": "uap-claude-native-evidence-666876926/update-unchanged-installer.json",
+      "bytes": 2851,
+      "sha256": "18bb4f448f7b907d05aa92bbe8f68047edd962dde4ba937a4e4aed1401b53e02"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/01-claude-version.log",
+      "bytes": 22,
+      "sha256": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/02-add.log",
+      "bytes": 3994,
+      "sha256": "ff86207443db268006df50f9682df6c8db46f2b1f142f03eacdb9dad185de242"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/03-installed.log",
+      "bytes": 275,
+      "sha256": "b30c8d0bfd92af75139c4e1b736210397d668d9b6470021cde142a4523955e17"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/04-runtime-A.log",
+      "bytes": 15178,
+      "sha256": "6d34ed72d4781fdb5afa1001688e74f3edf3f51e2e9c7a369397413656b354f9"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/05-update.log",
+      "bytes": 2131,
+      "sha256": "5b6267d8f62bb7f09371f49077fcd1c43bd685e82152f932c8ee7f524f1a7374"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/06-runtime-B.log",
+      "bytes": 15170,
+      "sha256": "ae9a8c59e9a0e6587118d83c17a2bc77e62e78e3fbb1f56f578170c782be8b60"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/07-same-version-update.log",
+      "bytes": 2131,
+      "sha256": "20944bbc5ca720f558618af5bf08c907fd1d59f29b8bb000de01db8b7745ad5c"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/08-runtime-C.log",
+      "bytes": 15174,
+      "sha256": "9c0948300572cb8e278b4293bbc0d6c723b4eb1efea0f78e32e3939fc9c2b434"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/09-repair.log",
+      "bytes": 1955,
+      "sha256": "488bd52f56fea47ca5a51ce48eb7efe3b246ea1d98055138bb94a056f43b29b7"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/10-runtime-repair.log",
+      "bytes": 15174,
+      "sha256": "4f5175b3179892d6c483a325c6d7e6d80cd20a3687de8df0c997a78d08eceb3d"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/11-remove.log",
+      "bytes": 1272,
+      "sha256": "fe9290c8337d3d0df4326823e0a690b88f7cca7637e1c06135ef8107092c09b1"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/events.jsonl",
+      "bytes": 17058,
+      "sha256": "701e0666ee52f1d6ad5962f93109f432becbf3c4da87f025367bc3cf83a6c937"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/12-removed.log",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/evidence.json",
+      "bytes": 3032,
+      "sha256": "c86cb6675ef9cfdce375ce94f9d26da5b52114c565b2bde37327911fa84162ec"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/http-events.jsonl",
+      "bytes": 5867,
+      "sha256": "e179fac70a37e344636a7989ba0862f4df8a0bfba37ca11a98a0ae3cd0b80959"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/runtime-A-gateway.json",
+      "bytes": 255807,
+      "sha256": "88ec27468869e016ca8f0e325fddfb67f1d9da77e4c130de41e0684df855dd0b"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/runtime-C-gateway.json",
+      "bytes": 255804,
+      "sha256": "e7419a57e2397e289d5bf648524a2b1d453c348d6414e47cba864ee84cec8dfc"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/runtime-B-gateway.json",
+      "bytes": 255804,
+      "sha256": "d40d943e5dd95c591f97c4d3cb9cbaf3fdcd96405318cc0cc488e99ac0378f74"
+    },
+    {
+      "name": "uap-native-evidence-1860064462/runtime-repair-gateway.json",
+      "bytes": 255804,
+      "sha256": "60fce8f594fb239ff89b637208122acbad7165df4637cb480027625f8c482a1c"
+    }
+  ]
+}

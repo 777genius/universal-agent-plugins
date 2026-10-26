@@ -36,6 +36,13 @@ func newBindingChangeCommand(app App, opts *options, mode usecase.BindingChangeM
 		Short: short,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
+			if err := rejectProjectCommand(app, "binding changes"); err != nil {
+				return err
+			}
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
@@ -37,10 +38,14 @@ type dependencyTransfer struct {
 func newDependencyTransferCommand(app App, opts *options, operation string) *cobra.Command {
 	var yes, install bool
 	command := &cobra.Command{
-		Use: operation + " [directory]", Short: operation + " the exact global dependency agreement",
-		Long: "Transfer only uap.toml and uap.lock between the global user environment and an exchange directory (default: current directory). Import never resolves pins. Import with --install requires strict locked preflight to succeed before saving; existing drift can require importing alone followed by install --locked.",
+		Use: operation + " [directory]", Short: operation + " the exact selected dependency agreement",
+		Long: "Transfer only uap.toml and uap.lock between the selected environment and an exchange directory (default: current directory). Import never resolves pins. Import with --install requires strict locked preflight to succeed before saving; existing drift can require importing alone followed by install --locked.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			app, scopeErr := app.forOptions(opts)
+			if scopeErr != nil {
+				return scopeErr
+			}
 			if err := validateDepsOptions(opts); err != nil {
 				return err
 			}
@@ -79,6 +84,17 @@ func prepareDependencyTransfer(app App, opts *options, operation string, args []
 	if err != nil {
 		return transfer, err
 	}
+	if app.scope() == domain.ScopeProject {
+		same := filepath.Clean(global) == filepath.Clean(exchange)
+		if a, err := os.Stat(global); err == nil {
+			if b, err := os.Stat(exchange); err == nil {
+				same = same || os.SameFile(a, b)
+			}
+		}
+		if same {
+			return transfer, errors.New("project agreement is already in this directory; choose a different exchange directory")
+		}
+	}
 	source, destination := global, exchange
 	if operation == "import" {
 		source, destination = exchange, global
@@ -98,6 +114,7 @@ func prepareDependencyTransfer(app App, opts *options, operation string, args []
 		transfer.destination.diagnostic = err.Error()
 	}
 	transfer.output = newDependencyTransferOutput(transfer, operation, opts.dryRun, install)
+	transfer.output.Scope = string(app.scope())
 	return transfer, nil
 }
 

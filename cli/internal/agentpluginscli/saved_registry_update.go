@@ -17,7 +17,7 @@ func updateSavedRegistry(cmd *cobra.Command, app App, opts *options, snapshot en
 		return requirements, snapshot.Lock, err
 	}
 	// Validate the authoritative old graph before rebuilding the new release's edges.
-	locked, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
+	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
 	return requirements, locked, err
 }
 

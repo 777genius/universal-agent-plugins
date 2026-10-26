@@ -17,14 +17,26 @@ var (
 )
 
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject || request.Plan.TargetContext.ProjectRoot != "" {
+		return false
+	}
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, _ domain.DeliveryPlan, backendExecutable string) bool {
+func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
+		return false
+	}
 	return shared.HasListingCLI(backendExecutable)
 }
 
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject || request.Plan.TargetContext.ProjectRoot != "" {
+		return activateProject(ctx, env, request)
+	}
+	return activateUser(ctx, env, request)
+}
+func activateUser(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -112,6 +124,9 @@ func verifyAbsent(ctx context.Context, env clients.Env, executable, name string)
 }
 
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
+		return deactivateProject(ctx, env, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {
 		outcome.ExternalRemovalComplete = true

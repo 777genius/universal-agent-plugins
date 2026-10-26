@@ -63,6 +63,9 @@ func detectedProfileRoot(host clients.Host) (string, error) {
 // only an exact artifact path can establish its filesystem profile authority.
 // Directory replacement identity still requires the shared UC-P seam.
 func (adapter *Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
+	if binding.Scope == string(domain.ScopeProject) {
+		return validateProjectBinding(root, binding)
+	}
 	selected, err := adapter.ResolveProfileRoot(root)
 	if err != nil {
 		return err
@@ -78,4 +81,25 @@ func (adapter *Adapter) ValidateBindingProfile(root string, binding domain.Clien
 		return fmt.Errorf("recorded Cursor native profile differs from selected root")
 	}
 	return nil
+}
+
+func validateProjectBinding(root string, binding domain.ClientBinding) error {
+	if err := profileSpelling(root); err != nil {
+		return err
+	}
+	if filepath.Base(root) != ".cursor" || binding.NativeProfileRoot != root {
+		return fmt.Errorf("recorded Cursor project registry differs from selected root")
+	}
+	if err := pathpolicy.ValidateLeafID(binding.PhysicalArtifact); err != nil {
+		return err
+	}
+	project := filepath.Dir(root)
+	expected := filepath.Join(project, ".uap", "managed", "clients", "cursor", binding.PhysicalArtifact)
+	if binding.TargetLocator != expected {
+		return fmt.Errorf("recorded Cursor artifact differs from selected project")
+	}
+	if err := pathpolicy.RequireContainedChild(project, expected); err != nil {
+		return err
+	}
+	return cursorComponents(root).ValidateObjects(cursorNativeObjects(binding.NativeObjects))
 }

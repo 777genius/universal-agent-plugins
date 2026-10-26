@@ -97,7 +97,7 @@ func selectPublic(root *cobra.Command, args []string) selection {
 			}
 		}
 		switch f.Name {
-		case "scope", "accept-security-risk", "security-details":
+		case "scope", "project-root", "accept-security-risk", "security-details":
 			s.invalid = true
 		}
 	}
@@ -497,7 +497,7 @@ func publicHelp(s selection) *report.CommandHelp {
 				}
 				seen[f.Name] = true
 				switch f.Name {
-				case "scope", "accept-security-risk", "security-details":
+				case "scope", "project-root", "accept-security-risk", "security-details":
 					return
 				}
 				label := "--" + f.Name

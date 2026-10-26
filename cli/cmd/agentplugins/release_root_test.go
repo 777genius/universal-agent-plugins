@@ -176,6 +176,7 @@ func TestReleaseCompletionProcessStderr(t *testing.T) {
 		t.Fatal(err)
 	}
 	home := t.TempDir()
+	coverageDir := t.TempDir()
 	marker := "glpat-" + strings.Repeat("b", 20)
 	for _, protocol := range []string{"__complete", "__completeNoDesc"} {
 		cases := []struct {
@@ -209,7 +210,7 @@ func TestReleaseCompletionProcessStderr(t *testing.T) {
 		for i, tc := range cases {
 			child := exec.Command(exe, append([]string{"-test.run=^TestReleaseCompletionProcessStderr$", "--"}, tc.args...)...)
 			child.Dir = home
-			child.Env = []string{"UAP_COMPLETION_PROCESS_FIXTURE=1", "HOME=" + home, "TMPDIR=" + home, "XDG_CONFIG_HOME=" + home, "PATH=" + home, "BASH_COMP_DEBUG_FILE=" + home + "/completion-debug", "GOMAXPROCS=2"}
+			child.Env = []string{"UAP_COMPLETION_PROCESS_FIXTURE=1", "HOME=" + home, "TMPDIR=" + home, "XDG_CONFIG_HOME=" + home, "PATH=" + home, "BASH_COMP_DEBUG_FILE=" + home + "/completion-debug", "GOMAXPROCS=2", "GOCOVERDIR=" + coverageDir}
 			var stdout, stderr bytes.Buffer
 			child.Stdout, child.Stderr = &stdout, &stderr
 			err := child.Run()

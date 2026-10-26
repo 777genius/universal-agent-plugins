@@ -105,7 +105,7 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 			return service.refusedPreparedActivation(installationID, bindingID, err)
 		}
 	}
-	if nativeLifecycleClient(request.Client.ClientID, request.Plan.SelectedDelivery) && !request.VerifyOnly {
+	if nativeLifecycleClient(request.Client.ClientID, request.Plan.SelectedDelivery, request.Plan.Scope) && !request.VerifyOnly {
 		if err := service.beginNativeAttemptWithObservation(installationID, bindingID, domain.NativeIntentRegister, request.Plan.SelectedDelivery, request.Plan.LocalEntryObservation.Clone()); err != nil {
 			return domain.ActivationOutcome{}, err
 		}
@@ -117,6 +117,9 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 			return domain.ActivationOutcome{}, fmt.Errorf("native attempt disappeared")
 		}
 		request.NativeAttempt = domain.NativeAttemptIdentity{OperationID: client.NativeActivationAttempt, InstallationID: installationID, BindingID: bindingID, NativeRoot: request.Client.ConfigRoot}
+		if request.Plan.Scope == domain.ScopeProject {
+			request.NativeAttempt.NativeRoot = request.Plan.NativeRegistryRoot
+		}
 	}
 	if request.Plan.SelectedDelivery.IsZero() {
 		return service.activatePreparedClient(ctx, installationID, bindingID, request)

@@ -1,11 +1,48 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v9 — distinguishable restore points, useful security review and matched-artifact requalification.
+Status: implementation plan v10 — current-main reconciliation and matched-artifact requalification.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
+
+## Continuation checkpoint — v10 (2026-10-26)
+
+The integration branch is reconciled with main
+`d5c16856cef67a1457704971d46765739141ab08`, including the project implementation
+merged through #499 and its #519 evidence cleanup. The old #472/#475/#480 draft
+statuses below are historical. Management still advertises and admits only its
+qualified user scope; S25/S26 require the separate scoped Management/Host seam.
+
+Shared dependency application preserves the selected environment identity,
+pre-lock namespace validation, Skill context checks before publication/native
+effects, and durable publication accounting. A default input-check callback must
+read the request's current bytes after publication rather than capture its old
+value. Independent review identified that merge defect; actual registry and HTTPS
+Skill lifecycle tests failed after intent publication before the correction and
+passed afterward.
+
+Removal-policy inspection now carries the same scoped target context as actual
+deactivation. Project component removal does not inherit user-plugin manual
+uninstall requirements. The public single/group Prepare-to-Apply regression fails
+when that context handoff is removed and passes with the reconciliation. Existing
+user removal rules and the Management scope guards remain unchanged. Directory
+swap journals retain the confined same-descriptor read introduced for alert #55.
+
+Local verification covers the generated contract drift check, SDK build/typecheck,
+27 SDK protocol/owned-process tests and the packed consumer; Management transport,
+local authoring, registry/HTTPS, package-link and journal checks; and real HTTPS
+archive project lifecycle/cold restore checks for selected adapters. Local process
+execution cannot qualify Git/native-process scenarios because this host lacks the
+required `/proc/<pid>/task/<tid>/children` observation primitive. Those checks
+remain required on a qualified CI host; no process guard or test assertion is
+relaxed. Duplicate proxy-variable casing was removed only from the local test
+process environment to satisfy the existing Codex admission contract.
+
+Fresh published-source Required/platform CI, downstream matching SDK/native pin,
+Electron/package qualification and individual CodeQL disposition remain gates.
+Previous green checks and old artifact receipts do not qualify this merged tree.
 
 ## Current checkpoint — v9 (2026-10-25)
 

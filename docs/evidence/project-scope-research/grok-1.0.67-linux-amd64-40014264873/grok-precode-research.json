@@ -1,0 +1,3588 @@
+{
+  "evidence_kind": "grok-precode-project-source-observations",
+  "version": "1.0.67",
+  "target": "linux-amd64",
+  "source_commit": "249a9e5731822b79df3b07d9da0ef9b432258caa",
+  "expected_probes": [
+    "version",
+    "plugin-list-help",
+    "inspect-help",
+    "empty-project-a-list",
+    "empty-project-a-inspect",
+    "empty-project-b-list",
+    "empty-project-b-inspect",
+    "user-project-a-list",
+    "user-project-a-inspect",
+    "user-project-b-list",
+    "user-project-b-inspect",
+    "project-a-project-a-list",
+    "project-a-project-a-inspect",
+    "project-a-project-b-list",
+    "project-a-project-b-inspect",
+    "project-b-project-a-list",
+    "project-b-project-a-inspect",
+    "project-b-project-b-list",
+    "project-b-project-b-inspect"
+  ],
+  "probes": [
+    {
+      "probe": "version",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "--version"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.046,
+      "stdout_file": "version.stdout.log",
+      "stderr_file": "version.stderr.log",
+      "stdout_bytes": 27,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e3180b48f49d248819c0764a6e1010b548d3158f9d738f3c2d161ea03fd37a7e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "plugin-list-help",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--help"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "plugin-list-help.stdout.log",
+      "stderr_file": "plugin-list-help.stderr.log",
+      "stdout_bytes": 789,
+      "stderr_bytes": 0,
+      "stdout_sha256": "2e4b4117fcc31d706335b5de0035e45b65802ea950e9b98b15f12db0a1a664dd",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "inspect-help",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--help"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "inspect-help.stdout.log",
+      "stderr_file": "inspect-help.stderr.log",
+      "stdout_bytes": 722,
+      "stderr_bytes": 0,
+      "stdout_sha256": "6c1e788375ab69df4eb8768532ee052154aa8e51f747965fb389129f332755c4",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "empty-project-a-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.147,
+      "stdout_file": "empty-project-a-list.stdout.log",
+      "stderr_file": "empty-project-a-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "empty-project-a-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "empty-project-a-inspect.stdout.log",
+      "stderr_file": "empty-project-a-inspect.stderr.log",
+      "stdout_bytes": 3238,
+      "stderr_bytes": 0,
+      "stdout_sha256": "c46f614771c47a25cc4b7eb9405f99a8f43b9262b4f1bbf8ef2dd9506355ed8e",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "empty-project-b-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.147,
+      "stdout_file": "empty-project-b-list.stdout.log",
+      "stderr_file": "empty-project-b-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "empty-project-b-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "empty-project-b-inspect.stdout.log",
+      "stderr_file": "empty-project-b-inspect.stderr.log",
+      "stdout_bytes": 3238,
+      "stderr_bytes": 0,
+      "stdout_sha256": "2248956b4ea135095445ad43b9e8f8854563166423d4a85b6a46c621ddcbd22c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "user-project-a-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.148,
+      "stdout_file": "user-project-a-list.stdout.log",
+      "stderr_file": "user-project-a-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "user-project-a-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "user-project-a-inspect.stdout.log",
+      "stderr_file": "user-project-a-inspect.stderr.log",
+      "stdout_bytes": 3561,
+      "stderr_bytes": 0,
+      "stdout_sha256": "dbfe41d5c0447144d238f432d7463c4c6a63d831951723e23b872efee405cecc",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "user-project-b-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.148,
+      "stdout_file": "user-project-b-list.stdout.log",
+      "stderr_file": "user-project-b-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "user-project-b-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "user-project-b-inspect.stdout.log",
+      "stderr_file": "user-project-b-inspect.stderr.log",
+      "stdout_bytes": 3561,
+      "stderr_bytes": 0,
+      "stdout_sha256": "a325a2b549c964c4dbff8cf0b841faf41da2a9680e81a949652f77161285b080",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-a-project-a-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.147,
+      "stdout_file": "project-a-project-a-list.stdout.log",
+      "stderr_file": "project-a-project-a-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-a-project-a-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "project-a-project-a-inspect.stdout.log",
+      "stderr_file": "project-a-project-a-inspect.stderr.log",
+      "stdout_bytes": 3571,
+      "stderr_bytes": 0,
+      "stdout_sha256": "5f0e6de8c4726ccf55bfcf1249ea26f49ceff137e747e48dd231fc7fbb9315c0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-a-project-b-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.147,
+      "stdout_file": "project-a-project-b-list.stdout.log",
+      "stderr_file": "project-a-project-b-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-a-project-b-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "project-a-project-b-inspect.stdout.log",
+      "stderr_file": "project-a-project-b-inspect.stderr.log",
+      "stdout_bytes": 3561,
+      "stderr_bytes": 0,
+      "stdout_sha256": "a325a2b549c964c4dbff8cf0b841faf41da2a9680e81a949652f77161285b080",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-b-project-a-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.148,
+      "stdout_file": "project-b-project-a-list.stdout.log",
+      "stderr_file": "project-b-project-a-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-b-project-a-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "project-b-project-a-inspect.stdout.log",
+      "stderr_file": "project-b-project-a-inspect.stderr.log",
+      "stdout_bytes": 3571,
+      "stderr_bytes": 0,
+      "stdout_sha256": "5f0e6de8c4726ccf55bfcf1249ea26f49ceff137e747e48dd231fc7fbb9315c0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-b-project-b-list",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "plugin",
+        "list",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.148,
+      "stdout_file": "project-b-project-b-list.stdout.log",
+      "stderr_file": "project-b-project-b-list.stderr.log",
+      "stdout_bytes": 3,
+      "stderr_bytes": 0,
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "project-b-project-b-inspect",
+      "argv": [
+        "/tmp/grok-native-research-h5lgn7tv/binary/grok",
+        "inspect",
+        "--json"
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.047,
+      "stdout_file": "project-b-project-b-inspect.stdout.log",
+      "stderr_file": "project-b-project-b-inspect.stderr.log",
+      "stdout_bytes": 3571,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e4c4676d3ed57092a3954512a630f9877d1ac1a9bef4ccc59ce05998f63dd1ff",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    }
+  ],
+  "fixture_preparation": [
+    {
+      "probe": "git-init-project-a",
+      "argv": [
+        "/usr/bin/git",
+        "init",
+        "--quiet",
+        "--template="
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-a",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.027,
+      "stdout_file": "git-init-project-a.stdout.log",
+      "stderr_file": "git-init-project-a.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    },
+    {
+      "probe": "git-init-project-b",
+      "argv": [
+        "/usr/bin/git",
+        "init",
+        "--quiet",
+        "--template="
+      ],
+      "cwd": "/tmp/grok-native-research-h5lgn7tv/project-b",
+      "error": null,
+      "exit": 0,
+      "elapsed_seconds": 0.026,
+      "stdout_file": "git-init-project-b.stdout.log",
+      "stderr_file": "git-init-project-b.stderr.log",
+      "stdout_bytes": 0,
+      "stderr_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "accepted": true
+    }
+  ],
+  "inventories": [
+    {
+      "stage": "empty",
+      "before": {
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "after": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 1254,
+          "kind": "file",
+          "sha256": "9da23d39988a16c2f1050252dee05daaf0a8bd83eec4249a832f6291c39d0b17"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "native_created": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 1254,
+          "kind": "file",
+          "sha256": "9da23d39988a16c2f1050252dee05daaf0a8bd83eec4249a832f6291c39d0b17"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      }
+    },
+    {
+      "stage": "user",
+      "before": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 1254,
+          "kind": "file",
+          "sha256": "9da23d39988a16c2f1050252dee05daaf0a8bd83eec4249a832f6291c39d0b17"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "ee6fff34592ccf52918e1a2347420666d72d842af0f5be071d4d9cecd02c8917"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user/SKILL.md": {
+          "mode": "0o644",
+          "size": 151,
+          "kind": "file",
+          "sha256": "a5858ef04c048433c3dd5c25b5f43e1d9b7de6ba1d316e30ecbf86fcb1723ed4"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "after": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 2508,
+          "kind": "file",
+          "sha256": "d0d948549c7ad4d5798cf8a28f0892f891ddd136996bc514820af531423820fe"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "ee6fff34592ccf52918e1a2347420666d72d842af0f5be071d4d9cecd02c8917"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user/SKILL.md": {
+          "mode": "0o644",
+          "size": 151,
+          "kind": "file",
+          "sha256": "a5858ef04c048433c3dd5c25b5f43e1d9b7de6ba1d316e30ecbf86fcb1723ed4"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "native_created": {}
+    },
+    {
+      "stage": "project-a",
+      "before": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 2508,
+          "kind": "file",
+          "sha256": "d0d948549c7ad4d5798cf8a28f0892f891ddd136996bc514820af531423820fe"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "ee6fff34592ccf52918e1a2347420666d72d842af0f5be071d4d9cecd02c8917"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user/SKILL.md": {
+          "mode": "0o644",
+          "size": 151,
+          "kind": "file",
+          "sha256": "a5858ef04c048433c3dd5c25b5f43e1d9b7de6ba1d316e30ecbf86fcb1723ed4"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "b8d1e981a5358d2b5b657ffed881676cf7367780579f7585ff2b183e417c3c6d"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a/SKILL.md": {
+          "mode": "0o644",
+          "size": 148,
+          "kind": "file",
+          "sha256": "5b4579951865cc7305006bb675e0ecc034b7ee8356ea27e7c4c0e0093661f8eb"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "after": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 3762,
+          "kind": "file",
+          "sha256": "807466e9eddb96a9593c958d9f410c18f622fa099b5e2c345e0cafe10e0f4d43"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "ee6fff34592ccf52918e1a2347420666d72d842af0f5be071d4d9cecd02c8917"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user/SKILL.md": {
+          "mode": "0o644",
+          "size": 151,
+          "kind": "file",
+          "sha256": "a5858ef04c048433c3dd5c25b5f43e1d9b7de6ba1d316e30ecbf86fcb1723ed4"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "b8d1e981a5358d2b5b657ffed881676cf7367780579f7585ff2b183e417c3c6d"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a/SKILL.md": {
+          "mode": "0o644",
+          "size": 148,
+          "kind": "file",
+          "sha256": "5b4579951865cc7305006bb675e0ecc034b7ee8356ea27e7c4c0e0093661f8eb"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "native_created": {}
+    },
+    {
+      "stage": "project-b",
+      "before": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 3762,
+          "kind": "file",
+          "sha256": "807466e9eddb96a9593c958d9f410c18f622fa099b5e2c345e0cafe10e0f4d43"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "ee6fff34592ccf52918e1a2347420666d72d842af0f5be071d4d9cecd02c8917"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user/SKILL.md": {
+          "mode": "0o644",
+          "size": 151,
+          "kind": "file",
+          "sha256": "a5858ef04c048433c3dd5c25b5f43e1d9b7de6ba1d316e30ecbf86fcb1723ed4"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "b8d1e981a5358d2b5b657ffed881676cf7367780579f7585ff2b183e417c3c6d"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a/SKILL.md": {
+          "mode": "0o644",
+          "size": 148,
+          "kind": "file",
+          "sha256": "5b4579951865cc7305006bb675e0ecc034b7ee8356ea27e7c4c0e0093661f8eb"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "737c568e59639e2cf6f87f383143cf74b55fc6a8a3e244f15182f88cf49ec650"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/skills/uap-research-b/SKILL.md": {
+          "mode": "0o644",
+          "size": 148,
+          "kind": "file",
+          "sha256": "d3dddab65c4e2f0d6152d4f599d6db2862535d032e017a116a00500c3d09a497"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/skills/uap-research-b": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "after": {
+        "home/.grok/docs/user-guide/01-getting-started.md": {
+          "mode": "0o644",
+          "size": 10495,
+          "kind": "file",
+          "sha256": "9c022943cfce0873165bd606a520e216b48a98decb1a974ca6cc6f30f0b32efd"
+        },
+        "home/.grok/docs/user-guide/02-authentication.md": {
+          "mode": "0o644",
+          "size": 16079,
+          "kind": "file",
+          "sha256": "d5a471051752238b2cf700f02fffc50f9418388072f28df0ebe83867ec2974c5"
+        },
+        "home/.grok/docs/user-guide/03-keyboard-shortcuts.md": {
+          "mode": "0o644",
+          "size": 37358,
+          "kind": "file",
+          "sha256": "ec298a3dc40b9bc6f937158b9342d42f766482d71547c2a4cf0063a162044004"
+        },
+        "home/.grok/docs/user-guide/04-slash-commands.md": {
+          "mode": "0o644",
+          "size": 42812,
+          "kind": "file",
+          "sha256": "355e3f2b0e89ed378df155161750e06f6d1735a25747e36acfb462d64c7e5bbe"
+        },
+        "home/.grok/docs/user-guide/05-configuration.md": {
+          "mode": "0o644",
+          "size": 57643,
+          "kind": "file",
+          "sha256": "8f7fd76981c6dab32fa96a5707da70dcd02af36d83430f85503dae64501ac72c"
+        },
+        "home/.grok/docs/user-guide/06-theming.md": {
+          "mode": "0o644",
+          "size": 17523,
+          "kind": "file",
+          "sha256": "4aff4bc0d42d927b7c37c0e08dd80365649520fa18baa202e82b65b8b117aa63"
+        },
+        "home/.grok/docs/user-guide/07-mcp-servers.md": {
+          "mode": "0o644",
+          "size": 25958,
+          "kind": "file",
+          "sha256": "088039bcb670bee17f0acdf7ef679d3d910641912eb667ce0c65678f4e0b7855"
+        },
+        "home/.grok/docs/user-guide/08-skills.md": {
+          "mode": "0o644",
+          "size": 13886,
+          "kind": "file",
+          "sha256": "4afcd002489982e069e02dbb0d07fb490216035707fab208b36c434fe6852f1c"
+        },
+        "home/.grok/docs/user-guide/09-plugins.md": {
+          "mode": "0o644",
+          "size": 28001,
+          "kind": "file",
+          "sha256": "867c8c39394ad4b30b8d38d19eee8f1895a06b37b3581f5f7d63e64f85826b5a"
+        },
+        "home/.grok/docs/user-guide/10-hooks.md": {
+          "mode": "0o644",
+          "size": 103892,
+          "kind": "file",
+          "sha256": "7a0138b61ced3decb5fdc99c9c82cbff694109ab77791fda5bceafddeab7ba5f"
+        },
+        "home/.grok/docs/user-guide/11-custom-models.md": {
+          "mode": "0o644",
+          "size": 19362,
+          "kind": "file",
+          "sha256": "4a0fe03334e91c1a472cf985d490ca73810e9738a171f5e0a5bf615552a6ca9a"
+        },
+        "home/.grok/docs/user-guide/12-project-rules.md": {
+          "mode": "0o644",
+          "size": 10890,
+          "kind": "file",
+          "sha256": "5bc157f20c2548362df49d2d704d4f4b2c568db2adc8a437680ab02064537f53"
+        },
+        "home/.grok/docs/user-guide/13-memory.md": {
+          "mode": "0o644",
+          "size": 14019,
+          "kind": "file",
+          "sha256": "51c764bfcfef4c4f79ad6dc4a270e057a3726cae237109b950083bf7007d7831"
+        },
+        "home/.grok/docs/user-guide/14-headless-mode.md": {
+          "mode": "0o644",
+          "size": 54963,
+          "kind": "file",
+          "sha256": "b76cedf9d8f6532377b1470590b3404ccbb20b24d5fb0d90042e3d70f92535ef"
+        },
+        "home/.grok/docs/user-guide/15-agent-mode.md": {
+          "mode": "0o644",
+          "size": 14507,
+          "kind": "file",
+          "sha256": "b4c4b840392a9b85a356b433b729ea02a89bf2742aa74894bbec56ff369c8fed"
+        },
+        "home/.grok/docs/user-guide/16-subagents.md": {
+          "mode": "0o644",
+          "size": 23119,
+          "kind": "file",
+          "sha256": "6556ef4eab94ff5dc01343feedacf525334b23131d626b38b4cd752eeb6c8c78"
+        },
+        "home/.grok/docs/user-guide/17-sessions.md": {
+          "mode": "0o644",
+          "size": 35835,
+          "kind": "file",
+          "sha256": "31849a3670d04470ef95df8afc79452f2bbf916c48cc01ac2774daa7edcb5e69"
+        },
+        "home/.grok/docs/user-guide/18-sandbox.md": {
+          "mode": "0o644",
+          "size": 27219,
+          "kind": "file",
+          "sha256": "82f3ca41b20a4b393cfff26a138d02464590dbff833f1817cc569520a4154181"
+        },
+        "home/.grok/docs/user-guide/19-plan-mode.md": {
+          "mode": "0o644",
+          "size": 14010,
+          "kind": "file",
+          "sha256": "b8c557491c640891b423c497546fe46a7286819f34f27bb4448195df2fd9b61f"
+        },
+        "home/.grok/docs/user-guide/20-background-tasks.md": {
+          "mode": "0o644",
+          "size": 10777,
+          "kind": "file",
+          "sha256": "0589ac332ab67724ffe85c9f0caf4e0e4c0b91789a4eeac19aabd561077a7a46"
+        },
+        "home/.grok/docs/user-guide/21-terminal-support.md": {
+          "mode": "0o644",
+          "size": 15077,
+          "kind": "file",
+          "sha256": "cd8323d383a3e90e2a3a97e618bc2428e4a000e9227c453028d6cbbe984b1023"
+        },
+        "home/.grok/docs/user-guide/22-permissions-and-safety.md": {
+          "mode": "0o644",
+          "size": 40609,
+          "kind": "file",
+          "sha256": "fdba89c72148c184a606034e82d98e0e5181c1bb34d5cc75bfc67f7ff2a3e192"
+        },
+        "home/.grok/docs/user-guide/23-dashboard.md": {
+          "mode": "0o644",
+          "size": 18425,
+          "kind": "file",
+          "sha256": "facc441ceef37a4b131e145f8f1ef4e58675e96cf9e9290d500795265179b430"
+        },
+        "home/.grok/docs/user-guide/24-monitoring-usage.md": {
+          "mode": "0o644",
+          "size": 22276,
+          "kind": "file",
+          "sha256": "331245078267fb8072df695815ce6fa23d184733be62b42a08fc5843f157783f"
+        },
+        "home/.grok/docs/user-guide/25-status-line.md": {
+          "mode": "0o644",
+          "size": 18204,
+          "kind": "file",
+          "sha256": "d4d5c64ea02163171425176906f52ce36cf0154a6324608fe0179490bb4852c2"
+        },
+        "home/.grok/docs/user-guide/26-config-reference.md": {
+          "mode": "0o644",
+          "size": 86122,
+          "kind": "file",
+          "sha256": "d68b333b18bd3c160ce58a438dc21d4b6d1271703ca09192ff6c6ae5e790ab66"
+        },
+        "home/.grok/docs/user-guide/27-grok-clone.md": {
+          "mode": "0o644",
+          "size": 10752,
+          "kind": "file",
+          "sha256": "cb557fe0d0a82cff73daad173c113727e9ed050159e3008a13bddafd699755ce"
+        },
+        "home/.grok/docs/user-guide": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/docs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/logs/unified.jsonl": {
+          "mode": "0o644",
+          "size": 5016,
+          "kind": "file",
+          "sha256": "28e4d84472ebf8046ad52d85e0b3f01c35b771a4b17b79e0c36e89ff51ed25e9"
+        },
+        "home/.grok/logs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "ee6fff34592ccf52918e1a2347420666d72d842af0f5be071d4d9cecd02c8917"
+        },
+        "home/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user/SKILL.md": {
+          "mode": "0o644",
+          "size": 151,
+          "kind": "file",
+          "sha256": "a5858ef04c048433c3dd5c25b5f43e1d9b7de6ba1d316e30ecbf86fcb1723ed4"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills/uap-research-user": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/config": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/data": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/git-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-cache": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "home/npm-global-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/npm-user-config": {
+          "mode": "0o644",
+          "size": 0,
+          "kind": "file",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "home/state": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-a/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-a/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "b8d1e981a5358d2b5b657ffed881676cf7367780579f7585ff2b183e417c3c6d"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a/SKILL.md": {
+          "mode": "0o644",
+          "size": 148,
+          "kind": "file",
+          "sha256": "5b4579951865cc7305006bb675e0ecc034b7ee8356ea27e7c4c0e0093661f8eb"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills/uap-research-a": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-a/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/HEAD": {
+          "mode": "0o644",
+          "size": 23,
+          "kind": "file",
+          "sha256": "f6f2b945f6c411b02ba3da9c7ace88dcf71b6af65ba2e0d89aa82900042b5a10"
+        },
+        "project-b/.git/config": {
+          "mode": "0o644",
+          "size": 92,
+          "kind": "file",
+          "sha256": "cfe7ba1238c9a78be7535d7c63bcaf5a4d5011d46b07c9b45d3bbf7d6c312dfe"
+        },
+        "project-b/.git/objects/info": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects/pack": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/objects": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/heads": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs/tags": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git/refs": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.git": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/.grok-plugin/plugin.json": {
+          "mode": "0o644",
+          "size": 143,
+          "kind": "file",
+          "sha256": "737c568e59639e2cf6f87f383143cf74b55fc6a8a3e244f15182f88cf49ec650"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/.grok-plugin": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/skills/uap-research-b/SKILL.md": {
+          "mode": "0o644",
+          "size": 148,
+          "kind": "file",
+          "sha256": "d3dddab65c4e2f0d6152d4f599d6db2862535d032e017a116a00500c3d09a497"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/skills/uap-research-b": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research/skills": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins/uap-project-native-research": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok/plugins": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        },
+        "project-b/.grok": {
+          "mode": "0o755",
+          "size": 4096,
+          "kind": "directory"
+        }
+      },
+      "native_created": {}
+    }
+  ],
+  "collection_complete": true,
+  "project_source_qualified": false,
+  "interpretation": "Human review of actual source/version/marker attribution and A/B/user precedence required",
+  "unobserved": [
+    "UAP project installation/ownership",
+    "disabled/alias/ancestor and Claude-compatible conflicts",
+    "skill execution",
+    "MCP initialization/tool result",
+    "model/account/trust",
+    "native restart"
+  ],
+  "runtime_network_isolation_claimed": false,
+  "acquisition": {
+    "url": "https://x.ai/cli/grok-1.0.67-linux-x86_64.gz",
+    "version": "1.0.67",
+    "archive_integrity": "sha256:6bbea96cde807c13e4c66d9583d8acdd155e446d93131c2820999cf5523ed5a5",
+    "integrity_source": "measured official HTTPS versioned bytes; no separate vendor SHA256 published",
+    "archive_bytes": 76217006,
+    "binary_sha256": "ce33b1a29e37901f56fe59916cda7a1149e6fd377118f918e90d89f9abb52a51",
+    "binary_bytes": 194169184,
+    "installer_executed": false
+  },
+  "native_environment": {
+    "HOME": "/tmp/grok-native-research-h5lgn7tv/home",
+    "USERPROFILE": "/tmp/grok-native-research-h5lgn7tv/home",
+    "XDG_CONFIG_HOME": "/tmp/grok-native-research-h5lgn7tv/home/config",
+    "XDG_CACHE_HOME": "/tmp/grok-native-research-h5lgn7tv/home/cache",
+    "XDG_STATE_HOME": "/tmp/grok-native-research-h5lgn7tv/home/state",
+    "XDG_DATA_HOME": "/tmp/grok-native-research-h5lgn7tv/home/data",
+    "NPM_CONFIG_CACHE": "/tmp/grok-native-research-h5lgn7tv/home/npm-cache",
+    "NPM_CONFIG_USERCONFIG": "/tmp/grok-native-research-h5lgn7tv/home/npm-user-config",
+    "NPM_CONFIG_GLOBALCONFIG": "/tmp/grok-native-research-h5lgn7tv/home/npm-global-config",
+    "GIT_CONFIG_GLOBAL": "/tmp/grok-native-research-h5lgn7tv/home/git-config",
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_TERMINAL_PROMPT": "0",
+    "PATH": "/usr/bin:/bin",
+    "TMPDIR": "/tmp/grok-native-research-h5lgn7tv/tmp",
+    "LANG": "C.UTF-8"
+  }
+}

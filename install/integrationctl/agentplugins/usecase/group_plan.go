@@ -33,7 +33,7 @@ func (session *groupSession) planOneGroupTarget(targetIndex int, target AddInput
 		return err
 	}
 	if managed != nil {
-		if err := validateNativeBinding(*managed, target.Client); err != nil {
+		if err := session.service.validateNativeBinding(session.ctx, *managed, target.Client); err != nil {
 			return err
 		}
 	}
@@ -58,7 +58,7 @@ func (session *groupSession) validateGroupTarget(targetIndex int, target *AddInp
 	if !session.input.Repair && (target.Envelope.TreeDigest != session.first.Envelope.TreeDigest || target.Envelope.ManifestDigest != session.first.Envelope.ManifestDigest || domain.ComputeSourceBindingID(target.Envelope.Source) != session.sourceID) {
 		return fmt.Errorf("all targets in one operation group must use one immutable package")
 	}
-	if target.Scope != domain.ScopeUser {
+	if target.Scope != session.service.scope() {
 		return fmt.Errorf("%s scope is not proven; group mutation supports user scope only", target.Scope)
 	}
 	if target.ReleaseRevoked && normalizedOriginMode(target.OriginMode) == domain.OriginModeDirectory {
@@ -102,12 +102,12 @@ func (session *groupSession) planAndPreflightGroupTarget(targetIndex int, target
 
 func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput, plan domain.DeliveryPlan) (bool, error) {
 	key := plan.ActivePath
-	if sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery) {
+	if sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery, target.Scope) {
 		definition, _ := domain.ClientDefinitionFor(target.Client.ClientID)
-		key = "shared-backend:" + definition.BackendFamily + ":" + plan.PhysicalArtifactID
+		key = "shared-backend:" + domain.BackendFamilyForScope(definition.ID, target.Scope) + ":" + plan.PhysicalArtifactID
 	} else if session.existing {
 		for _, binding := range session.state.Installations[session.installationIndex].Clients {
-			if binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), target.Client.ClientID) && binding.Materialization != domain.MaterializationAbsent {
+			if binding.PhysicalArtifact == plan.PhysicalArtifactID && sameNativeBackend(domain.ClientID(binding.ClientID), target.Client.ClientID, target.Scope) && binding.Materialization != domain.MaterializationAbsent {
 				key = binding.TargetLocator
 				break
 			}
@@ -119,10 +119,10 @@ func (session *groupSession) collideGroupTarget(targetIndex int, target AddInput
 		return false, nil
 	}
 	prior := &session.planned[priorIndex]
-	if !sameNativeBackend(prior.input.Client.ClientID, target.Client.ClientID) {
+	if !sameNativeBackend(prior.input.Client.ClientID, target.Client.ClientID, target.Scope) {
 		return false, fmt.Errorf("targets collide on physical backend %s", key)
 	}
-	if (prior.plan.SelectedDelivery.EffectiveTraits(prior.input.Client.ClientID).BindsNativeProfileRoot || plan.SelectedDelivery.EffectiveTraits(target.Client.ClientID).BindsNativeProfileRoot) && prior.input.Client.ConfigRoot != target.Client.ConfigRoot {
+	if (prior.plan.SelectedDelivery.EffectiveTraitsForScope(prior.input.Client.ClientID, prior.input.Scope).BindsNativeProfileRoot || plan.SelectedDelivery.EffectiveTraitsForScope(target.Client.ClientID, target.Scope).BindsNativeProfileRoot) && prior.input.Client.ConfigRoot != target.Client.ConfigRoot {
 		return false, fmt.Errorf("targets select different native profile roots for physical backend %s", key)
 	}
 	// Coalescing discards one plan, so all frozen authority, including revision
@@ -181,7 +181,7 @@ func (session *groupSession) resolveGroupManagedBinding(target AddInput, plan *d
 	if !session.existing {
 		return clientID, nil, nil
 	}
-	if !sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery) {
+	if !sharesPhysicalBackend(target.Client.ClientID, plan.SelectedDelivery, target.Scope) {
 		if binding, ok := session.state.Installations[session.installationIndex].Clients[clientID]; ok {
 			owned := binding
 			return clientID, &owned, nil
@@ -282,7 +282,7 @@ func (session *groupSession) preflightOneCompatibleBinding(check AddInput, compa
 		return err
 	}
 	for _, binding := range session.state.Installations[session.installationIndex].Clients {
-		if sameNativeBackend(domain.ClientID(binding.ClientID), check.Client.ClientID) && binding.Scope == string(check.Scope) {
+		if sameNativeBackend(domain.ClientID(binding.ClientID), check.Client.ClientID, check.Scope) && binding.Scope == string(check.Scope) {
 			compatibleBindings[binding.ClientBindingID] = true
 		}
 	}

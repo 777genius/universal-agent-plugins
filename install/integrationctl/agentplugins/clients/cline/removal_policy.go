@@ -10,5 +10,8 @@ var _ clients.RemovalAttestationPolicy = (*Adapter)(nil)
 // RequiresExternalUninstalled keeps legacy unowned projections on the existing
 // manual removal path; unrelated native object kinds cannot prove ownership.
 func (*Adapter) RequiresExternalUninstalled(_ clients.Env, request domain.DeactivationRequest) bool {
+	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
+		return false
+	}
 	return len(ClineObjects(request.NativeObjects)) == 0
 }

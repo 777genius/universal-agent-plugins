@@ -257,13 +257,25 @@ func TestPlannerFailsClosedForUndetectedClientAndUnsupportedScope(t *testing.T) 
 	if plan.Status != domain.PlanUnsupported || !contains(plan.Warnings, "client_not_detected") {
 		t.Fatalf("undetected plan = %+v", plan)
 	}
-	client = detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor"))
-	plan, err = planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeProject, "demo-0123456789ab")
+	// ChatGPT is actually unsupported for filesystem project installation.
+	projectRoot, rootErr := filepath.EvalSymlinks(t.TempDir())
+	if rootErr != nil {
+		t.Fatal(rootErr)
+	}
+	unsupportedPlanner := testPlanner(Planner{ProjectRoot: projectRoot, ManagedRoot: filepath.Join(projectRoot, ".uap", "managed")})
+	client = detectedClient(domain.ClientChatGPT, filepath.Join(t.TempDir(), ".chatgpt"))
+	plan, err = unsupportedPlanner.Plan(context.Background(), testEnvelope(), client, domain.ScopeProject, "demo-0123456789ab")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plan.Status != domain.PlanUnsupported || !contains(plan.Warnings, "scope_not_supported") {
 		t.Fatalf("project plan = %+v", plan)
+	}
+	// Cursor is qualified, but cannot borrow a missing selected project root.
+	client = detectedClient(domain.ClientCursor, filepath.Join(t.TempDir(), ".cursor"))
+	invalid, err := planner.Plan(context.Background(), testEnvelope(), client, domain.ScopeProject, "demo-0123456789ab")
+	if err == nil || invalid.ActivePath != "" {
+		t.Fatalf("qualified project with missing root resolved an artifact: %+v %v", invalid, err)
 	}
 }
 

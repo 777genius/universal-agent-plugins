@@ -160,7 +160,28 @@ var _ clients.RegistryInspector = (*Adapter)(nil)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return true }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, _ domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	if projectRequested(plan) {
+		if err := ctx.Err(); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if err := validateProjectPlan(client, plan); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		if managed != nil {
+			if managed.Scope != "project" {
+				return clients.RegistryIndeterminate, fmt.Errorf("qoder project inspection requires a project binding")
+			}
+			if err := New().ValidateBindingProfile(plan.NativeRegistryRoot, *managed); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			if managed.TargetLocator != plan.ActivePath || managed.PhysicalArtifact != plan.PhysicalArtifactID {
+				return clients.RegistryIndeterminate, fmt.Errorf("qoder project native inspection received another binding")
+			}
+		}
+		// Local prepared receipts never prove a native Qoder registration.
+		return clients.RegistryClear, nil
+	}
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}

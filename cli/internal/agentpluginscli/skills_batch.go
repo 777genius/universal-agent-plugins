@@ -60,9 +60,19 @@ func (p *PreparedSkillsBatch) Check(ctx context.Context) error {
 	return p.check(ctx)
 }
 
-func (p *PreparedSkillsBatch) check(ctx context.Context) error {
+func (p *PreparedSkillsBatch) checkInputs() error {
+	if err := p.app.checkSkillsContext(nil); err != nil {
+		return fmt.Errorf("%w: %w", ErrSkillsPlanStale, err)
+	}
 	if err := p.request.checkInputs(); err != nil {
 		return fmt.Errorf("%w: %w", ErrSkillsPlanStale, err)
+	}
+	return nil
+}
+
+func (p *PreparedSkillsBatch) check(ctx context.Context) error {
+	if err := p.checkInputs(); err != nil {
+		return err
 	}
 	actions, detected, paths, err := prepareSkillsBindings(ctx, p.preview, p.request.requirements, p.request.lock, p.request.aliases, p.request.prepared)
 	if err != nil {
@@ -92,8 +102,12 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	if p.closed || p.applied {
 		return result, errors.New("skill plan closed or already applied")
 	}
+	// Check the original authority before creating a lock in the selected root.
+	if err := p.checkInputs(); err != nil {
+		return result, err
+	}
 	p.applied = true
-	adapter := &dependencyInstaller{app: p.app, opts: &options{}, detected: p.request.detected}
+	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs}
 	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, p.check)
 	results := applied.Results
 	cursor := 0

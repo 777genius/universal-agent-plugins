@@ -231,8 +231,8 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		}
 	}
 	adapter.currentAction = action
-	request := installer.Request{OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
-		ClientExecutable: backendExecutable(client, adapter.detected), InstallationID: action.InstallationID,
+	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+		ClientExecutable: backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
@@ -282,7 +282,7 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	evidenceEnv.InstallerVersion = app.Version
 	evidenceEnv.DependencyIdentity = deterministicDependencyIdentity(loaded.envelope, targets)
 	request := domain.DirectoryResolveRequest{Selector: source.DistributionID, DesiredReleaseSequence: source.ReleaseSequence,
-		Operation: domain.DirectoryInstall, Scope: domain.ScopeUser, Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
+		Operation: domain.DirectoryInstall, Scope: app.scope(), Targets: targets, SchemaVersion: "1.0.0", InstallerVersion: app.Version,
 		OS: evidenceEnv.OS, Architecture: evidenceEnv.Architecture, DependencyIdentity: evidenceEnv.DependencyIdentity}
 	if recorded == nil {
 		request.Purpose = domain.DirectoryResolveLockedRestore
@@ -337,8 +337,8 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 	if !owned {
 		return false, nil
 	}
-	if opts.scope != "" && opts.scope != "user" {
-		return true, errors.New("environment repair supports user scope only")
+	if opts.scope != "" && opts.scope != "user" && opts.scope != "project" {
+		return true, errors.New("environment repair supports user or project scope")
 	}
 	if app.Installer == nil {
 		return true, errors.New("typed SDK installer is unavailable")
@@ -366,7 +366,7 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 
 func resolveDependencyBindingIdentity(view installer.Inspection, action *environment.PreparedBinding) error {
 	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault && receipt.Alias == action.Alias {
+		if receipt.EnvironmentID == action.Authority.EnvironmentID && receipt.Alias == action.Alias {
 			if action.InstallationID == "" {
 				action.InstallationID = receipt.InstallationID
 				action.Authority.InstallationID = receipt.InstallationID
@@ -385,11 +385,14 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			continue
 		}
 		for _, binding := range installation.Bindings {
+			if binding.ClientID == request.ClientID {
+				continue
+			}
 			sibling, ok := adapter.detected[domain.ClientID(binding.ClientID)]
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
 			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected)})
+			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope())})
 		}
 	}
 	return nil

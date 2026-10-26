@@ -27,6 +27,18 @@ func (*Adapter) TargetRoot(client domain.DetectedClient, mode domain.PackageMode
 }
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if plan.Scope == domain.ScopeProject || in.TargetContext.Scope == domain.ScopeProject || in.TargetContext.ProjectRoot != "" {
+		if _, err := grokPlanRoot(in.Client, *plan); err != nil {
+			return err
+		}
+		if plan.Status != domain.PlanUnsupported && shared.OnlyNativeComponents(plan.Components) {
+			plan.Status = domain.PlanReady
+			plan.Activation = domain.ActivationPrepared
+			plan.Verification = domain.VerificationPackageValid
+			plan.UserActions = shared.AppendUnique(plan.UserActions, projectPreparationAction)
+		}
+		return nil
+	}
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
 	if plan.Status == domain.PlanUnsupported {
 		return nil

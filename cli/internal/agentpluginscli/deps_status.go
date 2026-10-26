@@ -20,6 +20,7 @@ import (
 )
 
 type dependencyStatusFact struct {
+	Scope            domain.InstallScope       `json:"-"`
 	Alias            string                    `json:"alias,omitempty"`
 	ClientID         string                    `json:"client_id,omitempty"`
 	InstallationID   string                    `json:"installation_id,omitempty"`
@@ -51,10 +52,16 @@ type dependencyStatus struct {
 
 func runDependencyStatus(cmd *cobra.Command, app App, opts *options) error {
 	manifestPath, lockPath := app.dependencyPaths()
-	status := dependencyStatus{Scope: "user", ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
+	status := dependencyStatus{Scope: string(app.scope()), ManifestPath: manifestPath, LockPath: lockPath, SupportedTargets: supportedDependencyTargets(app), Facts: []dependencyStatusFact{}}
 	status.ExcludedTargets = []dependencyExcludedTarget{}
 	for _, definition := range domain.ClientDefinitions() {
 		reason := installer.ClientSupportExclusionReason(app.ClientRegistry, string(definition.ID))
+		if app.scope() == domain.ScopeProject {
+			reason = ""
+			if !supportsDependencyTarget(app, string(definition.ID)) {
+				reason = "project_scope_unsupported"
+			}
+		}
 		if reason != "" && reason != "not_registered" {
 			status.ExcludedTargets = append(status.ExcludedTargets, dependencyExcludedTarget{ID: string(definition.ID), Reason: reason})
 		}
@@ -141,7 +148,8 @@ func canonicalizeRequirementsFromLock(requirements *environment.Requirements, lo
 	return nil
 }
 
-func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage) {
+func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.InspectedBinding, pkg environment.LockedPackage, environmentIDs ...string) {
+	mergeDependencyGuidanceScope(fact, binding.Scope)
 	_, lifecycle := environment.LifecycleFacts(binding)
 	fact.Facts = append(fact.Facts, lifecycle...)
 	fact.NextActions = dependencyNextActions(*fact)
@@ -149,7 +157,7 @@ func appendBindingStatusFacts(fact *dependencyStatusFact, binding installer.Insp
 	if binding.TreeDigest != pkg.TreeDigest || binding.Revision != lockedCommit(pkg) {
 		fact.Facts = append(fact.Facts, "not_synced")
 	}
-	if binding.Owner == nil || binding.Owner.EnvironmentID != environment.EnvironmentUserDefault {
+	if binding.Owner == nil || binding.Owner.EnvironmentID != selectedEnvironmentID(environmentIDs) {
 		fact.Facts = append(fact.Facts, "foreign")
 	}
 	if binding.ProjectionStatus != "" {
@@ -238,7 +246,7 @@ func runDependencyRecover(cmd *cobra.Command, app App, opts *options, yes bool) 
 		return lockErr
 	}
 	defer func() { _ = release() }()
-	result, recoverErr := app.Installer.RecoverEnvironment(cmd.Context(), observed, environment.EnvironmentUserDefault)
+	result, recoverErr := app.Installer.RecoverEnvironment(cmd.Context(), observed, app.environmentID())
 	if opts.format == "json" {
 		if renderErr := renderJSON(cmd.OutOrStdout(), map[string]any{"result": result, "recovery": observed.Recovery}); renderErr != nil && recoverErr == nil {
 			return renderErr
@@ -285,7 +293,7 @@ func renderDependencyStatus(cmd *cobra.Command, opts *options, status dependency
 func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspection, lock environment.Lock, validLock bool) []dependencyStatusFact {
 	receipts := map[string]domain.EnvironmentReceipt{}
 	for _, receipt := range state.EnvironmentReceipts {
-		if receipt.EnvironmentID == environment.EnvironmentUserDefault {
+		if receipt.EnvironmentID == app.environmentID() {
 			receipts[receipt.Alias+"\x00"+receipt.ClientID] = receipt
 		}
 	}
@@ -301,7 +309,7 @@ func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspec
 		}
 	}
 	for _, receipt := range receipts {
-		fact := dependencyStatusFact{Alias: receipt.Alias, ClientID: receipt.ClientID, PackageDigest: receipt.PackageDigest, Facts: []string{"not_synced"}}
+		fact := dependencyStatusFact{Scope: app.scope(), Alias: receipt.Alias, ClientID: receipt.ClientID, PackageDigest: receipt.PackageDigest, Facts: []string{"not_synced"}}
 		appendStoreStatus(ctx, app, &fact, domain.TreeDigestAlgorithm)
 		appendReceiptStatus(&fact, state, receipt)
 		facts = append(facts, fact)
@@ -310,7 +318,7 @@ func inspectDependencyFacts(ctx context.Context, app App, state installer.Inspec
 }
 
 func desiredDependencyFact(ctx context.Context, app App, state installer.Inspection, pkg environment.LockedPackage, target string, receipt domain.EnvironmentReceipt, owned bool) dependencyStatusFact {
-	fact := dependencyStatusFact{Alias: pkg.Alias, ClientID: target, PackageDigest: pkg.TreeDigest}
+	fact := dependencyStatusFact{Scope: app.scope(), Alias: pkg.Alias, ClientID: target, PackageDigest: pkg.TreeDigest}
 	appendStoreStatus(ctx, app, &fact, pkg.DigestAlgorithm)
 	if !owned {
 		fact.Facts = append(fact.Facts, "not_synced")
@@ -324,7 +332,7 @@ func desiredDependencyFact(ctx context.Context, app App, state installer.Inspect
 	}
 	fact.InstallationID, fact.BindingID, fact.Owner = receipt.InstallationID, receipt.ClientBindingID, receipt.EnvironmentID
 	if binding, found := findInspectedEnvironmentBinding(state, receipt); found {
-		appendBindingStatusFacts(&fact, binding, pkg)
+		appendBindingStatusFacts(&fact, binding, pkg, app.environmentID())
 	} else {
 		fact.Facts = append(fact.Facts, "partial")
 	}
@@ -362,6 +370,7 @@ func appendReceiptStatus(fact *dependencyStatusFact, state installer.Inspection,
 		fact.Facts = append(fact.Facts, "partial")
 		return
 	}
+	mergeDependencyGuidanceScope(fact, binding.Scope)
 	fact.Revision, fact.ProjectionDigest = binding.Revision, binding.ProjectionDigest
 	if binding.ProjectionStatus != "" {
 		fact.Facts = append(fact.Facts, binding.ProjectionStatus)
@@ -378,11 +387,27 @@ func dependencyNextActions(fact dependencyStatusFact, sdk ...installer.NextActio
 	}
 	for _, item := range fact.Facts {
 		if item == "activation_manual" || item == "activation_prepared" {
-			out = append(out, dependencyNextActionDTO{Kind: "attest_activation", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --activation-complete", fact.ClientID)})
+			if fact.Scope == domain.ScopeProject {
+				out = append(out, dependencyNextActionDTO{Kind: "review_project_activation", Reason: "review the selected project's client instructions and native loading, then retry supported verification in the same selected project; prepared files do not establish native activation"})
+			} else {
+				out = append(out, dependencyNextActionDTO{Kind: "attest_activation", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --activation-complete", fact.ClientID)})
+			}
 		}
 		if item == "auth_pending" || item == "auth_failed" {
 			return append(out, dependencyNextActionDTO{Kind: "attest_authentication", Reason: fmt.Sprintf("agentplugins add <same-source> --target %s --auth-complete", fact.ClientID)})
 		}
 	}
 	return out
+}
+
+// Never downgrade a project context to user guidance because inspected metadata
+// disagrees. This chooses conservative text only; it confers no authority.
+func mergeDependencyGuidanceScope(fact *dependencyStatusFact, bindingScope string) {
+	if fact.Scope == domain.ScopeProject || bindingScope == string(domain.ScopeProject) {
+		fact.Scope = domain.ScopeProject
+		return
+	}
+	if fact.Scope == "" {
+		fact.Scope = domain.InstallScope(bindingScope)
+	}
 }

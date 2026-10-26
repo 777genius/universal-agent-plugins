@@ -12,15 +12,18 @@ import (
 
 var _ clients.RemovalAttestationPolicy = (*Adapter)(nil)
 
-// RequiresExternalUninstalled preserves Codex's explicit external-removal
+// RequiresExternalUninstalled preserves Codex's user-plugin external-removal
 // contract, including plugins that were prepared but never activated.
-func (*Adapter) RequiresExternalUninstalled(_ clients.Env, _ domain.DeactivationRequest) bool {
-	return true
+func (*Adapter) RequiresExternalUninstalled(_ clients.Env, request domain.DeactivationRequest) bool {
+	return request.TargetContext.Scope != domain.ScopeProject
 }
 
 // Deactivate removes the managed Codex plugin and marketplace after the
 // operator confirms, or records the manual steps when the CLI is missing.
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject {
+		return deactivateCodexProject(ctx, env, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
 		return outcome, err

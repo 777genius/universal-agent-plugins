@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "/usr/bin/xauth",
+    "-f",
+    "/tmp/uap-vscode-sealed-3399636247/auth/authority",
+    "source",
+    "-"
+  ],
+  "error": "",
+  "redacted": true,
+  "stderr_bytes": 86,
+  "stderr_sha256": "a67c95fb878a3b6b67e8bb4314214581f92fcb7ba526a728229486e32a7ed9d3",
+  "stdout_bytes": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

@@ -64,7 +64,7 @@ type stdioHelperProbe struct {
 
 func (service Service) preflightOneStdio(envelope domain.PackageEnvelope, plan *domain.DeliveryPlan, server domain.MCPServer, probe *stdioHelperProbe) (*domain.ComponentReadinessError, error) {
 	var failure *domain.ComponentReadinessError
-	if plan.SelectedDelivery.EffectiveTraits(plan.ClientID).UsesManagedStdioLauncher {
+	if plan.SelectedDelivery.EffectiveTraitsForScope(plan.ClientID, plan.Scope).UsesManagedStdioLauncher {
 		var err error
 		failure, err = service.checkedManagedStdioHelper(envelope.SnapshotRoot, probe)
 		if err != nil {

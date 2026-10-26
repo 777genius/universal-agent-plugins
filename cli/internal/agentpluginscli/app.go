@@ -40,7 +40,11 @@ type SourceAcquirer interface {
 }
 
 type App struct {
-	ManagementFactory  func(management.Startup) (App, error)
+	ManagementFactory func(management.Startup) (App, error)
+	// ForScope composes an isolated runtime after command flags select its context.
+	ForScope           func(domain.InstallScope, string) (App, error) `json:"-"`
+	Scope              domain.InstallScope                            `json:"-"`
+	ProjectRoot        string                                         `json:"-"`
 	chatGPTPreparation bool
 	chatGPTAppID       string
 	Prompter           prompt.Prompter
@@ -98,6 +102,7 @@ type options struct {
 	installIntents       map[domain.ClientID]domain.InstallIntent
 	color                terminaltheme.Policy
 	target               string
+	projectRoot          string
 	scope                string
 	dryRun               bool
 	format               string

@@ -17,12 +17,22 @@ import (
 var _ clients.Projector = (*Adapter)(nil)
 var _ clients.ActiveNativeProjector = (*Adapter)(nil)
 
-func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) ([]domain.NativeObjectOwnership, error) {
+	if plan.Scope == domain.ScopeProject {
+		if err := validateKiroProjectStdio(root, envelope, plan, dataPath); err != nil {
+			return nil, err
+		}
+	}
 	return BuildNativeObjects(root, envelope, plan)
 }
 
 // Project writes Kiro's MCP document and records the native objects it owns.
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if in.Plan.Scope == domain.ScopeProject {
+		if err := validateKiroProjectionRoot(in.StagingPath, in.Plan); err != nil {
+			return nil, err
+		}
+	}
 	if err := shared.ProjectMCPServers(shared.MCPProjection{
 		Root:       in.StagingPath,
 		Envelope:   in.Envelope,
@@ -33,10 +43,20 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 	}); err != nil {
 		return nil, err
 	}
+	if in.Plan.Scope == domain.ScopeProject {
+		if err := projectKiroStdio(in); err != nil {
+			return nil, err
+		}
+	}
 	return BuildNativeObjects(in.StagingPath, in.Envelope, in.Plan)
 }
 
 func BuildNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+	if plan.Scope == domain.ScopeProject {
+		if err := validateKiroProjectionRoot(stagingRoot, plan); err != nil {
+			return nil, err
+		}
+	}
 	configRoot := strings.TrimSpace(plan.NativeRegistryRoot)
 	if configRoot == "" {
 		return nil, kiroErrorf("Kiro config root is unavailable")
@@ -62,6 +82,9 @@ func BuildNativeObjects(stagingRoot string, envelope domain.PackageEnvelope, pla
 		}
 	}
 	sort.Slice(objects, func(i, j int) bool { return objects[i].ObjectID < objects[j].ObjectID })
+	if plan.Scope == domain.ScopeProject {
+		return objects, validateKiroProjectObjects(configRoot, objects)
+	}
 	return objects, nil
 }
 

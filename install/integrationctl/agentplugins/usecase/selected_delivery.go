@@ -16,7 +16,7 @@ func validateSelectedPlan(plan *domain.DeliveryPlan, envelope domain.PackageEnve
 		return nil
 	}
 	for _, binding := range installation.Clients {
-		if binding.Scope != string(plan.Scope) || !sameNativeBackend(domain.ClientID(binding.ClientID), plan.ClientID) {
+		if binding.Scope != string(plan.Scope) || !sameNativeBackend(domain.ClientID(binding.ClientID), plan.ClientID, plan.Scope) {
 			continue
 		}
 		if err := binding.SelectedDelivery.Validate(); err != nil {

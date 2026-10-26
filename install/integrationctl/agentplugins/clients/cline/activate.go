@@ -11,6 +11,9 @@ import (
 // AutomaticallyActivates reports that Activate will write managed Cline native
 // objects for this exact request.
 func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationRequest) bool {
+	if clineProjectSelected(request.Plan) {
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+	}
 	return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
 }
 
@@ -23,6 +26,9 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 // Activate installs or verifies managed Cline skills and MCP servers through
 // the native config kernel.
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if clineProjectSelected(request.Plan) {
+		return activateClineProject(ctx, env, request)
+	}
 	if err := shared.ActivationIdentityMismatch(request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -44,6 +50,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 
 // Deactivate removes managed Cline native objects.
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
+		return deactivateClineProject(ctx, env, request)
+	}
 	outcome := shared.StartedDeactivation()
 	if adapter.RequiresExternalUninstalled(env, request) {
 		action := "remove any Cline skills and MCP entries for this plugin, " +

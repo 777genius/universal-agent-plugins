@@ -11,6 +11,10 @@ import (
 )
 
 func validateNativeBinding(client domain.ClientBinding, detected domain.DetectedClient) error {
+	return validateNativeBindingAt(client, detected, detected.ConfigRoot)
+}
+
+func validateNativeBindingAt(client domain.ClientBinding, detected domain.DetectedClient, nativeRoot string) error {
 	if err := client.ValidateLocalEntryObservation(); err != nil {
 		return err
 	}
@@ -20,13 +24,13 @@ func validateNativeBinding(client domain.ClientBinding, detected domain.Detected
 	if err := client.SelectedDelivery.Validate(); err != nil {
 		return err
 	}
-	if !client.SelectedDelivery.EffectiveTraits(detected.ClientID).BindsNativeProfileRoot {
+	if !client.SelectedDelivery.EffectiveTraitsForScope(detected.ClientID, domain.InstallScope(client.Scope)).BindsNativeProfileRoot {
 		return nil
 	}
 	if client.NativeProfileRoot == "" {
 		return fmt.Errorf("legacy native binding has no proven native profile root; reviewed rebind is required")
 	}
-	if detected.ConfigRoot == "" || !filepath.IsAbs(detected.ConfigRoot) || filepath.Clean(detected.ConfigRoot) != client.NativeProfileRoot {
+	if nativeRoot == "" || !filepath.IsAbs(nativeRoot) || filepath.Clean(nativeRoot) != client.NativeProfileRoot {
 		return fmt.Errorf("selected native profile differs from the binding's native profile root")
 	}
 	return nil

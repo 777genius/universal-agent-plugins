@@ -22,7 +22,8 @@ func NewRoot(app App) *cobra.Command {
 	root.SetErr(app.errorOutput())
 	flags := root.PersistentFlags()
 	flags.StringVar(&opts.target, "target", "", "target client(s), comma-separated: "+supportedTargetHelp())
-	flags.StringVar(&opts.scope, "scope", "user", "installation scope (user only in this release)")
+	flags.StringVar(&opts.scope, "scope", "user", "installation scope: user or project")
+	flags.StringVar(&opts.projectRoot, "project-root", "", "existing project directory (project scope only; default: current directory)")
 	flags.BoolVar(&opts.dryRun, "dry-run", false, "show the exact plan without changes")
 	flags.StringVar(&opts.format, "format", "human", "output format: human or json")
 	flags.BoolVar(&opts.plain, "plain", false, "use accessible line prompts (independent of color)")
@@ -61,8 +62,8 @@ func validateCommonOptions(opts *options) error {
 	if opts.scope != "user" && opts.scope != "project" {
 		return fmt.Errorf("--scope must be user or project")
 	}
-	if opts.scope == "project" {
-		return fmt.Errorf("--scope project is not supported by the current client adapters; the public CLI supports user scope only")
+	if opts.scope != "project" && opts.projectRoot != "" {
+		return fmt.Errorf("--project-root requires --scope project")
 	}
 	if _, err := parseTargetOption(opts.target); err != nil {
 		return err

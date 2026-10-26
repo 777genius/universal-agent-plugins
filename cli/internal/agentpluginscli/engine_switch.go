@@ -179,7 +179,7 @@ func (session *switchSession) groupInputs() ([]usecase.AddInput, error) {
 		}
 		inputs = append(inputs, usecase.AddInput{
 			Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser, Hints: clientPackage.hints,
-			InstallationID: session.installation.InstallationID, BackendExecutable: backendExecutable(client, session.detected),
+			InstallationID: session.installation.InstallationID, BackendExecutable: backendExecutable(client, session.detected, session.app.scope()),
 			OriginMode: session.loaded.origin, DirectoryResolution: cloneDirectoryOrigin(session.loaded.directory),
 			DistributionSuspended: session.loaded.distributionSuspended, ReleaseRevoked: session.loaded.releaseRevoked,
 		})

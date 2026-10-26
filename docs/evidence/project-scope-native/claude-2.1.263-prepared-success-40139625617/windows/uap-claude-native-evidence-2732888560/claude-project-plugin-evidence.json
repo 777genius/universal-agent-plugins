@@ -1,0 +1,152 @@
+{
+  "arch": "amd64",
+  "artifact_sha256": {
+    "01-claude-version.log": "b223e2a39cb8534c8a0923ee0ec5050b0ed073905f830f89ef5b84a754e98185",
+    "add-installer-stderr.log": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934",
+    "add-installer.json": "d5f08d4a2f8e1a4dd449e9e25cbd516c5d0c8af8ca4a88f1dcf956aeb6a5bac3",
+    "add-repeated-installer-stderr.log": "c8a5af8ae5dd4c9d5dcb81109bff51448d8d744e9fd372a7e20b1c473ffce934",
+    "add-repeated-installer.json": "279666535285314035828281596734a479a99065a61f0415cac5c672f0982f77",
+    "after-add-native-A.json": "c954a66f02f81c47dfbbbf638ba0100a5edb922f492b51c2583cccbba15c94fd",
+    "after-add-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-add-native-A.stdout.log": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5",
+    "after-add-native-B.json": "03885704640af29ed024e08372bdbf0ea41ff2347e2afba0328e2b7855365dd3",
+    "after-add-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-add-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-owned-directory-loss-native-A.json": "3c8078261e72425b8498ea91eab2fd469d743bf85eb5f8596bdab0a9d7a2935b",
+    "after-owned-directory-loss-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-owned-directory-loss-native-A.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-owned-directory-loss-native-B.json": "d542e82d62e4c3981b6a0cd3658f087815648becf5891a6a4f02f2f0db7cac49",
+    "after-owned-directory-loss-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-owned-directory-loss-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-remove-native-A.json": "57f48b45edcece506ad6e8cd3ad71590c02ec899ef1ebd0c59c994d2e1054dfb",
+    "after-remove-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-remove-native-A.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-remove-native-B.json": "192ad8bd8acc8cf5d81d203e31557b58be01d57e17ed4f3b4581c5662f5b8892",
+    "after-remove-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-remove-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-repair-native-A.json": "6a3ddf809682666feba66ff1d22d8c2976ce1f2ee869941dda35efaf0e7fe06d",
+    "after-repair-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-repair-native-A.stdout.log": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5",
+    "after-repair-native-B.json": "aa8954efdf2045c6a88163ec896ab2606e7e113d1541bbf771d670a8d87bdf81",
+    "after-repair-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-repair-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-repeated-add-native-A.json": "2c20a4e194c156a533731a16c174dd6de54e38631f117268c43265dfc3f86f7d",
+    "after-repeated-add-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-repeated-add-native-A.stdout.log": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5",
+    "after-repeated-add-native-B.json": "df920e269331dfe1a656f384724cf995be3fe8a44854a16b4cd379642bc8a4fb",
+    "after-repeated-add-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-repeated-add-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "after-update-native-A.json": "91663e368949a1c8c6f0e52eb4d0562c44b49b3e45cf51ca3f81ac5ad114c189",
+    "after-update-native-A.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-update-native-A.stdout.log": "9446c13c1ee2bce54285bf413c503a78beffa1f7deb1fa166868e63ec4fa40b5",
+    "after-update-native-B.json": "d542e82d62e4c3981b6a0cd3658f087815648becf5891a6a4f02f2f0db7cac49",
+    "after-update-native-B.stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "after-update-native-B.stdout.log": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "binding-after-add.json": "035ed5ab59f7a954deeb619ea4d95626674f97ac3d0779ca0643ac87b09a0d61",
+    "binding-after-repair.json": "035ed5ab59f7a954deeb619ea4d95626674f97ac3d0779ca0643ac87b09a0d61",
+    "binding-after-update.json": "035ed5ab59f7a954deeb619ea4d95626674f97ac3d0779ca0643ac87b09a0d61",
+    "remove-installer-stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "remove-installer.json": "4f74431cc01a43fa65e2904877292f363658fb8ddd8622101e6792fb3c292889",
+    "repair-absent-installer-stderr.log": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f",
+    "repair-absent-installer.json": "18f8bcd176b315d17beab6ff211b8deac6c269673fc98cf81fb0a00a32a29f65",
+    "repair-intact-installer-stderr.log": "c07f022606d872579b151926f65c51b12e6e35041e3a0cb40c11dad0da08901f",
+    "repair-intact-installer.json": "85eaecbd1ef71d6465e63ff4e793cb9eeb1361b2c51b37f8a856ab5621a2477e",
+    "update-invocation-change-installer-stderr.log": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10",
+    "update-invocation-change-installer.json": "aab992c663a101a1240a1b1f2b3857667e914bc7f0f378f09eeeb970b97e1a80",
+    "update-unchanged-installer-stderr.log": "e75a15f135db1fcd94fff31932040c95267684d88d3f33f5bbd9b01999940d10",
+    "update-unchanged-installer.json": "ac8b802cd981c43a09bcbc841dca65f2bbd7b961a3ff8e355821f2a531d722a9"
+  },
+  "client": "claude",
+  "client_sha256": "0b35df94c1307004f07b738390bfef8dfca5e9af29aaf6517f305bf086b95b03",
+  "client_version_measured": "2.1.263 (Claude Code)",
+  "finished_utc": "2026-10-24T22:45:30.0606628Z",
+  "installer_sha256": "8dff69684ba79422b0fbad72b91c978aa76dbb9bee1c66c3d8c7acdcfd5ca76f",
+  "native_surface": "fresh bounded native project lists prove suppression; owned file lifecycle is prepared; no trust/model/MCP initialization",
+  "os": "windows",
+  "project_contract": "untrusted_prepared_v1",
+  "scanner": {
+    "archive_sha256": "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
+    "binary_sha256": "9d486e5b66875384c12a147b8a19007beebe2691bc6d23a7867bf019b70be453",
+    "platform": "windows-amd64",
+    "route": "prepopulated supported scanner cache; ordinary CLI security assessment",
+    "source_tag": "v0.1.3",
+    "version": "0.1.3"
+  },
+  "source_identity": {
+    "installer_base_commit": "428bdf5d49e63b78bc4783df6b766c87c8e678ca",
+    "installer_patch_sha256": [],
+    "installer_source_state": "committed",
+    "installer_tree": "94f69fd2a2e60040c0718dfec6ea4a778be78a6a"
+  },
+  "stages": {
+    "absent_repair": {
+      "status": "passed",
+      "reason": "production repair rebuilt missing exact-owned directory; fresh native list again suppressed it"
+    },
+    "command_skill_discovery": {
+      "status": "blocked",
+      "reason": "project trust is not granted; filesystem projection does not prove native discovery"
+    },
+    "explicit_invocation_enforced": {
+      "status": "not_evaluated",
+      "reason": "no trust, MCP initialization, model invocation or explicit invocation enforcement is exercised"
+    },
+    "install": {
+      "status": "passed",
+      "reason": "production initial add installed owned files as Prepared+Installed; native project scan remains suppressed",
+      "artifacts": [
+        "add-installer.json",
+        "binding-after-add.json"
+      ]
+    },
+    "intact_repair": {
+      "status": "passed",
+      "reason": "intact repair preserved prepared files and explicit native blocker"
+    },
+    "invocation_change_update": {
+      "status": "passed",
+      "reason": "production update changed owned command projection while native discovery stayed blocked"
+    },
+    "native_mcp_initialization": {
+      "status": "not_evaluated",
+      "reason": "no trust, MCP initialization, model invocation or explicit invocation enforcement is exercised"
+    },
+    "native_skill_discovery": {
+      "status": "blocked",
+      "reason": "project trust is not granted; filesystem projection does not prove native discovery"
+    },
+    "native_suppression_boundary": {
+      "status": "passed",
+      "reason": "bounded raw pinned native A/B lists retained the untrusted project suppression boundary"
+    },
+    "prepared_command_projection": {
+      "status": "passed",
+      "reason": "owned projected files contain exact rendered ordinary command bytes; this is filesystem evidence"
+    },
+    "prepared_explicit_command_withheld": {
+      "status": "passed",
+      "reason": "plan and owned projected files withhold the explicit-only command; no native loaded-skill claim"
+    },
+    "project_scope_preservation": {
+      "status": "passed",
+      "reason": "foreign user/cache/project A/project B hashes remained exact; fresh project-B native lists never exposed A"
+    },
+    "real_model_command_use": {
+      "status": "not_evaluated",
+      "reason": "no trust, MCP initialization, model invocation or explicit invocation enforcement is exercised"
+    },
+    "remove": {
+      "status": "passed",
+      "reason": "production inactive removal deleted only owned project files; fresh native list no longer suppresses a managed directory"
+    },
+    "unchanged_add": {
+      "status": "passed",
+      "reason": "repeated add reobserved real suppression without file/state mutation"
+    },
+    "unchanged_update": {
+      "status": "passed",
+      "reason": "unchanged prepared update retained exact state and projected bytes"
+    }
+  },
+  "started_utc": "2026-10-24T22:45:15.5547353Z"
+}
