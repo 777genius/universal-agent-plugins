@@ -14,8 +14,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: project-native-runtime-${{ github.ref }}
-  cancel-in-progress: false
+  group: project-native-runtime-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   contracts:
     name: Runtime admission contracts and exact selection
