@@ -39,21 +39,21 @@ un CLI compilé à partir du code actuel ; elles ne sont pas encore qualifiées
 comme version publiée. Dans le dossier à emporter sur un autre ordinateur, lancez :
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 Copiez le dossier sur l’autre ordinateur, ouvrez-le et installez les agents cibles.
 Puis lancez :
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked
 ```
 
 Ou combinez l’importation et l’installation :
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 Le chemin est facultatif : le dossier courant est utilisé par défaut. L’exportation

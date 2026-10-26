@@ -43,21 +43,21 @@ npx universal-agent-plugins add context7
 В папке, которую хотите перенести на другой компьютер, выполните:
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 Скопируйте папку на другой компьютер, откройте её и установите нужные клиентские
 агенты. Затем выполните:
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked
 ```
 
 Или объедините импорт и установку:
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 Путь необязателен: по умолчанию используется текущая папка. Экспорт читает

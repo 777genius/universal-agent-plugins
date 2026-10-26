@@ -39,21 +39,21 @@ requieren un CLI compilado desde el código actual; todavía no están cualifica
 como versión publicada. En la carpeta que quieras llevar a otro equipo, ejecuta:
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 Copia la carpeta al otro equipo, ábrela e instala los agentes de destino.
 Después ejecuta:
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked
 ```
 
 O combina la importación y la instalación:
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 La ruta es opcional: se usa la carpeta actual por defecto. La exportación lee
