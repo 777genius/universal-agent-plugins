@@ -1044,6 +1044,65 @@ before a later separately reviewed integration into the full lifecycle. This
 attempt cannot inherit component-lifecycle success or claim vendor OAuth or
 real-model qualification.
 
+## Observed native CLI installed-package receipt framing correction
+
+Genuine Kiro run [40354148388](https://github.com/777genius/universal-agent-plugins/actions/runs/40354148388),
+job `121708484979`, source `d650ef37ff5cd2f38f6b784ebcd9723c47e62cf7`, tree
+`6b2be08d15092de328f2644478036f8c751e2b94`, completed public project add with
+Prepared activation and installation verification, then refused the exact native
+ownership comparison before any restricted startup. Native artifact `12672746098`
+(SHA-256 `26403a83fe3bdf64819d29d652011a3265b78ee977310cbd068830d44dbad75b`)
+and frontend artifact `12671093626` (SHA-256
+`4582142ca5697d5ab25576759d2431945caaebb5bc493876e2f1377886020ff4`)
+retain that failure. Independent reconstruction from the captured selected skill
+and MCP entry matches their two recorded object digests; the fixture's managed
+package framing uses a different production contract.
+
+The exact fixed local-source/no-save public add in these four startup attempts
+uses `runAddManyLoaded` and the existing lifecycle service. Kiro, Windsurf/Devin,
+Grok and Qoder do not have `QualifiedLocalInstallerFacade`; that trait is set
+only for Codex and Claude. `cli/cmd/agentplugins/compose.go` wires
+`providers.Stager` into the lifecycle service. Its `assembleDelivery` records
+`packagesnapshot.Builder.Build(...).Digest`, and its installed verification uses
+that same builder. The shared attempt instead currently uses the newer,
+domain-separated `agentplugins/adapters/packagedigest.DigestCaptured` result.
+The four fixed specifications therefore need the same correction; no different
+Grok/Qoder route or algorithm is inferred from their uncompleted runtime runs.
+
+Change only the independently computed expected installed managed-package
+digest in these fixtures to the exact selected provider's existing framing:
+lexically ordered held entries; `dir` or `file`, relative slash path, executable
+boolean and decimal content length separated by NULs, followed by exact file
+bytes. Keep the current bounded held reads, full ordinary-file ownership/link
+checks, canonical parent checks, entry/depth/byte ceilings and the existing
+captured-path policy validation. Use no client-configurable digest choice and no
+alternate digest fallback. Exact object count, kind, ID, logical name, path and
+digest equality remain mandatory. Production routes and digest implementations,
+source identity, installed source/receipt checks, native argv, profiles, trust,
+permissions, deadlines, cleanup, artifact members and qualification remain unchanged.
+
+Cline's separate installed ACP attempt uses that same non-facade lifecycle and
+Stager route, and its installed `installedEntries` comparison has the identical
+framing mismatch. Route that one installed-receipt expectation through the same
+small strict held-entry helper in `agentplugins_project_native_runtime_test.go`.
+Keep Cline's separate `sourceDigest` and package-revision expectation on
+`packagedigest.DigestCaptured`: source acquisition/loading deliberately retains
+the newer `PackageSnapshot.TreeDigest` identity. The installed receipt and
+source digest must remain separate; neither is copied from a returned receipt.
+The shared helper accepts only previously held ordinary files/directories,
+retains captured-path policy validation, and offers no algorithm selector.
+
+Replace the self-selected newer-builder parity contract with inert staging
+through the actual four registered client adapters plus Cline, project planner
+and `providers.Stager`, including the mixed Kiro/Devin managed-launcher
+projections and Cline's separate native transport projection.
+Compare the helper's held-byte digest against the actual staged managed object
+and `packagesnapshot` verifier; explicitly show the newer framing differs and
+Cline's independent source identity still matches the newer source builder.
+Exercise content/executable/directory changes and retained hardlink/alias
+refusal. No vendor process executes. Propagate the reviewed shared-helper/contract and caller deltas to the relevant
+leaves; all initial completion and qualification flags stay false.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable

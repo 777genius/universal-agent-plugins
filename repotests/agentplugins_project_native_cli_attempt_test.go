@@ -596,7 +596,7 @@ func projectNativeCLIPackageDigest(ctx context.Context, root string) (string, er
 	if err != nil {
 		return "", err
 	}
-	return packagedigest.DigestCaptured(ctx, captured)
+	return projectNativeRuntimeInstalledDigest(ctx, captured)
 }
 func projectNativeCLIClosedView(root, name string, skill []byte) error {
 	expected := map[string]bool{".": true, ".qoder-plugin": true, ".qoder-plugin/plugin.json": true, "skills": true, "skills/" + name: true, "skills/" + name + "/SKILL.md": true}
