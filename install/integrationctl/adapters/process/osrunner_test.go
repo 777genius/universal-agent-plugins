@@ -1010,6 +1010,15 @@ func TestOSRunnerPrestartFailureProvesNoChild(t *testing.T) {
 	}
 	requireOrdinaryPreflight(t)
 	result, err = (OS{}).Run(context.Background(), ports.Command{Argv: []string{os.Args[0]}, Dir: filepath.Join(t.TempDir(), "TEST-missing-working-directory")})
+	// On Linux the outer supervisor has already started when the inner
+	// command reports its startup failure. That is not a direct Cmd.Start
+	// failure and must not gain no-child or cleanup proof from its exit code.
+	if class := OrdinarySupervisorFailureClass(err); class != "" {
+		if class != "ordinary_supervisor_command_start" || result.ExitCode != 125 || result.NoChildStarted || result.CleanupComplete {
+			t.Fatalf("supervised Start failure fabricated process proof: %+v class=%s err=%v", result, class, err)
+		}
+		return
+	}
 	if err == nil || !result.NoChildStarted || result.CleanupComplete {
 		t.Fatalf("Start failure closure evidence: %+v %v", result, err)
 	}
