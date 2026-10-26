@@ -6,8 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 type targetNoticeWriter struct{ err error }
