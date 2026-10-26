@@ -106,6 +106,7 @@ type controller struct {
 	createdDisplayParent os.FileInfo
 	displayCleanupErr    error
 	trustedState         *trustedLifecycle
+	scannerCache         *trustedScannerCache
 }
 
 func deadlineAt(start int64, limit time.Duration) (time.Time, error) {

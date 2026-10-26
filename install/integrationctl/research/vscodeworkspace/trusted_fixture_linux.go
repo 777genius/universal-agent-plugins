@@ -101,6 +101,11 @@ func trustedContained(root, path string) bool {
 // Only fixture-owned descendants are chowned. Sealed controller, executable and
 // request ancestors always remain outside this writable tree.
 func (c *controller) trustedDirectory(path string) error {
+	if c.scannerCache != nil && c.scannerCache.sealed {
+		if node := c.scannerCache.node(path); node != nil {
+			return node.verify()
+		}
+	}
 	root := c.trustedState.Root
 	if path != root && !trustedContained(root, path) {
 		return fmt.Errorf("fixture directory escapes owned root")
@@ -142,6 +147,9 @@ func (c *controller) trustedDirectory(path string) error {
 	return nil
 }
 func (c *controller) trustedWrite(path string, body []byte, mode os.FileMode) error {
+	if c.scannerCache != nil && c.scannerCache.sealed && c.scannerCache.protects(path) {
+		return fmt.Errorf("sealed scanner ancestry cannot be rewritten")
+	}
 	if !trustedContained(c.trustedState.Root, path) {
 		return fmt.Errorf("fixture write outside owned root")
 	}
@@ -256,6 +264,9 @@ func (c *controller) trustedFixtures() error {
 		if err := c.trustedSource(scope, scope+"-one"); err != nil {
 			return err
 		}
+	}
+	if err := c.prepareTrustedScanner(); err != nil {
+		return err
 	}
 	for _, path := range []string{f.UserSkill, filepath.Join(f.Profile, "User", "settings.json"), filepath.Join(f.Profile, "User", "mcp.json")} {
 		if err := c.trustedProtect(path); err != nil {
@@ -496,6 +507,12 @@ func (c *controller) trustedPreserved() error {
 }
 
 func (c *controller) checkTrustedAssets() error {
+	if c.scannerCache == nil {
+		return fmt.Errorf("trusted scanner cache admission missing")
+	}
+	if err := c.scannerCache.verify(); err != nil {
+		return err
+	}
 	if err := c.checkPublisher(); err != nil {
 		return err
 	}

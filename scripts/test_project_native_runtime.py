@@ -146,6 +146,25 @@ class RuntimeTests(unittest.TestCase):
     def cline_result(self):
         return {**self.cli_result("qoder"), "client": "cline", "version": "3.0.73"}
 
+    def test_catalog_triple_is_admitted_only_for_qoder_and_never_qualifies_it(self):
+        command = {"argv": ["/owned/qodercli", "plugins", "list", "--json", "--plugin-dir", "/owned/A/.agentplugins-qoder-native"],
+                   "cwd": "/owned/A", "exit": 0, "error": False, "deadline": False, "elapsed_ms": 1,
+                   "cleanup": "full descendant supervision; forced cleanup fails"}
+        triple = {"native-catalog.command.json": json.dumps(command).encode(), "native-catalog.stdout.log": b"[]\n",
+                  "native-catalog.stderr.log": b""}
+        for client in runtime.CLI_ATTEMPTS:
+            summary = {"runtime-attempt.json": json.dumps(self.cli_result(client)).encode()}
+            if client == "qoder":
+                result = runtime.cli_attempt_members({**summary, **triple}, self.source, client)
+                self.assertTrue(result["test_failed"])
+                self.assertFalse(any(result["qualification"].values()))
+                for missing in triple:
+                    with self.assertRaises(ValueError):
+                        runtime.cli_attempt_members({**summary, **{key: value for key, value in triple.items() if key != missing}}, self.source, client)
+            else:
+                with self.assertRaises(ValueError):
+                    runtime.cli_attempt_members({**summary, **triple}, self.source, client)
+
     def test_cline_capture_is_unqualified_and_provider_key_is_never_admitted(self):
         result = self.cline_result()
         base = {"runtime-attempt.json": json.dumps(result).encode()}
@@ -208,6 +227,47 @@ class RuntimeTests(unittest.TestCase):
                     (env, unit, 0, origin), (env, unit, 1001, 0)):
                 with self.assertRaises(ValueError):
                     runtime.cline_service_argv(test, selected, root, selected_unit, uid, 1001, stamp)
+
+    def test_kimi_single_call_is_selected_separately_without_replacing_existing_lifecycle(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(runtime, "SOURCE", Path(temporary)):
+            leaf = runtime.SOURCE / "scripts/project_native_collectors/kimi.py"
+            leaf.parent.mkdir(parents=True)
+            leaf.write_text("inert acquisition metadata")
+            tests = runtime.SOURCE / "repotests"
+            tests.mkdir()
+            for selector in ("kimi", "kimi-call"):
+                case = runtime.CASES[selector]
+                (runtime.SOURCE / case["file"]).write_text("func " + case["test"] + "(t *testing.T) {\n}")
+            self.assertEqual(runtime.selected_cases()["include"], [{"client": "kimi", "phase": "installed-components-lifecycle"}])
+            (leaf.parent / "kimi_attempt.py").write_text("inert installed-tool observer")
+            self.assertEqual(runtime.selected_cases()["include"], [{"client": "kimi", "phase": "installed-components-lifecycle"},
+                                {"client": "kimi-call", "phase": "installed-single-tool-attempt"}])
+            self.assertEqual(runtime.CASES["kimi"]["seconds"], 900)
+            self.assertEqual(runtime.CASES["kimi-call"]["seconds"], 180)
+            self.assertNotEqual(runtime.CASES["kimi"]["optin"], runtime.CASES["kimi-call"]["optin"])
+
+    def test_kimi_single_call_cannot_inherit_lifecycle_success_or_unknown_members(self):
+        result = {**self.cli_result("qoder"), "client": "kimi", "version": "2.3.2", "phase": "installed-single-tool-attempt",
+                  "provider_kind": "scripted-openai-chat-completions", "elapsed_ms": 100}
+        base = {"runtime-attempt.json": json.dumps(result).encode()}
+        self.assertTrue(runtime.kimi_call_members(base, self.source)["test_failed"])
+        for change in ({"phase": "installed-components-lifecycle"}, {"client": "kimi-call"}, {"test_failed": False},
+                       {"runtime_attempt_complete": True}, {"source_identity": {}}, {"elapsed_ms": True},
+                       {"qualification": {key: True for key in runtime.shared.QUALIFICATION_CASES}}):
+            with self.assertRaises(ValueError):
+                runtime.kimi_call_members({"runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source)
+        for extra in ({"lifecycle.json": b"{}"}, {"profile.json": b"{}"}, {"provider-request-2.json": b"{}"},
+                      {"provider-request-9.json": b"{}"}, {"git-c.stdout.log": b""},
+                      {"python-api.json": b'{"token":"uap-kimi-key-inert-canary"}'},
+                      {"provider-request-1.json": b'{"content":"uap-kimi-key-inert-canary"}'}):
+            with self.assertRaises(ValueError):
+                runtime.kimi_call_members({**base, **extra}, self.source)
+        command = {"argv": ["/owned/git", "init", "--quiet"], "cwd": "/owned/C", "exit": 0, "error": False,
+                   "deadline": False, "cleanup": "ordinary full-descendant supervision; forced termination fails"}
+        bodies = {**base, "git-c.command.json": json.dumps(command).encode(), "git-c.stdout.log": b"", "git-c.stderr.log": b""}
+        runtime.kimi_call_members(bodies, self.source)
+        with self.assertRaises(ValueError):
+            runtime.kimi_call_members({**bodies, "git-c.command.json": json.dumps({**command, "cleanup": "assumed"}).encode()}, self.source)
 
 
 if __name__ == "__main__":

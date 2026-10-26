@@ -71,6 +71,7 @@ jobs:
           home = Path(os.environ['RUNNER_TEMP']) / 'vscode-project-contract-home'
           home.mkdir(mode=0o700)
           env = {'PATH': str(go.parent) + ':/usr/bin:/bin', 'HOME': str(home), 'LANG': 'C.UTF-8', 'GOTOOLCHAIN': 'local', 'GOENV': 'off', 'GOMAXPROCS': '2', 'GOCACHE': str(home / 'cache'), 'GOMODCACHE': str(home / 'modules'), 'GOPROXY': 'https://proxy.golang.org', 'GOSUMDB': 'sum.golang.org'}
+          env.update({key: os.environ[key] for key in module.legacy.GUARD_KEYS})
           commands = [(['/usr/bin/python3', 'scripts/research-vscode-project.py', '--contracts'], 10),
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_project_native_vscode_toolchain.py'], 30),
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_workspace_research.py'], 30),

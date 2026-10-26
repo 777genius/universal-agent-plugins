@@ -363,8 +363,17 @@ func runSealed(base string) (err error) {
 	}
 	defer func() { _ = c.output.Close() }()
 	runErr := c.execute()
-	out, stderr, baseErr := cleanSealedCapture(base)
-	cleanupErr := errors.Join(baseErr, c.displayCleanupErr)
+	scannerErr := c.closeTrustedScanner()
+	var out, stderr []byte
+	var baseErr error
+	if scannerErr == nil {
+		out, stderr, baseErr = cleanSealedCapture(base)
+	} else {
+		// A foreign or unreleased mount must never grant recursive deletion
+		// authority over whichever tree currently occupies that task path.
+		baseErr = fmt.Errorf("sealed-root deletion withheld after scanner mount release failure")
+	}
+	cleanupErr := errors.Join(baseErr, c.displayCleanupErr, scannerErr)
 	cleaned = true
 	return c.finish(runErr, cleanupErr, out, stderr)
 }

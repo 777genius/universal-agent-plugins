@@ -709,6 +709,157 @@ directory changes. No vendor process executes in these tests. Independently
 review both subsections twice before implementation, then rerun the exact
 genuine hosted lifecycle; every unobserved or failed stage remains unqualified.
 
+### Observed VS Code pinned-scanner cache handoff
+
+Genuine same-head retry of [run 40373529167](https://github.com/777genius/universal-agent-plugins/actions/runs/40373529167),
+job `121768023210`, executed source `ee4556e222cc14e5e1c355428b42e8d4df4a7ace`
+(tree `46a998ba83fc8e6d3f905ab37d7129c598d950d7`). Native artifact
+`12677341866` has SHA256
+`e9f7b93e0c68f99895d86c9ca2f5ac23919b75e2e3013a4307e6b1446eb1ec5d`.
+Both `empty-a` and `empty-b` completed with separate exact native trust decisions,
+actual trusted canonical folders, inherited user skill discovery and publisher
+exit zero. The next public `add-user` failed before installation: its ordinary
+security evaluator attempted to download lintai inside the loopback-only network
+namespace and DNS access was refused. Installed-package checks and native MCP
+stages were not reached; all five qualifications remain false.
+
+The frontend already acquires archive SHA256
+`2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da`
+and its exact executable member SHA256
+`b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba`.
+`sealTrustedInputs` currently seals this as `<base>/executables/lintai`, but
+`trustedCommand` sets `AGENTPLUGINS_HOME=<trustedRoot>/installer-state`.
+Production `compose.go` constructs `securityscan.ReleaseScanner` at that home's
+`security/lintai` cache, and `release.go` resolves only
+`0.1.3/linux-amd64/lintai` underneath it; putting lintai on PATH cannot select
+it. This is a dedicated fixture handoff omission, not a production scanner or
+network-policy defect. The existing ordinary native fixtures already prepopulate
+this exact supported cache before their public installer operations.
+
+The first cache plan failed both independent reviews: a root-owned read-only
+leaf can be temporarily substituted through a native-owned writable ancestor,
+and post-command equality cannot prevent executing that substitution. Source
+inspection also rules out a root-owned sticky installer-state directory:
+`statev2.Store.Save` and `processlock.Lock.Acquire` unconditionally chmod their
+state/lock parent to `0700`. The user-scope public CLI must own that directory.
+Do not change those production semantics or assume sticky modes survive them.
+
+Use this exact fixture-only filesystem seam instead, before any native child:
+
+| Node below sealed base | Owner/group | Mode and authority |
+| --- | --- | --- |
+| `trusted` | `0:0` | `0755`; prevents replacing the state ancestor |
+| `trusted/installer-state` | original UID:GID | `0700`; unchanged CLI state/lock/temp/managed writes |
+| `trusted/installer-state/security` | `0:0` | `0555`; one exact task-owned self-bind mount |
+| `security/assessments` | original UID:GID | `0700`; real assessment-cache temporary/atomic writes |
+| `security/lintai`, `security/lintai/0.1.3`, `security/lintai/0.1.3/linux-amd64` | `0:0` | `0555`; fixed nonwritable scanner ancestors |
+| `security/lintai/0.1.3/linux-amd64/lintai` | `0:0` | `0555`; exact pinned, ordinary single-link ELF copy |
+
+All paths are the fixed descendants above, never caller-selected mount operands.
+Keep the existing immutable sealed scanner source and archive/member pins.
+Create the fresh cache copy with bounded held-parent/file operations, exclusive
+creation, no alias following or replacement, and exact ELF/hash checks. Precreate
+only empty ordinary `a-events.jsonl` and `b-events.jsonl` at `trusted`, owned by
+the original UID:GID with mode `0600`, before sealing that root. The probe's
+existing `O_CREATE|O_APPEND` works on these files without directory write access;
+`trustedEvents` already treats absent and zero-byte logs as the same empty byte
+stream. No native event is fabricated. Its marker still writes only plugin data.
+Other existing home, project, result, source and temporary children retain their
+original-user ownership and writable layouts; later authored source/result writes
+stay inside those precreated children.
+
+One self-bind mount of the exact `security` directory in the controller's current
+mount namespace prevents renaming/unlinking this entry through the writable
+state parent. Do not add a new mount namespace, recursive mount, alternate view,
+scanner override or mount on a system/shared directory. Every fixture process
+and existing view of this one task path sees the same protected mountpoint.
+The nonwritable root-owned subtree protects scanner contents; the native-owned
+assessment child remains writable. Primary Linux source at commit
+`e8f897f4afef0031fe618a8e94127a0934896aba` backs this seam: `fs/namei.c` blob
+`9342fa6a38c2bad85c13144b8d8ae4940e88e7e6` returns `EBUSY` for rename of
+old/new local mountpoints and rmdir/unlink of mountpoints; `fs/namespace.c` blob
+`5a51315c6678145467520800ceedc3378df5e7da` makes that test namespace-local
+and requires namespace `CAP_SYS_ADMIN` for mount/unmount. This is design support,
+not a claim about the actual runner; the hosted filesystem/UID contracts below
+must succeed, or native execution is refused. Original native UID, NNP and zero
+capabilities remain unchanged, including no authority to unmount this boundary.
+
+Hold and record the original dev/inode, UID/GID and declared mode of every
+ancestor from the admitted sealed base through the cache and both branches,
+plus the cache file's size, single-link identity and digest. The root-owned
+`trusted`, `security`, `lintai`, version and platform directories and cache file
+retain their owner/mode and linked identities throughout child execution; the
+security mount remains bound throughout that interval. The native-owned
+`installer-state` and `assessments` directories may legitimately chmod themselves
+and perform the documented state/temp/assessment writes. Their original inode
+and owner/group remain fixed, and their mode must be `0700` at each existing
+`checkTrustedAssets` stage boundary; their mode is not an immutable in-child
+invariant. Directory mtime/ctime/size are not frozen where entries legitimately
+change. Native ownership of `installer-state` does not authorize renaming that
+directory, because its `trusted` parent is root-owned and nonwritable; likewise,
+`assessments` cannot be replaced through its nonwritable `security` parent.
+
+Record and require the exact security mount ID independently of dev/inode;
+missing, detached, replaced or foreign/stacked mount state fails closed. Recheck
+all original records and declared boundary modes in every `checkTrustedAssets`;
+never recapture a replacement baseline. Keep strict read-only scanner-subtree
+preservation too. Once sealed, `trustedDirectory` and `trustedWrite` must not
+chown, chmod or rewrite a root-owned protected ancestor/cache node. A controller
+helper request for any recorded directory may only verify its original record
+and current boundary mode, not repair a changed one. The native owner's normal
+CLI writes and mode operations above remain permitted. Other ordinary fixture
+mutations retain their existing held IO guards.
+
+After the existing child/display supervision returns, release only this exact
+recorded task mount, after matching all held ancestry and mount identities, using
+ordinary unmount with no lazy/force/fallback behavior. Then retain the existing
+held-root deletion. Unexpected identity, busy/unmount failure or root-cleanup
+failure makes cleanup incomplete and qualification false. A resource-unmount
+attempt after a failed exchange cannot turn that child's failed tree proof into
+success. No controller/native sequence may execute after releasing this boundary;
+no new evidence member or successful-cleanup exception is introduced.
+
+The public CLI must continue using its unmodified required ReleaseScanner,
+normal security policy/report validation and ordinary assessment cache. Do not
+add a scanner override, fake security result, inherited cache, PATH fallback,
+network interface, native download, alternate pin or vendor execution locally.
+Keep source/receipt equality, original-user authority, native trust/MCP UI,
+sandbox, command tables, original deadlines, closed artifacts and qualification
+rules unchanged. After the observed public failure the existing display exchange
+was unsuccessful, its strict supervisor reported forced cleanup and display
+unlink authority was withheld. Retain that honest cleanup failure and the current
+success-only teardown/asset-unlink contract; no separate cleanup change is
+justified by this evidence.
+
+Add inert held-identity contracts for exact cache placement, missing or changed
+file bytes/mode/inode/owner, original ancestor replacement/mode/owner/symlink,
+hard links, unexpected destinations, pin mismatch and mount identity/cleanup
+refusals. On the genuine hosted privileged test path, build the same finite
+layout using inert ELF bytes, then actually drop to the original UID/GID with
+zero capabilities. Denial tests target the root-owned `trusted`, `security`,
+`lintai`, version and platform directories and scanner leaf: attempts to rename,
+exchange, unlink, rewrite or chmod those nodes, including temporary substitution
+of the security entry, must be denied before mutation. Also require denial of
+renaming/replacing native-owned `installer-state` and `assessments` through their
+root-owned nonwritable parents. These negative tests do not prohibit the native
+owner's chmod or documented contents writes within those two writable
+directories. Root-only chmod-and-restore demonstrations do not satisfy this
+contract. Positive tests in that same UID require owner chmod to `0700`, real
+statev2 save, mutation lock, state/temp writes, assessment-cache store/atomic
+replacement and normal event-log append to succeed. Check the declared native
+directory modes at stage boundaries, with owner mode drift detected there;
+root-owned chain owner/mode and mount binding stay protected during execution.
+Independently exercise real ReleaseScanner
+cache resolution with an expressly inert executable and a transport that
+refuses/counts network requests: PATH alone must miss; the seeded cache must run
+without download. Empty inert output is not a security report or a qualification.
+The hosted contract must also prove exact ordinary unmount and owned-root cleanup;
+unsupported privileges/filesystem semantics fail before any vendor, without a
+weaker fallback. Local environments without these privileges may run only the
+remaining inert contracts and cannot claim that hosted gate passed. No vendor
+process executes locally. Two independent reviews of this revised plan precede
+fixture implementation, independent code review and the exact hosted lifecycle.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for
@@ -1148,6 +1299,139 @@ does not motivate a second process primitive. Every initial capture, including
 an apparently successful exchange, fails pending independent review of actual
 native/provider/probe bytes. All five qualifications, vendor authentication and
 real-model flags remain false until a later reviewed full lifecycle proves them.
+
+## Qoder receipt-selected catalog observation
+
+Genuine pinned Qoder 1.1.78 help in
+[run 40342548512](https://github.com/777genius/universal-agent-plugins/actions/runs/40342548512),
+artifact `12664571770` (SHA-256
+`7f00bd2c8f8cf54409fa464658b394a44bc10020a1e92874f4e333c45aedbc11`),
+advertises `plugins list --json --plugin-dir <dirs...>`. The independently
+reviewed amendment adds exactly that read-only command with the actual
+receipt-selected closed import view, cwd A and a 30-second ceiling inside the
+existing 150-second work / 180-second total deadline. It runs after public add
+and before the existing restricted headless attempt. There is no global import,
+registration, profile relocation or new provider permission.
+
+Freeze the complete original `HOME/.qoder` subtree immediately before and after
+this catalog command: entry membership, directories, full modes, original UID,
+single-link ordinary files and held byte digests; bound it to 4,096 entries,
+32 levels and 256 MiB. Any change, including a new cache file or empty directory,
+fails. Require exit zero, empty stderr and strict whole JSON object/array, while
+leaving its unobserved catalog schema opaque. The Qoder-only `native-catalog`
+command triple is the sole additional frontend member set. Other clients retain
+the original five labels. Raw capture remains an intentional failed initial
+attempt with all five qualifications false until independently interpreted.
+
+## Kimi separate installed single-tool attempt
+
+Preserve the existing 900-second Kimi component lifecycle. Register the separate
+fixed selector `kimi-call`, exact
+`TestAgentpluginsKimiNativeProjectRuntimeAttempt` and
+`AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT=1` only when its own test and
+`kimi_attempt.py` observer exist. Its actual client and acquisition identity
+remain `kimi` 2.3.2; the phase is `installed-single-tool-attempt`, with an original
+180-second total / 150-second work / 30-second cleanup budget. One native service
+phase has at most 60 seconds including the existing five-second reap reserve.
+Neither phase can reset or borrow the other test's deadline.
+
+Two independent plan rounds reviewed nineteen exact source blobs at
+[`b8dd3a134060c6e80ba4a1659335cd63b68483f2`](https://github.com/MoonshotAI/kimi-code/tree/b8dd3a134060c6e80ba4a1659335cd63b68483f2),
+including the [native server API](https://github.com/MoonshotAI/kimi-code/blob/b8dd3a134060c6e80ba4a1659335cd63b68483f2/docs/en/reference/server-api.md),
+tool naming/policy, session/prompt/approval routes, and the OpenAI provider
+request/stream implementation. Author only the supported original-user
+configuration: one literal-loopback OpenAI-compatible test provider with a
+private fixture credential, manual permission mode, telemetry and session-title
+generation disabled, at most two steps and one attempt per step, and the sole
+enabled tool `mcp__uap-kimi-native-a__inspect_runtime`. Builtins and B tools are
+not enabled. Public project add must complete before the first native service.
+
+Reuse the existing Python service and token quarantine, existing Go descendant
+supervision and harmless probe. Create the actual native session in A through
+REST, submit the exact configured model/manual prompt and poll its real approval
+and snapshot endpoints. Approve only the matching actual session, main agent,
+positive turn, provider call ID, qualified tool, action and nonce arguments.
+The decision omits scope, granting one call only. Require no probe tool call or
+marker before that approval. Unknown or repeated approvals fail.
+
+The scripted provider permits exactly two successful exchanges: one selected
+tool call, then a final sentinel only after the real tool result contains the
+expected fresh probe facts. Require native session/turn/tool-result identity,
+provider history, initialize/list/call PID/session/nonce correlation, marker and
+complete cleanup. Retain at most eight actual provider requests for failure
+diagnosis. The closed artifact admits only its fixed summary, installed A
+snapshots, optional probe events, redacted `python-api.json`, contiguous bounded
+provider requests and six complete command triples: `git-a`, `git-b`, `git-c`,
+`version`, `add-a`, `native-attempt`. Private provider and native bearer values
+are registered before capture and redacted before artifact admission.
+
+Every first capture deliberately fails with `runtime_attempt_complete=false`,
+`test_failed=true` and all five qualification flags false, even if it appears to
+complete. Actual raw approval/session/provider/probe grammar must be reviewed
+before a later separately reviewed integration into the full lifecycle. This
+attempt cannot inherit component-lifecycle success or claim vendor OAuth or
+real-model qualification.
+
+## Observed Darwin completed-process cleanup correction
+
+Genuine baseline [run 40367376473](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473),
+job [121728625314](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473/job/121728625314),
+at Gemini source `6f8ea1173b8b1d343688299b5864ee7c1e1a86d7` failed its
+inert capture contracts before vendor execution. The reported host is macOS
+15.7.9 / 24G830, image `macos-15-arm64` `20260907.0337.1`.
+The finite stdout child wrote 129 bytes against a 128-byte bound and exited.
+Final cleanup's original `killpg(pid, SIGKILL)` raised `PermissionError:
+[Errno 1] Operation not permitted` before the child wait and normal overflow
+receipt. The same head's Codex macOS job `121728625811` passed all 75 contracts.
+Neither that pass nor the later missing-artifact error qualifies the failed job.
+
+Apple's published macOS 15-era XNU tag `xnu-11417.140.69`, commit
+`43a90889846e00bfb5cf1d255cdc0a701a1e05a4`, explains a narrow possible race:
+`bsd/kern/kern_sig.c` blob `d32c03ce89f56531a419436fd0ef0e944e0d8331`
+filters zombie group members and returns POSIX EPERM when an existing group has
+no eligible live member. An unreaped, already exited sole leader can therefore
+produce this result. The actual log has no process-state telemetry; this is a
+source-backed timing inference, not an observed zombie state or a claim that
+this public source exactly matches the runner's kernel binary.
+
+Change only `scripts/native_client_research.py:kill_group` and its inert
+contracts. Preserve the first group-wide SIGKILL and existing missing-group
+handling. Capture the original numeric group ID before that call. If and only
+if the first call raises PermissionError, poll the original Popen child once.
+A still-live child preserves the original permission failure. After its exit
+is observed, issue one read-only signal-zero check against the identical
+original group ID. Accept only ProcessLookupError from that check, proving
+that the group is now absent. A successful check, repeated permission denial
+or another ordinary OS error preserves the original permission failure.
+Unexpected exceptions and interruption remain failures.
+
+The new refusal branch must not retry a destructive signal after reaping,
+signal a different group or individual child, escalate privileges, sleep,
+retry without a bound or suppress arbitrary EPERM. An extant, reused or
+unrepresentable group cannot become successful cleanup. In the same XNU
+snapshot, `bsd/kern/kern_fork.c` blob
+`9a6e5335a40d3a5acd390f5069ab2fa3b73cd784` reserves IDs against process,
+group and session identities; `bsd/kern/kern_proc.c` blob
+`060913ab13ed90608124e6b2c773911c2dc7ca1b` removes an empty group when
+destroyed. Reaping a sole leader may end that reservation. The signal-zero
+check avoids adding a destructive retry against a potentially reused ID.
+
+Keep the shared helper's existing callers, first cleanup attempt, five-second
+child wait, descendant handling, pipe closure, output caps, original deadlines
+and error receipts. Do not alter collector argv/environment, native admission,
+acquisition, trust, permissions, token quarantine, artifacts or qualification.
+The common service retains its independent normal-exit, process-group,
+closed-port and forced-cleanup refusal rules.
+
+Deterministic inert tests must prove: a live child refuses without an absence
+probe; an exited child checks the same group once; only a now-absent group is
+accepted; a present group, repeated EPERM and unrelated OS error preserve the
+original error; and this branch sends no second destructive signal. Retain the
+real-process exact EOF/overflow, separate-stream, inherited-pipe descendant,
+capture-interruption and non-POSIX import controls. Local Linux contracts do
+not qualify the observed macOS race; the original hosted macOS contract remains
+required. Two independent plan rounds precede implementation, followed by
+independent code review and exact-source validation.
 
 ## Completion gate
 
