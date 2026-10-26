@@ -834,6 +834,7 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 	}
 	seen, redirect, leaked, redirectSource := false, false, false, false
 	negotiated := ""
+	stages["http_request_contract"] = nativeStage{Status: "failed", Reason: "No declared-source POST RPC request observed"}
 	stages["generated_protocol_header_priority"] = nativeStage{Status: "not_evaluated", Reason: "No post-negotiation request with a generated protocol header observed"}
 	for _, line := range bytes.Split(b, []byte{'\n'}) {
 		if len(line) == 0 {
@@ -873,9 +874,11 @@ func nativeCheckHTTP(t *testing.T, f *nativeFixture, stages map[string]nativeSta
 				leaked = true
 			}
 		}
-		if !seen && strings.HasPrefix(e.URI, "/mcp?") {
+		// Streamable HTTP clients may probe with GET before their first RPC.
+		// Only the first declared-source POST can establish the request contract.
+		if !seen && e.Origin == "declared-source" && e.Method == "POST" && strings.HasPrefix(e.URI, "/mcp?") {
 			seen = true
-			if e.Method != "POST" || e.Probe != f.Nonce || e.Literal != "${UNKNOWN}" || e.URI != "/mcp?literal=%24%7BUNKNOWN%7D" {
+			if e.Method != "POST" || e.RPCMethod == "" || e.Probe != f.Nonce || e.Literal != "${UNKNOWN}" || e.URI != "/mcp?literal=%24%7BUNKNOWN%7D" {
 				stages["http_request_contract"] = nativeStage{Status: "failed", Reason: string(line)}
 			} else {
 				stages["http_request_contract"] = nativeStage{Status: "passed"}

@@ -7,6 +7,14 @@ on:
         description: Exact public Agentplugins release tag (agentplugins-vX.Y.Z)
         required: true
         type: string
+      qualified_run_id:
+        description: Successful exact draft qualification run containing the tested npm tarball
+        required: true
+        type: string
+      qualified_run_attempt:
+        description: Exact qualification run attempt
+        required: true
+        type: string
       publish:
         description: Publish the verified package to npm with trusted provenance
         required: true
@@ -26,7 +34,11 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     name: Verify release and stage npm package
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      attestations: read
+      actions: read
     outputs:
       version: ${{ steps.stage.outputs.version }}
       commit: ${{ steps.stage.outputs.commit }}
@@ -54,6 +66,7 @@ jobs:
           [[ "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "${GITHUB_REF}" = "refs/tags/${TAG}"
           commit="$(git rev-parse HEAD)"
+          test "${GITHUB_SHA}" = "${commit}"
           test "${commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
           git fetch --no-tags --force origin main:refs/remotes/origin/main
           git merge-base --is-ancestor "${commit}" refs/remotes/origin/main
@@ -70,39 +83,22 @@ jobs:
           for asset in "${RUNNER_TEMP}"/release-assets/agentplugins_* "${RUNNER_TEMP}/release-assets/checksums.txt" "${RUNNER_TEMP}/release-assets/release-manifest.json" "${RUNNER_TEMP}/release-assets/THIRD_PARTY_NOTICES.txt"; do
             gh attestation verify "${asset}" --repo "${GITHUB_REPOSITORY}" --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/agentplugins-release.yml" --source-digest "${commit}"
           done
-      - name: Stage and pack the exact npm facade
+      - name: Reuse the exact npm tarball proven on all six platforms
         id: stage
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}
+          QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}
         run: |
           set -euo pipefail
-          version="${TAG#agentplugins-v}"
-          stage="${RUNNER_TEMP}/agentplugins-npm-stage"
-          mkdir -p "${stage}"
-          cp -R npm/agentplugins/. "${stage}/"
-          node "${stage}/scripts/stage-release.js" "${stage}" "${RUNNER_TEMP}/release-assets" "${version}" "$(git rev-parse HEAD)" --evidence-root "${GITHUB_WORKSPACE}/docs"
-          (
-            cd "${stage}"
-            AGENTPLUGINS_STAGED_TEST_CHILD=1 \
-              AGENTPLUGINS_DETACHED_ASSERT_ROOT="${stage}" \
-              npm test
-          )
-          mkdir -p "${RUNNER_TEMP}/npm-tarball"
-          (cd "${stage}" && npm pack --ignore-scripts --json --pack-destination "${RUNNER_TEMP}/npm-tarball" > "${RUNNER_TEMP}/npm-tarball/pack.json")
-          tarball_file="$(jq -er 'if length == 1 then .[0].filename else error("expected one tarball") end' "${RUNNER_TEMP}/npm-tarball/pack.json")"
-          integrity="$(jq -er '.[0].integrity' "${RUNNER_TEMP}/npm-tarball/pack.json")"
-          shasum="$(jq -er '.[0].shasum' "${RUNNER_TEMP}/npm-tarball/pack.json")"
-          node npm/agentplugins/scripts/npm-public-contract.js stage-outputs "${RUNNER_TEMP}/npm-tarball/pack.json" "${GITHUB_OUTPUT}" "${version}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
-          echo "package_name=$(node -p 'require(process.argv[1]).name' "${stage}/package.json")" >> "${GITHUB_OUTPUT}"
-          echo "tarball_file=${tarball_file}" >> "${GITHUB_OUTPUT}"
-          echo "tarball_integrity=${integrity}" >> "${GITHUB_OUTPUT}"
-          echo "tarball_shasum=${shasum}" >> "${GITHUB_OUTPUT}"
-          if tar -tzf "${RUNNER_TEMP}/npm-tarball/${tarball_file}" | grep -Eq '(^/|(^|/)\.\.(\/|$))'; then
-            echo "unsafe tarball path" >&2
-            exit 1
-          fi
+          install -d -m 700 "${RUNNER_TEMP}/npm-tarball"
+          python3 scripts/reuse-agentplugins-npm-artifact.py \
+            --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "$(git rev-parse HEAD)" \
+            --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
+            --source "${GITHUB_WORKSPACE}" --output-dir "${RUNNER_TEMP}/npm-tarball"
+          metadata="${RUNNER_TEMP}/npm-tarball/npm-package.json"
+          jq -er '"version=\(.version)", "commit=\(.commit)", "package_name=\(.package_name)", "tarball_file=\(.tarball_file)", "tarball_integrity=\(.integrity)", "tarball_shasum=\(.shasum)"' "${metadata}" >> "${GITHUB_OUTPUT}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: agentplugins-npm-${{ steps.stage.outputs.version }}
