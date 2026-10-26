@@ -6,8 +6,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -207,13 +207,12 @@ func TestProjectNativeCLIPackageDigestMatchesInstallerFramingFromHeldBytes(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := (packagedigest.Builder{TempRoot: t.TempDir()}).Snapshot(context.Background(), root, domain.SourceIdentity{})
+	want, err := (packagesnapshot.Builder{}).Digest(context.Background(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer packagedigest.Remove(snapshot)
-	if got != snapshot.TreeDigest {
-		t.Fatalf("held installed package digest differs from real installer framing: %s %s", got, snapshot.TreeDigest)
+	if got != want {
+		t.Fatalf("held installed package digest differs from selected lifecycle framing: %s %s", got, want)
 	}
 	if err := os.Link(filepath.Join(root, "plugin.json"), filepath.Join(t.TempDir(), "alias")); err != nil {
 		t.Fatal(err)

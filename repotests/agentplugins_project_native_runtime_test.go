@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,10 +14,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"syscall"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 )
 
 // Shared held-file mechanics for the source-only native project suites.
@@ -61,7 +65,7 @@ func projectNativeRuntimeStableStat(left, right any) bool {
 	b, okB := right.(*syscall.Stat_t)
 	return okA && okB && a.Dev == b.Dev && a.Ino == b.Ino && a.Mode == b.Mode && a.Nlink == b.Nlink && a.Uid == b.Uid && a.Gid == b.Gid && a.Size == b.Size && a.Mtim == b.Mtim && a.Ctim == b.Ctim
 }
-func projectNativeRuntimeDigest(path string) (string, error) {
+func projectNativeRuntimeDigest(path string) (digest string, err error) {
 	if err := projectNativeRuntimeParents(path); err != nil {
 		return "", err
 	}
@@ -78,7 +82,11 @@ func projectNativeRuntimeDigest(path string) (string, error) {
 		return "", err
 	}
 	file := os.NewFile(uintptr(fd), path)
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
+			digest, err = "", fmt.Errorf("close immutable file: %w", closeErr)
+		}
+	}()
 	same := func(info os.FileInfo) bool {
 		return info != nil && os.SameFile(before, info) && info.Mode() == before.Mode() && info.Size() == before.Size() && info.ModTime().Equal(before.ModTime()) && projectNativeRuntimeStableStat(info.Sys(), before.Sys())
 	}
@@ -266,4 +274,100 @@ func projectNativeRuntimeSchema(v any) error {
 		return fmt.Errorf("probe required arguments")
 	}
 	return nil
+}
+
+func TestProjectNativeRuntimeValidationContracts(t *testing.T) {
+	t.Run("whole JSON and exact keys", func(t *testing.T) {
+		value, err := projectNativeRuntimeJSON([]byte(`{"required":1,"optional":"text"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		object := value.(map[string]any)
+		if err := projectNativeRuntimeKeys(object, "required", "optional"); err != nil {
+			t.Fatal(err)
+		}
+		if projectNativeRuntimeKeys(object, "required missing", "optional") == nil || projectNativeRuntimeKeys(object, "required", "") == nil {
+			t.Fatal("missing or unknown JSON field accepted")
+		}
+		for _, body := range []string{`{"required":1,"required":2}`, `{"nested":{"x":1,"x":2}}`, `{} {}`, `{"number":1e999}`} {
+			if _, err := projectNativeRuntimeJSON([]byte(body)); err == nil {
+				t.Fatalf("unsafe whole JSON accepted: %s", body)
+			}
+		}
+	})
+	t.Run("bounded scalar types", func(t *testing.T) {
+		if !projectNativeRuntimeText("abc", 3) || projectNativeRuntimeText("abcd", 3) || projectNativeRuntimeText("a\x00b", 3) || projectNativeRuntimeText(3, 3) {
+			t.Fatal("bounded text contract differs")
+		}
+		if !projectNativeRuntimeNumber(json.Number("2"), 1, 3, true) || !projectNativeRuntimeNumber(json.Number("2.5"), 1, 3, false) {
+			t.Fatal("valid exact numeric type rejected")
+		}
+		for _, value := range []any{2, "2", json.Number("0"), json.Number("4"), json.Number("2.5"), json.Number("NaN"), json.Number("1e999")} {
+			if projectNativeRuntimeNumber(value, 1, 3, true) {
+				t.Fatalf("invalid bounded integer accepted: %v", value)
+			}
+		}
+	})
+	t.Run("canonical probe argument schema", func(t *testing.T) {
+		body := []byte(`{"type":"object","properties":{"nonce":{"type":"string"},"operation":{"type":"string"},"marker":{"type":"string"}},"required":["nonce"],"additionalProperties":false}`)
+		value, err := projectNativeRuntimeJSON(body)
+		if err != nil || projectNativeRuntimeSchema(value) != nil {
+			t.Fatalf("canonical probe schema rejected: %v", err)
+		}
+		for _, kind := range []string{"extra", "additional", "required", "property"} {
+			value, err := projectNativeRuntimeJSON(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			object := value.(map[string]any)
+			switch kind {
+			case "extra":
+				object["extra"] = true
+			case "additional":
+				object["additionalProperties"] = true
+			case "required":
+				object["required"] = []any{"nonce", "marker"}
+			case "property":
+				object["properties"].(map[string]any)["nonce"] = map[string]any{"type": "string", "description": "unknown"}
+			}
+			if projectNativeRuntimeSchema(object) == nil {
+				t.Fatalf("noncanonical probe %s schema accepted", kind)
+			}
+		}
+	})
+}
+
+// The public non-facade lifecycle records packagesnapshot framing for installed
+// managed objects. Source PackageSnapshot.TreeDigest retains its separate v1
+// framing. Inputs here are previously bounded, held ordinary-file captures.
+func projectNativeRuntimeInstalledDigest(ctx context.Context, captured []packagedigest.CapturedEntry) (string, error) {
+	if _, err := packagedigest.DigestCaptured(ctx, captured); err != nil {
+		return "", err
+	}
+	items := append([]packagedigest.CapturedEntry(nil), captured...)
+	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+	hash := sha256.New()
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		kind := "file"
+		switch item.Kind {
+		case "directory":
+			kind = "dir"
+		case "file":
+		default:
+			return "", fmt.Errorf("installed package capture requires ordinary files/directories")
+		}
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%d\x00", kind, item.Path, item.Executable, len(item.Content))
+		for body := item.Content; len(body) > 0; {
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
+			n := min(len(body), 32*1024)
+			_, _ = hash.Write(body[:n])
+			body = body[n:]
+		}
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }

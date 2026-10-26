@@ -185,6 +185,12 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 			if err != nil {
 				return client, err
 			}
+		} else if client.ClientID == domain.ClientWindsurf && primaryDevinExecutable(client.ExecutablePath) {
+			var err error
+			environment, err = detector.devinVersionEnvironment()
+			if err != nil {
+				return client, err
+			}
 		}
 		var version string
 		var err error
@@ -196,7 +202,7 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 			version, err = detector.ProbeVersionWithEnvironment(ctx, client.ExecutablePath, environment)
 		}
 		// A legacy probe cannot carry profile authority. Leave the version unknown
-		// rather than invoking Codex against a different or ambient profile.
+		// rather than invoking a native client against a different or ambient profile.
 		if err == nil {
 			client.Version = normalizeVersion(version)
 		}
