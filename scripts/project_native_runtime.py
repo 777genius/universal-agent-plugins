@@ -38,6 +38,10 @@ CASES = {
              "file": "repotests/agentplugins_kimi_project_native_lifecycle_test.go",
              "optin": "AGENTPLUGINS_KIMI_PROJECT_NATIVE_E2E", "seconds": 900,
              "phase": "installed-components-lifecycle"},
+    "kimi-call": {"test": "TestAgentpluginsKimiNativeProjectRuntimeAttempt",
+                  "file": "repotests/agentplugins_kimi_project_native_attempt_test.go",
+                  "optin": "AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
+                  "phase": "installed-single-tool-attempt"},
     "qoder": {"test": "TestAgentpluginsQoderNativeProjectRuntimeAttempt",
               "file": "repotests/agentplugins_qoder_project_native_attempt_test.go",
               "optin": "AGENTPLUGINS_QODER_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
@@ -61,6 +65,7 @@ KIMI_COMMANDS = ("git-a", "git-b", "git-c", "version", "add-user", "add-a", "add
                  "update-a", "missing-repair-a", "remove-a", "repeat-remove-a")
 CLI_COMMANDS = ("git-a", "git-b", "version", "add-a", "native-attempt")
 CLINE_COMMANDS = ("git-a", "git-b", "version", "add-a")
+KIMI_CALL_COMMANDS = ("git-a", "git-b", "git-c", "version", "add-a", "native-attempt")
 CLINE_ENV = frozenset("HOME USERPROFILE XDG_CONFIG_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_DATA_HOME "
     "NPM_CONFIG_CACHE NPM_CONFIG_USERCONFIG NPM_CONFIG_GLOBALCONFIG GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM "
     "GIT_TERMINAL_PROMPT PATH TMPDIR LANG NO_COLOR TERM GITHUB_ACTIONS RUNNER_ENVIRONMENT "
@@ -220,7 +225,8 @@ def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
-    for label in CLI_COMMANDS:
+    commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
+    for label in commands:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple
         if set(bodies) & triple and not triple <= set(bodies):
@@ -324,6 +330,50 @@ def cline_members(bodies, source):
     return result
 
 
+def kimi_call_members(bodies, source):
+    if any(b"uap-kimi-key-" in body for body in bodies.values()):
+        raise ValueError("unredacted Kimi fixture provider key refused")
+    allowed = {"runtime-attempt.json", "probe-events.jsonl", "python-api.json",
+               ".kimi-code-mcp.json.installed", "uap-kimi-native-a-SKILL.md.installed"}
+    allowed |= {f"provider-request-{number}.json" for number in range(1, 9)}
+    for label in KIMI_CALL_COMMANDS:
+        triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+        allowed |= triple
+        if set(bodies) & triple and not triple <= set(bodies):
+            raise ValueError("incomplete Kimi single-call command evidence")
+        if triple <= set(bodies):
+            row = strict_json(bodies[label + ".command.json"])
+            if (not isinstance(row, dict) or set(row) != {"argv", "cwd", "exit", "error", "deadline", "cleanup"}
+                    or not isinstance(row["argv"], list) or not row["argv"]
+                    or any(not isinstance(value, str) for value in row["argv"])
+                    or not isinstance(row["cwd"], str) or type(row["exit"]) is not int
+                    or type(row["error"]) is not bool or type(row["deadline"]) is not bool
+                    or row["cleanup"] != "ordinary full-descendant supervision; forced termination fails"):
+                raise ValueError("Kimi single-call command receipt differs")
+    if "runtime-attempt.json" not in bodies or set(bodies) - allowed:
+        raise ValueError("unrecorded Kimi single-call evidence member")
+    result = strict_json(bodies["runtime-attempt.json"])
+    if (not isinstance(result, dict) or result.get("client") != "kimi" or result.get("version") != "2.3.2"
+            or result.get("phase") != "installed-single-tool-attempt" or result.get("activation") != "prepared"
+            or result.get("provider_kind") != "scripted-openai-chat-completions"
+            or result.get("runtime_attempt_complete") is not False or result.get("test_failed") is not True
+            or result.get("vendor_authentication_qualified") is not False or result.get("real_model_qualified") is not False
+            or type(result.get("elapsed_ms")) is not int or result["elapsed_ms"] < 0):
+        raise ValueError("initial Kimi single-call capture must remain explicitly unqualified")
+    qualification = result.get("qualification")
+    if (not isinstance(qualification, dict) or set(qualification) != set(shared.QUALIFICATION_CASES)
+            or any(value is not False for value in qualification.values())):
+        raise ValueError("Kimi single-call capture cannot inherit lifecycle qualifications")
+    if result.get("source_identity") != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
+                                        "installer_source_state": "committed", "installer_patch_sha256": []}:
+        raise ValueError("Kimi single-call source identity differs")
+    numbers = sorted(int(name.removeprefix("provider-request-").removesuffix(".json"))
+                     for name in bodies if name.startswith("provider-request-"))
+    if numbers != list(range(1, len(numbers) + 1)):
+        raise ValueError("Kimi provider request capture sequence has gaps")
+    return result
+
+
 def admit_runtime(path, client, source):
     body = ordinary_bytes(path, MAX_ZIP)
     bodies, total = {}, 0
@@ -346,7 +396,9 @@ def admit_runtime(path, client, source):
             value.decode("utf-8", errors="strict")
             bodies[name] = value
             total += len(value)
-    if client == "cline":
+    if client == "kimi-call":
+        result = kimi_call_members(bodies, source)
+    elif client == "cline":
         result = cline_members(bodies, source)
     elif client == "kimi":
         result = kimi_members(bodies, source)
@@ -359,13 +411,16 @@ def admit_runtime(path, client, source):
 
 def selected_cases():
     rows = []
-    for client, case in CASES.items():
+    for selector, case in CASES.items():
+        client = "kimi" if selector == "kimi-call" else selector
         leaf, test = SOURCE / "scripts/project_native_collectors" / (client + ".py"), SOURCE / case["file"]
         if not leaf.exists() or not test.exists():
             continue
+        if selector == "kimi-call" and not (SOURCE / "scripts/project_native_collectors/kimi_attempt.py").exists():
+            continue
         if not re.search(r"(?m)^func " + re.escape(case["test"]) + r"\(t \*testing.T\) \{", test.read_text()):
             raise ValueError("declared exact native test is absent")
-        rows.append({"client": client, "phase": case["phase"]})
+        rows.append({"client": selector, "phase": case["phase"]})
     return {"include": rows}
 
 
@@ -385,10 +440,12 @@ def freeze(path, identities, limit=256 << 20):
     return {"path": str(path), "bytes": len(body), "sha256": digest}
 
 
-def prepare(client, ctx):
+def prepare(selector, ctx):
     # This method performs only Git source queries before the checked compiler
     # or any acquired client can be executed.
     ctx.source_and_projects()
+    case = CASES[selector]
+    client = "kimi" if selector == "kimi-call" else selector
     leaf = shared.adjacent("project_native_runtime_leaf_" + client, "project_native_collectors/" + client + ".py")
     if leaf.CLIENT != client or getattr(leaf, "ACQUISITION_ONLY", False):
         raise ValueError("unreviewed native client")
@@ -474,7 +531,7 @@ def prepare(client, ctx):
                          "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": scanner_receipt["sha256"],
                          "AGENTPLUGINS_" + client.upper() + "_BIN": str(binary),
                          "AGENTPLUGINS_PROJECT_NATIVE_IDENTITY": str(identity_path),
-                         "AGENTPLUGINS_PROJECT_NATIVE_OUTPUT": str(native_output), CASES[client]["optin"]: "1"})
+                         "AGENTPLUGINS_PROJECT_NATIVE_OUTPUT": str(native_output), case["optin"]: "1"})
     selected_env["PLUGIN_KIT_AI_REPO_ROOT"] = str(SOURCE)
     if client == "kimi":
         python = Path("/usr/bin/python3").resolve(strict=True)
@@ -679,7 +736,7 @@ def run(client, output):
         raise ValueError("fresh canonical output outside checkout required")
     output.mkdir(mode=0o700, parents=True)
     case = CASES[client]
-    summary = {"client": client, "phase": case["phase"], "commands": [], "cases": [],
+    summary = {"client": "kimi" if client == "kimi-call" else client, "phase": case["phase"], "commands": [], "cases": [],
                "qualification": {name: False for name in shared.QUALIFICATION_CASES},
                "build_complete": False, "test_selected": False, "test_passed": False,
                "runtime_artifact_admitted": False, "collection_complete": False}

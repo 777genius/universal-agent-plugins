@@ -972,6 +972,78 @@ an apparently successful exchange, fails pending independent review of actual
 native/provider/probe bytes. All five qualifications, vendor authentication and
 real-model flags remain false until a later reviewed full lifecycle proves them.
 
+## Qoder receipt-selected catalog observation
+
+Genuine pinned Qoder 1.1.78 help in
+[run 40342548512](https://github.com/777genius/universal-agent-plugins/actions/runs/40342548512),
+artifact `12664571770` (SHA-256
+`7f00bd2c8f8cf54409fa464658b394a44bc10020a1e92874f4e333c45aedbc11`),
+advertises `plugins list --json --plugin-dir <dirs...>`. The independently
+reviewed amendment adds exactly that read-only command with the actual
+receipt-selected closed import view, cwd A and a 30-second ceiling inside the
+existing 150-second work / 180-second total deadline. It runs after public add
+and before the existing restricted headless attempt. There is no global import,
+registration, profile relocation or new provider permission.
+
+Freeze the complete original `HOME/.qoder` subtree immediately before and after
+this catalog command: entry membership, directories, full modes, original UID,
+single-link ordinary files and held byte digests; bound it to 4,096 entries,
+32 levels and 256 MiB. Any change, including a new cache file or empty directory,
+fails. Require exit zero, empty stderr and strict whole JSON object/array, while
+leaving its unobserved catalog schema opaque. The Qoder-only `native-catalog`
+command triple is the sole additional frontend member set. Other clients retain
+the original five labels. Raw capture remains an intentional failed initial
+attempt with all five qualifications false until independently interpreted.
+
+## Kimi separate installed single-tool attempt
+
+Preserve the existing 900-second Kimi component lifecycle. Register the separate
+fixed selector `kimi-call`, exact
+`TestAgentpluginsKimiNativeProjectRuntimeAttempt` and
+`AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT=1` only when its own test and
+`kimi_attempt.py` observer exist. Its actual client and acquisition identity
+remain `kimi` 2.3.2; the phase is `installed-single-tool-attempt`, with an original
+180-second total / 150-second work / 30-second cleanup budget. One native service
+phase has at most 60 seconds including the existing five-second reap reserve.
+Neither phase can reset or borrow the other test's deadline.
+
+Two independent plan rounds reviewed nineteen exact source blobs at
+[`b8dd3a134060c6e80ba4a1659335cd63b68483f2`](https://github.com/MoonshotAI/kimi-code/tree/b8dd3a134060c6e80ba4a1659335cd63b68483f2),
+including the [native server API](https://github.com/MoonshotAI/kimi-code/blob/b8dd3a134060c6e80ba4a1659335cd63b68483f2/docs/en/reference/server-api.md),
+tool naming/policy, session/prompt/approval routes, and the OpenAI provider
+request/stream implementation. Author only the supported original-user
+configuration: one literal-loopback OpenAI-compatible test provider with a
+private fixture credential, manual permission mode, telemetry and session-title
+generation disabled, at most two steps and one attempt per step, and the sole
+enabled tool `mcp__uap-kimi-native-a__inspect_runtime`. Builtins and B tools are
+not enabled. Public project add must complete before the first native service.
+
+Reuse the existing Python service and token quarantine, existing Go descendant
+supervision and harmless probe. Create the actual native session in A through
+REST, submit the exact configured model/manual prompt and poll its real approval
+and snapshot endpoints. Approve only the matching actual session, main agent,
+positive turn, provider call ID, qualified tool, action and nonce arguments.
+The decision omits scope, granting one call only. Require no probe tool call or
+marker before that approval. Unknown or repeated approvals fail.
+
+The scripted provider permits exactly two successful exchanges: one selected
+tool call, then a final sentinel only after the real tool result contains the
+expected fresh probe facts. Require native session/turn/tool-result identity,
+provider history, initialize/list/call PID/session/nonce correlation, marker and
+complete cleanup. Retain at most eight actual provider requests for failure
+diagnosis. The closed artifact admits only its fixed summary, installed A
+snapshots, optional probe events, redacted `python-api.json`, contiguous bounded
+provider requests and six complete command triples: `git-a`, `git-b`, `git-c`,
+`version`, `add-a`, `native-attempt`. Private provider and native bearer values
+are registered before capture and redacted before artifact admission.
+
+Every first capture deliberately fails with `runtime_attempt_complete=false`,
+`test_failed=true` and all five qualification flags false, even if it appears to
+complete. Actual raw approval/session/provider/probe grammar must be reviewed
+before a later separately reviewed integration into the full lifecycle. This
+attempt cannot inherit component-lifecycle success or claim vendor OAuth or
+real-model qualification.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
