@@ -18,7 +18,7 @@ import (
 
 // Source: google-gemini/gemini-cli@6006c14a4decfe4b891c6263ad6ad5992e404b5b,
 // packages/core/src/tools/tools.ts blob ab2870984aba77e77fc5bacb25009cd47698582e.
-const geminiProjectWaitDescription = "Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true whe."
+const geminiProjectWaitDescription = "Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools."
 const geminiProjectModel = "gemini-2.5-flash"
 
 func geminiProjectContents(value any, tool, id string, args map[string]any) ([]map[string]any, error) {

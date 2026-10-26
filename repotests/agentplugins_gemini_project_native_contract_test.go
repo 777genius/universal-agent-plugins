@@ -144,19 +144,37 @@ func geminiProjectContractBody(t *testing.T, value any) []byte {
 func TestGeminiProjectNativeSchemaAcceptsOnlyExactVendorWaitProperty(t *testing.T) {
 	p := newGeminiProjectProvider("nonce", "private-fixture-key", func(string) error { return nil })
 	args := map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}
-	for _, kind := range []string{"valid", "unknown", "different-wait", "missing-wait", "foreign-tool"} {
+	// Independent bytes from native artifact 12677916698/provider-request-1.json
+	// and pinned tools.ts blob ab2870984aba77e77fc5bacb25009cd47698582e.
+	const observedDescription = "Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools."
+	for _, kind := range []string{"valid", "unknown", "different-wait", "truncated-wait", "missing-description", "wrong-type", "extra-wait-key", "missing-wait", "foreign-tool", "unknown-schema-key", "missing-schema-field"} {
 		m := geminiProjectContractRequest(p)
 		function := m["tools"].([]any)[0].(map[string]any)["functionDeclarations"].([]any)[0].(map[string]any)
-		properties := function["parametersJsonSchema"].(map[string]any)["properties"].(map[string]any)
+		schema := function["parametersJsonSchema"].(map[string]any)
+		properties := schema["properties"].(map[string]any)
+		wait := properties["wait_for_previous"].(map[string]any)
+		wait["description"] = observedDescription
 		switch kind {
 		case "unknown":
 			properties["extra"] = map[string]any{"type": "string"}
 		case "different-wait":
-			properties["wait_for_previous"].(map[string]any)["description"] = "changed"
+			wait["description"] = "changed"
+		case "truncated-wait":
+			wait["description"] = "Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true whe."
+		case "missing-description":
+			delete(wait, "description")
+		case "wrong-type":
+			wait["type"] = "string"
+		case "extra-wait-key":
+			wait["extra"] = true
 		case "missing-wait":
 			delete(properties, "wait_for_previous")
 		case "foreign-tool":
 			function["name"] = "mcp_uapgeminib_inspect_runtime"
+		case "unknown-schema-key":
+			schema["extra"] = true
+		case "missing-schema-field":
+			delete(schema, "required")
 		}
 		_, err := geminiProjectRequest(geminiProjectContractBody(t, m), p.tool, p.id, args, false)
 		if (err == nil) != (kind == "valid") {
