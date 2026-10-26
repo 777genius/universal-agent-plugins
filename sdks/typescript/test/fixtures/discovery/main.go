@@ -1,3 +1,5 @@
+//go:build go1.25
+
 // An owned transport fixture; it never installs extensions or starts clients.
 package main
 
@@ -20,7 +22,7 @@ func main() {
 	mode := strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe")
 	if mode == "hang" {
 		signal.Ignore(syscall.SIGTERM)
-		if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), "pid"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+		if err := writePID(); err != nil {
 			os.Exit(3)
 		}
 		time.Sleep(time.Minute)
@@ -68,4 +70,17 @@ func main() {
 	if mode == "trailing" {
 		fmt.Println("private trailing output")
 	}
+}
+
+func writePID() error {
+	root, err := os.OpenRoot(os.Getenv("HOME"))
+	if err != nil {
+		return err
+	}
+	writeErr := root.WriteFile("pid", []byte(strconv.Itoa(os.Getpid())), 0600)
+	closeErr := root.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
 }
