@@ -28,10 +28,13 @@ class FakeContext:
     def __init__(self, replacement=None):
         self.phase = "help"
         self.calls = []
+        self.env = {}
+        self.environments = []
         self.replacement = replacement or {}
 
     def probe(self, label, arguments, project="a", extra_env=None, timeout=30):
         self.calls.append((label, arguments, project, extra_env, timeout))
+        self.environments.append(dict(self.env))
         command = next(command for name, _, command in kimi.PROBES if name == label)
         default = ({"exit": 0, "error": None}, b"2.3.2\n" if command is None else help_body(command), b"")
         return self.replacement.get(label, default)
@@ -221,6 +224,17 @@ class ApiContext(FakeContext):
 
 
 class KimiCollectorTests(unittest.TestCase):
+    def test_literal_update_opt_out_precedes_first_child_without_ambient_auth(self):
+        ctx = FakeContext()
+        ctx.env = {"HOME": "/controlled/original-home"}
+        with patch.dict(os.environ, {"KIMI_CODE_NO_AUTO_UPDATE": "ambient-canary",
+                                     "KIMI_API_KEY": "private-canary"}):
+            kimi.collect(ctx)
+        self.assertTrue(ctx.environments)
+        self.assertTrue(all(env == {"HOME": "/controlled/original-home",
+                                    "KIMI_CODE_NO_AUTO_UPDATE": "1"}
+                            for env in ctx.environments))
+
     def test_installed_catalog_requires_exact_unmodified_receipt_config(self):
         expected = {"name": "uap-kimi-native-a", "origin": "/owned/A/.kimi-code/mcp.json",
                     "config": {"transport": "stdio", "command": "/owned/managed/launcher",

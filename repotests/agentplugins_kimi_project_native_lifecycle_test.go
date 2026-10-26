@@ -94,7 +94,7 @@ func (f *kimiProjectNativeFixture) check(t *testing.T) {
 }
 
 func (f *kimiProjectNativeFixture) env() []string {
-	return append(f.base.env(filepath.Dir(f.client)), "NO_COLOR=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
+	return append(f.base.env(filepath.Dir(f.client)), "NO_COLOR=1", "KIMI_CODE_NO_AUTO_UPDATE=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
 }
 
 func (f *kimiProjectNativeFixture) command(t *testing.T, label, cwd string, env, argv []string, timeout time.Duration, absent bool) ports.CommandResult {

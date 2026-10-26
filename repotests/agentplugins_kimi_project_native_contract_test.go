@@ -31,6 +31,28 @@ func TestKimiProjectNativeWholeJSONRemainsBoundedAndExact(t *testing.T) {
 	}
 }
 
+func TestKimiProjectNativeEnvironmentKeepsOriginalHomeAndLiteralUpdateOptOut(t *testing.T) {
+	t.Setenv("KIMI_CODE_NO_AUTO_UPDATE", "ambient-canary")
+	t.Setenv("KIMI_API_KEY", "private-canary")
+	root := t.TempDir()
+	home := filepath.Join(root, "original-home")
+	f := &kimiProjectNativeFixture{base: &nativeFixture{Root: root, Home: home}, client: filepath.Join(root, "client", "kimi")}
+	environment := map[string]string{}
+	for _, entry := range f.env() {
+		key, value, found := strings.Cut(entry, "=")
+		if !found {
+			t.Fatal("malformed controlled environment entry")
+		}
+		environment[key] = value
+		if strings.Contains(value, "canary") {
+			t.Fatal("ambient updater or credential entered native environment")
+		}
+	}
+	if environment["HOME"] != home || environment["USERPROFILE"] != home || environment["KIMI_CODE_NO_AUTO_UPDATE"] != "1" {
+		t.Fatal("original-home authority or literal update opt-out differs")
+	}
+}
+
 func TestKimiProjectNativeMCPRequiresIndependentReceiptAndSourceAuthority(t *testing.T) {
 	p := &kimiProjectNativePackage{Revision: "a-two", Data: "/owned/project/.uap/plugin-data/a", Binding: domain.ClientBinding{TargetLocator: "/owned/project/.uap/managed/a"}}
 	active := p.Binding.TargetLocator

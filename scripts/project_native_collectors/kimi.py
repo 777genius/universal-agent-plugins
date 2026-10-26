@@ -607,6 +607,7 @@ def collect(ctx):
     """Use only the explicitly selected reviewed phase; never imply runtime use."""
     if ctx.phase not in ("help", "observe"):
         raise ValueError("Kimi collector requires an explicit help or observe phase")
+    ctx.env["KIMI_CODE_NO_AUTO_UPDATE"] = "1"
     result = _help(ctx)
     if ctx.phase == "observe":
         result["observations"]["kimi-web-api"] = _observe(ctx)
@@ -839,7 +840,7 @@ def _installed_main(request_path):
     ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-api",
                    "commands": [], "qualification": {"mcp-tools-call": False}}
     ctx.env = shared.legacy.runtime_environment(home, root / "tmp")
-    ctx.env.update({"NO_COLOR": "1", "TERM": "dumb"})
+    ctx.env.update({"NO_COLOR": "1", "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"})
     with shared.Budget(65) as budget:
         ctx.budget = budget
         ctx.summary["observations"] = observe_installed(ctx, value["observation"])
