@@ -532,6 +532,37 @@ execution; publish post-native streams through the original directory identity
 and no-follow descriptors. Unknown files, replaced directories, incomplete
 stages, forced cleanup, or late results cannot qualify.
 
+### Observed VS Code first-launch settings correction
+
+Trusted run [40359430087](https://github.com/777genius/universal-agent-plugins/actions/runs/40359430087)
+at source tree `e3ca3a42425acbf8777495ead681d5de2d8057e7` completed pinned
+preparation but failed the first `empty-a` stage. Artifact `12667643294`
+reports only the native dialog `Welcome to Visual Studio Code` during workspace
+trust, changed protected user `settings.json` bytes and unproved teardown.
+All five qualification flags remain false; no runtime lifecycle is inferred.
+
+Before rerunning, author two current settings in the fresh original user profile:
+`workbench.welcomePage.experimentalOnboarding=false` and
+`extensions.autoUpdate="off"`. At the exact pinned publisher commit,
+`startupPage.ts` blob `777f3ad872c6de562252c1635e423c63692a3225` honors the
+onboarding setting before opening the optional welcome modal;
+`gettingStarted.contribution.ts` blob `067580a4b11550f219f8031d4c9b3827c140121c`
+registers that boolean. `extensions.contribution.ts` blob
+`695859cadf68c11ffc5d7a94c3d4a5302343aa3f` accepts the current `"off"` value
+without migrating it, while the old fixture boolean `false` triggers a native
+rewrite to `"off"`. This source-supported correction does not establish that
+the migration was the sole cause of the observed protected-byte difference.
+
+Freeze these authored bytes before the first native child using the existing
+strict inventory. Do not adopt a post-native settings baseline. Preserve the
+exact workspace/MCP trust UI, updater suppression, normal Electron sandbox,
+ordinary-user isolation, process primitive, source pins, deadlines and closed
+artifact inventory. Do not add a welcome-dialog action, authentication step or
+cleanup exception. Run the existing inert controller contracts, then rerun the
+exact trusted lifecycle on genuine hosted Ubuntu 22.04. Any remaining native
+settings change, unknown UI or cleanup failure still fails and requires its own
+observed diagnosis. Two independent plan-review rounds precede implementation.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for

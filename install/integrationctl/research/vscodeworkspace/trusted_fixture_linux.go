@@ -219,8 +219,9 @@ func (c *controller) trustedFixtures() error {
 			return err
 		}
 	}
-	settings := map[string]any{"update.mode": "none", "telemetry.telemetryLevel": "off", "extensions.autoUpdate": false,
+	settings := map[string]any{"update.mode": "none", "telemetry.telemetryLevel": "off", "extensions.autoUpdate": "off",
 		"extensions.autoCheckUpdates": false, "workbench.startupEditor": "none", "window.restoreWindows": "none",
+		"workbench.welcomePage.experimentalOnboarding": false,
 		"security.workspace.trust.enabled": true, "chat.mcp.autostart": "never"}
 	if err := c.trustedJSON(filepath.Join(f.Profile, "User", "settings.json"), settings); err != nil {
 		return err
