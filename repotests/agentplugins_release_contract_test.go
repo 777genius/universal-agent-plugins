@@ -3,6 +3,7 @@ package pluginkitairepo_test
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -195,8 +196,9 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		mustContain(t, npmPrepareJob, want)
 	}
 	mustAppearBefore(t, npmPrepareJob, "release-assets.js verify", "scripts/reuse-agentplugins-npm-artifact.py")
-	mustNotContain(t, npmPrepareJob, "npm test")
-	mustNotContain(t, npmPrepareJob, "npm pack")
+	if regexp.MustCompile(`(?m)^\s*(?:run:\s*)?npm\s+(?:test|pack)(?:\s|$)`).MatchString(npmPrepareJob) {
+		t.Fatal("npm publication preparation must reuse the qualified archive without testing or repacking")
+	}
 	mustNotContain(t, npmPrepareJob, "stage-release.js")
 	for _, want := range []string{
 		"needs: prepare",

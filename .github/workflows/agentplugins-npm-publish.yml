@@ -66,6 +66,7 @@ jobs:
           [[ "${TAG}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "${GITHUB_REF}" = "refs/tags/${TAG}"
           commit="$(git rev-parse HEAD)"
+          test "${GITHUB_SHA}" = "${commit}"
           test "${commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
           git fetch --no-tags --force origin main:refs/remotes/origin/main
           git merge-base --is-ancestor "${commit}" refs/remotes/origin/main
