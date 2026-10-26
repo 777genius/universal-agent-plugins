@@ -405,17 +405,22 @@ Freeze one minimal lock with the reviewed Node 24.21.0 archive and these package
 
 | Package | Version | Integrity |
 | --- | --- | --- |
-| typescript | 5.9.3 | sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw== |
+| @typescript/typescript-linux-x64 | 7.0.2 | sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A== |
 | @types/node | 22.20.1 | sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q== |
 | undici-types | 6.21.0 | sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ== |
 | playwright-core | 1.64.1 | sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ== |
 
-TypeScript 5.9.3 deliberately replaces the earlier 7.0.2 candidate: the retained
-skills-picker lock pins its JavaScript compiler, avoiding a new native compiler
-companion. Use exact verified Node/npm distribution bytes and
+The 2026-10-26 continuation honors the owner's TypeScript 7.0.2 minimum. Use the
+official Linux-x64 compiler package directly, with no wrapper or optional
+platform fallback. Its exact regular `lib/tsc` is 24,101,026 bytes, SHA256
+`4f2de678286401759b3fb4475bafe35b8f32b4b3a07d92642bbf37eadc9b34a4`.
+The official package integrity, binary identity and complete build-only library
+closure are checked before and after compilation. This amendment received two
+independent plan reviews; it does not change the old untrusted observer.
+Use exact verified Node/npm distribution bytes and
 `npm ci --ignore-scripts --no-audit --no-fund` in a temporary tool directory
 before native network isolation. No ambient compiler/npm, lifecycle scripts or
-browser downloads. Compile tracked TypeScript with `typescript/bin/tsc`, strict
+browser downloads. Compile tracked TypeScript with the pinned `lib/tsc`, strict
 ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
 The VS Code declarations are build-only files from the exact publisher commit:
 `vscode.d.ts` (742,500 bytes, Git blob `bd520cf7bb88454e99bd15da13c6b9c6ac56fd65`),
@@ -478,7 +483,7 @@ invent extra probe arguments or returned fields. Admit initialize/list/call only
 through the vendor gateway. Keep endpoint/session secrets private.
 
 Select exact `TestAgentpluginsVSCodeNativeProjectGatewayLifecycle` for the
-existing required full A/B/user public install/no-op/update/pinned repair/restart/
+existing required full A/B/user public install/no-op/update/local-source repair/restart/
 remove/repeat-remove sequence and the five `vscode.*` qualification IDs above.
 New observer sources live in `scripts/vscode-project-runtime-observer/`; the
 native test lives in `repotests/agentplugins_vscode_project_native_gateway_test.go`.
@@ -497,6 +502,35 @@ final cleanup also proves Xvfb/display assets removed. Legacy 420/480-second
 limits remain unchanged. Missing protocol, identity, native UI or cleanup fails.
 This is only a trusted development-host/proposed-API path, not model/OAuth or
 released-client qualification.
+
+The original monotonic origin is established before acquisition and compilation
+and is passed unchanged into the controller. Trusted root return and terminal
+capture bounds are 870/880 seconds; the final envelope remains within 900.
+Only the newly owned network namespace has loopback brought up, before dropping
+to the original ordinary UID/GID and verifying zero capabilities/NNP again.
+The sealed driver receives one closed stdin request, writes an exclusive READY
+challenge after the exact native trust/MCP interactions, and consumes the
+observer's atomic result. It keeps its leader alive until the existing strict
+planned-shutdown helper closes stdin. It never opens another browser or invokes
+the probe directly. Failure diagnostics are bounded to visible native dialog
+titles/messages and quick-pick labels, with URL/opaque values removed.
+
+For the original user, the existing public adapter remains Prepared; record
+`user_native_install_qualified=false`. Preserve a separately pre-existing native
+user skill sentinel through the real skill API without claiming that the public
+user add created it. Freeze authored sources before any native process and
+freeze the public user receipt/package/data immediately after its add. The A/B
+project assertions use exact ownership objects, independently computed installed
+skill/config digests, package/source identity, and fresh probe sessions. The
+missing-component repair keeps the selected local input unchanged at revision
+two. The separate existing TLS composed-source tests retain moving-source and
+recorded-pin coverage; the native local fixture does not claim that property.
+
+Frontend preparation and native evidence use separate flat closed ZIPs, each
+under the existing admission limits. Hold the preparation digest across native
+execution; publish post-native streams through the original directory identity
+and no-follow descriptors. Unknown files, replaced directories, incomplete
+stages, forced cleanup, or late results cannot qualify.
 
 ## Gemini and Copilot runtime-attempt amendment
 
@@ -825,6 +859,360 @@ and recorded-pin behavior remains separately required in
 `TestProjectCopilotComposedSavedLifecycle`; it is not attributed to these native
 local-directory observations. The checked source-root override and canonical
 Python executable are explicit inputs, with no ambient auth or loader variables.
+
+## Qoder, Grok, Kiro and Devin installed-startup attempts
+
+Two independent plan rounds and implementation reviews admit the finite shared
+`agentplugins_project_native_cli_attempt_test.go` helper and four thin client
+wrappers. Select only `TestAgentpluginsQoderNativeProjectRuntimeAttempt`,
+`TestAgentpluginsGrokNativeProjectRuntimeAttempt`,
+`TestAgentpluginsKiroNativeProjectRuntimeAttempt` and
+`TestAgentpluginsDevinNativeProjectRuntimeAttempt`. The last uses the public
+`windsurf` target, `AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT`, and the
+`agentplugins_windsurf_project_native_attempt_test.go` leaf. Each attempt keeps
+one original 180-second total, 150-second work and 30-second cleanup budget.
+
+Use exact already pinned archives, full regular runtime closure, actual hosted
+Linux admission and the real public local-directory project add. Qoder and Grok
+install skill-only packages; Kiro and Devin also install the harmless stdio
+probe through the production managed launcher. Independently validate selected
+source, package, Prepared binding, native ownership paths/digests, complete
+Qoder import-view inventory, and exact native command/arguments/environment
+against recorded package and data authority. No direct native configuration
+replacement or user-profile relocation is permitted.
+
+Qoder's measured help explicitly defines `--tools ''` as disabling all tools.
+Grok's pinned public command-source snapshot instead parses an empty `--tools`
+as no selector, so that option is not used. Its source-guided attempt uses
+`--deny ''`, traced through the strict permission parser to Deny/Any/no pattern;
+source similarity is not a claim of shipped-binary equivalence. Devin omits
+automatic permission mode and uses an original-profile deny-only configuration
+for the documented builtins and MCP prefix, with no allow entries or trust
+grant. Kiro uses no-interactive mode with no trust or automatic approval flag.
+Unknown actual options, permission behavior, authentication or tool protocol
+fail without granting access or trying an alternate permissive mode.
+
+The exact capture table is `git-a`, `git-b`, `version`, `add-a`,
+`native-attempt`. The closed frontend admits only their complete command
+triples, the fixed summary and optional probe events, bound to the exact source
+commit/tree. Every initial native session, including exit zero, remains a
+failed research attempt until its genuine raw output is independently reviewed.
+All five qualification flags, vendor authentication and real-model qualification
+remain false. A bounded retained failure cannot become a passing E2E gate.
+Further source/provider/permission/lifecycle changes require their own observed
+contract and independent review; legacy user and baseline gates remain required.
+
+| Client | Pinned native version | Fixed restricted startup |
+| --- | --- | --- |
+| Qoder | 1.1.78 | `--print --output-format stream-json --no-session-persistence --permission-mode default --tools "" --plugin-dir <receipt-selected-view> <prompt>` |
+| Grok | 1.0.70 (f50904eaee6c) | `--single <prompt> --output-format streaming-json --permission-mode default --deny "" --no-subagents --disable-web-search --max-turns 1` |
+| Kiro | 2.34.0 | `chat --v2 --no-interactive <prompt>` |
+| Windsurf / Devin | 3000.11.205 (6dea39440ae3) | `--print <prompt> --respect-workspace-trust true` |
+
+Grok's source-guided deny semantics are from public snapshot
+`xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`,
+`crates/codegen/xai-grok-pager/src/headless/cli.rs` blob
+`99d5732f95ec023debeffc2f00cb4ae4532f0f0b`, together with the same snapshot's
+`xai-grok-permission-rules/src/rules.rs` and `policy.rs`. The shipping commit
+differs; no binary equivalence is inferred. Devin's original-profile config is
+`auto_update:false`, `allow:[]`, `ask:[]`, and documented deny entries
+`read,edit,write,grep,glob,exec,fetch,web_fetch,mcp__*`.
+
+Actual Kiro research observed `error: failed to launch kiro-cli-chat` after its
+version/help preflight. Its leaf now admits the three exact acquired launcher,
+chat and terminal companions, checking ordinary ownership/mode and the pinned
+full runtime closure before every child. Only that verified bin directory is
+prepended to `/usr/bin:/bin`; there is no shared environment escape, alias,
+native-profile move or acceptance of the observed failure as success.
+
+## Cline first installed ACP capture
+
+The pinned Cline 3.0.73 source at
+`c718573538d76310f464541617ab665108a6c999` cannot bind the first noninteractive
+desktop approval to the requested session: it discards that supplied session ID
+and registers `activeCliSession` only after the first turn returns. Do not invent
+a desktop session or bypass the approval wall. The separately reviewed next
+candidate is the native ACP transport with `--auto-approve false`, one actual
+`session/new` response, an empty injected `mcpServers` list, and one exact native
+permission request. `allow_once` is permitted only when actual session ID,
+provider call ID, tool name `uapclinea__inspect_runtime`, nonce and arguments all
+match. All other permission requests are denied and the attempt fails.
+
+Select only `TestAgentpluginsClineNativeProjectRuntimeAttempt` with
+`AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT=1`. Use public local-source A add,
+the independently derived existing Cline nested `transport` projection with
+direct receipt-selected probe command, arguments, environment and native cwd,
+and the unchanged complete installed package. No production adapter change or
+managed-launcher substitution is introduced. The supported original-user custom
+provider/catalog selects one scripted loopback OpenAI-compatible endpoint with
+external catalog refresh disabled. Its fixture key is never published.
+
+The ordinary hosted frontend hashes the actual root-owned sudo, systemd-run,
+systemctl and env executables. It creates only one fresh
+`uap-cline-project-<32-hex>.service` with the original UID/GID, Delegate=yes,
+NoNewPrivileges=yes and KillMode=control-group through systemd 255. Pass only the
+closed existing environment and exact test binary, with literal
+`--expand-environment=no` preserving arguments before `env -i`. No AI client runs as root,
+no cgroup hierarchy is relabelled, and no delegation-root override is accepted.
+The Go test verifies actual `/proc/self/cgroup`, cgroup2 ownership and NNP before
+the existing OS duplex capability admission. The original CLOCK_MONOTONIC
+nanosecond origin starts before service launch and is not reset: 150 seconds
+work, 180 total. The outer capture returns by 165, reserving its existing five
+seconds reap and ten for exact-unit cleanup. RuntimeMaxSec is a secondary limit.
+If needed, stop and then kill only this owned unit; any such intervention fails
+the attempt, and the final exact cgroup must be empty or gone.
+
+Closed native evidence contains the fixed public command triples, bounded ACP
+JSONL and its command/error receipt, at most two actual provider exchanges,
+optional native probe events, and the exact source-bound attempt summary.
+Successful planned duplex exposes no diagnostic stream in the existing OS API;
+errors retain that API's bounded diagnostic. This limitation is explicit and
+does not motivate a second process primitive. Every initial capture, including
+an apparently successful exchange, fails pending independent review of actual
+native/provider/probe bytes. All five qualifications, vendor authentication and
+real-model flags remain false until a later reviewed full lifecycle proves them.
+
+## Qoder receipt-selected catalog observation
+
+Genuine pinned Qoder 1.1.78 help in
+[run 40342548512](https://github.com/777genius/universal-agent-plugins/actions/runs/40342548512),
+artifact `12664571770` (SHA-256
+`7f00bd2c8f8cf54409fa464658b394a44bc10020a1e92874f4e333c45aedbc11`),
+advertises `plugins list --json --plugin-dir <dirs...>`. The independently
+reviewed amendment adds exactly that read-only command with the actual
+receipt-selected closed import view, cwd A and a 30-second ceiling inside the
+existing 150-second work / 180-second total deadline. It runs after public add
+and before the existing restricted headless attempt. There is no global import,
+registration, profile relocation or new provider permission.
+
+Freeze the complete original `HOME/.qoder` subtree immediately before and after
+this catalog command: entry membership, directories, full modes, original UID,
+single-link ordinary files and held byte digests; bound it to 4,096 entries,
+32 levels and 256 MiB. Any change, including a new cache file or empty directory,
+fails. Require exit zero, empty stderr and strict whole JSON object/array, while
+leaving its unobserved catalog schema opaque. The Qoder-only `native-catalog`
+command triple is the sole additional frontend member set. Other clients retain
+the original five labels. Raw capture remains an intentional failed initial
+attempt with all five qualifications false until independently interpreted.
+
+## Kimi separate installed single-tool attempt
+
+Preserve the existing 900-second Kimi component lifecycle. Register the separate
+fixed selector `kimi-call`, exact
+`TestAgentpluginsKimiNativeProjectRuntimeAttempt` and
+`AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT=1` only when its own test and
+`kimi_attempt.py` observer exist. Its actual client and acquisition identity
+remain `kimi` 2.3.2; the phase is `installed-single-tool-attempt`, with an original
+180-second total / 150-second work / 30-second cleanup budget. One native service
+phase has at most 60 seconds including the existing five-second reap reserve.
+Neither phase can reset or borrow the other test's deadline.
+
+Two independent plan rounds reviewed nineteen exact source blobs at
+[`b8dd3a134060c6e80ba4a1659335cd63b68483f2`](https://github.com/MoonshotAI/kimi-code/tree/b8dd3a134060c6e80ba4a1659335cd63b68483f2),
+including the [native server API](https://github.com/MoonshotAI/kimi-code/blob/b8dd3a134060c6e80ba4a1659335cd63b68483f2/docs/en/reference/server-api.md),
+tool naming/policy, session/prompt/approval routes, and the OpenAI provider
+request/stream implementation. Author only the supported original-user
+configuration: one literal-loopback OpenAI-compatible test provider with a
+private fixture credential, manual permission mode, telemetry and session-title
+generation disabled, at most two steps and one attempt per step, and the sole
+enabled tool `mcp__uap-kimi-native-a__inspect_runtime`. Builtins and B tools are
+not enabled. Public project add must complete before the first native service.
+
+Reuse the existing Python service and token quarantine, existing Go descendant
+supervision and harmless probe. Create the actual native session in A through
+REST, submit the exact configured model/manual prompt and poll its real approval
+and snapshot endpoints. Approve only the matching actual session, main agent,
+positive turn, provider call ID, qualified tool, action and nonce arguments.
+The decision omits scope, granting one call only. Require no probe tool call or
+marker before that approval. Unknown or repeated approvals fail.
+
+The scripted provider permits exactly two successful exchanges: one selected
+tool call, then a final sentinel only after the real tool result contains the
+expected fresh probe facts. Require native session/turn/tool-result identity,
+provider history, initialize/list/call PID/session/nonce correlation, marker and
+complete cleanup. Retain at most eight actual provider requests for failure
+diagnosis. The closed artifact admits only its fixed summary, installed A
+snapshots, optional probe events, redacted `python-api.json`, contiguous bounded
+provider requests and six complete command triples: `git-a`, `git-b`, `git-c`,
+`version`, `add-a`, `native-attempt`. Private provider and native bearer values
+are registered before capture and redacted before artifact admission.
+
+Every first capture deliberately fails with `runtime_attempt_complete=false`,
+`test_failed=true` and all five qualification flags false, even if it appears to
+complete. Actual raw approval/session/provider/probe grammar must be reviewed
+before a later separately reviewed integration into the full lifecycle. This
+attempt cannot inherit component-lifecycle success or claim vendor OAuth or
+real-model qualification.
+
+## Observed Darwin completed-process cleanup correction
+
+Genuine baseline [run 40367376473](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473),
+job [121728625314](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473/job/121728625314),
+at Gemini source `6f8ea1173b8b1d343688299b5864ee7c1e1a86d7` failed its
+inert capture contracts before vendor execution. The reported host is macOS
+15.7.9 / 24G830, image `macos-15-arm64` `20260907.0337.1`.
+The finite stdout child wrote 129 bytes against a 128-byte bound and exited.
+Final cleanup's original `killpg(pid, SIGKILL)` raised `PermissionError:
+[Errno 1] Operation not permitted` before the child wait and normal overflow
+receipt. The same head's Codex macOS job `121728625811` passed all 75 contracts.
+Neither that pass nor the later missing-artifact error qualifies the failed job.
+
+Apple's published macOS 15-era XNU tag `xnu-11417.140.69`, commit
+`43a90889846e00bfb5cf1d255cdc0a701a1e05a4`, explains a narrow possible race:
+`bsd/kern/kern_sig.c` blob `d32c03ce89f56531a419436fd0ef0e944e0d8331`
+filters zombie group members and returns POSIX EPERM when an existing group has
+no eligible live member. An unreaped, already exited sole leader can therefore
+produce this result. The actual log has no process-state telemetry; this is a
+source-backed timing inference, not an observed zombie state or a claim that
+this public source exactly matches the runner's kernel binary.
+
+Change only `scripts/native_client_research.py:kill_group` and its inert
+contracts. Preserve the first group-wide SIGKILL and existing missing-group
+handling. Capture the original numeric group ID before that call. If and only
+if the first call raises PermissionError, poll the original Popen child once.
+A still-live child preserves the original permission failure. After its exit
+is observed, issue one read-only signal-zero check against the identical
+original group ID. Accept only ProcessLookupError from that check, proving
+that the group is now absent. A successful check, repeated permission denial
+or another ordinary OS error preserves the original permission failure.
+Unexpected exceptions and interruption remain failures.
+
+The new refusal branch must not retry a destructive signal after reaping,
+signal a different group or individual child, escalate privileges, sleep,
+retry without a bound or suppress arbitrary EPERM. An extant, reused or
+unrepresentable group cannot become successful cleanup. In the same XNU
+snapshot, `bsd/kern/kern_fork.c` blob
+`9a6e5335a40d3a5acd390f5069ab2fa3b73cd784` reserves IDs against process,
+group and session identities; `bsd/kern/kern_proc.c` blob
+`060913ab13ed90608124e6b2c773911c2dc7ca1b` removes an empty group when
+destroyed. Reaping a sole leader may end that reservation. The signal-zero
+check avoids adding a destructive retry against a potentially reused ID.
+
+Keep the shared helper's existing callers, first cleanup attempt, five-second
+child wait, descendant handling, pipe closure, output caps, original deadlines
+and error receipts. Do not alter collector argv/environment, native admission,
+acquisition, trust, permissions, token quarantine, artifacts or qualification.
+The common service retains its independent normal-exit, process-group,
+closed-port and forced-cleanup refusal rules.
+
+Deterministic inert tests must prove: a live child refuses without an absence
+probe; an exited child checks the same group once; only a now-absent group is
+accepted; a present group, repeated EPERM and unrelated OS error preserve the
+original error; and this branch sends no second destructive signal. Retain the
+real-process exact EOF/overflow, separate-stream, inherited-pipe descendant,
+capture-interruption and non-POSIX import controls. Local Linux contracts do
+not qualify the observed macOS race; the original hosted macOS contract remains
+required. Two independent plan rounds precede implementation, followed by
+independent code review and exact-source validation.
+
+# Copilot failed-attempt evidence and original-config diagnostics amendment
+
+## Observed evidence and limits
+
+Genuine runtime run `40363828314`, job `121755712251`, at published
+`4566b551b7c225a30b40c149a44f69d96cc2d0ce`, tree
+`aeaf19c4a30668f17f83a111ac362c70ed6f95d1`, built and selected the current
+Copilot test, then failed at the `native-attempt` command boundary with
+`original authority changed: .../home/.copilot/config.json (<nil>)`.
+Frontend artifact `12678603433`, ZIP SHA256
+`1020004a73f256b40287914bdb3925f0899997f7226cfbac72c80f6613ee96a4`,
+records `runtime_artifact_admitted=false` and
+`runtime_admission_error="ValueError"`. No native archive was uploaded.
+The config digest differed after a successful strict read. Its actual changed
+bytes/fields, cause and exact pre/post boundary are not available from that
+frontend. No migration, authentication or native tool outcome is inferred.
+
+Local source `6fb04dc10b3e48ade631c4d65433c39afd5a9f60` has the exact
+published tree above. Its fixture necessarily stores the installed project MCP
+snapshot under `.github-mcp.json.installed`, because setup derives a name from
+the parent `.github` plus basename `mcp.json`. The unchanged frontend accepts
+only `mcp.json.installed` for that snapshot. Setup returned before the reported
+line 406, so this unexpected member had already been held. An inert invocation
+of the exact `attempt_members` function reproduces `ValueError: unrecorded
+native artifact member`; changing only the inert member name to the existing
+allowed name admits the same failed/unqualified envelope. This proves a
+deterministic source contract defect. Because the historical raw archive was
+not exported and only the exception class survives, the exact historical
+admission branch cannot be inspected directly; an earlier ZIP check is not
+independently excluded by the available bytes.
+
+## Correct only the fixture's emitted snapshot name
+
+In the Copilot Go fixture, give the two installed public snapshots explicit
+existing names: `mcp.json.installed` for the selected project `.github/mcp.json`,
+and `uapcopilota-SKILL.md.installed` for its selected installed skill. Retain
+the same held bytes, receipt-selected paths, ordinary-file reader, content
+checks and capture bounds. Do not broaden or change `attempt_members`,
+`admit_runtime`, the allowed member set or shared Python parser. This snapshot
+is installed project configuration, not the original private user profile.
+Add an inert contract for actual fixture-emitted names and preserve unknown,
+duplicate, partial-command, non-UTF8 and oversized member refusal.
+
+## Use existing evidence to locate the failure boundary
+
+`command` already checks protected authority before execution, then holds its
+stdout/stderr/command triple before checking authority again. With the naming
+defect corrected, a complete `native-attempt` triple in an admitted failed
+archive proves the command returned before the failed post-command check; its
+absence together with the boundary failure identifies the pre-command check.
+Do not add a duplicate phase field or alter the exact command receipt schema.
+Retain failed captures and the deferred existing `finish` behavior even when
+the original-profile guard fails. An incomplete triple still refuses admission.
+
+## Minimum bounded original-config change facts
+
+Keep the original authored config bytes/digest frozen before version/native
+startup. On a mismatch of exactly the fixture's original
+`<original HOME>/.copilot/config.json`, keep the existing fatal refusal and
+record one optional, bounded `original_config_change` object inside the existing
+`runtime-attempt.json`. There is no new artifact member or private-profile ZIP.
+
+The diagnostic may contain only: expected and observed SHA256 digests; baseline
+and observed byte counts; a fixed snapshot status; whether strict parsed JSON
+is semantically equal to the original authored object; whether the
+`trustedFolders` value still exactly equals the original two selected project
+folders; and a bounded structural summary of changed top-level members. For
+each changed member export only its key SHA256 and before/after JSON type
+(`absent`, `null`, `boolean`, `number`, `string`, `array`, `object`). Do not
+export raw unknown key names, any member values, absolute trust-folder values,
+credentials, tokens, raw config text or a recursively copied profile. A
+semantically equal object can identify a byte-format change without accepting
+that change or adopting a new baseline.
+
+Use the existing no-follow ordinary held-file reader, cap this diagnostic read
+at 16 KiB and the structural summary at 32 changed top-level keys. Exceeding a
+bound records a fixed bounded status, with no partial structural summary.
+Compare the
+diagnostic bytes' digest to the digest observed by the failed guard; if it
+differs, record only a fixed unstable status and no JSON-derived conclusions.
+Missing, aliased, special, oversized, malformed/non-object or unreadable input
+records a fixed status without error text or content. Unknown/missing nodes do
+not broaden the original guard's acceptance. Produce a finite object no larger
+than 16 KiB, within existing total/work/cleanup budgets, with no retries,
+native child or filesystem writes during diagnosis. The snapshot remains in
+private memory only; do not reread or publish unknown profile files.
+
+## Verification and unchanged scope
+
+Two independent plan approvals precede code. Expected edits are the Copilot
+fixture and focused inert contract tests, plus its consolidated plan; shared
+frontend/parser/allowlist and native provider behavior remain unchanged.
+Contracts must prove correct snapshot naming, pre/post distinction through
+the existing triple, semantically equal-but-byte-changed refusal, exact trusted
+folder preservation checks, hashed/type-only changed-member summaries and
+absence of canary key names/values/secrets in exported diagnostics. Cover alias,
+read failure, malformed JSON, size/key-count bounds and a changed snapshot.
+Every mismatch still fails the test; diagnostics can never promote a failed
+attempt or any qualification flag.
+
+Preserve all pinned acquisition/runtime hashes, native argv/environment,
+loopback provider route/identity, permission restrictions, process supervision,
+original-user/A/B ownership, state Prepared, deadlines, no extra native calls
+and closed artifact limits. Run only focused inert contracts/lint locally.
+Inspect a fresh genuine hosted failed capture before proposing any source,
+product or runtime behavior amendment for the config mutation. Vendor
+authentication, model use, native session grammar and all five lifecycle/MCP
+qualification flags remain false.
 
 ## Completion gate
 

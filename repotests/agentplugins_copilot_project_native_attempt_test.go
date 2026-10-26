@@ -60,6 +60,8 @@ type copilotProjectAttempt struct {
 	files                                          map[string][]byte
 	immutable                                      map[string]string
 	protected                                      map[string]string
+	originalConfigPath                             string
+	originalConfigBaseline                         []byte
 	evidence                                       map[string]any
 	binding                                        domain.ClientBinding
 	data                                           string
@@ -86,7 +88,7 @@ func (f *copilotProjectAttempt) check(t *testing.T) {
 		}
 	}
 	for path, want := range f.protected {
-		got, err := projectNativeRuntimeDigest(path)
+		got, err := f.protectedDigest(path, want)
 		if err != nil || got != want {
 			t.Fatalf("original authority changed: %s (%v)", path, err)
 		}
@@ -190,7 +192,9 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 	}
 	trust := filepath.Join(f.base.Home, ".copilot", "config.json")
 	body, _ := json.Marshal(map[string]any{"trustedFolders": []string{f.base.Project, f.other}})
-	projectNativeRuntimeWrite(t, trust, append(body, '\n'), 0600)
+	body = append(body, '\n')
+	f.originalConfigPath, f.originalConfigBaseline = trust, bytes.Clone(body)
+	projectNativeRuntimeWrite(t, trust, f.originalConfigBaseline, 0600)
 	f.protected[trust] = nativeSHA(t, trust)
 	r := f.command(t, "version", f.outside, f.env(), []string{f.client, "--version"}, 30*time.Second)
 	if string(r.Stdout) != "GitHub Copilot CLI 1.0.103.\nRun 'copilot update' to check for updates.\n" || len(r.Stderr) != 0 {
@@ -251,13 +255,7 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 	if owned["copilot_project_mcp_server"] != filepath.Join(f.base.Project, ".github", "mcp.json") || owned["copilot_project_skill_directory"] != filepath.Join(f.base.Project, ".github", "skills", "uapcopilota") {
 		t.Fatal("installed native ownership paths differ")
 	}
-	for _, path := range []string{owned["copilot_project_mcp_server"], filepath.Join(owned["copilot_project_skill_directory"], "SKILL.md")} {
-		body, err := projectNativeRuntimeRead(path, copilotProjectBodyLimit)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.keep(t, filepath.Base(filepath.Dir(path))+"-"+filepath.Base(path)+".installed", body)
-	}
+	f.captureInstalled(t, owned["copilot_project_mcp_server"], filepath.Join(owned["copilot_project_skill_directory"], "SKILL.md"))
 	f.evidence["binding"] = f.binding
 	f.evidence["data_locator"] = f.data
 	if _, err := os.Lstat(f.base.Events); !os.IsNotExist(err) {
