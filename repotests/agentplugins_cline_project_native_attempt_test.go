@@ -470,7 +470,7 @@ func (f *clineProjectAttempt) setup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packageDigest, err := packagedigest.DigestCaptured(f.ctx, installedEntries)
+	packageDigest, err := projectNativeRuntimeInstalledDigest(f.ctx, installedEntries)
 	if err != nil {
 		t.Fatal(err)
 	}
