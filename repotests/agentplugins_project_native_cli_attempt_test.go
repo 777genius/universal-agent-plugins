@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -153,6 +154,11 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 		if err != nil {
 			return err
 		}
+	case "native-catalog":
+		if f.spec.client != "qoder" || !filepath.IsAbs(f.view) || filepath.Clean(f.view) != f.view || filepath.Base(f.view) != ".agentplugins-qoder-native" {
+			return fmt.Errorf("only the exact receipt-selected Qoder catalog is registered")
+		}
+		expected = []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}
 	default:
 		return fmt.Errorf("unregistered native CLI command label")
 	}
@@ -164,6 +170,9 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 func (f *projectNativeCLIAttempt) command(t *testing.T, label, cwd string, argv []string, timeout time.Duration) ports.CommandResult {
 	t.Helper()
 	allowed := map[string]bool{"git-a": true, "git-b": true, "version": true, "add-a": true, "native-attempt": true}
+	if f.spec.client == "qoder" {
+		allowed["native-catalog"] = true
+	}
 	if !allowed[label] || f.used[label] {
 		t.Fatal("unregistered/repeated CLI attempt command")
 	}
@@ -677,6 +686,73 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// This one read-only catalog must preserve the complete original Qoder user
+// profile, including new empty directories and changes to nonexecutable modes.
+// It does not freeze or inspect any other client's mutable profile/cache.
+func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
+	if err := projectNativeRuntimeParents(filepath.Join(root, "leaf")); err != nil {
+		return nil, err
+	}
+	result := map[string]string{}
+	count, total := 0, int64(0)
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		count++
+		rel, err := filepath.Rel(root, path)
+		if err != nil || count > 4096 || len(strings.Split(rel, string(filepath.Separator))) > 32 {
+			return fmt.Errorf("Qoder profile inventory entry/depth bound")
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		identity, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || identity.Uid != uint32(os.Getuid()) {
+			return fmt.Errorf("Qoder profile original owner differs")
+		}
+		if info.IsDir() {
+			if err := projectNativeRuntimeParents(filepath.Join(path, "leaf")); err != nil {
+				return err
+			}
+			result[rel] = fmt.Sprintf("directory:%o", info.Mode())
+			return nil
+		}
+		if !info.Mode().IsRegular() || identity.Nlink != 1 || info.Size() < 0 {
+			return fmt.Errorf("Qoder profile ordinary single-link file required")
+		}
+		total += info.Size()
+		if total > 256<<20 {
+			return fmt.Errorf("Qoder profile inventory byte bound")
+		}
+		body, err := projectNativeRuntimeRead(path, 64<<20)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(body)
+		result[rel] = fmt.Sprintf("file:%o:%d:%s", info.Mode(), len(body), hex.EncodeToString(sum[:]))
+		return nil
+	})
+	return result, err
+}
+
+func projectNativeCLIQoderCatalogJSON(body []byte) (string, error) {
+	value, err := projectNativeRuntimeJSON(body)
+	if err != nil {
+		return "", err
+	}
+	switch value.(type) {
+	case map[string]any:
+		return "object", nil
+	case []any:
+		return "array", nil
+	default:
+		return "", fmt.Errorf("Qoder catalog must be opaque whole JSON object or array")
+	}
+}
+
 func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	t.Helper()
 	spec, err := projectNativeCLISpecification(client)
@@ -689,6 +765,28 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	f := newProjectNativeCLIAttempt(t, spec)
 	defer f.finish(t)
 	f.setup(t)
+	if client == "qoder" {
+		profile := filepath.Join(f.base.Home, ".qoder")
+		before, err := projectNativeCLIQoderProfile(profile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.evidence["attempt_stage"] = "native-installed-catalog"
+		result := f.command(t, "native-catalog", f.base.Project, []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}, 30*time.Second)
+		after, err := projectNativeCLIQoderProfile(profile)
+		if err != nil || !reflect.DeepEqual(after, before) {
+			t.Fatal("Qoder catalog changed the complete original user profile/cache")
+		}
+		if len(result.Stderr) != 0 {
+			t.Fatal("Qoder catalog emitted native diagnostics; raw capture remains failed/unqualified")
+		}
+		kind, err := projectNativeCLIQoderCatalogJSON(result.Stdout)
+		if err != nil {
+			t.Fatal("Qoder catalog has unmeasured non-JSON grammar; raw capture remains failed/unqualified")
+		}
+		sum := sha256.Sum256(result.Stdout)
+		f.evidence["native_catalog"] = map[string]any{"schema_qualified": false, "json_kind": kind, "sha256": hex.EncodeToString(sum[:]), "original_profile_preserved": true, "selection_interpretation": "opaque native catalog; no scope or runtime qualification"}
+	}
 	prompt := "Describe only the installed " + f.name + " skill marker. Do not run any tool or change any file."
 	argv, err := projectNativeCLIArguments(client, f.client, f.view, prompt)
 	if err != nil {

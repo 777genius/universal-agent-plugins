@@ -153,6 +153,74 @@ func TestProjectNativeCLICommandLabelsCannotAuthorizeDifferentArgvOrScope(t *tes
 			t.Fatal("different native command/scope admitted")
 		}
 	}
+	catalog := []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}
+	if err := f.selectedCommand("native-catalog", f.base.Project, catalog, 30*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []struct {
+		client, cwd string
+		argv        []string
+		timeout     time.Duration
+	}{
+		{"grok", f.base.Project, catalog, 30 * time.Second},
+		{"qoder", f.other, catalog, 30 * time.Second},
+		{"qoder", f.base.Project, append(append([]string{}, catalog...), "--available"), 30 * time.Second},
+		{"qoder", f.base.Project, []string{f.client, "plugins", "install", f.view}, 30 * time.Second},
+		{"qoder", f.base.Project, catalog, 60 * time.Second},
+	} {
+		f.spec.client = change.client
+		if f.selectedCommand("native-catalog", change.cwd, change.argv, change.timeout) == nil {
+			t.Fatal("unreviewed catalog argv/client/cwd/deadline admitted")
+		}
+	}
+}
+
+func TestProjectNativeCLIQoderCatalogRemainsOpaqueStrictWholeJSON(t *testing.T) {
+	for _, body := range []string{`{}`, `[]`, `{"plugins":[],"unknownSchema":true}`} {
+		if _, err := projectNativeCLIQoderCatalogJSON([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, body := range []string{`null`, `true`, `"plugins"`, `0`, `{"plugins":[],"plugins":[]}`, `{"value":NaN}`, `[] trailing`, "\xff"} {
+		if _, err := projectNativeCLIQoderCatalogJSON([]byte(body)); err == nil {
+			t.Fatal("unsafe/scalar catalog accepted", body)
+		}
+	}
+}
+
+func TestProjectNativeCLIQoderCatalogCannotMutateOriginalProfileCache(t *testing.T) {
+	for _, kind := range []string{"bytes", "mode", "empty-directory", "new-cache", "alias", "hardlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), ".qoder")
+			path := filepath.Join(root, "settings.json")
+			projectNativeRuntimeWrite(t, path, []byte("original updater configuration\n"), 0600)
+			before, err := projectNativeCLIQoderProfile(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch kind {
+			case "bytes":
+				err = os.WriteFile(path, []byte("changed"), 0600)
+			case "mode":
+				err = os.Chmod(path, 0640)
+			case "empty-directory":
+				err = os.Mkdir(filepath.Join(root, "empty"), 0700)
+			case "new-cache":
+				err = os.WriteFile(filepath.Join(root, "plugins-cache.json"), []byte("{}"), 0600)
+			case "alias":
+				err = os.Symlink(path, filepath.Join(root, "alias"))
+			case "hardlink":
+				err = os.Link(path, filepath.Join(t.TempDir(), "hardlink"))
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			after, err := projectNativeCLIQoderProfile(root)
+			if err == nil && reflect.DeepEqual(before, after) {
+				t.Fatal("catalog profile/cache change omitted", kind)
+			}
+		})
+	}
 }
 
 func TestProjectNativeCLIMixedServerRefusesExtraTransportCWDAndUnknownFields(t *testing.T) {
