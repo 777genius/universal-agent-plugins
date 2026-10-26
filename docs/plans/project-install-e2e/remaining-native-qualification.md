@@ -1172,6 +1172,67 @@ Exercise content/executable/directory changes and retained hardlink/alias
 refusal. No vendor process executes. Propagate the reviewed shared-helper/contract and caller deltas to the relevant
 leaves; all initial completion and qualification flags stay false.
 
+## Observed Darwin completed-process cleanup correction
+
+Genuine baseline [run 40367376473](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473),
+job [121728625314](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473/job/121728625314),
+at Gemini source `6f8ea1173b8b1d343688299b5864ee7c1e1a86d7` failed its
+inert capture contracts before vendor execution. The reported host is macOS
+15.7.9 / 24G830, image `macos-15-arm64` `20260907.0337.1`.
+The finite stdout child wrote 129 bytes against a 128-byte bound and exited.
+Final cleanup's original `killpg(pid, SIGKILL)` raised `PermissionError:
+[Errno 1] Operation not permitted` before the child wait and normal overflow
+receipt. The same head's Codex macOS job `121728625811` passed all 75 contracts.
+Neither that pass nor the later missing-artifact error qualifies the failed job.
+
+Apple's published macOS 15-era XNU tag `xnu-11417.140.69`, commit
+`43a90889846e00bfb5cf1d255cdc0a701a1e05a4`, explains a narrow possible race:
+`bsd/kern/kern_sig.c` blob `d32c03ce89f56531a419436fd0ef0e944e0d8331`
+filters zombie group members and returns POSIX EPERM when an existing group has
+no eligible live member. An unreaped, already exited sole leader can therefore
+produce this result. The actual log has no process-state telemetry; this is a
+source-backed timing inference, not an observed zombie state or a claim that
+this public source exactly matches the runner's kernel binary.
+
+Change only `scripts/native_client_research.py:kill_group` and its inert
+contracts. Preserve the first group-wide SIGKILL and existing missing-group
+handling. Capture the original numeric group ID before that call. If and only
+if the first call raises PermissionError, poll the original Popen child once.
+A still-live child preserves the original permission failure. After its exit
+is observed, issue one read-only signal-zero check against the identical
+original group ID. Accept only ProcessLookupError from that check, proving
+that the group is now absent. A successful check, repeated permission denial
+or another ordinary OS error preserves the original permission failure.
+Unexpected exceptions and interruption remain failures.
+
+The new refusal branch must not retry a destructive signal after reaping,
+signal a different group or individual child, escalate privileges, sleep,
+retry without a bound or suppress arbitrary EPERM. An extant, reused or
+unrepresentable group cannot become successful cleanup. In the same XNU
+snapshot, `bsd/kern/kern_fork.c` blob
+`9a6e5335a40d3a5acd390f5069ab2fa3b73cd784` reserves IDs against process,
+group and session identities; `bsd/kern/kern_proc.c` blob
+`060913ab13ed90608124e6b2c773911c2dc7ca1b` removes an empty group when
+destroyed. Reaping a sole leader may end that reservation. The signal-zero
+check avoids adding a destructive retry against a potentially reused ID.
+
+Keep the shared helper's existing callers, first cleanup attempt, five-second
+child wait, descendant handling, pipe closure, output caps, original deadlines
+and error receipts. Do not alter collector argv/environment, native admission,
+acquisition, trust, permissions, token quarantine, artifacts or qualification.
+The common service retains its independent normal-exit, process-group,
+closed-port and forced-cleanup refusal rules.
+
+Deterministic inert tests must prove: a live child refuses without an absence
+probe; an exited child checks the same group once; only a now-absent group is
+accepted; a present group, repeated EPERM and unrelated OS error preserve the
+original error; and this branch sends no second destructive signal. Retain the
+real-process exact EOF/overflow, separate-stream, inherited-pipe descendant,
+capture-interruption and non-POSIX import controls. Local Linux contracts do
+not qualify the observed macOS race; the original hosted macOS contract remains
+required. Two independent plan rounds precede implementation, followed by
+independent code review and exact-source validation.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
