@@ -1164,6 +1164,54 @@ not qualify the observed macOS race; the original hosted macOS contract remains
 required. Two independent plan rounds precede implementation, followed by
 independent code review and exact-source validation.
 
+## Observed Kiro read-only authentication boundary
+
+Genuine research run `40354148442`, job `121719233213`, at source
+`d650ef37ff5cd2f38f6b784ebcd9723c47e62cf7`, tree
+`6b2be08d15092de328f2644478036f8c751e2b94`, reached the first selected
+`mcp list workspace` operation in A after all eight fixed version/help probes
+completed. Artifact `12673026085` has ZIP SHA256
+`8187c2423340174d86c70a21480139f6a9a1f2999d5437a4ef82092dbb82d068`.
+Its exact command receipt records exit `1`, no capture error, empty stdout and
+64 stderr bytes: `error: You are not logged in, please log in with kiro-cli login`
+followed by one LF. This is an observed authentication refusal for that read-only
+operation; it does not establish the outcome of native chat, ACP, discovery,
+trust, MCP startup or any later command. The archive was independently hashed
+and the held raw streams inspected; no credentials were available or used.
+
+Keep the immutable 2.34.0 archive, full closure, verified companions, fixed
+version/help commands, original HOME, disabled inert marker configurations,
+closed PATH, before/after fixture checks and all existing process/capture
+bounds. In the Kiro leaf only, recognize this exact receipt/stream tuple solely
+for label `a-workspace-raw-list`, arguments `mcp list workspace`, project `a`
+and the existing 30-second deadline. Require the explicit integer exit `1`,
+an explicit null capture error, empty byte stdout and exactly the measured
+stderr bytes. Any changed message, whitespace, additional diagnostic, stdout,
+status, missing field, capture failure, wrong label/argv/project/deadline or
+unsafe fixture still fails. Existing version/help stderr exceptions stay
+separate and cannot accept the authentication tuple.
+
+After this exact measured refusal, stop the list table without attempting its
+five unobserved remaining commands. Retain the raw failed command in the shared
+closed capture, and record one finite structured observation identifying this
+command's authentication-required boundary. Leave the opaque-list observation
+table empty; do not synthesize absent catalogs or source/marker results. The
+already completed fixed version/help probes may satisfy only `kiro.help`.
+The source scope observation and all project lifecycle/restart/MCP, vendor
+authentication and real-model qualifications remain false and explicitly
+unobserved. A successful help research collection cannot satisfy or replace
+the separate required installed runtime attempt, which remains fail-closed.
+
+Change only `scripts/project_native_collectors/kiro.py`, its inert contract
+test, and this consolidated plan. Do not change shared case selection, artifact
+admission, qualification schema, runtime fixtures or native behavior. Add inert
+contracts for the exact observed tuple and stop point, all changed/missing or
+misrouted tuples above, companion/config preservation after the refusal, the
+unchanged six-successful-list path and zero positive qualification. No vendor
+execution is permitted locally. Obtain two independent plan approvals before
+code, then independent implementation review and a fresh genuine hosted
+capture before claiming that the amended research path completed.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable

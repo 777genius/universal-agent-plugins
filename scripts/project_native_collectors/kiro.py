@@ -1,7 +1,8 @@
 """Kiro 2.34 help and opaque read-only config-list research, never runtime proof.
 
-The new version's nonempty list schema must be reviewed from genuine artifacts
-before a scope-observation case can be registered. No ACP session is started.
+The measured first read-only authentication refusal remains a boundary only.
+Nonempty list schema still requires review before a scope-observation case can
+be registered. No ACP session is started.
 """
 import hashlib
 import json
@@ -34,6 +35,7 @@ HELP = (
 )
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
 _ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
+_LIST_AUTH_STDERR = b"error: You are not logged in, please log in with kiro-cli login\n"
 _RUNTIME_MEMBERS = {
     "kiro-cli": "94cae7e349f76869a19eae335a5b392fba8515743b1c2822b9ea33128c067cc6",
     "kiro-cli-chat": "596c48b3cba6db1f5c043434c20a5fd1d23ea7d35eb0b70e3bcfe4144d93a79c",
@@ -81,6 +83,9 @@ def _runtime_bin(ctx):
 def _probe(ctx, owned, label, arguments, project="a"):
     if label == "all-help" and tuple(arguments) != ("--help-all",):
         raise ValueError("Kiro all-help stderr exception requires exact argv")
+    if label == "a-workspace-raw-list" and (
+            tuple(arguments) != ("mcp", "list", "workspace") or project != "a"):
+        raise ValueError("Kiro first read-only list requires exact argv/project")
     directory = _runtime_bin(ctx)
     if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
         raise ValueError("Kiro acquired companion PATH changed")
@@ -88,18 +93,28 @@ def _probe(ctx, owned, label, arguments, project="a"):
         record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
     finally:
         _runtime_bin(ctx)
-    expected_stderr = _ALL_HELP_STDERR if label == "all-help" else b""
-    if (not isinstance(record, dict) or type(record.get("exit")) is not int
-            or record["exit"] != 0 or "error" not in record or record["error"] is not None
-            or not isinstance(stdout, bytes) or not isinstance(stderr, bytes)
-            or stderr != expected_stderr):
-        raise ValueError("Kiro probe did not finish cleanly: " + label)
+    if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
+        raise ValueError("Kiro acquired companion PATH changed")
     for path, body in owned.items():
         _parents(path)
         info = path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != len(body)
                 or stat.S_IMODE(info.st_mode) != 0o600 or path.read_bytes() != body):
             raise ValueError("Kiro changed authored fixture bytes/mode")
+    if (label == "a-workspace-raw-list" and isinstance(record, dict)
+            and type(record.get("exit")) is int and record["exit"] == 1
+            and "error" in record and record["error"] is None
+            and isinstance(stdout, bytes) and stdout == b""
+            and isinstance(stderr, bytes) and stderr == _LIST_AUTH_STDERR):
+        # This exact measured refusal identifies only this read-only command's
+        # boundary. None cannot become opaque listing or discovery evidence.
+        return None
+    expected_stderr = _ALL_HELP_STDERR if label == "all-help" else b""
+    if (not isinstance(record, dict) or type(record.get("exit")) is not int
+            or record["exit"] != 0 or "error" not in record or record["error"] is not None
+            or not isinstance(stdout, bytes) or not isinstance(stderr, bytes)
+            or stderr != expected_stderr):
+        raise ValueError("Kiro probe did not finish cleanly: " + label)
     return _text(stdout)
 
 
@@ -138,26 +153,37 @@ def collect(ctx):
             stream.write(body)
         native.chmod(0o600)
         owned[native] = body
-    captures = []
+    captures, auth_boundary = [], None
     for project in ("a", "b", "user"):
         for scope in ("workspace", "global"):
             label = project + "-" + scope + "-raw-list"
             text = _probe(ctx, owned, label, ("mcp", "list", scope), project)
+            if text is None:
+                auth_boundary = {"probe": label, "cwd_selection": project,
+                                 "arguments": ["mcp", "list", scope],
+                                 "kind": "authentication-required", "exit": 1,
+                                 "remaining_list_commands_unobserved": 5}
+                break
             captures.append({"probe": label, "cwd_selection": project, "scope_argument": scope,
                              "sha256_normalized_text": hashlib.sha256(text.encode()).hexdigest(),
                              "fixture_name_tokens": [name for name in NAMES.values() if name in text],
                              "interpretation": "opaque native listing; no source schema or selection qualification"})
+        if auth_boundary is not None:
+            break
     facts = {"client_version_measured": version,
              "advertised": {"acp_agent_engine": "--agent-engine" in help_text["acp-help"],
                             "acp_auth_method": "--auth-method" in help_text["acp-help"],
                             "chat_trust_workspace": "--trust-workspace" in help_text["chat-help"]},
              "raw_source_list_observations": captures,
-             "surface": "pinned help and opaque read-only mcp list workspace/global; disabled inert remote markers",
+             "read_only_authentication_boundary": auth_boundary,
+             "surface": "pinned help and read-only mcp list observations or exact authentication-required boundary; disabled inert remote markers",
              "scope_observation_qualified": False, "uap_lifecycle_qualified": False,
              "mcp_initialization_qualified": False, "mcp_tools_list_qualified": False,
              "mcp_tools_call_qualified": False, "authentication_qualified": False, "real_model_qualified": False,
-             "remaining": "review genuine 2.34 nonempty text schema and actual mode before registering scope or ACP/runtime cases"}
+             "remaining": "read-only authentication boundary does not qualify discovery; review genuine 2.34 selected scope and actual mode before registering scope or ACP/runtime cases"}
     return {"observations": facts, "cases": [
         {"id": "kiro.help", "status": "passed",
-         "reason": "exact version/fixed help observed; opaque positional source-list captures remain unqualified; no session, startup or tool command"},
-    ]}
+         "reason": "exact version/fixed help observed; read-only list text or its exact measured authentication boundary remains unqualified; no session, startup or tool command"},
+    ], "unobserved": ["kiro.scope-observation", "kiro.project-lifecycle",
+                       "kiro.native-restart-removal", "kiro.mcp-initialize",
+                       "kiro.mcp-tools-list", "kiro.mcp-tools-call"]}
