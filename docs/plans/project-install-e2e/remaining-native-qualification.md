@@ -607,6 +607,52 @@ absence of the expected dialog. Run existing inert contracts and pinned strict
 TypeScript compilation, then inspect the next genuine hosted artifact. Two
 independent plan-review rounds precede this narrow driver correction.
 
+### Observed VS Code integration-test dialog suppression
+
+Genuine [run 40365228366](https://github.com/777genius/universal-agent-plugins/actions/runs/40365228366)
+at source tree `7d4ed4d9a114f26f6c2d1af834331f7e715b31b5` measured native
+document focus true both before and after activation, but still found no
+workspace-trust dialog in `empty-a`. Native artifact `12671090860` has SHA256
+`a6ad556f079a2b78715aa89f226d860984f840b6f527d351eed4945b97fe262d`.
+Focus starvation is not supported by that observation. No stage completed;
+cleanup and all five qualification cases remain unproved.
+
+The exact pinned publisher's
+`src/vs/workbench/services/dialogs/common/dialogService.ts`, blob
+`20ddfdcf4ec10c6ef509095f948604b37bad4e8a`, refuses `prompt()` whenever both
+extension-development mode and an extension-test entrypoint are present. The
+frozen trusted argv selects precisely that integration-test mode. This is a
+source-supported explanation for the missing dialog; it must not be treated as
+an approved trust decision or bypassed by changing a native trust service.
+
+For trusted mode only, remove the `--extensionTestsPath <observer>/runner.js`
+pair from both the controller's fixed argv and the driver's exact argv validator.
+All other arguments, proposed APIs, publisher and module pins stay fixed. This
+supersedes only that pair in the earlier trusted argv contract. Keep the legacy
+untrusted observer's independent integration-test invocation unchanged.
+
+Use the owned development extension's existing `onStartupFinished` activation
+event and sealed `extension.js` main module to invoke and await the existing
+`runner.js` exported `run()` function. The publisher's normal activation loader
+is `extHostExtensionService.ts` blob
+`42008549e96dff8258de6d38d1b8c3e89df8735d`. Declare only this observer's
+`capabilities.untrustedWorkspaces.supported=true`, supported by the pinned
+`extensionsRegistry.ts` blob `4f9fc31696f3c6d40d70320cda4d10a076fc8e86`.
+That lets the passive observer wait for the existing sealed UI challenge while
+the workspace is initially restricted. It registers no command, definition,
+tool or trust permission. Keep the complete sealed runtime closure unchanged.
+
+The observer still waits for the driver challenge and requires actual canonical
+folder identity and `workspace.isTrusted=true` before observing installed skills
+or calling the gateway. The driver still accepts only the exact native workspace
+trust dialog with the parent checkbox unchecked, then the existing exact MCP
+trust/start flow. No trust database, hidden command, synthetic UI event, native
+source patch, blanket approval or sandbox override is introduced. Preserve all
+original-user baselines, nonce/session joins, deadlines, artifact admission and
+strict cleanup. Run existing inert contracts and pinned strict TypeScript
+compilation, then inspect genuine hosted lifecycle evidence. Two independent
+plan-review rounds precede this narrow controller/observer correction.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for

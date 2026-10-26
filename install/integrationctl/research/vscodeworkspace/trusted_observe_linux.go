@@ -312,7 +312,7 @@ func (c *controller) trustedObserve(stage, scope, trust, operation string, insta
 	publisher := filepath.Join(c.request.Base, "publisher", publisherPrefix, "code")
 	observer := filepath.Join(c.request.Base, "tools", "observer")
 	args := []string{"--new-window", "--disable-crash-reporter", "--locale", "en", "--user-data-dir", f.Profile, "--extensions-dir", f.Extensions,
-		"--extensionDevelopmentPath", observer, "--extensionTestsPath", filepath.Join(observer, "runner.js"), "--enable-proposed-api", "uap-research.project-runtime-observer", "--remote-debugging-port=0", project}
+		"--extensionDevelopmentPath", observer, "--enable-proposed-api", "uap-research.project-runtime-observer", "--remote-debugging-port=0", project}
 	env := c.trustedEnvironment()
 	env["UAP_VSCODE_WORKSPACE_FOLDER"] = project
 	env["UAP_VSCODE_TRUSTED_REQUEST"] = requestPath

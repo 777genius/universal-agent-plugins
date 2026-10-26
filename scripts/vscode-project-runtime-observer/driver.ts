@@ -5,7 +5,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { constants, closeSync, fstatSync, lstatSync, openSync, readSync,
   realpathSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, normalize, relative } from 'node:path';
+import { basename, dirname, isAbsolute, normalize, relative } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { chromium, type Browser, type Locator, type Page } from 'playwright-core';
 
@@ -144,11 +144,11 @@ function request(value: unknown): Request {
   const project = canonical(v.project, true), publisher = canonical(v.publisher, false);
   if (basename(publisher) !== 'code') throw new Error('exact publisher entrypoint required');
   const args = v.publisherArgs;
-  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string') || args.length !== 16) throw new Error('fixed publisher argv required');
+  if (!Array.isArray(args) || args.some(arg => typeof arg !== 'string') || args.length !== 14) throw new Error('fixed publisher argv required');
   const a = args as string[];
   const profile = canonical(a[5], true), extensions = canonical(a[7], true), observer = canonical(a[9], true);
   const expected = ['--new-window', '--disable-crash-reporter', '--locale', 'en', '--user-data-dir', profile,
-    '--extensions-dir', extensions, '--extensionDevelopmentPath', observer, '--extensionTestsPath', join(observer, 'runner.js'),
+    '--extensions-dir', extensions, '--extensionDevelopmentPath', observer,
     '--enable-proposed-api', 'uap-research.project-runtime-observer', '--remote-debugging-port=0', project];
   if (JSON.stringify(a) !== JSON.stringify(expected)) throw new Error('publisher argv differs from frozen vector');
   if ([profile, extensions, observer].some(path => path === project || contained(project, path) || contained(path, project)))
