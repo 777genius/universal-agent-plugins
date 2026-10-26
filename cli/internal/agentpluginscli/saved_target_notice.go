@@ -29,7 +29,7 @@ func savedTargetNotice(lock environment.Lock, aliases, targets []string) string 
 		return ""
 	}
 	slices.Sort(retained)
-	return fmt.Sprintf("This installation selects %s. Saved targets %s are preserved and are not applied now; deps sync reconciles all saved targets.", strings.Join(targets, ", "), strings.Join(retained, ", "))
+	return fmt.Sprintf("This command selects %s. Saved targets %s are preserved and are not applied now; deps sync reconciles all saved targets.", strings.Join(targets, ", "), strings.Join(retained, ", "))
 }
 
 func renderSavedTargetNotice(cmd *cobra.Command, opts *options, lock environment.Lock, aliases, targets []string) error {
