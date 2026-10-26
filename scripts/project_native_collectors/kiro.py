@@ -24,7 +24,7 @@ ACQUISITION = {
 }
 HELP = (
     ("top-help", ("--help",), "Usage:"),
-    ("all-help", ("--help-all",), "Usage:"),
+    ("all-help", ("--help-all",), "Commands:"),
     ("mcp-help", ("mcp", "--help"), "list"),
     ("mcp-list-help", ("mcp", "list", "--help"), "workspace"),
     ("mcp-status-help", ("mcp", "status", "--help"), "--name"),
@@ -32,6 +32,7 @@ HELP = (
     ("chat-help", ("chat", "--help"), "Usage:"),
 )
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
+_ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
 _SGR = re.compile(r"\x1b\[[0-9;]*m")
 _ERROR = re.compile(r"authentication required|not logged in|please log ?in|login required|\berror:", re.I)
 
@@ -49,8 +50,14 @@ def _parents(path):
 
 
 def _probe(ctx, owned, label, arguments, project="a"):
+    if label == "all-help" and tuple(arguments) != ("--help-all",):
+        raise ValueError("Kiro all-help stderr exception requires exact argv")
     record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
-    if record.get("exit") != 0 or record.get("error") or stderr.strip():
+    expected_stderr = _ALL_HELP_STDERR if label == "all-help" else b""
+    if (not isinstance(record, dict) or type(record.get("exit")) is not int
+            or record["exit"] != 0 or "error" not in record or record["error"] is not None
+            or not isinstance(stdout, bytes) or not isinstance(stderr, bytes)
+            or stderr != expected_stderr):
         raise ValueError("Kiro probe did not finish cleanly: " + label)
     for path, body in owned.items():
         _parents(path)
@@ -75,7 +82,10 @@ def collect(ctx):
     help_text = {}
     for label, arguments, token in HELP:
         value = _probe(ctx, owned, label, arguments)
-        if token not in value:
+        if (token not in value or (label == "all-help" and (
+                not re.search(r"(?m)^[ \t]+--help-all[ \t]*$", value)
+                or not re.search(r"(?m)^[ \t]+(?:-h,[ \t]+)?--help[ \t]*$", value)
+                or "Usage:" in value or "USAGE:" in value))):
             raise ValueError("unrecognized pinned Kiro help: " + label)
         help_text[label] = value
     for scope in ("a", "b", "user"):
