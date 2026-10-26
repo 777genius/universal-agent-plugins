@@ -768,6 +768,46 @@ State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
 authentication false and real-model use false. Raw bounded evidence stays in
 closed CI artifacts, not Git or recursively uploaded native profiles.
 
+## Grok opaque catalog research amendment
+
+Genuine help run 40240232499/artifact 12616383397 confirms the frozen 1.0.70
+archive/executable and `inspect --json`, `plugin list --json`, and `mcp list
+--json` help. After two independent plan rounds, admit explicit `observe`
+research only. Keep the nine fixed version/help probes unchanged. Require six
+empty baseline catalog operations in A/outside, then author distinct text-only
+user/A/B `.grok/plugins/<marker>/.grok-plugin/plugin.json` and
+`skills/<marker>/SKILL.md`, and require nine populated catalog operations in
+A/B/outside. No executable payload, hooks, commands, MCP definition, native
+trust, provider, SDK or account mutation is introduced. Outside remains a
+separate cwd, never HOME.
+
+Each operation uses existing hosted admission, immutable runtime checks and
+`Context.probe`, with max 30 seconds capped by the original shared 360-second
+remaining deadline. Every required operation must return exact integer zero,
+error None, empty stderr and strict UTF-8 whole duplicate-free finite JSON
+object/list, bounded to one MiB, 32 levels and 8,192 nodes. Preserve raw streams.
+The schema remains opaque; root kind, digest and marker-token occurrences are
+research observations, never selected source/loading evidence. Owned ordinary
+single-link UID files retain exact mode, bytes and original identity across each
+probe, using descriptor-relative no-follow parent/file opens and held reads.
+
+Only completed fixed observations may pass `grok.scope-observation` research;
+all product lifecycle, native restart/removal, MCP initialize/list/call,
+authentication and model qualification flags remain false. Failures, malformed
+JSON, alias/replacement/mutation, timeout or missing operations fail the research
+slice. Freeze genuine observed source schemas and native modes with a new
+separate reviewed amendment before real UAP lifecycle implementation or a
+native-source qualification claim. Existing skills-only project MCP refusal
+remains intact.
+
+Every native child, including version/help and all catalogs, receives literal
+`GROK_DISABLE_AUTOUPDATER=1` through the existing environment allowlist. This is
+the documented suppression control in the official
+[settings reference](https://docs.x.ai/build/settings/reference); it does not
+claim network isolation or supply vendor authentication. Immutable runtime
+identities remain checked before and after every child. Inert contracts assert
+the exact supplied environment on every help/catalog call.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
