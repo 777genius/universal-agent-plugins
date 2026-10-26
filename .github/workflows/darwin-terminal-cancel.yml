@@ -9,6 +9,11 @@ on:
       - 'cli/installerui/terminal_session.go'
       - 'cli/installerui/terminal_stdin_darwin_test.go'
   workflow_dispatch:
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: darwin-terminal-cancel-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 jobs:

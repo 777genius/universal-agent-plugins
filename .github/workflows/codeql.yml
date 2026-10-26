@@ -9,6 +9,12 @@ on:
     - cron: "20 4 * * 1"
   workflow_dispatch:
 
+# PR checks are replaceable; retain every push as frozen release evidence.
+# See docs/agentplugins-release.md (Required gates). Manual/scheduled runs are isolated.
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   security-events: write

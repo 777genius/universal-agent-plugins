@@ -8,9 +8,11 @@ on:
 permissions:
   contents: read
 
+# PR checks are replaceable; retain every push as frozen release evidence.
+# See docs/agentplugins-release.md (Required gates). Manual/scheduled runs are isolated.
 concurrency:
-  group: skills-picker-${{ github.ref }}
-  cancel-in-progress: true
+  group: skills-picker-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   skills-picker:
