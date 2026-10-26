@@ -15,6 +15,12 @@ import (
 
 func newManagementCommand(app App) *cobra.Command {
 	command := &cobra.Command{Use: "manage", Short: "Embed the versioned UAP management API"}
+	command.AddCommand(&cobra.Command{Use: "discover", Short: "Observe private user-profile facts without executing clients", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
+		if cmd.Flags().NFlag() != 0 {
+			return errors.New("management discovery accepts no target, scope or lifecycle options")
+		}
+		return runManagementDiscovery(cmd.Context(), app, cmd.OutOrStdout())
+	}})
 	command.AddCommand(&cobra.Command{Use: "serve", Short: "Serve a private captured management context", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		return runManagementServer(cmd.Context(), app, cmd.InOrStdin(), cmd.OutOrStdout())
 	}})

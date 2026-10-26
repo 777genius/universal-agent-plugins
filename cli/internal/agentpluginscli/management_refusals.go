@@ -32,13 +32,20 @@ func managementExecutableReason(target management.StartupTarget, required bool) 
 	return ""
 }
 
+func managementTargetReason(target management.StartupTarget, required bool) string {
+	if target.DetectionStatus == management.ClientNotDetected {
+		return "This client is not detected; install or configure it before selecting it"
+	}
+	return managementExecutableReason(target, required)
+}
+
 func (b *ManagementBackend) selectedManagementClient(id string, installing bool) (string, error) {
 	for _, target := range b.config.Targets {
 		if target.Id != id {
 			continue
 		}
 		if installing {
-			if reason := managementExecutableReason(target, b.app.Installer.RequiresClientExecutable(target.Client)); reason != "" {
+			if reason := managementTargetReason(target, b.app.Installer.RequiresClientExecutable(target.Client)); reason != "" {
 				return "", managementRefusal("TARGET_UNAVAILABLE", reason)
 			}
 		}

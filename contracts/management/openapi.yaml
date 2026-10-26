@@ -300,6 +300,14 @@ components:
       - user
       - project
       - local
+    DetectionStatus:
+      type: string
+      enum:
+      - detected
+      - not_detected
+      x-enum-varnames:
+      - ClientDetected
+      - ClientNotDetected
     StartupTarget:
       type: object
       additionalProperties: false
@@ -324,6 +332,66 @@ components:
           type: string
           maxLength: 4096
           x-go-type-skip-optional-pointer: true
+        detectionStatus:
+          $ref: '#/components/schemas/DetectionStatus'
+          x-go-type-skip-optional-pointer: true
+          description: Optional passive discovery observation. Omission preserves explicit host capture
+            behavior. A not_detected profile retains inspection and removal authority but cannot be
+            selected for a new installation.
+    DiscoveredTarget:
+      type: object
+      additionalProperties: false
+      required:
+      - client
+      - label
+      - detectionStatus
+      - available
+      properties:
+        client:
+          type: string
+          maxLength: 128
+          minLength: 1
+        label:
+          type: string
+          maxLength: 256
+          minLength: 1
+        detectionStatus:
+          $ref: '#/components/schemas/DetectionStatus'
+        available:
+          type: boolean
+        reason:
+          type: string
+          maxLength: 4096
+          x-go-type-skip-optional-pointer: true
+        profile:
+          $ref: '#/components/schemas/StartupTarget'
+      description: Private host observation. A profile is emitted only for a qualified user-scope
+        client whose authority could be canonicalized safely, including when it is not currently
+        detected. Missing profiles are display-only observations and must never become startup
+        authority. Labels and reasons contain static application-owned guidance.
+    TargetDiscovery:
+      type: object
+      additionalProperties: false
+      required:
+      - apiVersion
+      - engineVersion
+      - targets
+      properties:
+        apiVersion:
+          $ref: '#/components/schemas/ProtocolVersion'
+        engineVersion:
+          type: string
+          maxLength: 128
+          minLength: 1
+        targets:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/DiscoveredTarget'
+      description: One bounded JSON document from the Node-only manage discover subprocess. No
+        client, root, executable or project inputs are accepted. The owning host keeps private
+        profile locators out of renderer state and logs. Discovery never executes a client,
+        probes versions, acquires sources or writes client/UAP state. This is not an HTTP response.
     Startup:
       type: object
       additionalProperties: false
@@ -452,6 +520,9 @@ components:
           maxLength: 4096
         available:
           type: boolean
+        detectionStatus:
+          $ref: '#/components/schemas/DetectionStatus'
+          x-go-type-skip-optional-pointer: true
         reason:
           type: string
           maxLength: 4096

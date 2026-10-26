@@ -227,11 +227,30 @@ export interface components {
         ChangeAction: "install" | "install_skills" | "update" | "sync" | "repair" | "remove" | "recover" | "local_skill";
         /** @enum {string} */
         Scope: "user" | "project" | "local";
+        /** @enum {string} */
+        DetectionStatus: "detected" | "not_detected";
         StartupTarget: {
             id: string;
             client: string;
             configRoot: string;
             executable?: string;
+            /** @description Optional passive discovery observation. Omission preserves explicit host capture behavior. A not_detected profile retains inspection and removal authority but cannot be selected for a new installation. */
+            detectionStatus?: components["schemas"]["DetectionStatus"];
+        };
+        /** @description Private host observation. A profile is emitted only for a qualified user-scope client whose authority could be canonicalized safely, including when it is not currently detected. Missing profiles are display-only observations and must never become startup authority. Labels and reasons contain static application-owned guidance. */
+        DiscoveredTarget: {
+            client: string;
+            label: string;
+            detectionStatus: components["schemas"]["DetectionStatus"];
+            available: boolean;
+            reason?: string;
+            profile?: components["schemas"]["StartupTarget"];
+        };
+        /** @description One bounded JSON document from the Node-only manage discover subprocess. No client, root, executable or project inputs are accepted. The owning host keeps private profile locators out of renderer state and logs. Discovery never executes a client, probes versions, acquires sources or writes client/UAP state. This is not an HTTP response. */
+        TargetDiscovery: {
+            apiVersion: components["schemas"]["ProtocolVersion"];
+            engineVersion: string;
+            targets: components["schemas"]["DiscoveredTarget"][];
         };
         /** @description Trusted host configuration, sent as one bounded JSON line on stdin before bootstrap. Roots and executable paths are absolute. Targets are captured for this process; one target per client in v1. Unsupported scopes fail explicitly. This is not an HTTP request. */
         Startup: {
@@ -267,6 +286,7 @@ export interface components {
             scope: components["schemas"]["Scope"];
             displayPath: string;
             available: boolean;
+            detectionStatus?: components["schemas"]["DetectionStatus"];
             reason?: string;
         };
         Session: {

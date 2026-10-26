@@ -4,6 +4,8 @@ import { createClient, ManagementError } from './client.js';
 import type { components } from './generated/schema.js';
 import type { Session } from './types.js';
 
+export { discoverTargets, type DiscoverTargetsOptions, type TargetDiscovery } from './discovery.js';
+
 export type StartupConfiguration = components['schemas']['Startup'];
 type Bootstrap = components['schemas']['Bootstrap'];
 export interface StartOptions {

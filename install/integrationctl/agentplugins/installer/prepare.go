@@ -17,26 +17,27 @@ import (
 
 // PreparedOperation owns a sealed source snapshot until Close or a terminal Apply.
 type PreparedOperation struct {
-	engine          *Engine
-	mu              sync.Mutex
-	closed          bool
-	busy            bool
-	applied         bool
-	req             Request
-	plan            Plan
-	observationPlan domain.DeliveryPlan
-	snapshot        domain.PackageSnapshot
-	snapshots       []domain.PackageSnapshot
-	envelope        domain.PackageEnvelope
-	envelopes       []domain.PackageEnvelope
-	client          domain.DetectedClient
-	clients         []domain.DetectedClient
-	detected        map[domain.ClientID]domain.DetectedClient
-	facts           BindingFacts
-	openCodeHost    *OpenCodePreparedHost
-	artifact        string
-	deliveries      []preparedDeliveryPlan
-	recorded        domain.StateFileV2
+	engine           *Engine
+	mu               sync.Mutex
+	closed           bool
+	busy             bool
+	applied          bool
+	req              Request
+	plan             Plan
+	observationPlan  domain.DeliveryPlan
+	snapshot         domain.PackageSnapshot
+	snapshots        []domain.PackageSnapshot
+	envelope         domain.PackageEnvelope
+	envelopes        []domain.PackageEnvelope
+	client           domain.DetectedClient
+	clients          []domain.DetectedClient
+	detected         map[domain.ClientID]domain.DetectedClient
+	facts            BindingFacts
+	openCodeHost     *OpenCodePreparedHost
+	openCodeSiblings []domain.DetectedClient
+	artifact         string
+	deliveries       []preparedDeliveryPlan
+	recorded         domain.StateFileV2
 }
 
 func (p *PreparedOperation) Plan() Plan {

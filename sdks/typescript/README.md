@@ -9,6 +9,27 @@ This source package has the development version `0.0.0-development`. It is consu
 as a built, integrity-pinned tarball until separately authorized public publication.
 The SDK never downloads or updates an engine executable.
 
+## Discover private user-profile facts
+
+The Node-only `discoverTargets({ executable, env?, signal?, timeoutMs? })` runs the
+same pinned engine's `manage discover` command and waits for its exit. It reads
+native client presence and canonical profile locators without version probes,
+client execution, source acquisition or filesystem mutations. The 10-second default
+deadline and 64 KiB output limit bound the owned child. Both default and explicit
+environments are filtered to OS variables and native profile locators; credentials,
+proxy secrets and launch options are not inherited.
+
+The versioned result contains `targets` with `client`, `label`, `detectionStatus`,
+`available`, optional `reason`, and optional private `profile` startup facts. Only
+qualified, safely inspected user profiles have `profile`. A profile remains present
+when `detectionStatus` is `not_detected`, so a host can retain existing binding
+inspection/removal authority after the client disappears. Such a target cannot be
+selected for a new installation. Detected unsupported clients are display-only
+observations with no profile. Never derive authority from their labels or display
+paths, forward private profile facts to a renderer, or turn discovery into automatic
+installation. Hosts preserve their own explicitly selected native profiles and can
+merge additional discovered profiles into the captured startup context.
+
 ## Start an owned engine
 
 ```ts

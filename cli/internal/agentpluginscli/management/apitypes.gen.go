@@ -82,6 +82,24 @@ func (e ChangeAction) Valid() bool {
 	}
 }
 
+// Defines values for DetectionStatus.
+const (
+	ClientDetected    DetectionStatus = "detected"
+	ClientNotDetected DetectionStatus = "not_detected"
+)
+
+// Valid indicates whether the value is a known member of the DetectionStatus enum.
+func (e DetectionStatus) Valid() bool {
+	switch e {
+	case ClientDetected:
+		return true
+	case ClientNotDetected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DiagnosticSeverity.
 const (
 	DiagnosticSeverityError   DiagnosticSeverity = "error"
@@ -345,6 +363,9 @@ type ChangeRequest struct {
 	TargetIds           []string     `json:"targetIds,omitempty"`
 }
 
+// DetectionStatus defines model for DetectionStatus.
+type DetectionStatus string
+
 // Diagnostic defines model for Diagnostic.
 type Diagnostic struct {
 	Alias    string             `json:"alias,omitempty"`
@@ -356,6 +377,16 @@ type Diagnostic struct {
 
 // DiagnosticSeverity defines model for Diagnostic.Severity.
 type DiagnosticSeverity string
+
+// DiscoveredTarget Private host observation. A profile is emitted only for a qualified user-scope client whose authority could be canonicalized safely, including when it is not currently detected. Missing profiles are display-only observations and must never become startup authority. Labels and reasons contain static application-owned guidance.
+type DiscoveredTarget struct {
+	Available       bool            `json:"available"`
+	Client          string          `json:"client"`
+	DetectionStatus DetectionStatus `json:"detectionStatus"`
+	Label           string          `json:"label"`
+	Profile         *StartupTarget  `json:"profile,omitempty"`
+	Reason          string          `json:"reason,omitempty"`
+}
 
 // Environment defines model for Environment.
 type Environment struct {
@@ -619,21 +650,30 @@ type Startup struct {
 
 // StartupTarget defines model for StartupTarget.
 type StartupTarget struct {
-	Client     string `json:"client"`
-	ConfigRoot string `json:"configRoot"`
-	Executable string `json:"executable,omitempty"`
-	Id         string `json:"id"`
+	Client          string          `json:"client"`
+	ConfigRoot      string          `json:"configRoot"`
+	DetectionStatus DetectionStatus `json:"detectionStatus,omitempty"`
+	Executable      string          `json:"executable,omitempty"`
+	Id              string          `json:"id"`
 }
 
 // Target defines model for Target.
 type Target struct {
-	Available   bool   `json:"available"`
-	Client      string `json:"client"`
-	DisplayPath string `json:"displayPath"`
-	Id          string `json:"id"`
-	Label       string `json:"label"`
-	Reason      string `json:"reason,omitempty"`
-	Scope       Scope  `json:"scope"`
+	Available       bool            `json:"available"`
+	Client          string          `json:"client"`
+	DetectionStatus DetectionStatus `json:"detectionStatus,omitempty"`
+	DisplayPath     string          `json:"displayPath"`
+	Id              string          `json:"id"`
+	Label           string          `json:"label"`
+	Reason          string          `json:"reason,omitempty"`
+	Scope           Scope           `json:"scope"`
+}
+
+// TargetDiscovery One bounded JSON document from the Node-only manage discover subprocess. No client, root, executable or project inputs are accepted. The owning host keeps private profile locators out of renderer state and logs. Discovery never executes a client, probes versions, acquires sources or writes client/UAP state. This is not an HTTP response.
+type TargetDiscovery struct {
+	ApiVersion    ProtocolVersion    `json:"apiVersion"`
+	EngineVersion string             `json:"engineVersion"`
+	Targets       []DiscoveredTarget `json:"targets"`
 }
 
 // Error Structured failure before acceptance or while observing. retryable never authorizes generating a fresh ID for an uncertain mutation.

@@ -69,7 +69,11 @@ func (b *ManagementBackend) Session(ctx context.Context) (management.Session, er
 	for _, captured := range b.config.Targets {
 		target := byClient[captured.Client]
 		target.Id = captured.Id
-		if reason := managementExecutableReason(captured, b.app.Installer.RequiresClientExecutable(captured.Client)); reason != "" {
+		target.DetectionStatus = captured.DetectionStatus
+		if target.DetectionStatus == "" {
+			target.DetectionStatus = management.ClientDetected
+		}
+		if reason := managementTargetReason(captured, b.app.Installer.RequiresClientExecutable(captured.Client)); reason != "" {
 			target.Available, target.Reason = false, reason
 		}
 		out.Targets = append(out.Targets, target)

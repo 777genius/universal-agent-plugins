@@ -42,6 +42,9 @@ func NormalizeManagementStartup(input management.Startup) (management.Startup, e
 	ids, clients := map[string]bool{}, map[string]bool{}
 	for i := range input.Targets {
 		target := &input.Targets[i]
+		if target.DetectionStatus != "" && target.DetectionStatus != management.ClientDetected && target.DetectionStatus != management.ClientNotDetected {
+			return input, errors.New("invalid captured detection status")
+		}
 		if target.Id == "" || len(target.Id) > 128 || ids[target.Id] || clients[target.Client] {
 			return input, errors.New("unique target IDs and one profile per client required")
 		}
@@ -118,6 +121,9 @@ func (d managementDetector) Detect(ctx context.Context) ([]domain.DetectedClient
 	detected := make([]domain.DetectedClient, 0, len(d.targets))
 	for _, target := range d.targets {
 		item := domain.DetectedClient{ClientID: domain.ClientID(target.Client), ConfigRoot: target.ConfigRoot, ExecutablePath: target.Executable, Status: domain.DetectionDetected}
+		if target.DetectionStatus == management.ClientNotDetected {
+			item.Status = domain.DetectionNotDetected
+		}
 		if reason := managementExecutableReason(target, d.requiresExecutable(target.Client)); reason != "" {
 			item.DetectionError = errors.New(reason)
 		}
