@@ -268,6 +268,41 @@ outside the checked-out source. One concrete shared TypeScript toolchain suffice
 - VS Code: [pinned gateway API](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vscode-dts/vscode.proposed.mcpServerDefinitions.d.ts),
   [MCP operations](https://code.visualstudio.com/docs/agents/run/manage-mcp-servers).
 
+## Grok and Qoder measured acquisition to fixed help
+
+Genuine Grok run 40235269281, artifact 12615677952 (ZIP SHA256
+`b8cccd65c059fab3d157edd4bb26474b7eab547458f4d8cf46222072660c7331`),
+measured the existing official 1.0.70 gzip at 76,760,282 bytes/SHA256
+`11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc`.
+Its sole `grok` executable is 195,700,192 bytes/SHA256
+`22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9`.
+Freeze those pins; admit only acquire/help and the exact nine commands:
+`--version`, `--help`, `inspect --help`, `mcp --help`, `mcp list --help`,
+`mcp doctor --help`, `plugin --help`, `plugin list --help`, `doctor --help`.
+Each has 30 seconds, exit zero, no capture error, empty stderr and strict UTF-8.
+Require exact requested Usage command followed only by a standard Clap
+metavariable or end-of-line, plus --help; main identifies inspect/mcp/plugin.
+The source-defined version candidate is one whole `grok 1.0.70 (<7..40 lowercase
+hex>)` line with optional ` [stable]`; retain the actual compiled commit/channel.
+Public source snapshot `xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`
+is command guidance, not shipping-source provenance. Only `grok.help` may pass;
+no inspect, trust, doctor operation, provider or MCP runtime executes here.
+
+Genuine Qoder run 40235270603, artifact 12615882073 (ZIP SHA256
+`09a2868892ec9c4eccd4a9f62d64a45c6024c977f51fa0bc524beb56ce5ae829`),
+confirms the existing pinned archive and sole regular member `qodercli`,
+182,982,112 bytes, matching the already frozen executable SHA256. Select that
+entrypoint. Existing retained genuine 1.1.78 evidence (run 40079977099) already
+binds exact version stdout `1.1.78\n` and `plugins` help; its parent Usage is
+`qodercli plugins|plugin [options] [command]`. The next help-only table is
+`--version`, `--help`, `plugins --help`, `plugins list --help`, `mcp --help`.
+Require exact version and requested command-specific Usage, --help, zero exit,
+no capture error and empty stderr, within 30 seconds each. Unknown main/MCP
+grammar fails with bounded evidence; do not guess a successful shape.
+Only `qoder.help` may pass. No import/list operation, session plugin, SDK,
+user-cache registration, scope discovery or MCP runtime is part of this slice.
+These pins and fixed-help additions retain every later qualification flag false.
+
 ## Kimi initial API research amendment
 
 This next slice qualifies only observed research IDs, not a product version gate
@@ -732,6 +767,40 @@ Required blocked/skipped/not-reached stages fail, never substitute a config pass
 State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
 authentication false and real-model use false. Raw bounded evidence stays in
 closed CI artifacts, not Git or recursively uploaded native profiles.
+
+## Current-source runtime CI handoff
+
+The October 26 continuation uses a separate `project-native-runtime.yml` job
+and the small `project_native_runtime.py` frontend. Two independent plan rounds
+and independent code reviews by the Gemini/Copilot and Kimi/Cline implementers
+admitted the closed first Copilot attempt. No existing baseline gate is changed.
+
+Only a fixed implemented test name, opt-in, source filename and deadline can be
+selected. The workflow verifies actual GitHub-hosted Linux x64 and exact clean
+source before setup-go; the frontend repeats admission before any compiler or
+vendor child. It reuses the reviewed archive acquisition/materialization,
+immutable file checks, capture budgets and closed ZIP writer. Build the public
+installer, existing probe and repository test binary with exact Go 1.26.10,
+checking held compiler identity before and after each build. Provision the same
+pinned lintai release through bounded verified archive acquisition. No inherited
+profile, authentication, proxy or loader environment enters the test.
+
+Acquisition and compilation have one 480-second budget. The initial Copilot
+attempt has its own original 180-second total, with five seconds reserved by
+the outer process capture for reaping, followed by a bounded publication phase.
+Future full lifecycle registrations require their separately reviewed exact
+tests and original deadlines; this is not an arbitrary timeout override.
+
+The frontend records source/build identity separately in `frontend.zip`. A
+native `runtime.zip` is normalized only from bounded held bytes after checking
+the fixed client's exact member inventory, command triples, source identity,
+UTF-8, duplicate/special/oversized entries and explicit qualification state.
+Copilot's initial schema admits its named installed snapshots, bounded provider
+requests, probe events and fixed command table. Unknown native JSONL semantics
+remain an intentional failed research attempt until a genuine artifact has been
+reviewed. A closed artifact or successful build cannot qualify a failed,
+skipped, absent or otherwise unobserved native test. Raw profiles are never
+recursively uploaded, and the workflow publishes only these two named ZIPs.
 
 ## Completion gate
 
