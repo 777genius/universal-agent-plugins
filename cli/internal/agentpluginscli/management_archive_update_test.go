@@ -77,7 +77,12 @@ func TestManagementMutableArchiveUpdateRetainsAllTargets(t *testing.T) {
 			targets := make([]string, 0, len(ids))
 			for _, id := range ids {
 				client := fixtureClient(t, id)
-				client.ExecutablePath = filepath.Join(t.TempDir(), string(id))
+				// Startup captures physical authority even when temp paths have aliases.
+				executableRoot, err := filepath.EvalSymlinks(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				client.ExecutablePath = filepath.Join(executableRoot, string(id))
 				detected = append(detected, client)
 				targets = append(targets, "profile-"+string(id))
 			}
