@@ -807,6 +807,105 @@ the documented suppression control in the official
 claim network isolation or supply vendor authentication. Immutable runtime
 identities remain checked before and after every child. Inert contracts assert
 the exact supplied environment on every help/catalog call.
+## Current-source runtime CI handoff
+
+The October 26 continuation uses a separate `project-native-runtime.yml` job
+and the small `project_native_runtime.py` frontend. Two independent plan rounds
+and independent code reviews by the Gemini/Copilot and Kimi/Cline implementers
+admitted the closed first Copilot attempt. No existing baseline gate is changed.
+
+Only a fixed implemented test name, opt-in, source filename and deadline can be
+selected. The workflow verifies actual GitHub-hosted Linux x64 and exact clean
+source before setup-go; the frontend repeats admission before any compiler or
+vendor child. It reuses the reviewed archive acquisition/materialization,
+immutable file checks, capture budgets and closed ZIP writer. Build the public
+installer, existing probe and repository test binary with exact Go 1.26.10,
+checking held compiler identity before and after each build. Provision the same
+pinned lintai release through bounded verified archive acquisition. No inherited
+profile, authentication, proxy or loader environment enters the test.
+
+Acquisition and compilation have one 480-second budget. The initial Copilot
+attempt has its own original 180-second total, with five seconds reserved by
+the outer process capture for reaping, followed by a bounded publication phase.
+Future full lifecycle registrations require their separately reviewed exact
+tests and original deadlines; this is not an arbitrary timeout override.
+
+The frontend records source/build identity separately in `frontend.zip`. A
+native `runtime.zip` is normalized only from bounded held bytes after checking
+the fixed client's exact member inventory, command triples, source identity,
+UTF-8, duplicate/special/oversized entries and explicit qualification state.
+Copilot's initial schema admits its named installed snapshots, bounded provider
+requests, probe events and fixed command table. Unknown native JSONL semantics
+remain an intentional failed research attempt until a genuine artifact has been
+reviewed. A closed artifact or successful build cannot qualify a failed,
+skipped, absent or otherwise unobserved native test. Raw profiles are never
+recursively uploaded, and the workflow publishes only these two named ZIPs.
+
+The reviewed Gemini registration uses the exact
+`TestAgentpluginsGeminiNativeProjectRuntimeAttempt` with the same 180-second
+attempt bound. A successful attempt additionally requires all command triples,
+both installed snapshots, provider requests, probe events, actual native
+session/call identifiers and returned probe facts. Its five lifecycle
+qualification flags remain false. Pinned Gemini source adds only the exact
+`wait_for_previous` boolean property to the provider-visible tool schema;
+validate that property exactly before comparing the original probe schema.
+Never add it to the emitted tool arguments. The fixture API key is registered,
+redacted and checked again at closed artifact admission.
+
+The Kimi registration selects only
+`TestAgentpluginsKimiNativeProjectComponentsLifecycle` and its original
+900-second total/840-second work budget. It observes public local-source
+installation, reconciliation, update, missing-component repair, fresh native
+processes and removal through Kimi's authenticated local API. Named native MCP
+tests prove initialize/list; tools-call stays false. As with the reviewed local
+Gemini/Copilot sequence, repair uses unchanged selected local input. Moving-source
+and recorded-pin behavior remains separately required in
+`TestProjectComposedSourceLifecycleSeparatesUserAndProjects` and
+`TestProjectCopilotComposedSavedLifecycle`; it is not attributed to these native
+local-directory observations. The checked source-root override and canonical
+Python executable are explicit inputs, with no ambient auth or loader variables.
+
+## Qoder, Grok, Kiro and Devin installed-startup attempts
+
+Two independent plan rounds and implementation reviews admit the finite shared
+`agentplugins_project_native_cli_attempt_test.go` helper and four thin client
+wrappers. Select only `TestAgentpluginsQoderNativeProjectRuntimeAttempt`,
+`TestAgentpluginsGrokNativeProjectRuntimeAttempt`,
+`TestAgentpluginsKiroNativeProjectRuntimeAttempt` and
+`TestAgentpluginsDevinNativeProjectRuntimeAttempt`. The last uses the public
+`windsurf` target, `AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT`, and the
+`agentplugins_windsurf_project_native_attempt_test.go` leaf. Each attempt keeps
+one original 180-second total, 150-second work and 30-second cleanup budget.
+
+Use exact already pinned archives, full regular runtime closure, actual hosted
+Linux admission and the real public local-directory project add. Qoder and Grok
+install skill-only packages; Kiro and Devin also install the harmless stdio
+probe through the production managed launcher. Independently validate selected
+source, package, Prepared binding, native ownership paths/digests, complete
+Qoder import-view inventory, and exact native command/arguments/environment
+against recorded package and data authority. No direct native configuration
+replacement or user-profile relocation is permitted.
+
+Qoder's measured help explicitly defines `--tools ''` as disabling all tools.
+Grok's pinned public command-source snapshot instead parses an empty `--tools`
+as no selector, so that option is not used. Its source-guided attempt uses
+`--deny ''`, traced through the strict permission parser to Deny/Any/no pattern;
+source similarity is not a claim of shipped-binary equivalence. Devin omits
+automatic permission mode and uses an original-profile deny-only configuration
+for the documented builtins and MCP prefix, with no allow entries or trust
+grant. Kiro uses no-interactive mode with no trust or automatic approval flag.
+Unknown actual options, permission behavior, authentication or tool protocol
+fail without granting access or trying an alternate permissive mode.
+
+The exact capture table is `git-a`, `git-b`, `version`, `add-a`,
+`native-attempt`. The closed frontend admits only their complete command
+triples, the fixed summary and optional probe events, bound to the exact source
+commit/tree. Every initial native session, including exit zero, remains a
+failed research attempt until its genuine raw output is independently reviewed.
+All five qualification flags, vendor authentication and real-model qualification
+remain false. A bounded retained failure cannot become a passing E2E gate.
+Further source/provider/permission/lifecycle changes require their own observed
+contract and independent review; legacy user and baseline gates remain required.
 
 ## Completion gate
 
