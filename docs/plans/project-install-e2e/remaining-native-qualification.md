@@ -596,17 +596,36 @@ body/path; no assumed provider prompt format or LLM skill activation is claimed.
 Fixed native argv is exact Node, exact `gemini.js`, `--prompt <fixed-stage-prompt>
 --approval-mode default --output-format stream-json --model gemini-2.5-flash`.
 No resume, fake-response file, injected MCP definition or extra extension.
-Original-home settings set `privacy.usageStatisticsEnabled=false`,
+Original-home settings set `security.auth.selectedType='gemini-api-key'`,
+`privacy.usageStatisticsEnabled=false`,
 `telemetry.enabled=false` and
 `experimental.adk.agentSessionNoninteractiveEnabled=false`, selecting the pinned
 legacy headless loop. Set `GOOGLE_GEMINI_BASE_URL` to the fresh literal loopback
 origin and `GOOGLE_GENAI_API_VERSION=v1beta`. Supply a fresh fixture-owned
 `GEMINI_API_KEY` required only by this loopback provider; compare its exact
 `x-goog-api-key` header privately and redact the key from all admitted artifacts.
-The pinned GATEWAY mode supports this custom endpoint. Its config code otherwise
-evaluates `loadApiKey()` before reaching the GATEWAY branch, so an explicit
-fixture key avoids accidental keychain probing. This is test-provider
+The explicit API-key type passes the pinned native auth validator and still
+uses the configured custom endpoint. The explicit fixture key also avoids
+`loadApiKey()` and accidental keychain probing. This is test-provider
 authentication, never vendor Google authentication/OAuth or an inherited account.
+
+Genuine [runtime run 40349097306](https://github.com/777genius/universal-agent-plugins/actions/runs/40349097306),
+native artifact `12668685097` (ZIP SHA256
+`311209db69ad0ebb6f59f64bcd3c918019a5e1167aad2f8cb4dc8d5e95f8e870`),
+failed before any provider request with `Invalid auth method selected.` The exact
+source commit `6006c14a4decfe4b891c6263ad6ad5992e404b5b` selects GATEWAY from
+`GOOGLE_GEMINI_BASE_URL`, but its CLI auth validator does not admit that type.
+This amendment selects the existing API-key type in original-home settings;
+the fixture key, loopback endpoint, native argv, normal auth validation, trust,
+tool policy, acquisition and budgets remain the reviewed contract. It does not
+enable external authentication or qualify the unexecuted provider/tool stages.
+Pinned source blobs are `packages/core/src/core/contentGenerator.ts`
+`f44ec6d2458473360db05f3150589cbd192c4a0e`,
+`packages/cli/src/validateNonInterActiveAuth.ts`
+`a15f4f83a20b515e98e69eee3786a22b48441408`, `config/auth.ts`
+`1ca07f98eb4c588b2b0bef0d627bc9b373bd6e7f` and `config/settingsSchema.ts`
+`f85279cdc3d78b2033a6e48f92eaf02febf1eaa0` (the last two under
+`packages/cli/src`). Implement only after two independent plan reviews.
 
 Admit only POST
 `/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse` and optional POST

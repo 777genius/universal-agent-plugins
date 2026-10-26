@@ -262,7 +262,7 @@ func (f *geminiProjectAttempt) setup(t *testing.T) {
 		}
 	}
 	settings := filepath.Join(f.base.Home, ".gemini", "settings.json")
-	settingsBody, _ := json.Marshal(map[string]any{"security": map[string]any{"folderTrust": map[string]any{"enabled": true}}, "privacy": map[string]any{"usageStatisticsEnabled": false}, "telemetry": map[string]any{"enabled": false}, "experimental": map[string]any{"adk": map[string]any{"agentSessionNoninteractiveEnabled": false}}, "general": map[string]any{"enableAutoUpdate": false, "enableAutoUpdateNotification": false}})
+	settingsBody, _ := json.Marshal(map[string]any{"security": map[string]any{"auth": map[string]any{"selectedType": "gemini-api-key"}, "folderTrust": map[string]any{"enabled": true}}, "privacy": map[string]any{"usageStatisticsEnabled": false}, "telemetry": map[string]any{"enabled": false}, "experimental": map[string]any{"adk": map[string]any{"agentSessionNoninteractiveEnabled": false}}, "general": map[string]any{"enableAutoUpdate": false, "enableAutoUpdateNotification": false}})
 	trust := filepath.Join(f.base.Home, ".gemini", "trustedFolders.json")
 	trustBody, _ := json.Marshal(map[string]string{f.base.Project: "TRUST_FOLDER", f.other: "TRUST_FOLDER"})
 	policy := filepath.Join(f.base.Home, ".gemini", "policies", "uap-project-proof.toml")
