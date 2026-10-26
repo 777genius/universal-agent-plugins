@@ -41,10 +41,20 @@ for (const scenario of [
       }, throws);
       await button.click();
       await expect(page.locator('html')).toHaveAttribute('data-copy-fallback', 'attempted');
-      await expect(button).toHaveAccessibleName(scenario.copy);
-      if (scenario.name === 'registry') await expect(snippet.getByRole('status')).toHaveText('');
-      else await expect(snippet.getByRole('status')).toHaveCount(0);
-      await expect(page.locator('textarea')).toHaveCount(textareas);
+      // Snapshot after promise/Vue updates, without waiting for the copied reset timer.
+      // The old implementation reports success here until its 1.6/1.8-second timeout.
+      const state = await snippet.evaluate(async (element) => {
+        await Promise.resolve();
+        await Promise.resolve();
+        return {
+          label: element.querySelector('button')?.getAttribute('aria-label'),
+          announcement: element.querySelector('[role="status"]')?.textContent ?? '',
+          textareas: document.querySelectorAll('textarea').length,
+        };
+      });
+      expect(state.label).toBe(scenario.copy);
+      expect(state.announcement.trim()).toBe('');
+      expect(state.textareas).toBe(textareas);
       await expect(snippet.locator('code')).toHaveText(command);
     }
   });
