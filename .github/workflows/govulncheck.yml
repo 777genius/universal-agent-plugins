@@ -7,11 +7,11 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
-# PR checks are replaceable; retain every push as frozen release evidence.
-# See docs/agentplugins-release.md (Required gates). Manual/scheduled runs are isolated.
+# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
+# Release validation also accepts checks from the associated merged PR head.
 concurrency:
-  group: govulncheck-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: govulncheck-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   govulncheck:
