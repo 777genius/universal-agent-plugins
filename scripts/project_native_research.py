@@ -227,6 +227,24 @@ def verify_files(identities, budget):
             raise ValueError("runtime bytes changed from pinned acquisition")
 
 
+def selected_node_receipt(receipt):
+    """Keep the executed Node member and a digest of the complete checked index.
+
+    Node's headers/docs/npm are inventoried but not materialized by this runner.
+    Repeating that large unused index in the one-MiB evidence summary hides
+    otherwise useful failure evidence; the immutable archive still binds it.
+    """
+    members = receipt["members"]
+    selected = [row for row in members if row["name"] == NODE["entrypoint"]]
+    if len(selected) != 1 or selected[0]["kind"] != "file":
+        raise ValueError("exact Node inventory member is absent")
+    canonical = json.dumps(members, sort_keys=True, separators=(",", ":")).encode()
+    return {**receipt, "members": selected, "inventory_member_count": len(members),
+            "inventory_regular_bytes": sum(row["bytes"] for row in members if row["kind"] == "file"),
+            "inventory_sha256": hashlib.sha256(canonical).hexdigest(),
+            "inventory_selection": "only the exact materialized Node executable"}
+
+
 class Context:
     def __init__(self, root, summary, budget):
         self.root, self.summary, self.budget = root, summary, budget
@@ -427,7 +445,9 @@ def admit_bodies(bodies, secrets):
     if len(bodies) > artifacts.FILES or "research.json" not in bodies or sum(map(len, bodies.values())) > artifacts.LIMIT - 65536:
         raise ValueError("evidence aggregate refused")
     for name, body in bodies.items():
-        if not artifacts.NAME.fullmatch(name) or len(body) > STREAM or any(secret in name.encode() or secret in body for secret in secrets):
+        if len(body) > STREAM:
+            raise ValueError("evidence member exceeds one-MiB bound")
+        if not artifacts.NAME.fullmatch(name) or any(secret in name.encode() or secret in body for secret in secrets):
             raise ValueError("private token or unsafe evidence member refused")
     json.loads(bodies["research.json"])
 
@@ -440,12 +460,34 @@ def publish(summary, ctx, output):
     try:
         bodies = evidence(summary, ctx.captures if ctx else {}, ctx.secrets if ctx else [])
         artifacts.write_zip(pending, bodies)
-    except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile):
+    except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile) as error:
         summary["collection_complete"] = False
         summary["artifact_admission_failed"] = True
         pending.unlink(missing_ok=True)
         failure = {"collection_complete": False, "artifact_admission_failed": True,
                    "qualification": {name: False for name in QUALIFICATION_CASES}}
+        # Only closed codes, counts and validated source identities survive a
+        # refused artifact. Never copy exception text or native observations.
+        reasons = {"evidence member exceeds one-MiB bound": "member_size",
+                   "evidence aggregate refused": "aggregate_size",
+                   "capture receipt differs": "capture_identity",
+                   "HTTP capture receipt differs": "http_capture_identity",
+                   "extra private capture refused": "capture_inventory",
+                   "private token or unsafe evidence member refused": "private_or_unsafe_member"}
+        failure["admission_reason"] = reasons.get(str(error), "admission_refused")
+        for key in ("source_commit", "source_tree"):
+            if isinstance(summary.get(key), str) and re.fullmatch(r"[0-9a-f]{40}", summary[key]):
+                failure[key] = summary[key]
+        if summary.get("client") in CLIENTS:
+            failure["client"] = summary["client"]
+        if summary.get("phase") in PHASE_CASES:
+            failure["phase"] = summary["phase"]
+        failure["command_count"] = len(summary.get("commands", []))
+        failure["captured_member_count"] = len(ctx.captures) if ctx else 0
+        try:
+            failure["summary_bytes"] = len(json.dumps(summary, sort_keys=True, indent=2).encode()) + 1
+        except (ValueError, TypeError):
+            failure["summary_bytes"] = None
         artifacts.write_zip(pending, {"research.json": json.dumps(failure).encode()})
 
 
@@ -481,7 +523,7 @@ def run(client, phase, output):
                     node, node_ids = materialize(output / "node", NODE, node_receipt, node_contents, selected_only=True)
                     ctx.identities.update(node_ids)
                     ctx.argv.insert(0, str(node))
-                    summary["node"] = node_receipt
+                    summary["node"] = selected_node_receipt(node_receipt)
                     ctx.env["PATH"] = str(node.parent) + ":/usr/bin:/bin"
                     verify_files(ctx.identities, budget)
                     record, stdout, stderr = ctx.command("node-version", [node, "--version"], ctx.projects["a"], ctx.env, 10)
