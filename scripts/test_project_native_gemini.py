@@ -96,10 +96,10 @@ class GeminiCollectorTests(unittest.TestCase):
 
     def test_native_errors_auth_and_wrong_version_fail_without_boundary(self):
         for replacement in [({"exit": 1}, b"Authentication required", b""),
-                            ({"exit": 0}, b"0.65.0\n", b"Authentication required"),
+                            ({"exit": 0, "error": None}, b"0.65.0\n", b"Authentication required"),
                             ({"exit": 0, "error": "timeout"}, b"0.65.0", b""),
                             ({}, b"0.65.0", b""),
-                            ({"exit": 0}, b"0.65.0-preview.1", b"")]:
+                            ({"exit": 0, "error": None}, b"0.65.0-preview.1", b"")]:
             with self.subTest(replacement=replacement):
                 ctx = self.context()
                 ctx.replace["version"] = replacement
@@ -109,7 +109,7 @@ class GeminiCollectorTests(unittest.TestCase):
 
     def test_unknown_help_fails_before_scope_probes(self):
         ctx = self.context()
-        ctx.replace["skills-list-help"] = ({"exit": 0}, b"unknown command", b"")
+        ctx.replace["skills-list-help"] = ({"exit": 0, "error": None}, b"unknown command", b"")
         with self.assertRaises(ValueError):
             gemini.collect(ctx)
         self.assertFalse(any(call[0].startswith("empty-") for call in ctx.calls))
@@ -121,7 +121,7 @@ class GeminiCollectorTests(unittest.TestCase):
             self.assertEqual(gemini._probe(ctx, {}, "observed", arguments), b"actual output")
         for arguments in (("--version",), ("--help",), ("skills", "list"), ("mcp", "list", "extra")):
             ctx = self.context()
-            ctx.replace["observed"] = ({"exit": 0}, b"actual output", gemini._RIPGREP_FALLBACK)
+            ctx.replace["observed"] = ({"exit": 0, "error": None}, b"actual output", gemini._RIPGREP_FALLBACK)
             with self.subTest(arguments=arguments), self.assertRaises(ValueError):
                 gemini._probe(ctx, {}, "observed", arguments)
 
@@ -139,20 +139,54 @@ class GeminiCollectorTests(unittest.TestCase):
             with self.subTest(exit=exit_code, error=error, stderr=stderr), self.assertRaises(ValueError):
                 gemini._probe(ctx, {}, "observed", ("skills", "list", "--all"))
 
+    def test_measured_empty_mcp_stderr_selects_only_existing_empty_parser(self):
+        ctx = self.context()
+        captured = ({"exit": 0, "error": None}, b"", b"No MCP servers configured.\n")
+        ctx.replace["observed"] = captured
+        body = gemini._probe(ctx, {}, "observed", ("mcp", "list"))
+        self.assertEqual(gemini.parse_mcp(body), ({}, False))
+        self.assertEqual(captured, ({"exit": 0, "error": None}, b"", gemini._EMPTY_MCP))
+        ctx.replace["empty-a-mcp"] = captured
+        result = gemini.collect(ctx)
+        self.assertEqual(len(result["cases"]), 2)
+        self.assertFalse(result["observations"]["mcp_tools_call_qualified"])
+
+    def test_empty_mcp_stderr_never_hides_other_output_or_capture_failure(self):
+        cases = [(("mcp", "list"), {"exit": 0, "error": None}, b"output", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0, "error": None}, b"", gemini._EMPTY_MCP + b"error\n"),
+                 (("mcp", "list"), {"exit": 0, "error": None}, b"", gemini._EMPTY_MCP.rstrip(b"\n")),
+                 (("mcp", "list"), {"exit": 0, "error": None}, b"", gemini._EMPTY_MCP + b"\n"),
+                 (("mcp", "list"), {"exit": False}, b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 1}, b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0, "error": "timeout"}, b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0}, b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0, "error": ""}, b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0, "error": False}, b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), [], b"", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0, "error": None}, "", gemini._EMPTY_MCP),
+                 (("mcp", "list"), {"exit": 0, "error": None}, b"", bytearray(gemini._EMPTY_MCP)),
+                 (("mcp", "list", "extra"), {"exit": 0, "error": None}, b"", gemini._EMPTY_MCP),
+                 (("skills", "list", "--all"), {"exit": 0, "error": None}, b"", gemini._EMPTY_MCP)]
+        for arguments, record, stdout, stderr in cases:
+            ctx = self.context()
+            ctx.replace["observed"] = (record, stdout, stderr)
+            with self.subTest(arguments=arguments, record=record, stdout=stdout, stderr=stderr), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", arguments)
+
     def test_successful_builtin_listing_with_exact_warning_remains_empty_control(self):
         ctx = self.context()
         body = (b"Discovered Agent Skills:\n\nantigravity-support [Enabled] [Built-in]\n"
                 b"  Description: Publisher-provided skill\n  Location:    /bundle/builtin/antigravity-support/SKILL.md\n\n"
                 b"skill-creator [Enabled] [Built-in]\n  Description: Publisher-provided skill\n"
                 b"  Location:    /bundle/builtin/skill-creator/SKILL.md\n\n")
-        ctx.replace["empty-a-skills"] = ({"exit": 0}, body, gemini._RIPGREP_FALLBACK)
+        ctx.replace["empty-a-skills"] = ({"exit": 0, "error": None}, body, gemini._RIPGREP_FALLBACK)
         result = gemini.collect(ctx)
         self.assertEqual(len(result["cases"]), 2)
         self.assertFalse(result["observations"]["mcp_tools_call_qualified"])
 
     def test_cross_project_skill_is_not_discovery_success(self):
         ctx = self.context()
-        ctx.replace["configured-a-skills"] = ({"exit": 0}, skill_text([
+        ctx.replace["configured-a-skills"] = ({"exit": 0, "error": None}, skill_text([
             (gemini.NAMES["a"], ctx.projects["b"] / ".gemini/skills" / gemini.NAMES["a"] / "SKILL.md", True),
             (gemini.NAMES["user"], ctx.home / ".gemini/skills" / gemini.NAMES["user"] / "SKILL.md", True),
         ]), b"")
@@ -161,7 +195,7 @@ class GeminiCollectorTests(unittest.TestCase):
 
     def test_unexpected_connection_does_not_pass_config_only_case(self):
         ctx = self.context()
-        ctx.replace["configured-a-mcp"] = ({"exit": 0}, mcp_text([
+        ctx.replace["configured-a-mcp"] = ({"exit": 0, "error": None}, mcp_text([
             (gemini.NAMES[scope], gemini.URLS[scope] + " (http)", "Connected") for scope in ("a", "user")
         ]), b"")
         with self.assertRaisesRegex(ValueError, "policy differs"):
@@ -169,7 +203,7 @@ class GeminiCollectorTests(unittest.TestCase):
 
     def test_missing_untrusted_warning_fails(self):
         ctx = self.context()
-        ctx.replace["untrusted-a-mcp"] = ({"exit": 0}, mcp_text([
+        ctx.replace["untrusted-a-mcp"] = ({"exit": 0, "error": None}, mcp_text([
             (gemini.NAMES[scope], gemini.URLS[scope] + " (http)", "Blocked") for scope in ("a", "user")
         ]), b"")
         with self.assertRaisesRegex(ValueError, "warning was not observed"):
@@ -177,7 +211,7 @@ class GeminiCollectorTests(unittest.TestCase):
 
     def test_untrusted_mcp_exclusion_precedes_trust_status(self):
         ctx = self.context()
-        ctx.replace["untrusted-a-mcp"] = ({"exit": 0}, mcp_text([
+        ctx.replace["untrusted-a-mcp"] = ({"exit": 0, "error": None}, mcp_text([
             (gemini.NAMES[scope], gemini.URLS[scope] + " (http)", "Disabled") for scope in ("a", "user")
         ], untrusted=True), b"")
         with self.assertRaisesRegex(ValueError, "policy differs"):
@@ -187,7 +221,7 @@ class GeminiCollectorTests(unittest.TestCase):
         ctx = self.context()
         def mutated():
             (ctx.home / ".gemini/settings.json").write_text("{}\n")
-            return {"exit": 0}, b"0.65.0\n", b""
+            return {"exit": 0, "error": None}, b"0.65.0\n", b""
         ctx.replace["version"] = mutated
         with self.assertRaisesRegex(ValueError, "fixture bytes"):
             gemini.collect(ctx)
@@ -209,7 +243,7 @@ class GeminiCollectorTests(unittest.TestCase):
             sentinel.chmod(0o600)
             original.rename(ctx.home / ".gemini-original")
             original.symlink_to(outside, target_is_directory=True)
-            return {"exit": 0}, b"0.65.0\n", b""
+            return {"exit": 0, "error": None}, b"0.65.0\n", b""
         ctx.replace["version"] = aliased
         with self.assertRaisesRegex(ValueError, "parent alias"):
             gemini.collect(ctx)

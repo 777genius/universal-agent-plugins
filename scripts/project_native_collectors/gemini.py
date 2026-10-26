@@ -40,6 +40,7 @@ _UNTRUSTED = (
     "User-level servers are also suppressed in untrusted folders to prevent accidental side-effects.",
 )
 _RIPGREP_FALLBACK = b"Ripgrep is not available. Falling back to GrepTool.\n"
+_EMPTY_MCP = b"No MCP servers configured.\n"
 _CONFIG_COMMANDS = (("skills", "list", "--all"), ("mcp", "list"))
 
 
@@ -124,16 +125,24 @@ def _write(path, document, owned):
 
 def _probe(ctx, owned, label, arguments, project="a"):
     record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
+    if (not isinstance(record, dict) or type(record.get("exit")) is not int or record["exit"] != 0
+            or "error" not in record or record["error"] is not None
+            or type(stdout) is not bytes or type(stderr) is not bytes):
+        raise ValueError("Gemini probe did not finish cleanly: " + label)
     # The pinned client reports its optional native search-backend fallback
     # while loading configuration. Actual hosted run 40238929259 measured this
     # exact 52-byte warning on a successful skills command. Keep those bytes in
     # evidence; version/help and every other diagnostic remain strict.
     known_stderr = tuple(arguments) in _CONFIG_COMMANDS and stderr == _RIPGREP_FALLBACK
-    if type(record.get("exit")) is not int or record["exit"] != 0 or record.get("error") or (stderr and not known_stderr):
+    # Actual hosted run 40240850774 emitted the empty-list sentinel on stderr,
+    # with zero stdout bytes and exit zero. Preserve both raw capture channels;
+    # only this whole measured response supplies the existing empty-list parser.
+    empty_mcp = tuple(arguments) == ("mcp", "list") and stdout == b"" and stderr == _EMPTY_MCP
+    if stderr and not known_stderr and not empty_mcp:
         raise ValueError("Gemini probe did not finish cleanly: " + label)
     for path, body in owned.items():
         _unchanged(path, body)
-    return stdout
+    return stderr if empty_mcp else stdout
 
 
 def _require_skills(rows, scopes, paths):
