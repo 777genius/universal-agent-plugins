@@ -16,8 +16,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: project-native-research-${{ github.ref }}
-  cancel-in-progress: true
+  group: project-native-research-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   contracts:
     name: Inert contracts and explicit research selection
