@@ -207,10 +207,15 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		var eligible []domain.DetectedClient
 		var skipped []targetSkip
 		for _, client := range clients {
-			if supportsDependencyTarget(app, string(client.ClientID)) {
-				eligible = append(eligible, client)
-			} else {
+			switch {
+			case client.DetectionError != nil:
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client configuration could not be inspected safely; correct it and retry"})
+			case client.Status != domain.DetectionDetected:
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client is not detected; install or configure it before selecting it"})
+			case !supportsDependencyTarget(app, string(client.ClientID)):
 				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "use --no-save"})
+			default:
+				eligible = append(eligible, client)
 			}
 		}
 		if len(eligible) > 1 {
