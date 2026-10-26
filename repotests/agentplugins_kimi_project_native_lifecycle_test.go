@@ -208,7 +208,7 @@ func newKimiProjectNativeFixture(t *testing.T) *kimiProjectNativeFixture {
 	return f
 }
 
-func (f *kimiProjectNativeFixture) source(t *testing.T, scope, revision string) string {
+func (f *kimiProjectNativeFixture) source(t *testing.T, scope, revision string) {
 	t.Helper()
 	name := "uap-kimi-native-" + scope
 	root := filepath.Join(f.base.Root, "sources", scope)
@@ -244,7 +244,6 @@ func (f *kimiProjectNativeFixture) source(t *testing.T, scope, revision string) 
 		write(filepath.Join(root, "mcp.json"), mcp, 0600)
 	}
 	f.packages[scope] = &kimiProjectNativePackage{Source: root, Name: name, Revision: revision}
-	return root
 }
 
 func (f *kimiProjectNativeFixture) uap(t *testing.T, label, scope string, mutated, absent bool, args ...string) {
