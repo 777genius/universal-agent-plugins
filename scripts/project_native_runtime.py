@@ -24,10 +24,22 @@ CASES = {
                 "file": "repotests/agentplugins_copilot_project_native_attempt_test.go",
                 "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                 "phase": "runtime-attempt"},
+    "gemini": {"test": "TestAgentpluginsGeminiNativeProjectRuntimeAttempt",
+               "file": "repotests/agentplugins_gemini_project_native_attempt_test.go",
+               "optin": "AGENTPLUGINS_GEMINI_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
+               "phase": "runtime-attempt"},
+    "kimi": {"test": "TestAgentpluginsKimiNativeProjectComponentsLifecycle",
+             "file": "repotests/agentplugins_kimi_project_native_lifecycle_test.go",
+             "optin": "AGENTPLUGINS_KIMI_PROJECT_NATIVE_E2E", "seconds": 900,
+             "phase": "installed-components-lifecycle"},
 }
 MAX_ZIP = 32 << 20
 MAX_MEMBER = 2 << 20
 COMMANDS = ("git-A", "git-B", "version", "add-A", "native-attempt")
+KIMI_COMMANDS = ("git-a", "git-b", "git-c", "version", "add-user", "add-a", "add-b", "add-c",
+                 "observe-empty", "observe-installed", "observe-stable", "observe-updated", "observe-repaired",
+                 "observe-restart", "observe-removed", "repeat-add-a", "unchanged-update-a", "intact-repair-a",
+                 "update-a", "missing-repair-a", "remove-a", "repeat-remove-a")
 
 
 def strict_json(body):
@@ -76,9 +88,13 @@ def write_new(path, body, mode=0o600):
     path.chmod(mode)
 
 
-def copilot_members(bodies, source):
+def attempt_members(bodies, source, client="copilot"):
     required = {"runtime-attempt.json"}
-    allowed = required | {"probe-events.jsonl", "mcp.json.installed", "uapcopilota-SKILL.md.installed"}
+    installed = {"copilot": {"mcp.json.installed", "uapcopilota-SKILL.md.installed"},
+                 "gemini": {".gemini-settings.json.installed", "uapgeminia-SKILL.md.installed"}}
+    if client not in installed:
+        raise ValueError("unknown runtime attempt schema")
+    allowed = required | {"probe-events.jsonl"} | installed[client]
     allowed |= {"provider-request-" + str(i) + ".json" for i in range(1, 9)}
     for label in COMMANDS:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
@@ -97,9 +113,10 @@ def copilot_members(bodies, source):
     if not required <= set(bodies) or set(bodies) - allowed:
         raise ValueError("unrecorded native artifact member")
     result = strict_json(bodies["runtime-attempt.json"])
-    if (not isinstance(result, dict) or result.get("client") != "copilot"
+    if (not isinstance(result, dict) or result.get("client") != client
             or result.get("provider_kind") != "scripted_loopback" or result.get("activation") != "prepared"
-            or result.get("runtime_attempt_complete") is not False
+            or type(result.get("runtime_attempt_complete")) is not bool
+            or (client == "copilot" and result["runtime_attempt_complete"] is not False)
             or result.get("vendor_authentication_qualified") is not False
             or result.get("real_model_qualified") is not False
             or result.get("qualification") != {key: False for key in shared.QUALIFICATION_CASES}
@@ -114,6 +131,58 @@ def copilot_members(bodies, source):
                      for name in bodies if name.startswith("provider-request-"))
     if numbers != list(range(1, len(numbers) + 1)):
         raise ValueError("provider evidence sequence has gaps")
+    if client == "gemini" and not result["test_failed"]:
+        successful = required | installed[client] | {"probe-events.jsonl"}
+        successful |= {label + suffix for label in COMMANDS for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+        if (result["runtime_attempt_complete"] is not True or not successful <= set(bodies) or len(numbers) < 2
+                or identity is None or result.get("provider_returned") is not True
+                or not isinstance(result.get("native_session_id"), str) or not result["native_session_id"]
+                or not isinstance(result.get("provider_call_id"), str) or not result["provider_call_id"]
+                or not isinstance(result.get("probe_facts"), dict) or not result["probe_facts"]):
+            raise ValueError("successful Gemini attempt is missing required runtime observations")
+        for label in COMMANDS:
+            row = strict_json(bodies[label + ".command.json"])
+            if row["exit"] != 0 or row["error"] or row["context_error"]:
+                raise ValueError("successful Gemini attempt contains a failed command")
+    return result
+
+
+def kimi_members(bodies, source):
+    allowed = {"lifecycle.json"}
+    for label in KIMI_COMMANDS:
+        triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+        allowed |= triple
+        if set(bodies) & triple and not triple <= set(bodies):
+            raise ValueError("incomplete Kimi command evidence triple")
+        if triple <= set(bodies):
+            row = strict_json(bodies[label + ".command.json"])
+            if (not isinstance(row, dict) or set(row) != {"argv", "cwd", "exit", "error", "deadline", "cleanup"}
+                    or not isinstance(row["argv"], list) or not row["argv"]
+                    or any(not isinstance(arg, str) for arg in row["argv"])
+                    or not isinstance(row["cwd"], str) or type(row["exit"]) is not int
+                    or type(row["error"]) is not bool or type(row["deadline"]) is not bool):
+                raise ValueError("invalid Kimi command receipt")
+    if "lifecycle.json" not in bodies or set(bodies) - allowed:
+        raise ValueError("unrecorded Kimi artifact member")
+    result = strict_json(bodies["lifecycle.json"])
+    if (not isinstance(result, dict) or result.get("client") != "kimi" or result.get("activation") != "prepared"
+            or result.get("vendor_authentication_qualified") is not False or result.get("real_model_qualified") is not False
+            or type(result.get("test_failed")) is not bool):
+        raise ValueError("Kimi lifecycle evidence state differs")
+    qualification = result.get("qualification")
+    if (not isinstance(qualification, dict) or set(qualification) != set(shared.QUALIFICATION_CASES)
+            or any(type(value) is not bool for value in qualification.values())
+            or qualification["mcp-tools-call"] is not False):
+        raise ValueError("Kimi cannot infer a tools-call qualification")
+    if result["test_failed"] and any(qualification.values()):
+        raise ValueError("failed Kimi lifecycle cannot qualify stages")
+    if not result["test_failed"]:
+        if set(bodies) != allowed or any(not qualification[key] for key in shared.QUALIFICATION_CASES if key != "mcp-tools-call"):
+            raise ValueError("successful Kimi lifecycle must contain all selected stages")
+    identity = result.get("source_identity")
+    if identity is not None and identity != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
+                                            "installer_source_state": "committed", "installer_patch_sha256": []}:
+        raise ValueError("Kimi evidence source differs")
     return result
 
 
@@ -130,7 +199,7 @@ def admit_runtime(path, client, source):
             if (name in bodies or Path(name).name != name or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", name)
                     or member.is_dir() or stat.S_IFMT(mode) not in (0, stat.S_IFREG) or member.flag_bits & 1
                     or member.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
-                    or member.file_size > MAX_MEMBER or total + member.file_size > 16 << 20):
+                    or member.file_size > MAX_MEMBER or total + member.file_size > (24 if client == "kimi" else 16) << 20):
                 raise ValueError("native ZIP member type/name/size refused")
             with archive.open(member) as stream:
                 value = shared.bounded_read(stream, MAX_MEMBER)
@@ -139,9 +208,7 @@ def admit_runtime(path, client, source):
             value.decode("utf-8", errors="strict")
             bodies[name] = value
             total += len(value)
-    if client != "copilot":
-        raise ValueError("no reviewed native artifact schema")
-    result = copilot_members(bodies, source)
+    result = kimi_members(bodies, source) if client == "kimi" else attempt_members(bodies, source, client)
     return bodies, result
 
 
@@ -263,6 +330,12 @@ def prepare(client, ctx):
                          "AGENTPLUGINS_" + client.upper() + "_BIN": str(binary),
                          "AGENTPLUGINS_PROJECT_NATIVE_IDENTITY": str(identity_path),
                          "AGENTPLUGINS_PROJECT_NATIVE_OUTPUT": str(native_output), CASES[client]["optin"]: "1"})
+    selected_env["PLUGIN_KIT_AI_REPO_ROOT"] = str(SOURCE)
+    if client == "kimi":
+        python = Path("/usr/bin/python3").resolve(strict=True)
+        python_body = ordinary_bytes(python, 64 << 20, owners=(0, os.getuid()))
+        ctx.summary["python"] = {"path": str(python), "sha256": hashlib.sha256(python_body).hexdigest()}
+        selected_env["AGENTPLUGINS_PROJECT_NATIVE_PYTHON"] = str(python)
     if node is not None:
         selected_env["AGENTPLUGINS_NODE_BIN"] = str(node)
     return tests, selected_env, native_output
@@ -310,6 +383,10 @@ def run(client, output):
                     admitted, result = admit_runtime(native_output / "research.zip", client, summary)
                     summary["runtime_artifact_admitted"] = True
                     summary["runtime_test_failed"] = result["test_failed"]
+                    if result["test_failed"]:
+                        summary["test_passed"] = False
+                    if summary["test_passed"]:
+                        summary["qualification"] = result["qualification"]
                 except Exception as error:
                     summary["runtime_admission_error"] = type(error).__name__
                     summary["test_passed"] = False
