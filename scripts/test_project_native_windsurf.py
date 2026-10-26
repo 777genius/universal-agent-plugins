@@ -10,7 +10,8 @@ SPEC.loader.exec_module(devin)
 
 
 def help_body(usage, required=()):
-    return ("Usage: " + usage + " [OPTIONS]\nOptions:\n  --help\n" + "\n".join(required)).encode()
+    usage_block = "\n".join(devin._ADD_USAGE) if usage == "devin mcp add" else "Usage: " + usage + " [OPTIONS]"
+    return (usage_block + "\n\nOptions:\n  --help\n" + "\n".join(required)).encode()
 
 
 class FakeContext:
@@ -56,6 +57,21 @@ class DevinCollectorTests(unittest.TestCase):
         self.assertEqual(result["cases"][0]["status"], "passed")
         self.assertIn("windsurf.scope-observation", result["unobserved"])
         self.assertIn("windsurf.mcp-tools-call", result["unobserved"])
+
+    def test_measured_mcp_add_usage_is_closed_to_four_forms(self):
+        good = help_body("devin mcp add", ("--scope",))
+        devin.collect(FakeContext({"devin-mcp-add-help": ({"exit": 0, "error": None}, good, b"")}))
+        for bad in [good.replace(b"--transport http", b"--transport https", 1),
+                    good.replace(b"devin mcp add <NAME> --url", b"devin mcp get <NAME> --url"),
+                    good.replace(b"Usage: devin mcp add", b"Usage: devin mcp adds", 1),
+                    good.replace(b"\n\nOptions:", b"\n       devin mcp add <NAME> --extra\n\nOptions:"),
+                    good.replace(b"\n\nOptions:", b"\nUsage: devin mcp add <NAME>\n\nOptions:"),
+                    good.replace(b"       devin mcp add <NAME> --url <URL>\n", b""),
+                    good.replace(b"--scope", b"")]:
+            ctx = FakeContext({"devin-mcp-add-help": ({"exit": 0, "error": None}, bad, b"")})
+            with self.subTest(body=bad), self.assertRaises(ValueError):
+                devin.collect(ctx)
+            self.assertEqual(ctx.calls[-1][0], "devin-mcp-add-help")
 
     def test_wrong_harness_version_build_and_prerelease_stop_before_help(self):
         for body in (b"windsurf 3000.11.205 (6dea39440ae3)\n",

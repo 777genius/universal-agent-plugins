@@ -22,6 +22,14 @@ ACQUISITION = {
     "binary_sha256": "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4",
 }
 _VERSION = "devin 3000.11.205 (6dea39440ae3)"
+# Measured run 40235292067, artifact 12616906453. Only this command uses
+# literal options in its Usage forms; do not broaden every command boundary.
+_ADD_USAGE = (
+    "Usage: devin mcp add --transport http <NAME> <URL>",
+    "       devin mcp add <NAME> -- <COMMAND> [ARGS...]",
+    "       devin mcp add <NAME> --url <URL>",
+    "       devin mcp add <NAME> --transport <stdio|sse|http> [OPTIONS]",
+)
 PROBES = (
     ("devin-version", ("--version",), None, ()),
     ("devin-help", ("--help",), "devin", ("mcp", "skills")),
@@ -39,7 +47,7 @@ PROBES = (
 def _text(record, stdout, stderr):
     if (not isinstance(record, dict) or type(record.get("exit")) is not int
             or record["exit"] != 0 or "error" not in record
-            or record["error"] not in (None, "")):
+            or record["error"] is not None):
         raise ValueError("Devin help probe failed; bounded capture retained")
     if not isinstance(stdout, bytes) or not isinstance(stderr, bytes) or stderr:
         raise ValueError("Devin help probe emitted unexpected stream data")
@@ -62,8 +70,21 @@ def collect(ctx):
             if text not in (_VERSION, _VERSION + "\n", _VERSION + "\r\n"):
                 raise ValueError("Devin executable differs from the frozen harness/version/build")
         else:
-            pattern = r"^Usage: " + re.escape(usage) + r"(?:[ \t]+[\[<]|[ \t]*$)"
-            if not re.search(pattern, text, re.MULTILINE) or "--help" not in text:
+            if usage == "devin mcp add":
+                lines = text.splitlines()
+                starts = [index for index, line in enumerate(lines) if line.startswith("Usage:")]
+                if len(starts) != 1:
+                    raise ValueError("Devin mcp-add help has an unexpected Usage block")
+                start, end = starts[0], starts[0] + 1
+                while end < len(lines) and lines[end].startswith("       "):
+                    end += 1
+                if tuple(lines[start:end]) != _ADD_USAGE:
+                    raise ValueError("Devin mcp-add help Usage forms differ from observation")
+            else:
+                pattern = r"^Usage: " + re.escape(usage) + r"(?:[ \t]+[\[<]|[ \t]*$)"
+                if not re.search(pattern, text, re.MULTILINE):
+                    raise ValueError("Devin help does not identify the requested command")
+            if "--help" not in text:
                 raise ValueError("Devin help does not identify the requested command")
             if any(token not in text for token in required):
                 raise ValueError("Devin help is missing a previously observed option")
