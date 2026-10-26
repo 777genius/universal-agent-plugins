@@ -437,6 +437,7 @@ jobs:
     if: ${{ inputs.publish_release == true }}
     needs: validate
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     permissions:
       # Draft release API visibility requires write capability; this job only reads.
       contents: write
