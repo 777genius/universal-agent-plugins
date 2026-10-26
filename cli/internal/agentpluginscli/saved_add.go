@@ -218,6 +218,14 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 				eligible = append(eligible, client)
 			}
 		}
+		if len(eligible) > 0 {
+			var incompatible []targetSkip
+			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), app, source, eligible)
+			if err != nil {
+				return nil, err
+			}
+			skipped = append(skipped, incompatible...)
+		}
 		if len(eligible) > 1 {
 			if app, err = withPrompter(cmd, app, opts); err != nil {
 				return nil, err

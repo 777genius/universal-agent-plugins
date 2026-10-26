@@ -18,7 +18,8 @@ import (
 // Regression: the default saved add used to prompt for targets without a
 // prompter and failed with "prompt unavailable" in a real terminal.
 func TestSavedAddPromptsForTargetsInTerminal(t *testing.T) {
-	j := newSavedJourney(t, t.TempDir())
+	repo, commit := savedJourneyRepository(t)
+	j := newSavedJourney(t, repo)
 	stop := errors.New("stop after target prompt")
 	prompted := false
 	j.cli.app.PromptFactory = func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error) {
@@ -27,7 +28,7 @@ func TestSavedAddPromptsForTargetsInTerminal(t *testing.T) {
 			return prompt.TargetSelectionResult{}, stop
 		}}, io.Discard, nil
 	}
-	_, _, err := j.cli.execute(true, "add", "github:owner/repo@"+strings.Repeat("a", 40))
+	_, _, err := j.cli.execute(true, "add", "github:owner/repo@"+commit)
 	if !prompted || !errors.Is(err, stop) {
 		t.Fatalf("prompted=%v err=%v", prompted, err)
 	}
@@ -37,6 +38,9 @@ func TestSavedAddDefaultsOnlySafelyDetectedTargets(t *testing.T) {
 	for _, count := range []int{0, 1, 2} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			detected := []domain.DetectedClient{fixtureClient(t, domain.ClientClaude), fixtureClient(t, domain.ClientCodex)}[:count]
+			for i := range detected {
+				detected[i].ExecutablePath = "/test/bin/" + string(detected[i].ClientID)
+			}
 			absent := fixtureClient(t, domain.ClientCopilot)
 			absent.Status = domain.DetectionNotDetected
 			unsafe := fixtureClient(t, domain.ClientCline)
@@ -60,7 +64,7 @@ func TestSavedAddDefaultsOnlySafelyDetectedTargets(t *testing.T) {
 					return prompt.TargetSelectionResult{IDs: request.DefaultIDs}, nil
 				}}, &output, nil
 			}
-			targets, err := savedAddTargets(cmd, app, &options{format: "human", scope: "user"}, "context7", nil)
+			targets, err := savedAddTargets(cmd, app, &options{format: "human", scope: "user"}, writeCLIPlugin(t), nil)
 			if count == 0 {
 				if err == nil || !strings.Contains(err.Error(), "no eligible detected client") {
 					t.Fatalf("no detected target: targets=%v err=%v", targets, err)
