@@ -6,6 +6,15 @@ on:
       tag:
         description: Exact stable tag, for example agentplugins-v0.1.0
         required: true
+      auto_publish:
+        description: After successful draft qualification, automatically dispatch promotion (environment approvals still apply)
+        required: false
+        type: boolean
+        default: false
+      release_notes:
+        description: Final release notes prefix, frozen before qualification
+        required: false
+        type: string
       publish_release:
         description: Explicitly promote after all verification succeeds
         required: false
@@ -27,7 +36,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOWORK: "off"
       GOTOOLCHAIN: local
@@ -44,7 +53,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ inputs.tag }}
-      - name: Verify exact stable tag and current main
+      - name: Verify frozen stable tag and main ancestry
         id: identity
         env:
           TAG: ${{ inputs.tag }}
@@ -57,12 +66,15 @@ jobs:
           fi
           git fetch --force origin main:refs/remotes/origin/main "refs/tags/${TAG}:refs/tags/${TAG}"
           head_commit="$(git rev-parse HEAD)"
-          test "${WORKFLOW_REF}" = "refs/heads/main"
+          case "${WORKFLOW_REF}" in
+            refs/heads/main|"refs/tags/${TAG}") ;;
+            *) echo "release must run from main or the exact frozen tag" >&2; exit 1 ;;
+          esac
           if [[ "${WORKFLOW_COMMIT}" != "${head_commit}" ]]; then
-            echo "release workflow source does not match the exact tagged main commit" >&2
+            echo "release workflow source does not match the exact tagged commit" >&2
             exit 1
           fi
-          test "${head_commit}" = "$(git rev-parse refs/remotes/origin/main)"
+          git merge-base --is-ancestor "${head_commit}" refs/remotes/origin/main
           test "${head_commit}" = "$(git rev-list -n 1 "refs/tags/${TAG}")"
           echo "commit=${head_commit}" >> "${GITHUB_OUTPUT}"
       - name: Verify merged PR and required commit evidence
@@ -113,13 +125,29 @@ jobs:
             'govulncheck (sdk)'; do
             require_check "${name}"
           done
+
+  qualify-go:
+    if: ${{ inputs.publish_release != true }}
+    needs: validate
+    runs-on: ubuntu-24.04
+    env:
+      GOWORK: "off"
+      GOTOOLCHAIN: local
+      GOFLAGS: -buildvcs=false -p=1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: ${{ inputs.publish_release != true }}
         with:
           go-version: 1.26.10
-          cache: false
+          cache: true
+          cache-dependency-path: |
+            cli/go.sum
+            install/integrationctl/go.sum
+            install/integrationctl/agentplugins/go.sum
       - name: Verify exact release-bound Directory bootstrap
-        if: ${{ inputs.publish_release != true }}
         working-directory: cli
         run: |
           release_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -132,29 +160,35 @@ jobs:
             -expected-public-key HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI= \
             -release-at "${release_at}"
       - name: Test standard-first engine and CLI
-        if: ${{ inputs.publish_release != true }}
         run: |
-          (cd install/integrationctl/agentplugins && go test ./...)
-          (cd install/integrationctl && go test ./adapters/dirswap ./adapters/source)
-          (cd cli && go test ./internal/agentpluginscli ./cmd/agentplugins/...)
+          (cd install/integrationctl/agentplugins && go test -count=1 ./...)
+          (cd install/integrationctl && go test -count=1 ./adapters/dirswap ./adapters/source)
+          (cd cli && go test -count=1 ./internal/agentpluginscli ./cmd/agentplugins/...)
       - name: Prove production binary excludes Directory conformance overrides
-        if: ${{ inputs.publish_release != true }}
         working-directory: cli
         run: go test ./cmd/agentplugins -run '^TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride$' -count=1
+
+  qualify-npm:
+    if: ${{ inputs.publish_release != true }}
+    needs: validate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: ${{ inputs.publish_release != true }}
         with:
           node-version: "22.21.1"
           package-manager-cache: false
       - name: Test npm bootstrap without install scripts
-        if: ${{ inputs.publish_release != true }}
         working-directory: npm/agentplugins
         run: npm test && npm pack --dry-run --ignore-scripts
 
   build:
     if: ${{ inputs.publish_release != true }}
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       GOWORK: "off"
       GOTOOLCHAIN: local
@@ -220,8 +254,8 @@ jobs:
 
   stage-draft:
     if: ${{ inputs.publish_release != true }}
-    needs: [validate, build]
-    runs-on: ubuntu-latest
+    needs: [validate, qualify-go, qualify-npm, build]
+    runs-on: ubuntu-24.04
     environment: agentplugins-release
     outputs:
       release_id: ${{ steps.release-identity.outputs.release_id }}
@@ -301,6 +335,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         working-directory: ${{ runner.temp }}/agentplugins-assets
         run: |
           owner="${GITHUB_REPOSITORY%%/*}"
@@ -318,7 +353,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" --verify-tag \
             --target "${{ needs.validate.outputs.commit }}" --draft \
             --title "Agentplugins ${TAG#agentplugins-v}" --generate-notes \
-            --notes "Native downloads: retain the companion THIRD_PARTY_NOTICES.txt with the binary and include it when redistributing."
+            --notes "${RELEASE_NOTES}${RELEASE_NOTES:+$'\n\n'}Native downloads: retain the companion THIRD_PARTY_NOTICES.txt with the binary and include it when redistributing."
       - name: Capture staged release identity
         id: release-identity
         env:
@@ -359,11 +394,12 @@ jobs:
   verified-draft:
     if: ${{ inputs.publish_release != true }}
     needs: [validate, stage-draft, platform-proof]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # GitHub draft visibility requires push capability; contents: read can return null.
       # This trusted producer verifier still only reads APIs/assets and verifies attestations.
       contents: write
+      actions: read
       attestations: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -381,13 +417,15 @@ jobs:
           FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
           RELEASE_ID: ${{ needs.stage-draft.outputs.release_id }}
           EXPECTED_ASSET_SET_DIGEST: ${{ needs.stage-draft.outputs.asset_set_digest }}
+          NPM_TARBALL_FILE: ${{ needs.platform-proof.outputs.tarball_file }}
         run: |
           python3 scripts/verify-agentplugins-draft.py \
             --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" \
             --commit "${FROZEN_COMMIT}" --release-id "${RELEASE_ID}" \
             --asset-set-digest "${EXPECTED_ASSET_SET_DIGEST}" \
             --run-id "${GITHUB_RUN_ID}" --run-attempt "${GITHUB_RUN_ATTEMPT}" \
-            --source "${GITHUB_WORKSPACE}" --receipt "${RUNNER_TEMP}/verified-draft.json"
+            --source "${GITHUB_WORKSPACE}" --receipt "${RUNNER_TEMP}/verified-draft.json" \
+            --npm-tarball-file "${NPM_TARBALL_FILE}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: agentplugins-verified-draft-${{ github.run_id }}-${{ github.run_attempt }}
@@ -398,7 +436,7 @@ jobs:
   reuse-verified-draft:
     if: ${{ inputs.publish_release == true }}
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # Draft release API visibility requires write capability; this job only reads.
       contents: write
@@ -421,6 +459,9 @@ jobs:
           QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}
           QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}
         run: |
+          [[ "${QUALIFIED_RUN_ID}" =~ ^[1-9][0-9]*$ ]]
+          test "${QUALIFIED_RUN_ID}" != "${GITHUB_RUN_ID}"
+          gh run watch "${QUALIFIED_RUN_ID}" --repo "${GITHUB_REPOSITORY}" --exit-status --interval 10
           python3 scripts/reuse-agentplugins-verified-draft.py \
             --repository "${GITHUB_REPOSITORY}" --tag "${TAG}" --commit "${FROZEN_COMMIT}" \
             --run-id "${QUALIFIED_RUN_ID}" --run-attempt "${QUALIFIED_RUN_ATTEMPT}" \
@@ -429,7 +470,7 @@ jobs:
   promote-release:
     if: ${{ inputs.publish_release == true }}
     needs: [validate, reuse-verified-draft]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: agentplugins-release
     permissions:
       contents: write
@@ -467,6 +508,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          QUALIFIED_RUN_ID: ${{ inputs.qualified_run_id }}
+          QUALIFIED_RUN_ATTEMPT: ${{ inputs.qualified_run_attempt }}
         run: |
           set -euo pipefail
           # npm publication is not optional bookkeeping: the public npx
@@ -475,4 +518,21 @@ jobs:
           # remains the human gate before anything reaches the registry.
           gh workflow run agentplugins-npm-publish.yml \
             --repo "${GITHUB_REPOSITORY}" --ref "${TAG}" \
-            -f "tag=${TAG}" -f publish=true
+            -f "tag=${TAG}" -f publish=true \
+            -f "qualified_run_id=${QUALIFIED_RUN_ID}" -f "qualified_run_attempt=${QUALIFIED_RUN_ATTEMPT}"
+
+  dispatch-promotion:
+    if: ${{ inputs.publish_release != true && inputs.auto_publish == true }}
+    needs: [validate, verified-draft]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch promotion of this exact qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh workflow run agentplugins-release.yml --repo "${GITHUB_REPOSITORY}" --ref "${TAG}" \
+            -f "tag=${TAG}" -f publish_release=true \
+            -f "qualified_run_id=${GITHUB_RUN_ID}" -f "qualified_run_attempt=${GITHUB_RUN_ATTEMPT}"
