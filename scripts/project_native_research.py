@@ -13,6 +13,7 @@ import lzma
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import stat
 import sys
 import tarfile
@@ -22,6 +23,7 @@ import urllib.request
 import zipfile
 
 from native_client_research import bounded_read, run_probe
+from project_native_service import Service
 import native_client_project_artifacts as artifacts
 
 
@@ -225,11 +227,30 @@ def verify_files(identities, budget):
             raise ValueError("runtime bytes changed from pinned acquisition")
 
 
+def selected_node_receipt(receipt):
+    """Keep the executed Node member and a digest of the complete checked index.
+
+    Node's headers/docs/npm are inventoried but not materialized by this runner.
+    Repeating that large unused index in the one-MiB evidence summary hides
+    otherwise useful failure evidence; the immutable archive still binds it.
+    """
+    members = receipt["members"]
+    selected = [row for row in members if row["name"] == NODE["entrypoint"]]
+    if len(selected) != 1 or selected[0]["kind"] != "file":
+        raise ValueError("exact Node inventory member is absent")
+    canonical = json.dumps(members, sort_keys=True, separators=(",", ":")).encode()
+    return {**receipt, "members": selected, "inventory_member_count": len(members),
+            "inventory_regular_bytes": sum(row["bytes"] for row in members if row["kind"] == "file"),
+            "inventory_sha256": hashlib.sha256(canonical).hexdigest(),
+            "inventory_selection": "only the exact materialized Node executable"}
+
+
 class Context:
     def __init__(self, root, summary, budget):
         self.root, self.summary, self.budget = root, summary, budget
+        self.phase, self.native_probe = summary.get("phase"), None
         self.home, self.private, self.output = root / "home", root / "private", root / "evidence"
-        self.projects = {"a": root / "project-a", "b": root / "project-b", "user": root / "outside"}
+        self.projects = {"a": root / "project-a", "b": root / "project-b", "c": root / "project-c", "user": root / "outside"}
         for path in (self.home, self.private, self.output, root / "tmp", *self.projects.values()):
             path.mkdir(mode=0o700)
         self.env = legacy.runtime_environment(self.home, root / "tmp")
@@ -275,6 +296,76 @@ class Context:
         finally:
             verify_files(self.identities, self.budget)
 
+    def service(self, label, arguments, observe, project="a", timeout=60):
+        native.require_hosted("linux-amd64")
+        if (project not in self.projects or not self.argv or not 5 < timeout <= 60
+                or not LABEL.fullmatch(label) or len(self.summary["commands"]) >= 60
+                or any(row["probe"] == label for row in self.summary["commands"])):
+            raise ValueError("invalid or duplicate native service")
+        verify_files(self.identities, self.budget)
+        try:
+            service = Service(label, [str(part) for part in [*self.argv, *arguments]], self.projects[project], dict(self.env),
+                              min(timeout, self.budget.check()), self.secrets)
+            record, stdout, stderr, result, requests, bodies = service.run(observe)
+            self.summary["commands"].append(record)
+            self.captures.update({record["stdout_file"]: stdout, record["stderr_file"]: stderr})
+            self.summary.setdefault("http_requests", []).extend(requests)
+            self.captures.update(bodies)
+            if record["error"] or record["exit"] != 0:
+                raise ValueError("native service observation or cleanup failed; private captures quarantined")
+            return result
+        finally:
+            verify_files(self.identities, self.budget)
+
+    def build_native_probe(self):
+        """Build the existing stdlib-only Go fixture with the exact CI toolchain."""
+        native.require_hosted("linux-amd64")
+        selected = shutil.which("go")
+        if not selected:
+            raise ValueError("pinned Go compiler not supplied")
+        go = Path(selected).resolve(strict=True)
+        before = go.lstat()
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size > 64 << 20:
+            raise ValueError("invalid Go compiler file")
+        compiler_fd = artifacts.open_member(go)
+        try:
+            held = os.fstat(compiler_fd)
+            if not artifacts.same_opened(before, held):
+                raise ValueError("Go compiler changed while opening")
+            with os.fdopen(os.dup(compiler_fd), "rb") as stream:
+                compiler_body = bounded_read(BudgetReader(stream, self.budget), 64 << 20)
+            if artifacts.identity(os.fstat(compiler_fd)) != artifacts.identity(held):
+                raise ValueError("Go compiler changed while hashing")
+        finally:
+            os.close(compiler_fd)
+        compiler_digest = hashlib.sha256(compiler_body).hexdigest()
+        env = dict(self.env)
+        for name in ("gocache", "gomodcache"):
+            (self.root / name).mkdir(mode=0o700)
+        env.update({"PATH": str(go.parent) + ":/usr/bin:/bin", "GOTOOLCHAIN": "local", "GOENV": "off",
+                    "GOWORK": "off", "GOPROXY": "off", "GOSUMDB": "off", "CGO_ENABLED": "0",
+                    "GOMAXPROCS": "2", "GOCACHE": str(self.root / "gocache"),
+                    "GOMODCACHE": str(self.root / "gomodcache")})
+        record, stdout, stderr = self.command("probe-go-version", [go, "version"], SOURCE, env, 10)
+        if record["exit"] != 0 or stdout != b"go version go1.26.10 linux/amd64\n" or stderr:
+            raise ValueError("exact Go1.26.10 Linux amd64 compiler required")
+        self.native_probe = self.root / "native-probe"
+        record, _, _ = self.command("probe-build", [go, "build", "-trimpath", "-o", self.native_probe,
+                                    SOURCE / "repotests/testdata/agentplugins_native_probe/main.go"], SOURCE, env, 180)
+        if record["exit"] != 0 or artifacts.identity(go.lstat()) != artifacts.identity(before):
+            raise ValueError("native fixture build or compiler identity failed")
+        info = self.native_probe.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or not 0 < info.st_size <= 32 << 20:
+            raise ValueError("invalid built native probe")
+        self.native_probe.chmod(0o700)
+        with self.native_probe.open("rb") as stream:
+            probe_body = bounded_read(BudgetReader(stream, self.budget), 32 << 20)
+        probe_digest = hashlib.sha256(probe_body).hexdigest()
+        self.identities[self.native_probe] = probe_digest
+        verify_files(self.identities, self.budget)
+        self.summary["fixture_compiler"] = {"path": str(go), "version": "go1.26.10", "bytes": len(compiler_body), "sha256": compiler_digest}
+        self.summary["native_probe"] = {"path": str(self.native_probe), "bytes": len(probe_body), "sha256": probe_digest}
+
     def source_and_projects(self):
         values = {}
         for label, arguments, key in (("source-commit", ["rev-parse", "HEAD"], "source_commit"),
@@ -289,7 +380,7 @@ class Context:
                 or not re.fullmatch(r"[0-9a-f]{40}", values["source_tree"]) or values["dirty"]):
             raise ValueError("exact clean current-source checkout required")
         self.summary.update({key: value for key, value in values.items() if key != "dirty"})
-        for key in ("a", "b"):
+        for key in ("a", "b", "c"):
             record, _, _ = self.command("git-init-" + key, ["/usr/bin/git", "init", "--quiet", "--initial-branch=main"], self.projects[key], self.env, 10)
             if record["exit"] != 0:
                 raise ValueError("owned real project creation failed")
@@ -327,6 +418,19 @@ def evidence(summary, captures, secrets):
             record[stream + "_bytes"] = len(body)
             record[stream + "_sha256"] = hashlib.sha256(body).hexdigest()
             bodies[name] = body
+    for record in summary.get("http_requests", []):
+        name = record["response_file"]
+        if name in expected or not artifacts.NAME.fullmatch(name) or not name.endswith(".http.json"):
+            raise ValueError("unrecorded or duplicate HTTP capture refused")
+        expected.add(name)
+        body = captures[name]
+        if (len(body) > STREAM or len(body) != record["response_bytes"]
+                or hashlib.sha256(body).hexdigest() != record["response_sha256"]):
+            raise ValueError("HTTP capture receipt differs")
+        for secret in secrets:
+            body = body.replace(secret, b"[redacted]")
+        record["response_bytes"], record["response_sha256"] = len(body), hashlib.sha256(body).hexdigest()
+        bodies[name] = body
     if set(captures) != expected:
         raise ValueError("extra private capture refused")
     body = json.dumps(summary, sort_keys=True, indent=2).encode() + b"\n"
@@ -341,7 +445,9 @@ def admit_bodies(bodies, secrets):
     if len(bodies) > artifacts.FILES or "research.json" not in bodies or sum(map(len, bodies.values())) > artifacts.LIMIT - 65536:
         raise ValueError("evidence aggregate refused")
     for name, body in bodies.items():
-        if not artifacts.NAME.fullmatch(name) or len(body) > STREAM or any(secret in name.encode() or secret in body for secret in secrets):
+        if len(body) > STREAM:
+            raise ValueError("evidence member exceeds one-MiB bound")
+        if not artifacts.NAME.fullmatch(name) or any(secret in name.encode() or secret in body for secret in secrets):
             raise ValueError("private token or unsafe evidence member refused")
     json.loads(bodies["research.json"])
 
@@ -354,12 +460,34 @@ def publish(summary, ctx, output):
     try:
         bodies = evidence(summary, ctx.captures if ctx else {}, ctx.secrets if ctx else [])
         artifacts.write_zip(pending, bodies)
-    except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile):
+    except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile) as error:
         summary["collection_complete"] = False
         summary["artifact_admission_failed"] = True
         pending.unlink(missing_ok=True)
         failure = {"collection_complete": False, "artifact_admission_failed": True,
                    "qualification": {name: False for name in QUALIFICATION_CASES}}
+        # Only closed codes, counts and validated source identities survive a
+        # refused artifact. Never copy exception text or native observations.
+        reasons = {"evidence member exceeds one-MiB bound": "member_size",
+                   "evidence aggregate refused": "aggregate_size",
+                   "capture receipt differs": "capture_identity",
+                   "HTTP capture receipt differs": "http_capture_identity",
+                   "extra private capture refused": "capture_inventory",
+                   "private token or unsafe evidence member refused": "private_or_unsafe_member"}
+        failure["admission_reason"] = reasons.get(str(error), "admission_refused")
+        for key in ("source_commit", "source_tree"):
+            if isinstance(summary.get(key), str) and re.fullmatch(r"[0-9a-f]{40}", summary[key]):
+                failure[key] = summary[key]
+        if summary.get("client") in CLIENTS:
+            failure["client"] = summary["client"]
+        if summary.get("phase") in PHASE_CASES:
+            failure["phase"] = summary["phase"]
+        failure["command_count"] = len(summary.get("commands", []))
+        failure["captured_member_count"] = len(ctx.captures) if ctx else 0
+        try:
+            failure["summary_bytes"] = len(json.dumps(summary, sort_keys=True, indent=2).encode()) + 1
+        except (ValueError, TypeError):
+            failure["summary_bytes"] = None
         artifacts.write_zip(pending, {"research.json": json.dumps(failure).encode()})
 
 
@@ -395,7 +523,7 @@ def run(client, phase, output):
                     node, node_ids = materialize(output / "node", NODE, node_receipt, node_contents, selected_only=True)
                     ctx.identities.update(node_ids)
                     ctx.argv.insert(0, str(node))
-                    summary["node"] = node_receipt
+                    summary["node"] = selected_node_receipt(node_receipt)
                     ctx.env["PATH"] = str(node.parent) + ":/usr/bin:/bin"
                     verify_files(ctx.identities, budget)
                     record, stdout, stderr = ctx.command("node-version", [node, "--version"], ctx.projects["a"], ctx.env, 10)
@@ -404,6 +532,8 @@ def run(client, phase, output):
                         raise ValueError("exact pinned Node runtime version required")
                 elif leaf.ACQUISITION["runtime"] != "native":
                     raise ValueError("unregistered native runtime")
+                if phase == "observe" and getattr(leaf, "NEEDS_NATIVE_PROBE", False):
+                    ctx.build_native_probe()
                 summary["runtime_files"] = [{"path": str(path), "sha256": digest} for path, digest in ctx.identities.items()]
                 result = leaf.collect(ctx)
                 if not isinstance(result, dict) or set(result) - {"observations", "cases", "unobserved"}:

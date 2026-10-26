@@ -268,6 +268,710 @@ outside the checked-out source. One concrete shared TypeScript toolchain suffice
 - VS Code: [pinned gateway API](https://github.com/microsoft/vscode/blob/e646868227c3e3a9e3f24277c8c7220be42c0be7/src/vscode-dts/vscode.proposed.mcpServerDefinitions.d.ts),
   [MCP operations](https://code.visualstudio.com/docs/agents/run/manage-mcp-servers).
 
+## Grok and Qoder measured acquisition to fixed help
+
+Genuine Grok run 40235269281, artifact 12615677952 (ZIP SHA256
+`b8cccd65c059fab3d157edd4bb26474b7eab547458f4d8cf46222072660c7331`),
+measured the existing official 1.0.70 gzip at 76,760,282 bytes/SHA256
+`11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc`.
+Its sole `grok` executable is 195,700,192 bytes/SHA256
+`22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9`.
+Freeze those pins; admit only acquire/help and the exact nine commands:
+`--version`, `--help`, `inspect --help`, `mcp --help`, `mcp list --help`,
+`mcp doctor --help`, `plugin --help`, `plugin list --help`, `doctor --help`.
+Each has 30 seconds, exit zero, no capture error, empty stderr and strict UTF-8.
+Require exact requested Usage command followed only by a standard Clap
+metavariable or end-of-line, plus --help; main identifies inspect/mcp/plugin.
+The source-defined version candidate is one whole `grok 1.0.70 (<7..40 lowercase
+hex>)` line with optional ` [stable]`; retain the actual compiled commit/channel.
+Public source snapshot `xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`
+is command guidance, not shipping-source provenance. Only `grok.help` may pass;
+no inspect, trust, doctor operation, provider or MCP runtime executes here.
+
+Genuine Qoder run 40235270603, artifact 12615882073 (ZIP SHA256
+`09a2868892ec9c4eccd4a9f62d64a45c6024c977f51fa0bc524beb56ce5ae829`),
+confirms the existing pinned archive and sole regular member `qodercli`,
+182,982,112 bytes, matching the already frozen executable SHA256. Select that
+entrypoint. Existing retained genuine 1.1.78 evidence (run 40079977099) already
+binds exact version stdout `1.1.78\n` and `plugins` help; its parent Usage is
+`qodercli plugins|plugin [options] [command]`. The next help-only table is
+`--version`, `--help`, `plugins --help`, `plugins list --help`, `mcp --help`.
+Require exact version and requested command-specific Usage, --help, zero exit,
+no capture error and empty stderr, within 30 seconds each. Unknown main/MCP
+grammar fails with bounded evidence; do not guess a successful shape.
+Only `qoder.help` may pass. No import/list operation, session plugin, SDK,
+user-cache registration, scope discovery or MCP runtime is part of this slice.
+These pins and fixed-help additions retain every later qualification flag false.
+
+## Kimi initial API research amendment
+
+This next slice qualifies only observed research IDs, not a product version gate
+or public-install lifecycle. Keep `kimi.help`; register `kimi.scope-observation`
+only with the following actual native observations. Kimi 2.3.2/source
+`b8dd3a134060c6e80ba4a1659335cd63b68483f2` remains the exact pin.
+
+Root owns a finite `Context.service(label, arguments, observe, project='a',
+timeout=60)` adapter. It reuses hosted admission, explicit environment,
+before/after runtime identities, selector stream limits, bounded in-memory
+capture and owned process-group cleanup. The callback receives bounded live
+snapshots and the original deadline, not an unrestricted process launcher.
+Only literal loopback HTTP is admitted, without proxies or redirects, with a
+five-second/request deadline, one MiB/body and at most 60 fixed API requests.
+The whole research collector remains limited to 360 seconds. No SDK, ACP,
+TypeScript, npm, alternate MCP fixture or direct fixture call is introduced.
+
+Root adds a separate real Git project C and supplies `ctx.native_probe`, built
+from existing `repotests/testdata/agentplugins_native_probe` by exact Go 1.26.10.
+Record compiler/probe identities; include the probe in immutable-file checks.
+Projects A/B/C and outside cwd share the one original fresh HOME. The leaf owns
+only benign uniquely named SKILL.md and `.kimi-code/mcp.json` entries in these
+roots and an independent user marker. All authored paths remain ordinary,
+single-link, bounded and outside alias traversal. MCP stdio commands select
+the exact supplied probe, per-scope argv/cwd/events file and fresh nonce using
+its existing `UAP_TEST_ROOT`, `UAP_TEST_EVENTS`, `UAP_TEST_NONCE` and
+`UAP_TEST_REVISION` contract. Each entry sets documented startupTimeoutMs and
+toolTimeoutMs to 3000; the fixed sequence uses at most 36 HTTP requests within
+the shared ceiling of 60. No tool call is sent during this initial slice.
+
+The only native service argv is `kimi web --no-open --host 127.0.0.1 --port 0`.
+The exact source accepts port zero and reports the bound port. With NO_COLOR=1,
+require `Kimi server ready`, the complete line
+`  Local:    http://127.0.0.1:<port>/#token=<token>` and a matching
+`  Token:    <token>` line. The token is 43 base64url ASCII characters.
+Read only original HOME's `.kimi-code/server.token`: ordinary same-UID parent
+mode 0700, regular/single-link token mode 0600, exact 43 bytes, no-follow held
+read with before/after identity. Its bytes must match both native banner fields.
+Register any parsed token privately immediately. Unrecognized or incomplete
+startup quarantines the raw streams; they must never enter a failure artifact.
+Validated streams are redacted before admission. HTTP uses Authorization only;
+never publish bearer-bearing fragments, query strings or exception text.
+
+Success JSON must be whole, duplicate-free, bounded, with integer `code:0`,
+`msg:'success'`, bounded request_id and the following typed data. Other exits,
+shapes and errors fail; only the two exact negative responses below are planned.
+
+| Native request | Required observation |
+| --- | --- |
+| `GET /api/v1/healthz`, no auth | HTTP 200, `data.ok:true`. |
+| `GET /api/v1/meta`, no auth | HTTP 401 and exact code 40101; proves native bearer admission. |
+| `GET /api/v1/meta`, bearer | `server_version:'2.3.2'`, nonempty server_id, ISO started_at, dangerous_bypass_auth false, backend v2, empty open_in_apps, and true websocket/file_upload/fs_query/mcp/tasks/terminal capabilities. Optional experimental_flags is a bool map; features contain typed name/state/meta; web_title is a string. |
+| `POST /api/v1/workspaces` with exact root/name for A/B/C | Distinct IDs matching `wd_[a-z0-9._-]+_[0-9a-f]{12}`, exact canonical root/name, ISO created_at/last_opened_at and initial session_count zero. |
+| `GET /api/v1/workspaces/{id}/trust` | Initially false for A/B/C. |
+| `POST /api/v1/workspaces/{A-or-B}/trust` with `{}` then GET | Native true for A/B, C remains false. Perform before preservation baseline; never forge trust state or trust C. |
+| `GET /api/v1/workspaces/{id}/skills` | Typed name/description/path/source rows select only the original-user and selected project research markers at exact SKILL.md paths. C skills may be visible: workspace trust gates MCP, not this catalog. |
+| `GET /api/v2/mcp/servers?cwd=<A/B/C/outside>` | A/B contain user plus their own entry; C/outside contain only user. Require exact project `.kimi-code/mcp.json` origin, source global, mutable false, stdio command/argv/cwd and sorted env keys. User origin is original HOME's file with mutable true. Source global denotes a file layer, not user scope by itself. |
+| `POST /api/v2/mcp/servers:test` with only `{name,cwd}` | A/B success true and native output identifies inspect_runtime; require fresh same-nonce/PID/session initialize and tools/list probe events in that request window. No inline server or direct fixture connection. C's named test returns HTTP 200 with exact code 40408 and no C probe events. |
+| Repeat A/B/C catalogs, then `POST /api/v1/shutdown` with `{}` | Protected user/B/foreign bytes remain exact; shutdown data.ok is true. If the foreground CLI remains alive, send ordinary SIGTERM to the owned group and require exit zero, closed port and reaped group within five seconds. SIGKILL fallback is failed cleanup, never a successful case. |
+
+The source pin covers web shared.ts, persistentToken.ts, privateFiles.ts,
+access-urls.ts, web/run.ts, rest-meta/meta, workspace/workspaces/skills,
+routes/v2/mcp and shutdown routes. The web launcher passes CLI version 2.3.2 to
+the server; the embedded server package version is not the reported CLI version.
+New inert contracts must cover private-token quarantine/redaction, malformed
+JSON/identity, wrong project origin, wrong probe nonce/session, the untrusted
+negative and incomplete service cleanup. Preserve all qualification flags false.
+Inspect genuine evidence before a separate two-round amendment admits the exact
+product version set {2.3.1, 2.3.2}, provider tool calls or the final public UAP
+lifecycle test `TestAgentpluginsKimiNativeProjectComponentsLifecycle`.
+
+## VS Code trusted development-host amendment
+
+Use the already pinned and observed 1.143.1 publisher, genuine Ubuntu 22.04,
+ordinary-user/NNP/zero-capability/loopback namespace, strict cgroup, authenticated
+Xvfb and normal Electron sandbox contract. Retain the existing untrusted mode.
+Add focused `trusted_*_linux.go` files to the existing `vscodeworkspace` package
+main and a closed request mode `trusted-project-v1`; absence of mode preserves
+legacy labels, observer pins, budgets and behavior. Reuse that package's private
+authority, sealing, capture, display and cleanup services directly. Do not copy
+the controller, add a process primitive, disable trust/sandboxing or export a
+new framework. Unknown modes, stages, paths and operations fail before launch.
+
+Reuse the dedicated publisher acquisition/materializer and its bounded parser.
+Exact archive: `https://vscode.download.prss.microsoft.com/dbazure/download/stable/e646868227c3e3a9e3f24277c8c7220be42c0be7/code-stable-x64-1792691793.tar.gz`,
+350,844,741 bytes, SHA256
+`48f658052e54e020a1c1be7b37ac0f9ae39f07e8ccda805c63f053cfda72b2be`.
+Actual retained inventory: 4,262 members, 1,034,475,520 expanded bytes,
+1,031,068,984 regular-file bytes, zero omitted symlinks. Do not increase the
+generic extractor caps. Verify publisher `code` (223,685,880 bytes,
+`cf8508cc7ddde30cfccc70caeda877a9a99119953c4476dcb30a3eb1a2c415e9`),
+`resources/app/out/cli.js` (275,169 bytes,
+`bd393ad6f0d28ba0aa7cd79cc685617f5187096f092009e315a4f098349f7976`),
+and `resources/app/product.json` (68,251 bytes,
+`a141a1de8ed44415c0c527b1882362e6abc25e674be052d67c09da71a27fbd7e`).
+Keep ELF-plus-cli.js version/help preflight; ELECTRON_RUN_AS_NODE=1 is confined
+to that fixed preflight and is absent from GUI execution.
+
+Freeze one minimal lock with the reviewed Node 24.21.0 archive and these packages:
+
+| Package | Version | Integrity |
+| --- | --- | --- |
+| @typescript/typescript-linux-x64 | 7.0.2 | sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A== |
+| @types/node | 22.20.1 | sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q== |
+| undici-types | 6.21.0 | sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ== |
+| playwright-core | 1.64.1 | sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ== |
+
+The 2026-10-26 continuation honors the owner's TypeScript 7.0.2 minimum. Use the
+official Linux-x64 compiler package directly, with no wrapper or optional
+platform fallback. Its exact regular `lib/tsc` is 24,101,026 bytes, SHA256
+`4f2de678286401759b3fb4475bafe35b8f32b4b3a07d92642bbf37eadc9b34a4`.
+The official package integrity, binary identity and complete build-only library
+closure are checked before and after compilation. This amendment received two
+independent plan reviews; it does not change the old untrusted observer.
+Use exact verified Node/npm distribution bytes and
+`npm ci --ignore-scripts --no-audit --no-fund` in a temporary tool directory
+before native network isolation. No ambient compiler/npm, lifecycle scripts or
+browser downloads. Compile tracked TypeScript with the pinned `lib/tsc`, strict
+ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
+The VS Code declarations are build-only files from the exact publisher commit:
+`vscode.d.ts` (742,500 bytes, Git blob `bd520cf7bb88454e99bd15da13c6b9c6ac56fd65`),
+`vscode.proposed.chatPromptFiles.d.ts` (13,619 bytes, blob
+`eb77adbd1a1084837ab2d7b8f669f8ecfc20f1b8`), and
+`vscode.proposed.mcpServerDefinitions.d.ts` (3,302 bytes, blob
+`81e75fe69d74e82bdfb4ca69d0e89b801e728118`). Fetch exact-commit raw source,
+verify byte count and Git blob digest, and include it only in temporary compiler
+inputs. No unpinned @types/vscode or emitted declaration runtime is introduced.
+Vendor declarations may use skipLibCheck; our observer and driver remain strict.
+playwright-core attaches to the publisher's Electron, never a substitute browser.
+Seal the emitted driver/observer package manifests and module mode together
+with the complete pinned playwright-core runtime JS/support-file closure;
+TypeScript compilation does not bundle dependencies. Compiler/types stay in
+the build directory, npm .bin links are excluded, and native execution must not
+resolve modules from an unsealed tool cache or ambient node_modules.
+
+The trusted mode admits verified Node plus the sealed compiled UI driver through
+the existing strict primitive. The driver starts the exact publisher using the
+existing same-process isolation-verifier prelude. Its observed namespace must
+match the driver, and its PID must match the spawned child before execve.
+Fixed GUI argv: `code --new-window --disable-crash-reporter --locale en
+--user-data-dir <one-original-profile> --extensions-dir <owned-empty-extensions>
+--extensionDevelopmentPath <sealed-observer> --extensionTestsPath <sealed-observer>/runner.js
+--enable-proposed-api uap-research.project-runtime-observer
+--remote-debugging-port=0 <exact-A-or-B>`.
+Admit exactly one child-emitted `ws://127.0.0.1:<1024..65535>/devtools/browser/<id>`
+with no credentials/query/fragment or conflicting endpoint, and exactly one
+corresponding workbench page. Attach inside the same namespace, with no fixed
+port, outside-network, alternate-browser or generic-dialog fallback.
+
+Pinned source fixes the following finite UI grammar. Workspace startup title is
+`Do you trust the authors of the files in this folder?`; click only
+`Yes, I trust the authors` after matching the canonical folder in the details
+and keeping `Trust the authors of all files in the parent folder '{name}'`
+unchecked. Require the observer's exact folder and workspace.isTrusted true.
+Trust A/B separately before preservation baselines; A must not implicitly trust B.
+The separate `Trust Folder & Continue` flow is not an admitted fallback.
+
+The gateway broker uses errorOnUserInteraction, so start each owned MCP server
+through native UI first: `MCP: List Servers`, `Select an MCP Server`, exact
+fixture row, `Select action for '<label>'`, `Start Server`. If required, accept
+only `Trust and run MCP server <label>?` with action `Trust` and exact expected
+configuration origin URI (inspect href without navigating). Reject multi-server
+trust, Pick Trusted, unknown enablement/auth dialogs and all broad approvals.
+Source at the publisher commit: workspace.contribution.ts blob
+`6cccbced7b7c304d1e9678fab1559a584f9ecc44`, mcpCommands.ts
+`1addb6dad8938da5442b43160b4400cf4a4adbce`, mcpRegistry.ts
+`607334861d0fbcd8691e9b0a98c44b6a326c6937`, gateway broker
+`8f90bc7d6eb0e47ceee42f73986ba9767b4f8d8a`. Unknown actual UI fails and requires
+an amended interaction; source support alone is not runtime evidence.
+
+The observer uses actual workspace/chat skills/MCP definitions and
+lm.startMcpGateway, enabling only chatPromptFiles and mcpServerDefinitions.
+It never grants trust, registers replacement definitions or directly calls the
+probe. Combine the gateway label/address with exact definition command/argv/env/
+cwd and newly observed probe PID/session, nonce, revision, package/data/cwd facts.
+The stage challenge is the existing inspect_runtime write/read marker; do not
+invent extra probe arguments or returned fields. Admit initialize/list/call only
+through the vendor gateway. Keep endpoint/session secrets private.
+
+Select exact `TestAgentpluginsVSCodeNativeProjectGatewayLifecycle` for the
+existing required full A/B/user public install/no-op/update/local-source repair/restart/
+remove/repeat-remove sequence and the five `vscode.*` qualification IDs above.
+New observer sources live in `scripts/vscode-project-runtime-observer/`; the
+native test lives in `repotests/agentplugins_vscode_project_native_gateway_test.go`.
+The root owns toolchain preparation/workflow wiring; the editor owner implements
+the focused controller and observer. Lifecycle success preserves user/B/foreign
+configuration, recorded ownership and retained data. State remains Prepared.
+
+Trusted mode alone has 900 seconds total from original monotonic start,
+840 seconds work and 60 seconds final teardown/admission. Public UAP operations
+have 30 seconds; GUI stage 60 seconds; trust and each MCP-start interaction
+15 seconds within that stage; gateway requests 10 seconds/one MiB. Stop starting
+GUI stages with less than 75 seconds work remaining. Dispose gateway/DevTools,
+allow five seconds graceful shutdown, then existing strict tree teardown within
+ten seconds total. Require driver/workbench/MCP tree reaped and cgroup empty;
+final cleanup also proves Xvfb/display assets removed. Legacy 420/480-second
+limits remain unchanged. Missing protocol, identity, native UI or cleanup fails.
+This is only a trusted development-host/proposed-API path, not model/OAuth or
+released-client qualification.
+
+The original monotonic origin is established before acquisition and compilation
+and is passed unchanged into the controller. Trusted root return and terminal
+capture bounds are 870/880 seconds; the final envelope remains within 900.
+Only the newly owned network namespace has loopback brought up, before dropping
+to the original ordinary UID/GID and verifying zero capabilities/NNP again.
+The sealed driver receives one closed stdin request, writes an exclusive READY
+challenge after the exact native trust/MCP interactions, and consumes the
+observer's atomic result. It keeps its leader alive until the existing strict
+planned-shutdown helper closes stdin. It never opens another browser or invokes
+the probe directly. Failure diagnostics are bounded to visible native dialog
+titles/messages and quick-pick labels, with URL/opaque values removed.
+
+For the original user, the existing public adapter remains Prepared; record
+`user_native_install_qualified=false`. Preserve a separately pre-existing native
+user skill sentinel through the real skill API without claiming that the public
+user add created it. Freeze authored sources before any native process and
+freeze the public user receipt/package/data immediately after its add. The A/B
+project assertions use exact ownership objects, independently computed installed
+skill/config digests, package/source identity, and fresh probe sessions. The
+missing-component repair keeps the selected local input unchanged at revision
+two. The separate existing TLS composed-source tests retain moving-source and
+recorded-pin coverage; the native local fixture does not claim that property.
+
+Frontend preparation and native evidence use separate flat closed ZIPs, each
+under the existing admission limits. Hold the preparation digest across native
+execution; publish post-native streams through the original directory identity
+and no-follow descriptors. Unknown files, replaced directories, incomplete
+stages, forced cleanup, or late results cannot qualify.
+
+## Gemini and Copilot runtime-attempt amendment
+
+This amendment first admits bounded, explicitly unqualified runtime research for
+the already pinned Gemini 0.65.0/Node 24.21.0 and Copilot 1.0.103 distributions.
+Wait for their genuine initial help/scope artifacts and two independent reviews
+of this subsection before implementation. Select exact
+`TestAgentpluginsGeminiNativeProjectRuntimeAttempt` and
+`TestAgentpluginsCopilotNativeProjectRuntimeAttempt`; their only research case is
+`<client>.runtime-attempt`. They cannot satisfy any of the five qualification
+IDs. Capture the actual provider request, installed tool name, native output and
+session identity, initialize/list/call events and returned result. Freeze the
+observed closed contract after inspecting genuine artifacts, with two independent
+reviews before implementing the final lifecycle. Unknown flags, schema, routes,
+tool names and auth responses fail the attempted scenario. A useful bounded
+failure capture is not a successful runtime attempt or an unsupported boundary.
+The initial attempt is deliberately one public A package add and one fresh A
+session with one write-marker tool call, followed by cleanup. A/B/outside roots
+exist, but independent user/B installation, trust negatives and the complete
+lifecycle belong to the later tests; the attempt claims none of that coverage.
+
+Copilot's candidate here is its supported headless BYOK provider path, replacing
+the earlier ACP-only candidate for these new tests. No ACP adapter, SDK, inline
+MCP definitions or generic RPC framework is introduced. Existing ACP research
+and legacy tests stay intact. Current vendor documentation identifies candidate
+flags; the exact pinned help and hosted attempt decide what is admitted.
+
+### Ownership, fixture authority and limits
+
+Own only focused `_test.go` leaves with the existing
+`repotests/agentplugins_gemini_project_native_` and
+`repotests/agentplugins_copilot_project_native_` prefixes: `provider`, `attempt`,
+`contract` and, after the later gate, `lifecycle`. Reuse `nativeFixture`, its
+existing harmless `inspect_runtime` probe, ownership/event assertions and the
+existing `httptest` scripted-provider pattern. Root owns hosted admission,
+immutable acquisition, workflow selection, bounded process/artifact integration
+and support wording. No production adapter, activation promotion or alternate
+installer is part of this slice.
+
+Use the actual built public `agentplugins` executable and production detection,
+security, source acquisition, immutable storage, installer and transactions.
+No host/security stubs or fake client executables. The verified Gemini bundle
+has the vendor Node shebang: create one recorded npm-style `bin/gemini` symlink
+to its verified `gemini.js`, with the verified Node first on PATH, for legitimate
+public detection. Check the exact link, target and runtime identities before
+and after each command. The native session itself invokes exact Node plus the
+exact bundle entrypoint. Copilot invokes its exact regular ELF. No shell shim
+or executable that fabricates a version or native result is admitted.
+
+Each attempt has 180 seconds total, 150 seconds work and 30 seconds cleanup.
+Each later lifecycle has 900 seconds total, 840 seconds work and 60 seconds
+cleanup, measured from one original monotonic start. Public UAP operations have
+30 seconds, help/list 30 seconds and each native session 60 seconds. Provider
+requests have five-second deadlines, one-second read-header limits, one MiB
+body/response limits and at most eight requests per session. Bound each native
+stdout/stderr stream to one MiB; reject truncation/overflow. Reuse existing
+ordinary `process.OS` descendant supervision and graceful-exit facilities rather
+than the older unbounded installer capture or a new process primitive. Stop
+starting lifecycle sessions with less than 75 seconds work remaining. Close
+provider listeners and prove all owned native/MCP descendants have exited before
+success. Forced termination, surviving children or incomplete cleanup fails.
+
+Every fixture uses one fresh original HOME, real Git projects A/B and an outside
+cwd; project paths never become HOME. Use independent public local packages for
+the original-user skill marker and A/B mixed skill/MCP markers. Distinct keys are
+`uapgeminia`/`uapgeminib` or `uapcopilota`/`uapcopilotb`; skill names/bodies are
+also distinct. Original-user package is skill-only. Each installed stdio entry
+selects the supplied verified probe, a separate event file, fresh nonce,
+revision, argv and cwd using the existing probe environment contract. Public
+installer output, recorded native ownership and selected installed bytes are
+authority. Fixture-authored replacement entries and direct probe calls cannot
+prove installed discovery. Foreign disabled native MCP, skill and preference
+sentinels are ordinary controlled files authored before preservation baselines.
+Validate ordinary parents, no aliases, regular/single-link leaves and bounded
+held reads before every owned read/rewrite; preserve outside sentinels.
+
+Author documented exact trust and provider/approval settings before baseline;
+UAP must leave them intact. Gemini enables folder trust in original-home settings
+and records exact canonical A/B `TRUST_FOLDER` decisions in `trustedFolders.json`.
+Its original-home policy file contains priority-100 deny-all and BOTH
+priority-200 allow rules, each selecting only the exact A or B `mcpName` plus
+`toolName='inspect_runtime'`. Do not rewrite policy between A/B sessions. Copilot
+uses exact canonical A/B `trustedFolders` in original-home `config.json` through
+the already reviewed safe held-file writer; its per-session argv narrows tool
+availability/approval without changing that file. No skip-trust, yolo,
+`mcpServers.trust`, `COPILOT_ALLOW_ALL`, blanket tool approval or forged database.
+
+The later never-trusted C subcase uses its own independent fresh original HOME,
+public installation of a distinct C mixed package and C-only named tool
+permission. Require native project-layer suppression and no C probe start;
+an empty directory alone is not a trust test. It never changes the positive
+A/B preservation baseline. Native catalogs prove skill discovery and selected
+body/path; no assumed provider prompt format or LLM skill activation is claimed.
+
+### Gemini native and provider grammar
+
+Fixed native argv is exact Node, exact `gemini.js`, `--prompt <fixed-stage-prompt>
+--approval-mode default --output-format stream-json --model gemini-2.5-flash`.
+No resume, fake-response file, injected MCP definition or extra extension.
+Original-home settings set `privacy.usageStatisticsEnabled=false`,
+`telemetry.enabled=false` and
+`experimental.adk.agentSessionNoninteractiveEnabled=false`, selecting the pinned
+legacy headless loop. Set `GOOGLE_GEMINI_BASE_URL` to the fresh literal loopback
+origin and `GOOGLE_GENAI_API_VERSION=v1beta`. Supply a fresh fixture-owned
+`GEMINI_API_KEY` required only by this loopback provider; compare its exact
+`x-goog-api-key` header privately and redact the key from all admitted artifacts.
+The pinned GATEWAY mode supports this custom endpoint. Its config code otherwise
+evaluates `loadApiKey()` before reaching the GATEWAY branch, so an explicit
+fixture key avoids accidental keychain probing. This is test-provider
+authentication, never vendor Google authentication/OAuth or an inherited account.
+
+Admit only POST
+`/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse` and optional POST
+`/v1beta/models/gemini-2.5-flash:countTokens` without query. Require literal
+loopback Host and the fixture key. JSON is whole, duplicate-free, finite and
+bounded. Top-level stream-request keys are `contents` plus optional
+`generationConfig`, `systemInstruction`, `safetySettings`, `tools`, `toolConfig`
+and `cachedContent`, recursively validated to the pinned SDK 1.30.0 converter
+types. Contents contain typed role/parts; only text, the selected functionCall
+and matching functionResponse parts are needed. Reject other part kinds/routes,
+methods, query parameters and unknown fields. Token counting admits its pinned
+contents body and returns `{"totalTokens":1}`; it supplies no runtime proof.
+
+For a positive session, require exactly the selected installed function
+declaration `mcp_<exact-server-key>_inspect_runtime` with the existing probe
+argument schema; the other project's tool must be absent. Emit one SSE
+`data: <JSON>\n\n` candidate with `index:0`, `content.role:'model'`, one
+`functionCall:{id,name,args}` part and `finishReason:'STOP'`. Name is the exact
+declaration; args contain only the existing `nonce`, `operation:'write'|'read'`
+and `marker` stage challenge. Start id as
+`<exact-tool-name>__uap_<nonce>_<stage>`: pinned `turn.ts` preserves an already
+qualified ID and otherwise prefixes it. Responses carry bounded numeric
+`usageMetadata`. Require the next native request's matching
+`functionResponse:{id,name,response:{output:<text>}}`. Pinned MCP text handling
+wraps output as `<untrusted_context>\n<probe-JSON>\n</untrusted_context>`;
+require exactly that one wrapper, remove it once and parse the inner probe facts
+JSON. Do not expect the original MCP content wrapper or silently strip arbitrary
+markup. The controlled fixture facts contain no closing-tag text needing escape.
+Compare nonce,
+revision, PID/session, argv, package/data roots, cwd and marker to the newly
+observed probe events. Only then return a text-only candidate containing exactly
+`UAP_DONE_<nonce>_<stage>` and STOP. No response echo alone passes.
+
+Pinned stdout is the finite `core/src/output/types.ts` JSONL union, with ISO
+timestamps: `init` has native `session_id`/`model`; `message` has role/content
+and optional delta; `tool_use` has tool_name/tool_id/parameters; `tool_result`
+has tool_id/status and optional output/error; `result` has status and optional
+error/stats. Require one init, a fresh nonempty native session ID, exact tool
+name/arguments and preserved call ID, successful matching tool_result, exact
+final assistant text and one terminal success. Reject error events,
+duplicate/out-of-order IDs, unknown fields, extra tool calls and unsuccessful
+terminal outcomes. Result stats, when present, follow the pinned finite numeric
+fields and bounded per-model map; they are bookkeeping. Match text-only
+tool_result.output facts independently to provider output and probe events.
+
+Pinned source closure is Gemini v0.65.0
+`packages/cli/src/nonInteractiveCli.ts`, `config/config.ts`,
+`config/settingsSchema.ts`, and core `src/core/contentGenerator.ts`,
+`core/turn.ts`, `tools/mcp-tool.ts`, `output/types.ts`,
+`output/stream-json-formatter.ts`, `utils/generateContentResponseUtilities.ts`
+and `utils/textUtils.ts`.
+Its core package pins `@google/genai` 1.30.0; that exact SDK's `src/models.ts`
+and `src/converters/_models_converters.ts` define the REST paths/conversions.
+Freeze the resolved source commits/blob identities with the genuine attempt.
+See the [policy reference](https://geminicli.com/docs/reference/policy-engine/).
+
+### Copilot native and provider grammar
+
+Candidate fixed argv is exact ELF `-p <fixed-stage-prompt> --output-format json
+--no-auto-update --disable-client-telemetry --disable-builtin-mcps
+--available-tools=<exact-observed-native-MCP-wire-name>
+--allow-tool=<exact-server-key>(inspect_runtime) --deny-tool=shell
+--deny-tool=write --deny-tool=read --deny-tool=url --deny-tool=memory`.
+These are literal argv elements, not shell expressions. Freeze each flag and
+wire name from pinned help/the hosted attempt; do not guess name sanitization or
+loosen to a wildcard/prefix. All children receive `COPILOT_OFFLINE=true` and
+`COPILOT_AUTO_UPDATE=false`. The session also receives
+`COPILOT_PROVIDER_TYPE=openai`,
+`COPILOT_PROVIDER_BASE_URL=http://127.0.0.1:<ephemeral>/v1`,
+`COPILOT_PROVIDER_WIRE_API=completions` and `COPILOT_MODEL=uap-fixture-model`.
+Provider API key/bearer and vendor credentials are absent. Supported keyless
+local-provider setup is not GitHub authentication or a claim of an OS firewall.
+
+Admit only POST `/v1/chat/completions`, literal loopback Host, exact model and
+`stream:true`. Requests use bounded typed messages and function tools.
+The closed Chat Completions candidate accepts top-level model/messages/stream,
+tools/tool_choice, stream_options, max_tokens/max_completion_tokens,
+temperature/top_p, parallel_tool_calls, stop, presence_penalty/frequency_penalty,
+seed, user, response_format and reasoning_effort, each with its documented type
+and finite bounds. Reject other fields/routes rather than returning a generic
+successful response. Message roles are system/developer/user/assistant/tool;
+content is bounded text, null for a tool-call assistant, or typed text parts.
+Function tool definitions have exact name/description/parameters and optional
+boolean strict. Assistant tool_calls have id/type:function/function name
+and JSON arguments; tool messages have exact tool_call_id and bounded content.
+The attempt records the actual subset; freeze its exact request/response union
+before qualification. No unrelated built-in tool, remote endpoint or provider
+fallback is admitted.
+
+Require the exact selected installed MCP declaration before emitting one
+`chat.completion.chunk` SSE tool call: bounded id/object/model, choices index 0,
+delta role assistant and tool_calls with index 0, unique id, type function,
+function name and arguments containing strict JSON for the existing probe args.
+Terminate that completion with `finish_reason:'tool_calls'` and `[DONE]`.
+The next native request must have role tool, exact tool_call_id and returned
+probe facts matching the fresh initialize/list/call event session and all facts
+listed above. Only then emit the exact final sentinel as content, finish_reason
+stop and `[DONE]`. Wrong-project/removed definitions must be absent. No direct
+probe call or inline MCP server flag is permitted.
+
+Exact Copilot 1.0.103 native JSONL event/session grammar is an explicit
+runtime-attempt observation prerequisite, not an invented assistant.message
+parser. Bound/privately capture the attempt; unknown event shape fails its
+admission even when the capture helps amend the parser. Freeze exact keys,
+ordering, terminal success/error and native session/tool identity from actual
+evidence before qualification. Do not fabricate client session IDs from test
+labels or treat provider/probe identity alone as native session identity.
+Primary candidates are official
+[BYOK](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/use-byok-models),
+[programmatic](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-programmatic-reference)
+and [tool-control](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools)
+documentation plus the pinned binary's actual help/observation artifacts.
+
+### Later public lifecycle and qualification gate
+
+After observing/freezing those contracts and the later two independent reviews,
+select exact `TestAgentpluginsGeminiNativeProjectComponentsLifecycle` and
+`TestAgentpluginsCopilotNativeProjectComponentsLifecycle`. These tests use the
+supported imperative local-directory route from
+[project installation](../../PROJECT_INSTALLATION.md), matching existing real
+OpenCode/Cline fixtures: public `add <canonical-source> --no-save --scope project
+--project-root <A-or-B> --target <client> --format json`; original-user add uses
+explicit user scope. Local sources take no saved alias and create no portable
+dependency agreement. There is no `deps sync` claim. Later selection is by
+observed package name/installation ID or the canonical source for update.
+
+Required sequence is empty baseline; independent user/A/B install; exact native
+skill/config discovery and A/B tool write/read; identical repeat add and unchanged
+update with stable ownership/native bytes; intact repair with truthful restaging;
+A source advance and public update; exact native v2 skill/tool/result with the
+retained marker; remove precisely one receipt-owned delivered skill directory
+while the selected local source stays unchanged at v2; public repair restores
+v2 and retained data; explicit fresh-process restart; exact A removal; fresh A
+absence/no A probe events with still-functional B/user; exact recognized repeated
+removal and byte-preserving no effects. No native children remain across UAP
+mutations. Preserve original-user/B/foreign native content, receipts and plugin
+data; compare exact selected source/tree/package/binding/data locator throughout.
+Intact repair may truthfully mutate by restaging; do not require a false no-op.
+Local missing repair proves reconstruction from unchanged selected local input.
+
+Keep `TestProjectComposedSourceLifecycleSeparatesUserAndProjects` and
+`TestProjectCopilotComposedSavedLifecycle` required as separate existing TLS
+Git/ZIP/saved-dependency evidence. Their moving-source/recorded-pin proof must
+not be attributed to the new native local-directory test. Preserve legacy native
+fixture/protocol tests and Claude/Codex/OpenCode gates. Do not change production
+source or repair behavior to fit a stronger fixture claim.
+
+Final successful cases are `<client>.project-lifecycle`,
+`<client>.native-restart-removal`, `<client>.mcp-initialize`,
+`<client>.mcp-tools-list` and `<client>.mcp-tools-call`, only after their complete
+native sequence and cleanup. Evidence joins actual native process/session/tool
+identity, provider call ID and probe PID/session/nonce, returned facts and exact
+installed authority. A connected label, catalog, raw stdout or provider echo is
+insufficient. Add inert contracts for duplicate/oversized JSON, unknown routes,
+foreign/missing declarations, wrong call ID/nonce/revision/data/cwd/session,
+out-of-order streams, bad terminal results, timeout and surviving descendants.
+Required blocked/skipped/not-reached stages fail, never substitute a config pass.
+State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
+authentication false and real-model use false. Raw bounded evidence stays in
+closed CI artifacts, not Git or recursively uploaded native profiles.
+
+## Current-source runtime CI handoff
+
+The October 26 continuation uses a separate `project-native-runtime.yml` job
+and the small `project_native_runtime.py` frontend. Two independent plan rounds
+and independent code reviews by the Gemini/Copilot and Kimi/Cline implementers
+admitted the closed first Copilot attempt. No existing baseline gate is changed.
+
+Only a fixed implemented test name, opt-in, source filename and deadline can be
+selected. The workflow verifies actual GitHub-hosted Linux x64 and exact clean
+source before setup-go; the frontend repeats admission before any compiler or
+vendor child. It reuses the reviewed archive acquisition/materialization,
+immutable file checks, capture budgets and closed ZIP writer. Build the public
+installer, existing probe and repository test binary with exact Go 1.26.10,
+checking held compiler identity before and after each build. Provision the same
+pinned lintai release through bounded verified archive acquisition. No inherited
+profile, authentication, proxy or loader environment enters the test.
+
+Acquisition and compilation have one 480-second budget. The initial Copilot
+attempt has its own original 180-second total, with five seconds reserved by
+the outer process capture for reaping, followed by a bounded publication phase.
+Future full lifecycle registrations require their separately reviewed exact
+tests and original deadlines; this is not an arbitrary timeout override.
+
+The frontend records source/build identity separately in `frontend.zip`. A
+native `runtime.zip` is normalized only from bounded held bytes after checking
+the fixed client's exact member inventory, command triples, source identity,
+UTF-8, duplicate/special/oversized entries and explicit qualification state.
+Copilot's initial schema admits its named installed snapshots, bounded provider
+requests, probe events and fixed command table. Unknown native JSONL semantics
+remain an intentional failed research attempt until a genuine artifact has been
+reviewed. A closed artifact or successful build cannot qualify a failed,
+skipped, absent or otherwise unobserved native test. Raw profiles are never
+recursively uploaded, and the workflow publishes only these two named ZIPs.
+
+The reviewed Gemini registration uses the exact
+`TestAgentpluginsGeminiNativeProjectRuntimeAttempt` with the same 180-second
+attempt bound. A successful attempt additionally requires all command triples,
+both installed snapshots, provider requests, probe events, actual native
+session/call identifiers and returned probe facts. Its five lifecycle
+qualification flags remain false. Pinned Gemini source adds only the exact
+`wait_for_previous` boolean property to the provider-visible tool schema;
+validate that property exactly before comparing the original probe schema.
+Never add it to the emitted tool arguments. The fixture API key is registered,
+redacted and checked again at closed artifact admission.
+
+The Kimi registration selects only
+`TestAgentpluginsKimiNativeProjectComponentsLifecycle` and its original
+900-second total/840-second work budget. It observes public local-source
+installation, reconciliation, update, missing-component repair, fresh native
+processes and removal through Kimi's authenticated local API. Named native MCP
+tests prove initialize/list; tools-call stays false. As with the reviewed local
+Gemini/Copilot sequence, repair uses unchanged selected local input. Moving-source
+and recorded-pin behavior remains separately required in
+`TestProjectComposedSourceLifecycleSeparatesUserAndProjects` and
+`TestProjectCopilotComposedSavedLifecycle`; it is not attributed to these native
+local-directory observations. The checked source-root override and canonical
+Python executable are explicit inputs, with no ambient auth or loader variables.
+
+## Qoder, Grok, Kiro and Devin installed-startup attempts
+
+Two independent plan rounds and implementation reviews admit the finite shared
+`agentplugins_project_native_cli_attempt_test.go` helper and four thin client
+wrappers. Select only `TestAgentpluginsQoderNativeProjectRuntimeAttempt`,
+`TestAgentpluginsGrokNativeProjectRuntimeAttempt`,
+`TestAgentpluginsKiroNativeProjectRuntimeAttempt` and
+`TestAgentpluginsDevinNativeProjectRuntimeAttempt`. The last uses the public
+`windsurf` target, `AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT`, and the
+`agentplugins_windsurf_project_native_attempt_test.go` leaf. Each attempt keeps
+one original 180-second total, 150-second work and 30-second cleanup budget.
+
+Use exact already pinned archives, full regular runtime closure, actual hosted
+Linux admission and the real public local-directory project add. Qoder and Grok
+install skill-only packages; Kiro and Devin also install the harmless stdio
+probe through the production managed launcher. Independently validate selected
+source, package, Prepared binding, native ownership paths/digests, complete
+Qoder import-view inventory, and exact native command/arguments/environment
+against recorded package and data authority. No direct native configuration
+replacement or user-profile relocation is permitted.
+
+Qoder's measured help explicitly defines `--tools ''` as disabling all tools.
+Grok's pinned public command-source snapshot instead parses an empty `--tools`
+as no selector, so that option is not used. Its source-guided attempt uses
+`--deny ''`, traced through the strict permission parser to Deny/Any/no pattern;
+source similarity is not a claim of shipped-binary equivalence. Devin omits
+automatic permission mode and uses an original-profile deny-only configuration
+for the documented builtins and MCP prefix, with no allow entries or trust
+grant. Kiro uses no-interactive mode with no trust or automatic approval flag.
+Unknown actual options, permission behavior, authentication or tool protocol
+fail without granting access or trying an alternate permissive mode.
+
+The exact capture table is `git-a`, `git-b`, `version`, `add-a`,
+`native-attempt`. The closed frontend admits only their complete command
+triples, the fixed summary and optional probe events, bound to the exact source
+commit/tree. Every initial native session, including exit zero, remains a
+failed research attempt until its genuine raw output is independently reviewed.
+All five qualification flags, vendor authentication and real-model qualification
+remain false. A bounded retained failure cannot become a passing E2E gate.
+Further source/provider/permission/lifecycle changes require their own observed
+contract and independent review; legacy user and baseline gates remain required.
+
+| Client | Pinned native version | Fixed restricted startup |
+| --- | --- | --- |
+| Qoder | 1.1.78 | `--print --output-format stream-json --no-session-persistence --permission-mode default --tools "" --plugin-dir <receipt-selected-view> <prompt>` |
+| Grok | 1.0.70 (f50904eaee6c) | `--single <prompt> --output-format streaming-json --permission-mode default --deny "" --no-subagents --disable-web-search --max-turns 1` |
+| Kiro | 2.34.0 | `chat --v2 --no-interactive <prompt>` |
+| Windsurf / Devin | 3000.11.205 (6dea39440ae3) | `--print <prompt> --respect-workspace-trust true` |
+
+Grok's source-guided deny semantics are from public snapshot
+`xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`,
+`crates/codegen/xai-grok-pager/src/headless/cli.rs` blob
+`99d5732f95ec023debeffc2f00cb4ae4532f0f0b`, together with the same snapshot's
+`xai-grok-permission-rules/src/rules.rs` and `policy.rs`. The shipping commit
+differs; no binary equivalence is inferred. Devin's original-profile config is
+`auto_update:false`, `allow:[]`, `ask:[]`, and documented deny entries
+`read,edit,write,grep,glob,exec,fetch,web_fetch,mcp__*`.
+
+Actual Kiro research observed `error: failed to launch kiro-cli-chat` after its
+version/help preflight. Its leaf now admits the three exact acquired launcher,
+chat and terminal companions, checking ordinary ownership/mode and the pinned
+full runtime closure before every child. Only that verified bin directory is
+prepended to `/usr/bin:/bin`; there is no shared environment escape, alias,
+native-profile move or acceptance of the observed failure as success.
+
+## Cline first installed ACP capture
+
+The pinned Cline 3.0.73 source at
+`c718573538d76310f464541617ab665108a6c999` cannot bind the first noninteractive
+desktop approval to the requested session: it discards that supplied session ID
+and registers `activeCliSession` only after the first turn returns. Do not invent
+a desktop session or bypass the approval wall. The separately reviewed next
+candidate is the native ACP transport with `--auto-approve false`, one actual
+`session/new` response, an empty injected `mcpServers` list, and one exact native
+permission request. `allow_once` is permitted only when actual session ID,
+provider call ID, tool name `uapclinea__inspect_runtime`, nonce and arguments all
+match. All other permission requests are denied and the attempt fails.
+
+Select only `TestAgentpluginsClineNativeProjectRuntimeAttempt` with
+`AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT=1`. Use public local-source A add,
+the independently derived existing Cline nested `transport` projection with
+direct receipt-selected probe command, arguments, environment and native cwd,
+and the unchanged complete installed package. No production adapter change or
+managed-launcher substitution is introduced. The supported original-user custom
+provider/catalog selects one scripted loopback OpenAI-compatible endpoint with
+external catalog refresh disabled. Its fixture key is never published.
+
+The ordinary hosted frontend hashes the actual root-owned sudo, systemd-run,
+systemctl and env executables. It creates only one fresh
+`uap-cline-project-<32-hex>.service` with the original UID/GID, Delegate=yes,
+NoNewPrivileges=yes and KillMode=control-group through systemd 255. Pass only the
+closed existing environment and exact test binary, with literal
+`--expand-environment=no` preserving arguments before `env -i`. No AI client runs as root,
+no cgroup hierarchy is relabelled, and no delegation-root override is accepted.
+The Go test verifies actual `/proc/self/cgroup`, cgroup2 ownership and NNP before
+the existing OS duplex capability admission. The original CLOCK_MONOTONIC
+nanosecond origin starts before service launch and is not reset: 150 seconds
+work, 180 total. The outer capture returns by 165, reserving its existing five
+seconds reap and ten for exact-unit cleanup. RuntimeMaxSec is a secondary limit.
+If needed, stop and then kill only this owned unit; any such intervention fails
+the attempt, and the final exact cgroup must be empty or gone.
+
+Closed native evidence contains the fixed public command triples, bounded ACP
+JSONL and its command/error receipt, at most two actual provider exchanges,
+optional native probe events, and the exact source-bound attempt summary.
+Successful planned duplex exposes no diagnostic stream in the existing OS API;
+errors retain that API's bounded diagnostic. This limitation is explicit and
+does not motivate a second process primitive. Every initial capture, including
+an apparently successful exchange, fails pending independent review of actual
+native/provider/probe bytes. All five qualifications, vendor authentication and
+real-model flags remain false until a later reviewed full lifecycle proves them.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
