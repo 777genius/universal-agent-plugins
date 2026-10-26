@@ -344,6 +344,34 @@ async function within<T>(work: Promise<T>, milliseconds: number): Promise<T> {
   } finally { if (timer) clearTimeout(timer); }
 }
 
+async function focusWorkbench(page: Page, req: Request, stageDeadline: number): Promise<void> {
+  const deadline = Math.min(stageDeadline, performance.now() + 5000);
+  const remaining = (): number => {
+    const value = deadline - performance.now();
+    if (value <= 0) throw new Error('workbench focus deadline exceeded');
+    return value;
+  };
+  const initialReadMs = Math.min(1000, remaining());
+  const before = await within(page.evaluate<unknown>('document.hasFocus()'), initialReadMs);
+  if (typeof before !== 'boolean') throw new Error('native initial focus is malformed');
+  const activationMs = Math.min(1000, remaining());
+  await within(page.bringToFront(), activationMs);
+  const focusDeadline = Math.min(deadline, performance.now() + 3000);
+  let after: boolean | undefined;
+  while (performance.now() < focusDeadline) {
+    const readMs = Math.min(1000, remaining(), focusDeadline - performance.now());
+    if (readMs <= 0) break;
+    const observed = await within(page.evaluate<unknown>('document.hasFocus()'), readMs);
+    if (typeof observed !== 'boolean') throw new Error('native final focus is malformed');
+    after = observed;
+    if (after) break;
+    await delay(Math.min(50, Math.max(0, focusDeadline - performance.now())));
+  }
+  if (after === undefined) throw new Error('native final focus is missing');
+  process.stdout.write(JSON.stringify({ type: 'driver-focus', stage: req.stage, nonce: req.nonce, before, after }) + '\n');
+  if (!after) throw new Error('native workbench did not acquire focus');
+}
+
 async function failureUI(page: Page | undefined): Promise<ObjectValue[]> {
   if (!page || page.isClosed()) return [];
   const result: ObjectValue[] = [];
@@ -433,6 +461,8 @@ async function main(): Promise<void> {
     if (!page) throw new Error('native workbench page missing');
     page.setDefaultTimeout(3000);
     await page.locator('.monaco-workbench').waitFor({ state: 'visible', timeout: Math.min(15000, deadline - performance.now()) });
+    phase = 'workbench-focus';
+    await focusWorkbench(page, req, deadline);
     phase = 'workspace-trust';
     const trustPromptAccepted = await workspaceTrust(page, req), servers: ObjectValue[] = [];
     phase = 'native-mcp-start';

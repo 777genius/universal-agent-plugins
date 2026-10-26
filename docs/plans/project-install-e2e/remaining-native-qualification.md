@@ -563,6 +563,50 @@ exact trusted lifecycle on genuine hosted Ubuntu 22.04. Any remaining native
 settings change, unknown UI or cleanup failure still fails and requires its own
 observed diagnosis. Two independent plan-review rounds precede implementation.
 
+### Observed VS Code startup focus investigation
+
+The corrected genuine [run 40363268218](https://github.com/777genius/universal-agent-plugins/actions/runs/40363268218)
+at source tree `b89e5d8774d4c6c502dbb48117999afeceb443a9` again failed
+`empty-a` during workspace trust, now with no visible dialog. Native artifact
+`12669876292` (SHA256
+`5b94fbd4aa55d6c291cf1957120a4d79dfa2105be43bd0b53664a623134f4f7c`)
+contains no welcome modal or protected-settings error. Teardown remains unproved
+and every qualification remains false.
+
+At the pinned publisher commit, `workspace.contribution.ts` blob
+`6cccbced7b7c304d1e9678fab1559a584f9ecc44` starts the trust modal only when
+`hostService.hasFocus` is true or its focus event subsequently fires. The native
+`nativeHostService.ts` blob `86a3d521e1bef4ff05c0d91c949c91cdca643e4b`
+implements that getter with `getActiveDocument().hasFocus()`. The native
+environment inherits `disableWorkspaceTrust` only from the explicit
+`--disable-workspace-trust` argument (`environment/common/environmentService.ts`
+blob `004d0614c938a3e9371c4f78a92a2a57b0058a10`); the frozen native argv does
+not contain that flag. Neither development nor test entrypoint presence is that
+getter's condition. The retained artifact does not measure native window focus;
+focus starvation is a source-supported hypothesis, not an observed cause.
+
+After admitting the sole actual workbench and before the unchanged trust flow,
+record only the boolean result of the constant expression
+`document.hasFocus()`, call the existing pinned Playwright
+[`page.bringToFront()`](https://playwright.dev/docs/api/class-page#page-bring-to-front)
+on that same page once, and wait at most three seconds for a true boolean.
+Bound the complete focus step to five seconds inside the original 60-second
+stage. Retain before/after booleans with stage/nonce in one bounded
+`driver-focus` diagnostic in the already admitted merged stream. No document
+content, endpoint, new artifact member or new result-envelope field is exposed.
+Use the driver's existing bounded-promise helper for the focus action and reads.
+Missing/malformed booleans or a false final focus fail before any trust or server
+action; an initially false focus is retained as an observation.
+
+This is normal activation of the already selected genuine workbench; it does not
+set trust, invoke a hidden native command or synthesize a focus event. Keep the
+exact canonical-folder trust dialog and unchecked-parent assertion, all existing
+MCP UI/API, source/tool pins, settings baselines, process primitive, sandbox,
+deadlines and cleanup gates. Do not substitute a resource-trust dialog or accept
+absence of the expected dialog. Run existing inert contracts and pinned strict
+TypeScript compilation, then inspect the next genuine hosted artifact. Two
+independent plan-review rounds precede this narrow driver correction.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for
