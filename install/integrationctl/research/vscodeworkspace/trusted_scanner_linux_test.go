@@ -12,7 +12,7 @@ import (
 )
 
 func TestTrustedScannerHeldAncestryRejectsReplacementAndMetadataDrift(t *testing.T) {
-	for _, kind := range []string{"directory-replacement", "directory-mode", "directory-alias", "file-replacement", "file-mode", "file-bytes", "file-hardlink", "wrong-owner", "mount"} {
+	for _, kind := range []string{"directory-replacement", "directory-mode", "directory-alias", "file-replacement", "file-mode", "file-size", "file-hardlink", "wrong-owner", "mount"} {
 		t.Run(kind, func(t *testing.T) {
 			base := t.TempDir()
 			path, mode := filepath.Join(base, "node"), os.FileMode(0700)
@@ -54,8 +54,8 @@ func TestTrustedScannerHeldAncestryRejectsReplacementAndMetadataDrift(t *testing
 				}
 			case "directory-mode", "file-mode":
 				err = os.Chmod(path, 0750)
-			case "file-bytes":
-				err = os.WriteFile(path, []byte("held changed!"), 0700)
+			case "file-size":
+				err = os.WriteFile(path, []byte("held original with a different size"), 0700)
 			case "file-hardlink":
 				err = os.Link(path, path+"-alias")
 			case "wrong-owner":
@@ -72,6 +72,61 @@ func TestTrustedScannerHeldAncestryRejectsReplacementAndMetadataDrift(t *testing
 			}
 			if err := n.verify(); err == nil {
 				t.Fatal("original scanner node drift was adopted", kind)
+			}
+		})
+	}
+}
+
+func TestTrustedScannerContentsRejectSameSizeBytesAndInventoryDrift(t *testing.T) {
+	for _, kind := range []string{"same-size-bytes", "file-mode", "empty-directory"} {
+		t.Run(kind, func(t *testing.T) {
+			security := t.TempDir()
+			tree := filepath.Join(security, "lintai")
+			if err := os.Mkdir(tree, 0700); err != nil {
+				t.Fatal(err)
+			}
+			body := []byte("held original")
+			sum := sha256.Sum256(body)
+			s := &trustedScannerCache{security: security, binary: filepath.Join(tree, "lintai"), digest: hex.EncodeToString(sum[:])}
+			if err := os.WriteFile(s.binary, body, 0700); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			s.inventory, err = trustedInventory(tree)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.verifyContents(); err != nil {
+				t.Fatal("original content refused", err)
+			}
+			want := "sealed scanner subtree differs"
+			switch kind {
+			case "same-size-bytes":
+				before, err := anchoredInfo(s.binary)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(s.binary, []byte("held changed!"), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Chtimes(s.binary, before.ModTime(), before.ModTime()); err != nil {
+					t.Fatal(err)
+				}
+				after, err := anchoredInfo(s.binary)
+				if err != nil || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
+					t.Fatal("same-size restored-mtime setup differs", err)
+				}
+				want = "pinned cached scanner bytes differ"
+			case "file-mode":
+				err = os.Chmod(s.binary, 0750)
+			case "empty-directory":
+				err = os.Mkdir(filepath.Join(tree, "unexpected-empty"), 0700)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.verifyContents(); err == nil || err.Error() != want {
+				t.Fatalf("content drift %s: got %v, want %q", kind, err, want)
 			}
 		})
 	}

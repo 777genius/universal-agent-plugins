@@ -860,6 +860,49 @@ remaining inert contracts and cannot claim that hosted gate passed. No vendor
 process executes locally. Two independent reviews of this revised plan precede
 fixture implementation, independent code review and the exact hosted lifecycle.
 
+### Observed scanner metadata-contract timestamp collision
+
+Genuine hosted [run 40389182925](https://github.com/777genius/universal-agent-plugins/actions/runs/40389182925),
+job `121805371213`, checked exact source
+`bd42cfedc8a8c48dce0615f008981089c3590598` (tree
+`459e041d038a2aa9251b148c3bda7f9c93c4b00d`). Its inert controller contracts
+failed in `TestTrustedScannerHeldAncestryRejectsReplacementAndMetadataDrift/file-bytes`:
+the metadata-only held-node check accepted a same-size rewrite from
+`held original` to `held changed!`. The log does not contain the actual stat
+timestamps; a same-quantum timestamp collision is an inference from that check's
+size/mtime/ctime comparisons. No native lifecycle ran and no native artifact was
+admitted. This result does not establish failure of the separate pinned digest
+and full subtree inventory checks in `trustedScannerCache.verify`.
+
+Keep held-node verification's existing inode, ownership, mode, single-link,
+size, timestamp and mount rules. Make its byte-size mutation contract
+deterministic by naming that subcase `file-size` and writing distinctly longer
+bytes. Extract only the existing unchanged pinned-digest and strict-inventory
+tail of `trustedScannerCache.verify` into `verifyContents`, called at the same
+point after all existing ancestry and mount checks. Do not add hashing, change
+admission order, relax an authority check or move a production boundary.
+
+Exercise that exact content helper with an actual ordinary temporary cache
+subtree. First require its original digest and inventory to pass. Then require
+refusal of an equal-size byte rewrite even after restoring the original mtime,
+and independently require refusal of scanner mode and empty-directory inventory
+changes. The metadata-only subcase no longer claims to prove byte integrity;
+the production content check proves that separate contract. Preserve the genuine
+hosted original-UID/self-bind/cache-route gate unchanged and require it before
+the editor. Two independent plan reviews precede this fixture-only amendment,
+followed by independent code review, focused inert validation and a fresh exact
+hosted lifecycle. All unobserved native stages remain unqualified.
+
+### Observed VS Code inert deadline contract on a short-uptime host
+
+Genuine hosted run 40389182726, job 121805371389, checked source bd42cfedc8a8c48dce0615f008981089c3590598 (tree 459e041d038a2aa9251b148c3bda7f9c93c4b00d). Before any untrusted native workbench observation, TestTrustedDeadlineKeepsOriginalOriginAndClosedMode failed at trusted_lifecycle_linux_test.go:47: "legacy budget changed monotonic task budget authority refused". The later missing ZIP is a consequence of never starting observation, not native evidence.
+
+The inert test constructs its real CLOCK_MONOTONIC origin by subtracting 100 seconds without checking uptime. deadlineAtMaximum correctly refuses nonpositive, future or over-budget origins. A host with less than 100 seconds of monotonic uptime therefore cannot satisfy that test's setup. The logs contain no sampled clock value; short uptime is a source-backed inference, not observed telemetry. The roughly 21-second controller build/test log interval does not itself measure system uptime.
+
+Change only the deadline test in install/integrationctl/research/vscodeworkspace/trusted_lifecycle_linux_test.go plus this recorded plan. Let the artificial elapsed interval be min(100 seconds, CLOCK_MONOTONIC nanoseconds / 2), require it to be positive, and derive the one original StartNS by subtracting that interval from the sampled monotonic time. Require the same legacy and trusted work deadlines to retain that origin: 420 seconds minus elapsed and 840 seconds minus elapsed, with the existing one-second tolerance. Add explicit zero and negative origin refusals alongside the existing future-origin and closed-mode negatives. Do not sleep, skip the test, reset an origin, mock the production clock or change production deadline logic, limits, native execution, permissions, acquisition, cleanup or qualification.
+
+Two independent reviews of this exact plan precede implementation. Review the exact implementation independently, then run the focused actual deadline/Trusted inert contracts and changed-lines lint using the existing shared caches. The corrected scanner-content candidate b1f23a707894d83e7d3f3315304a54de6f265374 remains independently reviewable; this is a separate test-only correction. Genuine hosted untrusted/trusted runs remain mandatory and all unobserved native stages remain unqualified.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for

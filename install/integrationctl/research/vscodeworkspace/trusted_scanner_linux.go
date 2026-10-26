@@ -116,6 +116,10 @@ func (s *trustedScannerCache) verify() error {
 	if err != nil || parentErr != nil || mounted != s.mount || parent != s.parentMount || mounted == parent {
 		return fmt.Errorf("original scanner mount binding differs")
 	}
+	return s.verifyContents()
+}
+
+func (s *trustedScannerCache) verifyContents() error {
 	digest, err := hashFile(s.binary, 128<<20)
 	if err != nil || digest != s.digest {
 		return fmt.Errorf("pinned cached scanner bytes differ")

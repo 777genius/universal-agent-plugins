@@ -41,20 +41,26 @@ func TestTrustedDeadlineKeepsOriginalOriginAndClosedMode(t *testing.T) {
 	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &now); err != nil {
 		t.Fatal(err)
 	}
-	legacy := inputRequest{StartNS: now.Nano() - int64(100*time.Second)}
+	elapsed := min(100*time.Second, time.Duration(now.Nano()/2))
+	if elapsed <= 0 {
+		t.Fatal("positive monotonic elapsed interval required")
+	}
+	legacy := inputRequest{StartNS: now.Nano() - int64(elapsed)}
+	remaining := 420*time.Second - elapsed
 	deadline, err := inputDeadline(legacy, "work")
-	if err != nil || time.Until(deadline) > 321*time.Second || time.Until(deadline) < 319*time.Second {
+	if err != nil || time.Until(deadline) > remaining+time.Second || time.Until(deadline) < remaining-time.Second {
 		t.Fatal("legacy budget changed", err)
 	}
 	in := legacy
 	in.Mode = trustedProjectMode
 	in.SourceTree = strings.Repeat("a", 40)
 	in.Trusted = &trustedInput{ToolsRoot: "/tmp/tools", ToolsManifestSHA256: strings.Repeat("a", 64), InstallerPath: "/tmp/installer", InstallerSHA256: strings.Repeat("b", 64), ProbePath: "/tmp/probe", ProbeSHA256: strings.Repeat("c", 64), ScannerPath: "/tmp/scanner", ScannerSHA256: strings.Repeat("d", 64), ScannerArchiveSHA256: trustedScannerArchive}
+	remaining = 840*time.Second - elapsed
 	deadline, err = inputDeadline(in, "work")
-	if err != nil || time.Until(deadline) > 741*time.Second || time.Until(deadline) < 739*time.Second {
+	if err != nil || time.Until(deadline) > remaining+time.Second || time.Until(deadline) < remaining-time.Second {
 		t.Fatal("trusted budget origin was reset", err)
 	}
-	for _, kind := range []string{"unknown-mode", "legacy-input", "observer-substitution", "scanner-pin", "future-origin", "unknown-phase"} {
+	for _, kind := range []string{"unknown-mode", "legacy-input", "observer-substitution", "scanner-pin", "zero-origin", "negative-origin", "future-origin", "unknown-phase"} {
 		changed := in
 		phase := "work"
 		switch kind {
@@ -68,6 +74,10 @@ func TestTrustedDeadlineKeepsOriginalOriginAndClosedMode(t *testing.T) {
 			copy := *in.Trusted
 			copy.ScannerArchiveSHA256 = strings.Repeat("e", 64)
 			changed.Trusted = &copy
+		case "zero-origin":
+			changed.StartNS = 0
+		case "negative-origin":
+			changed.StartNS = -1
 		case "future-origin":
 			changed.StartNS = now.Nano() + int64(time.Hour)
 		case "unknown-phase":
