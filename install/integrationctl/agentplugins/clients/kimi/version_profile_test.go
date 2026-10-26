@@ -80,9 +80,10 @@ func TestVersionProbeEnvironmentRejectsUnsafeKimiProfileOrCache(t *testing.T) {
 					if err := os.Symlink(root, alias); err != nil {
 						t.Skipf("symlink creation unavailable: %v", err)
 					}
-					if kind == "profile-link" {
+					switch kind {
+					case "profile-link":
 						root = alias
-					} else if kind == "ancestor-link" {
+					case "ancestor-link":
 						root = filepath.Join(alias, "missing-profile")
 					}
 				}

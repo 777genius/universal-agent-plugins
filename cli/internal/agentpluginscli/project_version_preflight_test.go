@@ -6,9 +6,48 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
+
+func projectVersionRegistry(t *testing.T) *clients.Registry {
+	t.Helper()
+	registry, err := clients.NewRegistry(kimi.New(), windsurf.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return registry
+}
+
+func TestProjectLifecycleVersionProbeRequiresInjectedRegistry(t *testing.T) {
+	client := projectVersionClient()
+	detector := &projectVersionDetector{err: errors.New("must not execute")}
+	detected := map[domain.ClientID]domain.DetectedClient{client.ClientID: client}
+	err := ensureSelectedProjectVersions(context.Background(), App{Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{client.ClientID}, detected)
+	if !errors.Is(err, clients.ErrRegistryRequired) || len(detector.targets) != 0 || detector.broadCalls != 0 || !reflect.DeepEqual(detected[client.ClientID], client) {
+		t.Fatalf("missing injected registry did not fail closed: %v", err)
+	}
+}
+
+type projectVersionPlainAdapter struct{ id domain.ClientID }
+
+func (adapter projectVersionPlainAdapter) ID() domain.ClientID { return adapter.id }
+
+func TestProjectLifecycleVersionProbeRequiresAdapterCapability(t *testing.T) {
+	client := projectVersionClient()
+	registry, err := clients.NewRegistry(projectVersionPlainAdapter{id: client.ClientID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detector := &projectVersionDetector{err: errors.New("must not execute")}
+	detected := map[domain.ClientID]domain.DetectedClient{client.ClientID: client}
+	if err := ensureSelectedProjectVersions(context.Background(), App{Scope: domain.ScopeProject, Detector: detector, ClientRegistry: registry}, &options{}, []domain.ClientID{client.ClientID}, detected); err != nil || len(detector.targets) != 0 || detector.broadCalls != 0 || !reflect.DeepEqual(detected[client.ClientID], client) {
+		t.Fatalf("absent adapter capability executed or changed discovery: %v", err)
+	}
+}
 
 type projectVersionDetector struct {
 	clients, probed []domain.DetectedClient
@@ -47,7 +86,7 @@ func TestProjectLifecycleVersionProbePreservesDiscovery(t *testing.T) {
 	detector := &projectVersionDetector{clients: []domain.DetectedClient{original, other}, probed: []domain.DetectedClient{
 		probed, {ClientID: domain.ClientGemini, Version: "must not replace ambient discovery"},
 	}}
-	selected, detected, err := preflightProjectLifecycleTargets(context.Background(), App{Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi}, nil, false)
+	selected, detected, err := preflightProjectLifecycleTargets(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi}, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +128,7 @@ func TestProjectLifecycleVersionProbeRejectsUnboundResults(t *testing.T) {
 			detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
 			test.change(detector)
 			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: original}
-			err := ensureSelectedProjectVersions(context.Background(), App{Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi}, detected)
+			err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi}, detected)
 			if err == nil {
 				t.Fatal("unbound or unsuccessful version observation was accepted")
 			}
@@ -125,7 +164,7 @@ func TestProjectLifecycleVersionProbeEligibility(t *testing.T) {
 			}
 			detector := &projectVersionDetector{err: errors.New("must not probe")}
 			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: client}
-			if err := ensureSelectedProjectVersions(context.Background(), App{Scope: test.scope, Detector: detector}, &options{dryRun: test.dryRun}, []domain.ClientID{test.target}, detected); err != nil {
+			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: test.scope, Detector: detector}, &options{dryRun: test.dryRun}, []domain.ClientID{test.target}, detected); err != nil {
 				t.Fatal(err)
 			}
 			if len(detector.targets) != 0 || detector.broadCalls != 0 || !reflect.DeepEqual(detected[domain.ClientKimi], client) {
@@ -148,7 +187,7 @@ func (detector *projectVersionBroadOnlyDetector) DetectWithVersionProbe(context.
 func TestProjectLifecycleVersionProbeRequiresTargetedCapability(t *testing.T) {
 	client := projectVersionClient()
 	detector := &projectVersionBroadOnlyDetector{staticDetector: staticDetector{clients: []domain.DetectedClient{client}}}
-	selected, _, err := preflightProjectLifecycleTargets(context.Background(), App{Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi}, nil, false)
+	selected, _, err := preflightProjectLifecycleTargets(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{}, []domain.ClientID{domain.ClientKimi}, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +216,7 @@ func TestProjectDependencyVersionsValidateCompleteActionSet(t *testing.T) {
 			probed := client
 			probed.Version = "2.3.1"
 			detector := &projectVersionDetector{probed: []domain.DetectedClient{probed}}
-			adapter := &dependencyInstaller{app: App{Scope: domain.ScopeProject, Detector: detector}, opts: &options{}, detected: map[domain.ClientID]domain.DetectedClient{
+			adapter := &dependencyInstaller{app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, opts: &options{}, detected: map[domain.ClientID]domain.DetectedClient{
 				domain.ClientKimi: client, domain.ClientGemini: {ClientID: domain.ClientGemini, Status: domain.DetectionNotDetected},
 			}}
 			err := adapter.preflightProjectVersions(context.Background(), test.actions)
@@ -203,7 +242,7 @@ func TestProjectDependencyPreviewDoesNotProbeVersions(t *testing.T) {
 	reachedPreparation := false
 	boundary := errors.New("inert preview preparation boundary")
 	adapter := &dependencyInstaller{
-		app: App{Scope: domain.ScopeProject, Detector: detector}, opts: &options{},
+		app: App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, opts: &options{},
 		detected: map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: client},
 		beforeApply: func() error {
 			reachedPreparation = true

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
@@ -12,8 +13,8 @@ import (
 // Project adapters can require a current version even for a local package.
 // Validate the complete selection before executing the one missing version
 // probe, and retain the original discovery facts for every client.
-func preflightProjectLifecycleTargets(ctx context.Context, app App, opts *options, targets []domain.ClientID, clients []domain.DetectedClient, probeVersion bool, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
-	selected, detected, err := preflightSelectedTargets(ctx, app, targets, clients, probeVersion, intents...)
+func preflightProjectLifecycleTargets(ctx context.Context, app App, opts *options, targets []domain.ClientID, observedClients []domain.DetectedClient, probeVersion bool, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
+	selected, detected, err := preflightSelectedTargets(ctx, app, targets, observedClients, probeVersion, intents...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -30,12 +31,11 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 	if app.scope() != domain.ScopeProject || opts.dryRun {
 		return nil
 	}
-	selected := false
-	for _, target := range targets {
-		selected = selected || target == domain.ClientKimi
+	if app.ClientRegistry == nil {
+		return clients.ErrRegistryRequired
 	}
-	client, ok := detected[domain.ClientKimi]
-	if !selected || !ok || client.Status != domain.DetectionDetected || client.DetectionError != nil || client.ExecutablePath == "" || strings.TrimSpace(client.Version) != "" {
+	requested := missingProjectVersionTargets(app.ClientRegistry, targets, detected)
+	if len(requested) == 0 {
 		return nil
 	}
 	targeted, ok := app.Detector.(ports.TargetedVersionProbingClientDetector)
@@ -44,36 +44,61 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 		// without targeted probing must never execute unrelated clients.
 		return nil
 	}
-	probed, err := targeted.DetectTargetsWithVersionProbe(ctx, []domain.ClientID{domain.ClientKimi})
+	probed, err := targeted.DetectTargetsWithVersionProbe(ctx, requested)
 	if err != nil {
-		return fmt.Errorf("target %q version detection failed; no target was changed: %w", domain.ClientKimi, err)
+		return fmt.Errorf("targets %v version detection failed; no target was changed: %w", requested, err)
 	}
-	updated, err := selectedKimiVersion(client, probed)
-	if err != nil {
-		return err
+	versions := make(map[domain.ClientID]string, len(requested))
+	for _, id := range requested {
+		version, err := selectedProjectVersion(detected[id], probed)
+		if err != nil {
+			return err
+		}
+		versions[id] = version
 	}
-	client.Version = updated
-	detected[domain.ClientKimi] = client
+	for _, id := range requested {
+		client := detected[id]
+		client.Version = versions[id]
+		detected[id] = client
+	}
 	return nil
 }
 
-func selectedKimiVersion(original domain.DetectedClient, probed []domain.DetectedClient) (string, error) {
+func missingProjectVersionTargets(registry *clients.Registry, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) []domain.ClientID {
+	var requested []domain.ClientID
+	seen := map[domain.ClientID]bool{}
+	for _, id := range targets {
+		client, ok := detected[id]
+		if seen[id] || !ok || client.Status != domain.DetectionDetected || client.DetectionError != nil || client.ExecutablePath == "" || strings.TrimSpace(client.Version) != "" {
+			continue
+		}
+		requirement, ok := clients.As[clients.ProjectVersionRequirement](registry, id)
+		if !ok || !requirement.RequiresProjectVersion(client) {
+			continue
+		}
+		requested = append(requested, id)
+		seen[id] = true
+	}
+	return requested
+}
+
+func selectedProjectVersion(original domain.DetectedClient, probed []domain.DetectedClient) (string, error) {
 	var client domain.DetectedClient
 	matches := 0
 	for _, candidate := range probed {
-		if candidate.ClientID == domain.ClientKimi {
+		if candidate.ClientID == original.ClientID {
 			client = candidate
 			matches++
 		}
 	}
 	if matches != 1 {
-		return "", fmt.Errorf("target %q version detection returned %d matching clients; no target was changed", domain.ClientKimi, matches)
+		return "", fmt.Errorf("target %q version detection returned %d matching clients; no target was changed", original.ClientID, matches)
 	}
 	if client.Status != domain.DetectionDetected || client.DetectionError != nil || strings.TrimSpace(client.Version) == "" {
-		return "", fmt.Errorf("target %q version detection did not return a successful version; no target was changed", domain.ClientKimi)
+		return "", fmt.Errorf("target %q version detection did not return a successful version; no target was changed", original.ClientID)
 	}
 	if client.ExecutablePath != original.ExecutablePath || client.ConfigRoot != original.ConfigRoot || client.ProfileNamespace != original.ProfileNamespace || !domain.SameProfileAuthority(client.ProfileAuthority, original.ProfileAuthority) {
-		return "", fmt.Errorf("target %q identity changed during version detection; no target was changed", domain.ClientKimi)
+		return "", fmt.Errorf("target %q identity changed during version detection; no target was changed", original.ClientID)
 	}
 	return client.Version, nil
 }

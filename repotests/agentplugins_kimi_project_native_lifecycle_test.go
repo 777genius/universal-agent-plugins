@@ -32,6 +32,7 @@ type kimiProjectNativePackage struct {
 	Source, Name, Revision, Skill, Data string
 	Installation                        domain.Installation
 	Binding                             domain.ClientBinding
+	Proof                               *kimiProjectProof
 }
 
 type kimiProjectNativeFixture struct {
@@ -210,8 +211,10 @@ func newKimiProjectNativeFixture(t *testing.T) *kimiProjectNativeFixture {
 
 func (f *kimiProjectNativeFixture) source(t *testing.T, scope, revision string) {
 	t.Helper()
+	f.check(t)
 	name := "uap-kimi-native-" + scope
 	root := filepath.Join(f.base.Root, "sources", scope)
+	authored := map[string]kimiProjectProofFile{}
 	write := func(path string, body []byte, mode os.FileMode) {
 		if _, err := os.Lstat(path); err == nil {
 			if _, err := projectNativeRuntimeRead(path, 256<<20); err != nil {
@@ -224,6 +227,11 @@ func (f *kimiProjectNativeFixture) source(t *testing.T, scope, revision string) 
 			t.Fatal(err)
 		}
 		projectNativeRuntimeWrite(t, path, body, mode)
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		authored[filepath.ToSlash(rel)] = kimiProjectProofFile{Body: bytes.Clone(body), Executable: mode.Perm()&0111 != 0}
 	}
 	version := "1.0.0"
 	if revision == "a-two" {
@@ -238,16 +246,31 @@ func (f *kimiProjectNativeFixture) source(t *testing.T, scope, revision string) 
 		if err != nil {
 			t.Fatal(err)
 		}
+		if kimiProjectProofSHA(probe) != f.immutable[f.base.Probe] {
+			t.Fatal("Kimi authored probe differs from frozen trusted executable")
+		}
 		write(filepath.Join(root, "bin", "probe"), probe, 0700)
 		server := map[string]any{"type": "stdio", "command": "./bin/probe", "args": []string{"Kimi owned " + scope, "${PLUGIN_ROOT}/argument"}, "cwd": "${PLUGIN_ROOT}", "env": map[string]string{"UAP_TEST_ROOT": f.base.Root, "UAP_TEST_EVENTS": filepath.Join(f.base.Root, scope+"-events.jsonl"), "UAP_TEST_NONCE": f.base.Nonce + "-" + scope, "UAP_TEST_REVISION": revision}}
 		mcp, _ := json.Marshal(map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{name: server}})
 		write(filepath.Join(root, "mcp.json"), mcp, 0600)
 	}
-	f.packages[scope] = &kimiProjectNativePackage{Source: root, Name: name, Revision: revision}
+	proof, err := newKimiProjectProof(f.ctx, scope, root, name, version, f.base.Root, f.base.Home, f.projects[scope], f.base.Nonce, revision, authored, f.immutable[f.installer])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if previous := f.packages[scope]; previous != nil {
+		proof.stable = previous.Proof.stable
+	}
+	f.packages[scope] = &kimiProjectNativePackage{Source: root, Name: name, Revision: revision, Proof: proof}
 }
 
 func (f *kimiProjectNativeFixture) uap(t *testing.T, label, scope string, mutated, absent bool, args ...string) {
 	t.Helper()
+	for _, p := range f.packages {
+		if err := p.Proof.validateSource(f.ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
 	argv := append([]string{f.installer}, args...)
 	argv = append(argv, "--target", "kimi", "--format", "json")
 	cwd := f.projects["user"]
@@ -293,7 +316,7 @@ func (f *kimiProjectNativeFixture) uap(t *testing.T, label, scope string, mutate
 	}
 }
 
-func (f *kimiProjectNativeFixture) receipt(t *testing.T, scope string) {
+func (f *kimiProjectNativeFixture) receipt(t *testing.T, scope string) map[string]string {
 	t.Helper()
 	p := f.packages[scope]
 	statePath := filepath.Join(f.projects[scope], ".uap", "state-v2.json")
@@ -304,12 +327,9 @@ func (f *kimiProjectNativeFixture) receipt(t *testing.T, scope string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := kimiProjectObject(body); err != nil {
+	state, err := kimiProjectProofState(body)
+	if err != nil {
 		t.Fatal(err)
-	}
-	var state domain.StateFileV2
-	if json.Unmarshal(body, &state) != nil {
-		t.Fatal("Kimi installed state malformed")
 	}
 	var selected []domain.Installation
 	for _, installation := range state.Installations {
@@ -317,55 +337,25 @@ func (f *kimiProjectNativeFixture) receipt(t *testing.T, scope string) {
 			selected = append(selected, installation)
 		}
 	}
-	if len(selected) != 1 || len(selected[0].Clients) != 1 {
+	if len(selected) != 1 {
 		t.Fatal("Kimi exact package/binding receipt missing")
 	}
 	i := selected[0]
-	if i.Source.CanonicalSource != p.Source || i.Source.SourceBindingID == "" || i.Source.TreeDigest == "" || i.Package.DeclaredName != p.Name || i.Package.ManifestDigest == "" {
-		t.Fatal("Kimi selected source/package identity differs")
+	validated, err := p.Proof.validate(f.ctx, i)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, binding := range i.Clients {
-		if binding.ClientID != "kimi" || binding.Scope != map[bool]string{true: "user", false: "project"}[scope == "user"] || binding.TargetLocator == "" {
-			t.Fatal("Kimi receipt scope differs")
-		}
-		if scope != "user" {
-			if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.NativeProfileRoot != filepath.Join(f.projects[scope], ".kimi-code") {
-				t.Fatal("Kimi project authority/status changed")
-			}
-			data := i.DataReceipts[binding.DataReceiptID]
-			if data.DataReceiptID == "" || data.State != domain.DataReceiptOwned || data.OwnershipDigest == "" || data.Scope != "project" || data.PhysicalBackend != binding.PhysicalArtifact {
-				t.Fatal("Kimi persistent data receipt missing")
-			}
-			nativeRequireContained(t, filepath.Join(f.projects[scope], ".uap", "managed"), binding.TargetLocator)
-			nativeRequireContained(t, filepath.Join(f.projects[scope], ".uap", "plugin-data"), data.Locator)
-			p.Data = data.Locator
-			owned := map[string]string{}
-			for _, object := range binding.NativeObjects {
-				if object.Kind == "kimi_project_skill_directory" || object.Kind == "kimi_project_mcp_server" {
-					if object.LogicalName != p.Name || object.ManagedDigest == "" || owned[object.Kind] != "" {
-						t.Fatal("Kimi native ownership differs")
-					}
-					owned[object.Kind] = object.Path
-				}
-			}
-			if owned["kimi_project_skill_directory"] != filepath.Join(f.projects[scope], ".kimi-code", "skills", p.Name) || owned["kimi_project_mcp_server"] != filepath.Join(f.projects[scope], ".kimi-code", "mcp.json") {
-				t.Fatal("Kimi native ownership paths differ")
-			}
-			p.Skill = filepath.Join(owned["kimi_project_skill_directory"], "SKILL.md")
-		} else {
-			p.Skill = filepath.Join(binding.TargetLocator, "skills", p.Name, "SKILL.md")
-		}
-		p.Binding = binding
-	}
+	p.Binding, p.Data, p.Skill = validated.binding, validated.authority.data, validated.skill
 	p.Installation = i
 	got, err := projectNativeRuntimeRead(p.Skill, kimiProjectNativeLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := projectNativeRuntimeRead(filepath.Join(p.Source, "skills", p.Name, "SKILL.md"), kimiProjectNativeLimit)
-	if err != nil || !bytes.Equal(got, want) {
+	want := p.Proof.authored["skills/"+p.Name+"/SKILL.md"].Body
+	if !bytes.Equal(got, want) {
 		t.Fatal("Kimi selected native skill bytes differ")
 	}
+	return validated.identities
 }
 
 func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust bool, installed ...string) {
@@ -374,8 +364,12 @@ func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust boo
 		t.Fatal("Kimi cannot start native stage inside cleanup reserve")
 	}
 	selected := map[string]bool{}
+	validatedIDs := map[string]string{}
 	for _, scope := range installed {
 		selected[scope] = true
+		for path, digest := range f.receipt(t, scope) {
+			validatedIDs[path] = digest
+		}
 	}
 	skills, servers := map[string][]any{}, map[string][]any{}
 	for _, scope := range []string{"a", "b", "c"} {
@@ -385,12 +379,11 @@ func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust boo
 				continue
 			}
 			p := f.packages[key]
-			f.receipt(t, key)
 			source := "project"
 			if key == "user" {
 				source = "extra"
 			}
-			skills[scope] = append(skills[scope], map[string]any{"name": p.Name, "description": "Kimi installed " + p.Revision, "path": p.Skill, "source": source, "sha256": nativeSHA(t, p.Skill)})
+			skills[scope] = append(skills[scope], map[string]any{"name": p.Name, "description": "Kimi installed " + p.Revision, "path": p.Skill, "source": source, "sha256": kimiProjectProofSHA(p.Proof.authored["skills/"+p.Name+"/SKILL.md"].Body)})
 		}
 		if selected[scope] {
 			p := f.packages[scope]
@@ -423,17 +416,8 @@ func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust boo
 			observerIDs[path] = digest
 		}
 	}
-	for _, scope := range installed {
-		if scope != "user" {
-			p := f.packages[scope]
-			for _, path := range []string{filepath.Join(p.Binding.TargetLocator, "bin", "probe"), filepath.Join(p.Binding.TargetLocator, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)} {
-				digest, err := projectNativeRuntimeDigest(path)
-				if err != nil {
-					t.Fatal(err)
-				}
-				observerIDs[path] = digest
-			}
-		}
+	for path, digest := range validatedIDs {
+		observerIDs[path] = digest
 	}
 	request := map[string]any{"schema_version": 1, "root": f.base.Root, "home": f.base.Home, "projects": f.projects, "client": f.client, "identities": observerIDs, "observation": map[string]any{"stage": stage, "setup_trust": trust, "skills": skills, "servers": servers}}
 	body, _ := json.Marshal(request)
@@ -568,6 +552,7 @@ func TestAgentpluginsKimiNativeProjectComponentsLifecycle(t *testing.T) {
 	userState := filepath.Join(f.base.Root, "installer-state", "state-v2.json")
 	f.protected[userState] = nativeSHA(t, userState)
 	for _, scope := range []string{"user", "b", "c"} {
+		f.receipt(t, scope)
 		f.protected[f.packages[scope].Skill] = nativeSHA(t, f.packages[scope].Skill)
 		f.protectedTrees[f.packages[scope].Binding.TargetLocator] = kimiProjectTree(t, f.packages[scope].Binding.TargetLocator)
 		if scope != "user" {
@@ -668,17 +653,20 @@ func kimiProjectObject(body []byte) (map[string]any, error) {
 // The expected projection is fixed by this source package and the selected
 // receipt, independently of the bytes that the native API is about to read.
 func kimiProjectValidateServer(actual map[string]any, p *kimiProjectNativePackage, scope, root, nonce string) error {
+	if !reflect.DeepEqual(actual, kimiProjectExpectedServer(p, scope, root, nonce)) {
+		return fmt.Errorf("Kimi native stdio projection differs from selected receipt/package/data/cwd/source arguments")
+	}
+	return nil
+}
+
+func kimiProjectExpectedServer(p *kimiProjectNativePackage, scope, root, nonce string) map[string]any {
 	active := p.Binding.TargetLocator
-	expected := map[string]any{
+	return map[string]any{
 		"transport": "stdio",
 		"command":   filepath.Join(active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName),
 		"args":      []any{"--internal-stdio-v1", active, p.Data, active, "plugin", "--", "./bin/probe", "Kimi owned " + scope, active + "/argument"},
 		"env":       map[string]any{"PLUGIN_ROOT": active, "PLUGIN_DATA": p.Data, "UAP_TEST_ROOT": root, "UAP_TEST_EVENTS": filepath.Join(root, scope+"-events.jsonl"), "UAP_TEST_NONCE": nonce + "-" + scope, "UAP_TEST_REVISION": p.Revision},
 	}
-	if !reflect.DeepEqual(actual, expected) {
-		return fmt.Errorf("Kimi native stdio projection differs from selected receipt/package/data/cwd/source arguments")
-	}
-	return nil
 }
 
 func kimiProjectTree(t *testing.T, root string) map[string]string {

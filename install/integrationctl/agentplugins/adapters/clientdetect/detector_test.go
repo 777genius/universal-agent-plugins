@@ -838,8 +838,8 @@ func testDetector(home string, binaries map[string]string) Detector {
 		Environment:           map[string]string{},
 		SystemApplicationsDir: applications,
 		LookPath: func(name string) (string, error) {
-			if path := binaries[name]; path != "" {
-				return path, nil
+			if resolved := binaries[name]; resolved != "" {
+				return resolved, nil
 			}
 			return "", exec.ErrNotFound
 		},
