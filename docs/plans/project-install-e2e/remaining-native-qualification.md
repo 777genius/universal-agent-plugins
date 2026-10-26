@@ -405,17 +405,22 @@ Freeze one minimal lock with the reviewed Node 24.21.0 archive and these package
 
 | Package | Version | Integrity |
 | --- | --- | --- |
-| typescript | 5.9.3 | sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw== |
+| @typescript/typescript-linux-x64 | 7.0.2 | sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A== |
 | @types/node | 22.20.1 | sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q== |
 | undici-types | 6.21.0 | sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ== |
 | playwright-core | 1.64.1 | sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ== |
 
-TypeScript 5.9.3 deliberately replaces the earlier 7.0.2 candidate: the retained
-skills-picker lock pins its JavaScript compiler, avoiding a new native compiler
-companion. Use exact verified Node/npm distribution bytes and
+The 2026-10-26 continuation honors the owner's TypeScript 7.0.2 minimum. Use the
+official Linux-x64 compiler package directly, with no wrapper or optional
+platform fallback. Its exact regular `lib/tsc` is 24,101,026 bytes, SHA256
+`4f2de678286401759b3fb4475bafe35b8f32b4b3a07d92642bbf37eadc9b34a4`.
+The official package integrity, binary identity and complete build-only library
+closure are checked before and after compilation. This amendment received two
+independent plan reviews; it does not change the old untrusted observer.
+Use exact verified Node/npm distribution bytes and
 `npm ci --ignore-scripts --no-audit --no-fund` in a temporary tool directory
 before native network isolation. No ambient compiler/npm, lifecycle scripts or
-browser downloads. Compile tracked TypeScript with `typescript/bin/tsc`, strict
+browser downloads. Compile tracked TypeScript with the pinned `lib/tsc`, strict
 ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
 The VS Code declarations are build-only files from the exact publisher commit:
 `vscode.d.ts` (742,500 bytes, Git blob `bd520cf7bb88454e99bd15da13c6b9c6ac56fd65`),
@@ -478,7 +483,7 @@ invent extra probe arguments or returned fields. Admit initialize/list/call only
 through the vendor gateway. Keep endpoint/session secrets private.
 
 Select exact `TestAgentpluginsVSCodeNativeProjectGatewayLifecycle` for the
-existing required full A/B/user public install/no-op/update/pinned repair/restart/
+existing required full A/B/user public install/no-op/update/local-source repair/restart/
 remove/repeat-remove sequence and the five `vscode.*` qualification IDs above.
 New observer sources live in `scripts/vscode-project-runtime-observer/`; the
 native test lives in `repotests/agentplugins_vscode_project_native_gateway_test.go`.
@@ -497,6 +502,35 @@ final cleanup also proves Xvfb/display assets removed. Legacy 420/480-second
 limits remain unchanged. Missing protocol, identity, native UI or cleanup fails.
 This is only a trusted development-host/proposed-API path, not model/OAuth or
 released-client qualification.
+
+The original monotonic origin is established before acquisition and compilation
+and is passed unchanged into the controller. Trusted root return and terminal
+capture bounds are 870/880 seconds; the final envelope remains within 900.
+Only the newly owned network namespace has loopback brought up, before dropping
+to the original ordinary UID/GID and verifying zero capabilities/NNP again.
+The sealed driver receives one closed stdin request, writes an exclusive READY
+challenge after the exact native trust/MCP interactions, and consumes the
+observer's atomic result. It keeps its leader alive until the existing strict
+planned-shutdown helper closes stdin. It never opens another browser or invokes
+the probe directly. Failure diagnostics are bounded to visible native dialog
+titles/messages and quick-pick labels, with URL/opaque values removed.
+
+For the original user, the existing public adapter remains Prepared; record
+`user_native_install_qualified=false`. Preserve a separately pre-existing native
+user skill sentinel through the real skill API without claiming that the public
+user add created it. Freeze authored sources before any native process and
+freeze the public user receipt/package/data immediately after its add. The A/B
+project assertions use exact ownership objects, independently computed installed
+skill/config digests, package/source identity, and fresh probe sessions. The
+missing-component repair keeps the selected local input unchanged at revision
+two. The separate existing TLS composed-source tests retain moving-source and
+recorded-pin coverage; the native local fixture does not claim that property.
+
+Frontend preparation and native evidence use separate flat closed ZIPs, each
+under the existing admission limits. Hold the preparation digest across native
+execution; publish post-native streams through the original directory identity
+and no-follow descriptors. Unknown files, replaced directories, incomplete
+stages, forced cleanup, or late results cannot qualify.
 
 ## Gemini and Copilot runtime-attempt amendment
 
@@ -937,6 +971,147 @@ Add focused tests for both admitted versions and unchanged refusals, then rerun
 the existing genuine Grok startup capture. No new command, alternate catalog,
 trust grant, provider, permission mode, deadline or cleanup policy is introduced.
 Two independent plan reviews precede this product correction.
+| Client | Pinned native version | Fixed restricted startup |
+| --- | --- | --- |
+| Qoder | 1.1.78 | `--print --output-format stream-json --no-session-persistence --permission-mode default --tools "" --plugin-dir <receipt-selected-view> <prompt>` |
+| Grok | 1.0.70 (f50904eaee6c) | `--single <prompt> --output-format streaming-json --permission-mode default --deny "" --no-subagents --disable-web-search --max-turns 1` |
+| Kiro | 2.34.0 | `chat --v2 --no-interactive <prompt>` |
+| Windsurf / Devin | 3000.11.205 (6dea39440ae3) | `--print <prompt> --respect-workspace-trust true` |
+
+Grok's source-guided deny semantics are from public snapshot
+`xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`,
+`crates/codegen/xai-grok-pager/src/headless/cli.rs` blob
+`99d5732f95ec023debeffc2f00cb4ae4532f0f0b`, together with the same snapshot's
+`xai-grok-permission-rules/src/rules.rs` and `policy.rs`. The shipping commit
+differs; no binary equivalence is inferred. Devin's original-profile config is
+`auto_update:false`, `allow:[]`, `ask:[]`, and documented deny entries
+`read,edit,write,grep,glob,exec,fetch,web_fetch,mcp__*`.
+
+Actual Kiro research observed `error: failed to launch kiro-cli-chat` after its
+version/help preflight. Its leaf now admits the three exact acquired launcher,
+chat and terminal companions, checking ordinary ownership/mode and the pinned
+full runtime closure before every child. Only that verified bin directory is
+prepended to `/usr/bin:/bin`; there is no shared environment escape, alias,
+native-profile move or acceptance of the observed failure as success.
+
+## Cline first installed ACP capture
+
+The pinned Cline 3.0.73 source at
+`c718573538d76310f464541617ab665108a6c999` cannot bind the first noninteractive
+desktop approval to the requested session: it discards that supplied session ID
+and registers `activeCliSession` only after the first turn returns. Do not invent
+a desktop session or bypass the approval wall. The separately reviewed next
+candidate is the native ACP transport with `--auto-approve false`, one actual
+`session/new` response, an empty injected `mcpServers` list, and one exact native
+permission request. `allow_once` is permitted only when actual session ID,
+provider call ID, tool name `uapclinea__inspect_runtime`, nonce and arguments all
+match. All other permission requests are denied and the attempt fails.
+
+Select only `TestAgentpluginsClineNativeProjectRuntimeAttempt` with
+`AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT=1`. Use public local-source A add,
+the independently derived existing Cline nested `transport` projection with
+direct receipt-selected probe command, arguments, environment and native cwd,
+and the unchanged complete installed package. No production adapter change or
+managed-launcher substitution is introduced. The supported original-user custom
+provider/catalog selects one scripted loopback OpenAI-compatible endpoint with
+external catalog refresh disabled. Its fixture key is never published.
+
+The ordinary hosted frontend hashes the actual root-owned sudo, systemd-run,
+systemctl and env executables. It creates only one fresh
+`uap-cline-project-<32-hex>.service` with the original UID/GID, Delegate=yes,
+NoNewPrivileges=yes and KillMode=control-group through systemd 255. Pass only the
+closed existing environment and exact test binary, with literal
+`--expand-environment=no` preserving arguments before `env -i`. No AI client runs as root,
+no cgroup hierarchy is relabelled, and no delegation-root override is accepted.
+The Go test verifies actual `/proc/self/cgroup`, cgroup2 ownership and NNP before
+the existing OS duplex capability admission. The original CLOCK_MONOTONIC
+nanosecond origin starts before service launch and is not reset: 150 seconds
+work, 180 total. The outer capture returns by 165, reserving its existing five
+seconds reap and ten for exact-unit cleanup. RuntimeMaxSec is a secondary limit.
+If needed, stop and then kill only this owned unit; any such intervention fails
+the attempt, and the final exact cgroup must be empty or gone.
+
+Closed native evidence contains the fixed public command triples, bounded ACP
+JSONL and its command/error receipt, at most two actual provider exchanges,
+optional native probe events, and the exact source-bound attempt summary.
+Successful planned duplex exposes no diagnostic stream in the existing OS API;
+errors retain that API's bounded diagnostic. This limitation is explicit and
+does not motivate a second process primitive. Every initial capture, including
+an apparently successful exchange, fails pending independent review of actual
+native/provider/probe bytes. All five qualifications, vendor authentication and
+real-model flags remain false until a later reviewed full lifecycle proves them.
+
+## Qoder receipt-selected catalog observation
+
+Genuine pinned Qoder 1.1.78 help in
+[run 40342548512](https://github.com/777genius/universal-agent-plugins/actions/runs/40342548512),
+artifact `12664571770` (SHA-256
+`7f00bd2c8f8cf54409fa464658b394a44bc10020a1e92874f4e333c45aedbc11`),
+advertises `plugins list --json --plugin-dir <dirs...>`. The independently
+reviewed amendment adds exactly that read-only command with the actual
+receipt-selected closed import view, cwd A and a 30-second ceiling inside the
+existing 150-second work / 180-second total deadline. It runs after public add
+and before the existing restricted headless attempt. There is no global import,
+registration, profile relocation or new provider permission.
+
+Freeze the complete original `HOME/.qoder` subtree immediately before and after
+this catalog command: entry membership, directories, full modes, original UID,
+single-link ordinary files and held byte digests; bound it to 4,096 entries,
+32 levels and 256 MiB. Any change, including a new cache file or empty directory,
+fails. Require exit zero, empty stderr and strict whole JSON object/array, while
+leaving its unobserved catalog schema opaque. The Qoder-only `native-catalog`
+command triple is the sole additional frontend member set. Other clients retain
+the original five labels. Raw capture remains an intentional failed initial
+attempt with all five qualifications false until independently interpreted.
+
+## Kimi separate installed single-tool attempt
+
+Preserve the existing 900-second Kimi component lifecycle. Register the separate
+fixed selector `kimi-call`, exact
+`TestAgentpluginsKimiNativeProjectRuntimeAttempt` and
+`AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT=1` only when its own test and
+`kimi_attempt.py` observer exist. Its actual client and acquisition identity
+remain `kimi` 2.3.2; the phase is `installed-single-tool-attempt`, with an original
+180-second total / 150-second work / 30-second cleanup budget. One native service
+phase has at most 60 seconds including the existing five-second reap reserve.
+Neither phase can reset or borrow the other test's deadline.
+
+Two independent plan rounds reviewed nineteen exact source blobs at
+[`b8dd3a134060c6e80ba4a1659335cd63b68483f2`](https://github.com/MoonshotAI/kimi-code/tree/b8dd3a134060c6e80ba4a1659335cd63b68483f2),
+including the [native server API](https://github.com/MoonshotAI/kimi-code/blob/b8dd3a134060c6e80ba4a1659335cd63b68483f2/docs/en/reference/server-api.md),
+tool naming/policy, session/prompt/approval routes, and the OpenAI provider
+request/stream implementation. Author only the supported original-user
+configuration: one literal-loopback OpenAI-compatible test provider with a
+private fixture credential, manual permission mode, telemetry and session-title
+generation disabled, at most two steps and one attempt per step, and the sole
+enabled tool `mcp__uap-kimi-native-a__inspect_runtime`. Builtins and B tools are
+not enabled. Public project add must complete before the first native service.
+
+Reuse the existing Python service and token quarantine, existing Go descendant
+supervision and harmless probe. Create the actual native session in A through
+REST, submit the exact configured model/manual prompt and poll its real approval
+and snapshot endpoints. Approve only the matching actual session, main agent,
+positive turn, provider call ID, qualified tool, action and nonce arguments.
+The decision omits scope, granting one call only. Require no probe tool call or
+marker before that approval. Unknown or repeated approvals fail.
+
+The scripted provider permits exactly two successful exchanges: one selected
+tool call, then a final sentinel only after the real tool result contains the
+expected fresh probe facts. Require native session/turn/tool-result identity,
+provider history, initialize/list/call PID/session/nonce correlation, marker and
+complete cleanup. Retain at most eight actual provider requests for failure
+diagnosis. The closed artifact admits only its fixed summary, installed A
+snapshots, optional probe events, redacted `python-api.json`, contiguous bounded
+provider requests and six complete command triples: `git-a`, `git-b`, `git-c`,
+`version`, `add-a`, `native-attempt`. Private provider and native bearer values
+are registered before capture and redacted before artifact admission.
+
+Every first capture deliberately fails with `runtime_attempt_complete=false`,
+`test_failed=true` and all five qualification flags false, even if it appears to
+complete. Actual raw approval/session/provider/probe grammar must be reviewed
+before a later separately reviewed integration into the full lifecycle. This
+attempt cannot inherit component-lifecycle success or claim vendor OAuth or
+real-model qualification.
 
 ## Completion gate
 
