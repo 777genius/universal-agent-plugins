@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import stat
 import urllib.request
 
@@ -15,7 +16,7 @@ from native_client_research import bounded_read
 
 PUBLISHER = "e646868227c3e3a9e3f24277c8c7220be42c0be7"
 PACKAGES = {
-    "typescript": ("5.9.3", "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="),
+    "@typescript/typescript-linux-x64": ("7.0.2", "sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A=="),
     "@types/node": ("22.20.1", "sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q=="),
     "undici-types": ("6.21.0", "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="),
     "playwright-core": ("1.64.1", "sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ=="),
@@ -29,6 +30,9 @@ INPUTS = {"extension.ts": "observer/extension.ts", "runner.ts": "observer/runner
           "driver.ts": "driver/driver.ts", "package.json": "observer/package.json",
           "driver-package.json": "driver/package.json"}
 RUNTIME_FILES = ("observer/extension.js", "observer/runner.js", "driver/driver.js")
+COMPILER_MEMBER = "lib/tsc"
+COMPILER_BYTES = 24101026
+COMPILER_SHA256 = "4f2de678286401759b3fb4475bafe35b8f32b4b3a07d92642bbf37eadc9b34a4"
 
 
 def ordinary_bytes(path, limit):
@@ -72,8 +76,8 @@ def package_lock():
                 "integrity": integrity, "dev": True}
         if name == "@types/node":
             item["dependencies"] = {"undici-types": "~6.21.0"}
-        if name == "typescript":
-            item["bin"] = {"tsc": "bin/tsc", "tsserver": "bin/tsserver"}
+        if name == "@typescript/typescript-linux-x64":
+            item.update({"os": ["linux"], "cpu": ["x64"]})
         if name == "playwright-core":
             item["bin"] = {"playwright-core": "cli.js"}
         packages["node_modules/" + name] = item
@@ -159,13 +163,45 @@ def runtime_manifest(root, budget):
     required = {*RUNTIME_FILES, "observer/package.json", "driver/package.json", "node", "driver/node_modules/playwright-core/package.json"}
     if not required <= {row["path"] for row in rows}:
         raise ValueError("compiler runtime closure is incomplete")
-    return {"schema_version": 1, "node_version": "24.21.0", "typescript_version": "5.9.3",
+    return {"schema_version": 1, "node_version": "24.21.0", "typescript_version": "7.0.2",
             "publisher_commit": PUBLISHER, "files": sorted(rows, key=lambda item: item["path"])}
+
+
+def build_tree_identities(root, budget, max_files=4096, max_bytes=128 << 20):
+    """Freeze regular build inputs without following directory or file aliases."""
+    if root.resolve() != root or not stat.S_ISDIR(root.lstat().st_mode):
+        raise ValueError("build input directory alias refused")
+    identities, total = {}, 0
+    for base, directories, names in os.walk(root, followlinks=False):
+        budget.check()
+        for name in directories:
+            if not stat.S_ISDIR((Path(base) / name).lstat().st_mode):
+                raise ValueError("compiler library directory alias refused")
+        for name in names:
+            path = Path(base) / name
+            body = ordinary_bytes(path, 32 << 20)
+            total += len(body)
+            if len(identities) >= max_files or total > max_bytes:
+                raise ValueError("build input closure exceeds bound")
+            identities[path] = hashlib.sha256(body).hexdigest()
+    return identities
+
+
+def compiler_identities(root, budget):
+    """Freeze the exact platform compiler and its build-only library closure."""
+    identities = build_tree_identities(root, budget, 512, 64 << 20)
+    compiler = root / COMPILER_MEMBER
+    if (compiler not in identities or compiler.stat().st_size != COMPILER_BYTES
+            or identities[compiler] != COMPILER_SHA256):
+        raise ValueError("exact TypeScript platform compiler identity differs")
+    return compiler, identities
 
 
 def prepare(root, sources, budget, capture):
     """capture(label, argv, cwd, env, seconds) returns bounded stdout/stderr bytes."""
     root, sources = Path(root), Path(sources)
+    if platform.system() != "Linux" or platform.machine() != "x86_64":
+        raise ValueError("pinned compiler requires Linux x64; no platform fallback")
     if root.exists() or root.resolve() != root or sources.resolve() != sources:
         raise ValueError("fresh canonical compiler root and source directory required")
     root.mkdir(mode=0o700)
@@ -198,13 +234,24 @@ def prepare(root, sources, budget, capture):
         raise ValueError("pinned compiler Node version differs")
     manifest, lock = package_lock()
     for name, value in (("package.json", manifest), ("package-lock.json", lock)):
-        write_new(root / name, json.dumps(value, sort_keys=True, indent=2).encode() + b"\n")
+        body = json.dumps(value, sort_keys=True, indent=2).encode() + b"\n"
+        write_new(root / name, body)
+        identities[root / name] = hashlib.sha256(body).hexdigest()
     capture("trusted-npm-ci", [node, npm, "ci", "--ignore-scripts", "--no-audit", "--no-fund", "--registry=https://registry.npmjs.org"], root, env, 120)
     shared.verify_files(identities, budget)
     for name, (version, _) in PACKAGES.items():
         package = json.loads(ordinary_bytes(root / "node_modules" / name / "package.json", 128 << 10))
         if package.get("name") != name or package.get("version") != version:
             raise ValueError("compiler package differs from the exact lock")
+    compiler, compiler_files = compiler_identities(root / "node_modules/@typescript/typescript-linux-x64", budget)
+    identities.update(compiler_files)
+    for name in PACKAGES:
+        if name != "@typescript/typescript-linux-x64":
+            identities.update(build_tree_identities(root / "node_modules" / name, budget))
+    stdout, stderr = capture("trusted-tsc-version", [compiler, "--version"], root, env, 10)
+    if stdout != b"Version 7.0.2\n" or stderr:
+        raise ValueError("pinned TypeScript compiler version differs")
+    shared.verify_files(identities, budget)
     source_hashes = {}
     for name, target in INPUTS.items():
         body = ordinary_bytes(sources / name, 256 << 10)
@@ -217,7 +264,11 @@ def prepare(root, sources, budget, capture):
                                    "rootDir": "build", "outDir": "emitted"},
               "include": ["build/**/*.ts", "declarations/*.d.ts"]}
     write_new(root / "tsconfig.json", json.dumps(config, sort_keys=True).encode() + b"\n")
-    capture("trusted-tsc", [node, root / "node_modules/typescript/bin/tsc", "--project", root / "tsconfig.json"], root, env, 60)
+    identities.update(build_tree_identities(root / "build", budget))
+    identities.update(build_tree_identities(root / "declarations", budget))
+    identities[root / "tsconfig.json"] = hashlib.sha256(ordinary_bytes(root / "tsconfig.json", 16 << 10)).hexdigest()
+    shared.verify_files(identities, budget)
+    capture("trusted-tsc", [compiler, "--project", root / "tsconfig.json"], root, env, 60)
     shared.verify_files(identities, budget)
     for name, expected in source_hashes.items():
         if hashlib.sha256(ordinary_bytes(sources / name, 256 << 10)).hexdigest() != expected:
@@ -238,7 +289,11 @@ def prepare(root, sources, budget, capture):
     if len(body) > 1 << 20:
         raise ValueError("trusted runtime manifest exceeds bound")
     write_new(tools / "manifest.json", body)
+    build_index = {path.relative_to(root).as_posix(): digest for path, digest in identities.items()}
     return tools, {"node": shared.selected_node_receipt(receipt), "packages": {name: {"version": version, "integrity": integrity} for name, (version, integrity) in PACKAGES.items()},
+                   "compiler_files": {path.relative_to(root).as_posix(): value for path, value in compiler_files.items()},
+                   "build_input_count": len(build_index),
+                   "build_input_sha256": hashlib.sha256(json.dumps(build_index, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
                    "declarations": declaration_receipts, "source_sha256": source_hashes,
                    "playwright_runtime_files": count, "playwright_runtime_bytes": size,
                    "tools_manifest_sha256": hashlib.sha256(body).hexdigest(), "runtime_file_count": len(runtime["files"])}

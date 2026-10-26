@@ -22,6 +22,27 @@ class CompilerTests(unittest.TestCase):
             self.assertEqual((row["version"], row["integrity"]), (version, integrity))
             self.assertTrue(row["resolved"].startswith("https://registry.npmjs.org/" + name + "/-/"))
         self.assertEqual(lock["packages"]["node_modules/@types/node"]["dependencies"], {"undici-types": "~6.21.0"})
+        native = lock["packages"]["node_modules/@typescript/typescript-linux-x64"]
+        self.assertEqual((native["version"], native["os"], native["cpu"]), ("7.0.2", ["linux"], ["x64"]))
+        self.assertNotIn("node_modules/typescript", lock["packages"])
+
+    def test_compiler_identity_rejects_changed_binary_and_library_alias(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            body = b"inert compiler bytes"
+            compiler.write_new(root / "lib/tsc", body, executable=True)
+            compiler.write_new(root / "lib/lib.es2023.d.ts", b"inert library")
+            with patch.object(compiler, "COMPILER_BYTES", len(body)), patch.object(compiler, "COMPILER_SHA256", hashlib.sha256(body).hexdigest()):
+                executable, identities = compiler.compiler_identities(root, Budget())
+                self.assertEqual(executable, root / "lib/tsc")
+                self.assertEqual(len(identities), 2)
+                (root / "lib/tsc").write_bytes(b"changed compiler!!!")
+                with self.assertRaisesRegex(ValueError, "identity"):
+                    compiler.compiler_identities(root, Budget())
+                (root / "lib/tsc").write_bytes(body)
+                (root / "lib/alias").symlink_to(root / "lib/lib.es2023.d.ts")
+                with self.assertRaisesRegex(ValueError, "alias"):
+                    compiler.compiler_identities(root, Budget())
 
     def test_declaration_requires_both_exact_size_and_git_blob_identity(self):
         body = b"inert typed declaration\n"
@@ -32,6 +53,20 @@ class CompilerTests(unittest.TestCase):
             for wrong in (body + b" ", body.replace(b"typed", b"other")):
                 with self.assertRaisesRegex(ValueError, "pinned source"):
                     compiler.check_declaration("inert.d.ts", wrong)
+
+    def test_staged_input_and_type_library_drift_are_detected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("build/observer/runner.ts", "declarations/vscode.d.ts", "node_modules/@types/node/index.d.ts"):
+                compiler.write_new(root / name, b"inert type input\n")
+            identities = compiler.build_tree_identities(root, Budget())
+            compiler.shared.verify_files(identities, Budget())
+            for path in identities:
+                original = path.read_bytes()
+                path.write_bytes(b"changed type input\n")
+                with self.assertRaisesRegex(ValueError, "changed"):
+                    compiler.shared.verify_files(identities, Budget())
+                path.write_bytes(original)
 
     def test_ordinary_inputs_reject_leaf_and_parent_aliases_and_hardlinks(self):
         with tempfile.TemporaryDirectory() as temporary:

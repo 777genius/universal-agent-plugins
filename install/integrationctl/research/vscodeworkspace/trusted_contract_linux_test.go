@@ -26,7 +26,7 @@ func trustedContractFixture(t *testing.T) (string, trustedToolManifest) {
 		"driver/node_modules/playwright-core/package.json": []byte(`{"name":"playwright-core","version":"1.64.1"}`),
 		"driver/node_modules/playwright-core/runtime.js":   []byte("inert runtime closure\n"),
 	}
-	manifest := trustedToolManifest{SchemaVersion: 1, NodeVersion: "24.21.0", TypeScriptVersion: "5.9.3", PublisherCommit: publisherCommit}
+	manifest := trustedToolManifest{SchemaVersion: 1, NodeVersion: "24.21.0", TypeScriptVersion: "7.0.2", PublisherCommit: publisherCommit}
 	for path, body := range bodies {
 		full := filepath.Join(root, path)
 		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
@@ -143,7 +143,7 @@ func TestTrustedManifestRejectsModeDriftDuplicatePathsAndIncompleteClosure(t *te
 			manifest.Files = append([]trustedToolFile(nil), original.Files...)
 			switch kind {
 			case "version":
-				manifest.TypeScriptVersion = "7.0.2"
+				manifest.TypeScriptVersion = "5.9.3"
 			case "duplicate":
 				manifest.Files = append(manifest.Files, manifest.Files[0])
 			case "traversal":

@@ -73,7 +73,7 @@ func decodeTrustedManifest(body []byte) (trustedToolManifest, error) {
 	if err := decoder.Decode(&manifest); err != nil {
 		return manifest, err
 	}
-	if manifest.SchemaVersion != 1 || manifest.NodeVersion != "24.21.0" || manifest.TypeScriptVersion != "5.9.3" || manifest.PublisherCommit != publisherCommit || len(manifest.Files) < 7 || len(manifest.Files) > 4096 {
+	if manifest.SchemaVersion != 1 || manifest.NodeVersion != "24.21.0" || manifest.TypeScriptVersion != "7.0.2" || manifest.PublisherCommit != publisherCommit || len(manifest.Files) < 7 || len(manifest.Files) > 4096 {
 		return manifest, fmt.Errorf("trusted tool version/closure contract differs")
 	}
 	seen, total := map[string]bool{}, int64(0)

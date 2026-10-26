@@ -405,17 +405,22 @@ Freeze one minimal lock with the reviewed Node 24.21.0 archive and these package
 
 | Package | Version | Integrity |
 | --- | --- | --- |
-| typescript | 5.9.3 | sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw== |
+| @typescript/typescript-linux-x64 | 7.0.2 | sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A== |
 | @types/node | 22.20.1 | sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q== |
 | undici-types | 6.21.0 | sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ== |
 | playwright-core | 1.64.1 | sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ== |
 
-TypeScript 5.9.3 deliberately replaces the earlier 7.0.2 candidate: the retained
-skills-picker lock pins its JavaScript compiler, avoiding a new native compiler
-companion. Use exact verified Node/npm distribution bytes and
+The 2026-10-26 continuation honors the owner's TypeScript 7.0.2 minimum. Use the
+official Linux-x64 compiler package directly, with no wrapper or optional
+platform fallback. Its exact regular `lib/tsc` is 24,101,026 bytes, SHA256
+`4f2de678286401759b3fb4475bafe35b8f32b4b3a07d92642bbf37eadc9b34a4`.
+The official package integrity, binary identity and complete build-only library
+closure are checked before and after compilation. This amendment received two
+independent plan reviews; it does not change the old untrusted observer.
+Use exact verified Node/npm distribution bytes and
 `npm ci --ignore-scripts --no-audit --no-fund` in a temporary tool directory
 before native network isolation. No ambient compiler/npm, lifecycle scripts or
-browser downloads. Compile tracked TypeScript with `typescript/bin/tsc`, strict
+browser downloads. Compile tracked TypeScript with the pinned `lib/tsc`, strict
 ES2023/NodeNext and pinned types; emitted JS stays in the temporary build tree.
 The VS Code declarations are build-only files from the exact publisher commit:
 `vscode.d.ts` (742,500 bytes, Git blob `bd520cf7bb88454e99bd15da13c6b9c6ac56fd65`),
