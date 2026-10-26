@@ -55,7 +55,7 @@ does not make downloaded package trees trusted.
 | --- | --- | --- |
 | [45](https://github.com/777genius/universal-agent-plugins/security/code-scanning/45), Critical | `sourceacquisition/skill_web.go:178`, HTTP GET | `SourceRequest.Source` -> website catalog -> credential-free normalized HTTPS publisher -> fixed well-known index and same-publisher derived file URLs -> `client.Do`. Redirects, arbitrary index file URLs and supplied credentials are refused; TLS, time, size, count and pinned-content checks apply. Private destinations and trusted proxy configuration remain intentionally allowed. Discovery performs GET before Apply. No IP allowlist or DNS-rebinding defense is claimed. No elevation beyond the authenticated local owner's source-selection authority was demonstrated; formal disposition remains required. |
 | [46](https://github.com/777genius/universal-agent-plugins/security/code-scanning/46), High | `management_local_skills_apply.go:79`, Lstat | Restore ID -> exact 64 lowercase hex -> fixed path under captured StateRoot -> strict child/no-existing-symlink validation -> metadata check. An arbitrary HTTP path is not accepted. The check/open sequence assumes private state storage; it is not hostile same-user process isolation. |
-| [47](https://github.com/777genius/universal-agent-plugins/security/code-scanning/47), High | `management_local_skills_apply.go:89`, ReadFile | Same identity and containment checks -> regular file <=65,536 bytes -> read -> strict single JSON document -> exact operation, backup, captured root and Skill identity. A separate descriptor confinement guarantee is not claimed for this historical read. |
+| [47](https://github.com/777genius/universal-agent-plugins/security/code-scanning/47), High | `management_local_skills_apply.go:89`, ReadFile | Same identity and containment checks -> regular file <=65,536 bytes -> read -> strict single JSON document -> exact operation, backup, captured root and Skill identity. **2026-10-26 correction:** preserve the pre-open file-type refusal, open within captured StateRoot, validate and read the same descriptor, and bound the read to 65,537 bytes with an explicit size refusal. The historical separate check/read did not provide that descriptor confinement or growth bound. |
 | [48](https://github.com/777genius/universal-agent-plugins/security/code-scanning/48), High | `pathpolicy/pathpolicy.go:111`, Lstat | Candidate -> absolute/clean paths -> strict `Rel` child check -> inspect base and each descendant -> reject existing symlinks and non-directory ancestors. The reported operation is within the validator. Parents above base are not checked here; Management canonicalizes startup roots. |
 | [49](https://github.com/777genius/universal-agent-plugins/security/code-scanning/49), High | `packagedigest/snapshot.go:87`, Mkdir | Validated portable WalkDir inventory -> new private `MkdirTemp` parent -> literal snapshot root -> inventory-derived child directory. WalkDir does not recurse through symlink entries. Package-link safety additionally depends on corrected alert 50. |
 | [50](https://github.com/777genius/universal-agent-plugins/security/code-scanning/50), High | `packagedigest/snapshot.go:92`, Symlink | Untrusted package link text -> link-text checks -> internal-tree resolution -> snapshot symlink creation. **Confirmed validation defect corrected:** the old resolver cleaned parent components before following directory links. The replacement processes components in filesystem order, bounds link expansions, and rejects root escape, missing paths and non-directory intermediates. |
@@ -141,3 +141,22 @@ Snapshot cleanup errors are also checked, correcting the new test's lint error.
 The changed test candidate still requires fresh platform and scanner results.
 This record does not assert that all GitHub alerts have closed or that an
 unfinished candidate has passed CI.
+
+## Retained local Skill receipt follow-up, 2026-10-26
+
+After current-main reconciliation, the reader associated with alerts #46/#47
+retains the exact operation-ID grammar and no-existing-symlink policy. Its
+pre-open regular-file check remains so an ordinary named pipe is refused before
+opening. `os.OpenInRoot` confines the subsequent open to captured StateRoot;
+metadata validation and the bounded read use the same opened descriptor. Reading
+at most 65,537 bytes and rejecting more than 65,536 prevents concurrent growth
+from bypassing the existing size limit. Startup root selection still belongs to
+the trusted process owner; this is not hostile same-user process isolation.
+
+The complete `TestManagementLocalSkill` suite passes locally, including actual
+create/edit/delete/restore, interrupted restore and retention. New public restore
+cases accept a valid receipt exactly at the size limit and refuse an oversized
+receipt, trailing JSON, a directory, in-root file/parent links and an escaping
+file link. Refusals preserve the active Skill and its retained backup. These
+checks qualify the reader behavior, not the unavailable CodeQL flow edges.
+Fresh scanner results and individual formal dispositions remain required.

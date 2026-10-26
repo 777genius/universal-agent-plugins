@@ -76,6 +76,7 @@ func (b *ManagementBackend) loadLocalSkillReceipt(id string) (*localSkillReceipt
 	if err := pathcontract.RequireContainedChild(b.config.StateRoot, filename); err != nil {
 		return nil, err
 	}
+	// Refuse nonregular files before opening; a named pipe could block the open.
 	info, err := os.Lstat(filename)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -86,9 +87,24 @@ func (b *ManagementBackend) loadLocalSkillReceipt(id string) (*localSkillReceipt
 	if !info.Mode().IsRegular() || info.Size() > 65536 {
 		return nil, errors.New("invalid local Skill recovery record")
 	}
-	body, err := os.ReadFile(filename)
+	file, err := os.OpenInRoot(b.config.StateRoot, filepath.Join("local-skills", "receipts", id+".json"))
 	if err != nil {
 		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err = file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > 65536 {
+		return nil, errors.New("invalid local Skill recovery record")
+	}
+	body, err := io.ReadAll(io.LimitReader(file, 65537))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > 65536 {
+		return nil, errors.New("invalid local Skill recovery record")
 	}
 	var receipt localSkillReceipt
 	decoder := json.NewDecoder(bytes.NewReader(body))
