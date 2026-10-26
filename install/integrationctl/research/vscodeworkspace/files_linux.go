@@ -335,12 +335,21 @@ func sortedKeys(m map[string][]byte) []string {
 	return keys
 }
 func uniqueJSON(body []byte) (any, error) {
+	return uniqueJSONArrayLimit(body, 256)
+}
+
+// Trusted tool manifests enumerate the complete pinned Playwright package.
+// Native observations keep the legacy 256-item bound unchanged.
+func uniqueJSONArrayLimit(body []byte, arrayLimit int) (any, error) {
+	if arrayLimit != 256 && arrayLimit != 4096 {
+		return nil, fmt.Errorf("unknown JSON inventory bound")
+	}
 	if !utf8.Valid(body) {
 		return nil, fmt.Errorf("invalid UTF-8 JSON")
 	}
 	dec := json.NewDecoder(strings.NewReader(string(body)))
 	dec.UseNumber()
-	value, err := readJSONValue(dec, 0)
+	value, err := readJSONValueLimit(dec, 0, arrayLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -350,6 +359,9 @@ func uniqueJSON(body []byte) (any, error) {
 	return value, nil
 }
 func readJSONValue(dec *json.Decoder, depth int) (any, error) {
+	return readJSONValueLimit(dec, depth, 256)
+}
+func readJSONValueLimit(dec *json.Decoder, depth, arrayLimit int) (any, error) {
 	if depth > 32 {
 		return nil, fmt.Errorf("JSON nesting bound")
 	}
@@ -363,14 +375,17 @@ func readJSONValue(dec *json.Decoder, depth int) (any, error) {
 	}
 	switch delimiter {
 	case '{':
-		return readJSONObject(dec, depth)
+		return readJSONObjectLimit(dec, depth, arrayLimit)
 	case '[':
-		return readJSONArray(dec, depth)
+		return readJSONArrayLimit(dec, depth, arrayLimit)
 	default:
 		return nil, fmt.Errorf("unexpected JSON delimiter")
 	}
 }
 func readJSONObject(dec *json.Decoder, depth int) (any, error) {
+	return readJSONObjectLimit(dec, depth, 256)
+}
+func readJSONObjectLimit(dec *json.Decoder, depth, arrayLimit int) (any, error) {
 	result := map[string]any{}
 	seen := map[string]bool{}
 	for dec.More() {
@@ -384,7 +399,7 @@ func readJSONObject(dec *json.Decoder, depth int) (any, error) {
 			return nil, fmt.Errorf("duplicate/ambiguous JSON key")
 		}
 		seen[fold] = true
-		value, err := readJSONValue(dec, depth+1)
+		value, err := readJSONValueLimit(dec, depth+1, arrayLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -396,12 +411,15 @@ func readJSONObject(dec *json.Decoder, depth int) (any, error) {
 	return result, nil
 }
 func readJSONArray(dec *json.Decoder, depth int) (any, error) {
+	return readJSONArrayLimit(dec, depth, 256)
+}
+func readJSONArrayLimit(dec *json.Decoder, depth, arrayLimit int) (any, error) {
 	result := []any{}
 	for dec.More() {
-		if len(result) >= 256 {
+		if len(result) >= arrayLimit {
 			return nil, fmt.Errorf("JSON array bound")
 		}
-		value, err := readJSONValue(dec, depth+1)
+		value, err := readJSONValueLimit(dec, depth+1, arrayLimit)
 		if err != nil {
 			return nil, err
 		}

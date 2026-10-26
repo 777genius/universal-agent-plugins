@@ -1,0 +1,11 @@
+{
+  "name": "project-runtime-observer",
+  "publisher": "uap-research",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "vscode": "1.143.1" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "enabledApiProposals": ["chatPromptFiles", "mcpServerDefinitions"]
+}

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -129,10 +130,20 @@ func (c *controller) isolationCommand(argv []string, cwd string, env map[string]
 	if err != nil {
 		return ports.Command{}, err
 	}
-	command := []string{"/usr/bin/unshare", "--net", "--", "/usr/bin/setpriv", "--reuid=" + strconv.Itoa(c.request.Input.UID), "--regid=" + strconv.Itoa(c.request.Input.GID), "--clear-groups", "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all", "--no-new-privs", "/usr/bin/env", "-i", "/usr/bin/python3", "-I", "-c", isolationVerifier, strconv.FormatUint(c.parentNS, 10), strconv.Itoa(c.request.Input.UID), strconv.Itoa(c.request.Input.GID), string(environment), string(args)}
+	verifier := isolationVerifier
+	if c.request.Input.Mode == trustedProjectMode {
+		verifier = strings.Replace(isolationVerifier, "\np[\"capabilities_zero\"]", trustedLoopbackVerification+"\np[\"capabilities_zero\"]", 1)
+	}
+	command := []string{"/usr/bin/unshare", "--net", "--", "/usr/bin/setpriv", "--reuid=" + strconv.Itoa(c.request.Input.UID), "--regid=" + strconv.Itoa(c.request.Input.GID), "--clear-groups", "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all", "--no-new-privs", "/usr/bin/env", "-i", "/usr/bin/python3", "-I", "-c", verifier, strconv.FormatUint(c.parentNS, 10), strconv.Itoa(c.request.Input.UID), strconv.Itoa(c.request.Input.GID), string(environment), string(args)}
+	if c.request.Input.Mode == trustedProjectMode {
+		command = append([]string{"/usr/bin/unshare", "--net", "--", "/usr/bin/python3", "-I", "-c", trustedLoopbackPrelude, strconv.FormatUint(c.parentNS, 10)}, command[3:]...)
+	}
 	return ports.Command{Argv: command, Env: []string{"PATH=/usr/bin:/bin", "LANG=C.UTF-8"}, Dir: cwd}, nil
 }
 func (c *controller) strict(ctx context.Context, label string, argv []string, cwd string, env map[string]string, exchange func(context.Context, isolationProof) error) (childRecord, error) {
+	return c.strictInput(ctx, label, argv, cwd, env, nil, exchange)
+}
+func (c *controller) strictInput(ctx context.Context, label string, argv []string, cwd string, env map[string]string, input []byte, exchange func(context.Context, isolationProof) error) (childRecord, error) {
 	if err := ctx.Err(); err != nil {
 		return childRecord{Label: label, Error: clipped(err)}, err
 	}
@@ -148,7 +159,7 @@ func (c *controller) strict(ctx context.Context, label string, argv []string, cw
 		capture.cancel = c.cancelWork
 	}
 	started := false
-	err = c.runner.RunDuplexWithPlannedShutdown(childCtx, command, func(_ io.Writer, r io.Reader) error {
+	err = c.runner.RunDuplexWithPlannedShutdown(childCtx, command, func(w io.Writer, r io.Reader) error {
 		started = true
 		go capture.drain(r, c.request.Input.UID, c.request.Input.GID, c.parentNS)
 		select {
@@ -162,6 +173,17 @@ func (c *controller) strict(ctx context.Context, label string, argv []string, cw
 		capture.mu.Unlock()
 		if proofErr != nil {
 			return proofErr
+		}
+		if c.request.Input.Mode == trustedProjectMode && !proof.LoopbackReady {
+			return fmt.Errorf("trusted loopback is not ready after privilege drop")
+		}
+		if len(input) > controlLimit {
+			return fmt.Errorf("trusted driver input exceeds bound")
+		}
+		if len(input) != 0 {
+			if _, err := w.Write(input); err != nil {
+				return err
+			}
 		}
 		exchangeErr := exchange(childCtx, proof)
 		if exchangeErr == nil {

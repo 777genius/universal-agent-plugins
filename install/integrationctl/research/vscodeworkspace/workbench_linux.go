@@ -118,7 +118,11 @@ func (c *controller) sourcePaths(label string) []string {
 	return []string{filepath.Join(base, "observer"), filepath.Join(base, "projects"), filepath.Join(base, "home", ".copilot", "skills"), filepath.Join(base, "probes", label, "profile", "User", "settings.json"), filepath.Join(base, "probes", label, "profile", "User", "mcp.json")}
 }
 func (c *controller) checkPublisher() error {
-	if err := immutableAncestors(filepath.Join(c.request.Base, "observer")); err != nil {
+	observer := filepath.Join(c.request.Base, "observer")
+	if c.request.Input.Mode == trustedProjectMode {
+		observer = filepath.Join(c.request.Base, "tools", "observer")
+	}
+	if err := immutableAncestors(observer); err != nil {
 		return err
 	}
 	self := filepath.Join(c.request.Base, "control", "controller")
@@ -385,7 +389,11 @@ func (c *controller) execute() (resultErr error) {
 		c.displayCleanupErr = errors.Join(c.displayCleanupErr, c.closeDisplayAssets())
 		resultErr = errors.Join(resultErr, c.displayCleanupErr)
 	}()
-	if err := c.fixtures(); err != nil {
+	fixtures := c.fixtures
+	if c.request.Input.Mode == trustedProjectMode {
+		fixtures = c.trustedFixtures
+	}
+	if err := fixtures(); err != nil {
 		return err
 	}
 	if err := c.setupDisplay(); err != nil {
@@ -395,13 +403,28 @@ func (c *controller) execute() (resultErr error) {
 		return err
 	}
 	env := c.environment(filepath.Join(c.request.Base, "projects", "A"), "", "")
+	if c.request.Input.Mode == trustedProjectMode {
+		env = c.trustedEnvironment()
+	}
 	argv := []string{"/usr/bin/Xvfb", display, "-screen", "0", "1024x768x24", "-nolisten", "tcp", "-auth", filepath.Join(c.request.Base, "auth", "authority")}
 	displayCtx, cancel := context.WithDeadline(context.Background(), c.deadline)
 	defer cancel()
 	attemptedDisplay = true
-	record, err := runDisplayTable(c.work, func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
+	outer := func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
 		return c.strict(displayCtx, "Xvfb", argv, c.request.Base, env, exchange)
-	}, c.displayReady, c.observe)
+	}
+	var record childRecord
+	var err error
+	if c.request.Input.Mode == trustedProjectMode {
+		record, err = outer(func(ctx context.Context, proof isolationProof) error {
+			if err := c.displayReady(ctx, proof); err != nil {
+				return err
+			}
+			return c.trustedSequence(ctx)
+		})
+	} else {
+		record, err = runDisplayTable(c.work, outer, c.displayReady, c.observe)
+	}
 	reapedDisplay = record.TreeReaped
 	return err
 }

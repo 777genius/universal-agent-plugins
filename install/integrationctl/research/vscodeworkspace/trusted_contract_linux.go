@@ -21,12 +21,15 @@ const trustedToolsLimit = 384 << 20
 
 // This is a fixed test-tool handoff, never a general executable request.
 type trustedInput struct {
-	ToolsRoot           string `json:"tools_root"`
-	ToolsManifestSHA256 string `json:"tools_manifest_sha256"`
-	InstallerPath       string `json:"installer_path"`
-	InstallerSHA256     string `json:"installer_sha256"`
-	ProbePath           string `json:"probe_path"`
-	ProbeSHA256         string `json:"probe_sha256"`
+	ToolsRoot            string `json:"tools_root"`
+	ToolsManifestSHA256  string `json:"tools_manifest_sha256"`
+	InstallerPath        string `json:"installer_path"`
+	InstallerSHA256      string `json:"installer_sha256"`
+	ProbePath            string `json:"probe_path"`
+	ProbeSHA256          string `json:"probe_sha256"`
+	ScannerPath          string `json:"scanner_path"`
+	ScannerSHA256        string `json:"scanner_sha256"`
+	ScannerArchiveSHA256 string `json:"scanner_archive_sha256"`
 }
 
 type trustedToolFile struct {
@@ -65,7 +68,7 @@ func decodeTrustedManifest(body []byte) (trustedToolManifest, error) {
 	if len(body) > trustedManifestLimit {
 		return manifest, fmt.Errorf("trusted tool manifest exceeds bound")
 	}
-	if _, err := uniqueJSON(body); err != nil {
+	if _, err := uniqueJSONArrayLimit(body, 4096); err != nil {
 		return manifest, err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))

@@ -76,12 +76,14 @@ func decodeInput(root string) (inputRequest, error) {
 	if req.UID != uid || req.EUID != uid || req.GID != gid || req.EGID != gid || req.SourceCommit != buildCommit || !shaPattern.MatchString(req.HelperSHA) {
 		return req, fmt.Errorf("request identity or source differs from trusted caller")
 	}
-	deadline, err := deadlineAt(req.StartNS, 420*time.Second)
+	deadline, err := inputDeadline(req, "work")
 	if err != nil || time.Until(deadline) <= 0 {
 		return req, fmt.Errorf("work budget exhausted before initialization")
 	}
-	if _, err = exactDirectory(req.ObserverRoot, uid); err != nil {
-		return req, err
+	if req.Mode == "" {
+		if _, err = exactDirectory(req.ObserverRoot, uid); err != nil {
+			return req, err
+		}
 	}
 	if _, err = exactDirectory(req.OutputRoot, uid); err != nil {
 		return req, err
@@ -111,7 +113,7 @@ func bootstrap(root string) (resultErr error) {
 	if err != nil {
 		return err
 	}
-	deadline, err := deadlineAt(req.StartNS, 420*time.Second)
+	deadline, err := inputDeadline(req, "work")
 	if err != nil {
 		return err
 	}
@@ -147,8 +149,14 @@ func prepareSealed(ctx context.Context, root, base string, req inputRequest) err
 	if err != nil {
 		return err
 	}
-	if err := copyObserver(ctx, req.ObserverRoot, base, req.UID); err != nil {
-		return err
+	if req.Mode == trustedProjectMode {
+		if err := sealTrustedInputs(ctx, req, base); err != nil {
+			return err
+		}
+	} else {
+		if err := copyObserver(ctx, req.ObserverRoot, base, req.UID); err != nil {
+			return err
+		}
 	}
 	source, err := os.Executable()
 	if err != nil {
@@ -375,14 +383,17 @@ func loadSealedRequest(base string) (sealedRequest, error) {
 	if err != nil || req.Base != base || req.Input.UID != uid || req.Input.GID != gid || req.Input.SourceCommit != buildCommit {
 		return sealedRequest{}, fmt.Errorf("sealed request identity differs")
 	}
+	if _, err := inputDeadline(req.Input, "work"); err != nil {
+		return sealedRequest{}, err
+	}
 	return req, nil
 }
 func sealedWork(req sealedRequest) (context.Context, context.CancelFunc, time.Time, error) {
-	final, err := deadlineAt(req.Input.StartNS, 440*time.Second)
+	final, err := inputDeadline(req.Input, "final")
 	if err != nil {
 		return nil, nil, time.Time{}, err
 	}
-	deadline, err := deadlineAt(req.Input.StartNS, 420*time.Second)
+	deadline, err := inputDeadline(req.Input, "work")
 	if err != nil {
 		return nil, nil, time.Time{}, err
 	}
@@ -422,6 +433,9 @@ func (c *controller) finish(runErr, cleanupErr error, out, stderr []byte) error 
 	}
 	outHash, errHash := sha256.Sum256(out), sha256.Sum256(stderr)
 	summary := map[string]any{"evidence_kind": "vscode-pinned-untrusted-workspace-research", "source_commit": buildCommit, "version": publisherVersion, "publisher_commit": publisherCommit, "collection_complete": runErr == nil && cleanupErr == nil, "native_project_qualified": false, "native_mcp_initialization_qualified": false, "native_runtime_qualified": false, "children": c.children, "observations": c.observations, "executable_hashes": c.hashes, "error": clipped(runErr), "cleanup": map[string]any{"complete": cleanupErr == nil, "error": clipped(cleanupErr), "stdout_file": "root-cleanup.stdout.log", "stderr_file": "root-cleanup.stderr.log", "stdout_bytes": len(out), "stderr_bytes": len(stderr), "stdout_sha256": hex.EncodeToString(outHash[:]), "stderr_sha256": hex.EncodeToString(errHash[:])}, "diagnostics": "verifier-prefixed merged streams; planned teardown may truncate trailing diagnostics; API result is separate"}
+	if c.request.Input.Mode == trustedProjectMode {
+		c.trustedSummary(summary, runErr, cleanupErr)
+	}
 	body, e := encode(summary, 1<<20)
 	if e != nil {
 		return errors.Join(runErr, cleanupErr, e)
@@ -449,7 +463,7 @@ func (c *controller) publish() error {
 		return fmt.Errorf("evidence output root changed")
 	}
 	for _, name := range sortedKeys(c.files) {
-		deadline, e := deadlineAt(c.request.Input.StartNS, 450*time.Second)
+		deadline, e := inputDeadline(c.request.Input, "publish")
 		if e != nil || time.Until(deadline) <= 0 {
 			return fmt.Errorf("controller publication deadline")
 		}
