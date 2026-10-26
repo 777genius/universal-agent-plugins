@@ -1038,6 +1038,231 @@ execute no vendor binaries locally. Commit/push only after independent code GO
 and these checks, then inspect fresh genuine hosted artifacts before claiming
 any native completion or merge qualification.
 
+### Bounded diagnostics for an exit-one scanner failure
+
+#### Observed failure and limits
+
+Genuine VS Code trusted run 40400045559, job 121843130833, at source
+73f6b9c3e26709409d8ad9e1502683675683ebad/tree
+355cd394b6caf21a17e230949a3040f00ad1963e passed its inert hosted contracts,
+completed empty-a and empty-b, then failed public add-user before installation:
+"security assessment failed before installation: lintai returned invalid JSON".
+Native artifact 12687549067 retains that public error, but not the internal
+scanner's stdout, stderr or exit. All five qualifications remain false and
+native/display cleanup is not proved. Frontend cleanup is a separate success.
+
+CommandScanner runs the actual admitted executable once with the fixed argv
+scan-agent-plugin <packageRoot>, cwd packageRoot, its existing allowlisted
+environment, default 30-second context and 8-MiB stdout/64-KiB stderr limits.
+It currently accepts exit zero or one and drops stderr for both. The evaluator
+then independently rejects empty/non-JSON output, unsupported report/policy
+identity, runtime errors and other invalid assessment facts. The observed error
+therefore establishes accepted exit zero/one and a refusal for empty, oversized
+or non-JSON stdout, not the actual scanner exit or a measured cause. The later
+inert regression below proves the intended stream cap was bypassable.
+
+Static inspection of the already acquired exact GNU archive
+2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da and
+member b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba
+found a strong GLIBC_2.39 version need (Flags:none) and the associated undefined
+pidfd_getpid/pidfd_spawnp symbols. The standard Ubuntu 22.04 libc baseline is
+2.35. GNU glibc 2.35 loader source reports a missing strong version and exits
+one before main. This is a strong compatibility inference; the actual loaded
+libc version and loader diagnostic have not been captured. The upstream
+v0.1.3 tag source emits a JSON report before a normal findings exit and prints
+ordinary command errors to stderr with exit two; source is not proof that the
+released bytes exactly reproduce its build.
+
+#### Exact production change
+
+Change only install/integrationctl/agentplugins/adapters/securityscan/scanner.go
+plus a focused new inert CommandScanner test file and the recorded plan. The
+shared production adapter owns this error; do not introduce a VS-only wrapper,
+scanner substitute, extra command/preflight or second execution. Root will
+coordinate integration through the existing program/client PRs.
+
+Keep timeout and both overflow checks at their current precedence. Keep the
+existing non-exit-one error branch, argv/cwd/environment, deadlines, limits and
+return values unchanged. In the existing accepted-exit-one branch only, check
+json.Valid on the already captured stdout. If it is false, return failure with
+a fixed diagnostic identifying actual exit 1, the exact stdout byte count, and
+strings.TrimSpace of the already bounded stderr, using the same stderr policy
+as the existing non-one failure branch. Example diagnostic shape:
+"lintai security scan failed (exit 1, invalid JSON, 0 stdout bytes): <stderr>".
+Do not return captured stdout as a successful scan in that branch.
+
+Retain valid-JSON exit-one output byte-for-byte for the existing evaluator and
+its full report/identity/runtime-error/assessment validation. Do not equate
+json.Valid with a valid security report. Exit-zero behavior, including its
+existing later invalid-JSON rejection, stays unchanged. No successful outcome,
+report, assessment or cache entry may be fabricated or rescued by diagnostics.
+The change tightens only an already failing exit-one/non-JSON path and makes
+its actual process failure visible before the evaluator's generic error.
+
+Do not emit raw stdout, report bodies, scanned file contents, environment or
+credentials; the byte count is sufficient to distinguish empty from malformed
+output. Retain the existing 64-KiB stderr ceiling and fail on overflow before
+formatting any diagnostic. Do not enlarge buffers or add output files, artifact
+members, result fields, general callbacks, inherited credentials or a debug
+switch. The existing bounded public add-user log will carry the error through
+the unchanged capture/admission path. No new external communication occurs.
+
+#### Inert verification and review gates
+
+Use an expressly inert temporary shell/helper executable, never a vendor,
+through the real CommandScanner.Scan path with the same fixed argv and cwd.
+Keep these process tests on supported POSIX test platforms; preserve the
+existing cross-platform evaluator/report tests without weakening their gates.
+Verify:
+
+- Exact valid reports with exit zero and with exit one return unchanged bytes;
+  the real evaluator still accepts/classifies the valid exit-one findings.
+- Exit one with empty stdout and a loader-shaped stderr sentinel returns a
+  failure exposing actual exit one, zero stdout bytes and trimmed stderr.
+- Exit one with non-JSON stdout refuses and reports its byte count without
+  leaking a distinct raw-stdout sentinel into the error.
+- Syntactically valid but unsupported exit-one JSON still reaches and fails the
+  existing independent report/identity validation.
+- Exit-zero invalid JSON and non-one process errors retain their existing
+  behavior. Stderr overflow remains an output-limit failure, never a truncated
+  diagnostic accepted as a scan or a disclosure beyond the existing bound.
+
+Run the focused scanner/evaluator contracts and affected unfiltered lint after
+independent code review, using the approved private temporary/cache capacity.
+Do not run the vendor locally. Obtain two independent reviews of this exact
+plan before implementation and independent review of the exact implementation
+before pushing. Then use one genuine unchanged Ubuntu 22 trusted workflow to
+collect the actual diagnostic; retain its source/tree/artifact identities and
+all failures. If it still follows the unchanged exit-zero invalid-JSON route,
+report that limitation rather than broadening the code silently.
+
+A host/pin/selection correction requires a separate evidence-bound plan after
+reviewing that result. Preserve the prior Ubuntu 24 sandbox failure, GNU/musl
+cache identity separation, native trust/permissions, process containment and
+all qualification/cleanup rules. No host, archive, scanner selection or
+sandbox change is authorized by this diagnostic amendment.
+
+### Enforce the scanner's intended stream bounds before publishing diagnostics
+
+This amends the independently reviewed exit-one diagnostic plan (scratch
+SHA256 89ef9097a66617f12338b99f43c7ce112cc13c8e344fcf262e6bf80a0cdec09c;
+recorded plan c845eb97b0bd9b954014a8139aea19fa8a44e08b). The initial diagnostic
+implementation 7eefe3c9204fb9d1452fe7de76445dbd9ce7c9b7/tree
+520917a812f91350d73670cc8784c23268f58c8b is NOT approved for publication.
+
+#### Actual inert regression and corrected historical inference
+
+The real CommandScanner process tests executed locally against an expressly
+inert POSIX script. Every prior scanner/evaluator test and every new valid-report,
+exit-one diagnostic, unsupported-report and exit-zero/non-one case passed. The
+new stderr-overflow case failed: a script writing maxScannerError+1 bytes and
+exiting one reached the formatted invalid-JSON diagnostic instead of the
+existing output-limit refusal. Full package result: FAIL, 0.039 seconds. No
+vendor binary ran and no result is native qualification evidence.
+
+The existing limitedBuffer embeds bytes.Buffer and therefore promotes its
+ReadFrom method. os/exec copies a child pipe using io.Copy; that fast path can
+invoke the promoted bytes.Buffer.ReadFrom, bypassing limitedBuffer.Write and
+its overflow flag. The only production limitedBuffer instances are the
+CommandScanner stdout and stderr buffers in scanner.go. Their consumers need
+only Write, Bytes, Len and String. No other caller requires ReaderFrom or a
+promoted bytes.Buffer API.
+
+Correct the earlier bounded-output inference in the recorded diagnostic plan.
+decodeReport uses the same generic invalid-JSON error for empty output, output
+larger than 8 MiB, or syntactically invalid output. The effective intended cap
+was bypassable, so the VS73/5942 artifact establishes accepted exit zero/one and
+one of those three refusal conditions; the actual scanner stdout, stderr and
+exit remain unretained. Do not claim the old 8-MiB/64-KiB caps actually held.
+The independently observed GNU ELF strong GLIBC_2.39 requirement and Ubuntu22
+baseline remain a separate loader-compatibility inference, not actual captured
+loader stderr.
+
+#### Exact bound repair
+
+Change only the existing scanner.go buffer implementation and the focused
+scanner_process_test.go, plus this recorded plan/correction. Replace the
+anonymous embedded bytes.Buffer with one named private bytes.Buffer field.
+Update the existing bounded Write to use that field without changing its
+limit, truncation, overflow flag, return-count or error behavior. Add only the
+three explicit Bytes, Len and String forwarding methods required by the current
+scanner callers. Do not implement ReaderFrom, embed another interface, expose
+an unbounded writer or add a copy helper, sink, process primitive or execution.
+All child output must consequently traverse the existing bounded Write even
+when os/exec/io.Copy chooses an optimized method path.
+
+Retain the intended 8-MiB stdout and 64-KiB stderr limits, existing timeout then
+overflow precedence and already reviewed three-line exit-one/non-JSON diagnostic.
+Keep valid in-bound output byte-for-byte, full evaluator/report/identity checks,
+exit-zero/non-one behavior, child argv/cwd/environment and cancellation unchanged.
+The repaired bounds intentionally refuse output that exceeded the declared cap
+but previously slipped through the promoted method. Do not weaken an assertion
+or enlarge a limit to make the regression pass.
+
+#### Verification and independent review
+
+Extend the actual inert CommandScanner process tests to cover BOTH stdout and
+stderr at their respective limit+1, with exit zero and exit one. Each must return
+no successful body and the existing exact output-limit failure, before any
+invalid-JSON diagnostic. Retain the valid zero/one report byte-parity and real
+evaluator classification tests and all other reviewed negatives. Keep failure
+messages concise: report lengths/classification rather than dumping a large
+stream or stderr error. Tests execute only the expressly inert temporary helper.
+
+Two independent reviews of this exact amendment precede implementation. Record
+it in the consolidated plan, including the corrected historical inference,
+before code. Review the exact final implementation independently, run the full
+affected securityscan package and affected unfiltered lint in the coordinated
+approved private cache/temp slot, and require zero issues/failures. Never run a
+vendor locally. Only then may root publish the combined bounded diagnostic and
+request one genuine unchanged-host Ubuntu22 lifecycle to capture actual scanner
+failure facts through its existing admitted public log.
+
+No host, GNU/musl asset, release selector, cache identity, report schema, artifact
+member, raw stdout disclosure, ambient credentials, native permission, sandbox,
+deadline or qualification changes are authorized by this amendment.
+
+### Scanner diagnostic validation: inherited lint findings and actual Required gates
+
+Validation of final code `56856d510e3342db2472fbd354cfbbe7cb3f58f0`
+(tree `ae5ca58ee7d2575b0c4d5da170826db12834441c`) found five unfiltered
+lint issues in unchanged parent files, so the earlier plan's expectation of
+zero issues from that broader invocation is corrected by observed evidence.
+Do not describe the entire unfiltered package as clean or change unrelated
+provider/cache code to meet that mistaken expectation.
+
+Exact GitHub file metadata at parent
+`b16b5c5d28cdc734856ac414521d40d9c8d8dfd5` matches the local unchanged blobs:
+
+| File below `install/integrationctl/agentplugins/adapters/securityscan/` | Parent/current blob | Inherited findings |
+| --- | --- | --- |
+| `cache.go` | `bb5f7213bd0d0a04a1cec4879ba463eafb64e1d6` | line 67: unchecked deferred `os.Remove` |
+| `release.go` | `46ae62b4f2b537069b65f224321d3e6fe3f4265b` | lines 107, 128, 180: unchecked deferred body close, temporary remove, gzip close; line 99: gocritic prefers `http.NoBody` |
+
+The pre-diagnostic scanner.go blob at local c75 is
+`403fcc9a38aa8875c224ab8ed792d15ec51c6b56`, also byte-exact to that parent.
+Thus the actual changed-lines run from c75 covers the complete scanner delta,
+and the new process-test file is included in full.
+
+Actual final verification, using golangci-lint 2.13.2 and the approved private
+cache/temp capacity with one CPU, is:
+
+- Full securityscan package tests: PASS, 0.281 seconds, including both actual
+  process streams at limit+1 for exit zero and one, valid reports and evaluator
+  classification, bounded diagnostics, and the prior refusal paths.
+- All enabled linters on changed lines from c75: zero issues.
+- The actual Required whole-file size/architecture selection
+  `revive,funlen,gocyclo,gocognit,dupl,depguard`: zero issues.
+- Broader unfiltered package lint: the five inherited findings above, with none
+  in scanner.go or scanner_process_test.go. No suppression or exclusion changed.
+
+This is a validation-only addendum matching the existing Required workflow's
+changed-lines plus whole-file size/architecture gates. It changes no product
+source, tests, assertions, linter settings or baseline. Root and independent CLI
+review must approve this exact addendum before publication; the independently
+reviewed product code remains frozen. No vendor executable ran locally, and
+native scanner cause/qualification remains for genuine hosted observation.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for
