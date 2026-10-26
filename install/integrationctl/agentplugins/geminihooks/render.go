@@ -7,7 +7,9 @@ import (
 	"unicode/utf8"
 )
 
-// Exact variable syntax used by Gemini CLI 0.62.0 before shell execution.
+// Variable syntax verified with Gemini CLI 0.62.0 before shell execution.
+// This records test evidence, not a host CLI version requirement. Keep the
+// renderer contract-based; never turn this test pin into an admission gate.
 var interpolation = regexp.MustCompile(`\$(?:(\w+)|\{([^}]+?)(?::-([^}]*))?\})`)
 
 func safeString(s string) error {
