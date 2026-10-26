@@ -111,7 +111,7 @@ func trustedReceiptFixture(t *testing.T, scope string) (*controller, domain.Stat
 			{ObjectID: "vscode_project_mcp_server:" + p.Name, Kind: "vscode_project_mcp_server", LogicalName: p.Name, Path: config, ManagedDigest: receipt.Digest, ProtectionClass: "managed"},
 		}
 	}
-	digest, err := trustedPackageDigest(c.work, active)
+	digest, err := trustedInstalledPackageDigest(c.work, active)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestTrustedReceiptRejectsWrongSourceObjectsAndInstalledProbe(t *testing.T) 
 				if err := os.WriteFile(filepath.Join(b.TargetLocator, "bin", "probe"), []byte("changed native payload"), 0700); err != nil {
 					t.Fatal(err)
 				}
-				digest, err := trustedPackageDigest(c.work, b.TargetLocator)
+				digest, err := trustedInstalledPackageDigest(c.work, b.TargetLocator)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -221,7 +221,7 @@ func TestTrustedInstalledPackageCannotAdoptExtraFileAndRewrittenReceipt(t *testi
 	if err := os.WriteFile(filepath.Join(p.Binding.TargetLocator, "unreviewed-extra"), []byte("native added payload"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	digest, err := trustedPackageDigest(c.work, p.Binding.TargetLocator)
+	digest, err := trustedInstalledPackageDigest(c.work, p.Binding.TargetLocator)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,7 +291,7 @@ func TestTrustedHeldMutationRejectsLeafSwapAndParentAlias(t *testing.T) {
 	}
 }
 
-func TestTrustedCapturedPackageDigestMatchesInstallerFraming(t *testing.T) {
+func TestTrustedCapturedPackageDigestMatchesAcquiredSourceFraming(t *testing.T) {
 	c, _, _ := trustedReceiptFixture(t, "a")
 	root := c.trustedState.Packages["a"].Source
 	got, err := trustedPackageDigest(c.work, root)

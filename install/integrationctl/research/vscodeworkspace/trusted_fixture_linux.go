@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 
 	"golang.org/x/sys/unix"
@@ -222,7 +223,7 @@ func (c *controller) trustedFixtures() error {
 	settings := map[string]any{"update.mode": "none", "telemetry.telemetryLevel": "off", "extensions.autoUpdate": "off",
 		"extensions.autoCheckUpdates": false, "workbench.startupEditor": "none", "window.restoreWindows": "none",
 		"workbench.welcomePage.experimentalOnboarding": false,
-		"security.workspace.trust.enabled": true, "chat.mcp.autostart": "never"}
+		"security.workspace.trust.enabled":             true, "security.workspace.trust.startupPrompt": "always", "chat.mcp.autostart": "never"}
 	if err := c.trustedJSON(filepath.Join(f.Profile, "User", "settings.json"), settings); err != nil {
 		return err
 	}
@@ -317,9 +318,53 @@ func trustedPackageDigest(ctx context.Context, root string) (string, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	parent, err := trustedParent(filepath.Join(root, "leaf"))
+	captured, err := trustedCapturePackage(ctx, root)
 	if err != nil {
 		return "", err
+	}
+	return packagedigest.DigestCaptured(ctx, captured)
+}
+
+// Installed managed receipts use the existing provider Stager's framing. The
+// acquired source's v1 digest above remains a separate immutable identity.
+func trustedInstalledPackageDigest(ctx context.Context, root string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	captured, err := trustedCapturePackage(ctx, root)
+	if err != nil {
+		return "", err
+	}
+	if _, err := packagedigest.DigestCaptured(ctx, captured); err != nil {
+		return "", err
+	}
+	sort.Slice(captured, func(i, j int) bool { return captured[i].Path < captured[j].Path })
+	hash := sha256.New()
+	for _, item := range captured {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		kind := "file"
+		if item.Kind == "directory" {
+			kind = "dir"
+		}
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%d\x00", kind, item.Path, item.Executable, len(item.Content))
+		for body := item.Content; len(body) > 0; {
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
+			n := min(len(body), 32*1024)
+			_, _ = hash.Write(body[:n])
+			body = body[n:]
+		}
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func trustedCapturePackage(ctx context.Context, root string) ([]packagedigest.CapturedEntry, error) {
+	parent, err := trustedParent(filepath.Join(root, "leaf"))
+	if err != nil {
+		return nil, err
 	}
 	_ = parent.Close()
 	captured := []packagedigest.CapturedEntry{}
@@ -369,9 +414,9 @@ func trustedPackageDigest(ctx context.Context, root string) (string, error) {
 		return nil
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return packagedigest.DigestCaptured(ctx, captured)
+	return captured, nil
 }
 
 func trustedInventory(root string) (map[string]string, error) {
@@ -582,7 +627,7 @@ func (c *controller) trustedReceiptObjects(scope string, p *trustedPackage, skil
 			return fmt.Errorf("managed package differs from frozen authored source")
 		}
 	}
-	digest, err := trustedPackageDigest(c.work, active)
+	digest, err := trustedInstalledPackageDigest(c.work, active)
 	if err != nil {
 		return err
 	}

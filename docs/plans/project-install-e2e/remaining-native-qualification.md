@@ -653,6 +653,62 @@ strict cleanup. Run existing inert contracts and pinned strict TypeScript
 compilation, then inspect genuine hosted lifecycle evidence. Two independent
 plan-review rounds precede this narrow controller/observer correction.
 
+### Observed VS Code startup-prompt setting
+
+Genuine [run 40368973193](https://github.com/777genius/universal-agent-plugins/actions/runs/40368973193)
+at source tree `00a4a30cf9b4065feca1b0eec577afca3b61126f` used normal
+extension activation but again failed `empty-a` with native focus true/true and
+no visible workspace-trust dialog. Native artifact `12672882701` has SHA256
+`db8b4be131ece70b3121b6b2d153d84fef63f50d00e0667ebd9db01243aaed04`.
+No stage or qualification completed, and cleanup remains unproved.
+
+The same exact pinned `workspace.contribution.ts` blob
+`6cccbced7b7c304d1e9678fab1559a584f9ecc44` registers
+`security.workspace.trust.startupPrompt` with default `"never"` and explicitly
+returns from startup trust prompting for that value. The fixture previously
+set trust enablement but omitted the prompt setting. Author only
+`security.workspace.trust.startupPrompt="always"` in the fresh original user's
+settings before the existing strict preservation baseline. This requests the
+already frozen native dialog; it grants no trust and does not substitute any
+other interaction. Native trusted workspaces still skip prompting, while A/B
+must each receive their own exact native trust decision. Preserve the normal
+development-host invocation, canonical folder/unchecked-parent checks, passive
+observer handoff, all existing MCP UI, settings bytes, sandbox and deadlines.
+
+### VS Code source and installed-package receipt framing
+
+Independent source inspection found an additional fixture mismatch before any
+native run reached public installation. VS Code has no
+`QualifiedLocalInstallerFacade` trait, so its fixed public local-source adds use
+the existing lifecycle service and `providers.Stager`. The provider records
+installed `managed_package_directory` digests from
+`packagesnapshot.Builder.Build`, while the current trusted fixture uses its
+newer `packagedigest.DigestCaptured` source digest for that installed receipt.
+The authored `SourceDigest`, selected source binding and package revision
+correctly retain the newer acquired `PackageSnapshot.TreeDigest` identity.
+No native installation or product defect is inferred from this source finding.
+
+Preserve the current bounded, held, ordinary-file/directory capture and its
+canonical parent, original UID, single-link, path/depth/size checks. Keep
+`packagedigest.DigestCaptured` policy validation and source identity unchanged.
+Add only a private installed-receipt helper within `vscodeworkspace`, using the
+provider's exact lexical NUL-delimited `dir`/`file`, slash-relative path,
+executable boolean, decimal byte length and held file bytes. It has no algorithm
+selector, alternate fallback or returned-receipt adoption. Route only installed
+managed-package expectations through it; maintain complete exact object
+count/kind/ID/name/path/digest equality and all separate probe/launcher checks.
+Do not add a production digest API or change any provider, adapter or installer.
+
+Keep the acquired-source parity test and add meaningful inert user-skill and
+mixed project cases through the actual VS Code adapter, project planner and
+`providers.Stager`. Compare held installed bytes with the actual staged object
+and `packagesnapshot` verification, require the source identity to remain the
+newer snapshot digest, and demonstrate the two framings differ. Retain negative
+source/receipt/probe-adoption/link checks and exercise file/executable/empty
+directory changes. No vendor process executes in these tests. Independently
+review both subsections twice before implementation, then rerun the exact
+genuine hosted lifecycle; every unobserved or failed stage remains unqualified.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for
