@@ -10,7 +10,7 @@ import platform
 import shutil
 import subprocess
 
-from harness import Fixture, check
+from harness import Fixture, check, scanner_cache_options, resolve_scanner_cache_platform
 
 
 REPO = Path(__file__).resolve().parent.parent.parent
@@ -124,16 +124,18 @@ def main():
     parser.add_argument("--npm", type=Path, required=True)
     parser.add_argument("--node", type=Path, required=True)
     parser.add_argument("--artifacts", type=Path, required=True)
+    scanner_cache_options(parser)
     args = parser.parse_args()
+    cache_platform = resolve_scanner_cache_platform(args.scanner_cache_platform)
 
     binary = args.binary.resolve()
-    check(binary.is_file(), "current-source binary is missing")
+    check(binary.is_file(), "supplied installer binary is missing")
     artifacts = args.artifacts.resolve()
     check(not artifacts.exists(), "artifacts directory already exists")
     artifacts.mkdir(parents=True)
     evidence = artifacts / "evidence"
     evidence.mkdir()
-    fixture = Fixture(artifacts / "fixture")
+    fixture = Fixture(artifacts / "fixture", scanner_cache_platform=cache_platform)
 
     staged = artifacts / "staged-package"
     shutil.copytree(PACKAGE_SOURCE, staged,
@@ -271,6 +273,9 @@ def main():
         "version": VERSION,
         "platform": platform_key,
         "source_binary_sha256": digest(binary),
+        "binary_source_equivalence": "not established; supplied binary is packed without a source-build receipt",
+        "scanner": "SYNTHETIC cached protocol stub; no security proof",
+        "scanner_cache_platform": cache_platform,
         "cached_binary_sha256": digest(cached),
         "tarball_sha256": digest(tarball),
         "isolation": "disposable HOME, npm cache, installer state and clients",

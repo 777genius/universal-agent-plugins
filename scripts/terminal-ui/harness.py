@@ -194,8 +194,31 @@ def prepare_opencode_fixture(fixture):
     destination.chmod(0o700)
 
 
+def native_scanner_cache_platform():
+    machine = {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
+    check(machine is not None, 'unsupported fixture architecture')
+    return platform.system().lower() + '-' + machine
+
+
+def resolve_scanner_cache_platform(value=None, current_source=False):
+    native = native_scanner_cache_platform()
+    default = native + '-musl' if native == 'linux-amd64' else native
+    allowed = {native, default}
+    check(value is None or value in allowed, 'scanner cache platform is invalid or belongs to another host')
+    selected = default if value is None else value
+    check(not current_source or selected == default,
+          'current-source build cannot use the legacy GNU scanner cache')
+    return selected
+
+
+def scanner_cache_options(parser):
+    parser.add_argument('--scanner-cache-platform', metavar='PLATFORM',
+                        help='fixture-only cache placement; raw bytes remain caller-declared/unclassified')
+
+
 class Fixture:
-    def __init__(self, root, scanner_binary=None, include_opencode=False):
+    def __init__(self, root, scanner_binary=None, include_opencode=False, *, scanner_cache_platform=None):
+        self.scanner_cache_platform = resolve_scanner_cache_platform(scanner_cache_platform)
         self.root = Path(root)
         self.home = self.root / 'home-é'
         self.project = self.root / 'project'
@@ -248,9 +271,7 @@ class Fixture:
             editor.write_bytes(b'synthetic TEST Cursor editor; never executable')
         # Existing executable-cache seam, only inside this disposable fixture.
         # This is a SYNTHETIC scanner protocol response, not security evidence.
-        machine = {'x86_64': 'amd64', 'amd64': 'amd64', 'aarch64': 'arm64', 'arm64': 'arm64'}.get(platform.machine().lower())
-        check(machine is not None, 'unsupported fixture architecture')
-        scanner = self.data / 'security' / 'lintai' / '0.1.3' / (platform.system().lower() + '-' + machine) / ('lintai.exe' if os.name == 'nt' else 'lintai')
+        scanner = self.data / 'security' / 'lintai' / '0.1.3' / self.scanner_cache_platform / ('lintai.exe' if os.name == 'nt' else 'lintai')
         scanner.parent.mkdir(parents=True)
         report = {'schema_version': 1, 'tool': {'name': 'lintai', 'version': '0.1.3'},
                   'policy': {'id': 'agent-plugin-install', 'version': 2,
@@ -548,7 +569,8 @@ def run_case(name, binary, root, args):
     evidence = root / name
     evidence.mkdir()
     with tempfile.TemporaryDirectory(prefix='agentplugins-pty-') as tmp:
-        fixture = Fixture(tmp, getattr(args, "scanner_path", None), include_opencode=name == "group-progress")
+        fixture = Fixture(tmp, getattr(args, "scanner_path", None), include_opencode=name == "group-progress",
+                          scanner_cache_platform=getattr(args, "scanner_cache_platform", None))
         argv = [str(binary), 'add', str(fixture.package)]
         if getattr(args, 'npm_launcher', False):
             node = shutil.which('node')
@@ -776,26 +798,35 @@ def run_case(name, binary, root, args):
 
 
 SCANNER_ARCHIVES = {
-    'lintai-v0.1.3-aarch64-apple-darwin.tar.gz': 'be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff',
-    'lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz': '2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da',
-    'lintai-v0.1.3-x86_64-pc-windows-msvc.zip': '2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911',
+    'lintai-v0.1.3-aarch64-apple-darwin.tar.gz': ('be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff', 'darwin-arm64'),
+    'lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz': ('2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da', 'linux-amd64'),
+    'lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz': ('3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b', 'linux-amd64-musl'),
+    'lintai-v0.1.3-x86_64-pc-windows-msvc.zip': ('2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911', 'windows-amd64'),
 }
 
 
 def scanner_options(parser):
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--scanner-archive', type=Path, help='pinned v0.1.3 archive, verified before extraction')
-    group.add_argument('--scanner-binary', type=Path, help='real scanner, requires --scanner-sha256')
+    group.add_argument('--scanner-binary', type=Path, help='trusted raw scanner, requires --scanner-sha256')
     parser.add_argument('--scanner-sha256', help='trusted digest of raw scanner executable')
+    scanner_cache_options(parser)
 
 
 def prepare_scanner(args):
     args.scanner_path = None
+    declared = getattr(args, 'scanner_cache_platform', None)
+    selected = resolve_scanner_cache_platform(declared)
     if args.scanner_archive:
         archive = args.scanner_archive
-        expected = SCANNER_ARCHIVES.get(archive.name)
+        record = SCANNER_ARCHIVES.get(archive.name)
+        check(record is not None, 'scanner archive name or SHA256 does not match pin')
+        expected, archive_platform = record
+        selected = resolve_scanner_cache_platform(archive_platform)
+        check(declared is None or declared == selected,
+              'scanner archive conflicts with declared cache platform')
         data = archive.read_bytes()
-        check(expected is not None and hashlib.sha256(data).hexdigest() == expected,
+        check(hashlib.sha256(data).hexdigest() == expected,
               'scanner archive name or SHA256 does not match pin')
         # Read the exact verified bytes; never extract paths, links, or devices.
         import io
@@ -803,25 +834,36 @@ def prepare_scanner(args):
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 names = [n for n in z.namelist() if Path(n).name == 'lintai.exe']
                 check(len(names) == 1, 'archive must contain exactly one lintai.exe')
-                payload = z.read(names[0])
+                member = names[0]
+                payload = z.read(member)
         else:
             with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as t:
                 members = [m for m in t.getmembers() if Path(m.name).name == 'lintai' and m.isfile()]
                 check(len(members) == 1, 'archive must contain exactly one regular lintai')
+                member = members[0].name
                 payload = t.extractfile(members[0]).read()
-        source = {'archive': str(archive), 'archive_sha256': expected}
+        source = {'archive': str(archive), 'archive_sha256': expected,
+                  'archive_member': member, 'cache_identity_basis': 'verified pinned archive'}
+        kind = 'real scanner; synthetic package only'
     elif args.scanner_binary:
+        check(native_scanner_cache_platform() != 'linux-amd64' or declared is not None,
+              'Linux amd64 raw scanner requires explicit --scanner-cache-platform')
         payload = args.scanner_binary.read_bytes()
         check(args.scanner_sha256 and hashlib.sha256(payload).hexdigest() == args.scanner_sha256.lower(),
               'scanner binary SHA256 mismatch or missing trusted digest')
-        source = {'binary': str(args.scanner_binary)}
+        source = {'binary': str(args.scanner_binary), 'cache_identity_basis': 'caller-declared' if declared else 'native platform',
+                  'classification': 'trusted raw/unclassified; no ABI, pinned-asset or portable-policy proof'}
+        kind = 'trusted raw/unclassified; synthetic package only'
     else:
         check(not args.scanner_sha256, '--scanner-sha256 needs --scanner-binary')
+        args.scanner_cache_platform = selected
         return 'SYNTHETIC cached protocol stub; no security proof'
+    args.scanner_cache_platform = selected
     args.scanner_path = args.artifacts / ('verified-lintai.exe' if os.name == 'nt' else 'verified-lintai')
     args.scanner_path.write_bytes(payload)
     args.scanner_path.chmod(0o700)
-    return dict(kind='real scanner; synthetic package only', executable_sha256=hashlib.sha256(payload).hexdigest(), **source)
+    return dict(kind=kind, executable_sha256=hashlib.sha256(payload).hexdigest(),
+                cache_platform=selected, **source)
 
 
 def main():
@@ -854,7 +896,7 @@ def main():
             'platform': platform.platform(), 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'launcher': 'npm stdio:inherit' if args.npm_launcher else 'native',
             'binary': str(binary), 'python': platform.python_version(),
-            'scanner': scanner_evidence,
+            'scanner': scanner_evidence, 'scanner_cache_platform': args.scanner_cache_platform,
             'network': 'local fixture + version-only stubs + dead proxies; not firewall attestation',
             'results': results}, indent=2))
     return int(any(r['status'] == 'failed' for r in results))

@@ -28,6 +28,41 @@ class RuntimeTests(unittest.TestCase):
                 entry.external_attr = mode << 16
                 archive.writestr(entry, body)
 
+    def test_current_source_prepare_acquires_portable_scanner_before_build(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        class ScannerAcquisitionReached(Exception):
+            pass
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            ctx = SimpleNamespace(source_and_projects=Mock(), root=root, budget=object(), identities={})
+            leaf = SimpleNamespace(CLIENT='copilot', ACQUISITION={'runtime': 'native'})
+            pin = runtime.shared.native.PINS['linux-amd64']['lintai-musl']
+            calls = []
+
+            def acquire(spec, budget):
+                self.assertIs(budget, ctx.budget)
+                calls.append(spec)
+                if len(calls) == 1:
+                    return {}, {}
+                self.assertEqual(spec['url'], f'https://github.com/{pin[1]}/releases/download/{pin[2]}/{pin[3]}')
+                self.assertEqual(spec['integrity'], pin[4])
+                self.assertEqual(spec['entrypoint'], pin[5])
+                self.assertEqual(spec['runtime'], 'native')
+                raise ScannerAcquisitionReached()
+
+            with patch.object(runtime.shared, 'adjacent', return_value=leaf), \
+                 patch.object(runtime.shared, 'acquire', side_effect=acquire), \
+                 patch.object(runtime.shared, 'materialize', return_value=(root / 'client', {})), \
+                 patch.object(runtime, 'capture', side_effect=AssertionError('compiler or vendor execution')) as execute:
+                with self.assertRaises(ScannerAcquisitionReached):
+                    runtime.prepare('copilot', ctx)
+                execute.assert_not_called()
+            ctx.source_and_projects.assert_called_once()
+            self.assertEqual(len(calls), 2)
+
     def test_failed_attempt_artifact_is_preserved_without_qualification(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "research.zip"

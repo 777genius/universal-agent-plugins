@@ -61,7 +61,7 @@ func (c *controller) prepareTrustedScanner() error {
 	f := c.trustedState
 	state := filepath.Join(f.Root, "installer-state")
 	security := filepath.Join(state, "security")
-	chain := []string{security, filepath.Join(security, "lintai"), filepath.Join(security, "lintai", "0.1.3"), filepath.Join(security, "lintai", "0.1.3", "linux-amd64")}
+	chain := []string{security, filepath.Join(security, "lintai"), filepath.Join(security, "lintai", "0.1.3"), filepath.Join(security, "lintai", "0.1.3", "linux-amd64-musl")}
 	s := &trustedScannerCache{security: security, binary: filepath.Join(chain[3], "lintai"), digest: c.request.Input.Trusted.ScannerSHA256}
 	c.scannerCache = s
 	if err := c.seedTrustedScanner(chain); err != nil {

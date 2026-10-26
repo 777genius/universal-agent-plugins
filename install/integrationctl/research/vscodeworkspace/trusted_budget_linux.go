@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const trustedScannerArchive = "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da"
+const trustedScannerArchive = "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b"
 
 func inputDeadline(in inputRequest, phase string) (time.Time, error) {
 	limits := map[string]time.Duration{"work": 420 * time.Second, "final": 440 * time.Second, "publish": 450 * time.Second}

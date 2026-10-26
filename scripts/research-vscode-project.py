@@ -41,7 +41,7 @@ GUI = ("empty-a", "empty-b", "installed-a", "installed-b", "stable-a", "updated-
 PREPARATION = ("source-commit", "source-tree", "source-clean", "source-final-clean", "go-version",
                "controller-build", "installer-build", "probe-build", "trusted-node-version", "trusted-npm-ci",
                "trusted-tsc-version", "trusted-tsc", "publisher-version", "publisher-help")
-SCANNER_ARCHIVE = "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da"
+SCANNER_ARCHIVE = "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b"
 
 
 def guard():
@@ -229,7 +229,7 @@ class Preparation:
 
 
 def acquire_scanner(root, budget):
-    kind, repository, version, archive, pin, basename = publisher.native.PINS["linux-amd64"]["lintai"]
+    kind, repository, version, archive, pin, basename = publisher.native.current_source_scanner_pin("linux-amd64")
     if kind != "github" or pin != "sha256:" + SCANNER_ARCHIVE:
         raise ValueError("reviewed scanner archive differs")
     spec = {"url": "https://github.com/" + repository + "/releases/download/" + version + "/" + archive,
@@ -409,7 +409,7 @@ def contracts():
         raise AssertionError("incomplete controller success admitted")
     if (legacy.ROOT_TIMEOUT, legacy.ROOT_KILL) != (460, 470):
         raise AssertionError("legacy controller bounds changed")
-    if SCANNER_ARCHIVE != publisher.native.PINS["linux-amd64"]["lintai"][4].removeprefix("sha256:"):
+    if SCANNER_ARCHIVE != publisher.native.current_source_scanner_pin("linux-amd64")[4].removeprefix("sha256:"):
         raise AssertionError("scanner archive pin differs")
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)

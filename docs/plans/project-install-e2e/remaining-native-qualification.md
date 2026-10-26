@@ -2067,3 +2067,57 @@ by matrix REQUIRED_TESTS|PROJECT_TESTS, supported genuine OS matrix andno-skip r
 plus all affected remaining-client public/runtime gates on exact combined source.
 Frozen GNU lanes remain distinct from source portable proof. Preserve auth/model
 limitations, independent raw review andall merge/release gates.
+
+
+## Portable scanner implementation: review and inert validation
+
+The accepted policy plan was recorded before source changes in e769538689f44e68b8b93ab071454b309be98410.
+Final independently reviewed file manifests are desktop 9 files SHA-256
+d7a190794ee0b54551c583ff49887e0bf813761fd32d42218235e08a8a8a3f26;
+root 7 files ff3047061840d21e711f687ab27228210949e31e018d1ef278601d46a97b6c26;
+and terminal 13 files 768b54cb3027fc7e1fc3da52d31b2aec725adfbd587ff93bd1239000e62173a0.
+Desktop's production/VS slice has root and CLI independent code GOs; root's
+shared producer/fixture slice has desktop and CLI independent code GOs. Terminal
+review found and fixed generated reproduction commands losing the declared
+legacy cache route; the final report contract checks both default and GNU keys.
+
+Actual local inert validation:
+- Full securityscan package PASS (0.190s) and full VS controller package PASS
+  (1.144s). After the request-capture mutex review fix, focused actual resolver
+  tests PASS (0.012s); production bytes were unchanged by that test-only fix.
+- New actual VS scanner acquisition handoff 3 tests PASS (0.002s), existing
+  workspace 17 PASS (0.219s), toolchain 8 PASS (0.010s), and frontend --contracts
+  PASS. The new suite is in the hosted workflow's existing bounded pre-vendor
+  inert command list, preserving original source/host guards.
+- Shared producer/runtime Python suites 145 PASS (4.106s) and the offline frozen
+  verifier substitution negative PASS (0.012s), as reported by the owning root
+  worker. Actual new Go scanner admission/cache tests PASS (0.010s), including
+  declared-CPU refusals and both truthful cache routes without scanner execution.
+- Terminal full inert discovery PASS: 99 tests (19.807s), 3 existing expected
+  real-installer/native-Windows skips. The final reproduction fix's 8 flow
+  contracts PASS (2.232s); no real installer or vendor ran locally.
+- Affected actual Required changed-line and unfiltered whole-file size/architecture
+  lint gates report 0 issues for desktop and shared Go slices. The 5 previously
+  documented inherited correctness/style findings remain unchanged; this does
+  not claim unfiltered all-linter zero.
+
+A broader local NativeFixture run failed in unchanged immutable Git acquisition:
+ordinary process containment preflight returned ErrOrdinaryContainmentUnsupported
+because this environment lacks the live task children primitive. No full fixture
+PASS is claimed; no containment guard, skip or production fallback was added.
+No vendor executable ran locally. The final exact published source still needs
+its genuine Ubuntu 22 UID/mount/cache gate, real public scan/evaluate/install,
+complete editor/MCP lifecycle and cleanup evidence, plus the retained required
+Claude/Codex/OpenCode and remaining-client native gates. Static ELF compatibility,
+inert cache hits and these contracts do not establish native qualification.
+
+The final terminal 13-file manifest has root and CLI independent code GOs,
+with an additional independent desktop review and the reproduction finding fixed.
+
+Same-parent CI alignment copies exactly two files from parent
+`b16b5c5d28cdc734856ac414521d40d9c8d8dfd5`: project-native-runtime.yml blob
+`66fb12161a3d1cfe6992cfeada8fbf44ad54fda6` and project-native-research.yml blob
+`3527cc1a416407850af2b858a79a6cc2668109fd`. Root independently compared the
+remote full bytes; desktop confirmed the local blobs and concurrency-only diff.
+Groups now distinguish event/run identity, and only PR runs cancel superseded
+PR work. No runtime/native gate changes accompany this alignment.

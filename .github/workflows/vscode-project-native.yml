@@ -75,6 +75,7 @@ jobs:
           commands = [(['/usr/bin/python3', 'scripts/research-vscode-project.py', '--contracts'], 10),
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_project_native_vscode_toolchain.py'], 30),
                       (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_workspace_research.py'], 30),
+                      (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_project_research.py'], 30),
                       ([str(go), 'test', '-p=1', './install/integrationctl/research/vscodeworkspace'], 240),
                       ([str(go), 'test', '-p=1', './repotests', '-run', '^TestVSCodeProjectGatewayEvidence', '-count=1'], 240)]
           for index, (argv, seconds) in enumerate(commands):

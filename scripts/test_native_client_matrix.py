@@ -22,6 +22,19 @@ RELEASED_SPEC.loader.exec_module(released)
 
 
 class NativeMatrixTests(unittest.TestCase):
+    def test_offline_frozen_verifier_rejects_portable_source_scanner_substitution(self):
+        record = {}
+        for field, name in (('client_asset', 'codex'), ('scanner_asset', 'lintai'), ('ripgrep_asset', 'rg')):
+            kind, repo, version, archive, integrity, _ = released.pins()['linux-amd64'][name]
+            record[field] = dict(source=f'https://github.com/{repo}/releases/tag/{version}', version=version,
+                                 archive=archive, archive_integrity=integrity, binary_sha256='a'*64)
+        released.verify_tools(record, 'linux-amd64', 'codex')
+        _, repo, version, archive, integrity, _ = matrix.current_source_scanner_pin('linux-amd64')
+        record['scanner_asset'].update(source=f'https://github.com/{repo}/releases/tag/{version}',
+                                       version=version, archive=archive, archive_integrity=integrity)
+        with self.assertRaisesRegex(ValueError, 'wrong pinned tool: scanner_asset'):
+            released.verify_tools(record, 'linux-amd64', 'codex')
+
     def test_release_identity_rejected_before_network(self):
         for tag, commit, repo in [("latest", "a" * 40, "777genius/universal-agent-plugins"), ("agentplugins-v1.2.3", "main", "777genius/universal-agent-plugins"), ("agentplugins-v1.2.3", "a" * 40, "other/repo"), ("agentplugins-v1.2.3", "a" * 40, "777genius/plugin-kit-ai")]:
             with patch.object(matrix.subprocess, "check_output") as network:

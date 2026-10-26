@@ -44,19 +44,48 @@ To exercise a real scanner, supply the pinned archive (no download occurs):
 
 ```sh
 python3 scripts/terminal-ui/harness.py --binary /tmp/frozen-agentplugins \
-  --scanner-archive /tmp/lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz \
+  --scanner-archive /tmp/lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz \
   --artifacts /tmp/pty-real-scanner
 ```
 
 The archive SHA256 must equal
-`2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da`.
+`3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b`.
 Only its regular `lintai` member is copied; archive paths are never extracted.
-Alternatively use `--scanner-binary PATH --scanner-sha256 TRUSTED_DIGEST` for a
-native executable from a separately verified source. The frozen scanner and both
-archive/executable hashes are saved in evidence. Real scanner runs still use only
-the synthetic package; they are not general scanner/security release proof.
+Known pinned archives select their own cache identity: the musl archive above
+uses `linux-amd64-musl`; the retained GNU archive
+`lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz` (SHA256
+`2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da`)
+uses the original `linux-amd64` cache for a compatible supplied old installer.
+An explicit conflicting `--scanner-cache-platform` is rejected. No bytes are
+relabelled, no second cache is seeded, and no ABI probe or retry selects a variant.
+
+Alternatively supply trusted raw bytes with
+`--scanner-binary PATH --scanner-sha256 TRUSTED_DIGEST`. On Linux amd64 this
+also requires an explicit `--scanner-cache-platform linux-amd64-musl` or
+`--scanner-cache-platform linux-amd64`. The declaration controls only the
+disposable fixture cache. Raw bytes remain **caller-declared/unclassified**;
+even a matching digest does not prove ABI, official archive identity, portable
+policy or installer/source equivalence. The verified bytes are frozen before
+fixture copies. Archive runs record the archive/member and executable digest;
+raw runs record their trusted digest and declared placement. Both still use
+only the synthetic package and are not general scanner/security release proof.
+
+Without a scanner input the source-policy default is the UI-only synthetic
+stub in `linux-amd64-musl` on Linux amd64. For a supplied old installer, pass
+`--scanner-cache-platform linux-amd64` to retain the original synthetic placement.
+The same cache-only option is supported by selection, plugin, UI regression,
+resilience and packed-npm flows. Selection `--build-go` builds current source and
+rejects a legacy GNU declaration before building. The finite historical-state
+flow retains one original synthetic cache explicitly, without claiming that
+historical releases consume a scanner. macOS and Windows cache paths are
+unchanged; native Windows still requires a verified real scanner.
+
+The workflow always builds source and provisions its scanner with the shared
+current-source pin selector. Manual supplied binaries and npm packaging alone
+do not establish source equivalence. Preserve their recorded limitations.
 Dead proxies and local fixtures are not firewall-level network attestation.
-Linux here means glibc, not musl. Freeze a private copy of a changing CLI build
+Portable scanner selection does not qualify terminal behavior on a musl host;
+actual coverage remains limited to the recorded native image and run. Freeze a private copy of a changing CLI build
 output before invoking the Unix harness; its hash is recorded in `results.json`.
 
 ## Cases and evidence

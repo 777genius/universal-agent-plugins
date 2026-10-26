@@ -463,7 +463,7 @@ def prepare(selector, ctx):
     identity["runtime_files"] = [{"path": str(path), "sha256": digest} for path, digest in client_ids.items()]
     ctx.identities.update(client_ids)
     del contents
-    kind, repository, version, archive, pin, basename = shared.native.PINS["linux-amd64"]["lintai"]
+    kind, repository, version, archive, pin, basename = shared.native.current_source_scanner_pin("linux-amd64")
     if kind != "github" or not archive.endswith(".tar.gz"):
         raise ValueError("pinned scanner acquisition differs")
     spec = {"url": "https://github.com/" + repository + "/releases/download/" + version + "/" + archive,

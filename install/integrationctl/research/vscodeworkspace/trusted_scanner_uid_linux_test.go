@@ -58,7 +58,7 @@ func scannerUIDContract(t *testing.T) {
 	root, state := filepath.Join(base, "trusted"), filepath.Join(base, "trusted", "installer-state")
 	security := filepath.Join(state, "security")
 	lintai := filepath.Join(security, "lintai")
-	version, platform := filepath.Join(lintai, "0.1.3"), filepath.Join(lintai, "0.1.3", "linux-amd64")
+	version, platform := filepath.Join(lintai, "0.1.3"), filepath.Join(lintai, "0.1.3", "linux-amd64-musl")
 	binary := filepath.Join(platform, "lintai")
 	assessments := filepath.Join(security, "assessments")
 	external, err := os.MkdirTemp("/tmp", "uap-vscode-scanner-decoy-")

@@ -392,7 +392,8 @@ def run_case(name, args):
     evidence = args.artifacts / name
     evidence.mkdir()
     with tempfile.TemporaryDirectory(prefix='huh-conpty-é-') as root:
-        fixture = Fixture(root, args.scanner_path)
+        fixture = Fixture(root, args.scanner_path,
+                          scanner_cache_platform=getattr(args, "scanner_cache_platform", None))
         fixture.env.pop('TERM')
         nonce = uuid.uuid4().hex
         status_path = evidence / 'status.json'
@@ -492,7 +493,7 @@ def main():
         results.append(result); print(json.dumps(result), flush=True)
         (args.artifacts / 'results.json').write_text(json.dumps(dict(platform=platform.platform(),
             python=platform.python_version(), binary_sha256=hashlib.sha256(payload).hexdigest(),
-            scanner=scanner, mode='native ConPTY, TERM unset, Plain required', results=results), indent=2), encoding='utf-8')
+            scanner=scanner, scanner_cache_platform=args.scanner_cache_platform, mode='native ConPTY, TERM unset, Plain required', results=results), indent=2), encoding='utf-8')
     return int(any(r['status'] == 'failed' for r in results))
 
 

@@ -12,7 +12,7 @@ import re
 import subprocess
 import tempfile
 
-from harness import Fixture, Session, SELECT, CONFIRM, LIFECYCLE, check, clean, selection_choices
+from harness import Fixture, Session, SELECT, CONFIRM, LIFECYCLE, check, clean, selection_choices, scanner_cache_options, resolve_scanner_cache_platform
 
 CASES = ('plain-queued-enter', 'plain-queued-yes', 'plain-default-yes',
          'plain-queued-lifecycle', 'plain-no', 'plain-cancel',
@@ -20,11 +20,11 @@ CASES = ('plain-queued-enter', 'plain-queued-yes', 'plain-default-yes',
          'group-narrow', 'group-plain')
 
 
-def run_case(name, binary, evidence, timeout):
+def run_case(name, binary, evidence, timeout, scanner_cache_platform=None):
     evidence.mkdir()
     with tempfile.TemporaryDirectory(prefix='ui-regression-') as tmp:
         grouped = name.startswith(('json-', 'group-'))
-        fixture = Fixture(tmp, include_opencode=grouped)
+        fixture = Fixture(tmp, include_opencode=grouped, scanner_cache_platform=scanner_cache_platform)
         if name.startswith('group-'):
             skill = fixture.package / 'skills' / 'ui-regression' / 'SKILL.md'
             skill.parent.mkdir(parents=True)
@@ -104,13 +104,15 @@ def main():
     parser.add_argument('--artifacts', required=True, type=Path)
     parser.add_argument('--case', choices=CASES, action='append')
     parser.add_argument('--timeout', type=float, default=12)
+    scanner_cache_options(parser)
     args = parser.parse_args()
+    cache_platform = resolve_scanner_cache_platform(args.scanner_cache_platform)
     binary = args.binary.resolve(strict=True)
     args.artifacts.mkdir(parents=True, exist_ok=False)
     results = []
     for name in args.case or CASES:
         try:
-            run_case(name, binary, args.artifacts / name, args.timeout)
+            run_case(name, binary, args.artifacts / name, args.timeout, scanner_cache_platform=cache_platform)
             result = {'case': name, 'status': 'passed'}
         except Exception as exc:
             result = {'case': name, 'status': 'failed', 'error': str(exc)}
@@ -119,6 +121,7 @@ def main():
         (args.artifacts / 'results.json').write_text(json.dumps({
             'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
             'scanner': 'synthetic cached protocol stub; no security proof',
+            'scanner_cache_platform': cache_platform,
             'results': results}, indent=2))
     return int(any(r['status'] != 'passed' for r in results))
 

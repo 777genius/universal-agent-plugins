@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import tarfile
 
-from harness import Fixture, check
+from harness import Fixture, check, native_scanner_cache_platform
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -104,7 +104,8 @@ def release_flow(current, go, tag, version, expected_schema, root):
     workspace.mkdir()
     historical, commit = build_release(
         go, tag, version, workspace, evidence)
-    fixture = Fixture(workspace / "fixture")
+    fixture = Fixture(workspace / "fixture",
+                      scanner_cache_platform=native_scanner_cache_platform())
     env = dict(fixture.env)
 
     created = run([
@@ -180,6 +181,8 @@ def release_flow(current, go, tag, version, expected_schema, root):
         "version": version,
         "legacy_schema": expected_schema,
         "historical_binary_sha256": sha256_bytes(historical.read_bytes()),
+        "scanner": "SYNTHETIC compatibility cache; historical scanner use and source-portable policy are not established",
+        "scanner_cache_platform": fixture.scanner_cache_platform,
         "historical_state_sha256": sha256_bytes(original),
         "migrated_state_sha256": sha256_bytes(state_path.read_bytes()),
         "status": "pass",

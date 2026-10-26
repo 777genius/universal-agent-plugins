@@ -2,6 +2,9 @@
 import argparse
 import importlib.util
 import json
+import io
+import tarfile
+from unittest.mock import patch
 import os
 from pathlib import Path
 import sys
@@ -101,7 +104,7 @@ class ScannerTests(unittest.TestCase):
             source.write_bytes(b'synthetic scanner bytes')
             args = argparse.Namespace(scanner_archive=None, scanner_binary=source,
                                       scanner_sha256=h.hashlib.sha256(source.read_bytes()).hexdigest(),
-                                      artifacts=root)
+                                      artifacts=root, scanner_cache_platform=h.resolve_scanner_cache_platform())
             receipt = h.prepare_scanner(args)
             source.write_bytes(b'changed after verification')
             self.assertEqual(args.scanner_path.read_bytes(), b'synthetic scanner bytes')
@@ -116,10 +119,110 @@ class ScannerTests(unittest.TestCase):
             archive = root / 'lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz'
             archive.write_bytes(b'not the pinned archive')
             args = argparse.Namespace(scanner_archive=archive, scanner_binary=None,
-                                      scanner_sha256=None, artifacts=root)
-            with self.assertRaisesRegex(AssertionError, 'SHA256'): h.prepare_scanner(args)
+                                      scanner_sha256=None, artifacts=root, scanner_cache_platform=None)
+            with self.assertRaisesRegex(AssertionError, 'SHA256|another host'): h.prepare_scanner(args)
             args.scanner_archive = None; args.scanner_binary = archive
+            args.scanner_cache_platform = h.resolve_scanner_cache_platform()
             with self.assertRaisesRegex(AssertionError, 'SHA256'): h.prepare_scanner(args)
+
+
+class ScannerCacheIdentityTests(unittest.TestCase):
+    def platform(self, system='Linux', machine='x86_64'):
+        from contextlib import ExitStack
+        stack = ExitStack()
+        stack.enter_context(patch.object(h.platform, 'system', return_value=system))
+        stack.enter_context(patch.object(h.platform, 'machine', return_value=machine))
+        return stack
+
+    def args(self, root, **extra):
+        return argparse.Namespace(artifacts=root, scanner_archive=None,
+                                  scanner_binary=None, scanner_sha256=None,
+                                  scanner_cache_platform=None, **extra)
+
+    def test_source_default_and_legacy_stub_seed_only_their_own_cache(self):
+        with self.platform(), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for key in (None, 'linux-amd64'):
+                args = self.args(root)
+                args.scanner_cache_platform = key
+                self.assertIn('SYNTHETIC', h.prepare_scanner(args))
+                fixture = h.Fixture(root / ('source' if key is None else 'legacy'),
+                                    scanner_cache_platform=args.scanner_cache_platform)
+                files = list((fixture.data / 'security/lintai/0.1.3').rglob('lintai'))
+                self.assertEqual(len(files), 1)
+                self.assertEqual(files[0].parent.name, 'linux-amd64-musl' if key is None else key)
+                self.assertIn(b'scan-agent-plugin', files[0].read_bytes())
+
+    def test_invalid_or_wrong_host_key_refuses_before_fixture_seed(self):
+        with self.platform(), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for key in ('../linux-amd64', '/tmp/other', 'darwin-arm64', 'windows-amd64', ''):
+                path = root / ('fixture-' + str(len(list(root.iterdir()))))
+                with self.subTest(key=key), self.assertRaises(AssertionError):
+                    h.Fixture(path, scanner_cache_platform=key)
+                self.assertFalse(path.exists())
+        for system, machine, key in (('Darwin', 'arm64', 'darwin-arm64'),
+                                     ('Windows', 'AMD64', 'windows-amd64'),
+                                     ('Linux', 'aarch64', 'linux-arm64')):
+            with self.platform(system, machine):
+                self.assertEqual(h.resolve_scanner_cache_platform(), key)
+                with self.assertRaises(AssertionError):
+                    h.resolve_scanner_cache_platform('linux-amd64-musl')
+
+    def test_raw_input_requires_explicit_declaration_and_stays_unclassified(self):
+        with self.platform(), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            raw = root / 'raw'
+            raw.write_bytes(b'inert trusted raw bytes; never executed')
+            args = self.args(root)
+            args.scanner_binary, args.scanner_sha256 = raw, h.hashlib.sha256(raw.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(AssertionError, 'explicit'):
+                h.prepare_scanner(args)
+            for key in ('linux-amd64', 'linux-amd64-musl'):
+                args.scanner_cache_platform = key
+                receipt = h.prepare_scanner(args)
+                self.assertEqual(receipt['cache_platform'], key)
+                self.assertEqual(receipt['cache_identity_basis'], 'caller-declared')
+                self.assertIn('unclassified', receipt['classification'])
+                self.assertNotIn('archive_sha256', receipt)
+                before = args.scanner_path.read_bytes()
+                raw.write_bytes(b'changed after verification')
+                self.assertEqual(args.scanner_path.read_bytes(), before)
+                raw.write_bytes(before)
+            args.scanner_sha256 = '0' * 64
+            with self.assertRaisesRegex(AssertionError, 'SHA256'):
+                h.prepare_scanner(args)
+
+    def test_archive_identity_controls_cache_and_conflicting_declaration_refuses(self):
+        # Extra inert records exercise the real digest/extraction/handoff without
+        # changing any official pin or executing the synthetic payload.
+        with self.platform(), tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for key in ('linux-amd64', 'linux-amd64-musl'):
+                buffer = io.BytesIO()
+                payload = b'inert archive member; never executed'
+                with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
+                    member = tarfile.TarInfo('inert/lintai'); member.size = len(payload)
+                    archive.addfile(member, io.BytesIO(payload))
+                path = root / (key + '.tar.gz'); path.write_bytes(buffer.getvalue())
+                record = (h.hashlib.sha256(path.read_bytes()).hexdigest(), key)
+                args = self.args(root); args.scanner_archive = path
+                with patch.dict(h.SCANNER_ARCHIVES, {path.name: record}):
+                    receipt = h.prepare_scanner(args)
+                    fixture = h.Fixture(root / key, args.scanner_path,
+                                        scanner_cache_platform=args.scanner_cache_platform)
+                    self.assertEqual(receipt['archive_member'], 'inert/lintai')
+                    self.assertEqual(receipt['executable_sha256'], h.hashlib.sha256(payload).hexdigest())
+                    self.assertEqual(receipt['cache_platform'], key)
+                    installed = list((fixture.data / 'security/lintai/0.1.3').rglob('lintai'))
+                    self.assertEqual([p.parent.name for p in installed], [key])
+                    args.scanner_cache_platform = 'linux-amd64' if key.endswith('-musl') else 'linux-amd64-musl'
+                    with self.assertRaisesRegex(AssertionError, 'conflicts'):
+                        h.prepare_scanner(args)
+            args = self.args(root)
+            args.scanner_archive = root / 'lintai-v0.1.3-aarch64-apple-darwin.tar.gz'
+            with self.assertRaisesRegex(AssertionError, 'another host'):
+                h.prepare_scanner(args)
 
 
 class ScreenTests(unittest.TestCase):
