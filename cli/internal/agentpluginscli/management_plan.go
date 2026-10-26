@@ -159,7 +159,7 @@ func (p *managementPrepared) prepareBindings(ctx context.Context, prior []depend
 	if err = p.backend.validateManagementActions(ctx, actions); err != nil {
 		return nil, nil, nil, err
 	}
-	if err = reserveSkillBindingIDs(actions, prior); err != nil {
+	if err = reserveSkillBindingIDs(view, actions, prior); err != nil {
 		return nil, nil, nil, err
 	}
 	detected, err := detectDependencyClients(ctx, p.preview)
