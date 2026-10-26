@@ -1849,3 +1849,221 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+
+## Reviewed portable scanner amendment (2026-10-26)
+
+Plan SHA-256: `d5fb2db3cceb112c974beed31f9144c91df7e93c213add0cbac2099fc037d0b0`.
+Independent plan reviews: root R1 GO and cli_completion R2 GO, both bound to this exact text before implementation.
+
+# Portable Linux amd64 scanner: observed-failure amendment
+
+This is the final plan for independent review, superseding the preparatory
+portable-policy and producer-coupling DRAFT notes. It changes no product source
+until two independent plan GOs and a recorded consolidated-plan commit.
+Preserve the existing scanner/evaluator, source/receipt, process, permission,
+trust/MCP, cleanup, artifact and qualification contracts in the consolidated plan.
+
+## Actual evidence and chosen surface
+
+Genuine run 40404315364 / job 121858008835 executed
+160906e8d9cc6ef15e07ca9775aa78b22b505f84/tree8be1c7a901ea2da91ad59b314f8a96a9feec9eef.
+Native artifact 12690158855 outerSHA256
+682c1914a94b00b3b80d89bed716b7dba9fdea2bbbb83d2e05cc2eae44b23fe1
+contains only research.zip with 20 canonical unique flat file members; frontend
+12689949178 outerSHA256fe69f497ef77ec826cda976a935feaa0000289e1693228c0a8dcbda734c9d565
+has the same envelope with 29 members. Root, CLI and desktop independently read
+these closed bytes. Actual add-user.merged.log (740B, SHA256
+248ff5a7e5d7a806ef7257f31ac492ab1a9d694bae85efa3368cad6dd352ba3c)
+now records scanner exit 1, zero stdout and actual libc.so.6 refusal for required
+GLIBC_2.39 from cached GNU lintai 0.1.3. This confirms that loader failure, without
+measuring the host's full libc version. Empty A/B passed; installation/MCP stopped;
+native/display cleanup false, frontend cleanup true, all five qualifications false.
+
+Keep Ubuntu 22 and every existing genuine-host/source/original-UID guard. Setup
+image 20261012.322.1 and environment image 20261023.322.3 conflict and remain separate
+facts. Prior Ubuntu 24 run 40182639794 failed the normal Electron sandbox; do not
+change host, AppArmor/sysctl, NNP/capabilities, executable modes, process/cgroup/
+namespace primitives, trust or sandbox flags to evade either retained failure.
+
+## Deterministic production choice and preservation
+
+For every declared linux/amd64 target, ReleaseScanner.resolve chooses the existing
+linux/amd64-musl asset and cache 0.1.3/linux-amd64-musl/lintai. Other targets stay
+unchanged. Keep GNU releaseAssets/cache bytes/history; never rewrite, migrate,
+delete or relabel them. GNU-only cache is not a portable hit. No ABI/file probe,
+retry/fallback, environment selector, new public option, dual seeding or extra
+process. Keep real scan-agent-plugin, repaired output bounds/diagnostics, report
+and policy identity/runtime-error checks, assessment semantics and transactions.
+
+Exact portable v0.1.3 archive is lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz,
+3,317,017 B, SHA256 3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b;
+member lintai-v0.1.3-x86_64-unknown-linux-musl/lintai is 9,797,344 B,
+SHA256 033cc9672601d318a2c8012f85905e02d9908d865b58ef665e7701816edb6f1a.
+Use only the existing official777genius/lintai v0.1.3 release origin and full
+archive/member admission. Static ELF64 x86-64 PIE has no PT_INTERP/DT_NEEDED/version
+table; that is compatibility evidence, not runtime qualification.
+
+Preservation inventory: usesMusl is current private filesystem-probe policy,
+one resolve caller, no external/public or legacy-YAML consumer/tests/dependencies
+owned by it. Adapt supported scanner resolution to the target condition and
+retire only this obsolete private probe. Preserve GNU asset/cache capability
+and all useful legacy source/tests/docs. No dummy caller, redundant exported API,
+unused suppression or other deletion. This disposition is part of plan review.
+
+## Source versus frozen producers: preserve the original literal manifest
+
+Keep PINS[linux-amd64][lintai] exact GNU unchanged. Add same-version sibling
+lintai-musl in that same literal manifest; runtime/prepared toolnames remain
+exactly client/lintai/rg, with no new target or record schema.
+
+Concrete shared helpers: frozen_installer(args) reuses the existing predicate
+release_tag OR draft OR prepared_input OR prepare_only; use it for current
+source-project admission and selection. current_source_scanner_pin(target)
+returns named musl only for linux-amd64, original scanner otherwise. A selected
+producer-tool-pin helper uses that source pin only outside frozen mode.
+Default release_state=public alone is NOT frozen: the actual source branch has
+no release_tag/prepared_input/prepare_only and builds ./cmd/agentplugins.
+Tagged public, authenticated draft, prepare-only and prepared consumption keep
+original GNU tuples. Preserve prepared_release/load_prepared exact tuples,
+state/tag/commit/target, file closure, PREPARED_SHA256, no credentials/acquisition
+fallback, offline literal-PINS verification and historical GNU provenance fixtures.
+
+Standalone prepared_tools, main pin admission and existing archive-SHA env must
+use the same selected pin. Require actual scanner_asset source/version/archive/
+integrity to match the selected producer pin BEFORE build/native execution;
+env archiveSHA comes from that verified receipt. GNU substitution cannot produce
+current-source portable proof. Keep installer/attestation/bootstrap/version and
+scanner_asset/provenance schemas unchanged; no new hidden mode env or inference
+from commit inequality. Current-source runtime/VS/TUI provisioner use the shared
+current_source_scanner_pin helper, not the historical default entry.
+
+Deliberate future boundary: preserving currently admitted frozenGNU installers
+does not admit a future post-policy released/draft producer automatically. Its
+portable scanner policy must be explicitly bound to its reviewed frozen producer
+identity/manifest before qualification. No version guessing, trying both variants
+or general multi-version framework now. No release is published in this program.
+
+## Actual fixture handoffs
+
+Go nativeProvisionScanner retains nativeBinary, nativeSHA, supplied expected hash,
+ordinary copy and rehash. A small private input-admission helper (declared OS/CPU,
+actual/expected binary digest, supplied archiveSHA→platform/error) maps Linux amd64
+GNU 2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da→linux-amd64,
+musl 3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b→linux-amd64-musl.
+Wrong digest, unknown archive or platform refuses before seeding; other platforms keep
+exact single pins. No host-loader probe. ArchiveSHA truthfully routes supplied
+bytes, not producer policy: source→musl enforcement remains at authenticated
+Python acquisition above, not an isolated Go receipt.
+
+VS SCANNER_ARCHIVE/trustedScannerArchive and sealed/UID cachechain change to the
+portable tuple/key. Preserve bounded archive/unique ordinary member/hash handoff,
+held ancestry/root modes, exact single self-bind, valid exchange-denial geometry,
+real state/lock/assessment writes, no-network actual ReleaseScanner cache test,
+ordinary unmount and fail-closed cleanup. Hosted UID/mount gate stays mandatory
+before vendor execution; inert ELF cannot become report/native proof.
+
+## Terminal UI preserving manual/raw compatibility
+
+Workflow always builds source: provision_scanner uses shared sourcepin helper;
+Linux matrix filename becomes musl; other OS entries unchanged. Add musl to
+known archive/pin/cache-identity records while retaining GNU mappings/history.
+Known archive determines truthful key; conflicting explicit declaration fails.
+
+Add harness-only --scanner-cache-platform / optional Fixture keyword. Validate
+fixed key against actual OS/CPU before seeding/execution; no arbitrary path or
+product CLI/env option. Linux amd64 source default islinux-amd64-musl, other native
+keys unchanged. Raw trusted-SHA input onLinux amd64 requires explicitGNU-or-musl
+cache declaration: frozen raw bytes stay trusted raw/unclassified, cache is
+caller-declared, never pinned-asset/ABI/portable-policy proof even on hash match.
+Preserve useful manual/raw input, trusted hash and frozen copy; other platforms'
+raw behavior unchanged. No-scanner stubs stay SYNTHETIC/UI-only, with source
+musl default and explicitGNU legacy placement. No dual seeding or autodetection.
+
+Forward the declaration through every arbitrary-binary consumer/nestedFixture:
+harness, resilience, selection --binary, plugin_matrix, ui_regressions,
+Windows ConPTY and npm_packed_flow. Selection --build-go is a known current-source producer: reject
+an explicit legacy GNU cache declaration BEFORE any build or fixture creation.
+Keep explicit GNU placement available for arbitrary supplied --binary; it is
+not source-policy proof. Windows retains its correct
+.exe cache and mandatory-real-scanner rule. Record actual known archive/member
+hash and resolved key; preserve raw/synthetic limitations. Update README current
+and oldGNU/raw examples; distinguish archive compatibility from actually executed
+host coverage (portable scanner does not qualify a musl-host terminal run).
+
+Two additional production Fixture consumers are explicitly preserved:
+- historical_state_flow builds the existing finite RELEASES (agentplugins-v0.1.4,
+  v0.1.5 and v0.1.6). Preserve its original Linux amd64 GNU SYNTHETIC fixture placement
+  explicitly, retaining one cache rather than applying the new source default;
+  other platforms retain their existing key. This is fixture compatibility, not
+  a claim that these historical producers execute lintai or prove its ABI.
+  Actual historical main wiring lacks the current scanner evaluator; keep the
+  historical add, current update-before-migration refusal, migrate/remove,
+  backup/state/cleanup checks and supplied-current-binary provenance. None of
+  these migration steps establishes current-source portable scanner policy.
+  No dual cache, source-portable proof or generic future-tag inference.
+- npm_packed_flow merely admits a supplied --binary file and packs those bytes;
+  its npm wrapper/manifest does not prove construction from current source.
+  Forward the same harness-only manual cache declaration, with source-placement
+  default and explicit GNU route, and preserve supplied/synthetic provenance
+  limitations. Record resolved cache placement without claiming installer/source
+  equivalence from the wrapper. No new product switch or scanner execution.
+
+## Disjoint implementation ownership and gates
+
+After both plan GOs, desktop records this exact accepted text in consolidated document
+BEFORE code. Work in existing desktop checkout; no clones or mixed early commits.
+
+- Desktop: securityscan/release.go +new resolver tests; research-vscode-project.py;
+  VS trusted_budget/seed/UID and affectedcontracts; consolidatedplan/final staging.
+- Root: run-native-client-matrix.py +producer/prepared tests; project_native_runtime.py
+  andtests; nativefixtureGo +small admission helper and inert cache tests.
+- Shell: terminal-ui harness/provisioner/resilience/windows_conpty/selection/plugin/
+  ui_regressions, historical_state_flow, npm_packed_flow, terminal-ui.yml, README
+  and affected focusedtests (including new small flow-contract tests if needed).
+- CLI independentcritic. Rootcode reviewed desktop+CLI; desktop/shell reviewed
+  root+CLI; exactassembledtree reviewed before finalcommit/push. Desktop stages/
+  commits only after all workers report. Preserve scanner.go diagnostic/boundfix.
+
+Meaningful inert requirements:
+1. Actualresolve proves portable selection with existing GNU-only cache, exact musl
+   request/checksum refusal, correct cache hit/no network, GNU unchanged andother
+   targets unchanged; no vendor execution or productiondigest mutation.
+2. Full securityscan keeps actual both-stream cap+1 exit0/1, valid exit-one reports/full evaluator,
+   policy/report/runtime errors andassessment cache gates.
+3. Actual producer helpers cover default source/tagged public/prepared public/draft/
+   prepare-only and refuse GNU source substitution before execution. Preserve strict
+   three-tool sets, prepared no-network/tamper/missing/mixed/credential refusals,
+   AST literal pin verification andallhistorical GNU fixtures.
+4. Go admission negatives use errors, not a native child; positive tests call actual
+   nativeProvisionScanner with inert ordinary bytes and verify two truthful cache
+   routes/unchanged other cache. Retain full native fixture identity/framing tests.
+5. Full VS controller, frontend --contracts, toolchain/workspace/native research
+   andgatewaywrapper contracts remain; genuine UID/mount is explicitly unproved
+   locally. Pythonmatrix/linux/draft/released/runtime/research/capture/artifact
+   contracts run where affected, with actual handoff negatives, not constant mirrors.
+6. TUI tests prove source-only musl, known GNU, archive-conflict/wrong-host/key refusal,
+   raw explicit declaration + trusted hash/unclassified record/freeze, all nested option
+   propagation, --build-go legacy-declaration refusal before build/fixture,
+   UI-only stubs, non-Linux/Windows preservation and provisioner filename.
+   Historical flow tests exercise its real fixture-construction seam with inert
+   builders/runners: finite historical GNU SYNTHETIC placement, exactly one cache,
+   retained operation/migration/remove order and no scanner-execution or
+   source-portable claim. npm flow tests
+   exercise argument-to-Fixture propagation for default and explicit legacy key,
+   refusing invalid/wrong-host placement before packing/execution and preserving
+   supplied/synthetic provenance. No historical or vendor binary executes locally.
+7. Actual Required changed-lines +whole-file size/architecture gates in affected
+   modules, existing config/toolchain. Report inherited untouched debt honestly;
+   no suppression/baseline growth/unrelated cleanup. Coordinate private Go/lintslot.
+
+After code GOs and inert PASS, genuine unchangedUbuntu 22VS must run the UID/mount/cache gate,
+then real public add-user/A/B scan/evaluate/install on fresh nonce-bound packages/empty
+assessment cache with exact portable bytes. Inspect existing closed provenance,
+public results, receipts, all native MCP stages andfull cleanup; download/static ELF/
+cache hit alone never qualifies. New failure needs observed-contract review.
+Retain all 14 existing Claude/Codex/OpenCode user/project required tests selected
+by matrix REQUIRED_TESTS|PROJECT_TESTS, supported genuine OS matrix andno-skip rule,
+plus all affected remaining-client public/runtime gates on exact combined source.
+Frozen GNU lanes remain distinct from source portable proof. Preserve auth/model
+limitations, independent raw review andall merge/release gates.
