@@ -5,6 +5,7 @@ before a scope-observation case can be registered. No ACP session is started.
 """
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import stat
@@ -33,6 +34,11 @@ HELP = (
 )
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
 _ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
+_RUNTIME_MEMBERS = {
+    "kiro-cli": "94cae7e349f76869a19eae335a5b392fba8515743b1c2822b9ea33128c067cc6",
+    "kiro-cli-chat": "596c48b3cba6db1f5c043434c20a5fd1d23ea7d35eb0b70e3bcfe4144d93a79c",
+    "kiro-cli-term": "b43d2c9b15accdac83724225660ae9d02214598f88897d87abacac1f0208b7d3",
+}
 _SGR = re.compile(r"\x1b\[[0-9;]*m")
 _ERROR = re.compile(r"authentication required|not logged in|please log ?in|login required|\berror:", re.I)
 
@@ -49,10 +55,39 @@ def _parents(path):
         raise ValueError("Kiro fixture parent alias refused")
 
 
+def _runtime_bin(ctx):
+    root = Path(ctx.root)
+    if not root.is_absolute() or root.resolve() != root:
+        raise ValueError("Kiro runtime root alias refused")
+    directory = root / "client/kirocli/bin"
+    if ctx.argv != [str(directory / "kiro-cli")]:
+        raise ValueError("Kiro requires the exact acquired launcher path")
+    for name, digest in _RUNTIME_MEMBERS.items():
+        path = directory / name
+        _parents(path)
+        try:
+            info = path.lstat()
+        except OSError as error:
+            raise ValueError("Kiro pinned runtime companion absent") from error
+        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700
+                or ctx.identities.get(path) != digest):
+            raise ValueError("Kiro pinned runtime companion identity/mode refused")
+    # Context.probe independently rehashes every acquired regular member before
+    # and after each child. These three exact hashes bind PATH to that closure.
+    return directory
+
+
 def _probe(ctx, owned, label, arguments, project="a"):
     if label == "all-help" and tuple(arguments) != ("--help-all",):
         raise ValueError("Kiro all-help stderr exception requires exact argv")
-    record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
+    directory = _runtime_bin(ctx)
+    if ctx.env.get("PATH") != str(directory) + ":/usr/bin:/bin":
+        raise ValueError("Kiro acquired companion PATH changed")
+    try:
+        record, stdout, stderr = ctx.probe(label, list(arguments), project=project, timeout=30)
+    finally:
+        _runtime_bin(ctx)
     expected_stderr = _ALL_HELP_STDERR if label == "all-help" else b""
     if (not isinstance(record, dict) or type(record.get("exit")) is not int
             or record["exit"] != 0 or "error" not in record or record["error"] is not None
@@ -76,6 +111,10 @@ def collect(ctx):
                    for path in projects.values())):
         raise ValueError("Kiro requires distinct projects and original user home")
     owned = {}
+    directory = _runtime_bin(ctx)
+    if ctx.env.get("PATH") != "/usr/bin:/bin":
+        raise ValueError("Kiro research requires the original closed system PATH")
+    ctx.env["PATH"] = str(directory) + ":/usr/bin:/bin"
     version = _probe(ctx, owned, "version", ("--version",))
     if version != "kiro-cli " + VERSION:
         raise ValueError("Kiro version differs from immutable pin")

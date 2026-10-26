@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from project_native_collectors import kiro
 
@@ -12,12 +13,22 @@ class FakeContext:
         self.root = Path(root)
         self.home = self.root / "home"
         self.projects = {scope: self.root / scope for scope in ("a", "b", "user")}
-        self.calls, self.replace, self.env, self.argv = [], {}, {}, ["/not/executed/kiro-cli"]
+        self.calls, self.replace, self.env = [], {}, {"PATH": "/usr/bin:/bin"}
+        self.probe_envs, self.identities = [], {}
         for path in (self.home, *self.projects.values()):
             path.mkdir()
+        directory = self.root / "client/kirocli/bin"
+        directory.mkdir(parents=True)
+        for name, digest in kiro._RUNTIME_MEMBERS.items():
+            path = directory / name
+            path.write_text("inert metadata fixture; never executed\n")
+            path.chmod(0o700)
+            self.identities[path] = digest
+        self.argv = [str(directory / "kiro-cli")]
 
     def probe(self, label, arguments, project="a", extra_env=None, timeout=30):
         self.calls.append((label, arguments, project, extra_env, timeout))
+        self.probe_envs.append(dict(self.env))
         if label in self.replace:
             replacement = self.replace[label]
             return replacement() if callable(replacement) else replacement
@@ -49,6 +60,8 @@ class KiroCollectorTests(unittest.TestCase):
         self.assertFalse(any(value for key, value in facts.items() if key.endswith("_qualified")))
         self.assertEqual(len(facts["raw_source_list_observations"]), 6)
         self.assertEqual(len(ctx.calls), 14)
+        for env in ctx.probe_envs:
+            self.assertEqual(env, {"PATH": str(ctx.root / "client/kirocli/bin") + ":/usr/bin:/bin"})
         for _, arguments, _, extra_env, timeout in ctx.calls:
             self.assertIn(arguments, [["--version"], *[list(args) for _, args, _ in kiro.HELP],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
@@ -59,6 +72,49 @@ class KiroCollectorTests(unittest.TestCase):
             document = json.loads((root / ".kiro/settings/mcp.json").read_text())
             self.assertEqual(set(document["mcpServers"]), {kiro.NAMES[scope]})
             self.assertIs(document["mcpServers"][kiro.NAMES[scope]]["disabled"], True)
+
+    def test_companion_path_identity_and_mode_are_required_before_any_child(self):
+        for mutation in ("argv", "missing", "identity", "mode", "link", "hardlink", "owner", "path"):
+            ctx = self.context()
+            companion = ctx.root / "client/kirocli/bin/kiro-cli-chat"
+            if mutation == "argv":
+                ctx.argv = [str(companion)]
+            elif mutation == "missing":
+                companion.unlink()
+            elif mutation == "identity":
+                ctx.identities[companion] = "0" * 64
+            elif mutation == "mode":
+                companion.chmod(0o600)
+            elif mutation == "link":
+                companion.unlink()
+                companion.symlink_to("kiro-cli")
+            elif mutation == "hardlink":
+                (companion.parent / "unexpected-hardlink").hardlink_to(companion)
+            elif mutation == "path":
+                ctx.env["PATH"] = "/unexpected:/usr/bin:/bin"
+            with self.subTest(mutation=mutation):
+                if mutation == "owner":
+                    with patch.object(kiro.os, "getuid", return_value=companion.stat().st_uid + 1):
+                        with self.assertRaises(ValueError):
+                            kiro.collect(ctx)
+                else:
+                    with self.assertRaises(ValueError):
+                        kiro.collect(ctx)
+                self.assertEqual(ctx.calls, [])
+
+    def test_companion_change_after_child_and_path_change_before_next_are_refused(self):
+        for mutation in ("mode", "path"):
+            ctx = self.context()
+            def changed():
+                if mutation == "mode":
+                    (ctx.root / "client/kirocli/bin/kiro-cli-chat").chmod(0o600)
+                else:
+                    ctx.env["PATH"] = "/usr/bin:/bin"
+                return {"exit": 0, "error": None}, b"kiro-cli 2.34.0\n", b""
+            ctx.replace["version"] = changed
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                kiro.collect(ctx)
+            self.assertEqual(len(ctx.calls), 1)
 
     def test_help_advertisement_does_not_claim_selected_runtime_mode(self):
         ctx = self.context()
