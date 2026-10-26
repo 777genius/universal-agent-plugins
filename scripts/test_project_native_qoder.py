@@ -118,6 +118,19 @@ class QoderAcquisitionContract(unittest.TestCase):
             with self.subTest(body=body), self.assertRaises(ValueError):
                 leaf.parse_help(body, listing)
 
+    def test_measured_main_usage_requires_exact_query_suffix(self):
+        leaf = load_leaf()
+        usage = "Usage: qodercli [options] [command] [query...]"
+        body = (usage + "\n\nOptions:\n  -h, --help  display help for command\n").encode()
+        self.assertEqual(leaf.HELP[0][2], usage)
+        self.assertEqual(leaf.parse_help(body, usage), usage)
+        for wrong in [body.replace(b" [query...]", b""),
+                      body.replace(b" [query...]", b" [query...] [extra]"),
+                      body.replace(b"[command] [query...]", b"[query...] [command]"),
+                      body.replace(b"qodercli ", b"qodercli-other ")]:
+            with self.subTest(body=wrong), self.assertRaises(ValueError):
+                leaf.parse_help(wrong, usage)
+
     def test_reuses_preserved_reviewed_archive_and_binary_identities(self):
         # Read literal pins without importing the legacy acquisition machinery.
         tree = ast.parse((SCRIPTS / "research-qoder-native.py").read_text(encoding="utf-8"))

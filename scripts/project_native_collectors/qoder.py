@@ -19,7 +19,7 @@ ACQUISITION = {
     "binary_sha256": "0da0976e13fe00bc28f725d6fe7c2f0fe9fa9a8c37eeb2ee4e80ad4c0fc58953",
 }
 HELP = (
-    ("top-help", ("--help",), "Usage: qodercli [options] [command]"),
+    ("top-help", ("--help",), "Usage: qodercli [options] [command] [query...]"),
     ("plugins-help", ("plugins", "--help"), "Usage: qodercli plugins|plugin [options] [command]"),
     ("plugins-list-help", ("plugins", "list", "--help"), "Usage: qodercli plugins list [options]"),
     ("mcp-help", ("mcp", "--help"), "Usage: qodercli mcp [options] [command]"),
