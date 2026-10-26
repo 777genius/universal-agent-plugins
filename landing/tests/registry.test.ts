@@ -439,6 +439,18 @@ describe('unified registry landing', () => {
     assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target codex,cursor$/);
   });
 
+  it('reserves a local logo for the newly published marketing kit', () => {
+    const plugin = { ...registry.plugins[0]!, name: 'marketing-kit', built_in: true };
+    assert.equal(mirroredIconPath(plugin), 'plugin-icons/marketing-kit.svg');
+    const svg = readFileSync(resolve(root, 'public/plugin-icons/marketing-kit.svg'), 'utf8');
+    assert.match(svg, /<svg\b[^>]*\bviewBox=/);
+    assert.doesNotMatch(
+      svg,
+      /<(?:script|foreignObject|image)\b|\bon\w+\s*=|(?:href|xlink:href)\s*=/i,
+    );
+    assert.equal(mirroredIconPath({ ...plugin, built_in: false }), undefined);
+  });
+
   it('gives every reviewed plugin its own local plugin or publisher logo', () => {
     const publisherAliases: Record<string, string> = {
       'chrome-devtools': 'googlechrome',
