@@ -35,6 +35,18 @@ type independentActivationResult struct {
 	err            error
 }
 
+type independentClientOperation func(context.Context) (domain.ActivationOutcome, error)
+
+type independentActivationRun struct {
+	session    *groupSession
+	activator  ports.IndependentClientActivator
+	ctx        context.Context
+	cancel     context.CancelCauseFunc
+	results    chan independentActivationResult
+	dispatched int
+	stopErr    error
+}
+
 // Only client effects run in goroutines. Request preparation, journal changes,
 // host callbacks, publication, and progress callbacks stay on this coordinator.
 func (session *groupSession) activateIndependentGroupTargets(activator ports.IndependentClientActivator) (GroupResult, error) {
@@ -42,81 +54,109 @@ func (session *groupSession) activateIndependentGroupTargets(activator ports.Ind
 	session.firstActivationErr = nil
 	effectContext, cancel := context.WithCancelCause(session.ctx)
 	defer cancel(nil)
-	results := make(chan independentActivationResult, len(session.planned))
-	dispatched := 0
-	var stopErr error
-	for index, target := range session.planned {
-		if err := effectContext.Err(); err != nil {
-			stopErr = context.Cause(effectContext)
+	run := independentActivationRun{session: session, activator: activator, ctx: effectContext, cancel: cancel,
+		results: make(chan independentActivationResult, len(session.planned))}
+	run.dispatch()
+	run.collect()
+	return run.finish()
+}
+
+func (run *independentActivationRun) dispatch() {
+	for index, target := range run.session.planned {
+		if run.ctx.Err() != nil {
+			run.stopErr = context.Cause(run.ctx)
 			break
 		}
-		request, outcome, delivery, nativeComplete, err := session.groupActivationRequest(target)
-		if err == nil {
-			request, outcome, err = session.service.prepareNativeActivation(effectContext, session.installationID, target.clientBindingID, request)
-		}
-		if err == nil && session.service.ClientPreparation != nil && !request.VerifyOnly {
-			err = session.service.ClientPreparation.RevalidateClient(effectContext, request.Client, request.Plan)
-		}
-		var operation func(context.Context) (domain.ActivationOutcome, error)
-		if err == nil {
-			operation, err = activator.PrepareIndependentActivation(effectContext, request)
-		}
-		if err == nil {
-			err = effectContext.Err()
-		}
-		if err == nil && operation == nil {
-			err = fmt.Errorf("independent activator returned no operation")
-		}
-		if err == nil {
-			err = session.reportGroupProgress(target, GroupProgressActivating)
-		}
-		dispatched++
-		if err != nil {
-			results <- independentActivationResult{index: index, outcome: outcome, delivery: delivery, nativeComplete: nativeComplete, err: err}
-			stopErr = err
-			cancel(err)
+		operation, result := run.prepare(index, target)
+		run.dispatched++
+		if result.err != nil {
+			run.results <- result
+			run.stopErr = result.err
+			run.cancel(result.err)
 			break
 		}
-		go func(index int, delivery domain.StagedDelivery, nativeComplete bool, operation func(context.Context) (domain.ActivationOutcome, error)) {
-			outcome, err := operation(effectContext)
-			if domain.IsUnclosedClientProbe(err) {
-				outcome.NativeEffect = domain.NativeEffectUncertain
-			}
-			if outcome.NativeEffect == domain.NativeEffectUncertain && err == nil {
-				err = fmt.Errorf("independent native activation outcome is uncertain")
-			}
-			// A closed local probe does not cancel a sibling. Unknown cleanup or an
-			// uncertain native effect cancels all in-flight commands before joining.
-			if outcome.NativeEffect == domain.NativeEffectUncertain ||
-				((errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) && !domain.IsIsolatedProbeTimeout(err)) {
-				cancel(err)
-			}
-			results <- independentActivationResult{index: index, outcome: outcome, delivery: delivery, nativeComplete: nativeComplete, err: err}
-		}(index, delivery, nativeComplete, operation)
+		go run.execute(operation, result)
 	}
-	// Every launched operation must return before the group lock/reservation is
-	// released. Publish completion in observed order, so a quick Codex activation
-	// becomes visible while Claude is still running.
-	for range dispatched {
-		got := <-results
-		target := session.planned[got.index]
-		outcome, delivery, nativeComplete, err := session.finishGroupActivation(target, got.outcome, got.delivery, got.nativeComplete, got.err)
-		if publishErr := session.publishGroupActivation(len(session.planned), target, outcome, delivery, nativeComplete, err); publishErr != nil {
-			if stopErr == nil {
-				stopErr = publishErr
-			}
-			cancel(publishErr)
+}
+
+// Preparation stays serial: shared journals, client revalidation, and host
+// callbacks finish before exposing this target's independent effect operation.
+func (run *independentActivationRun) prepare(index int, target plannedGroupTarget) (independentClientOperation, independentActivationResult) {
+	request, outcome, delivery, nativeComplete, err := run.session.groupActivationRequest(target)
+	result := independentActivationResult{index: index, outcome: outcome, delivery: delivery, nativeComplete: nativeComplete, err: err}
+	if err != nil {
+		return nil, result
+	}
+	request, result.outcome, result.err = run.session.service.prepareNativeActivation(run.ctx, run.session.installationID, target.clientBindingID, request)
+	if result.err != nil {
+		return nil, result
+	}
+	if preparation := run.session.service.ClientPreparation; preparation != nil && !request.VerifyOnly {
+		result.err = preparation.RevalidateClient(run.ctx, request.Client, request.Plan)
+		if result.err != nil {
+			return nil, result
 		}
 	}
-	if dispatched < len(session.planned) {
-		stage, message := groupActivationStopReason(session.ctx, stopErr)
-		session.markRemainingNotAttempted(dispatched, stage, message)
+	operation, err := run.activator.PrepareIndependentActivation(run.ctx, request)
+	if err == nil {
+		err = run.ctx.Err()
 	}
-	if session.externalFailed > 0 || stopErr != nil || session.ctx.Err() != nil {
+	if err == nil && operation == nil {
+		err = fmt.Errorf("independent activator returned no operation")
+	}
+	if err == nil {
+		err = run.session.reportGroupProgress(target, GroupProgressActivating)
+	}
+	result.err = err
+	return operation, result
+}
+
+// execute reads only the effect context and cancellation/channel handles. It
+// does not touch shared installation state or invoke coordinator observers.
+func (run *independentActivationRun) execute(operation independentClientOperation, result independentActivationResult) {
+	result.outcome, result.err = operation(run.ctx)
+	if domain.IsUnclosedClientProbe(result.err) {
+		result.outcome.NativeEffect = domain.NativeEffectUncertain
+	}
+	if result.outcome.NativeEffect == domain.NativeEffectUncertain && result.err == nil {
+		result.err = fmt.Errorf("independent native activation outcome is uncertain")
+	}
+	// A closed local probe does not cancel a sibling. Unknown cleanup or an
+	// uncertain native effect cancels all in-flight commands before joining.
+	if result.outcome.NativeEffect == domain.NativeEffectUncertain ||
+		((errors.Is(result.err, context.Canceled) || errors.Is(result.err, context.DeadlineExceeded)) && !domain.IsIsolatedProbeTimeout(result.err)) {
+		run.cancel(result.err)
+	}
+	run.results <- result
+}
+
+// Every launched operation returns before the group lock/reservation is
+// released. Publish in observed completion order while other effects continue.
+func (run *independentActivationRun) collect() {
+	for range run.dispatched {
+		got := <-run.results
+		target := run.session.planned[got.index]
+		outcome, delivery, nativeComplete, err := run.session.finishGroupActivation(target, got.outcome, got.delivery, got.nativeComplete, got.err)
+		if publishErr := run.session.publishGroupActivation(len(run.session.planned), target, outcome, delivery, nativeComplete, err); publishErr != nil {
+			if run.stopErr == nil {
+				run.stopErr = publishErr
+			}
+			run.cancel(publishErr)
+		}
+	}
+}
+
+func (run *independentActivationRun) finish() (GroupResult, error) {
+	session := run.session
+	if run.dispatched < len(session.planned) {
+		stage, message := groupActivationStopReason(session.ctx, run.stopErr)
+		session.markRemainingNotAttempted(run.dispatched, stage, message)
+	}
+	if session.externalFailed > 0 || run.stopErr != nil || session.ctx.Err() != nil {
 		session.classifyActivationFailure()
 		cause := session.firstActivationErr
 		if cause == nil {
-			cause = stopErr
+			cause = run.stopErr
 		}
 		if ctxErr := session.ctx.Err(); ctxErr != nil && !errors.Is(cause, ctxErr) {
 			cause = errors.Join(cause, ctxErr)

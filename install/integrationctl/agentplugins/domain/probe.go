@@ -19,7 +19,8 @@ type IsolatedProbeTimeout struct {
 func (err *IsolatedProbeTimeout) Error() string {
 	return fmt.Sprintf("%s exceeded %s probe budget after %s; process cleanup confirmed: %v", err.Operation, err.Budget, err.Elapsed.Round(time.Millisecond), err.Err)
 }
-func (err *IsolatedProbeTimeout) Unwrap() error { return err.Err }
+func (err *IsolatedProbeTimeout) Unwrap() error     { return err.Err }
+func (*IsolatedProbeTimeout) isolatedProbeTimeout() {}
 
 // IsIsolatedProbeTimeout rejects joins with additional causes: a neighboring
 // cleanup or persistence failure must not be hidden by a safe local timeout.
@@ -27,12 +28,12 @@ func IsIsolatedProbeTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
-	if _, ok := err.(*IsolatedProbeTimeout); ok {
-		return true
-	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		causes := joined.Unwrap()
 		return len(causes) == 1 && IsIsolatedProbeTimeout(causes[0])
+	}
+	if _, ok := err.(interface{ isolatedProbeTimeout() }); ok {
+		return true
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		return IsIsolatedProbeTimeout(wrapped.Unwrap())

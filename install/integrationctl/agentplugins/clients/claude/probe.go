@@ -88,7 +88,7 @@ func runClaudeListCommandWithin(ctx context.Context, runner ports.CommandRunner,
 		if result.CleanupComplete || result.NoChildStarted {
 			return result, &domain.IsolatedProbeTimeout{Operation: "Claude Code plugin listing", Budget: budget, Elapsed: time.Since(started), Err: err}
 		}
-		return result, fmt.Errorf("Claude Code plugin listing exceeded %s probe budget after %s; process cleanup unconfirmed: %w", budget, time.Since(started).Round(time.Millisecond), err)
+		return result, fmt.Errorf("claude code plugin listing exceeded %s probe budget after %s; process cleanup unconfirmed: %w", budget, time.Since(started).Round(time.Millisecond), err)
 	}
 	return result, err
 }
@@ -202,3 +202,5 @@ func environmentSize(environment []string) int {
 	}
 	return total
 }
+
+func (*Adapter) NativeDiscoveryTimeout() time.Duration { return ClaudeProbeTimeout }

@@ -34,3 +34,9 @@ type AutomaticActivator interface {
 type ReadOnlyVerifier interface {
 	VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool
 }
+
+// IndependentActivator attests that an adapter's activation effects do not
+// write shared installation state or invoke host handoff callbacks.
+type IndependentActivator interface {
+	SupportsIndependentActivation(domain.ActivationRequest) bool
+}

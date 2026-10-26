@@ -139,3 +139,9 @@ func runPreparedClaudeList(ctx context.Context, env clients.Env, command legacyp
 	}
 	return result, nil
 }
+
+// SupportsIndependentActivation limits effect-only execution to the adapter's
+// user CLI flow. Project and selected native-config delivery keep serial custody.
+func (*Adapter) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	return request.Plan.Scope == domain.ScopeUser && request.Plan.SelectedDelivery.IsZero()
+}

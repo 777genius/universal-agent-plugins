@@ -142,11 +142,10 @@ func (a seamActivator) Activate(ctx context.Context, request domain.ActivationRe
 	return a.inner.Activate(ctx, prepared)
 }
 
-// Native config adapters may write the shared kernel while activating. Only
-// the two independent user CLI adapters can expose effect-only operations.
+// Native config adapters may write the shared kernel while activating. Effect
+// isolation must be explicitly attested by the registered client adapter.
 func (a seamActivator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
-	return a.independent && request.Plan.Scope == domain.ScopeUser && request.Plan.SelectedDelivery.IsZero() &&
-		(request.Client.ClientID == domain.ClientClaude || request.Client.ClientID == domain.ClientCodex)
+	return a.independent && a.inner.SupportsIndependentActivation(request)
 }
 
 func (a seamActivator) PrepareIndependentActivation(ctx context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {

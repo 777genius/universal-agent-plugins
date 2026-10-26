@@ -691,7 +691,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 		// Explicit cleanup happens while the leader is unreaped, so its numeric
 		// process/group identity cannot have been recycled.
 		termination = containment.terminate()
-		if termination.err == os.ErrProcessDone {
+		if termination.err == os.ErrProcessDone { //nolint:errorlint // A wrapped or joined cleanup failure is not the bare process-done sentinel.
 			termination.err = nil
 		}
 		if !termination.leaderStopped && supervisionErr != nil {
@@ -705,7 +705,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	capturedResult, capturedErr := finishExplicitCommand(termination.err, waitErr, stdout.Bytes(), stderr.Bytes())
 	// Only a raw Wait exit status (including a supervised kill) proves reaping.
 	// Joined cleanup/close/reap-timeout errors never attest process closure.
-	_, reapedWithStatus := waitErr.(*exec.ExitError)
+	_, reapedWithStatus := waitErr.(*exec.ExitError) //nolint:errorlint // Only a raw Wait exit status proves reaping; joined cleanup failures must stay unproven.
 	capturedResult.CleanupComplete = termination.leaderStopped && termination.err == nil &&
 		(waitErr == nil || reapedWithStatus) && containmentClosed
 	stdoutErr := stdout.Err()

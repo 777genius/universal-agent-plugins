@@ -9,7 +9,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -124,8 +123,8 @@ func (observer NativeIdentityObserver) discoverNativeFinding(ctx context.Context
 		timeout := observer.DiscoveryTimeout
 		if timeout <= 0 {
 			timeout = defaultNativeDiscoveryTimeout
-			if client.ClientID == domain.ClientClaude {
-				timeout = claude.ClaudeProbeTimeout
+			if policy, ok := clients.As[clients.NativeDiscoveryPolicy](observer.Registry, client.ClientID); ok {
+				timeout = policy.NativeDiscoveryTimeout()
 			}
 		}
 		nativeCtx, cancelNative = context.WithTimeout(ctx, timeout)
