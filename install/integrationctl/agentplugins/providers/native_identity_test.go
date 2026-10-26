@@ -537,3 +537,36 @@ func writeIdentityFile(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+type listingBudgetRunner struct {
+	t                *testing.T
+	minimum, maximum time.Duration
+}
+
+func (r listingBudgetRunner) Run(ctx context.Context, _ legacyports.Command) (legacyports.CommandResult, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok || time.Until(deadline) < r.minimum || time.Until(deadline) > r.maximum {
+		r.t.Fatalf("native discovery budget = %s", time.Until(deadline))
+	}
+	return legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}, nil
+}
+
+func TestClaudeNativeDiscoveryUsesListingBudget(t *testing.T) {
+	for _, explicit := range []time.Duration{0, 250 * time.Millisecond} {
+		t.Run(explicit.String(), func(t *testing.T) {
+			config := t.TempDir()
+			plan := identityPlan(filepath.Join(config, "skills"))
+			plan.TargetAnchor = config
+			plan.NativeRegistryExecutable = "/TEST/bin/claude"
+			budget := 30 * time.Second
+			if explicit > 0 {
+				budget = explicit
+			}
+			observer := testObserver(NativeIdentityObserver{DiscoveryTimeout: explicit, Runner: listingBudgetRunner{t: t, minimum: budget - 100*time.Millisecond, maximum: budget}})
+			_, attempted, err := observer.discoverNativeFinding(context.Background(), domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: config}, plan, nil, true)
+			if err != nil || !attempted {
+				t.Fatalf("attempted=%v err=%v", attempted, err)
+			}
+		})
+	}
+}

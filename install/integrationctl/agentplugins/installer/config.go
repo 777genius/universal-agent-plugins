@@ -53,9 +53,13 @@ type Config struct {
 	// pre-authorized local bytes. When false, Prepare requires either Assess or
 	// a digest-bound Request.Assessment; nil is never an implicit allow.
 	TrustedLocalPackages bool
-	// Progress reports coarse phases. It must not return an error, prompt, or
+	// Progress reports coarse phases and group client checkpoints. It must not return an error, prompt, or
 	// start a nested installer.
 	Progress func(ProgressEvent)
+	// IndependentActivations allows distinct Claude/Codex user CLI effects to run
+	// together after serial state and host preparation. Other clients stay serial.
+	// Runner must support simultaneous commands for distinct clients.
+	IndependentActivations bool
 	// ClientExecutables are optional explicit client paths Discover Lstats
 	// without executing. Empty entries fall back to PATH presence of the
 	// well-known binary name. New copies the map.

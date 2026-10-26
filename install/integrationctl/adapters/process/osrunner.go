@@ -620,10 +620,10 @@ func (OS) RunWithDescendantExitGrace(ctx context.Context, cmd ports.Command, tre
 
 func runCommand(ctx context.Context, cmd ports.Command, treeExitGrace time.Duration, processGroupOnly bool) (ports.CommandResult, error) {
 	if len(cmd.Argv) == 0 {
-		return ports.CommandResult{}, exec.ErrNotFound
+		return ports.CommandResult{NoChildStarted: true}, exec.ErrNotFound
 	}
 	if err := ctx.Err(); err != nil {
-		return ports.CommandResult{}, err
+		return ports.CommandResult{NoChildStarted: true}, err
 	}
 	// Every production command is explicitly supervised. Even commands that are
 	// nominally diagnostic can load client configuration and start helpers, and
@@ -647,7 +647,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	c.Stderr = stderr
 	containment, err := newOrdinaryCommandContainment(c, treeExitGrace)
 	if err != nil {
-		return ports.CommandResult{}, err
+		return ports.CommandResult{NoChildStarted: true}, err
 	}
 	if processGroupOnly {
 		containment.limitToProcessGroup()
@@ -666,7 +666,9 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	}
 	defer func() { resultErr = errors.Join(resultErr, closeContainment()) }()
 	if err := c.Start(); err != nil {
-		return ports.CommandResult{}, err
+		// Cmd.Start has no fallible steps after successful StartProcess. A non-nil
+		// Process on an anomalous partial start remains unproven and fails closed.
+		return ports.CommandResult{NoChildStarted: c.Process == nil}, err
 	}
 	if err := containment.attach(c); err != nil {
 		return ports.CommandResult{}, cleanupAttachFailure(err, containment.terminate, c.Process.Kill, containment.exited, closeContainment, c.Wait)
@@ -689,7 +691,7 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 		// Explicit cleanup happens while the leader is unreaped, so its numeric
 		// process/group identity cannot have been recycled.
 		termination = containment.terminate()
-		if errors.Is(termination.err, os.ErrProcessDone) {
+		if termination.err == os.ErrProcessDone {
 			termination.err = nil
 		}
 		if !termination.leaderStopped && supervisionErr != nil {
@@ -701,6 +703,11 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	// return; no second Wait or Process.Release may abandon a future zombie.
 	waitErr := closeContainmentAndWait(closeContainment, c.Wait, processReapTimeout)
 	capturedResult, capturedErr := finishExplicitCommand(termination.err, waitErr, stdout.Bytes(), stderr.Bytes())
+	// Only a raw Wait exit status (including a supervised kill) proves reaping.
+	// Joined cleanup/close/reap-timeout errors never attest process closure.
+	_, reapedWithStatus := waitErr.(*exec.ExitError)
+	capturedResult.CleanupComplete = termination.leaderStopped && termination.err == nil &&
+		(waitErr == nil || reapedWithStatus) && containmentClosed
 	stdoutErr := stdout.Err()
 	if supervisionErr != nil {
 		return capturedResult, withDuplexDiagnostic(errors.Join(supervisionErr, capturedErr, stdoutErr), stderr.Bytes())
@@ -791,7 +798,10 @@ func superviseExplicit(ctx context.Context, poll <-chan time.Time, exited func()
 	// The poll observation and cancellation can become ready in the same
 	// scheduling turn. Re-check after observation so a natural exit cannot hide
 	// cancellation and incorrectly retain a successful command result.
-	return errors.Join(supervisionErr, ctx.Err())
+	if ctxErr := ctx.Err(); ctxErr != nil && !errors.Is(supervisionErr, ctxErr) {
+		return errors.Join(supervisionErr, ctxErr)
+	}
+	return supervisionErr
 }
 
 // synchronizedOutputBuffer allows the sole Wait owner and exec's pipe-copy

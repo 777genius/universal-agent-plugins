@@ -987,3 +987,30 @@ func TestOSRunnerBoundsStderrWhileRetainingDiagnosticEdges(t *testing.T) {
 		t.Fatalf("bounded stderr result: exit=%d bytes=%d diagnostic=%q", result.ExitCode, len(result.Stderr), diagnostic)
 	}
 }
+
+func TestOSRunnerTimeoutAttestsClosedProcess(t *testing.T) {
+	if os.Getenv("TEST_UAP_CLOSED_TIMEOUT_HELPER") == "1" {
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
+	requireOrdinaryPreflight(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	result, err := (OS{}).Run(ctx, ports.Command{Argv: []string{os.Args[0], "-test.run=^TestOSRunnerTimeoutAttestsClosedProcess$"}, Env: append(os.Environ(), "TEST_UAP_CLOSED_TIMEOUT_HELPER=1")})
+	if !errors.Is(err, context.DeadlineExceeded) || !result.CleanupComplete {
+		t.Fatalf("closure=%v error=%v", result.CleanupComplete, err)
+	}
+}
+
+func TestOSRunnerPrestartFailureProvesNoChild(t *testing.T) {
+	result, err := (OS{}).Run(context.Background(), ports.Command{})
+	if !errors.Is(err, exec.ErrNotFound) || !result.NoChildStarted {
+		t.Fatalf("invalid command lost prestart evidence: %+v %v", result, err)
+	}
+	requireOrdinaryPreflight(t)
+	result, err = (OS{}).Run(context.Background(), ports.Command{Argv: []string{os.Args[0]}, Dir: filepath.Join(t.TempDir(), "TEST-missing-working-directory")})
+	if err == nil || !result.NoChildStarted || result.CleanupComplete {
+		t.Fatalf("Start failure closure evidence: %+v %v", result, err)
+	}
+}

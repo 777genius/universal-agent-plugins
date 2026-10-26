@@ -54,6 +54,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return activateClaudeProject(ctx, env, request)
 	}
 	if err := verifyClaudePlugin(ctx, env, request); err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return shared.FailedActivation(outcome, fmt.Sprintf("verify with `%s plugin list --json`", request.BackendExecutable), err)
 	}
 	outcome.Activation = domain.ActivationActive
@@ -129,7 +132,7 @@ func runClaudeList(ctx context.Context, env clients.Env, executable, configRoot,
 func runPreparedClaudeList(ctx context.Context, env clients.Env, command legacyports.Command) (legacyports.CommandResult, error) {
 	result, err := RunClaudeListCommand(ctx, env.Runner, command)
 	if err != nil {
-		return result, fmt.Errorf("start Claude Code CLI: %w", err)
+		return result, fmt.Errorf("run Claude Code plugin listing: %w", err)
 	}
 	if result.ExitCode != 0 {
 		return result, fmt.Errorf("the Claude Code CLI command failed with exit code %d", result.ExitCode)

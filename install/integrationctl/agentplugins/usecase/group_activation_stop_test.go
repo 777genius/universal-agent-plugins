@@ -96,3 +96,44 @@ func (a *stopSecondGroupActivator) Activate(context.Context, domain.ActivationRe
 func (*stopSecondGroupActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	return domain.DeactivationOutcome{}, nil
 }
+
+func TestGroupContinuesOnlyAfterIsolatedProbeClosure(t *testing.T) {
+	for _, unsafe := range []bool{false, true} {
+		name := "closed local probe"
+		if unsafe {
+			name = "joined cleanup failure"
+		}
+		t.Run(name, func(t *testing.T) {
+			service, store, cursor := serviceFixture(t)
+			codex := domain.DetectedClient{ClientID: domain.ClientCodex, Status: domain.DetectionDetected, ConfigRoot: canonicalCodexProfile(t, ".codex")}
+			kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+			activator := &stopSecondGroupActivator{stop: func() error {
+				err := error(&domain.IsolatedProbeTimeout{Operation: "Claude Code plugin listing", Budget: 30 * time.Second, Elapsed: 30 * time.Second, Err: context.DeadlineExceeded})
+				if unsafe {
+					return errors.Join(err, errors.New("containment close failed"))
+				}
+				return err
+			}}
+			service.Activator = activator
+			result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+				addInput(t, cursor, "https://example.com/local-probe"), addInput(t, kiro, "https://example.com/local-probe"), addInput(t, codex, "https://example.com/local-probe"),
+			}, OperationGroupID: "isolated-probe", Confirmed: true})
+			if !errors.Is(err, context.DeadlineExceeded) || result.Targets[1].Failure == nil || result.Targets[1].Failure.Stage != "timeout" {
+				t.Fatalf("failure facts: %+v %v", result, err)
+			}
+			wantPhase := GroupTargetExternalCompleted
+			wantCalls := 3
+			if unsafe {
+				wantPhase = GroupTargetExternalNotAttempted
+				wantCalls = 2
+			}
+			if activator.calls != wantCalls || result.Targets[2].GroupPhase != wantPhase {
+				t.Fatalf("calls=%d targets=%+v", activator.calls, result.Targets)
+			}
+			state, loadErr := store.Load()
+			if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 3 {
+				t.Fatalf("registration lost: %+v %v", state, loadErr)
+			}
+		})
+	}
+}

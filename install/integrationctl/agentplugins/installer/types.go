@@ -268,6 +268,10 @@ const (
 // ProgressEvent is an observational checkpoint. The observer does not decide.
 type ProgressEvent struct {
 	Phase ProgressPhase
+	// Client carries a group activation checkpoint. external_started records
+	// dispatch; terminal group phases follow serial state publication. Nil marks
+	// an operation-wide phase. Observers must not mutate installation state.
+	Client *ClientResult
 }
 
 // Inspection is a read-only view of owned UAP state. Recovery facts are

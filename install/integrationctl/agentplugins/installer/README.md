@@ -77,7 +77,22 @@ false. Mixed group Repair assesses each distinct
 snapshot digest once; blocking any snapshot refuses Prepare without mutation.
 Same-root group Repair assesses that snapshot once. `New`, Inspect, Discover,
 and Recover do not invoke Assess. Coarse `Config.Progress` phases are
-observational. The engine does not import Notifications types and does not
+observational. `Config.IndependentActivations` explicitly enables concurrent
+external activation for distinct Claude/Codex user targets without selected
+native delivery. Other targets and the default configuration retain sequential
+activation. Preparation, host callbacks, state writes and result publication
+remain coordinated. Per-client `ProgressEvent.Client` checkpoints report
+`external_started`, `external_completed` or `external_failed`; failures expose
+their finite stage rather than raw provider diagnostics.
+
+Claude discovery and plugin listing have a 30-second budget, capped by the
+caller deadline. A local listing timeout may leave another activation running
+only after the runner proves that no child started or that the process and its
+descendants closed. Parent cancellation and unconfirmed cleanup cancel and join
+all dispatched work before returning. Qualification version pins do not change
+these time budgets or become installed-client version restrictions.
+
+The engine does not import Notifications types and does not
 query a live Claude/Codex identity by default.
 
 Prepare freezes the selected adapter's complete `SelectedDelivery` through the
