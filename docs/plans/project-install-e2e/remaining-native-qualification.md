@@ -907,6 +907,37 @@ remain false. A bounded retained failure cannot become a passing E2E gate.
 Further source/provider/permission/lifecycle changes require their own observed
 contract and independent review; legacy user and baseline gates remain required.
 
+## Observed Grok 1.0.70 project inspection admission
+
+Genuine runtime [40353442588](https://github.com/777genius/universal-agent-plugins/actions/runs/40353442588)
+stopped before public `add-a` mutation because the existing project inspector
+accepted only the previously measured 1.0.67 version. The follow-up genuine
+read-only [observe run 40353442581](https://github.com/777genius/universal-agent-plugins/actions/runs/40353442581)
+succeeded at source `3234be86f0a3217ebd2371dc5e8fa0b26d3dcd26`, tree
+`74490cebf339e8538b1f237b478aceeb58667e3d`. Native artifact `12670385326`
+(SHA256 `a0d9c2e0858b5bbb2297f4d6f6f99aa71a57cfbc3d9ba5ec908434dfe14db957`)
+retains the actual bounded 1.0.70 inspection responses.
+
+The measured empty A and populated A/B responses contain the existing identity
+subset: exact `grokVersion`, canonical `cwd`, same `projectRoot` with an optional
+trailing separator, boolean `projectTrusted`, and `skills`/`plugins` arrays.
+Populated A/B each identify their own project plugin by exact name/scope/path
+with `enabled=false`, plus the independent original-user plugin. Outside cwd
+lists only the user plugin and has no project root. The separate plugin-list
+command returned empty arrays even for these candidates; it is not a substitute
+for project inspection. Native trust and MCP execution remain unqualified.
+
+Admit exactly the measured 1.0.70 version alongside 1.0.67 in the existing
+project-inspection parser. Retain strict duplicate/case-fold handling, exact
+cwd/root, typed trust and collections, unique plugin names, canonical absolute
+paths, scope checks, ownership and namespace collision rules. All other versions
+remain closed. Update only the corresponding version-specific user guidance;
+project activation remains Prepared and MCP qualification remains unchanged.
+Add focused tests for both admitted versions and unchanged refusals, then rerun
+the existing genuine Grok startup capture. No new command, alternate catalog,
+trust grant, provider, permission mode, deadline or cleanup policy is introduced.
+Two independent plan reviews precede this product correction.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable
