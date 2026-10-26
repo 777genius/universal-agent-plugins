@@ -16,7 +16,7 @@ before(async () => {
   fixture = join(directory, process.platform === 'win32' ? 'fixture.exe' : 'fixture');
   const build = spawnSync(
     'go',
-    ['build', '-o', fixture, fileURLToPath(new URL('./fixtures/discovery.go', import.meta.url))],
+    ['build', '-o', fixture, fileURLToPath(new URL('./fixtures/discovery/main.go', import.meta.url))],
     { env: { ...process.env, GOWORK: 'off' }, encoding: 'utf8' },
   );
   assert.equal(build.status, 0, build.stderr || build.error?.message);
