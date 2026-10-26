@@ -1,5 +1,7 @@
 """Inert Kimi collector contracts; never acquires or executes vendor bytes."""
 import importlib.util
+import copy
+import hashlib
 from datetime import datetime, timezone
 import json
 import os
@@ -219,6 +221,82 @@ class ApiContext(FakeContext):
 
 
 class KimiCollectorTests(unittest.TestCase):
+    def test_installed_catalog_requires_exact_unmodified_receipt_config(self):
+        expected = {"name": "uap-kimi-native-a", "origin": "/owned/A/.kimi-code/mcp.json",
+                    "config": {"transport": "stdio", "command": "/owned/managed/launcher",
+                               "args": ["owned a"], "env": {"UAP_TEST_NONCE": "private"}}}
+        row = {"name": expected["name"], "origin": expected["origin"], "source": "global",
+               "mutable": False, "config": {"transport": "stdio", "command": "/owned/managed/launcher",
+                                            "args": ["owned a"], "envKeys": ["UAP_TEST_NONCE"]}}
+        self.assertEqual(kimi._installed_catalog([row], [expected]), [expected["name"]])
+        mutations = [lambda x: x.update(origin="/owned/B/.kimi-code/mcp.json"),
+                     lambda x: x.update(mutable=True), lambda x: x.update(source="caller"),
+                     lambda x: x.update(plugin={"id": "foreign", "name": "foreign"}),
+                     lambda x: x["config"].update(command="/foreign/probe"),
+                     lambda x: x["config"].update(env={"UAP_TEST_NONCE": "private"}),
+                     lambda x: x["config"].update(args=["wrong"])]
+        for change in mutations:
+            bad = copy.deepcopy(row)
+            change(bad)
+            with self.subTest(row=bad), self.assertRaises(ValueError):
+                kimi._installed_catalog([bad], [expected])
+        for rows in ([], [row, row], [row, {**row, "name": "uap-kimi-native-b"}]):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                kimi._installed_catalog(rows, [expected])
+        with self.assertRaises(ValueError):
+            kimi._installed_catalog([row], [])
+
+    def test_installed_skill_names_paths_sources_and_absence_are_exact(self):
+        expected = {"name": "uap-kimi-native-user", "description": "Kimi installed user-one",
+                    "path": "/owned/home/plugins/managed/user/skills/user/SKILL.md", "source": "extra"}
+        self.assertEqual(kimi._installed_skills({"skills": [expected]}, [expected]), [expected["name"]])
+        for key, value in (("name", "uap-kimi-native-b"), ("description", "other revision"),
+                           ("path", "/owned/B/SKILL.md"), ("source", "project")):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                kimi._installed_skills({"skills": [{**expected, key: value}]}, [expected])
+        for rows in ([], [expected, expected], [{**expected, "unknown": True}]):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                kimi._installed_skills({"skills": rows}, [expected])
+        with self.assertRaises(ValueError):
+            kimi._installed_skills({"skills": [expected]}, [])
+
+    def test_installed_authority_hash_or_inline_replacement_fails_before_service(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ctx = FakeContext()
+            ctx.root = root
+            ctx.service = lambda *_args, **_kwargs: self.fail("native service requested before authority admission")
+            skill = root / "SKILL.md"
+            kimi._write_new(root, skill, b"installed skill bytes")
+            entry = {"name": "uap-kimi-native-a", "description": "owned", "path": str(skill),
+                     "source": "project", "sha256": "0" * 64}
+            request = {"stage": "installed", "setup_trust": False,
+                       "skills": {"a": [entry], "b": [], "c": []}, "servers": {k: [] for k in kimi.WORKSPACES}}
+            with self.assertRaisesRegex(ValueError, "skill bytes"):
+                kimi.observe_installed(ctx, request)
+            entry["sha256"] = hashlib.sha256(skill.read_bytes()).hexdigest()
+            mcp = root / "mcp.json"
+            kimi._write_new(root, mcp, b'{"mcpServers":{"uap-kimi-native-a":{"transport":"stdio","command":"/actual"}}}')
+            request["servers"]["a"] = [{"name": entry["name"], "origin": str(mcp),
+                "config": {"transport": "stdio", "command": "/replacement"},
+                "sha256": hashlib.sha256(mcp.read_bytes()).hexdigest(), "event": str(root / "events"),
+                "nonce": "nonce", "cwd": str(root)}]
+            with self.assertRaisesRegex(ValueError, "MCP bytes"):
+                kimi.observe_installed(ctx, request)
+
+    def test_only_empty_installed_baseline_may_author_native_trust(self):
+        ctx = FakeContext()
+        for stage in ("installed", "removed", "restart"):
+            request = {"stage": stage, "setup_trust": True,
+                       "skills": {k: [] for k in kimi.WORKSPACES}, "servers": {k: [] for k in kimi.WORKSPACES}}
+            with self.subTest(stage=stage), self.assertRaisesRegex(ValueError, "empty baseline"):
+                kimi.observe_installed(ctx, request)
+
+    def test_installed_entrypoint_obeys_real_host_guard_before_read_or_child(self):
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}):
+            with self.assertRaises(RuntimeError):
+                kimi._installed_main("/must-not-be-read/fixture.json")
+
     def test_frozen_archive_is_current_official_native_entry(self):
         self.assertEqual(kimi.CLIENT, "kimi")
         self.assertEqual(kimi.VERSION, "2.3.2")

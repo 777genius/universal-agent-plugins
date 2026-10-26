@@ -733,6 +733,103 @@ State stays Prepared. Label `provider_kind=scripted_loopback`, vendor
 authentication false and real-model use false. Raw bounded evidence stays in
 closed CI artifacts, not Git or recursively uploaded native profiles.
 
+## Kimi installed local lifecycle amendment
+
+Genuine Kimi API run 40238495966 at `ac3a7e5da565590fd85c4ff9795cae6b312ed6b1`,
+artifact 12615878095 (ZIP SHA256
+`cb14eec0bd7fc5040a43d4314255055a59ad1729a24dacb56ffcc894607381ef`),
+confirmed the pinned 2.3.2 native bearer, A/B trust and separate A/B/C/user
+catalogs with named initialize/tools-list and untrusted C refusal. Its
+tools-call count was zero. Admit only exact product versions `{2.3.1, 2.3.2}`;
+all existing executable, original-user and nearest-Git checks remain intact.
+
+Select `TestAgentpluginsKimiNativeProjectComponentsLifecycle`, opt-in
+`AGENTPLUGINS_KIMI_PROJECT_NATIVE_E2E=1`. Public UAP installs independent local
+user/A/B/C packages. Seven fresh authenticated native web processes observe the
+empty, installed, unchanged, updated, missing-repaired, restarted and removed
+stages. Native API trust authorizes only A/B during the empty baseline; C stays
+untrusted. Receipt-selected skills and independently reconstructed exact
+stdio command/argv/environment/package/data/cwd authority must match the
+unchanged installed native files before the API reads them. B/C/user managed
+package inventories and their original receipts/native bytes remain exact.
+
+This is the supported imperative local-directory route, with `--no-save` and
+no saved dependency agreement. Missing local repair keeps its selected source
+at A-two: it proves reconstruction from unchanged selected local input. Moving
+Git/ZIP sources and repair from their recorded immutable pin remain separate
+required gates, `TestProjectComposedSourceLifecycleSeparatesUserAndProjects`,
+`TestProjectKimiComposedSavedLifecycle` and
+`TestProjectKimiColdSavedImportPreservesPinnedAgreement`. Do not attribute those
+source-resolution results to the native local-directory test or change product
+repair semantics to fit a stronger local-source claim.
+
+The native test may satisfy project-lifecycle, native-restart-removal,
+mcp-initialize and mcp-tools-list only after the complete sequence and cleanup.
+It keeps mcp-tools-call false, activation Prepared, vendor authentication false
+and real-model use false. Provider-driven tool calls require their own observed
+and independently reviewed amendment. Reuse existing private service capture,
+token quarantine/redaction and closed artifact admission; never upload a native
+profile or token file. The original total/work/cleanup budgets are 900/840/60
+seconds, with no native children across UAP mutations.
+
+## Current-source runtime CI handoff
+
+The October 26 continuation uses a separate `project-native-runtime.yml` job
+and the small `project_native_runtime.py` frontend. Two independent plan rounds
+and independent code reviews by the Gemini/Copilot and Kimi/Cline implementers
+admitted the closed first Copilot attempt. No existing baseline gate is changed.
+
+Only a fixed implemented test name, opt-in, source filename and deadline can be
+selected. The workflow verifies actual GitHub-hosted Linux x64 and exact clean
+source before setup-go; the frontend repeats admission before any compiler or
+vendor child. It reuses the reviewed archive acquisition/materialization,
+immutable file checks, capture budgets and closed ZIP writer. Build the public
+installer, existing probe and repository test binary with exact Go 1.26.10,
+checking held compiler identity before and after each build. Provision the same
+pinned lintai release through bounded verified archive acquisition. No inherited
+profile, authentication, proxy or loader environment enters the test.
+
+Acquisition and compilation have one 480-second budget. The initial Copilot
+attempt has its own original 180-second total, with five seconds reserved by
+the outer process capture for reaping, followed by a bounded publication phase.
+Future full lifecycle registrations require their separately reviewed exact
+tests and original deadlines; this is not an arbitrary timeout override.
+
+The frontend records source/build identity separately in `frontend.zip`. A
+native `runtime.zip` is normalized only from bounded held bytes after checking
+the fixed client's exact member inventory, command triples, source identity,
+UTF-8, duplicate/special/oversized entries and explicit qualification state.
+Copilot's initial schema admits its named installed snapshots, bounded provider
+requests, probe events and fixed command table. Unknown native JSONL semantics
+remain an intentional failed research attempt until a genuine artifact has been
+reviewed. A closed artifact or successful build cannot qualify a failed,
+skipped, absent or otherwise unobserved native test. Raw profiles are never
+recursively uploaded, and the workflow publishes only these two named ZIPs.
+
+The reviewed Gemini registration uses the exact
+`TestAgentpluginsGeminiNativeProjectRuntimeAttempt` with the same 180-second
+attempt bound. A successful attempt additionally requires all command triples,
+both installed snapshots, provider requests, probe events, actual native
+session/call identifiers and returned probe facts. Its five lifecycle
+qualification flags remain false. Pinned Gemini source adds only the exact
+`wait_for_previous` boolean property to the provider-visible tool schema;
+validate that property exactly before comparing the original probe schema.
+Never add it to the emitted tool arguments. The fixture API key is registered,
+redacted and checked again at closed artifact admission.
+
+The Kimi registration selects only
+`TestAgentpluginsKimiNativeProjectComponentsLifecycle` and its original
+900-second total/840-second work budget. It observes public local-source
+installation, reconciliation, update, missing-component repair, fresh native
+processes and removal through Kimi's authenticated local API. Named native MCP
+tests prove initialize/list; tools-call stays false. As with the reviewed local
+Gemini/Copilot sequence, repair uses unchanged selected local input. Moving-source
+and recorded-pin behavior remains separately required in
+`TestProjectComposedSourceLifecycleSeparatesUserAndProjects` and
+`TestProjectCopilotComposedSavedLifecycle`; it is not attributed to these native
+local-directory observations. The checked source-root override and canonical
+Python executable are explicit inputs, with no ambient auth or loader variables.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable

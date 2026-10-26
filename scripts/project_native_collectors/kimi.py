@@ -616,3 +616,250 @@ def collect(ctx):
         result["unobserved"].remove("kimi.mcp-initialize")
         result["unobserved"].remove("kimi.mcp-tools-list")
     return result
+
+
+def _installed_skills(data, expected):
+    """Compare native rows to receipt-selected files, never replacement fixtures."""
+    _object(data, ("skills",))
+    rows = data["skills"]
+    if not isinstance(rows, list) or len(rows) > 512:
+        raise ValueError("Kimi installed skill catalog count refused")
+    found = {}
+    for row in rows:
+        _object(row, ("name", "description", "path", "source"),
+                ("type", "disable_model_invocation", "scopes"))
+        for field in ("name", "description", "path", "source"):
+            _string(row[field], empty=field == "description", multiline=field == "description")
+        if row["source"] not in ("project", "user", "extra", "builtin"):
+            raise ValueError("Kimi installed skill source shape differs")
+        if "type" in row:
+            _string(row["type"], empty=True)
+        if "disable_model_invocation" in row and type(row["disable_model_invocation"]) is not bool:
+            raise ValueError("Kimi installed skill invocation flag differs")
+        if "scopes" in row and (not isinstance(row["scopes"], list) or len(row["scopes"]) > 2
+                or any(value not in ("tui", "web") for value in row["scopes"])):
+            raise ValueError("Kimi installed skill scope shape differs")
+        if row["name"].startswith("uap-kimi-native-"):
+            if row["name"] in found:
+                raise ValueError("Kimi installed skill is duplicated")
+            found[row["name"]] = row
+    if set(found) != {row["name"] for row in expected}:
+        raise ValueError("Kimi installed skill selection differs")
+    for item in expected:
+        row = found[item["name"]]
+        if any(row[key] != item[key] for key in ("name", "description", "path", "source")):
+            raise ValueError("Kimi installed skill origin differs")
+    return sorted(found)
+
+
+def _installed_catalog(data, expected):
+    if not isinstance(data, list) or len(data) > 256:
+        raise ValueError("Kimi installed MCP catalog count refused")
+    found = {}
+    for row in data:
+        _object(row, ("name", "config", "source", "origin", "mutable"), ("plugin",))
+        _string(row["name"])
+        _string(row["origin"])
+        if not isinstance(row["config"], dict) or row["source"] not in ("global", "plugin", "caller") or type(row["mutable"]) is not bool:
+            raise ValueError("Kimi installed MCP catalog shape differs")
+        if row["name"].startswith("uap-kimi-native-"):
+            if row["name"] in found:
+                raise ValueError("Kimi installed MCP is duplicated")
+            found[row["name"]] = row
+    if set(found) != {row["name"] for row in expected}:
+        raise ValueError("Kimi installed MCP selection differs")
+    for item in expected:
+        row, config = found[item["name"]], dict(item["config"])
+        if "env" in config:
+            config["envKeys"] = sorted(config.pop("env"))
+        if (row["source"] != "global" or row["origin"] != item["origin"]
+                or row["mutable"] is not False or "plugin" in row or row["config"] != config):
+            raise ValueError("Kimi installed MCP origin/config differs")
+    return sorted(found)
+
+
+def observe_installed(ctx, request):
+    """One fresh web process over already-installed public UAP authority.
+
+    The Go lifecycle owns the installer and builds this exact expectation from
+    committed receipts/native bytes. This observer never authors components.
+    Only the empty initial stage may author native A/B trust through its API.
+    """
+    _object(request, ("stage", "setup_trust", "skills", "servers"))
+    if (not re.fullmatch(r"[a-z][a-z0-9-]{0,40}", request["stage"])
+            or type(request["setup_trust"]) is not bool
+            or set(request["skills"]) != set(WORKSPACES)
+            or set(request["servers"]) != set(WORKSPACES)):
+        raise ValueError("Kimi installed stage contract refused")
+    if (any(not isinstance(request[key][scope], list) or len(request[key][scope]) > (2 if key == "skills" else 1)
+            for key in ("skills", "servers") for scope in WORKSPACES)
+            or (request["setup_trust"] and (request["stage"] != "empty"
+                or any(request[key][scope] for key in ("skills", "servers") for scope in WORKSPACES)))):
+        raise ValueError("Kimi installed trust setup requires the empty baseline")
+    protected = {}
+    for scope in WORKSPACES:
+        for skill in request["skills"][scope]:
+            _object(skill, ("name", "description", "path", "source", "sha256"))
+            path = Path(skill["path"])
+            body = _read(ctx.root, path, 1 << 20)
+            if hashlib.sha256(body).hexdigest() != skill["sha256"]:
+                raise ValueError("Kimi receipt-selected skill bytes differ")
+            protected[path] = body
+
+        for item in request["servers"][scope]:
+            _object(item, ("name", "origin", "config", "sha256", "event", "nonce", "cwd"))
+            path = Path(item["origin"])
+            body = _read(ctx.root, path, 1 << 20)
+            if (hashlib.sha256(body).hexdigest() != item["sha256"]
+                    or _json(body).get("mcpServers", {}).get(item["name"]) != item["config"]):
+                raise ValueError("Kimi receipt-selected MCP bytes differ")
+            protected[path] = body
+
+    def preserved():
+        for path, body in protected.items():
+            if _read(ctx.root, path) != body:
+                raise ValueError("Kimi installed authority changed during observation")
+    # Every fresh process verifies the same native workspace identities/trust.
+    # No trust mutation occurs in any installed or removed stage.
+    def observe(service):
+        token, count = _ready(ctx, service), 0
+
+        def api(label, method, path, body=None, code=0):
+            nonlocal count
+            count += 1
+            if count > 60:
+                raise ValueError("Kimi installed API request budget exhausted")
+            return _envelope(*service.http(label, method, path, token=token,
+                                          json_body=body, timeout=min(5, service.remaining())), code=code)
+
+        meta = api("meta", "GET", "/api/v1/meta")
+        _meta(meta)
+        ids = {}
+        for scope in WORKSPACES:
+            root = ctx.projects[scope]
+            fixture = {"root": root, "name": "uap-kimi-native-" + scope}
+            data = api("workspace-" + scope, "POST", "/api/v1/workspaces",
+                       {"root": str(root), "name": fixture["name"]})
+            ids[scope] = _workspace(data, fixture)
+            trust_path = "/api/v1/workspaces/" + ids[scope] + "/trust"
+            expected_trust = scope in ("a", "b") and not request["setup_trust"]
+            _trust(api("trust-before-" + scope, "GET", trust_path), expected_trust)
+            if request["setup_trust"] and scope in ("a", "b"):
+                _trust(api("trust-set-" + scope, "POST", trust_path, {}), True)
+                _trust(api("trust-after-" + scope, "GET", trust_path), True)
+        if len(set(ids.values())) != 3:
+            raise ValueError("Kimi installed workspace identities are not distinct")
+        skill_rows, server_rows, probe_rows = {}, {}, {}
+        seen = set()
+        _installed_catalog(api("mcp-outside", "GET", "/api/v2/mcp/servers?" +
+                              urlencode({"cwd": str(ctx.projects["user"])})), [])
+        for scope in WORKSPACES:
+            skill_rows[scope] = _installed_skills(api("skills-" + scope, "GET",
+                "/api/v1/workspaces/" + ids[scope] + "/skills"), request["skills"][scope])
+            entries = request["servers"][scope] if scope != "c" else []
+            server_rows[scope] = _installed_catalog(api("mcp-" + scope, "GET",
+                "/api/v2/mcp/servers?" + urlencode({"cwd": str(ctx.projects[scope])})), entries)
+            for item in request["servers"][scope]:
+                event_fixture = {"event": Path(item["event"]), "nonce": item["nonce"]}
+                before, _ = _events(ctx, event_fixture)
+                if scope == "c":
+                    if before:
+                        raise ValueError("Kimi untrusted installed C already ran a probe")
+                    api("test-refused-c", "POST", "/api/v2/mcp/servers:test",
+                        {"name": item["name"], "cwd": str(ctx.projects[scope])}, code=40408)
+                    if _events(ctx, event_fixture)[0] != before:
+                        raise ValueError("Kimi untrusted installed C started a probe")
+                    continue
+                started = datetime.now(timezone.utc)
+                result = api("test-" + scope, "POST", "/api/v2/mcp/servers:test",
+                             {"name": item["name"], "cwd": str(ctx.projects[scope])})
+                ended = datetime.now(timezone.utc)
+                expected_output = ('Connected to MCP server "' + item["name"] + '".\nAvailable tools: 1\n'
+                                   '- inspect_runtime: Inspect only disposable fixture runtime facts.')
+                if result != {"success": True, "output": expected_output}:
+                    raise ValueError("Kimi installed named MCP test failed")
+                after, rows = _events(ctx, event_fixture)
+                fresh = rows[len(before.splitlines()):]
+                pairs = {(row["pid"], row["session"]) for row in fresh}
+                if (not after.startswith(before) or not fresh or fresh[0]["method"] != "initialize"
+                        or {row["method"] for row in fresh} != {"initialize", "tools/list"}
+                        or sum(row["method"] == "initialize" for row in fresh) != 1
+                        or len(pairs) != 1 or pairs & seen
+                        or any(not started <= _instant(row["timestamp"]) <= ended for row in fresh)):
+                    raise ValueError("Kimi installed named test lacks fresh correlated events")
+                seen.update(pairs)
+                probe_rows[scope] = fresh
+        preserved()
+        if _object(api("shutdown", "POST", "/api/v1/shutdown", {}), ("ok",))["ok"] is not True:
+            raise ValueError("Kimi installed service shutdown failed")
+        service.mark_shutdown()
+        return {"stage": request["stage"], "server_id": meta["server_id"], "workspace_ids": ids,
+                "skill_names": skill_rows, "server_names": server_rows, "probe_events": probe_rows,
+                "tools_call_count": 0, "provider_configured": False, "request_count": count}
+
+    result = ctx.service("kimi-" + request["stage"],
+        ["web", "--no-open", "--host", "127.0.0.1", "--port", "0"], observe, project="a", timeout=60)
+    preserved()
+    return result
+
+
+def _installed_main(request_path):
+    """Client-specific adapter to the existing private service/capture owner."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import project_native_research as shared
+
+    # This guard precedes parsing paths, creating files, or any child launch.
+    shared.native.require_hosted("linux-amd64")
+    path = Path(request_path)
+    value = _json(_read(path.parent, path, 1 << 20, mode=0o600))
+    _object(value, ("schema_version", "root", "home", "projects", "client", "identities", "observation"))
+    if value["schema_version"] != 1 or type(value["schema_version"]) is not int:
+        raise ValueError("Kimi installed request version refused")
+    root, home, client = (Path(value[key]) for key in ("root", "home", "client"))
+    projects = {key: Path(item) for key, item in value["projects"].items()}
+    if (set(projects) != set((*WORKSPACES, "user")) or root.resolve() != root
+            or client.name != "kimi" or not client.is_absolute()
+            or any(item.resolve() != item or not item.is_relative_to(root) or item == root
+                   for item in (home, *projects.values()))
+            or len({home, *projects.values()}) != 5
+            or any(left.is_relative_to(right) for left in (home, *projects.values())
+                   for right in (home, *projects.values()) if left != right)):
+        raise ValueError("Kimi installed profile/project authority refused")
+    identities = {Path(key): digest for key, digest in value["identities"].items()}
+    if (client not in identities or len(identities) < 3 or len(identities) > 128
+            or any(not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                   for digest in identities.values())):
+        raise ValueError("Kimi installed immutable closure refused")
+    # Reuse the existing Context's service, environment, capture, redaction and
+    # cleanup implementation without acquisition or fixture creation.
+    ctx = shared.Context.__new__(shared.Context)
+    ctx.root, ctx.home, ctx.projects, ctx.identities = root, home, projects, identities
+    ctx.argv, ctx.secrets, ctx.captures = [str(client)], [], {}
+    ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-api",
+                   "commands": [], "qualification": {"mcp-tools-call": False}}
+    ctx.env = shared.legacy.runtime_environment(home, root / "tmp")
+    ctx.env.update({"NO_COLOR": "1", "TERM": "dumb"})
+    with shared.Budget(65) as budget:
+        ctx.budget = budget
+        ctx.summary["observations"] = observe_installed(ctx, value["observation"])
+        bodies = shared.evidence(ctx.summary, ctx.captures, ctx.secrets)
+    # Shared evidence() admits only closed redacted members. Recheck the whole
+    # serialization too; a token cannot leak through an added summary field.
+    output = json.dumps({"schema_version": 1,
+        "files": {name: body.decode("utf-8", "strict") for name, body in bodies.items()}},
+        allow_nan=False, sort_keys=True).encode()
+    if len(output) > 1 << 20 or any(secret in output for secret in ctx.secrets):
+        raise ValueError("Kimi installed closed evidence refused")
+    sys.stdout.buffer.write(output + b"\n")
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 3 or sys.argv[1] != "--installed-request":
+        raise SystemExit("Kimi installed observer requires its exact private request")
+    try:
+        _installed_main(sys.argv[2])
+    except Exception:
+        # Never render exception text from bearer-bearing startup/API activity.
+        raise SystemExit("Kimi installed API observation failed; private capture quarantined") from None
