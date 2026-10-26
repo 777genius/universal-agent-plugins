@@ -165,6 +165,33 @@ class RuntimeTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     runtime.cli_attempt_members({**summary, **triple}, self.source, client)
 
+    def test_inspect_triple_is_admitted_only_for_grok_without_qualification(self):
+        command = {"argv": ["/owned/grok", "inspect", "--json"], "cwd": "/owned/A", "exit": 0,
+                   "error": False, "deadline": False, "elapsed_ms": 1,
+                   "cleanup": "full descendant supervision; forced cleanup fails"}
+        triple = {"native-inspect.command.json": json.dumps(command).encode(),
+                  "native-inspect.stdout.log": b'{"grokVersion":"1.0.70"}\n',
+                  "native-inspect.stderr.log": b""}
+        for client in runtime.CLI_ATTEMPTS:
+            summary = {"runtime-attempt.json": json.dumps(self.cli_result(client)).encode()}
+            if client != "grok":
+                with self.subTest(client=client), self.assertRaises(ValueError):
+                    runtime.cli_attempt_members({**summary, **triple}, self.source, client)
+                continue
+            with tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary) / "research.zip"
+                self.envelope(path, list({**summary, **triple}.items()))
+                bodies, result = runtime.admit_runtime(path, client, self.source)
+            self.assertEqual(set(bodies), set(summary) | set(triple))
+            self.assertTrue(result["test_failed"])
+            self.assertFalse(result["runtime_attempt_complete"])
+            self.assertFalse(any(result["qualification"].values()))
+            for missing in triple:
+                with self.subTest(missing=missing), self.assertRaises(ValueError):
+                    runtime.cli_attempt_members({**summary, **{key: value for key, value in triple.items() if key != missing}}, self.source, client)
+            with self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**summary, **triple, "native-inspect.extra.log": b""}, self.source, client)
+
     def test_cline_capture_is_unqualified_and_provider_key_is_never_admitted(self):
         result = self.cline_result()
         base = {"runtime-attempt.json": json.dumps(result).encode()}

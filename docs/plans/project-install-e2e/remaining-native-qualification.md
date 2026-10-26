@@ -1233,6 +1233,65 @@ not qualify the observed macOS race; the original hosted macOS contract remains
 required. Two independent plan rounds precede implementation, followed by
 independent code review and exact-source validation.
 
+## Draft Grok installed prepared-candidate visibility capture
+
+This proposed narrow follow-through awaits scope assessment and two independent
+plan approvals before code. It adds one visibility stage to the existing Grok
+installed-startup attempt, not another collector, lifecycle case or capability.
+
+The concrete gap is the join between existing evidence sets. Genuine observe
+run `40353442581`, source `3234be86f0a3217ebd2371dc5e8fa0b26d3dcd26`,
+tree `74490cebf339e8538b1f237b478aceeb58667e3d`, artifact `12670385326`
+(ZIP SHA256 `a0d9c2e0858b5bbb2297f4d6f6f99aa71a57cfbc3d9ba5ec908434dfe14db957`)
+measured project candidate name/scope/path and disabled status, but those native
+directories were authored directly by research. The composed saved lifecycle
+test exercises the public installer with an inert native runner. The real
+installed-startup fixture validates public add and installed skill/receipts,
+but retains no independent raw `inspect --json` output after that add.
+Production `inspectProject` deliberately permits file-valid Prepared output
+when its native list lacks the candidate, so successful public add alone does
+not establish candidate visibility. This is a missing research observation,
+not evidence of a production bug or a reason to tighten preparation behavior.
+
+After the existing `f.setup`, run exactly one Grok-only command, label
+`native-inspect`, argv `<pinned-grok> inspect --json`, cwd selected project A,
+timeout 30 seconds. Reuse the same command supervisor, original HOME, literal
+updater suppression, immutable/protected checks, bounded streams and original
+150-second work / 180-second total deadline. Other clients' command tables and
+all existing native-startup argv remain unchanged. There is no additional
+provider, login, trust grant, plugin enable, permissions change or native tool.
+
+Parse only the already measured identity subset using the existing strict JSON
+and key-folding helpers: exact `grokVersion=1.0.70`, cwd A, projectRoot A with
+the measured optional trailing separator, boolean projectTrusted and typed
+skills/plugins arrays. Require projectTrusted=false and exactly one selected
+name in the complete plugins array, scope=project, path equal to the already
+validated selected binding locator and enabled=false. Refuse ambiguous names,
+wrong types, aliased/noncanonical paths, duplicate or case-folded identity
+fields, missing candidate or changed version/scope/path/status. Preserve and
+recheck authored and delivered skill bytes around this read-only command.
+Require the selected locator to be a canonical direct child of A's exact
+`.grok/plugins`, with the validated physical-artifact basename. Require its
+ordinary owned directory ancestry and held native manifest/skill paths without
+aliases or extra links before and after inspection; string equality alone
+cannot establish this path authority. Reuse existing bounded no-follow readers.
+Capture the full raw command triple; summarize only visible disabled Prepared
+candidate identity. Do not treat counts, labels or retained files as skill
+loading, active discovery or source revision/runtime proof.
+
+Admit the new complete triple only for Grok in the existing closed frontend;
+partial/unknown members and every other client's admission remain unchanged.
+Root owns this minimal shared frontend change. Add focused inert native-JSON,
+fixed command/cwd/deadline, wrong-client and artifact-triple contracts, using
+the held genuine inspection bytes as the positive schema reference. Then run
+the existing restricted startup attempt unchanged. The whole initial attempt
+still deliberately fails; all five qualification, vendor-authentication and
+real-model flags remain false. This stage does not establish B/outside
+isolation, full lifecycle, restart/removal or a new supported native surface.
+Further lifecycle/qualification work requires its own reviewed evidence and
+definition. Independent code review and a fresh genuine hosted capture remain
+mandatory; no vendor process may run locally.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable

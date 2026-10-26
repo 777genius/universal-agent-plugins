@@ -225,7 +225,11 @@ def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
-    commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
+    commands = CLI_COMMANDS
+    if client == "qoder":
+        commands += ("native-catalog",)
+    elif client == "grok":
+        commands += ("native-inspect",)
     for label in commands:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple

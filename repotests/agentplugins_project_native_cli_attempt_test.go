@@ -153,6 +153,11 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 		if err != nil {
 			return err
 		}
+	case "native-inspect":
+		if f.spec.client != "grok" {
+			return fmt.Errorf("only Grok has the measured installed inspection")
+		}
+		expected = []string{f.client, "inspect", "--json"}
 	default:
 		return fmt.Errorf("unregistered native CLI command label")
 	}
@@ -164,6 +169,9 @@ func (f *projectNativeCLIAttempt) selectedCommand(label, cwd string, argv []stri
 func (f *projectNativeCLIAttempt) command(t *testing.T, label, cwd string, argv []string, timeout time.Duration) ports.CommandResult {
 	t.Helper()
 	allowed := map[string]bool{"git-a": true, "git-b": true, "version": true, "add-a": true, "native-attempt": true}
+	if f.spec.client == "grok" {
+		allowed["native-inspect"] = true
+	}
 	if !allowed[label] || f.used[label] {
 		t.Fatal("unregistered/repeated CLI attempt command")
 	}
@@ -692,6 +700,9 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	f := newProjectNativeCLIAttempt(t, spec)
 	defer f.finish(t)
 	f.setup(t)
+	if client == "grok" {
+		f.inspectGrokPrepared(t)
+	}
 	prompt := "Describe only the installed " + f.name + " skill marker. Do not run any tool or change any file."
 	argv, err := projectNativeCLIArguments(client, f.client, f.view, prompt)
 	if err != nil {
