@@ -1,26 +1,53 @@
-import type { SkillSpectorReport } from '~/types/skillSpector';
-import { loadSkillSpectorReport } from '~/utils/skillSpector';
+import type { MaybeRefOrGetter } from 'vue';
+import type { SkillSpectorDisplayReport, SkillSpectorSubject } from '~/types/skillSpector';
+import { createSkillSpectorClient } from '~/utils/skillSpectorCatalog';
 
-/** One bounded static-report request shared by both catalogs, independent of installation. */
-export function useSkillSpector() {
+const clients = new WeakMap<object, ReturnType<typeof createSkillSpectorClient>>();
+
+/** Shared immutable report cache, with loading/failure state local to the requested repository. */
+export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | undefined>) {
   const config = useRuntimeConfig();
-  const report = useState<SkillSpectorReport | undefined>('skillspector-report');
-  const status = useState<'loading' | 'ready' | 'unavailable'>(
-    'skillspector-load-status',
-    () => 'loading',
-  );
-  const requested = useState('skillspector-requested', () => false);
+  const app = useNuxtApp();
+  const report = shallowRef<SkillSpectorDisplayReport>();
+  const status = ref<'loading' | 'ready' | 'unavailable'>('loading');
+  const mounted = ref(false);
+  let generation = 0;
   onMounted(() => {
-    if (requested.value) return;
-    requested.value = true;
-    void (async () => {
-      try {
-        report.value = await loadSkillSpectorReport(String(config.public.skillspectorReportsUrl));
+    mounted.value = true;
+  });
+  watch(
+    [mounted, () => toValue(subject)?.repository.toLowerCase()],
+    async ([ready, repository]: [boolean, string | undefined]) => {
+      if (!ready) return;
+      const current = ++generation;
+      report.value = undefined;
+      if (!repository) {
         status.value = 'ready';
-      } catch {
-        status.value = 'unavailable';
+        return;
       }
-    })();
+      status.value = 'loading';
+      let client = clients.get(app);
+      if (!client) {
+        client = createSkillSpectorClient(
+          String(config.public.skillspectorManifestUrl),
+          String(config.public.skillspectorReportsUrl),
+        );
+        clients.set(app, client);
+      }
+      try {
+        const result = await client.reportFor(repository);
+        if (current === generation) {
+          report.value = result;
+          status.value = 'ready';
+        }
+      } catch {
+        if (current === generation) status.value = 'unavailable';
+      }
+    },
+    { immediate: true },
+  );
+  onBeforeUnmount(() => {
+    generation++;
   });
   return { report, status };
 }

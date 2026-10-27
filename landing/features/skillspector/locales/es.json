@@ -31,7 +31,8 @@
       "older": "Este informe tiene más de siete días o describe otra revisión. No acredita el estado actual.",
       "staticParseLimit": "Algunas expresiones superaron los límites del analizador estático.",
       "referenceMissing": "Algunos archivos locales referenciados no se encontraron entre los archivos de la habilidad analizados; podrían crearse durante la ejecución.",
-      "analyzerIncomplete": "Un analizador no completó todas las comprobaciones previstas."
+      "analyzerIncomplete": "Un analizador no completó todas las comprobaciones previstas.",
+      "pendingCoverage": "Se han comprobado {checked} de {total} habilidades seleccionadas. Las restantes esperan una comprobación en segundo plano."
     }
   }
 }

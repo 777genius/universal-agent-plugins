@@ -191,6 +191,9 @@ export default defineNuxtConfig({
       discoveryKeyID,
       discoveryPublicKey,
       muxPlaybackId,
+      skillspectorManifestUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_MANIFEST_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v2/index.json',
       skillspectorReportsUrl:
         process.env.NUXT_PUBLIC_SKILLSPECTOR_REPORTS_URL ||
         'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v1/index.json',

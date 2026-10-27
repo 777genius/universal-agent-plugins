@@ -14,7 +14,7 @@ const props = defineProps<{
   scope: 'plugin' | 'skill';
 }>();
 const { t, n, locale } = useI18n({ useScope: 'local' });
-const { report, status: reportStatus } = useSkillSpector();
+const { report, status: reportStatus } = useSkillSpector(() => props.subject);
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
 const displayStatus = computed(() =>
   reportStatus.value === 'ready' ? assessment.value.status : reportStatus.value,
@@ -86,6 +86,14 @@ const coverageLimits = computed(() => {
       <strong>{{
         t(`registryUi.skillSpector.${scope === 'plugin' ? 'pluginScope' : 'skillScope'}`)
       }}</strong>
+      <p v-if="assessment.coverage?.pending">
+        {{
+          t('registryUi.skillSpector.pendingCoverage', {
+            checked: n(assessment.coverage.reported),
+            total: n(assessment.coverage.selected),
+          })
+        }}
+      </p>
       <p v-if="reportStatus !== 'ready'">
         {{ t(`registryUi.skillSpector.${reportStatus}Details`) }}
       </p>
