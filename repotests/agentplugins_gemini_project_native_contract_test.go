@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -12,6 +13,47 @@ import (
 	"testing"
 	"time"
 )
+
+func geminiProjectNativeStderrAllowed(body []byte) bool {
+	const ripgrep = "Ripgrep is not available. Falling back to GrepTool.\n"
+	const terminal = "Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.\n" +
+		"Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n" + ripgrep
+	switch string(body) {
+	case "", ripgrep, terminal:
+		return true
+	default:
+		return false
+	}
+}
+
+func TestGeminiProjectNativeStderrAdmitsOnlyExactMeasuredTuples(t *testing.T) {
+	const observed = `Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.
+Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.
+Ripgrep is not available. Falling back to GrepTool.
+`
+	if len(observed) != 342 || fmt.Sprintf("%x", sha256.Sum256([]byte(observed))) != "0309ffcd9f9558b019117eab516a089bfe80be8c1a596be48e3794ecf695a953" {
+		t.Fatal("independent measured terminal tuple differs")
+	}
+	for _, body := range []string{"", "Ripgrep is not available. Falling back to GrepTool.\n", observed} {
+		if !geminiProjectNativeStderrAllowed([]byte(body)) {
+			t.Fatal("exact measured diagnostic tuple refused")
+		}
+	}
+	lines := strings.SplitAfter(observed, "\n")
+	for index, body := range []string{
+		observed[:len(observed)-1], observed + "\n", "\n" + observed, observed + observed,
+		strings.ReplaceAll(observed, "\n", "\r\n"), lines[0], lines[1], lines[0] + lines[1],
+		lines[1] + lines[0] + lines[2], lines[2] + lines[0] + lines[1],
+		strings.Replace(observed, "TERM=dumb", "TERM=vt100", 1), strings.Replace(observed, "256-color", "truecolor", 1),
+		observed + "[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.\n",
+		observed + "API request failed\nError: private stack\n", observed + "Not signed in\n",
+		"\x1b[31m" + observed, observed + "\x00",
+	} {
+		if geminiProjectNativeStderrAllowed([]byte(body)) {
+			t.Fatalf("unmeasured or failing diagnostic %d admitted", index)
+		}
+	}
+}
 
 // Source-defined JSONL union; genuine runtime evidence must still satisfy every
 // ordering, tool, native-session and independent probe-facts constraint.

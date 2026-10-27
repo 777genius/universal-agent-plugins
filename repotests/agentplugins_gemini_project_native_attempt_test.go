@@ -502,7 +502,7 @@ func TestAgentpluginsGeminiNativeProjectRuntimeAttempt(t *testing.T) {
 	prompt := "Call only the installed inspect_runtime tool once for the fixture challenge."
 	env := append(f.env(), "GEMINI_API_KEY="+f.secret, "GOOGLE_GEMINI_BASE_URL="+p.server.URL, "GOOGLE_GENAI_API_VERSION=v1beta")
 	result := f.command(t, "native-attempt", f.base.Project, env, []string{f.node, f.client, "--prompt", prompt, "--approval-mode", "default", "--output-format", "stream-json", "--model", geminiProjectModel}, 60*time.Second)
-	if len(result.Stderr) != 0 && string(result.Stderr) != "Ripgrep is not available. Falling back to GrepTool.\n" {
+	if !geminiProjectNativeStderrAllowed(result.Stderr) {
 		t.Fatal("unexpected Gemini native diagnostic")
 	}
 	p.server.Close()

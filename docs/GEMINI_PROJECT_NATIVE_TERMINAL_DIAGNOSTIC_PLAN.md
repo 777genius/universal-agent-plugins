@@ -83,3 +83,19 @@ cleanup. The full applicable project lifecycle remains a separate mandatory
 proof. All unproved qualification, vendor-authentication and real-model flags
 remain false; the old failed trace is never relabelled.
 
+## Completed local validation
+
+Both independent plan and code reviews approved the final two-file correction.
+The exact helper resides alongside the existing native stream helper in the
+contract file, retaining the attempt file's prior size. The affected diagnostic,
+provider, stream, identity and artifact contracts passed (0.015s), including a
+temporary offline replay of the exact retained1952-byte stderr by full hash.
+That actual failed stream was refused while its exact measured342-byte tuple
+was admitted; the temporary replay test was then removed. Actual affected
+all-enabled lint and unfiltered whole-file size/complexity/architecture lint
+each reported zero issues. Formatting and diff whitespace checks passed.
+Checks used the granted exclusive slot, pinned Go1.26.10 with Go1.22 source
+compatibility, private shared-memory temporary/lint directories and existing
+bounded module/build caches. No vendor, installer, hosted guard or model ran
+locally. The fresh genuine hosted result remains a required separate proof.
+
