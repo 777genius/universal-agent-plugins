@@ -153,7 +153,10 @@ async function readBytes(
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new HttpError(response.status);
-  if (Number(response.headers.get('content-length')) > maximum || !response.body) invalid();
+  if (Number(response.headers.get('content-length')) > maximum || !response.body) {
+    await response.body?.cancel();
+    invalid();
+  }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
@@ -246,7 +249,20 @@ export function createSkillSpectorClient(
           const records = (
             await Promise.all(descriptors.map((descriptor) => loadShard(manifest, descriptor)))
           ).flat();
-          if (new Set(records.map((record) => record.id)).size !== records.length) invalid();
+          const ids = new Set<string>();
+          const subjects = new Set<string>();
+          for (const record of records) {
+            const subject = JSON.stringify([
+              record.kind,
+              record.source.repository.toLowerCase(),
+              record.source.revision,
+              record.source.path,
+              record.plugin_path,
+            ]);
+            if (ids.has(record.id) || subjects.has(subject)) invalid();
+            ids.add(record.id);
+            subjects.add(subject);
+          }
           return { ...manifest, records };
         })();
         repositories.set(key, pending);

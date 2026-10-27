@@ -183,6 +183,59 @@ describe('bounded SkillSpector repository catalog', () => {
     assert.equal(requests.includes(legacyUrl), false);
   });
 
+  it('rejects duplicated immutable subjects across repository parts even under different IDs', async () => {
+    const { bodies } = await catalog(['owner/one', 'owner/one']);
+    await assert.rejects(
+      createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(bodies)).reportFor('owner/one'),
+      /invalid/,
+    );
+  });
+
+  it('waits for every repository part before exposing any assessment records', async () => {
+    const { manifest, bodies } = await catalog(['owner/one', 'owner/one']);
+    const oldUrl = new URL(manifest.shards[1]!.path, manifestUrl).href;
+    const second = JSON.parse(bodies.get(oldUrl)!);
+    second.records[0].source.path += '-other';
+    const body = JSON.stringify(second);
+    const bytes = new TextEncoder().encode(body);
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    manifest.shards[1] = {
+      repository: 'owner/one',
+      path: `shards/${hash}.json`,
+      digest: `sha256:${hash}`,
+      bytes: bytes.byteLength,
+      record_count: 1,
+    };
+    const secondUrl = new URL(manifest.shards[1]!.path, manifestUrl).href;
+    bodies.set(secondUrl, body);
+    bodies.set(manifestUrl, JSON.stringify(manifest));
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let firstRead = false;
+    const fetcher = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === secondUrl) await blocked;
+      else if (url !== manifestUrl) firstRead = true;
+      return new Response(bodies.get(url));
+    }) as typeof fetch;
+    let settled = false;
+    const pending = createSkillSpectorClient(manifestUrl, legacyUrl, fetcher)
+      .reportFor('owner/one')
+      .then((report) => {
+        settled = true;
+        return report;
+      });
+    while (!firstRead) await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    release();
+    assert.equal((await pending).records.length, 2);
+  });
+
   it('falls back only when the v2 manifest is missing, preserving strict legacy bounds', async () => {
     for (const status of [404, 500]) {
       const requests: string[] = [];
@@ -236,6 +289,24 @@ describe('bounded SkillSpector repository catalog', () => {
     }
     assert.equal((await all).length, 9);
     assert.equal(peak, 4);
+  });
+
+  it('cancels a response immediately when its declared content length exceeds the bound', async () => {
+    let cancelled = false;
+    const fetcher = (async () =>
+      new Response(
+        new ReadableStream({
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        { headers: { 'content-length': String((4 << 20) + 1) } },
+      )) as typeof fetch;
+    await assert.rejects(
+      createSkillSpectorClient(manifestUrl, legacyUrl, fetcher).reportFor('owner/one'),
+      /invalid/,
+    );
+    assert.equal(cancelled, true);
   });
 
   it('cancels oversized streams before allocating a complete manifest', async () => {
