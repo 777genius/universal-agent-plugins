@@ -699,6 +699,7 @@ func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
 	}
 	result := map[string]string{}
 	count, total := 0, int64(0)
+	var logLink *qoderLogLinkSnapshot
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -723,6 +724,18 @@ func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
 			result[rel] = fmt.Sprintf("directory:%o", info.Mode())
 			return nil
 		}
+		if rel == filepath.Join("logs", "latest") && info.Mode()&os.ModeSymlink != 0 {
+			snapshot, err := qoderReadOriginalLogLink(root, info)
+			if err != nil {
+				return err
+			}
+			total += info.Size()
+			if total > 256<<20 {
+				return fmt.Errorf("Qoder profile inventory byte bound")
+			}
+			result[rel], logLink = snapshot.Record, &snapshot
+			return nil
+		}
 		if !info.Mode().IsRegular() || identity.Nlink != 1 || info.Size() < 0 {
 			return projectNativeCLIQoderProfileRefusal(rel, info, identity.Nlink)
 		}
@@ -738,6 +751,9 @@ func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
 		result[rel] = fmt.Sprintf("file:%o:%d:%s", info.Mode(), len(body), hex.EncodeToString(sum[:]))
 		return nil
 	})
+	if err == nil && logLink != nil {
+		err = qoderVerifyOriginalLogClosure(root, *logLink, result)
+	}
 	return result, err
 }
 
@@ -782,6 +798,9 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 		before, err := projectNativeCLIQoderProfile(profile)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if record, ok := before[filepath.Join("logs", "latest")]; ok {
+			f.evidence["qoder_original_log_link"] = map[string]any{"no_follow": true, "contained_ordinary_target": true, "record": record}
 		}
 		f.evidence["attempt_stage"] = "native-installed-catalog"
 		result := f.command(t, "native-catalog", f.base.Project, []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}, 30*time.Second)

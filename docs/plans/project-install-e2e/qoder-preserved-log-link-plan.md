@@ -106,3 +106,33 @@ Use only the root-granted exclusive Go/lint slot for focused contracts and both
 affected lint gates; inspect exact scope, obtain independent code review, and
 let root publish to existing PR523 using a fresh non-forced ref lease. Only a
 fresh genuine source-bound run can establish whether catalog/startup proceeds.
+
+## Actual implementation validation
+
+The original plan SHA256 `6e45e544bc368a0974ca94196472771642210d735e442c2a07744cace84cecae`
+received independent CLI and shell plan GOs plus root review before code. Both
+critics reviewed the complete two-file implementation and its final small
+preallocation/positive-contract delta. The unchanged shared attempt file has
+SHA256 `d2571a53a42f70486967c96298b6fd5c1ca34036d511814169eb18a36c796020`;
+the final new helper/contracts have
+SHA256 `cbfe3f4ffa325c742a0123939813354197eaf0dcf8a52d5a3bdbbb59c98ebeba`.
+
+Actual focused inert Go tests passed in `0.028s`: five new log-link suites with
+23 directory/file, unsafe-target, alias/hardlink/FIFO and mutation subcases,
+together with the retained Qoder catalog/profile/diagnostic and exact argv/scope
+contracts. Actual all-enabled changed-line lint and unfiltered whole-file
+size/complexity/architecture lint each reported `0 issues`; gofmt and whitespace
+checks pass. The first linker attempt exhausted SHM, and the first lint pass
+found one preallocation issue plus exhausted SHM fact-cache writes. After root
+freed an independently verified duplicate toolchain, the byte-identical canonical
+Go1.26.10 and task-owned disk temp/lint cache completed the checks. Direct source
+indexing (`GODEBUG=goindex=0`) avoided the stale index after the compiler path
+change. No vendor process ran locally and no native qualification was inferred.
+
+The symlink record includes the stable numeric link and target metadata as well
+as exact target byte count/SHA256, so replacing a link with the same target text
+cannot compare equal. Actual same-target rotation and unchanged original-link
+identity contracts cover that boundary. Target text and contents remain private;
+the ordinary target closure and existing complete pre/post map comparison remain
+mandatory. Actual native target shape and any catalog log mutation remain for a
+fresh genuine run; an unsafe target or changed log still fails.
