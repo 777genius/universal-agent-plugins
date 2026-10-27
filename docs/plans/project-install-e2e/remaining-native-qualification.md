@@ -1411,8 +1411,11 @@ are unchanged; historical failed raw archives must re-admit byte-identically.
 Update the existing independent expected metadata/count assertions only where
 the intentional fourth retained detail changes them. Keep all prior checks,
 priority cases, hostile records, actual-filesystem nonmutation, private-canary
-checks and the fatal full-profile child control. State independent literal key
-and content digests for the fourth selected fixture entries; do not replace
+checks and the original fatal full-profile comparison. The existing Qoder
+controls exercise actual filesystem drift and unequal inventory maps; there is
+no separate Qoder fatal-child test. Prove the fatal caller remains unchanged
+with its complete file hash. State independent literal key and content digests
+for the fourth selected fixture entries; do not replace
 assertions with expectations computed through the formatter being tested.
 
 Exercise an actual inert filesystem with a latest-link replacement plus a new
@@ -1444,3 +1447,19 @@ This amendment grants no eventual log allowance or full-cycle qualification.
 ## Accepted Qoder diagnostic amendment before implementation
 
 The exact draft SHA256 `49e8fdec9188273f924542bf13469e44c83393ade9bc5c392ad0d5ddb68bfe4a` received independent GPT-6.1 Sol xhigh plan GOs from `vscode_finish` (R1) and `native_finish` (R2) before any code edit. Both reviewers inspected the current formatter and exact failed capture; the original full-profile failure and all qualification limits remain required.
+
+### Factual pre-code correction and renewed independent acceptance
+
+Before source edits, root corrected the reference to a separate fatal-child
+control: Qoder has actual filesystem drift/unequal-map controls and an
+unconditional fatal caller, not that separate Copilot test. The revised exact
+plan SHA256 is `449e9c92195a9d3460a6a6ee7a9e76f6d94d3ccc9a7539922ed6e0c9027d21c8`.
+Independent GPT-6.1 Sol xhigh reviewers `gemini_qoder_finish` and
+`native_e2e_finish` both gave PLAN GO before implementation; receipt SHA256s
+are `55cb807030414e335b55884c2187fc03f858748397546db2a6074f67eee4750e`
+and `cd499270db43b6536fa61f197bd0bfabafee58d610fa0abc4f6c0f1f4c37c10e`.
+Both checked the actual source and unchanged unconditional full-profile fatal
+caller, whose complete file SHA256 is
+`20ba3af567f4f0499220ff6ad7202993a4a4a292d6c41493f41cf174f804ba72`.
+This factual correction changes no guard, authorized scope or intended tests.
+The previous plan-only commit remains preserved in history.
