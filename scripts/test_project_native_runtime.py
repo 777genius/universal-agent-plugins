@@ -460,6 +460,161 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.kimi_call_members({**bodies, "git-c.command.json": json.dumps({**command, "cleanup": "assumed"}).encode()}, self.source)
 
+    def kimi_synthetic_completed_capture(self):
+        """Independent inert protocol records, never a measured native capture."""
+        encode = lambda value: json.dumps(value, separators=(",", ":")).encode()
+        digest = lambda body: hashlib.sha256(body).hexdigest()
+        nonce, root = "c" * 32, "/inert/kimi-python-contract"
+        project, physical = root + "/project", "uap-kimi-native-a-" + "d" * 12
+        profile = project + "/.kimi-code"
+        active, data = project + "/.uap/managed/clients/kimi/" + physical, project + "/.uap/plugin-data/" + physical
+        client, session = "/inert/never-executed/kimi", "session_11111111-2222-4333-8444-555555555555"
+        call, approval, prompt_id = "uap_" + nonce + "_attempt", "approval_inert-owned", "msg_inert_prompt"
+        stamp = "2026-01-02T03:04:07Z"
+        prompt = "Call the one installed fixture tool once with the exact nonce and marker; then report completion. " + nonce + "-a"
+        sentinel, marker = "UAP_KIMI_DONE_" + nonce, "retained-" + nonce
+        args = {"nonce": nonce + "-a", "operation": "write", "marker": marker}
+        facts = {"nonce": nonce + "-a", "revision": "a-one", "cwd": active, "argv": ["Kimi owned a", active + "/argument"],
+                 "plugin_root": active, "plugin_data": data, "literal": "", "once": "", "marker": marker, "pid": 17, "session": "17-1767323048000000000"}
+        server = {"transport": "stdio", "command": active + "/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins",
+                  "args": ["--internal-stdio-v1", active, data, active, "plugin", "--", "./bin/probe", "Kimi owned a", active + "/argument"],
+                  "env": {"PLUGIN_ROOT": active, "PLUGIN_DATA": data, "UAP_TEST_ROOT": root, "UAP_TEST_EVENTS": root + "/a-events.jsonl", "UAP_TEST_NONCE": nonce + "-a", "UAP_TEST_REVISION": "a-one"}}
+        bodies = {".kimi-code-mcp.json.installed": encode({"mcpServers": {"uap-kimi-native-a": server}}),
+                  "uap-kimi-native-a-SKILL.md.installed": ("---\nname: uap-kimi-native-a\ndescription: Kimi installed a-one\n---\nUAP_KIMI_a-one_" + nonce + "\n").encode()}
+        for label in runtime.KIMI_CALL_COMMANDS:
+            command = {"argv": ["/inert/never-executed/" + label], "cwd": project, "exit": 0, "error": False,
+                       "deadline": False, "cleanup": "ordinary full-descendant supervision; forced termination fails"}
+            bodies[label + ".command.json"], bodies[label + ".stdout.log"], bodies[label + ".stderr.log"] = encode(command), b"", b""
+        projects_for_commands = {"a": project, "b": root + "/project-b", "c": root + "/project-c", "user": root + "/outside"}
+        for scope in ("a", "b", "c"):
+            command = json.loads(bodies["git-" + scope + ".command.json"])
+            command.update({"argv": ["/inert/never-executed/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"], "cwd": projects_for_commands[scope]})
+            bodies["git-" + scope + ".command.json"] = encode(command)
+        for label, argv in (("version", [client, "--version"]),
+                ("add-a", ["/inert/never-executed/agentplugins", "add", root + "/sources/a", "--no-save", "--target", "kimi", "--format", "json", "--scope", "project", "--project-root", project]),
+                ("native-attempt", ["/inert/never-executed/python", "/inert/checked-source/scripts/project_native_collectors/kimi_attempt.py", "--attempt-request", root + "/attempt-request.json"])):
+            command = json.loads(bodies[label + ".command.json"])
+            command.update({"argv": argv, "cwd": project if label == "add-a" else projects_for_commands["user"]})
+            bodies[label + ".command.json"] = encode(command)
+        bodies["version.stdout.log"] = b"2.3.2\n"
+        bodies["probe-events.jsonl"] = b"".join(encode({"method": method, "pid": 17, "session": facts["session"], "nonce": nonce + "-a",
+             "timestamp": f"2026-01-02T03:04:08.00{index}Z", "facts": facts if method == "tools/call" else None}) + b"\n"
+             for index, method in enumerate(("initialize", "tools/list", "tools/call")))
+        declaration = {"type": "function", "function": {"name": "mcp__uap-kimi-native-a__inspect_runtime", "description": "Inspect only disposable fixture runtime facts.",
+             "parameters": {"type": "object", "properties": {key: {"type": "string"} for key in ("nonce", "operation", "marker")}, "required": ["nonce"], "additionalProperties": False}}}
+        first = {"model": "uap-kimi-native-model", "messages": [{"role": "user", "content": prompt}], "tools": [declaration], "stream": True,
+                 "stream_options": {"include_usage": True}, "prompt_cache_key": session}
+        second = {**first, "messages": first["messages"] + [{"role": "assistant", "content": None, "tool_calls": [{"id": call, "type": "function", "function": {"name": declaration["function"]["name"], "arguments": encode(args).decode()}}]},
+                 {"role": "tool", "tool_call_id": call, "content": "Wall time: 0.004 seconds\n" + encode(facts).decode()}]}
+        bodies["provider-request-1.json"], bodies["provider-request-2.json"] = encode(first), encode(second)
+        messages = [{"id": prompt_id, "session_id": session, "role": "user", "content": [{"type": "text", "text": prompt}], "created_at": stamp, "metadata": {"origin": {"kind": "user"}}},
+                    {"id": "msg_inert_call", "session_id": session, "role": "assistant", "content": [{"type": "tool_use", "tool_call_id": call, "tool_name": declaration["function"]["name"], "input": args}], "created_at": stamp},
+                    {"id": "msg_inert_result", "session_id": session, "role": "tool", "content": [{"type": "tool_result", "tool_call_id": call, "output": encode(facts).decode()}], "created_at": "2026-01-02T03:04:08.003Z"},
+                    {"id": "msg_inert_final", "session_id": session, "role": "assistant", "content": [{"type": "text", "text": sentinel}], "created_at": "2026-01-02T03:04:08.004Z"}]
+        state = {"id": session, "workspace_id": "wd_project_111111111111", "metadata": {"cwd": project}, "agent_config": {"model": "uap-kimi-native-model"},
+                 "permission_rules": [], "last_turn_reason": "completed", "busy": False, "main_turn_active": False, "pending_interaction": "none", "archived": False}
+        state.update({"title": prompt, "created_at": stamp, "updated_at": "2026-01-02T03:04:10Z", "usage": {key: 0 for key in ("input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens", "context_tokens")}, "message_count": 0, "last_seq": 0})
+        raw = {"kimi-single-tool.stdout.log": "independently authored inert service stream; never executed\n", "kimi-single-tool.stderr.log": ""}
+        native = {"argv": [client, "web", "--no-open", "--host", "127.0.0.1", "--port", "0"], "cwd": project, "probe": "kimi-single-tool", "elapsed_seconds": 0.01, "error": None, "exit": 0,
+                  "cleanup": {"forced_kill": False, "group_reaped": True, "port_closed": True, "shutdown_acknowledged": True, "sigterm_sent": False}}
+        for channel in ("stdout", "stderr"):
+            name = "kimi-single-tool." + channel + ".log"
+            native.update({channel + "_file": name, channel + "_bytes": len(raw[name].encode()), channel + "_sha256": digest(raw[name].encode())})
+        receipts = []
+        def response(label, method, path, value, auth=True, status=200, code=0):
+            body = encode({"code": code, "msg": "success" if code == 0 else "inert unauthorized", "data": value, "request_id": "inert-request-" + label})
+            name = "kimi-single-tool-" + label + ".http.json"
+            raw[name] = body.decode()
+            receipts.append({"authenticated": auth, "error": None, "label": label, "method": method, "path": path, "response_bytes": len(body), "response_file": name, "response_sha256": digest(body), "status": status})
+        response("health", "GET", "/api/v1/healthz", {"ok": True}, False)
+        response("unauthorized", "GET", "/api/v1/meta", None, False, 401, 40101)
+        response("meta", "GET", "/api/v1/meta", {"server_version": "2.3.2", "backend": "v2", "dangerous_bypass_auth": False})
+        projects = {"a": project, "b": root + "/project-b", "c": root + "/project-c", "user": root + "/outside"}
+        workspaces = {"a": "wd_project_111111111111", "b": "wd_project-b_222222222222", "c": "wd_project-c_333333333333"}
+        for scope in ("a", "b", "c"):
+            response("workspace-" + scope, "POST", "/api/v1/workspaces", {"id": workspaces[scope], "root": projects[scope], "name": "uap-kimi-native-" + scope, "created_at": stamp, "last_opened_at": stamp, "session_count": 0})
+            response("trust-before-" + scope, "GET", "/api/v1/workspaces/" + workspaces[scope] + "/trust", {"trusted": False})
+        for scope in ("a", "b"):
+            response("trust-set-" + scope, "POST", "/api/v1/workspaces/" + workspaces[scope] + "/trust", {"trusted": True})
+            response("trust-after-" + scope, "GET", "/api/v1/workspaces/" + workspaces[scope] + "/trust", {"trusted": True})
+        response("trust-untrusted-c", "GET", "/api/v1/workspaces/" + workspaces["c"] + "/trust", {"trusted": False})
+        projected = {key: value for key, value in server.items() if key != "env"}; projected["envKeys"] = sorted(server["env"])
+        for scope in ("a", "b", "c", "user"):
+            catalog = [{"name": "uap-kimi-native-a", "config": projected, "source": "global", "origin": profile + "/mcp.json", "mutable": False}] if scope == "a" else []
+            response("catalog-" + scope, "GET", "/api/v2/mcp/servers?" + runtime.urlencode({"cwd": projects[scope]}), catalog)
+        response("skills-a", "GET", "/api/v1/workspaces/" + workspaces["a"] + "/skills", {"skills": []})
+        response("create-session", "POST", "/api/v1/sessions", {**{key: value for key, value in state.items() if key != "last_turn_reason"}, "agent_config": {"model": ""}, "title": ""})
+        base = "/api/v1/sessions/" + session
+        response("prompt", "POST", base + "/prompts", {"prompt_id": prompt_id, "user_message_id": prompt_id, "status": "running", "content": [{"type": "text", "text": prompt}], "created_at": stamp})
+        action = "Approve " + declaration["function"]["name"]
+        response("approvals-0", "GET", base + "/approvals?status=pending", {"items": [{"approval_id": approval, "session_id": session, "agent_id": "main", "turn_id": 0, "tool_call_id": call, "tool_name": declaration["function"]["name"], "action": action, "tool_input_display": {"kind": "generic", "summary": action, "detail": args}, "created_at": stamp, "expires_at": "2026-01-03T03:04:07Z"}]})
+        response("approve-once", "POST", base + "/approvals/" + approval, {"resolved": True, "resolved_at": stamp})
+        response("snapshot-0", "GET", base + "/snapshot", {"as_of_seq": 1, "epoch": "inert-epoch", "session": state, "messages": {"items": messages, "has_more": False}, "in_flight_turn": None, "pending_approvals": [], "pending_questions": [], "subagents": []})
+        response("history", "GET", base + "/messages?page_size=20", {"items": messages[::-1], "has_more": False})
+        response("shutdown", "POST", "/api/v1/shutdown", {"ok": True})
+        raw["research.json"] = encode({"schema_version": 1, "client": "kimi", "phase": "installed-single-tool-attempt", "commands": [native], "http_requests": receipts,
+              "qualification": dict.fromkeys(runtime.shared.QUALIFICATION_CASES, False), "observations": {"native_capture_complete": False, "native_history_grammar_frozen": False,
+              "native_session_id": session, "native_turn_id": 0, "provider_call_id": call, "approval_id": approval, "snapshot_count": 1, "api_request_count": len(receipts), "boundary": "Bounded initial capture; no native history or qualification inferred from provider/probe success"}}).decode()
+        bodies["python-api.json"] = bodies["native-attempt.stdout.log"] = encode({"schema_version": 1, "files": raw})
+        inventory = {".": "020000000700:directory", ".agentplugins-data-owner.json": "0600:" + "e" * 64}
+        bodies["native-data-proof.json"] = encode({"schema_version": 1, "before": inventory, "after_without_marker": inventory, "marker_body": marker, "marker_bytes": len(marker), "marker_sha256": digest(marker.encode())})
+        proof = {"native_session_id": session, "native_turn_id": 0, "provider_call_id": call, "approval_id": approval, "prompt_id": prompt_id, "terminal_reason": "completed",
+                 "message_count": 4, "snapshot_count": 1, "history_sha256": digest(raw["kimi-single-tool-history.http.json"].encode()), "terminal_snapshot_sha256": digest(raw["kimi-single-tool-snapshot-0.http.json"].encode()),
+                 "probe_pid": 17, "probe_session": facts["session"], "started_at": "2026-01-02T03:04:05Z", "ended_at": "2026-01-02T03:04:11Z", "data_proof_sha256": digest(bodies["native-data-proof.json"])}
+        result = {**self.cli_result("qoder"), "client": "kimi", "version": "2.3.2", "phase": "installed-single-tool-attempt", "provider_kind": "scripted-openai-chat-completions", "elapsed_ms": 8000,
+                  "runtime_attempt_complete": True, "test_failed": False, "native_capture_complete": True, "native_history_grammar_frozen": True, "provider_returned": True,
+                  "provider_call_id": call, "native_session_id": session, "native_turn_id": 0, "probe_facts": facts, "native_history": proof,
+                  "binding": {"client_id": "kimi", "scope": "project", "activation": "prepared", "authentication": "not_checked", "verification": "installation_verified", "materialization": "materialized", "target_locator": active, "native_profile_root": profile, "physical_artifact_id": physical},
+                  "data_locator": data, "provider_cleanup": {"shutdown_complete": True, "forced_close": False, "error": False, "requests": 2, "issued": True, "returned": True},
+                  "qualification": {key: key in ("mcp-initialize", "mcp-tools-list", "mcp-tools-call") for key in runtime.shared.QUALIFICATION_CASES}}
+        bodies["runtime-attempt.json"] = encode(result)
+        return bodies
+
+    def test_kimi_synthetic_complete_reader_recomputes_raw_proof(self):
+        bodies = self.kimi_synthetic_completed_capture()
+        result = runtime.kimi_call_members(bodies, self.source)
+        self.assertTrue(result["runtime_attempt_complete"])
+        self.assertFalse(result["qualification"]["project-lifecycle"])
+        self.assertFalse(result["qualification"]["native-restart-removal"])
+        for name in bodies:
+            with self.subTest(missing=name), self.assertRaises(ValueError):
+                runtime.kimi_call_members({key: value for key, value in bodies.items() if key != name}, self.source)
+
+    def test_kimi_synthetic_success_cannot_cover_failed_or_foreign_raw(self):
+        for kind in ("terminal-failed", "empty-sentinel", "wrong-call", "extra-message", "history-more", "forced", "changed-data", "wrong-marker", "wrong-proof", "foreign-source", "lifecycle-flag", "wrong-cache", "unknown-file"):
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                bodies = self.kimi_synthetic_completed_capture()
+                result = json.loads(bodies["runtime-attempt.json"])
+                if kind in ("terminal-failed", "empty-sentinel", "wrong-call", "extra-message", "history-more"):
+                    envelope = json.loads(bodies["python-api.json"])
+                    raw = envelope["files"]
+                    snapshot = json.loads(raw["kimi-single-tool-snapshot-0.http.json"])
+                    if kind == "terminal-failed": snapshot["data"]["session"]["last_turn_reason"] = "failed"
+                    elif kind == "empty-sentinel": snapshot["data"]["messages"]["items"][-1]["content"] = []
+                    elif kind == "wrong-call": snapshot["data"]["messages"]["items"][1]["content"][0]["tool_call_id"] = "foreign"
+                    elif kind == "extra-message": snapshot["data"]["messages"]["items"].append(snapshot["data"]["messages"]["items"][0])
+                    elif kind == "history-more": snapshot["data"]["messages"]["has_more"] = True
+                    raw["kimi-single-tool-snapshot-0.http.json"] = json.dumps(snapshot)
+                    research = json.loads(raw["research.json"])
+                    for receipt in research["http_requests"]:
+                        body = raw[receipt["response_file"]].encode(); receipt["response_bytes"] = len(body); receipt["response_sha256"] = hashlib.sha256(body).hexdigest()
+                    raw["research.json"] = json.dumps(research)
+                    bodies["python-api.json"] = bodies["native-attempt.stdout.log"] = json.dumps(envelope).encode()
+                elif kind == "forced": result["provider_cleanup"]["forced_close"] = True
+                elif kind in ("changed-data", "wrong-marker"):
+                    data = json.loads(bodies["native-data-proof.json"])
+                    if kind == "changed-data": data["after_without_marker"]["foreign"] = "0600:" + "e" * 64
+                    else: data["marker_body"] = "foreign"
+                    bodies["native-data-proof.json"] = json.dumps(data).encode()
+                elif kind == "wrong-proof": result["native_history"]["history_sha256"] = "foreign"
+                elif kind == "foreign-source": result["source_identity"]["installer_tree"] = "f" * 40
+                elif kind == "lifecycle-flag": result["qualification"]["project-lifecycle"] = True
+                elif kind == "wrong-cache":
+                    request = json.loads(bodies["provider-request-2.json"]); request["prompt_cache_key"] = "foreign"; bodies["provider-request-2.json"] = json.dumps(request).encode()
+                elif kind == "unknown-file": bodies["foreign.json"] = b"{}"
+                bodies["runtime-attempt.json"] = json.dumps(result).encode()
+                runtime.kimi_call_members(bodies, self.source)
+
 
 def load_tests(loader, tests, pattern):
     # The existing runtime workflow deliberately selects this exact module.

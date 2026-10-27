@@ -143,6 +143,39 @@ type kimiAttemptProvider struct {
 	err                              error
 	issued, returned                 bool
 	validate                         func(string) error
+	cleanup                          map[string]any
+}
+
+// Cleanup uses the constructor's original total origin. A forced close remains
+// failure evidence and can never satisfy the successful artifact pair.
+func (p *kimiAttemptProvider) closeOriginal(started time.Time) map[string]any {
+	p.mu.Lock()
+	if p.cleanup != nil {
+		result := p.cleanup
+		p.mu.Unlock()
+		return result
+	}
+	p.mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	if original := started.Add(180 * time.Second); original.Before(deadline) {
+		deadline = original
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	err := ctx.Err()
+	if err == nil {
+		err = p.server.Config.Shutdown(ctx)
+	}
+	cancel()
+	if err != nil {
+		p.server.CloseClientConnections()
+	}
+	p.server.Close()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cleanup = map[string]any{"shutdown_complete": err == nil, "forced_close": err != nil,
+		"error": err != nil || p.err != nil, "requests": p.requestCount,
+		"issued": p.issued, "returned": p.returned}
+	return p.cleanup
 }
 
 func (p *kimiAttemptProvider) start() error {

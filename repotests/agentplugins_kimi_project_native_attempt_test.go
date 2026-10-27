@@ -200,7 +200,13 @@ func (a *kimiSingleToolAttempt) setup(t *testing.T) {
 	t.Helper()
 	f := a.f
 	a.secret, a.marker = "uap-kimi-key-"+f.base.Nonce, "retained-"+f.base.Nonce
-	a.provider = &kimiAttemptProvider{key: a.secret, id: "uap_" + f.base.Nonce + "_attempt", nonce: f.base.Nonce + "-a", marker: a.marker, sentinel: "UAP_KIMI_DONE_" + f.base.Nonce, validate: a.validateFacts}
+	a.provider = &kimiAttemptProvider{key: a.secret, id: "uap_" + f.base.Nonce + "_attempt", nonce: f.base.Nonce + "-a", marker: a.marker, sentinel: "UAP_KIMI_DONE_" + f.base.Nonce, validate: func(body string) error {
+		raw, err := kimiAttemptModelFacts(body)
+		if err != nil {
+			return err
+		}
+		return a.validateFacts(string(raw))
+	}}
 	if err := a.provider.start(); err != nil {
 		t.Fatal(err)
 	}
@@ -329,13 +335,32 @@ func (a *kimiSingleToolAttempt) run(t *testing.T) {
 		f.evidence[key] = observation[key]
 	}
 	a.provider.mu.Lock()
-	issued, returned, problem, count := a.provider.issued, a.provider.returned, a.provider.err, len(a.provider.requests)
+	issued, returned, problem, count, cacheKey := a.provider.issued, a.provider.returned, a.provider.err, len(a.provider.requests), a.provider.cacheKey
 	a.provider.mu.Unlock()
 	f.evidence["provider_call_id"], f.evidence["provider_returned"] = a.provider.id, returned
 	if problem != nil || !issued || !returned || count != 2 || a.facts == nil {
 		t.Fatal("Kimi provider/native probe exchange incomplete; bounded initial evidence retained")
 	}
 	f.evidence["probe_facts"] = a.facts
+	session, sessionOK := observation["native_session_id"].(string)
+	approval, approvalOK := observation["approval_id"].(string)
+	if !sessionOK || !approvalOK || cacheKey != session {
+		t.Fatal("Kimi native session/provider metadata join differs")
+	}
+	expected := kimiAttemptHistoryExpectation{Client: f.client, Session: session, Call: a.provider.id,
+		Approval: approval, Prompt: "Call the one installed fixture tool once with the exact nonce and marker; then report completion. " + f.base.Nonce + "-a",
+		Sentinel: a.provider.sentinel, Skill: p.Skill, Projects: f.projects,
+		Server: kimiProjectExpectedServer(p, "a", f.base.Root, f.base.Nonce), Facts: a.facts,
+		Started: f.started, Ended: time.Now()}
+	proof, err := kimiAttemptHistory(r.Stdout, expected)
+	if err != nil {
+		t.Fatal("Kimi finite native history did not complete; bounded raw evidence retained")
+	}
+	providerCleanup := a.provider.closeOriginal(f.started)
+	f.evidence["provider_cleanup"] = providerCleanup
+	if !kimiAttemptProviderClosed(providerCleanup) || f.ctx.Err() != nil {
+		t.Fatal("Kimi original provider closure failed")
+	}
 	marker, err := projectNativeRuntimeRead(filepath.Join(p.Data, "native-marker.txt"), 256)
 	if err != nil || string(marker) != a.marker {
 		t.Fatal("Kimi native marker differs")
@@ -345,9 +370,18 @@ func (a *kimiSingleToolAttempt) run(t *testing.T) {
 	if !reflect.DeepEqual(after, dataBefore) {
 		t.Fatal("Kimi tool changed unrelated persistent data")
 	}
+	dataProof, err := json.Marshal(map[string]any{"schema_version": 1, "before": dataBefore, "after_without_marker": after, "marker_body": string(marker), "marker_bytes": len(marker), "marker_sha256": kimiProjectProofSHA(marker)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.keep(t, "native-data-proof.json", dataProof)
+	proof["data_proof_sha256"] = kimiProjectProofSHA(dataProof)
 	f.check(t)
-	// Even source-guided success is not measured native-history qualification.
-	t.Error("Kimi initial native history capture requires independent finite-schema review; no qualification")
+	f.evidence["native_history"] = proof
+	f.evidence["native_capture_complete"], f.evidence["native_history_grammar_frozen"], f.evidence["runtime_attempt_complete"] = true, true, true
+	for _, key := range []string{"mcp-initialize", "mcp-tools-list", "mcp-tools-call"} {
+		f.evidence["qualification"].(map[string]bool)[key] = true
+	}
 }
 
 // Only the private observer receives these genuinely observed host markers.
@@ -372,8 +406,7 @@ func (a *kimiSingleToolAttempt) finish(t *testing.T) {
 	f := a.f
 	defer f.cancel()
 	if a.provider != nil && a.provider.server != nil {
-		a.provider.server.CloseClientConnections()
-		a.provider.server.Close()
+		f.evidence["provider_cleanup"] = a.provider.closeOriginal(f.started)
 		a.provider.mu.Lock()
 		for index, body := range a.provider.requests {
 			f.keep(t, fmt.Sprintf("provider-request-%d.json", index+1), body)
@@ -382,6 +415,12 @@ func (a *kimiSingleToolAttempt) finish(t *testing.T) {
 	}
 	if time.Since(f.started) > 180*time.Second {
 		t.Error("Kimi original runtime attempt total deadline exceeded")
+	}
+	if f.evidence["runtime_attempt_complete"] == true && (!kimiAttemptProviderClosed(f.evidence["provider_cleanup"]) || f.ctx.Err() != nil) {
+		t.Error("Kimi staged completion lost original work/ordinary closure")
+	}
+	if t.Failed() {
+		kimiAttemptClearCompletion(f.evidence)
 	}
 	if body, err := projectNativeRuntimeRead(filepath.Join(f.base.Root, "a-events.jsonl"), 1<<20); err == nil {
 		f.keep(t, "probe-events.jsonl", body)
@@ -434,7 +473,7 @@ func (a *kimiSingleToolAttempt) finish(t *testing.T) {
 }
 
 func kimiAttemptAdmit(files map[string][]byte) error {
-	allowed := map[string]bool{"runtime-attempt.json": true, "probe-events.jsonl": true, "python-api.json": true,
+	allowed := map[string]bool{"runtime-attempt.json": true, "probe-events.jsonl": true, "python-api.json": true, "native-data-proof.json": true,
 		".kimi-code-mcp.json.installed": true, "uap-kimi-native-a-SKILL.md.installed": true}
 	for index := 1; index <= 8; index++ {
 		allowed[fmt.Sprintf("provider-request-%d.json", index)] = true
@@ -479,17 +518,26 @@ func kimiAttemptAdmit(files map[string][]byte) error {
 		}
 	}
 	result, err := kimiProjectObject(files["runtime-attempt.json"])
-	if err != nil || result["client"] != "kimi" || result["runtime_attempt_complete"] != false || result["vendor_authentication_qualified"] != false || result["real_model_qualified"] != false || result["test_failed"] != true {
-		return fmt.Errorf("Kimi initial capture cannot claim successful qualification")
+	if err != nil || result["client"] != "kimi" || result["vendor_authentication_qualified"] != false || result["real_model_qualified"] != false {
+		return fmt.Errorf("Kimi capture boundary differs")
+	}
+	success := result["runtime_attempt_complete"] == true && result["test_failed"] == false
+	failed := result["runtime_attempt_complete"] == false && result["test_failed"] == true
+	if !success && !failed {
+		return fmt.Errorf("Kimi completion/failure pair differs")
 	}
 	flags, ok := result["qualification"].(map[string]any)
 	if !ok || len(flags) != 5 {
 		return fmt.Errorf("Kimi initial qualification flags absent")
 	}
 	for _, key := range []string{"project-lifecycle", "native-restart-removal", "mcp-initialize", "mcp-tools-list", "mcp-tools-call"} {
-		if flags[key] != false {
-			return fmt.Errorf("Kimi initial capture promoted unobserved qualification")
+		want := success && key != "project-lifecycle" && key != "native-restart-removal"
+		if flags[key] != want {
+			return fmt.Errorf("Kimi capture promoted unobserved qualification")
 		}
+	}
+	if success {
+		return kimiAttemptSuccessfulFiles(files, result)
 	}
 	return nil
 }
