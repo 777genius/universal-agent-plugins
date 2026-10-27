@@ -138,3 +138,19 @@ the actual failed stage/category and truthful cleanup status before any later
 behavioral or grammar amendment is planned. Do not relabel the existing failed
 runs, assume a response schema mismatch or promote any native qualification.
 
+
+## Actual implementation validation
+
+The exact four-file candidate passes all 47 existing/new Kimi collector,
+attempt and shared service inert tests in 16.404 seconds, including the
+existing graceful finite-schema refusal and actual inert Python child
+quarantine/reaping tests. All four Python files parse; whitespace checks are
+clean. The six externally published Go files remain byte-for-byte unchanged.
+No vendor binary or Go process ran.
+
+The first run's precise transport-stage assertion exposed an existing inert
+test fixture issue: a null selected response stage also matched unregistered
+health operations and inserted an unknown field too early. Requiring a
+non-null selected stage restores the intended transport/permission/cleanup
+negative controls; it changes no collector or native response grammar. The
+complete final rerun above passes with that meaningful fixture correction.

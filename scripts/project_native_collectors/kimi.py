@@ -619,6 +619,94 @@ def collect(ctx):
     return result
 
 
+_FAILURE_STAGES = frozenset({
+    "host-admission", "request-read", "request-validate", "authority", "immutable-closure", "context",
+    "service-entry", "ready", "meta", "health", "unauthorized", "distinct-workspaces", "pre-call",
+    "mcp-outside", "create-session", "prompt", "approvals", "approve-once", "snapshot", "history",
+    "preserved-authority", "shutdown", "service-cleanup", "serialization", "emission", "trust-untrusted-c",
+    *[prefix + "-" + scope for prefix in ("workspace", "trust-before", "trust-set", "trust-after",
+                                         "catalog", "mcp", "skills", "probe-events") for scope in WORKSPACES],
+    "catalog-user", "test-a", "test-b", "test-refused-c",
+})
+_FAILURE_PHASES = frozenset({"enter", "request", "envelope", "validate", "complete"})
+_FAILURE_KINDS = frozenset({"validation", "type", "key", "os", "timeout", "other"})
+_FAILURE_CLEANUP = ("shutdown_acknowledged", "sigterm_sent", "forced_kill", "group_reaped", "port_closed")
+
+
+class _KimiFailureDiagnostic:
+    """Only finite caller-owned progress and held supervisor booleans may leave quarantine."""
+
+    def __init__(self, collector):
+        if collector not in ("installed", "single-tool"):
+            raise ValueError("unregistered Kimi diagnostic collector")
+        self.collector, self.stage, self.phase = collector, "host-admission", "enter"
+        self.kind, self.ctx, self.observer_entered = None, None, False
+
+    def step(self, stage, phase="enter"):
+        if stage not in _FAILURE_STAGES or phase not in _FAILURE_PHASES:
+            raise ValueError("unregistered Kimi diagnostic stage or phase")
+        self.stage, self.phase = stage, phase
+
+    def api(self, label, phase):
+        if label in {"approvals-" + str(index) for index in range(20)}:
+            label = "approvals"
+        elif label in {"snapshot-" + str(index) for index in range(10)}:
+            label = "snapshot"
+        self.step(label, phase)
+
+    @staticmethod
+    def exception_kind(error):
+        for kind, classes in (("timeout", (TimeoutError,)), ("validation", (ValueError,)),
+                              ("type", (TypeError,)), ("key", (KeyError,)), ("os", (OSError,))):
+            if isinstance(error, classes):
+                return kind
+        return "other"
+
+    def observer(self, callback):
+        def tracked(service):
+            self.observer_entered = True
+            try:
+                result = callback(service)
+            except Exception as error:
+                self.kind = self.exception_kind(error)
+                raise
+            self.step("service-cleanup", "complete")
+            return result
+        return tracked
+
+    def line(self, error):
+        self.step(self.stage, self.phase)
+        kind = self.kind if self.kind is not None else self.exception_kind(error)
+        if (self.collector not in ("installed", "single-tool") or kind not in _FAILURE_KINDS
+                or type(self.observer_entered) is not bool):
+            raise ValueError("unregistered Kimi diagnostic facts")
+        cleanup = dict.fromkeys(_FAILURE_CLEANUP)
+        summary = getattr(self.ctx, "summary", None)
+        commands = summary.get("commands") if type(summary) is dict else None
+        recorded = type(commands) is list and len(commands) == 1 and type(commands[0]) is dict
+        held = commands[0].get("cleanup") if recorded else None
+        if type(held) is dict:
+            cleanup.update({key: held[key] for key in _FAILURE_CLEANUP if type(held.get(key)) is bool})
+        value = {"schema_version": 1, "collector": self.collector, "failure": True,
+                 "stage": self.stage, "phase": self.phase, "exception_kind": kind,
+                 "observer_entered": self.observer_entered, "service_recorded": recorded,
+                 "cleanup_reported": all(type(item) is bool for item in cleanup.values()), "cleanup": cleanup}
+        line = "Kimi collector failure: " + json.dumps(value, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n"
+        if len(line.encode()) > 2048:
+            raise ValueError("Kimi diagnostic bound exceeded")
+        return line
+
+
+def _emit_failure_diagnostic(diagnostic, error, stream):
+    try:
+        line = diagnostic.line(error)
+    except Exception:
+        # An invalid internal diagnostic must leave the original quarantine
+        # failure intact, rather than render arbitrary state or exception text.
+        return
+    stream.write(line)
+
+
 def _installed_skills(data, expected):
     """Compare native rows to receipt-selected files, never replacement fixtures."""
     _object(data, ("skills",))
@@ -679,13 +767,16 @@ def _installed_catalog(data, expected):
     return sorted(found)
 
 
-def observe_installed(ctx, request):
+def observe_installed(ctx, request, diagnostic=None):
     """One fresh web process over already-installed public UAP authority.
 
     The Go lifecycle owns the installer and builds this exact expectation from
     committed receipts/native bytes. This observer never authors components.
     Only the empty initial stage may author native A/B trust through its API.
     """
+    diagnostic = diagnostic or _KimiFailureDiagnostic("installed")
+    diagnostic.ctx = ctx
+    diagnostic.step("request-validate")
     _object(request, ("stage", "setup_trust", "skills", "servers"))
     if (not re.fullmatch(r"[a-z][a-z0-9-]{0,40}", request["stage"])
             or type(request["setup_trust"]) is not bool
@@ -697,6 +788,7 @@ def observe_installed(ctx, request):
             or (request["setup_trust"] and (request["stage"] != "empty"
                 or any(request[key][scope] for key in ("skills", "servers") for scope in WORKSPACES)))):
         raise ValueError("Kimi installed trust setup requires the empty baseline")
+    diagnostic.step("authority")
     protected = {}
     for scope in WORKSPACES:
         for skill in request["skills"][scope]:
@@ -717,21 +809,29 @@ def observe_installed(ctx, request):
             protected[path] = body
 
     def preserved():
+        diagnostic.step("preserved-authority")
         for path, body in protected.items():
             if _read(ctx.root, path) != body:
                 raise ValueError("Kimi installed authority changed during observation")
     # Every fresh process verifies the same native workspace identities/trust.
     # No trust mutation occurs in any installed or removed stage.
     def observe(service):
+        diagnostic.step("ready")
         token, count = _ready(ctx, service), 0
 
         def api(label, method, path, body=None, code=0):
             nonlocal count
+            diagnostic.api(label, "enter")
             count += 1
             if count > 60:
                 raise ValueError("Kimi installed API request budget exhausted")
-            return _envelope(*service.http(label, method, path, token=token,
-                                          json_body=body, timeout=min(5, service.remaining())), code=code)
+            diagnostic.api(label, "request")
+            response = service.http(label, method, path, token=token,
+                                    json_body=body, timeout=min(5, service.remaining()))
+            diagnostic.api(label, "envelope")
+            result = _envelope(*response, code=code)
+            diagnostic.api(label, "validate")
+            return result
 
         meta = api("meta", "GET", "/api/v1/meta")
         _meta(meta)
@@ -748,6 +848,7 @@ def observe_installed(ctx, request):
             if request["setup_trust"] and scope in ("a", "b"):
                 _trust(api("trust-set-" + scope, "POST", trust_path, {}), True)
                 _trust(api("trust-after-" + scope, "GET", trust_path), True)
+        diagnostic.step("distinct-workspaces")
         if len(set(ids.values())) != 3:
             raise ValueError("Kimi installed workspace identities are not distinct")
         skill_rows, server_rows, probe_rows = {}, {}, {}
@@ -761,6 +862,7 @@ def observe_installed(ctx, request):
             server_rows[scope] = _installed_catalog(api("mcp-" + scope, "GET",
                 "/api/v2/mcp/servers?" + urlencode({"cwd": str(ctx.projects[scope])})), entries)
             for item in request["servers"][scope]:
+                diagnostic.step("probe-events-" + scope)
                 event_fixture = {"event": Path(item["event"]), "nonce": item["nonce"]}
                 before, _ = _events(ctx, event_fixture)
                 if scope == "c":
@@ -779,6 +881,7 @@ def observe_installed(ctx, request):
                                    '- inspect_runtime: Inspect only disposable fixture runtime facts.')
                 if result != {"success": True, "output": expected_output}:
                     raise ValueError("Kimi installed named MCP test failed")
+                diagnostic.step("probe-events-" + scope)
                 after, rows = _events(ctx, event_fixture)
                 fresh = rows[len(before.splitlines()):]
                 pairs = {(row["pid"], row["session"]) for row in fresh}
@@ -798,25 +901,31 @@ def observe_installed(ctx, request):
                 "skill_names": skill_rows, "server_names": server_rows, "probe_events": probe_rows,
                 "tools_call_count": 0, "provider_configured": False, "request_count": count}
 
+    diagnostic.step("service-entry")
     result = ctx.service("kimi-" + request["stage"],
-        ["web", "--no-open", "--host", "127.0.0.1", "--port", "0"], observe, project="a", timeout=60)
+        ["web", "--no-open", "--host", "127.0.0.1", "--port", "0"], diagnostic.observer(observe), project="a", timeout=60)
     preserved()
     return result
 
 
-def _installed_main(request_path):
+def _installed_main(request_path, diagnostic=None):
     """Client-specific adapter to the existing private service/capture owner."""
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     import project_native_research as shared
 
     # This guard precedes parsing paths, creating files, or any child launch.
+    diagnostic = diagnostic or _KimiFailureDiagnostic("installed")
+    diagnostic.step("host-admission")
     shared.native.require_hosted("linux-amd64")
+    diagnostic.step("request-read")
     path = Path(request_path)
     value = _json(_read(path.parent, path, 1 << 20, mode=0o600))
+    diagnostic.step("request-validate")
     _object(value, ("schema_version", "root", "home", "projects", "client", "identities", "observation"))
     if value["schema_version"] != 1 or type(value["schema_version"]) is not int:
         raise ValueError("Kimi installed request version refused")
+    diagnostic.step("authority")
     root, home, client = (Path(value[key]) for key in ("root", "home", "client"))
     projects = {key: Path(item) for key, item in value["projects"].items()}
     if (set(projects) != set((*WORKSPACES, "user")) or root.resolve() != root
@@ -827,6 +936,7 @@ def _installed_main(request_path):
             or any(left.is_relative_to(right) for left in (home, *projects.values())
                    for right in (home, *projects.values()) if left != right)):
         raise ValueError("Kimi installed profile/project authority refused")
+    diagnostic.step("immutable-closure")
     identities = {Path(key): digest for key, digest in value["identities"].items()}
     if (client not in identities or len(identities) < 3 or len(identities) > 128
             or any(not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)
@@ -834,16 +944,19 @@ def _installed_main(request_path):
         raise ValueError("Kimi installed immutable closure refused")
     # Reuse the existing Context's service, environment, capture, redaction and
     # cleanup implementation without acquisition or fixture creation.
+    diagnostic.step("context")
     ctx = shared.Context.__new__(shared.Context)
     ctx.root, ctx.home, ctx.projects, ctx.identities = root, home, projects, identities
     ctx.argv, ctx.secrets, ctx.captures = [str(client)], [], {}
     ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-api",
                    "commands": [], "qualification": {"mcp-tools-call": False}}
+    diagnostic.ctx = ctx
     ctx.env = shared.legacy.runtime_environment(home, root / "tmp")
     ctx.env.update({"NO_COLOR": "1", "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"})
     with shared.Budget(65) as budget:
         ctx.budget = budget
-        ctx.summary["observations"] = observe_installed(ctx, value["observation"])
+        ctx.summary["observations"] = observe_installed(ctx, value["observation"], diagnostic)
+        diagnostic.step("serialization")
         bodies = shared.evidence(ctx.summary, ctx.captures, ctx.secrets)
     # Shared evidence() admits only closed redacted members. Recheck the whole
     # serialization too; a token cannot leak through an added summary field.
@@ -852,6 +965,7 @@ def _installed_main(request_path):
         allow_nan=False, sort_keys=True).encode()
     if len(output) > 1 << 20 or any(secret in output for secret in ctx.secrets):
         raise ValueError("Kimi installed closed evidence refused")
+    diagnostic.step("emission")
     sys.stdout.buffer.write(output + b"\n")
 
 
@@ -859,8 +973,10 @@ if __name__ == "__main__":
     import sys
     if len(sys.argv) != 3 or sys.argv[1] != "--installed-request":
         raise SystemExit("Kimi installed observer requires its exact private request")
+    diagnostic = _KimiFailureDiagnostic("installed")
     try:
-        _installed_main(sys.argv[2])
-    except Exception:
+        _installed_main(sys.argv[2], diagnostic)
+    except Exception as error:
         # Never render exception text from bearer-bearing startup/API activity.
+        _emit_failure_diagnostic(diagnostic, error, sys.stderr)
         raise SystemExit("Kimi installed API observation failed; private capture quarantined") from None

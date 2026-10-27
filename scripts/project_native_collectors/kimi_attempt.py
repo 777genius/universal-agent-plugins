@@ -114,11 +114,15 @@ def no_call(ctx, event_path, marker_path):
         raise ValueError("Kimi marker exists before native manual approval")
 
 
-def observe(ctx, request):
+def observe(ctx, request, diagnostic=None):
+    diagnostic = diagnostic or kimi._KimiFailureDiagnostic("single-tool")
+    diagnostic.ctx = ctx
+    diagnostic.step("request-validate")
     kimi._object(request, ("server", "skill", "call_id", "provider_key", "nonce", "marker", "data"))
     server, skill = request["server"], request["skill"]
     kimi._object(skill, ("name", "description", "path", "source", "sha256"))
     kimi._object(server, ("name", "origin", "config", "sha256", "event", "nonce", "cwd"))
+    diagnostic.step("authority")
     if server["name"] != "uap-kimi-native-a" or server["nonce"] != request["nonce"]:
         raise ValueError("Kimi selected installed A identity differs")
     event_path, marker_path = Path(server["event"]), Path(request["data"]) / "native-marker.txt"
@@ -130,21 +134,28 @@ def observe(ctx, request):
     skill_body = kimi._read(ctx.root, Path(skill["path"]), 1 << 20)
     if hashlib.sha256(skill_body).hexdigest() != skill["sha256"]:
         raise ValueError("Kimi receipt-selected A skill bytes differ")
+    diagnostic.step("pre-call")
     no_call(ctx, event_path, marker_path)
     args = {"nonce": request["nonce"], "operation": "write", "marker": request["marker"]}
 
     def run(service):
+        diagnostic.step("ready")
         token, count = kimi._ready(ctx, service), 0
 
         def api(label, method, path, body=None, *, auth=True, status=200, code=0):
             nonlocal count
+            diagnostic.api(label, "enter")
             count += 1
             if count > 60 or (label != "shutdown" and count > 59):
                 raise ValueError("Kimi single original HTTP inventory exhausted")
+            diagnostic.api(label, "request")
             result_status, result_body = service.http(label, method, path, token=token if auth else None,
                                   json_body=body, timeout=min(5, service.remaining()))
+            diagnostic.api(label, "envelope")
             strict_json(result_body)
-            return kimi._envelope(result_status, result_body, expected_status=status, code=code)
+            result = kimi._envelope(result_status, result_body, expected_status=status, code=code)
+            diagnostic.api(label, "validate")
+            return result
 
         if kimi._object(api("health", "GET", "/api/v1/healthz", auth=False), ("ok",))["ok"] is not True:
             raise ValueError("Kimi native health differs")
@@ -158,6 +169,7 @@ def observe(ctx, request):
                       {"root": str(fixture["root"]), "name": fixture["name"]})
             workspaces[scope] = kimi._workspace(row, fixture)
             kimi._trust(api("trust-before-" + scope, "GET", "/api/v1/workspaces/" + workspaces[scope] + "/trust"), False)
+        diagnostic.step("distinct-workspaces")
         if len(set(workspaces.values())) != 3:
             raise ValueError("Kimi workspace IDs are not distinct")
         for scope in ("a", "b"):
@@ -189,6 +201,7 @@ def observe(ctx, request):
             kimi._instant(prompt["created_at"])
             matched = None
             for index in range(20):
+                diagnostic.step("pre-call")
                 no_call(ctx, event_path, marker_path)
                 pending = api("approvals-" + str(index), "GET", base + "/approvals?status=pending")
                 candidate = None
@@ -210,6 +223,7 @@ def observe(ctx, request):
                 time.sleep(min(0.25, service.remaining()))
             if matched is None:
                 raise ValueError("Kimi exact native manual approval was not observed")
+            diagnostic.step("pre-call")
             no_call(ctx, event_path, marker_path)
             validated["native_turn_id"], validated["approval_id"] = matched[1], matched[0]
             # Deliberately omit scope: no remembered or blanket tool approval.
@@ -253,6 +267,7 @@ def observe(ctx, request):
             result = {**validated, "response_schema_refused": True,
                       "failed_stage": refusal.stage, "native_capture_complete": False,
                       "native_history_grammar_frozen": False}
+        diagnostic.step("preserved-authority")
         if kimi._read(ctx.root, config_path, 1 << 20) != config_body:
             raise ValueError("Kimi installed config changed during native tool attempt")
         shutdown = api("shutdown", "POST", "/api/v1/shutdown", {})
@@ -262,16 +277,23 @@ def observe(ctx, request):
         result["api_request_count"] = count
         return result
 
-    return ctx.service("kimi-single-tool", ["web", "--no-open", "--host", "127.0.0.1", "--port", "0"], run, project="a", timeout=60)
+    diagnostic.step("service-entry")
+    return ctx.service("kimi-single-tool", ["web", "--no-open", "--host", "127.0.0.1", "--port", "0"],
+                       diagnostic.observer(run), project="a", timeout=60)
 
 
-def main(request_path):
+def main(request_path, diagnostic=None):
+    diagnostic = diagnostic or kimi._KimiFailureDiagnostic("single-tool")
+    diagnostic.step("host-admission")
     shared.native.require_hosted("linux-amd64")
+    diagnostic.step("request-read")
     path = Path(request_path)
     value = kimi._object(strict_json(kimi._read(path.parent, path, 1 << 20, mode=0o600)),
                          ("schema_version", "root", "home", "projects", "client", "identities", "observation"))
+    diagnostic.step("request-validate")
     if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise ValueError("Kimi attempt request version differs")
+    diagnostic.step("authority")
     root, home, client = (Path(value[key]) for key in ("root", "home", "client"))
     projects = {key: Path(item) for key, item in value["projects"].items()}
     if (set(projects) != set((*kimi.WORKSPACES, "user")) or root.resolve() != root or not client.is_absolute()
@@ -280,6 +302,7 @@ def main(request_path):
             or any(left.is_relative_to(right) for left in (home, *projects.values())
                    for right in (home, *projects.values()) if left != right)):
         raise ValueError("Kimi original profile/project authority differs")
+    diagnostic.step("immutable-closure")
     identities = {Path(key): digest for key, digest in value["identities"].items()}
     if (client not in identities or not 3 <= len(identities) <= 128
             or any(not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in identities.values())):
@@ -287,21 +310,24 @@ def main(request_path):
     key = value["observation"]["provider_key"]
     if not isinstance(key, str) or not re.fullmatch(r"uap-kimi-key-[0-9a-f]{32}", key):
         raise ValueError("Kimi private fixture key differs")
+    diagnostic.step("context")
     ctx = shared.Context.__new__(shared.Context)
     ctx.root, ctx.home, ctx.projects, ctx.identities = root, home, projects, identities
     ctx.argv, ctx.secrets, ctx.captures = [str(client)], [], {}
     ctx.register_secret(key)  # Before any native startup or capture is possible.
     ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-single-tool-attempt",
                    "commands": [], "qualification": {name: False for name in shared.QUALIFICATION_CASES}}
+    diagnostic.ctx = ctx
     ctx.env = shared.legacy.runtime_environment(home, root / "tmp")
     ctx.env.update({"NO_COLOR": "1", "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"})
     with shared.Budget(65) as budget:
         ctx.budget = budget
-        ctx.summary["observations"] = observe(ctx, value["observation"])
-        return emit_capture(ctx)
+        ctx.summary["observations"] = observe(ctx, value["observation"], diagnostic)
+        diagnostic.step("serialization")
+        return emit_capture(ctx, diagnostic)
 
 
-def emit_capture(ctx):
+def emit_capture(ctx, diagnostic=None):
     # Context.service has already enforced unchanged graceful cleanup before
     # admitting any HTTP receipt. This is the same closed, redacted envelope
     # for success or the dedicated failed response-shape observation.
@@ -310,6 +336,8 @@ def emit_capture(ctx):
                         allow_nan=False, sort_keys=True).encode()
     if len(output) > 1 << 20 or any(secret in output for secret in ctx.secrets):
         raise ValueError("Kimi private closed API evidence differs")
+    if diagnostic is not None:
+        diagnostic.step("emission")
     sys.stdout.buffer.write(output + b"\n")
     return 1 if ctx.summary["observations"].get("response_schema_refused") is True else 0
 
@@ -317,8 +345,10 @@ def emit_capture(ctx):
 if __name__ == "__main__":
     if len(sys.argv) != 3 or sys.argv[1] != "--attempt-request":
         raise SystemExit("Kimi runtime attempt requires its exact private request")
+    diagnostic = kimi._KimiFailureDiagnostic("single-tool")
     try:
-        status = main(sys.argv[2])
-    except Exception:
+        status = main(sys.argv[2], diagnostic)
+    except Exception as error:
+        kimi._emit_failure_diagnostic(diagnostic, error, sys.stderr)
         raise SystemExit("Kimi single-tool observation failed; private native streams quarantined") from None
     raise SystemExit(status)

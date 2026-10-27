@@ -1,9 +1,12 @@
 """Inert admission regressions; never launches Kimi, a provider or a probe."""
 import copy
+import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
+import runpy
 import sys
 import tempfile
 import time
@@ -35,8 +38,9 @@ class CaptureService(live.Service):
         self.calls.append((label, method, path, token, json_body))
         if token is not None and token != TOKEN:
             raise ValueError("inert bearer mismatch")
-        if self.ctx.fault == "transport" and label == "create-session":
-            raise ValueError("inert transport failure")
+        if self.ctx.fault in ("transport", "private-transport") and label == "create-session":
+            raise ValueError(TOKEN + KEY + " /private/path nonce-session" if self.ctx.fault == "private-transport"
+                             else "inert transport failure")
         status, code = (401, 40101) if label == "unauthorized" else (200, 0)
         if label == "health" or label == "shutdown":
             data = {"ok": not (label == "shutdown" and self.ctx.fault == "shutdown")}
@@ -73,7 +77,7 @@ class CaptureService(live.Service):
             data = None
         stage = {"create-session": "session", "prompt": "prompt", "approvals-0": "approval",
                  "snapshot-0": "snapshot", "history": "history"}.get(label)
-        if stage == self.ctx.stage:
+        if stage is not None and stage == self.ctx.stage:
             target = data["items"][0] if stage == "approval" else data
             target["unmeasured_field"] = "bounded response " + TOKEN + " " + KEY
         if self.ctx.fault == "identity" and label == "create-session":
@@ -132,15 +136,16 @@ class CaptureContext:
         while b"inert-ready\n" not in service.snapshot()[0]:
             time.sleep(0.01)
         self.secrets.append(TOKEN.encode())
-        if self.fault == "readiness":
-            raise ValueError("inert failed readiness")
+        if self.fault in ("readiness", "private-readiness"):
+            raise ValueError(TOKEN + KEY + " /private/path nonce-session" if self.fault == "private-readiness"
+                             else "inert failed readiness")
         service.bind_origin("http://127.0.0.1:31415")
         service.capture_ready()
         return TOKEN
 
 
 class KimiAttemptContracts(unittest.TestCase):
-    def observe_capture(self, ctx, closed=True):
+    def observe_capture(self, ctx, closed=True, diagnostic=None):
         # Previously qualified workspace/catalog validators are separate inert
         # contracts. Exercise only the new response stages and real cleanup.
         with (
@@ -153,7 +158,63 @@ class KimiAttemptContracts(unittest.TestCase):
             patch.object(attempt.kimi, "_installed_skills"),
             patch.object(live, "port_closed", return_value=closed),
         ):
-            return attempt.observe(ctx, ctx.request())
+            return attempt.observe(ctx, ctx.request(), diagnostic)
+
+    def test_generic_failure_diagnostic_retains_actual_stage_and_cleanup_without_private_capture(self):
+        cases = (("private-readiness", None, "ready", "enter", None),
+                 ("private-transport", None, "create-session", "request", "create-session"),
+                 ("identity", "session", "create-session", "validate", "create-session"),
+                 ("permission", "approval", "approvals", "validate", "approvals-0"),
+                 ("shutdown", "session", "shutdown", "validate", "shutdown"),
+                 ("cleanup", "history", "service-cleanup", "complete", "shutdown"))
+        for fault, stage, failed_stage, phase, last_call in cases:
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as root:
+                ctx = CaptureContext(root, stage, fault)
+                diagnostic = attempt.kimi._KimiFailureDiagnostic("single-tool")
+                with self.assertRaisesRegex(ValueError, "common service refused") as caught:
+                    self.observe_capture(ctx, closed=fault != "cleanup", diagnostic=diagnostic)
+                line = diagnostic.line(caught.exception)
+                value = json.loads(line.removeprefix("Kimi collector failure: "))
+                self.assertEqual((value["stage"], value["phase"]), (failed_stage, phase))
+                self.assertEqual(value["exception_kind"], "validation")
+                self.assertTrue(value["observer_entered"])
+                self.assertTrue(value["service_recorded"])
+                self.assertTrue(value["cleanup_reported"])
+                self.assertEqual(value["cleanup"], ctx.summary["commands"][0]["cleanup"])
+                calls = [row[0] for row in ctx.services[0].calls]
+                self.assertEqual(calls[-1] if calls else None, last_call)
+                if failed_stage not in ("shutdown", "service-cleanup"):
+                    self.assertNotIn("shutdown", calls)
+                for private in (TOKEN, KEY, "/private/path", "nonce-session", root, "provider_owned"):
+                    self.assertNotIn(private, line)
+                self.assertLessEqual(len(line.encode()), 2048)
+                self.assertEqual(line.count("\n"), 1)
+                self.assertEqual(ctx.summary["http_requests"], [])
+                self.assertFalse(any(name.endswith(".http.json") for name in ctx.captures))
+                self.assertTrue(all(TOKEN.encode() not in body and KEY.encode() not in body
+                                    for body in ctx.captures.values()))
+
+    def test_both_real_entrypoint_failure_branches_emit_only_finite_diagnostic_then_fail(self):
+        for module, argument, collector, reason in (
+                (attempt.kimi, "--installed-request", "installed", "Kimi installed API observation failed; private capture quarantined"),
+                (attempt, "--attempt-request", "single-tool", "Kimi single-tool observation failed; private native streams quarantined")):
+            stdout, stderr = io.StringIO(), io.StringIO()
+            private = "/private/request-bearer-nonce-session"
+            with self.subTest(collector=collector), patch.dict(os.environ, {"GITHUB_ACTIONS": "false"}), \
+                    patch.object(sys, "argv", [module.__file__, argument, private]), \
+                    contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                with self.assertRaises(SystemExit) as caught:
+                    runpy.run_path(module.__file__, run_name="__main__")
+            self.assertEqual(caught.exception.code, reason)
+            self.assertEqual(stdout.getvalue(), "")
+            line = stderr.getvalue()
+            self.assertEqual(line.count("\n"), 1)
+            self.assertNotIn(private, line)
+            value = json.loads(line.removeprefix("Kimi collector failure: "))
+            self.assertEqual((value["collector"], value["stage"]), (collector, "host-admission"))
+            self.assertFalse(value["observer_entered"])
+            self.assertFalse(value["service_recorded"])
+            self.assertTrue(all(item is None for item in value["cleanup"].values()))
 
     def test_finite_schema_refusal_stops_actions_then_retains_only_admitted_redacted_failure(self):
         for stage, refused in (("session", "create-session"), ("prompt", "prompt"),

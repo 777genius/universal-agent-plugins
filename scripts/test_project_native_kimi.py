@@ -3,9 +3,11 @@ import importlib.util
 import copy
 import hashlib
 from datetime import datetime, timezone
+import io
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import time
 import unittest
@@ -224,6 +226,95 @@ class ApiContext(FakeContext):
 
 
 class KimiCollectorTests(unittest.TestCase):
+    def diagnostic(self, diagnostic, error):
+        output = io.StringIO()
+        kimi._emit_failure_diagnostic(diagnostic, error, output)
+        line = output.getvalue()
+        self.assertTrue(line.startswith("Kimi collector failure: "))
+        self.assertEqual(line.count("\n"), 1)
+        self.assertLessEqual(len(line.encode()), 2048)
+        value = json.loads(line.removeprefix("Kimi collector failure: "))
+        self.assertEqual(set(value), {"schema_version", "collector", "failure", "stage", "phase",
+                         "exception_kind", "observer_entered", "service_recorded", "cleanup_reported", "cleanup"})
+        self.assertEqual(set(value["cleanup"]), set(kimi._FAILURE_CLEANUP))
+        return line, value
+
+    def test_failure_diagnostic_before_service_never_invents_cleanup_or_prints_exception(self):
+        diagnostic = kimi._KimiFailureDiagnostic("installed")
+        private = "/private/path bearer-secret nonce-session-id"
+        line, value = self.diagnostic(diagnostic, RuntimeError(private))
+        self.assertNotIn(private, line)
+        self.assertEqual(value["stage"], "host-admission")
+        self.assertEqual(value["exception_kind"], "other")
+        self.assertFalse(value["observer_entered"])
+        self.assertFalse(value["service_recorded"])
+        self.assertFalse(value["cleanup_reported"])
+        self.assertTrue(all(item is None for item in value["cleanup"].values()))
+
+    def test_failure_diagnostic_copies_only_exact_booleans_and_refuses_arbitrary_labels(self):
+        diagnostic = kimi._KimiFailureDiagnostic("installed")
+        private = "private-bearer-and-HTTP-body"
+        diagnostic.ctx = SimpleNamespace(summary={"commands": [{"cleanup": {
+            "shutdown_acknowledged": True, "forced_kill": False, "group_reaped": 1,
+            "sigterm_sent": private, "port_closed": None, "unknown": private}, "stdout": private}]})
+        line, value = self.diagnostic(diagnostic, ValueError(private))
+        self.assertNotIn(private, line)
+        self.assertTrue(value["service_recorded"])
+        self.assertFalse(value["cleanup_reported"])
+        self.assertEqual(value["cleanup"], {"shutdown_acknowledged": True, "sigterm_sent": None,
+                         "forced_kill": False, "group_reaped": None, "port_closed": None})
+        for stage, phase in ((private, "enter"), ("meta", private), ("approvals-20", "request")):
+            with self.subTest(stage=stage), self.assertRaises(ValueError):
+                diagnostic.step(stage, phase)
+        for field in ("collector", "stage", "phase", "kind"):
+            clean = kimi._KimiFailureDiagnostic("installed")
+            setattr(clean, field, private)
+            output = io.StringIO()
+            kimi._emit_failure_diagnostic(clean, ValueError(private), output)
+            self.assertEqual(output.getvalue(), "")
+
+    def test_exception_categories_never_render_private_messages_or_dynamic_type_names(self):
+        private = "private_bearer_nonce_session"
+        private_type = type(private, (Exception,), {})
+        for error, kind in ((ValueError(private), "validation"), (TypeError(private), "type"),
+                            (KeyError(private), "key"), (OSError(private), "os"),
+                            (TimeoutError(private), "timeout"), (private_type(private), "other")):
+            line, value = self.diagnostic(kimi._KimiFailureDiagnostic("installed"), error)
+            self.assertNotIn(private, line)
+            self.assertEqual(value["exception_kind"], kind)
+
+    def test_installed_callback_reports_transport_envelope_and_validator_without_continuing(self):
+        private = "planted-bearer /private/path nonce-call-session"
+        for fault, phase in (("transport", "request"), ("envelope", "envelope"), ("validator", "validate")):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as root:
+                calls = []
+                diagnostic = kimi._KimiFailureDiagnostic("installed")
+                ctx = SimpleNamespace(root=Path(root), projects={k: Path(root) / k for k in (*kimi.WORKSPACES, "user")},
+                                      summary={"commands": []})
+                def http(label, *args, **kwargs):
+                    calls.append(label)
+                    if fault == "transport":
+                        raise ValueError(private)
+                    body = b"{" if fault == "envelope" else json.dumps({"code": 0, "msg": "success",
+                            "data": {"unmeasured": private}, "request_id": private}).encode()
+                    return 200, body
+                def service(label, argv, observe, **kwargs):
+                    self.assertEqual(label, "kimi-installed")
+                    return observe(SimpleNamespace(http=http, remaining=lambda: 50))
+                ctx.service = service
+                request = {"stage": "installed", "setup_trust": False,
+                           "skills": dict.fromkeys(kimi.WORKSPACES, []), "servers": dict.fromkeys(kimi.WORKSPACES, [])}
+                with patch.object(kimi, "_ready", return_value="private-bearer"):
+                    with self.assertRaises(ValueError) as caught:
+                        kimi.observe_installed(ctx, request, diagnostic)
+                line, value = self.diagnostic(diagnostic, caught.exception)
+                self.assertNotIn(private, line)
+                self.assertEqual(calls, ["meta"])
+                self.assertEqual((value["stage"], value["phase"]), ("meta", phase))
+                self.assertTrue(value["observer_entered"])
+                self.assertFalse(value["service_recorded"])
+                self.assertTrue(all(item is None for item in value["cleanup"].values()))
+
     def test_literal_update_opt_out_precedes_first_child_without_ambient_auth(self):
         ctx = FakeContext()
         ctx.env = {"HOME": "/controlled/original-home"}
