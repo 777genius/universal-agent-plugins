@@ -203,6 +203,80 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runtime.cli_attempt_members({**present, "grok-provider.response.sse": b"unrecorded response"}, self.source, "grok")
 
+    def grok_title_bodies(self):
+        bodies = self.grok_provider_bodies()
+        row = {"role": "session-title", "transport": "scripted loopback OpenAI session-title SSE; no real model",
+               "model": "uap-grok-title-fixture", "started": True, "requests": 1, "responses": 1,
+               "credential_matched": True, "failure": "none", "shutdown_complete": True, "forced_close": False}
+        bodies.update({"grok-title-provider.json": json.dumps(row).encode(),
+                       "grok-title-provider.request.json": b'{"model":"uap-grok-title-fixture","messages":[{"role":"system","content":"You are tasked with generating the session title. The user is asking almost always software engineering related questions on their codebase.\\nWe describe the session title below\\n# Session Title\\nA short and distinctive 5-10 word descriptive title for the session. Super info dense, no filler.\\n\\nYou will be given the user query below encapsulated in <user_query></user_query>.\\n\\nJust generate the session_title and nothing else"},{"role":"user","content":"<user_query>\\nDescribe only the installed uap-grok-attempt skill marker. Do not run any tool or change any file.\\n</user_query>"}],"temperature":1.0,"max_tokens":100,"tools":[{"type":"function","function":{"name":"session_title","description":"Generate the session_title which we use for the user_message","parameters":{"type":"object","required":["session_title"],"properties":{"session_title":{"type":"string","description":"Final session title, just 5-10 word descriptive title for the session. Super info dense, no filler."}},"additionalProperties":false}}}],"tool_choice":{"type":"function","function":{"name":"session_title"}},"stream":true,"stream_options":{"include_usage":true}}',
+                       "grok-title-provider.response.sse": b'data: {"id":"uap-grok-title-capture","object":"chat.completion.chunk","created":1,"model":"uap-grok-title-fixture","choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"uap-grok-title-call","type":"function","function":{"name":"session_title","arguments":"{\\"session_title\\":\\"Disposable plugin startup observation\\"}"}}]},"finish_reason":null}]}\n\ndata: {"id":"uap-grok-title-capture","object":"chat.completion.chunk","created":1,"model":"uap-grok-title-fixture","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n'})
+        return bodies
+
+    def test_grok_title_is_separate_fixed_evidence_and_cannot_qualify(self):
+        bodies = self.grok_title_bodies()
+        result = runtime.cli_attempt_members(bodies, self.source, "grok")
+        self.assertTrue(result["test_failed"])
+        self.assertFalse(result["runtime_attempt_complete"])
+        self.assertFalse(any(result["qualification"].values()))
+        self.assertEqual(hashlib.sha256(bodies["grok-title-provider.request.json"]).hexdigest(),
+                         "6310901ba3d8138dbf06eb01e447139f815a42424513ed048263f39b1ced658a")
+        self.assertEqual(hashlib.sha256(bodies["grok-title-provider.response.sse"]).hexdigest(),
+                         "eea6c4c389c7e27cf0e6d1cc9e705bc84a4d77ae8c5afddaa846ec8255e6ed68")
+        for missing in ("grok-title-provider.json", "grok-title-provider.request.json", "grok-title-provider.response.sse", "grok-provider.json"):
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({key: value for key, value in bodies.items() if key != missing}, self.source, "grok")
+        for extra in ("grok-title-provider.headers.json", "grok-title-provider-2.request.json"):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, extra: b"{}"}, self.source, "grok")
+
+    def test_grok_title_receipt_and_fixed_response_refuse_unmeasured_states(self):
+        bodies = self.grok_title_bodies()
+        row = json.loads(bodies["grok-title-provider.json"])
+        changes = ({"role": "main"}, {"model": "uap-grok-fixture"}, {"transport": "real model"},
+                   {"requests": True}, {"responses": 2}, {"started": False}, {"credential_matched": False},
+                   {"forced_close": True}, {"shutdown_complete": False}, {"failure": "private error"},
+                   {"failure": "privacy"}, {"failure": "body"}, {"failure": "request-shape"}, {"extra": "unknown"})
+        for change in changes:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-title-provider.json": json.dumps({**row, **change}).encode()}, self.source, "grok")
+        for name, raw in (("grok-title-provider.json", b" " * 2049),
+                          ("grok-title-provider.request.json", b"[]"),
+                          ("grok-title-provider.request.json", b'{"x":1,"x":2}'),
+                          ("grok-title-provider.request.json", b" " * ((1 << 20) + 1)),
+                          ("grok-title-provider.response.sse", bodies["grok-title-provider.response.sse"] + b"\n")):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, name: raw}, self.source, "grok")
+        for kind in ("main-model", "system", "stream-type", "temperature-type", "schema-type", "extra"):
+            request = json.loads(bodies["grok-title-provider.request.json"])
+            if kind == "main-model": request["model"] = "uap-grok-fixture"
+            elif kind == "system": request["messages"][0]["content"] = "changed"
+            elif kind == "stream-type": request["stream"] = 1
+            elif kind == "temperature-type": request["temperature"] = True
+            elif kind == "schema-type": request["tools"][0]["function"]["parameters"]["additionalProperties"] = 0
+            else: request["extra"] = "unknown"
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-title-provider.request.json": json.dumps(request).encode()}, self.source, "grok")
+
+    def test_grok_title_safe_shape_refusal_and_prebody_failures_preserve_failed_raw(self):
+        original = self.grok_title_bodies()
+        row = json.loads(original["grok-title-provider.json"])
+        for count, failure in ((1, "request-shape"), (0, "request-shape"), (0, "privacy"), (0, "body"), (0, "credential")):
+            bodies = {key: value for key, value in original.items() if key not in
+                      {"grok-title-provider.request.json", "grok-title-provider.response.sse"}}
+            record = {**row, "requests": count, "responses": 0, "failure": failure,
+                      "credential_matched": failure != "credential"}
+            bodies["grok-title-provider.json"] = json.dumps(record).encode()
+            if count: bodies["grok-title-provider.request.json"] = b'{"model":"safe-unmeasured-title"}'
+            result = runtime.cli_attempt_members(bodies, self.source, "grok")
+            self.assertTrue(result["test_failed"])
+            self.assertFalse(any(result["qualification"].values()))
+            with self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-title-provider.response.sse": original["grok-title-provider.response.sse"]}, self.source, "grok")
+        for raw in (b'{"opaque":"uap-grok-private-inert"}', b'{"opaque":"\\u0075ap-grok-private-inert"}'):
+            changed = {**original, "grok-title-provider.request.json": raw}
+            with self.assertRaises(ValueError): runtime.cli_attempt_members(changed, self.source, "grok")
+
     def grok_route_bodies(self):
         bodies = self.grok_provider_bodies()
         row = json.loads(bodies["grok-provider.json"])

@@ -141,6 +141,9 @@ func (f *projectNativeCLIAttempt) env() []string {
 		env = append(env, "GROK_DISABLE_AUTOUPDATER=1")
 		if f.grok != nil {
 			env = append(env, "UAP_GROK_TEST_PROVIDER_KEY="+f.grok.key, "GROK_SAMPLER_SHARED_CLIENT=0")
+			if f.grok.title != nil {
+				env = append(env, "UAP_GROK_TITLE_PROVIDER_KEY="+f.grok.title.transport.key)
+			}
 		}
 	}
 	return env
@@ -725,7 +728,7 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	defer f.finish(t)
 	if client == "grok" {
 		// finish owns cleanup before any listener or native child can start.
-		f.configureGrokProvider(t)
+		f.configureGrokTitleProvider(t)
 	}
 	f.setup(t)
 	if client == "grok" {

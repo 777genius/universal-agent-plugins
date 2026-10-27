@@ -50,6 +50,7 @@ type grokProjectProvider struct {
 	request, reply []byte
 	authoredConfig []byte
 	receipt        grokProjectProviderReceipt
+	title          *grokProjectTitleProvider
 }
 
 func newGrokProjectProvider(ctx context.Context, cancel context.CancelFunc, totalEnd time.Time) (*grokProjectProvider, error) {
@@ -255,11 +256,18 @@ func (p *grokProjectProvider) stop() bool {
 }
 
 func (p *grokProjectProvider) redact(body []byte) []byte {
-	return bytes.ReplaceAll(body, []byte(p.key), []byte("[redacted-grok-fixture-key]"))
+	body = bytes.ReplaceAll(body, []byte(p.key), []byte("[redacted-grok-fixture-key]"))
+	if p.title != nil {
+		body = bytes.ReplaceAll(body, []byte(p.title.transport.key), []byte("[redacted-grok-fixture-key]"))
+	}
+	return body
 }
 
 func (p *grokProjectProvider) finish(t *testing.T, f *projectNativeCLIAttempt) {
 	t.Helper()
+	if p.title != nil {
+		p.title.finish(t, f)
+	}
 	if !p.stop() {
 		t.Error("Grok test provider ordinary shutdown did not complete")
 	}

@@ -370,11 +370,88 @@ def grok_provider_members(bodies, client):
     return members
 
 
+GROK_TITLE_SYSTEM = (
+    "You are tasked with generating the session title. The user is asking almost always software engineering related questions on their codebase.\n"
+    "We describe the session title below\n# Session Title\n"
+    "A short and distinctive 5-10 word descriptive title for the session. Super info dense, no filler.\n\n"
+    "You will be given the user query below encapsulated in <user_query></user_query>.\n\n"
+    "Just generate the session_title and nothing else")
+EXPECTED_TITLE_REQUEST = {
+    "model": "uap-grok-title-fixture", "stream": True, "stream_options": {"include_usage": True},
+    "temperature": 1.0, "max_tokens": 100,
+    "messages": [{"role": "system", "content": GROK_TITLE_SYSTEM},
+                 {"role": "user", "content": "<user_query>\nDescribe only the installed uap-grok-attempt skill marker. Do not run any tool or change any file.\n</user_query>"}],
+    "tools": [{"type": "function", "function": {
+        "name": "session_title", "description": "Generate the session_title which we use for the user_message",
+        "parameters": {"type": "object", "required": ["session_title"], "additionalProperties": False,
+                       "properties": {"session_title": {"type": "string", "description": "Final session title, just 5-10 word descriptive title for the session. Super info dense, no filler."}}}}}],
+    "tool_choice": {"type": "function", "function": {"name": "session_title"}}}
+
+
+def grok_title_provider_members(bodies, client):
+    names = {"grok-title-provider.json", "grok-title-provider.request.json", "grok-title-provider.response.sse"}
+    present = set(bodies) & names
+    if not present:
+        return set()
+    if client != "grok" or "grok-provider.json" not in bodies or "grok-title-provider.json" not in present:
+        raise ValueError("separate Grok title/main receipts required")
+    if len(bodies["grok-title-provider.json"]) > 2048:
+        raise ValueError("Grok title receipt bound")
+    row = strict_json(bodies["grok-title-provider.json"])
+    fields = {"role", "transport", "model", "started", "requests", "responses", "credential_matched",
+              "failure", "shutdown_complete", "forced_close"}
+    failures = {"none", "listen", "serve", "deadline", "route", "credential", "duplicate",
+                "body", "request-shape", "privacy", "response-write", "cleanup"}
+    if (type(row) is not dict or set(row) not in (fields, fields | {"route_observation"})
+            or row["role"] != "session-title"
+            or row["transport"] != "scripted loopback OpenAI session-title SSE; no real model"
+            or row["model"] != "uap-grok-title-fixture"
+            or type(row["failure"]) is not str or row["failure"] not in failures
+            or any(type(row[key]) is not bool for key in ("started", "credential_matched", "shutdown_complete", "forced_close"))
+            or any(type(row[key]) is not int or not 0 <= row[key] <= 1 for key in ("requests", "responses"))
+            or row["responses"] > row["requests"]):
+        raise ValueError("finite Grok title receipt differs")
+    if ((not row["started"] and (row["failure"] != "listen" or row["requests"] or row["responses"]
+                                 or row["credential_matched"] or row["shutdown_complete"] or row["forced_close"]))
+            or (row["requests"] and (not row["started"] or not row["credential_matched"]))
+            or (row["failure"] == "none" and (row["requests"] != row["responses"]
+                                               or row["forced_close"] or not row["shutdown_complete"]))
+            or (row["started"] and row["failure"] == "listen")
+            or (row["failure"] in {"body", "privacy"} and row["requests"])
+            or (row["failure"] in {"request-shape", "privacy", "body", "response-write"} and row["responses"])):
+        raise ValueError("Grok title partial capture or cleanup differs")
+    grok_provider_route_observation(row)
+    required = {"grok-title-provider.json"}
+    if row["requests"]:
+        required.add("grok-title-provider.request.json")
+    if row["responses"]:
+        required.add("grok-title-provider.response.sse")
+    if present != required or any(not bodies[name].strip() for name in present):
+        raise ValueError("Grok title member counts differ")
+    request = None
+    if row["requests"]:
+        raw = bodies["grok-title-provider.request.json"]
+        request = strict_json(raw)
+        if len(raw) > 1 << 20 or type(request) is not dict or grok_private_credential(raw):
+            raise ValueError("Grok title safe captured object required")
+    if row["responses"]:
+        expected = EXPECTED_TITLE_REQUEST
+        response = bodies["grok-title-provider.response.sse"]
+        if (request != expected or type(request["stream"]) is not bool
+                or request["stream_options"]["include_usage"] is not True
+                or request["tools"][0]["function"]["parameters"]["additionalProperties"] is not False
+                or type(request["temperature"]) not in (int, float) or len(response) != 570
+                or hashlib.sha256(response).hexdigest() != "eea6c4c389c7e27cf0e6d1cc9e705bc84a4d77ae8c5afddaa846ec8255e6ed68"):
+            raise ValueError("Grok title fixed request/response differs")
+    return names
+
+
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     allowed |= grok_provider_members(bodies, client)
+    allowed |= grok_title_provider_members(bodies, client)
     commands = CLI_COMMANDS
     if client == "qoder":
         commands += ("native-catalog",)
