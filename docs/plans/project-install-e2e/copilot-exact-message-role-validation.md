@@ -7,11 +7,18 @@ Reviewed implementation: `61d11984c18a4d81d6dfe212b093e81b7b84fde3`, tree
 
 ## Independent reviews and exact scope
 
-Two independent critics, native_finish (R1) and kimi_cline_finish (R2), read
-the complete plan and gave GO before implementation. Both subsequently read
-the complete changed files and the 29-addition/1-deletion implementation
-delta and gave code GO, conditional on the checks recorded below. Their
-reviews found no outstanding issue in this correction.
+During the current reconciliation on 2026-10-27, root performed independent
+R1 plan and code review, and native_finish performed independent R2 plan and
+code review, against exact plan105c11de and code61d11984. Both gave GO for the
+exact five-role switch and all14 full-request controls. The imported handoff's
+claims of earlier reviews by named workers could not be independently
+confirmed and are not relied on. This record does not assert that the current
+reviews preceded the isolated original authoring or its19:32 handoff.
+
+The following hashes identify the isolated source reviewed during that current
+reconciliation. The combined leaf preserves the separately approved context,
+De Morgan and formatting corrections; its fresh hashes and validation are
+recorded with the readiness candidate before publication.
 
 | File | Reviewed SHA-256 |
 | --- | --- |
@@ -57,6 +64,6 @@ These checks close this narrow static enum correction. They do not claim the
 unfiltered all-enabled integration lint passed: the separate nine-lint
 amendment still owns its remaining findings. They do not provide native
 session, complete lifecycle, vendor-authentication or real-model evidence.
-The pending genuine baseline capture remains necessary; publication and
+The historical9b8d genuine capture remains deliberately failed; publication and
 semantic integration retain the plan's fresh-head and writer-coordination
 requirements. No release or VS Code change is included.
