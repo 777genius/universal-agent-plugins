@@ -1,4 +1,5 @@
 """Inert Gemini collector contracts. No native process or hosted spoofing."""
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -70,6 +71,72 @@ class GeminiCollectorTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         return FakeContext(directory.name)
+
+    def observed_refresh_stderr(self):
+        # Independent literal from artifact12698121032, not the implementation constant.
+        body = (b"Ripgrep is not available. Falling back to GrepTool.\n"
+                b"Scheduling MCP context refresh...\nExecuting MCP context refresh...\n"
+                b"MCP context refresh complete.\n")
+        self.assertEqual(len(body), 149)
+        self.assertEqual(hashlib.sha256(body).hexdigest(),
+                         "627ecbbc677b2ca1e37a8b6894cd23619ddcf0ab7e1b1c16bdc460229c434234")
+        return body
+
+    def test_exact_measured_refresh_diagnostic_preserves_complete_source_observation(self):
+        ctx = self.context()
+        body = skill_text([(gemini.NAMES[scope], (ctx.home if scope == "user" else ctx.projects[scope]) /
+                           ".gemini/skills" / gemini.NAMES[scope] / "SKILL.md", True) for scope in ("a", "user")])
+        ctx.replace["configured-a-skills"] = ({"exit": 0, "error": None}, body, self.observed_refresh_stderr())
+        result = gemini.collect(ctx)
+        self.assertEqual(len(ctx.calls), 18)
+        self.assertEqual(len(result["cases"]), 2)
+        self.assertTrue(all(row["status"] == "passed" for row in result["cases"]))
+        self.assertFalse(any(value for key, value in result["observations"].items() if key.endswith("_qualified")))
+
+    def test_refresh_diagnostic_does_not_expand_command_bytes_or_capture_success(self):
+        captured = self.observed_refresh_stderr()
+        lines = captured.splitlines(keepends=True)
+        variants = [captured + b"Authentication required\n", captured[:-1], captured.replace(b"\n", b"\r\n"),
+                    b"".join([lines[0], lines[2], lines[1], lines[3]]), captured + lines[-1],
+                    b"".join(lines[1:]), captured.replace(b"complete", b"failed"), b"prefix\n" + captured]
+        for stderr in variants:
+            ctx = self.context()
+            ctx.replace["observed"] = ({"exit": 0, "error": None}, b"actual output", stderr)
+            with self.subTest(stderr=stderr), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", ("skills", "list", "--all"))
+        for arguments in (("mcp", "list"), ("--version",), ("--help",), ("skills", "list"),
+                          ("skills", "list", "--all", "extra")):
+            ctx = self.context()
+            ctx.replace["observed"] = ({"exit": 0, "error": None}, b"actual output", captured)
+            with self.subTest(arguments=arguments), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", arguments)
+        for record, stdout, stderr in [({"exit": 1, "error": None}, b"output", captured),
+                                      ({"exit": False, "error": None}, b"output", captured),
+                                      ({"exit": 0}, b"output", captured),
+                                      ({"exit": 0, "error": "timeout"}, b"output", captured),
+                                      ({"exit": 0, "error": ""}, b"output", captured),
+                                      ({"exit": 0, "error": False}, b"output", captured),
+                                      ({"exit": 0, "error": None}, "output", captured),
+                                      ({"exit": 0, "error": None}, b"output", bytearray(captured))]:
+            ctx = self.context()
+            ctx.replace["observed"] = (record, stdout, stderr)
+            with self.subTest(record=record), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", ("skills", "list", "--all"))
+
+    def test_refresh_diagnostic_cannot_mask_foreign_stdout_or_authored_mutation(self):
+        for fault in ("foreign-path", "malformed-list", "authored-mutation"):
+            ctx = self.context()
+            body = skill_text([(gemini.NAMES[scope], (ctx.home if scope == "user" else
+                               ctx.projects["b" if fault == "foreign-path" else scope]) /
+                               ".gemini/skills" / gemini.NAMES[scope] / "SKILL.md", True) for scope in ("a", "user")])
+            captured = self.observed_refresh_stderr()
+            def observed():
+                if fault == "authored-mutation":
+                    (ctx.home / ".gemini/settings.json").write_text("{}\n")
+                return {"exit": 0, "error": None}, b"unrecognized" if fault == "malformed-list" else body, captured
+            ctx.replace["configured-a-skills"] = observed
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                gemini.collect(ctx)
 
     def test_complete_source_observation_is_explicitly_not_runtime(self):
         ctx = self.context()

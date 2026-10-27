@@ -66,3 +66,14 @@ pass. Inert success or this old failed capture does not establish new native
 observations, a runtime lifecycle, MCP exchange, vendor authentication or model
 behavior. All unproved qualification flags remain false. VS Code is excluded.
 
+
+## Actual validation
+
+Both independent plan reviews (root and CLI) approved SHA256
+71a06dd903b535c632412a1f1a2c7301d8ade1783899c9486b8f9141d4f7994f
+before implementation. The actual affected Gemini collector and shared research
+inert modules pass all31 tests in0.388 seconds. Python AST and whitespace checks
+pass. The positive literal independently matches the captured149 bytes and
+SHA256; hostile command/byte/capture/source-path/authored-mutation cases remain
+refused. No vendor or Go binary executed. Fresh genuine hosted observation is
+still required for every remaining native probe.

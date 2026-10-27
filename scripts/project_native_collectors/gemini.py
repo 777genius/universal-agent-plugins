@@ -40,6 +40,8 @@ _UNTRUSTED = (
     "User-level servers are also suppressed in untrusted folders to prevent accidental side-effects.",
 )
 _RIPGREP_FALLBACK = b"Ripgrep is not available. Falling back to GrepTool.\n"
+_SKILLS_REFRESH_DIAGNOSTIC = (_RIPGREP_FALLBACK + b"Scheduling MCP context refresh...\n"
+                              b"Executing MCP context refresh...\nMCP context refresh complete.\n")
 _EMPTY_MCP = b"No MCP servers configured.\n"
 _CONFIG_COMMANDS = (("skills", "list", "--all"), ("mcp", "list"))
 
@@ -134,11 +136,14 @@ def _probe(ctx, owned, label, arguments, project="a"):
     # exact 52-byte warning on a successful skills command. Keep those bytes in
     # evidence; version/help and every other diagnostic remain strict.
     known_stderr = tuple(arguments) in _CONFIG_COMMANDS and stderr == _RIPGREP_FALLBACK
+    # Genuine research run 40405537349 captured this exact 149-byte successful
+    # skills-list tuple; it does not admit another command or any other bytes.
+    refresh_stderr = tuple(arguments) == ("skills", "list", "--all") and stderr == _SKILLS_REFRESH_DIAGNOSTIC
     # Actual hosted run 40240850774 emitted the empty-list sentinel on stderr,
     # with zero stdout bytes and exit zero. Preserve both raw capture channels;
     # only this whole measured response supplies the existing empty-list parser.
     empty_mcp = tuple(arguments) == ("mcp", "list") and stdout == b"" and stderr == _EMPTY_MCP
-    if stderr and not known_stderr and not empty_mcp:
+    if stderr and not known_stderr and not refresh_stderr and not empty_mcp:
         raise ValueError("Gemini probe did not finish cleanly: " + label)
     for path, body in owned.items():
         _unchanged(path, body)
