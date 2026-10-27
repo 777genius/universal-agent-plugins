@@ -294,7 +294,11 @@ func (a *kimiSingleToolAttempt) run(t *testing.T) {
 	projectNativeRuntimeWrite(t, path, encoded, 0600)
 	f.protected[path] = nativeSHA(t, path)
 	dataBefore := kimiProjectTree(t, p.Data)
-	r := f.command(t, "native-attempt", f.projects["user"], f.env(), []string{f.python, filepath.Join(RepoRoot(t), "scripts", "project_native_collectors", "kimi_attempt.py"), "--attempt-request", path}, 70*time.Second, false)
+	observerEnv, err := kimiAttemptObserverEnvironment(f.env(), os.Getenv("GITHUB_ACTIONS"), os.Getenv("RUNNER_ENVIRONMENT"), os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := f.command(t, "native-attempt", f.projects["user"], observerEnv, []string{f.python, filepath.Join(RepoRoot(t), "scripts", "project_native_collectors", "kimi_attempt.py"), "--attempt-request", path}, 70*time.Second, false)
 	if len(r.Stderr) != 0 {
 		t.Fatal("Kimi private observer emitted diagnostics")
 	}
@@ -340,6 +344,23 @@ func (a *kimiSingleToolAttempt) run(t *testing.T) {
 	f.check(t)
 	// Even source-guided success is not measured native-history qualification.
 	t.Error("Kimi initial native history capture requires independent finite-schema review; no qualification")
+}
+
+// Only the private observer receives these genuinely observed host markers.
+// The independent Python platform/host guard and closed vendor env remain intact.
+func kimiAttemptObserverEnvironment(base []string, actions, runner, optin string) ([]string, error) {
+	if actions != "true" || runner != "github-hosted" || optin != "1" {
+		return nil, fmt.Errorf("Kimi observer genuine hosted markers required")
+	}
+	for _, entry := range base {
+		key, _, _ := strings.Cut(entry, "=")
+		switch key {
+		case "GITHUB_ACTIONS", "RUNNER_ENVIRONMENT", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED":
+			return nil, fmt.Errorf("Kimi observer base contains host marker")
+		}
+	}
+	env := append([]string(nil), base...)
+	return append(env, "GITHUB_ACTIONS="+actions, "RUNNER_ENVIRONMENT="+runner, "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED="+optin), nil
 }
 
 func (a *kimiSingleToolAttempt) finish(t *testing.T) {

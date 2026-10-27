@@ -9,8 +9,50 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 )
+
+func TestKimiSingleToolObserverEnvironmentForwardsOnlyHeldMarkers(t *testing.T) {
+	for _, key := range []string{"AWS_SECRET_ACCESS_KEY", "HTTPS_PROXY", "KIMI_API_KEY", "LD_PRELOAD"} {
+		t.Setenv(key, "inert-private-canary")
+	}
+	base := make([]string, 3, 8)
+	copy(base, []string{"HOME=/inert/home", "PATH=/inert/bin", "NO_COLOR=1"})
+	backing := base[:cap(base)]
+	backing[3] = "inert-capacity-canary"
+	before := append([]string(nil), backing...)
+	env, err := kimiAttemptObserverEnvironment(base, "true", "github-hosted", "1")
+	want := []string{"HOME=/inert/home", "PATH=/inert/bin", "NO_COLOR=1", "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED=1"}
+	if err != nil || !reflect.DeepEqual(env, want) || !reflect.DeepEqual(backing, before) {
+		t.Fatal("observer handoff did not preserve exact closed base and held markers")
+	}
+	env[0] = "changed-result"
+	if !reflect.DeepEqual(backing, before) || len(base) != 3 || cap(base) != 8 {
+		t.Fatal("observer environment aliases or mutates original base")
+	}
+}
+
+func TestKimiSingleToolObserverEnvironmentRefusesUnheldAuthority(t *testing.T) {
+	for index := range 3 {
+		for _, wrong := range []string{"", "false", "self-hosted", " true", "true\n", "1\x00", "github-hosted "} {
+			values := [3]string{"true", "github-hosted", "1"}
+			values[index] = wrong
+			if env, err := kimiAttemptObserverEnvironment([]string{"HOME=/inert/home"}, values[0], values[1], values[2]); err == nil || env != nil {
+				t.Fatalf("invalid held marker %d admitted or partially forwarded", index)
+			}
+		}
+	}
+	for _, key := range []string{"GITHUB_ACTIONS", "RUNNER_ENVIRONMENT", "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED"} {
+		for _, existing := range []string{key, key + "=foreign", key + "=true"} {
+			base := []string{"HOME=/inert/home", existing}
+			before := append([]string(nil), base...)
+			if env, err := kimiAttemptObserverEnvironment(base, "true", "github-hosted", "1"); err == nil || env != nil || !reflect.DeepEqual(base, before) {
+				t.Fatal("preexisting base host marker admitted or base mutated")
+			}
+		}
+	}
+}
 
 func kimiAttemptContractBody() map[string]any {
 	return map[string]any{"model": kimiAttemptModel, "stream": true, "stream_options": map[string]any{"include_usage": true},
