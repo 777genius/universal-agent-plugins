@@ -74,3 +74,28 @@ Root alone publishes reviewed commits to existing PR525 on a fresh non-forced
 ref. A new genuine hosted cycle is required to expose the still-unobserved
 missing-repair command details and remaining removal/restart facts. No vendor
 client or hosted eligibility spoof runs locally. No release, new PR or VS work.
+
+## Actual recovered-candidate validation
+
+Fresh complete four-file reviews from desktop and shell approved manifest
+473da3d495e598c2d11ee2c640e29c1ca9cca12f69086e6c328db2b7ca68d91f.
+The exact restored official Go1.26.10 binary SHA256 is
+9c2a37ae5b21ba1d5a004bb9ab4d0c64de6fc5778e9d30487adccea62678b8b5;
+golangci-lint2.13.2 binary SHA256 is
+97aa6134a250a0f964d112a5e6c01c80f87e4b0512872ebe0845834b5a03b76b.
+Offline focused Cline cycle/project contracts passed in0.105s; checked-in
+all-enabled affected-line lint and unfiltered six-linter whole-file gates
+each reported0issues. Fresh Python runtime contracts passed23tests in1.419s;
+shell independently passed the same23tests in1.431s. Formatting and diff checks
+are clean. No vendor client, installer or positive hosted guard ran locally.
+
+The actual9d native artifact12713365628 was reacquired and matched its original
+API size/SHA, closed21-member ZIP/CRC and inner digest. Every raw body passes
+the new scanner, and its original complete single-attempt admission still
+passes with all lifecycle/authentication/model qualifications false. The6d
+frontend12718201141 was also reacquired: exact source/tree, empty clean-source
+streams, all30 command-stream joins and normally closed originalUID/GID1001
+service with no forced stop/kill were reverified. That actual full cycle still
+failed at missing-repair-a; its quarantined native details remain unobserved.
+The separate owned-directory fault correction has not been applied in this
+code commit. Root publication and fresh hosted evidence remain separate gates.
