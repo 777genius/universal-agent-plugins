@@ -1600,3 +1600,14 @@ adoption is allowed. Safe bounded route/auth/strict-JSON/raw-and-decoded-key
 privacy precede request retention; schema refusal sends no response. Main
 provider handlers and existing fatal/review barrier remain unchanged.
 Root freshly checked PR522 remains611 before this isolated checkout.
+
+
+## Grok dedicated title fixture: final reviewed validation (2026-10-27)
+
+The accepted separate-title plan `72cc3bcbe925d310806833836d6fa97d65dd1693ad0bcaaf9069e7939f8da07b` is implemented by code source `3c38d0d5143b4490ff67822954fe9794e55498a8`, tree `28bfe97d594d45a0a7d59767dd427c218d8889fe`. Two exact independent code critics approved the final source: root receipt `ddd9a66d794faf55fd350248f13a1e212a1c7092421670d455fa12401ede980d` and GPT-6.1 Sol xhigh Gemini reviewer `3e7beb62d23ea66ba1f262f87c367448be475e431bb03d03e0a7a6fada93204b`.
+
+The held original HOME is authored once with separate main and initial-title loopback endpoints and private keys. The title handler admits one exact source-defined request and fixed internal session-title SSE response. Both literal and recursively encoded fixture keys are refused before raw request retention. The original main provider route/model/count/authentication functions, shared native process guard and unconditional final failed-only review barrier are unchanged. Three closed title evidence names have a separate bounded validator; all five qualification flags, native completion, vendor authentication and real-model qualification stay false.
+
+Actual final focused inert Go contracts passed (package 2.150s); affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1` and unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard each reported zero issues. The 41 Python contracts passed in 8.678s on preceding source `3edd581c5b9e3c39b7089dd4d9a5c78233d86b81`; the entire scripts tree is identical through final source (`2d4ac1a96e1f5ccf3a0d6ca7af546d4a39753406`). Original611 and a1af failed archives retain all21/20 member bytes and summaries with all flags false under original and current readers. Gate and transfer receipt SHA256 `954aba61be3972a92fb6a551e7e144b7b655e7a7e0ac58d11999e249b3fd296e`.
+
+Two measured inert-test lint issues were corrected without changing the module version or any guard: context propagation and Go1.22-compatible HTTP request construction. Earlier failed logs remain in scratch audit evidence. No vendor client, public installer or scanner executed locally. Publication only schedules a fresh genuine hosted diagnostic; public-source/shipping equivalence, completed startup, loaded skills, user/project lifecycle and authentication remain unproved.
