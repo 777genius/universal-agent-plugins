@@ -384,12 +384,10 @@ func (s *Session) Preview(ctx context.Context, p string) (Preview, error) {
 		if err := ctx.Err(); err != nil {
 			return preview, err
 		}
-		if e.Type != "blob" || (e.Mode != "100644" && e.Mode != "100755" && e.Mode != "120000") {
-			preview.HasUnsupportedResources = true
+		ordinary := e.Type == "blob" && (e.Mode == "100644" || e.Mode == "100755")
+		preview.HasUnsupportedResources = preview.HasUnsupportedResources || !ordinary
+		if !ordinary && (e.Type != "blob" || e.Mode != "120000") {
 			continue
-		}
-		if e.Mode == "120000" {
-			preview.HasUnsupportedResources = true
 		}
 		rel := e.Path
 		if p != "" {
