@@ -12,7 +12,7 @@ test('CSS background works without JavaScript and keeps unique logos on the circ
   const page = await context.newPage();
   try {
     await page.goto('./');
-    const field = page.locator('.hero__demo .hero-agent-field');
+    const field = page.locator('.hero-agent-field');
     await expect(field).toHaveAttribute('aria-hidden', 'true');
     await expect(field.locator('[data-client-id]')).toHaveCount(uniqueLogos.length);
     await expect(field.locator('img[src$="/openai.svg"]')).toHaveCount(1);
@@ -56,7 +56,7 @@ test('CSS background works without JavaScript and keeps unique logos on the circ
 test('CSS background depth animates on the right and pauses offscreen or hidden', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('./');
-  const field = page.locator('.hero__demo .hero-agent-field');
+  const field = page.locator('.hero-agent-field');
   const orbit = field.locator('.hero-agent-field__orbit');
   await expect(field).toHaveClass(/hero-agent-field--active/);
   // Observe real playback in one browser task. The failure trace stalled in a
@@ -69,7 +69,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   });
   const first = await orbit.evaluate((node) => getComputedStyle(node).transform);
   await page.waitForFunction((initial) => {
-    const node = document.querySelector('.hero__demo .hero-agent-field__orbit');
+    const node = document.querySelector('.hero-agent-field__orbit');
     return node && getComputedStyle(node).animationPlayState === 'running'
       && getComputedStyle(node).transform !== initial;
   }, first, { timeout: 5_000 });
@@ -81,7 +81,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   expect(bounds.x).toBeGreaterThan(copy.x + copy.width);
   expect(bounds.y).toBeCloseTo(installation.y, 1);
   expect(bounds.height).toBeCloseTo(installation.height, 1);
-  expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('absolute');
+  expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('fixed');
   const sceneAnimations = await field.evaluate((node) => node.getAnimations({ subtree: true })
     .map((animation) => (animation as CSSAnimation).animationName));
   expect(sceneAnimations).toContain('agent-orbit-breathe');
@@ -100,10 +100,10 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   // Real out-of-plane rotation changes depth on both axes, not just a flat spin.
   expect(Math.abs(tiltMatrices[0]![0]! - tiltMatrices[1]![0]!)).toBeGreaterThan(0.5);
   expect(Math.abs(tiltMatrices[0]![1]! - tiltMatrices[1]![1]!)).toBeGreaterThan(0.5);
-  await page.getByRole('contentinfo').scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' }));
   await expect(field).not.toHaveClass(/hero-agent-field--active/);
   expect(await orbit.evaluate((node) => getComputedStyle(node).animationPlayState)).toBe('paused');
-  await field.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
@@ -116,7 +116,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   });
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
 });
 
 test('logos travel clockwise along a stationary ring and stay upright', async ({ page }) => {
@@ -171,7 +171,7 @@ test('larger breathing background never changes layout or blocks the foreground'
   await expect(field).toHaveCSS('perspective', '1125px');
   for (const width of [1440, 1280, 1024, 800, 390, 280]) {
     await page.setViewportSize({ width, height: 1000 });
-    await field.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     const windowBefore = (await page.locator('.hero__window').boundingBox())!;
     const heroBefore = (await page.locator('.hero').boundingBox())!;
     const planeWidth = await field.locator('.hero-agent-field__plane')
@@ -204,7 +204,7 @@ test('larger breathing background never changes layout or blocks the foreground'
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await field.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   const sizes: number[] = [];
   for (const progress of [0, 0.5, 1]) {
     await field.evaluate((node, fraction) => {
@@ -258,7 +258,7 @@ test('logo thickness follows the viewing angle without extra animation loops', a
     expect(first.x * opposite.x + first.y * opposite.y).toBeLessThan(-1);
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
   await expect(field.locator('.hero-agent-field__face')).toHaveCount(uniqueLogos.length);
 });
 
@@ -382,4 +382,36 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
   await expect(page.locator('.hero__demo .command-snippet')).toContainText(
     'add context7 --target chatgpt',
   );
+});
+
+test('orbit follows scrolling with a small upward and leftward drift, then returns', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('./');
+  const field = page.locator('.hero-agent-field');
+  await expect(field).toHaveCSS('position', 'fixed');
+  const start = (await field.boundingBox())!;
+  const installation = (await page.locator('.hero__window').boundingBox())!;
+  for (const distance of [400, 1000, 400, 0]) {
+    await page.mouse.wheel(0, distance - await page.evaluate(() => window.scrollY));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(distance);
+    await expect.poll(async () => (await field.boundingBox())!.y - start.y).toBeCloseTo(-distance * 0.12, 0);
+    expect((await field.boundingBox())!.x - start.x).toBeCloseTo(-distance * 0.025, 0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  expect(await page.locator('.hero__window').boundingBox()).toEqual(installation);
+  // Resize while scrolled: the anchor must still be measured in document coordinates.
+  await page.mouse.wheel(0, 600);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(600);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const anchor = page.locator('.hero-agent-field-anchor');
+  await expect.poll(async () => {
+    const origin = (await anchor.boundingBox())!;
+    const moved = (await field.boundingBox())!;
+    return Math.round(moved.y - origin.y);
+  }).toBe(528);
+  await expect.poll(async () => (await field.boundingBox())!.width).toBe((await anchor.boundingBox())!.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(field).toHaveCSS('translate', 'none');
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
 });
