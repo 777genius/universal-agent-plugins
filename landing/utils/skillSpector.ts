@@ -1,6 +1,7 @@
 import type {
   SkillSpectorAssessment,
   SkillSpectorFinding,
+  SkillSpectorDisplayReport,
   SkillSpectorRecord,
   SkillSpectorReport,
   SkillSpectorSubject,
@@ -90,8 +91,20 @@ export function decodeSkillSpectorReport(value: unknown, now = new Date()): Skil
     report.records.length > 128
   )
     invalid();
+  decodeSkillSpectorRecords(report.records, String(report.generated_at), 128, now);
+  return value as SkillSpectorReport;
+}
+
+/** Shared strict record validation for legacy reports and bounded repository shards. */
+export function decodeSkillSpectorRecords(
+  value: unknown,
+  generatedAt: string,
+  maximum: number,
+  now = new Date(),
+): SkillSpectorRecord[] {
+  if (!Array.isArray(value) || value.length > maximum) invalid();
   const ids = new Set<string>();
-  for (const item of report.records as unknown[]) {
+  for (const item of value as unknown[]) {
     const record = object(item);
     const source = object(record.source);
     if (
@@ -148,7 +161,7 @@ export function decodeSkillSpectorReport(value: unknown, now = new Date()): Skil
     if (record.status === 'complete' && (record.errors as unknown[]).length) invalid();
     if (
       record.scanned_at !== null &&
-      Date.parse(record.scanned_at as string) > Date.parse(report.generated_at as string)
+      Date.parse(record.scanned_at as string) > Date.parse(generatedAt)
     )
       invalid();
     for (const item of record.findings as unknown[]) {
@@ -169,12 +182,12 @@ export function decodeSkillSpectorReport(value: unknown, now = new Date()): Skil
         invalid();
     }
   }
-  return value as SkillSpectorReport;
+  return value as SkillSpectorRecord[];
 }
 
 /** Plugin joins are immutable; the Skills provider supplies historical name hints only. */
 export function skillSpectorAssessment(
-  report: SkillSpectorReport | undefined,
+  report: SkillSpectorDisplayReport | undefined,
   subject: SkillSpectorSubject | undefined,
   now = new Date(),
 ): SkillSpectorAssessment {

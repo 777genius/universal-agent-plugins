@@ -14,7 +14,7 @@ const props = defineProps<{
   scope: 'plugin' | 'skill';
 }>();
 const { t, n, locale } = useI18n({ useScope: 'local' });
-const { report, status: reportStatus } = useSkillSpector();
+const { report, status: reportStatus } = useSkillSpector(() => props.subject);
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
 const displayStatus = computed(() =>
   reportStatus.value === 'ready' ? assessment.value.status : reportStatus.value,

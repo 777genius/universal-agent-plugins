@@ -1,0 +1,242 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
+import type {
+  SkillSpectorManifest,
+  SkillSpectorRecord,
+  SkillSpectorShardDescriptor,
+} from '../types/skillSpector.ts';
+import {
+  createSkillSpectorClient,
+  decodeSkillSpectorManifest,
+  decodeSkillSpectorShard,
+  skillSpectorV2ProfileDigest,
+} from '../utils/skillSpectorCatalog.ts';
+
+const fixture = JSON.parse(
+  readFileSync(new URL('./fixtures/skillspector-report.json', import.meta.url), 'utf8'),
+);
+const manifestUrl = 'https://example.test/v2/index.json';
+const legacyUrl = 'https://example.test/v1/index.json';
+const generatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+async function catalog(repositories = ['owner/one', 'owner/two']) {
+  const bodies = new Map<string, string>();
+  const descriptors: SkillSpectorShardDescriptor[] = [];
+  for (const [index, repository] of repositories.entries()) {
+    const record: SkillSpectorRecord = structuredClone(fixture.records[0]);
+    record.id = `record-${index}`;
+    record.source.repository = repository;
+    const shard = {
+      schema_version: 2,
+      scanner: fixture.scanner,
+      profile: { id: 'static-only-v2', digest: skillSpectorV2ProfileDigest },
+      repository,
+      records: [record],
+    };
+    const body = JSON.stringify(shard);
+    const bytes = new TextEncoder().encode(body);
+    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    const path = `shards/${hash}.json`;
+    bodies.set(new URL(path, manifestUrl).href, body);
+    descriptors.push({
+      repository,
+      path,
+      digest: `sha256:${hash}`,
+      bytes: bytes.byteLength,
+      record_count: 1,
+    });
+  }
+  const manifest: SkillSpectorManifest = {
+    schema_version: 2,
+    generated_at: generatedAt,
+    source_commit: 'a'.repeat(40),
+    scanner: fixture.scanner,
+    profile: { id: 'static-only-v2', digest: skillSpectorV2ProfileDigest },
+    scope: 'selected_sources',
+    selection_digest: `sha256:${'b'.repeat(64)}`,
+    coverage: { selected: repositories.length + 5, reported: repositories.length, pending: 5 },
+    shards: descriptors,
+  };
+  bodies.set(manifestUrl, JSON.stringify(manifest));
+  return { manifest, bodies };
+}
+function fetchFrom(bodies: Map<string, string>, requests: string[] = []) {
+  return (async (input: string | URL | Request) => {
+    const url = String(input);
+    requests.push(url);
+    const body = bodies.get(url);
+    return new Response(body ?? '', { status: body === undefined ? 404 : 200 });
+  }) as typeof fetch;
+}
+
+describe('bounded SkillSpector repository catalog', () => {
+  it('validates explicit coverage, immutable relative shard paths and pinned metadata', async () => {
+    const { manifest } = await catalog();
+    assert.equal(decodeSkillSpectorManifest(manifest).coverage.pending, 5);
+    for (const change of [
+      (value: SkillSpectorManifest) => {
+        value.coverage.pending++;
+      },
+      (value: SkillSpectorManifest) => {
+        value.coverage.selected = 10_001;
+      },
+      (value: SkillSpectorManifest) => {
+        value.profile.digest = `sha256:${'0'.repeat(64)}`;
+      },
+      (value: SkillSpectorManifest) => {
+        value.scanner.revision = '0'.repeat(40);
+      },
+      (value: SkillSpectorManifest) => {
+        value.shards[0]!.path = '../outside.json';
+      },
+      (value: SkillSpectorManifest) => {
+        value.shards[0]!.bytes = (8 << 20) + 1;
+      },
+      (value: SkillSpectorManifest) => {
+        value.shards[0]!.record_count = 257;
+      },
+      (value: SkillSpectorManifest) => {
+        value.shards.push(value.shards[0]!);
+      },
+      (value: SkillSpectorManifest) => {
+        value.generated_at = '2026-02-30T00:00:00Z';
+      },
+    ]) {
+      const malformed = structuredClone(manifest);
+      change(malformed);
+      assert.throws(() => decodeSkillSpectorManifest(malformed), /invalid/);
+    }
+    const empty = { ...manifest, shards: [], coverage: { selected: 5, reported: 0, pending: 5 } };
+    assert.equal(decodeSkillSpectorManifest(empty).shards.length, 0);
+  });
+
+  it('rejects mismatched shard repository and incomplete record evidence', async () => {
+    const { manifest, bodies } = await catalog();
+    const descriptor = manifest.shards[0]!;
+    const shard = JSON.parse(bodies.get(new URL(descriptor.path, manifestUrl).href)!);
+    assert.equal(decodeSkillSpectorShard(shard, manifest, descriptor).length, 1);
+    for (const change of [
+      (value: typeof shard) => {
+        value.repository = 'other/repository';
+      },
+      (value: typeof shard) => {
+        value.records[0].source.repository = 'other/repository';
+      },
+      (value: typeof shard) => {
+        value.records[0].source.content_digest = null;
+      },
+      (value: typeof shard) => {
+        value.records[0].scanned_at = '2099-01-01T00:00:00Z';
+      },
+      (value: typeof shard) => {
+        value.profile.id = 'static-only-v1';
+      },
+    ]) {
+      const malformed = structuredClone(shard);
+      change(malformed);
+      assert.throws(() => decodeSkillSpectorShard(malformed, manifest, descriptor), /invalid/);
+    }
+  });
+
+  it('shares requests, loads only requested repositories, and leaves pending subjects neutral', async () => {
+    const { bodies } = await catalog();
+    const requests: string[] = [];
+    const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(bodies, requests));
+    const [first, same] = await Promise.all([
+      client.reportFor('OWNER/one'),
+      client.reportFor('owner/one'),
+    ]);
+    assert.equal(first, same);
+    assert.equal(first.records.length, 1);
+    assert.equal(requests.length, 2);
+    assert.equal((await client.reportFor('not/selected')).records.length, 0);
+    assert.equal(requests.length, 2);
+  });
+
+  it('isolates a tampered or failed shard without downgrading to v1', async () => {
+    const { manifest, bodies } = await catalog();
+    bodies.set(new URL(manifest.shards[0]!.path, manifestUrl).href, 'tampered');
+    const requests: string[] = [];
+    const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(bodies, requests));
+    await assert.rejects(client.reportFor('owner/one'), /invalid/);
+    assert.equal((await client.reportFor('owner/two')).records.length, 1);
+    assert.equal(requests.includes(legacyUrl), false);
+  });
+
+  it('falls back only when the v2 manifest is missing, preserving strict legacy bounds', async () => {
+    for (const status of [404, 500]) {
+      const requests: string[] = [];
+      const fetcher = (async (input: string | URL | Request) => {
+        requests.push(String(input));
+        return String(input) === manifestUrl
+          ? new Response('', { status })
+          : new Response(JSON.stringify(fixture));
+      }) as typeof fetch;
+      const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetcher);
+      if (status === 404) assert.equal((await client.reportFor('owner/one')).schema_version, 1);
+      else await assert.rejects(client.reportFor('owner/one'), /500/);
+      assert.equal(requests.includes(legacyUrl), status === 404);
+    }
+  });
+
+  it('bounds concurrent shard fetches to four', async () => {
+    const { bodies } = await catalog(
+      Array.from({ length: 9 }, (_, index) => `owner/repo-${index}`),
+    );
+    let active = 0,
+      peak = 0;
+    const releases: (() => void)[] = [];
+    const fetcher = (async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url !== manifestUrl) {
+        active++;
+        peak = Math.max(active, peak);
+        await new Promise<void>((resolve) =>
+          releases.push(() => {
+            active--;
+            resolve();
+          }),
+        );
+      }
+      return new Response(bodies.get(url));
+    }) as typeof fetch;
+    const client = createSkillSpectorClient(manifestUrl, legacyUrl, fetcher);
+    const all = Promise.all(
+      Array.from({ length: 9 }, (_, index) => client.reportFor(`owner/repo-${index}`)),
+    );
+    while (releases.length < 4) await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(peak, 4);
+    for (let completed = 0; completed < 9;) {
+      const release = releases.shift();
+      if (release) {
+        release();
+        completed++;
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal((await all).length, 9);
+    assert.equal(peak, 4);
+  });
+
+  it('cancels oversized streams before allocating a complete manifest', async () => {
+    let cancelled = false;
+    const fetcher = (async () =>
+      new Response(
+        new ReadableStream({
+          pull(controller) {
+            controller.enqueue(new Uint8Array((4 << 20) + 1));
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      )) as typeof fetch;
+    await assert.rejects(
+      createSkillSpectorClient(manifestUrl, legacyUrl, fetcher).reportFor('owner/one'),
+      /invalid/,
+    );
+    assert.equal(cancelled, true);
+  });
+});
