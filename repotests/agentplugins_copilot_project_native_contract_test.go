@@ -248,6 +248,29 @@ func TestCopilotProjectNativeJSONClosedContract(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCopilotProjectNativeMessageRolesAreExactInFullRequests(t *testing.T) {
+	for _, test := range []struct {
+		role any
+		want bool
+	}{
+		{"system", true}, {"developer", true}, {"user", true}, {"assistant", true}, {"tool", true},
+		{"system|developer", false}, {"user|assistant", false}, {"assistant|tool", false}, {"user|assistant|tool", false},
+		{"", false}, {"USER", false}, {"user ", false}, {nil, false}, {7, false},
+	} {
+		request := copilotProjectContractRequest()
+		message := request["messages"].([]any)[0].(map[string]any)
+		message["role"] = test.role
+		if test.role == "tool" {
+			message["tool_call_id"] = "inert-tool-call"
+		}
+		_, err := copilotProjectRequest(copilotProjectContractBody(t, request), "uapcopilota-inspect_runtime")
+		if (err == nil) != test.want {
+			t.Fatalf("exact full-request role admission differs for %v: %v", test.role, err)
+		}
+	}
+}
+
 func TestCopilotProjectNativeProviderRejectsForeignMissingAndMalformedDeclarations(t *testing.T) {
 	for _, kind := range []string{"foreign", "missing", "unknown-envelope", "unknown-message", "duplicate-tools", "schema-extra", "wrong-type"} {
 		t.Run(kind, func(t *testing.T) {

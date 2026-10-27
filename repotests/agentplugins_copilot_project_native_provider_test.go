@@ -25,8 +25,12 @@ func copilotProjectMessage(v any) error {
 		return fmt.Errorf("message object")
 	}
 	role, ok := m["role"].(string)
-	const roles = "|system|developer|user|assistant|tool|"
-	if !ok || !strings.Contains(roles, "|"+role+"|") {
+	if !ok {
+		return fmt.Errorf("message role")
+	}
+	switch role {
+	case "system", "developer", "user", "assistant", "tool":
+	default:
 		return fmt.Errorf("message role")
 	}
 	content, has := m["content"]
