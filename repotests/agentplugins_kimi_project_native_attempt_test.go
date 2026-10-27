@@ -272,11 +272,12 @@ func (a *kimiSingleToolAttempt) run(t *testing.T) {
 	}
 	object, _ := kimiProjectObject(body)
 	server := object["mcpServers"].(map[string]any)[p.Name]
-	identities := map[string]string{}
-	for _, inventory := range []map[string]string{f.immutable, f.protected} {
-		for path, digest := range inventory {
-			identities[path] = digest
-		}
+	identities, err := kimiAttemptObserverIdentities(f.immutable, f.python, f.git)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, digest := range f.protected {
+		identities[path] = digest
 	}
 	for root, inventory := range f.protectedTrees {
 		for relative, value := range inventory {

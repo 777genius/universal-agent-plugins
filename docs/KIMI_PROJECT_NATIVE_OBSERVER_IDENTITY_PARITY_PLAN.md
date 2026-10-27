@@ -97,3 +97,18 @@ verification and callback now proceed; a later failure still requires its own
 measured interpretation. Full lifecycle, restart/removal, MCP protocol/process
 and actual cleanup evidence remain required. This exact role projection is
 neither a native success claim nor permission to bypass unknown identity errors.
+
+## Completed local validation
+
+Both independent plan/code reviews approved the exact two-role copied-map
+projection. The native705 inner-member count was independently corrected to21;
+its actual failed capture and source/UID inference distinction remain intact.
+Focused existing single-tool and closed-environment contracts plus the new
+identity role/no-alias/refusal controls passed (0.013s). Actual affected
+all-enabled lint and unfiltered whole-file size/complexity/architecture lint
+each reported zero issues. Formatting and diff whitespace checks passed.
+Validation used the granted exclusive slot, pinned Go1.26.10 with Go1.22 source
+compatibility, private shared-memory temporary/lint directories and existing
+bounded caches. No vendor, model or positive hosted guard was run locally.
+All prior Python/component bytes and full Go immutable guards remain unchanged;
+fresh genuine service/callback and full lifecycle evidence are still required.

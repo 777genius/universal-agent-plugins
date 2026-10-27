@@ -13,6 +13,72 @@ import (
 	"testing"
 )
 
+// Supervisory Python/Git stay frozen in the full Go immutable closure.
+// The native observer receives the same role projection as the component lane.
+func kimiAttemptObserverIdentities(immutable map[string]string, python, git string) (map[string]string, error) {
+	if python == "" || git == "" || python == git || immutable[python] == "" || immutable[git] == "" {
+		return nil, fmt.Errorf("Kimi observer supervisory identity roles differ")
+	}
+	result := make(map[string]string, len(immutable)-2)
+	for path, digest := range immutable {
+		if path != python && path != git {
+			result[path] = digest
+		}
+	}
+	return result, nil
+}
+
+func TestKimiSingleToolObserverIdentitiesPreserveEveryNativeAndSourceRole(t *testing.T) {
+	immutable := map[string]string{"/inert/supervisor/python": "held-python", "/inert/supervisor/git": "held-git",
+		"/inert/native/kimi": "held-client", "/inert/source/kimi.py": "held-source", "/inert/tools/compiler": "held-compiler",
+		"/inert/tools/scanner": "held-scanner", "/inert/native/python": "held-same-basename", "/inert/native/probe": "held-probe"}
+	before := make(map[string]string, len(immutable))
+	for path, digest := range immutable {
+		before[path] = digest
+	}
+	got, err := kimiAttemptObserverIdentities(immutable, "/inert/supervisor/python", "/inert/supervisor/git")
+	want := map[string]string{"/inert/native/kimi": "held-client", "/inert/source/kimi.py": "held-source", "/inert/tools/compiler": "held-compiler",
+		"/inert/tools/scanner": "held-scanner", "/inert/native/python": "held-same-basename", "/inert/native/probe": "held-probe"}
+	if err != nil || !reflect.DeepEqual(got, want) || !reflect.DeepEqual(immutable, before) {
+		t.Fatal("observer projection changed original pins or omitted a native/source role")
+	}
+	got["/inert/native/kimi"] = "changed-result"
+	got["/inert/supervisor/python"] = "changed-result"
+	if !reflect.DeepEqual(immutable, before) {
+		t.Fatal("observer projection aliases the complete immutable authority")
+	}
+}
+
+func TestKimiSingleToolObserverIdentitiesRefuseMissingOrAmbiguousSupervisors(t *testing.T) {
+	for _, kind := range []string{"python-path", "git-path", "same-path", "missing-python", "missing-git", "empty-python", "empty-git"} {
+		immutable := map[string]string{"/inert/python": "held-python", "/inert/git": "held-git", "/inert/kimi": "held-client"}
+		python, git := "/inert/python", "/inert/git"
+		switch kind {
+		case "python-path":
+			python = ""
+		case "git-path":
+			git = ""
+		case "same-path":
+			git = python
+		case "missing-python":
+			delete(immutable, python)
+		case "missing-git":
+			delete(immutable, git)
+		case "empty-python":
+			immutable[python] = ""
+		case "empty-git":
+			immutable[git] = ""
+		}
+		before := make(map[string]string, len(immutable))
+		for path, digest := range immutable {
+			before[path] = digest
+		}
+		if got, err := kimiAttemptObserverIdentities(immutable, python, git); err == nil || got != nil || !reflect.DeepEqual(immutable, before) {
+			t.Fatal("unheld supervisory role admitted or original authority mutated", kind)
+		}
+	}
+}
+
 func TestKimiSingleToolObserverEnvironmentForwardsOnlyHeldMarkers(t *testing.T) {
 	for _, key := range []string{"AWS_SECRET_ACCESS_KEY", "HTTPS_PROXY", "KIMI_API_KEY", "LD_PRELOAD"} {
 		t.Setenv(key, "inert-private-canary")
