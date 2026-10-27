@@ -92,7 +92,8 @@ class CacheFlowTests(unittest.TestCase):
                 self.assertEqual(case.call_args.kwargs['scanner_cache_platform'], expected)
                 command = shlex.split(report['cases'][0]['repro'])
                 self.assertEqual(command[command.index('--scanner-cache-platform') + 1], expected)
-                self.assertEqual(command[command.index('--binary') + 1], str(self.binary))
+                self.assertEqual(Path(command[command.index('--binary') + 1]).resolve(strict=True),
+                                 self.binary.resolve(strict=True))
 
     def test_selection_source_build_refuses_legacy_route_before_build_or_fixture(self):
         argv = ['selection', '--build-go', '/not-executed/go', '--artifacts', str(self.root/'source'),

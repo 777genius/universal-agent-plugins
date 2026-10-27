@@ -235,7 +235,11 @@ func TestOfflinePublicInstallerSecurityBoundary(t *testing.T) {
 	}
 	// Only empty scanner acquisition directories are permitted; no lifecycle state,
 	// assessment cache, executable bytes or leaked private source snapshot.
-	want := []string{".", "security", "security/lintai", "security/lintai/0.1.3", "security/lintai/0.1.3/" + runtime.GOOS + "-" + runtime.GOARCH}
+	platformKey := runtime.GOOS + "-" + runtime.GOARCH
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		platformKey += "-musl"
+	}
+	want := []string{".", "security", "security/lintai", "security/lintai/0.1.3", "security/lintai/0.1.3/" + platformKey}
 	entries := securityFixtureTree(t, state)
 	if len(entries) != len(want) {
 		t.Fatalf("unexpected installer effects: %v", entries)
