@@ -39,8 +39,12 @@ func kimiCacheContractBody(t *testing.T, value map[string]any) []byte {
 	return body
 }
 
-func kimiCacheContractSend(p *kimiAttemptProvider, body []byte, mutate func(*http.Request)) *httptest.ResponseRecorder {
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, p.server.URL+"/v1/chat/completions", bytes.NewReader(body))
+func kimiCacheContractSend(t *testing.T, p *kimiAttemptProvider, body []byte, mutate func(*http.Request)) *httptest.ResponseRecorder {
+	t.Helper()
+	r, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.server.URL+"/v1/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	r.Header.Set("Authorization", "Bearer "+p.key)
 	r.Header.Set("Content-Type", "application/json")
 	if mutate != nil {
@@ -76,11 +80,11 @@ func TestKimiSingleToolCanonicalCacheMetadataPreservesOwnedExchange(t *testing.T
 		if _, err := kimiAttemptRequest(body); err != nil {
 			t.Fatalf("canonical session metadata refused: %v", err)
 		}
-		w := kimiCacheContractSend(p, body, nil)
+		w := kimiCacheContractSend(t, p, body, nil)
 		if w.Code != 200 || !p.issued || p.returned || p.err != nil || p.requestCount != 1 || len(p.requests) != 1 || *validated != 0 || !bytes.Equal(p.requests[0], body) || !strings.Contains(w.Body.String(), kimiAttemptTool) || strings.Contains(w.Body.String(), p.sentinel) {
 			t.Fatal("canonical metadata did not preserve the exact first owned response")
 		}
-		w = kimiCacheContractSend(p, kimiCacheContractBody(t, kimiCacheContractSecond(t, p, key)), nil)
+		w = kimiCacheContractSend(t, p, kimiCacheContractBody(t, kimiCacheContractSecond(t, p, key)), nil)
 		if w.Code != 200 || !p.returned || p.err != nil || *validated != 1 || p.requestCount != 2 || len(p.requests) != 2 || !strings.Contains(w.Body.String(), p.sentinel) {
 			t.Fatal("same-session metadata did not preserve the exact owned result")
 		}
@@ -110,7 +114,7 @@ func TestKimiSingleToolCacheMetadataRefusesNoncanonicalValues(t *testing.T) {
 func assertKimiCacheContractRefusal(t *testing.T, body []byte, mutate func(*http.Request)) {
 	t.Helper()
 	p, validated := kimiCacheContractProvider()
-	w := kimiCacheContractSend(p, body, mutate)
+	w := kimiCacheContractSend(t, p, body, mutate)
 	if w.Code != 400 || p.issued || p.returned || p.err == nil || *validated != 0 || p.requestCount != 1 || strings.Contains(w.Body.String(), kimiCacheContractKey) {
 		t.Fatal("invalid metadata or authority reached an owned response or leaked metadata")
 	}
@@ -147,15 +151,15 @@ func TestKimiSingleToolCacheMetadataCannotChangeBetweenTurns(t *testing.T) {
 		if pair[0] != "" {
 			first["prompt_cache_key"] = pair[0]
 		}
-		if w := kimiCacheContractSend(p, kimiCacheContractBody(t, first), nil); w.Code != 200 || !p.issued {
+		if w := kimiCacheContractSend(t, p, kimiCacheContractBody(t, first), nil); w.Code != 200 || !p.issued {
 			t.Fatal("canonical first request refused")
 		}
-		w := kimiCacheContractSend(p, kimiCacheContractBody(t, kimiCacheContractSecond(t, p, pair[1])), nil)
+		w := kimiCacheContractSend(t, p, kimiCacheContractBody(t, kimiCacheContractSecond(t, p, pair[1])), nil)
 		if w.Code != 400 || p.returned || p.err == nil || *validated != 0 || p.requestCount != 2 || len(p.requests) != 2 {
 			t.Fatal("changed cache metadata crossed the owned result boundary")
 		}
 		firstError := p.err
-		w = kimiCacheContractSend(p, kimiCacheContractBody(t, kimiCacheContractSecond(t, p, pair[0])), nil)
+		w = kimiCacheContractSend(t, p, kimiCacheContractBody(t, kimiCacheContractSecond(t, p, pair[0])), nil)
 		if w.Code != 400 || !errors.Is(p.err, firstError) || p.returned || *validated != 0 || p.requestCount != 3 || len(p.requests) != 2 {
 			t.Fatal("later valid metadata cleared the provider refusal")
 		}
