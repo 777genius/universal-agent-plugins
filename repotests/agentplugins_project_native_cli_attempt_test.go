@@ -94,6 +94,7 @@ type projectNativeCLIAttempt struct {
 	used                                                                         map[string]bool
 	evidence                                                                     map[string]any
 	binding                                                                      domain.ClientBinding
+	qoderMetadata                                                                *qoderOriginalMetadata
 }
 
 func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
@@ -109,6 +110,11 @@ func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 }
 func (f *projectNativeCLIAttempt) check(t *testing.T) {
 	t.Helper()
+	if f.spec.client == "qoder" && f.qoderMetadata != nil {
+		if err := f.qoderMetadata.check(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	for _, inventory := range []map[string]string{f.immutable, f.protected} {
 		for path, want := range inventory {
 			got, err := projectNativeRuntimeDigest(path)
@@ -332,6 +338,12 @@ func newProjectNativeCLIAttempt(t *testing.T, spec projectNativeCLISpec) *projec
 		projectNativeRuntimeWrite(t, path, body, 0600)
 		f.protected[path] = nativeSHA(t, path)
 		f.evidence["fixture_authored_updater_config"] = path
+	}
+	if spec.client == "qoder" {
+		f.qoderMetadata, err = qoderAuthorOriginalMetadata(filepath.Join(f.base.Home, ".qoder"), f.protected)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	return f
 }

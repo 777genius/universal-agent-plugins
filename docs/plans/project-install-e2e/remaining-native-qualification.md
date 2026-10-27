@@ -1243,3 +1243,51 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+## Qoder original anonymous-metadata fixture amendment
+
+Accepted bounded fixture correction. Native-finish R1 and independent CLI R2 approved exact plan SHA256 `0500e7dcd839dd3b27a70ebf3da1ae57ecdac43637d0ee6a2c1e9cba5858558b` before implementation. No native qualification or authentication claim.
+
+### Evidence and source boundary
+
+Current PR523 source 1973a9551f87a6e349c3cfd7ba6a9b8ff11118b8, tree 3e8fb0fc2c56162e6345f1797fd3c5b3419c984b, genuine runtime40566031581/job122407532341, native12761729753 and frontend12762294585, produces a successful exact flag-selected 765-byte catalog before the complete original .qoder profile guard fails. The full delta is10 additions,1 change,8 omissions. Existing file-priority diagnostic independently maps three held regular-file path hashes to published literals: installation_id (36bytes0644), .auth/.credential-transaction (0bytes0600), .auth/machine_id (36bytes0600). Actual ID contents were neither exported nor read. The unobserved eight entries remain unknown; no stability promise follows from these three observations.
+
+The published @qoder-ai/qodercli1.1.78 archive at https://registry.npmjs.org/@qoder-ai/qodercli/-/qodercli-1.1.78.tgz was checked against published SHA1 and SHA512 integrity. Its archive SHA256 is c5b237d2fd84ceb44af5427f281a7f1bcadd8c888fbed49197b5ce2f37dada4f; package/bundle/qodercli.js is34562870bytes, SHA256 ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38. The npm bundle is source guidance only: its equivalence to the independently pinned standalone executable is not established.
+
+Root independently rechecked the entire archive/bundle hashes and these source paths, without executing Node, the installer or any client:
+
+- Installation reader at byte1016117 returns existing nonempty trimmed installation_id. getInstallationId at1016392 generates/writes a UUID only when absent, caching it separately from account credentials.
+- Auth directory/transaction setup MAl at3843720 creates .auth0700, opens the empty .credential-transaction target in append mode0600 and enforces0600. The transient .credential-transaction.lock is separate and is not authored by this proposal.
+- Machine reader FT at3850006 returns existing nonempty trimmed machine_id. getMachineId at3855626 returns the held value via PpA; absent identity takes the ordinary transaction/generation path, with hardware or random generation. PpA at3847740 records consistency of the identifier in process; it is not an account grant.
+- Wet at3843328 selects distinct account credential files .auth/user or .auth/user.<environment>. No such credential file, token, login state or trust entry is created or modified here. The fixture remains without vendor account credentials; a later genuine authentication refusal stays a failure.
+
+### Proposed finite fixture change
+
+Change only the Qoder fixture constructor, before the first public/native child and before any preservation baseline. In its already-owned original disposable HOME/.qoder, create precisely these independently authored entries:
+
+1. installation_id: one fresh independent RFC4122 version4 UUID, exactly36 ASCII bytes with no newline, ordinary single-link file0644.
+2. .auth: an ordinary directory0700, owned by the current original user; refuse any preexisting entry at this previously unowned exact path.
+3. .auth/machine_id: a second fresh independent version4 UUID, distinct from installation_id, exactly36 ASCII bytes with no newline, ordinary single-link file0600.
+4. .auth/.credential-transaction: an empty ordinary single-link file0600.
+
+Use fresh cryptographic randomness from the existing inert Go fixture process, not native-observed IDs, host hardware IDs, account data, imported HOME or native output. Do not reuse the public package/probe nonce as an ID or parse/copy any existing native auth file. Use existing held-parent/no-follow/exclusive-create helpers, exact modes and owner checks. Author only the above three files and their one absent parent; no unknown cache, directory, lock, registration or auth path is inferred from omitted diagnostics. If any target is unexpectedly present, special, linked or foreign-owned, fail without replacing it.
+
+Record the three expected byte digests in existing protected-file authority immediately, before any child. Also hold the exact initial recipe authority for these three ordinary files and their .auth parent: device/inode, UID/GID, full mode, single-link files, exact byte lengths and independent byte digests. Add a narrow Qoder-only fixed-recipe verifier to the existing f.check before/after each already-selected command, activated only after this constructor recipe exists. This verifier rejects same-byte mode changes, inode replacement, changed parent/type/owner/link count or bytes from the first child onward; it must not wait until the catalog snapshot to notice a version/public-child mutation. It accepts no extra file or directory authority and reads no account credential path. Existing intraread held identity checks remain unchanged; this is not a promise of immutable access/change timestamps after ordinary reads or same-mode chmod. Keep the complete original .qoder catalog before/after snapshot and equality guard unchanged, including full modes, membership, unknown files/directories, links and existing special original-log rule. Every later byte drift or missing marker is fatal; no post-run adoption, exception, exclusions, cleanup deletion or fallback recipe. Source/native divergence, unexpected chmod or additional native file creation remains a genuine failed observation.
+
+No new child command, native argv, provider, environment, permission, trust, source/installed digest, scanner, acquisition pin, deadline, supervision, raw member, diagnostic cap or admission schema is added. Current raw diagnostics stay three details/2KiB with full counts and omissions. All five qualification flags, runtime_attempt_complete, vendor authentication and real-model flags remain false, including a successful catalog or restricted startup. Project activation remains Prepared. No public adapter or installer production code changes.
+
+### Implementation and meaningful checks
+
+Keep the helper/client-only controls in new Qoder-specific test files with one guarded constructor authoring call and one guarded invocation in the existing f.check for spec.client==qoder; do not alter other clients. The extra held recipe field is private to this fixture and absent before construction; no common permission or profile snapshot policy changes. Unit tests call the helper on ordinary inert temporary directories only, never newProjectNativeCLIAttempt, a positive hosted guard or a vendor executable.
+
+Check the exact four-entry recipe, types/modes/owner/single-link/byte counts, canonical distinct valid UUIDs, protected digests and unchanged original settings. Verify preexisting target or .auth, symlink/hardlink/special/foreign authority refuses without overwrite, including partial-recipe failures. Exercise the narrow fixed-recipe verifier to show a real same-byte chmod or inode replacement before the catalog baseline fails, as well as after a command. Exercise the existing full profile snapshot to show metadata bytes/mode or any new sibling still cause inequality/refusal. No tests may bless the current eight omitted native entries or infer native source equivalence.
+
+Two independent plan GOs precede coding; independent exact code review and focused inert Go/affected-root/full-six lint gates precede root-only publication. Align actual program base a412ba5e137fdcb7e004393229b323211ed746e1 with separate preservation review. No force push, release, new PR or VS Code work. A fresh genuine hosted capture is required to learn whether the same exact catalog now preserves the profile; any remaining mutation/authentication/tool boundary is reported honestly rather than reclassified as success.
+
+The original Qoder leaf was aligned to actual Cline-containing program base in
+`ca88f79a399f1e0f8280a38476f862fd9667eb2e`, tree
+`65edbdc10526a653d0d225a3fb531dea2910d4b3`. Independent static preservation
+review verified all 5777 nonconflicting tree entries and every nonblank plan
+line from both parents; Qoder-owned source was unchanged by this merge.
+Focused inert verification and exact-code review are recorded separately once
+completed; this accepted plan does not claim those gates or native success.
