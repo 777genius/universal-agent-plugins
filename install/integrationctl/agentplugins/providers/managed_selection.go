@@ -16,15 +16,28 @@ import (
 // A second verification detects artifact drift during the read. It does not
 // promise protection from same-principal ABA races.
 func (stager Stager) ManagedMCPNames(ctx context.Context, client domain.ClientID, root, digest string) ([]string, error) {
+	return stager.managedMCPNames(ctx, client, "", root, digest)
+}
+
+// ManagedMCPNamesForScope reads the explicitly scoped selection without changing
+// the existing unscoped API. Refused scoped policy never retries another layout.
+func (stager Stager) ManagedMCPNamesForScope(ctx context.Context, client domain.ClientID, scope domain.InstallScope, root, digest string) ([]string, error) {
+	if scope != domain.ScopeUser && scope != domain.ScopeProject {
+		return nil, fmt.Errorf("managed MCP selection requires an explicit user or project scope")
+	}
+	return stager.managedMCPNames(ctx, client, scope, root, digest)
+}
+
+func (stager Stager) managedMCPNames(ctx context.Context, client domain.ClientID, scope domain.InstallScope, root, digest string) ([]string, error) {
 	if err := stager.requireDeps(); err != nil {
 		return nil, err
 	}
 	if err := stager.Verify(ctx, root, digest); err != nil {
 		return nil, err
 	}
-	layout := clients.DefaultSelectionLayout
-	if reader, ok := clients.As[clients.SelectionReader](stager.Registry, client); ok {
-		layout = reader.ManagedMCPSelection()
+	layout, err := stager.managedSelectionLayout(client, scope)
+	if err != nil {
+		return nil, err
 	}
 	names, err := readSelectionNames(root, layout)
 	if err != nil {
@@ -35,6 +48,18 @@ func (stager Stager) ManagedMCPNames(ctx context.Context, client domain.ClientID
 	}
 	sort.Strings(names)
 	return names, nil
+}
+
+func (stager Stager) managedSelectionLayout(client domain.ClientID, scope domain.InstallScope) (clients.SelectionLayout, error) {
+	if scope != "" {
+		if reader, ok := clients.As[clients.ScopedSelectionReader](stager.Registry, client); ok {
+			return reader.ManagedMCPSelectionForScope(scope)
+		}
+	}
+	if reader, ok := clients.As[clients.SelectionReader](stager.Registry, client); ok {
+		return reader.ManagedMCPSelection(), nil
+	}
+	return clients.DefaultSelectionLayout, nil
 }
 
 func readSelectionNames(root string, layout clients.SelectionLayout) ([]string, error) {
