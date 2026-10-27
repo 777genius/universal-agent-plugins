@@ -3,7 +3,9 @@ package gitsource
 
 import (
 	"context"
+	"errors"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -93,12 +95,26 @@ func safePath(path string) bool {
 
 // hostedRunner only receives trusted core-generated Git arguments. No user
 // input can switch transports, redirects, helpers or native credentials.
-type hostedRunner struct{}
+type hostedRunner struct {
+	runner   sourceacquisition.Runner
+	poisoned atomic.Bool
+}
 
-func (hostedRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
+func (r *hostedRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
+	if r.poisoned.Load() {
+		return nil, sourceacquisition.ErrGitCleanupUnconfirmed
+	}
 	if command.NativeCredentials {
 		return nil, skillsresolve.ErrInvalidRequest
 	}
 	command.Args = append([]string{"-c", "protocol.allow=never", "-c", "protocol.https.allow=always", "-c", "http.followRedirects=false"}, command.Args...)
-	return (sourceacquisition.OSRunner{}).Run(ctx, command)
+	runner := r.runner
+	if runner == nil {
+		runner = sourceacquisition.OSRunner{}
+	}
+	output, err := runner.Run(ctx, command)
+	if errors.Is(err, sourceacquisition.ErrGitCleanupUnconfirmed) {
+		r.poisoned.Store(true)
+	}
+	return output, err
 }

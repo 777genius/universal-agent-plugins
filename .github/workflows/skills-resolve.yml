@@ -48,6 +48,7 @@ jobs:
         run: |
           go test -race -count=1 ./internal/skillsresolve/... ./internal/skillscatalog
           go test -count=1 ./install/integrationctl/agentplugins/adapters/skillsource
+          go test -count=1 ./install/integrationctl/agentplugins/adapters/sourceacquisition -run '^TestGitCleanupEvidence'
           GOWORK=off CGO_ENABLED=0 go build -mod=readonly -trimpath -buildvcs=false -o "$RUNNER_TEMP/skills-catalog-api" ./cmd/skills-catalog-api
           sha256sum "$RUNNER_TEMP/skills-catalog-api"
       - name: Verify real runtime envelope and disk exhaustion

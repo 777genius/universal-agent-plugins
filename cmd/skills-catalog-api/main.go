@@ -69,6 +69,7 @@ func run() error {
 
 func resolveHandler() http.Handler {
 	token := os.Getenv("SKILLS_RESOLVER_SERVICE_TOKEN")
+	_ = os.Unsetenv("SKILLS_RESOLVER_SERVICE_TOKEN") // Git children never need the service capability.
 	if token == "" {
 		return skillscatalog.NewResolveHandler(nil, "")
 	}

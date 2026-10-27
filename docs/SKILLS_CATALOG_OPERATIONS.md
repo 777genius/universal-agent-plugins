@@ -235,6 +235,10 @@ seconds for process-tree termination, inside the 35-second server write timeout.
 Git uses filtered immutable trees without checkout, HTTPS only, no redirects,
 and isolated configuration/credentials. Temporary files are removed on success
 and failure. Filtering plus time/disk limits is not a total network-byte counter.
+If process supervision cannot confirm Git cleanup, the hosted resolver refuses
+all further Git launches until the service restarts; it does not release physical
+capacity merely because a request returned an error. Diagnose the failure before
+restarting. Anonymous catalog browsing remains available.
 
 Only the original UTF-8 `SKILL.md` is returned, together with its SHA-256 and
 immutable source identity. CRLF is preserved and invalid UTF-8 is rejected.

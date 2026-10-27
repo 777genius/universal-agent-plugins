@@ -158,11 +158,11 @@ func TestHostedGitRejectsAlternateTransport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	command := sourceacquisition.Command{Dir: t.TempDir(), Args: []string{"ls-remote", "file:///nonexistent"}, MaxOutputBytes: 4096}
-	if _, err := (hostedRunner{}).Run(ctx, command); err == nil || !strings.Contains(err.Error(), "not allowed") {
+	if _, err := (&hostedRunner{}).Run(ctx, command); err == nil || !strings.Contains(err.Error(), "not allowed") {
 		t.Fatal("file transport was not rejected", err)
 	}
 	command.NativeCredentials = true
-	if _, err := (hostedRunner{}).Run(ctx, command); !errors.Is(err, skillsresolve.ErrInvalidRequest) {
+	if _, err := (&hostedRunner{}).Run(ctx, command); !errors.Is(err, skillsresolve.ErrInvalidRequest) {
 		t.Fatal("hosted native credentials accepted", err)
 	}
 }

@@ -23,6 +23,6 @@ func NewHosted(tempDir string) (Source, error) {
 		return Source{}, err
 	}
 	return Source{Acquirer: skillsource.Acquirer{
-		Acquirer: sourceacquisition.Acquirer{TempRoot: tempDir, Runner: hostedRunner{}}, Policy: Policy,
+		Acquirer: sourceacquisition.Acquirer{TempRoot: tempDir, Runner: &hostedRunner{}}, Policy: Policy,
 	}}, nil
 }
