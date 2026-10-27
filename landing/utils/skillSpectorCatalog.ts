@@ -93,6 +93,7 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
     invalid();
   const paths = new Set<string>();
   let records = 0;
+  let totalShardBytes = 0;
   for (const item of manifest.shards) {
     const shard = object(item);
     keys(shard, ['repository', 'path', 'digest', 'bytes', 'record_count']);
@@ -110,6 +111,8 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
       invalid();
     paths.add(shard.path);
     records += shard.record_count;
+    totalShardBytes += shard.bytes;
+    if (totalShardBytes > 256 << 20) invalid();
   }
   if (
     records !== coverage.reported ||

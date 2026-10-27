@@ -179,6 +179,25 @@ describe('bounded SkillSpector repository catalog', () => {
     assert.throws(() => decodeSkillSpectorManifest(manifest), /invalid/);
   });
 
+  it('rejects aggregate shard bytes above the 256 MiB catalog bound', async () => {
+    const { manifest } = await catalog();
+    manifest.coverage = { selected: 33, reported: 33, pending: 0 };
+    manifest.shards = Array.from({ length: 33 }, (_, index) => {
+      const hash = index.toString(16).padStart(64, '0');
+      return {
+        repository: `owner/repo-${index}`,
+        path: `shards/${hash}.json`,
+        digest: `sha256:${hash}`,
+        bytes: 8 << 20,
+        record_count: 1,
+      };
+    });
+    assert.throws(() => decodeSkillSpectorManifest(manifest), /invalid/);
+    manifest.shards.pop();
+    manifest.coverage = { selected: 32, reported: 32, pending: 0 };
+    assert.equal(decodeSkillSpectorManifest(manifest).shards.length, 32);
+  });
+
   it('rejects mismatched shard repository and incomplete record evidence', async () => {
     const { manifest, bodies } = await catalog();
     const descriptor = manifest.shards[0]!;
@@ -300,6 +319,7 @@ describe('bounded SkillSpector repository catalog', () => {
     await updateShard(data, 0, (shard) => {
       shard.records[0].kind = 'plugin_skill';
       shard.records[0].plugin_path = 'plugins/example';
+      shard.records[0].source.path = 'plugins/example/skills/example';
     });
     const report = await createSkillSpectorClient(
       manifestUrl,
@@ -332,6 +352,54 @@ describe('bounded SkillSpector repository catalog', () => {
     assert.equal(skillSpectorAssessment(failed, subject).status, 'error');
   });
 
+  it('rejects a clean plugin record whose scanned root does not belong to that plugin', async () => {
+    for (const path of [
+      'skills/unrelated',
+      'plugins/other/skills/example',
+      'plugins/example/skills/',
+      'plugins/example/skills/nested/child',
+    ]) {
+      const data = await catalog(['owner/one']);
+      data.manifest.plugin_coverage = [
+        {
+          repository: 'owner/one',
+          plugin_path: 'plugins/example',
+          selected: 1,
+          reported: 1,
+          pending: 0,
+        },
+      ];
+      await updateShard(data, 0, (shard) => {
+        shard.records[0].kind = 'plugin_skill';
+        shard.records[0].plugin_path = 'plugins/example';
+        shard.records[0].source.path = path;
+      });
+      await assert.rejects(
+        createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(data.bodies)).reportFor(
+          'owner/one',
+        ),
+        /invalid/,
+      );
+    }
+    const root = await catalog(['owner/one']);
+    root.manifest.plugin_coverage = [
+      { repository: 'owner/one', plugin_path: '', selected: 1, reported: 1, pending: 0 },
+    ];
+    await updateShard(root, 0, (shard) => {
+      shard.records[0].kind = 'plugin_skill';
+      shard.records[0].plugin_path = '';
+      shard.records[0].source.path = 'skills/example';
+    });
+    assert.equal(
+      (
+        await createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(root.bodies)).reportFor(
+          'owner/one',
+        )
+      ).records.length,
+      1,
+    );
+  });
+
   it('requires plugin coverage counts to agree with all loaded repository records', async () => {
     const data = await catalog(['owner/one']);
     data.manifest.coverage = { selected: 13, reported: 1, pending: 12 };
@@ -347,6 +415,7 @@ describe('bounded SkillSpector repository catalog', () => {
     await updateShard(data, 0, (shard) => {
       shard.records[0].kind = 'plugin_skill';
       shard.records[0].plugin_path = 'plugins/example';
+      shard.records[0].source.path = 'plugins/example/skills/example';
     });
     await assert.rejects(
       createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(data.bodies)).reportFor(

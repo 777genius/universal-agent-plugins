@@ -131,7 +131,7 @@ export function decodeSkillSpectorRecords(
       !['plugin_skill', 'standalone_skill'].includes(String(record.kind)) ||
       !(record.plugin_path === null || path(record.plugin_path, true)) ||
       !(record.skill_name === null || text(record.skill_name, 200)) ||
-      (record.kind === 'plugin_skill' && record.plugin_path === null) ||
+      (record.kind === 'plugin_skill' && !pluginSkillRoot(record.plugin_path, source.path)) ||
       (record.kind === 'standalone_skill' && record.plugin_path !== null) ||
       !repository(source.repository) ||
       !revision(source.revision) ||
@@ -303,6 +303,13 @@ function path(value: unknown, empty = false): value is string {
     (value === '' || !value.split('/').some((part) => !part || part === '.' || part === '..'))
   );
 }
+function pluginSkillRoot(pluginPath: unknown, skillPath: unknown): boolean {
+  if (typeof pluginPath !== 'string' || typeof skillPath !== 'string') return false;
+  const prefix = `${pluginPath ? `${pluginPath}/` : ''}skills/`;
+  const child = skillPath.startsWith(prefix) ? skillPath.slice(prefix.length) : '';
+  return Boolean(child) && !child.includes('/');
+}
+
 function count(value: unknown): value is number {
   return Number.isSafeInteger(value) && Number(value) >= 0;
 }
