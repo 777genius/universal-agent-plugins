@@ -216,31 +216,59 @@ func TestGrokConfigHeldReadRefusesFullMetadataAndParentChangesDuringRead(t *test
 }
 
 func TestGrokConfigDiagnosticCannotMakeFormatOnlyRewritePassProtectedGuard(t *testing.T) {
-	if os.Getenv("UAP_GROK_CONFIG_FATAL_CHILD") == "1" {
-		f := grokConfigFixture(t)
-		path := filepath.Join(f.base.Home, ".grok", "config.toml")
-		grokConfigRewrite(t, path, append([]byte("# PRIVATE-COMMENT\n"), f.grok.authoredConfig...))
-		defer func() {
-			observation, ok := f.evidence["grok_config_mutation"].(grokConfigObservation)
-			if !ok || observation.Status != "captured" || !observation.Comparison.SemanticEqual || f.protected[path] != grokConfigSHA(f.grok.authoredConfig) {
-				t.Error("CONFIG_DIAGNOSTIC_OR_AUTHORITY_DIFFERS")
-				return
-			}
-			if _, err := fmt.Fprint(os.Stdout, "CONFIG_FATAL_DIAGNOSTIC_VERIFIED\n"); err != nil {
-				t.Error("inert verification output failed")
-			}
-		}()
-		f.check(t)
-		t.Fatal("changed config unexpectedly passed")
+	grokConfigRequireProtectedFatal(t, "format")
+}
+
+func TestGrokConfigMigrationFlagChangesCannotPassProtectedGuard(t *testing.T) {
+	for _, mode := range []string{"removed", "false"} {
+		t.Run(mode, func(t *testing.T) { grokConfigRequireProtectedFatal(t, mode) })
 	}
+}
+
+func grokConfigRequireProtectedFatal(t *testing.T, mode string) {
+	t.Helper()
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := captureProjectNative(context.Background(), executable, t.TempDir(), []string{"UAP_GROK_CONFIG_FATAL_CHILD=1"},
-		[]string{"-test.run=^TestGrokConfigDiagnosticCannotMakeFormatOnlyRewritePassProtectedGuard$"}, 4096, 5*time.Second)
+	result := captureProjectNative(context.Background(), executable, t.TempDir(), []string{"UAP_GROK_CONFIG_FATAL_CHILD=" + mode},
+		[]string{"-test.run=^TestGrokConfigProtectedFatalInertChild$"}, 4096, 5*time.Second)
 	if result.Exit != 1 || result.Deadline || result.StdoutLimit || result.StderrLimit || len(result.Stderr) != 0 ||
 		!bytes.Contains(result.Stdout, []byte("CONFIG_FATAL_DIAGNOSTIC_VERIFIED")) || !bytes.Contains(result.Stdout, []byte("native CLI immutable/protected identity changed")) {
 		t.Fatalf("original fatal guard was not proved: exit=%d, error=%s", result.Exit, result.ErrorKind)
 	}
+}
+
+func TestGrokConfigProtectedFatalInertChild(t *testing.T) {
+	mode := os.Getenv("UAP_GROK_CONFIG_FATAL_CHILD")
+	if mode == "" {
+		t.Skip("inert protected-guard child only")
+	}
+	f := grokConfigFixture(t)
+	path := filepath.Join(f.base.Home, ".grok", "config.toml")
+	body := f.grok.authoredConfig
+	switch mode {
+	case "format":
+		body = append([]byte("# PRIVATE-COMMENT\n"), body...)
+	case "removed":
+		body = bytes.Replace(body, []byte("\n[marketplace]\ndefault_skills_installs_purged = true\n"), nil, 1)
+	case "false":
+		body = bytes.Replace(body, []byte("default_skills_installs_purged = true"), []byte("default_skills_installs_purged = false"), 1)
+	default:
+		t.Fatal("unknown inert guard mutation")
+	}
+	grokConfigRewrite(t, path, body)
+	defer func() {
+		observation, ok := f.evidence["grok_config_mutation"].(grokConfigObservation)
+		if !ok || observation.Status != "captured" || observation.Comparison == nil ||
+			observation.Comparison.SemanticEqual != (mode == "format") || f.protected[path] != grokConfigSHA(f.grok.authoredConfig) {
+			t.Error("CONFIG_DIAGNOSTIC_OR_AUTHORITY_DIFFERS")
+			return
+		}
+		if _, err := fmt.Fprint(os.Stdout, "CONFIG_FATAL_DIAGNOSTIC_VERIFIED\n"); err != nil {
+			t.Error("inert verification output failed")
+		}
+	}()
+	f.check(t)
+	t.Fatal("changed config unexpectedly passed")
 }

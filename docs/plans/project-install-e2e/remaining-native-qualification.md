@@ -1292,6 +1292,56 @@ Further lifecycle/qualification work requires its own reviewed evidence and
 definition. Independent code review and a fresh genuine hosted capture remain
 mandatory; no vendor process may run locally.
 
+## Grok empty-profile migration sentinel amendment
+
+The genuine PR522 source `753936db2e50613c2a4310848a262ec4f25dea87`,
+run `40553581491` / native artifact `12759346679` (outer SHA256
+`f90a4502e5e0bac54dfbb37372a29916431a2c0b4fc7aedb0afed6fa5832531a`),
+fails the original config digest guard. All eight model facts remain equal;
+the sole added table has key SHA256
+`dfd76b3ecbefe4606d9cbfa7e7c41884b22d214a0c13560bb7eb10e65c11851f`.
+Independently verified public snapshot
+`xai-org/grok-build@2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8` identifies
+the exact source-defined table as
+`marketplace = { default_skills_installs_purged = true }`.
+Its canonical JSON value SHA256 is
+`292bc27c01bd4c8e2df64aacd7e75d92db6d9e3f446970ea2d7d97f011250093`.
+
+The primary shell `extensions/marketplace.rs` blob
+`ea896d05e4471573974e273049d6deb868e92cd6` lines963–1082 reads a typed
+boolean, returns before migration when true and sets it even for an empty
+legacy registry. Shell `plugin/mod.rs` blob
+`60d0d7fba53875e2456b6ebef0fc0744f4fe35ac` lines1346–1390 writes the
+literal boolean into that table. These exact Git blob identities were
+independently reconstructed. This does not resolve shipping build
+`f50904eaee6c` to the public snapshot or export the changed raw TOML.
+
+Root R1 and independent CLI R2 approved the exact plan SHA256
+`30a05da404dc1de8103c030510aff5c34daf2d128f5ad6ea462c8a488e986e77`
+before implementation. The disposable original HOME has no legacy installs.
+Author only `[marketplace] default_skills_installs_purged = true` in the
+initial provider recipe before its first write/vendor child. Freeze all bytes
+and the original digest as before; any later format/removal/false-toggle
+continues to fail the original protected guard. Preserve the eight model
+fields, environment, commands, provider route guard, diagnostic limits,
+process/deadline/admission and all false qualification flags. This grants no
+marketplace source, trust, permission, account or plugin activation.
+
+Inert contracts assert the complete three-table recipe, independently fixed
+semantic hash and initial held bytes/digest. Actual inert test children prove
+the original fatal for formatting, removing or toggling the flag. Existing
+diagnostic count assertions retain one changed member against the new third
+authored table. Focused `^(TestGrok|TestProjectNativeCLI)` contracts passed
+in 1.161s with Go 1.26.10 and approved inert loopback access; the first restricted
+invocation could not bind sockets. Actual all-enabled root lint versus the
+PR520 base and unfiltered whole-root six-linter gate both reported zero issues.
+Gofmt/diff checks are clean; the actual twenty-member native archive still
+replays as failed/incomplete with all five qualifications false. No vendor or
+public installer ran locally. Independent exact-code review precedes root
+publication. A fresh genuine run must establish preservation;
+the existing rejected GET remains `uri=other`, and this amendment accepts no
+new HTTP route or final capture/qualification boundary.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable

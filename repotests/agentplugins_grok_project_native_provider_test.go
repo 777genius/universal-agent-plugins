@@ -101,7 +101,9 @@ func (p *grokProjectProvider) start() error {
 }
 
 func (p *grokProjectProvider) configuration() []byte {
-	return []byte(fmt.Sprintf("[models]\ndefault = %q\n[model.%s]\nmodel = %q\nbase_url = %q\nenv_key = \"UAP_GROK_TEST_PROVIDER_KEY\"\napi_backend = \"chat_completions\"\nsupports_backend_search = false\nsupports_reasoning_effort = false\nmax_retries = 0\n", grokProjectProviderModel, grokProjectProviderModel, grokProjectProviderModel, "http://"+p.listener.Addr().String()+"/v1"))
+	// This fresh original HOME has no legacy marketplace installs to purge.
+	// Author the source-defined migration sentinel before freezing the full file.
+	return []byte(fmt.Sprintf("[models]\ndefault = %q\n[model.%s]\nmodel = %q\nbase_url = %q\nenv_key = \"UAP_GROK_TEST_PROVIDER_KEY\"\napi_backend = \"chat_completions\"\nsupports_backend_search = false\nsupports_reasoning_effort = false\nmax_retries = 0\n\n[marketplace]\ndefault_skills_installs_purged = true\n", grokProjectProviderModel, grokProjectProviderModel, grokProjectProviderModel, "http://"+p.listener.Addr().String()+"/v1"))
 }
 
 func (p *grokProjectProvider) connectionState(_ net.Conn, state http.ConnState) {

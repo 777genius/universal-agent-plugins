@@ -86,6 +86,32 @@ func grokConfigRequireKnown(t *testing.T, comparison *grokConfigComparison, uneq
 	}
 }
 
+func TestGrokConfigRecipeAuthorsOnlyEmptyProfileMigrationSentinel(t *testing.T) {
+	f := grokConfigFixture(t)
+	value, status := grokConfigParse(f.grok.authoredConfig)
+	want := map[string]any{
+		"models": map[string]any{"default": "uap-grok-fixture"},
+		"model": map[string]any{"uap-grok-fixture": map[string]any{
+			"model": "uap-grok-fixture", "base_url": "http://" + f.grok.listener.Addr().String() + "/v1",
+			"env_key": "UAP_GROK_TEST_PROVIDER_KEY", "api_backend": "chat_completions",
+			"supports_backend_search": false, "supports_reasoning_effort": false, "max_retries": int64(0),
+		}},
+		"marketplace": map[string]any{"default_skills_installs_purged": true},
+	}
+	if status != "captured" || !reflect.DeepEqual(value, want) {
+		t.Fatal("independently authored model and empty-profile migration recipe differs")
+	}
+	semantic, err := json.Marshal(value["marketplace"])
+	if err != nil || fmt.Sprintf("%x", sha256.Sum256(semantic)) != "292bc27c01bd4c8e2df64aacd7e75d92db6d9e3f446970ea2d7d97f011250093" {
+		t.Fatal("source-defined migration table differs from independent semantic hash")
+	}
+	path := filepath.Join(f.base.Home, ".grok", "config.toml")
+	body, err := projectNativeRuntimeRead(path, 64<<10)
+	if err != nil || !bytes.Equal(body, f.grok.authoredConfig) || f.protected[path] != grokConfigSHA(body) {
+		t.Fatal("complete original recipe and protected digest differ before a child")
+	}
+}
+
 func TestGrokConfigDiagnosticReportsOnlyIndependentlyEncodedAddedTypes(t *testing.T) {
 	for _, test := range []struct{ toml, kind, canonical string }{
 		{`"PRIVATE-BODY"`, "string", `"PRIVATE-BODY"`}, {"false", "boolean", "false"}, {"1", "integer", "1"},
@@ -98,7 +124,7 @@ func TestGrokConfigDiagnosticReportsOnlyIndependentlyEncodedAddedTypes(t *testin
 			observation := grokConfigObservedFile(t, f, body)
 			comparison := observation.Comparison
 			grokConfigRequireKnown(t, comparison, "")
-			if observation.Status != "captured" || comparison.SemanticEqual || comparison.BeforeFields != 2 || comparison.AfterFields != 3 || comparison.ChangedCount != 1 || comparison.OmittedCount != 0 || len(comparison.Differences) != 1 {
+			if observation.Status != "captured" || comparison.SemanticEqual || comparison.BeforeFields != 3 || comparison.AfterFields != 4 || comparison.ChangedCount != 1 || comparison.OmittedCount != 0 || len(comparison.Differences) != 1 {
 				t.Fatal("one added top-level member facts differ")
 			}
 			want := grokConfigDifference{KeySHA256: fmt.Sprintf("%x", sha256.Sum256([]byte("PRIVATE-KEY"))), BeforeType: "absent", AfterType: test.kind,
