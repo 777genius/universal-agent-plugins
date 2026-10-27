@@ -146,6 +146,68 @@ class RuntimeTests(unittest.TestCase):
     def cline_result(self):
         return {**self.cli_result("qoder"), "client": "cline", "version": "3.0.73"}
 
+    def cline_complete_bodies(self):
+        # Inert envelope receipts; actual native grammar is replayed by the Go
+        # contracts from the two exact measured nonsecret JSONL fixtures.
+        fixture = Path(__file__).resolve().parent.parent / "repotests/testdata/cline-3.0.73-installed-acp"
+        result = {**self.cline_result(), "runtime_attempt_complete": True, "test_failed": False,
+                  "native_exchange_observed": True, "attempt_stage": "native-installed-acp",
+                  "native_session_id": "1793077736317_iF4rU_cli"}
+        bodies = {"runtime-attempt.json": json.dumps(result).encode(),
+                  "native-acp.jsonl": (fixture / "native-acp.jsonl").read_bytes(),
+                  "probe-events.jsonl": (fixture / "probe-events.jsonl").read_bytes()}
+        for label in runtime.CLINE_COMMANDS:
+            command = {"argv": ["/inert/never-executed", label], "cwd": "/inert/project", "exit": 0,
+                       "error": False, "deadline": False}
+            bodies[label + ".command.json"] = json.dumps(command).encode()
+            bodies[label + ".stdout.log"] = b""
+            bodies[label + ".stderr.log"] = b""
+        command = {"argv": ["/inert/cline", "--acp"], "cwd": "/inert/project", "mcp_settings_override": "/inert/mcp.json",
+                   "auto_approve": False, "injected_mcp_servers": [], "error": False, "elapsed_ms": 1,
+                   "cleanup": "existing OS strict planned duplex shutdown; entire delegated descendant cgroup",
+                   "stderr_contract": "existing OS returns bounded 32KiB diagnostic on error; successful planned shutdown exposes no diagnostic stream"}
+        bodies["native-acp.command.json"] = json.dumps(command).encode()
+        provider = {"requests": 2, "responses": 2, "exact_call_issued": True, "single_call_approved": True,
+                    "error": False, "transport": "loopback scripted OpenAI chat-completions SSE; no real model"}
+        bodies["provider.json"] = json.dumps(provider).encode()
+        for number in (1, 2):
+            bodies[f"provider-{number}.request.json"] = b'{"inert-envelope":true}'
+            bodies[f"provider-{number}.response.log"] = b"inert envelope bytes; never a native observation"
+        return bodies
+
+    def test_cline_complete_attempt_requires_the_exact_closed_success_members(self):
+        bodies = self.cline_complete_bodies()
+        result = runtime.cline_members(bodies, self.source)
+        self.assertTrue(result["runtime_attempt_complete"])
+        self.assertFalse(result["test_failed"])
+        self.assertFalse(any(result["qualification"].values()))
+        for missing in bodies:
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                runtime.cline_members({key: body for key, body in bodies.items() if key != missing}, self.source)
+        for empty in ("native-acp.jsonl", "probe-events.jsonl", "provider-1.request.json", "provider-2.response.log"):
+            with self.subTest(empty=empty), self.assertRaises(ValueError):
+                runtime.cline_members({**bodies, empty: b"\n"}, self.source)
+        with self.assertRaises(ValueError):
+            runtime.cline_members({**bodies, "native-acp.error.log": b"failed"}, self.source)
+
+    def test_cline_complete_attempt_cannot_borrow_failed_or_foreign_receipts(self):
+        bodies = self.cline_complete_bodies()
+        result = json.loads(bodies["runtime-attempt.json"])
+        for change in ({"test_failed": True}, {"runtime_attempt_complete": False}, {"runtime_attempt_complete": 1},
+                       {"native_exchange_observed": False}, {"attempt_stage": "unobserved"}, {"native_session_id": "foreign"},
+                       {"vendor_authentication_qualified": True}, {"real_model_qualified": True},
+                       {"qualification": {key: True for key in runtime.shared.QUALIFICATION_CASES}}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.cline_members({**bodies, "runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source)
+        for member, changes in (("provider.json", ({"requests": 1}, {"responses": 1}, {"exact_call_issued": False},
+                                                  {"single_call_approved": False}, {"error": True}, {"error_text": "failed"})),
+                                ("native-acp.command.json", ({"error": True}, {"auto_approve": True}, {"injected_mcp_servers": [{}]})),
+                                ("add-a.command.json", ({"exit": 1}, {"error": True}, {"deadline": True}))):
+            receipt = json.loads(bodies[member])
+            for change in changes:
+                with self.subTest(member=member, change=change), self.assertRaises(ValueError):
+                    runtime.cline_members({**bodies, member: json.dumps({**receipt, **change}).encode()}, self.source)
+
     def test_catalog_triple_is_admitted_only_for_qoder_and_never_qualifies_it(self):
         command = {"argv": ["/owned/qodercli", "plugins", "list", "--json", "--plugin-dir", "/owned/A/.agentplugins-qoder-native"],
                    "cwd": "/owned/A", "exit": 0, "error": False, "deadline": False, "elapsed_ms": 1,

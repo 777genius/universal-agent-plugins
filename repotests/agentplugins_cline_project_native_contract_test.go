@@ -210,7 +210,8 @@ func TestClineProjectNativeACPRejectsUnknownAndDuplicatePermissionWithoutBroadAp
 		if kind == "unknown-first" {
 			permission["toolCall"].(map[string]any)["title"] = "run_commands"
 		}
-		frames := []any{init, map[string]any{"jsonrpc": "2.0", "id": 2, "result": clineContractSession()}, map[string]any{"jsonrpc": "2.0", "id": "permission", "method": "session/request_permission", "params": permission}}
+		pending := map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{"sessionId": permission["sessionId"], "update": map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": p.callID, "title": clineAttemptTitle(p.arguments()), "kind": "other", "status": "pending", "rawInput": p.arguments()}}}
+		frames := []any{init, map[string]any{"jsonrpc": "2.0", "id": 2, "result": clineContractSession()}, pending, map[string]any{"jsonrpc": "2.0", "id": "permission", "method": "session/request_permission", "params": permission}}
 		if kind == "duplicate" {
 			frames = append(frames, frames[len(frames)-1])
 		}

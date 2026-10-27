@@ -516,6 +516,8 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 	session := ""
 	approved := false
 	completed := false
+	progress, chunks := 0, 0
+	infoSeen := false
 	text := ""
 	requestIDs := map[string]bool{}
 	for scan.Scan() {
@@ -546,7 +548,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 				issued := f.provider.issued
 				f.provider.mu.Unlock()
 				validID := idOK && (projectNativeRuntimeText(id, 128) || projectNativeRuntimeNumber(id, 0, 1<<31, true))
-				if !validID || requestIDs[idText] || stage != 3 || approved || !issued || clineAttemptPermission(params, session, f.provider.callID, f.provider.arguments()) != nil {
+				if !validID || requestIDs[idText] || stage != 3 || progress != 1 || approved || !issued || clineAttemptPermission(params, session, f.provider.callID, f.provider.arguments()) != nil {
 					if validID {
 						_ = write(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"outcome": map[string]any{"outcome": clineACPRefusalOutcome}}})
 					}
@@ -558,6 +560,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 					return err
 				}
 				approved = true
+				progress = 2
 				f.provider.mu.Lock()
 				f.provider.approved = true
 				f.provider.mu.Unlock()
@@ -567,7 +570,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 				_ = write(map[string]any{"jsonrpc": "2.0", "id": m["id"], "error": map[string]any{"code": -32601, "message": "unsupported research client request"}})
 				return fmt.Errorf("unknown native ACP client operation refused")
 			}
-			if method != "session/update" || session == "" || projectNativeRuntimeKeys(params, "sessionId update", "") != nil || params["sessionId"] != session {
+			if method != "session/update" || stage != 3 || session == "" || projectNativeRuntimeKeys(params, "sessionId update", "") != nil || params["sessionId"] != session {
 				return fmt.Errorf("unknown native ACP notification/session")
 			}
 			update, ok := params["update"].(map[string]any)
@@ -584,12 +587,21 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 					if projectNativeRuntimeKeys(update, "sessionUpdate toolCallId title kind status rawInput", "") != nil || update["title"] != clineAttemptTitle(f.provider.arguments()) || update["kind"] != "other" || !reflect.DeepEqual(update["rawInput"], f.provider.arguments()) {
 						return fmt.Errorf("native pending tool identity differs")
 					}
+					switch {
+					case kind == "tool_call_update" && progress == 0:
+						progress = 1
+					case kind == "tool_call" && progress == 3:
+						progress = 4
+					default:
+						return fmt.Errorf("native pending tool progress differs")
+					}
 				} else if status == "in_progress" {
-					if !approved || projectNativeRuntimeKeys(update, "sessionUpdate toolCallId status", "") != nil {
+					if !approved || progress != 2 || kind != "tool_call_update" || projectNativeRuntimeKeys(update, "sessionUpdate toolCallId status", "") != nil {
 						return fmt.Errorf("native tool ran without exact approval")
 					}
+					progress = 3
 				} else if status == "completed" {
-					if !approved || completed || projectNativeRuntimeKeys(update, "sessionUpdate toolCallId status rawOutput", "") != nil {
+					if !approved || completed || progress != 4 || kind != "tool_call_update" || projectNativeRuntimeKeys(update, "sessionUpdate toolCallId status rawOutput", "") != nil {
 						return fmt.Errorf("native completed tool event differs")
 					}
 					body, _ := json.Marshal(update["rawOutput"])
@@ -599,11 +611,12 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 					}
 					f.nativeFacts = actual
 					completed = true
+					progress = 5
 				} else {
 					return fmt.Errorf("unknown/failed native tool status")
 				}
 			case "agent_message_chunk":
-				if projectNativeRuntimeKeys(update, "sessionUpdate content", "") != nil {
+				if progress != 5 || infoSeen || projectNativeRuntimeKeys(update, "sessionUpdate content", "") != nil {
 					return fmt.Errorf("native message keys")
 				}
 				content, ok := update["content"].(map[string]any)
@@ -611,11 +624,12 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 					return fmt.Errorf("native message grammar")
 				}
 				text += content["text"].(string)
-				if len(text) > 16384 {
+				chunks++
+				if len(text) > 16384 || chunks > 64 {
 					return fmt.Errorf("native final text bound")
 				}
 			case "session_info_update":
-				if projectNativeRuntimeKeys(update, "sessionUpdate updatedAt", "") != nil {
+				if progress != 5 || infoSeen || text != "UAP_CLINE_DONE_"+f.base.Nonce || projectNativeRuntimeKeys(update, "sessionUpdate updatedAt", "") != nil {
 					return fmt.Errorf("native session info keys")
 				}
 				stamp, ok := update["updatedAt"].(string)
@@ -625,6 +639,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 				if _, err := time.Parse(time.RFC3339Nano, stamp); err != nil {
 					return err
 				}
+				infoSeen = true
 			default:
 				return fmt.Errorf("unmeasured native ACP update %q", kind)
 			}
@@ -651,7 +666,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 				return fmt.Errorf("unmeasured ACP capabilities/auth method grammar")
 			}
 			info, ok := result["agentInfo"].(map[string]any)
-			if !ok || projectNativeRuntimeKeys(info, "name version", "") != nil || info["version"] != "3.0.73" || !projectNativeRuntimeText(info["name"], 80) {
+			if !ok || projectNativeRuntimeKeys(info, "name version", "") != nil || info["version"] != "3.0.73" || info["name"] != "cline" {
 				return fmt.Errorf("native ACP identity version differs")
 			}
 			stage = 2
@@ -669,7 +684,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 				return err
 			}
 		case 3:
-			if projectNativeRuntimeKeys(result, "stopReason", "") != nil || result["stopReason"] != "end_turn" || !approved || !completed || text != "UAP_CLINE_DONE_"+f.base.Nonce {
+			if projectNativeRuntimeKeys(result, "stopReason", "") != nil || result["stopReason"] != "end_turn" || !approved || !completed || progress != 5 || !infoSeen || text != "UAP_CLINE_DONE_"+f.base.Nonce {
 				return fmt.Errorf("complete native prompt/tool/result/sentinel join missing")
 			}
 			return nil

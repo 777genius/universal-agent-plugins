@@ -262,6 +262,7 @@ def cli_attempt_members(bodies, source, client):
 def cline_members(bodies, source):
     allowed = {"runtime-attempt.json", "probe-events.jsonl", "provider.json",
                "native-acp.jsonl", "native-acp.command.json", "native-acp.error.log"}
+    public_rows, acp_row, provider = {}, None, None
     for label in CLINE_COMMANDS:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple
@@ -275,16 +276,18 @@ def cline_members(bodies, source):
                     or not isinstance(row["cwd"], str) or type(row["exit"]) is not int
                     or type(row["error"]) is not bool or type(row["deadline"]) is not bool):
                 raise ValueError("Cline public command receipt differs")
+            public_rows[label] = row
     for number in (1, 2):
         allowed |= {f"provider-{number}.request.json", f"provider-{number}.response.log"}
     if "runtime-attempt.json" not in bodies or set(bodies) - allowed:
         raise ValueError("unrecorded Cline ACP artifact member")
     result = strict_json(bodies["runtime-attempt.json"])
     if (not isinstance(result, dict) or result.get("client") != "cline" or result.get("version") != "3.0.73"
-            or result.get("runtime_attempt_complete") is not False or result.get("test_failed") is not True
+            or not ((result.get("runtime_attempt_complete") is False and result.get("test_failed") is True)
+                    or (result.get("runtime_attempt_complete") is True and result.get("test_failed") is False))
             or result.get("activation") != "prepared" or result.get("vendor_authentication_qualified") is not False
             or result.get("real_model_qualified") is not False):
-        raise ValueError("unreviewed Cline ACP capture cannot qualify")
+        raise ValueError("Cline ACP result pair or fixed identity differs")
     qualification = result.get("qualification")
     if (not isinstance(qualification, dict) or set(qualification) != set(shared.QUALIFICATION_CASES)
             or any(value is not False for value in qualification.values())):
@@ -297,6 +300,7 @@ def cline_members(bodies, source):
         raise ValueError("incomplete Cline ACP command capture")
     if acp <= set(bodies):
         row = strict_json(bodies["native-acp.command.json"])
+        acp_row = row
         if (not isinstance(row, dict) or set(row) != {"argv", "cwd", "mcp_settings_override", "auto_approve",
                 "injected_mcp_servers", "error", "elapsed_ms", "cleanup", "stderr_contract"}
                 or not isinstance(row["argv"], list) or not row["argv"]
@@ -325,6 +329,26 @@ def cline_members(bodies, source):
                 or any(type(provider.get(key)) is not bool for key in ("exact_call_issued", "single_call_approved", "error"))
                 or provider.get("transport") != "loopback scripted OpenAI chat-completions SSE; no real model"):
             raise ValueError("Cline provider receipt differs")
+    if result["runtime_attempt_complete"]:
+        required = {"runtime-attempt.json", "probe-events.jsonl", "provider.json", *acp}
+        required |= {label + suffix for label in CLINE_COMMANDS
+                     for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+        required |= {f"provider-{number}.{suffix}" for number in (1, 2)
+                     for suffix in ("request.json", "response.log")}
+        nonempty = {"native-acp.jsonl", "probe-events.jsonl", "provider-1.request.json", "provider-2.request.json",
+                    "provider-1.response.log", "provider-2.response.log"}
+        if (set(bodies) != required or any(not bodies.get(name, b"").strip() for name in nonempty)
+                or set(public_rows) != set(CLINE_COMMANDS)
+                or any(row["exit"] != 0 or row["error"] or row["deadline"] for row in public_rows.values())
+                or acp_row is None or acp_row["error"] is not False
+                or provider is None or provider["requests"] != 2 or provider["responses"] != 2
+                or provider["exact_call_issued"] is not True or provider["single_call_approved"] is not True
+                or provider["error"] is not False or "error_text" in provider
+                or result.get("native_exchange_observed") is not True
+                or result.get("attempt_stage") != "native-installed-acp"
+                or not isinstance(result.get("native_session_id"), str)
+                or re.fullmatch(r"\d{13}_[A-Za-z0-9_-]{5}_cli", result["native_session_id"]) is None):
+            raise ValueError("complete Cline installed ACP closure and successful receipts required")
     if any(re.search(rb"uap-cline-private-[0-9a-f]+", body) for body in bodies.values()):
         raise ValueError("unredacted fixture provider key refused")
     return result
