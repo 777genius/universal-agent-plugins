@@ -112,6 +112,24 @@ describe('bounded SkillSpector repository catalog', () => {
     assert.equal(decodeSkillSpectorManifest(empty).shards.length, 0);
   });
 
+  it('accepts 10,000 single-root repository descriptors within the total record bound', async () => {
+    const { manifest } = await catalog();
+    manifest.coverage = { selected: 10_000, reported: 10_000, pending: 0 };
+    manifest.shards = Array.from({ length: 10_000 }, (_, index) => {
+      const hash = index.toString(16).padStart(64, '0');
+      return {
+        repository: `owner/repo-${index}`,
+        path: `shards/${hash}.json`,
+        digest: `sha256:${hash}`,
+        bytes: 100,
+        record_count: 1,
+      };
+    });
+    assert.equal(decodeSkillSpectorManifest(manifest).shards.length, 10_000);
+    manifest.shards.push({ ...manifest.shards[0]! });
+    assert.throws(() => decodeSkillSpectorManifest(manifest), /invalid/);
+  });
+
   it('rejects mismatched shard repository and incomplete record evidence', async () => {
     const { manifest, bodies } = await catalog();
     const descriptor = manifest.shards[0]!;

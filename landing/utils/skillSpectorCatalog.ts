@@ -78,7 +78,7 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
     new Date(manifest.generated_at).toISOString() !==
       manifest.generated_at.replace(/Z$/, '.000Z') ||
     !Array.isArray(manifest.shards) ||
-    manifest.shards.length > 2048
+    manifest.shards.length > 10_000
   )
     invalid();
   const coverage = object(manifest.coverage);
