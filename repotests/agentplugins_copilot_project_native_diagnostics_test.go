@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"reflect"
 	"sort"
 	"testing"
@@ -27,6 +29,11 @@ type copilotProjectConfigChange struct {
 	BaselineBytes       int                                `json:"baseline_bytes"`
 	ObservedBytes       *int                               `json:"observed_bytes,omitempty"`
 	Status              string                             `json:"status"`
+	BaselineJSONValid   *bool                              `json:"baseline_json_valid,omitempty"`
+	ObservedJSONValid   *bool                              `json:"observed_json_valid,omitempty"`
+	StrictJSONFailure   string                             `json:"strict_json_failure,omitempty"`
+	BaselineJSONReason  string                             `json:"baseline_json_reason,omitempty"`
+	ObservedJSONReason  string                             `json:"observed_json_reason,omitempty"`
 	SemanticallyEqual   *bool                              `json:"semantically_equal,omitempty"`
 	TrustedFoldersMatch *bool                              `json:"trusted_folders_match,omitempty"`
 	ChangedMembers      []copilotProjectConfigMemberChange `json:"changed_members,omitempty"`
@@ -89,7 +96,7 @@ func copilotProjectConfigDiagnostic(baseline []byte, expected, observed string, 
 	after, afterErr := projectNativeRuntimeJSON(body)
 	change.Status = "invalid-json"
 	if beforeErr != nil || afterErr != nil {
-		return change
+		return copilotProjectInvalidJSON(change, baseline, body, beforeErr, afterErr)
 	}
 	beforeObject, okBefore := before.(map[string]any)
 	afterObject, okAfter := after.(map[string]any)
@@ -106,6 +113,58 @@ func copilotProjectConfigDiagnostic(baseline []byte, expected, observed string, 
 	trusted := reflect.DeepEqual(beforeObject["trustedFolders"], afterObject["trustedFolders"])
 	change.Status, change.SemanticallyEqual, change.TrustedFoldersMatch = "captured", &equal, &trusted
 	return change
+}
+
+func copilotProjectInvalidJSON(change copilotProjectConfigChange, baseline, observed []byte, beforeErr, afterErr error) copilotProjectConfigChange {
+	beforeValid, afterValid := json.Valid(baseline), json.Valid(observed)
+	change.BaselineJSONValid, change.ObservedJSONValid = &beforeValid, &afterValid
+	change.BaselineJSONReason, change.ObservedJSONReason = copilotProjectJSONErrorKind(beforeErr), copilotProjectJSONErrorKind(afterErr)
+	switch {
+	case beforeErr != nil && afterErr != nil:
+		change.StrictJSONFailure = "both"
+	case beforeErr != nil:
+		change.StrictJSONFailure = "baseline"
+	default:
+		change.StrictJSONFailure = "observed"
+	}
+	return change
+}
+
+func copilotProjectJSONErrorKind(err error) string {
+	if err == nil {
+		return "valid"
+	}
+	var syntax *json.SyntaxError
+	if errors.As(err, &syntax) {
+		return "syntax"
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return "unexpected-eof"
+	}
+	// Only exact static parser reasons become finite labels. Error contents
+	// from an unrecognized parser path never cross the evidence boundary.
+	switch err.Error() {
+	case "duplicate JSON key":
+		return "duplicate-key"
+	case "JSON body limit":
+		return "body-limit"
+	case "JSON structure limit":
+		return "structure-limit"
+	case "JSON key":
+		return "key"
+	case "JSON object end":
+		return "object-end"
+	case "JSON array end":
+		return "array-end"
+	case "unexpected JSON delimiter":
+		return "unexpected-delimiter"
+	case "nonfinite JSON number":
+		return "nonfinite-number"
+	case "JSON trailing data":
+		return "trailing-data"
+	default:
+		return "other"
+	}
 }
 
 func copilotProjectChangedMembers(before, after map[string]any) ([]copilotProjectConfigMemberChange, bool) {

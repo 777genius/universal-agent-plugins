@@ -99,3 +99,24 @@ fresh actual Git ref/expected_sha, force=false, preserving external changes.
 A new genuine hosted attempt must independently confirm the runtime mapping
 and diagnose or pass the profile boundary. This amendment itself establishes
 neither complete startup nor A/B lifecycle/restart/removal/MCP qualification.
+
+
+## Independent reviews and actual validation
+
+CLI R1 and desktop R2 independently approved plan SHA256
+43777a8e94b7ff6c8c8afc2aa2b7c108faa03aa16e2d8c55d6350d861a861848
+before implementation. Both reviewers independently approved the four-file
+implementation and its final contract precision adjustment: the project-as-HOME
+negative now uses a distinct held Project, independently from original Home and
+package TargetLocator. The final contract SHA256 is
+9e22798bb46b3a0e9558bc271f84e4439ba78dc7525c53a994cf8f0b0937eed3;
+other reviewed source files are unchanged.
+
+Actual focused TestCopilotProjectNative contracts passed in 0.033 seconds.
+Actual golangci-lint 2.13.2 affected all-enabled lint and the unfiltered
+revive/funlen/gocyclo/gocognit/dupl/depguard whole-file gate each reported
+0 issues. Gofmt and whitespace checks passed. Tests used the repository's
+existing Go workspace and ran inert fixtures only; no vendor executable ran
+locally. A fresh genuine hosted execution on the published source must still
+confirm the exact native mapping and report the separate original-config
+refusal. No previous failure is relabelled and no qualification flag is raised.

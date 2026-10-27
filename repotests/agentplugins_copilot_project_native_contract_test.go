@@ -21,11 +21,23 @@ func copilotProjectContractRequest() map[string]any {
 }
 
 func TestCopilotProjectNativeReturnedFactsRequireExactInstalledAuthorityAndEvents(t *testing.T) {
-	for _, kind := range []string{"valid", "nonce", "revision", "root", "data", "cwd", "session", "event-session", "out-of-order", "call-missing", "duplicate-call", "field-case", "extra-event-field"} {
+	for _, kind := range []string{"valid", "literal-unexpanded", "literal-foreign-home", "literal-project-home", "literal-unknown", "nonce", "revision", "root", "data", "cwd", "session", "event-session", "out-of-order", "call-missing", "duplicate-call", "field-case", "extra-event-field"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
-			f := &copilotProjectAttempt{base: &nativeFixture{Root: root, Nonce: "nonce", Events: filepath.Join(root, "events.jsonl")}, binding: domain.ClientBinding{TargetLocator: filepath.Join(root, "managed")}, data: filepath.Join(root, "data")}
-			facts := nativeFacts{Nonce: "nonce", Revision: "A-one", Root: f.binding.TargetLocator, Data: f.data, CWD: f.binding.TargetLocator, Argv: []string{"argument with spaces", f.binding.TargetLocator + "/argument", "${UNKNOWN}"}, Literal: "literal ${UNKNOWN} $HOME", Once: f.binding.TargetLocator + "/${UNKNOWN}", Marker: "retained-nonce", PID: 123, Session: "123-456"}
+			f := &copilotProjectAttempt{base: &nativeFixture{Root: root, Home: filepath.Join(root, "home"), Project: filepath.Join(root, "project"), Nonce: "nonce", Events: filepath.Join(root, "events.jsonl")}, binding: domain.ClientBinding{TargetLocator: filepath.Join(root, "managed")}, data: filepath.Join(root, "data")}
+			facts := nativeFacts{Nonce: "nonce", Revision: "A-one", Root: f.binding.TargetLocator, Data: f.data, CWD: f.binding.TargetLocator, Argv: []string{"argument with spaces", f.binding.TargetLocator + "/argument", "${UNKNOWN}"}, Literal: "literal ${UNKNOWN} " + f.base.Home, Once: f.binding.TargetLocator + "/${UNKNOWN}", Marker: "retained-nonce", PID: 123, Session: "123-456"}
+			// Keep the negative event and returned payload consistent so only the
+			// native environment contract can reject these literal variations.
+			switch kind {
+			case "literal-unexpanded":
+				facts.Literal = "literal ${UNKNOWN} $HOME"
+			case "literal-foreign-home":
+				facts.Literal = "literal ${UNKNOWN} " + filepath.Join(root, "foreign-home")
+			case "literal-project-home":
+				facts.Literal = "literal ${UNKNOWN} " + f.base.Project
+			case "literal-unknown":
+				facts.Literal = "literal replaced " + f.base.Home
+			}
 			var events bytes.Buffer
 			methods := []string{"initialize", "tools/list", "tools/call"}
 			if kind == "out-of-order" {

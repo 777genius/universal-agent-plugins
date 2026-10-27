@@ -278,7 +278,9 @@ func (f *copilotProjectAttempt) validateFacts(body string) error {
 	if err := decoder.Decode(&facts); err != nil {
 		return err
 	}
-	if facts.Nonce != f.base.Nonce || facts.Revision != "A-one" || facts.Root != f.binding.TargetLocator || facts.Data != f.data || facts.CWD != f.binding.TargetLocator || !reflect.DeepEqual(facts.Argv, []string{"argument with spaces", f.binding.TargetLocator + "/argument", "${UNKNOWN}"}) || facts.Literal != "literal ${UNKNOWN} $HOME" || facts.Once != f.binding.TargetLocator+"/${UNKNOWN}" || facts.Marker != "retained-"+f.base.Nonce || facts.PID <= 0 || facts.Session == "" {
+	// Copilot expands its native env after UAP materializes the unchanged literal.
+	// Bind that measured expansion to the held original HOME, never ambient env.
+	if facts.Nonce != f.base.Nonce || facts.Revision != "A-one" || facts.Root != f.binding.TargetLocator || facts.Data != f.data || facts.CWD != f.binding.TargetLocator || !reflect.DeepEqual(facts.Argv, []string{"argument with spaces", f.binding.TargetLocator + "/argument", "${UNKNOWN}"}) || facts.Literal != "literal ${UNKNOWN} "+f.base.Home || facts.Once != f.binding.TargetLocator+"/${UNKNOWN}" || facts.Marker != "retained-"+f.base.Nonce || facts.PID <= 0 || facts.Session == "" {
 		return fmt.Errorf("returned probe authority/nonce/revision/cwd/marker differs")
 	}
 	log, err := projectNativeRuntimeRead(f.base.Events, 2<<20)

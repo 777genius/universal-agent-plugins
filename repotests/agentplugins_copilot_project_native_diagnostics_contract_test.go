@@ -71,6 +71,54 @@ func TestCopilotProjectNativeConfigFormatChangeDoesNotAdoptBaseline(t *testing.T
 	if f.protected[f.originalConfigPath] != want || !bytes.Equal(f.originalConfigBaseline, baseline) {
 		t.Fatal("post-launch config was adopted as a baseline")
 	}
+	if change.BaselineJSONValid != nil || change.ObservedJSONValid != nil || change.StrictJSONFailure != "" || change.BaselineJSONReason != "" || change.ObservedJSONReason != "" {
+		t.Fatal("JSON refusal fields escaped the invalid-json diagnostic branch")
+	}
+}
+
+func TestCopilotProjectNativeConfigJSONRefusalsExposeOnlyFiniteFacts(t *testing.T) {
+	valid := `{"private-key":"private-value"}`
+	syntax := `{"private-key":@}`
+	for _, tc := range []struct {
+		name, baseline, observed, side, beforeReason, afterReason string
+		beforeValid, afterValid                                   bool
+	}{
+		{"syntax", valid, syntax, "observed", "valid", "syntax", true, false},
+		{"duplicate", valid, `{"private-key":"private-value","private-key":null}`, "observed", "valid", "duplicate-key", true, true},
+		{"baseline", syntax, valid, "baseline", "syntax", "valid", false, true},
+		{"both", syntax, `{"private-key":`, "both", "syntax", "unexpected-eof", false, false},
+		{"nonfinite", valid, `{"private-key":1e10000}`, "observed", "valid", "nonfinite-number", true, true},
+		{"structure", valid, strings.Repeat("[", 34) + strings.Repeat("]", 34), "observed", "valid", "structure-limit", true, true},
+		{"trailing", valid, `{} {}`, "observed", "valid", "trailing-data", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := copilotProjectConfigFixture(t, []byte(tc.baseline))
+			want := f.protected[f.originalConfigPath]
+			copilotProjectWriteConfig(t, f, []byte(tc.observed))
+			got, err := f.protectedDigest(f.originalConfigPath, want)
+			change := copilotProjectRecordedChange(t, f)
+			if err != nil || got == want || change.Status != "invalid-json" || change.StrictJSONFailure != tc.side || change.BaselineJSONReason != tc.beforeReason || change.ObservedJSONReason != tc.afterReason {
+				t.Fatalf("strict refusal or finite category differs: %+v, %v", change, err)
+			}
+			if change.BaselineJSONValid == nil || *change.BaselineJSONValid != tc.beforeValid || change.ObservedJSONValid == nil || *change.ObservedJSONValid != tc.afterValid {
+				t.Fatal("standard JSON syntax facts differ")
+			}
+			encoded := string(copilotProjectContractBody(t, change))
+			if strings.Contains(encoded, "private-key") || strings.Contains(encoded, "private-value") || len(change.ChangedMembers) != 0 || change.SemanticallyEqual != nil || change.TrustedFoldersMatch != nil {
+				t.Fatal("private content or unsupported interpretation escaped JSON refusal")
+			}
+			if f.protected[f.originalConfigPath] != want || !bytes.Equal(f.originalConfigBaseline, []byte(tc.baseline)) {
+				t.Fatal("invalid original config was adopted")
+			}
+			body, err := os.ReadFile(f.originalConfigPath)
+			if err != nil || string(body) != tc.observed {
+				t.Fatal("read-only diagnostic changed config bytes", err)
+			}
+		})
+	}
+	if copilotProjectJSONErrorKind(errors.New("private-key private-value")) != "other" {
+		t.Fatal("unrecognized private error was classified dynamically")
+	}
 }
 
 func TestCopilotProjectNativeConfigMismatchStillFailsActualGuard(t *testing.T) {
