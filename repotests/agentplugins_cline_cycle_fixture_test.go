@@ -87,8 +87,8 @@ func newClineProjectCycle(t *testing.T, f *clineProjectAttempt) *clineProjectCyc
 	t.Helper()
 	f.cycle = true
 	f.absent = map[string]bool{}
-	f.evidence["capture_mode"] = "cline-complete-cycle-first-capture"
-	f.evidence["cycle_capture_review_required"] = true
+	f.evidence["capture_mode"] = "cline-complete-cycle"
+	f.evidence["cycle_capture_review_required"] = false
 	c := &clineProjectCycle{f: f, recipes: map[string]*clineCycleRecipe{}, aggregates: map[string][]byte{}, sessionIDs: map[string]bool{}, probeIDs: map[string]bool{}, listings: []string{}, sessions: []string{}}
 	return c
 }
@@ -285,6 +285,7 @@ func scopeName(r *clineCycleRecipe) string {
 }
 func (c *clineProjectCycle) finish(t *testing.T) {
 	t.Helper()
+	defer c.f.finish(t)
 	if c.owner != nil {
 		c.owner.close(t, c)
 	}
@@ -293,12 +294,12 @@ func (c *clineProjectCycle) finish(t *testing.T) {
 	}
 	c.f.evidence["cycle_public_stages"] = clineCyclePrefix(clineCyclePublic, c.f.used)
 	c.f.evidence["cycle_listing_stages"], c.f.evidence["cycle_acp_stages"] = c.listings, c.sessions
+	c.f.check(t)
 	for _, raw := range c.f.files {
 		if clineCyclePrivateCredential(raw) {
 			t.Fatal("Cline cycle final private canary refusal")
 		}
 	}
-	c.f.finish(t)
 }
 func clineCyclePrefix(order []string, used map[string]bool) []string {
 	result := []string{}

@@ -20,6 +20,7 @@ import time
 import zipfile
 
 import project_native_research as shared
+import project_native_cline_cycle as cline_cycle_success
 
 SOURCE = shared.SOURCE
 CASES = {
@@ -414,6 +415,11 @@ def cline_cycle_members(bodies, source):
             or any(cline_cycle_private(body) for body in bodies.values())):
         raise ValueError("Cline cycle closed member/size/private boundary")
     result = strict_json(bodies["runtime-attempt.json"])
+    if type(result) is not dict:
+        raise ValueError("Cline cycle result object required")
+    first_capture = result.get("capture_mode") == "cline-complete-cycle-first-capture"
+    success = result.get("runtime_attempt_complete") is True and result.get("test_failed") is False
+    failed = result.get("runtime_attempt_complete") is False and result.get("test_failed") is True
     if (type(result) is not dict or result.get("capture_mode") != "cline-complete-cycle-first-capture"
             or result.get("client") != "cline" or result.get("version") != "3.0.73"
             or result.get("runtime_attempt_complete") is not False or result.get("test_failed") is not True
@@ -423,10 +429,21 @@ def cline_cycle_members(bodies, source):
                 "installer_source_state": "committed", "installer_patch_sha256": []}
             or type(result.get("qualification")) is not dict or set(result["qualification"]) != set(shared.QUALIFICATION_CASES)
             or any(value is not False for value in result["qualification"].values())):
-        raise ValueError("first Cline cycle capture cannot qualify")
+        if (type(result) is not dict or result.get("capture_mode") != "cline-complete-cycle"
+                or result.get("client") != "cline" or result.get("version") != "3.0.73"
+                or not (success or failed) or result.get("cycle_capture_review_required") is not False
+                or result.get("activation") != "prepared" or result.get("vendor_authentication_qualified") is not False
+                or result.get("real_model_qualified") is not False
+                or result.get("source_identity") != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
+                    "installer_source_state": "committed", "installer_patch_sha256": []}
+                or type(result.get("qualification")) is not dict or set(result["qualification"]) != set(shared.QUALIFICATION_CASES)
+                or any(value is not success for value in result["qualification"].values())):
+            raise ValueError("Cline cycle result/qualification pair differs")
     complete = result.get("cycle_observed_complete", False)
     if type(complete) is not bool:
         raise ValueError("Cline cycle completion type differs")
+    if success and not complete:
+        raise ValueError("Cline success requires observed complete cycle")
     public = []
     for label in CLINE_CYCLE_PUBLIC:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
@@ -470,7 +487,7 @@ def cline_cycle_members(bodies, source):
         if (len(bodies) != 54 or public != list(CLINE_CYCLE_PUBLIC)
                 or result["cycle_listing_stages"] != list(CLINE_CYCLE_LISTINGS)
                 or result["cycle_acp_stages"] != list(CLINE_CYCLE_ACP)
-                or result.get("attempt_stage") != "complete-cycle-capture-review"):
+                or result.get("attempt_stage") != ("complete-cycle-capture-review" if first_capture else "complete-cycle")):
             raise ValueError("complete Cline cycle matrix required")
         for name in ("cycle-native-acp.jsonl", "cycle-native-commands.jsonl", "cycle-provider-receipts.jsonl", "cycle-probe-events.jsonl"):
             if [row["stage"] for row in rows[name]] != list(CLINE_CYCLE_ACP):
@@ -480,6 +497,8 @@ def cline_cycle_members(bodies, source):
         cleanup = result.get("cycle_provider_cleanup")
         if cleanup != {"shutdown_complete": True, "forced_close": False, "error": False, "completed_stages": list(CLINE_CYCLE_ACP)}:
             raise ValueError("complete Cline cycle provider cleanup required")
+    if success:
+        cline_cycle_success.validate_success(rows, strict_json, cline_cycle_stream)
     return result
 
 
@@ -562,7 +581,7 @@ def cline_cycle_structured(rows, complete):
 def cline_members(bodies, source):
     if "runtime-attempt.json" in bodies:
         result = strict_json(bodies["runtime-attempt.json"])
-        if isinstance(result, dict) and result.get("capture_mode") == "cline-complete-cycle-first-capture":
+        if isinstance(result, dict) and result.get("capture_mode") in ("cline-complete-cycle-first-capture", "cline-complete-cycle"):
             return cline_cycle_members(bodies, source)
     allowed = {"runtime-attempt.json", "probe-events.jsonl", "provider.json",
                "native-acp.jsonl", "native-acp.command.json", "native-acp.error.log"}

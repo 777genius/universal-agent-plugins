@@ -461,5 +461,13 @@ class RuntimeTests(unittest.TestCase):
             runtime.kimi_call_members({**bodies, "git-c.command.json": json.dumps({**command, "cleanup": "assumed"}).encode()}, self.source)
 
 
+def load_tests(loader, tests, pattern):
+    # The existing runtime workflow deliberately selects this exact module.
+    # Broad research discovery already selects the new client-specific module.
+    if pattern in (None, "test_project_native_runtime.py"):
+        tests.addTests(loader.loadTestsFromName("test_project_native_cline_cycle.CompleteCycleTests"))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()

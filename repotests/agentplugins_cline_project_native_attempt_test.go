@@ -642,6 +642,11 @@ func (f *clineProjectAttempt) finish(t *testing.T) {
 	if clineAttemptMonotonic() > f.totalEnd {
 		t.Error("original Cline total deadline exhausted")
 	}
+	if f.cycle {
+		if err := clineCycleFinalize(f.evidence, t.Failed(), f.ctx.Err()); err != nil {
+			t.Error(err)
+		}
+	}
 	if t.Failed() {
 		f.evidence["runtime_attempt_complete"] = false
 	}
