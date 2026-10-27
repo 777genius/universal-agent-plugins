@@ -55,7 +55,7 @@ func (store Store) RequireMutationReady() error {
 		return err
 	}
 	if version >= domain.LegacyStateSchemaVersion && version < domain.StateSchemaVersion {
-		return fmt.Errorf("state schema %d requires explicit migration; run agentplugins migrate-state --dry-run, then agentplugins migrate-state", version)
+		return &MigrationRequiredError{SourceSchema: version, TargetSchema: domain.StateSchemaVersion}
 	}
 	if version != domain.StateSchemaVersion {
 		return fmt.Errorf("unsupported state schema_version %d", version)

@@ -22,13 +22,12 @@ func TestLegacyMutationReadinessReportsMigrationSchemas(t *testing.T) {
 				t.Fatalf("old schema is not readable: %v", err)
 			}
 			err := store.RequireMutationReady()
-			var required interface{ MigrationSchemas() (int, int) }
-			if !errors.As(err, &required) {
+			var required *MigrationRequiredError
+			if !errors.Is(err, ErrMigrationRequired) || !errors.As(err, &required) {
 				t.Fatalf("mutation refusal has no typed schema information: %v", err)
 			}
-			source, target := required.MigrationSchemas()
-			if source != schema || target != domain.StateSchemaVersion {
-				t.Fatalf("migration schemas = %d -> %d", source, target)
+			if required.SourceSchema != schema || required.TargetSchema != domain.StateSchemaVersion {
+				t.Fatalf("migration schemas = %d -> %d", required.SourceSchema, required.TargetSchema)
 			}
 		})
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,6 +18,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
+
+// ErrPlanChanged refuses a migration whose reviewed bytes are no longer live.
+var ErrPlanChanged = errors.New("state changed after review; rerun migrate-state --dry-run")
 
 type Migrator struct {
 	LegacyPath string
@@ -111,7 +115,7 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 	}
 	actual := digest(body)
 	if strings.TrimSpace(expectedDigest) == "" || expectedDigest != actual {
-		return Report{}, fmt.Errorf("state changed after review; rerun migrate-state --dry-run")
+		return Report{}, ErrPlanChanged
 	}
 	var header struct {
 		SchemaVersion int `json:"schema_version"`
@@ -149,7 +153,7 @@ func (migrator Migrator) MigrateCurrentV2(ctx context.Context, expectedDigest st
 		return Report{}, err
 	}
 	if err := atomicfile.Write(backupPath, body, 0o600); err != nil {
-		return Report{}, fmt.Errorf("backup schema 2 state: %w", err)
+		return Report{}, fmt.Errorf("backup schema %d state: %w", header.SchemaVersion, err)
 	}
 	if err := migrator.V2Store.Save(state); err != nil {
 		return Report{BackupPath: backupPath}, fmt.Errorf("commit migrated state: %w", err)

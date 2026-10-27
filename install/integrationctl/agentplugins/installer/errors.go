@@ -3,6 +3,7 @@ package installer
 import (
 	"errors"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -24,7 +25,13 @@ var (
 	ErrAssessmentRejected       = errors.New("package assessment is not allow")
 	ErrCompatibilityUnavailable = errors.New("sibling compatibility checks are unavailable")
 	ErrTargetFactsUnavailable   = errors.New("target facts are unavailable or conflict with owned state")
+	ErrMigrationRequired        = statev2.ErrMigrationRequired
 )
+
+// MigrationRequiredError reports the readable on-disk schema and required
+// writer schema. Use errors.As to read its fields and errors.Is with
+// ErrMigrationRequired to classify it through installer error wrappers.
+type MigrationRequiredError = statev2.MigrationRequiredError
 
 // lifecycleConflictReason names the conflict a lifecycle error reports instead
 // of an incomplete outcome. A saved dependency waiting for a pin change has
