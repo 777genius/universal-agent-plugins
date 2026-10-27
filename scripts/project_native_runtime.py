@@ -221,8 +221,24 @@ def kimi_members(bodies, source):
     return result
 
 
+def grok_encoded_credential(body):
+    try:
+        value = strict_json(body)
+    except (ValueError, UnicodeError, RecursionError):
+        return False
+    return "uap-grok-private-" in json.dumps(value)
+
+
+def grok_private_credential(body):
+    if len(body) > 1 << 20 or b"uap-grok-private-" in body or grok_encoded_credential(body):
+        return True
+    # BytesIO iterates records without allocating an unbounded line list. The
+    # closed Grok member bound applies before either semantic JSON scan.
+    return any(grok_encoded_credential(line) for line in io.BytesIO(body) if line.strip())
+
+
 def grok_provider_members(bodies, client):
-    if client == "grok" and any(b"uap-grok-private-" in body for body in bodies.values()):
+    if client == "grok" and any(grok_private_credential(body) for body in bodies.values()):
         raise ValueError("unredacted Grok fixture credential refused")
     members = {"grok-provider.json", "grok-provider.request.json", "grok-provider.response.sse"}
     present = set(bodies) & members

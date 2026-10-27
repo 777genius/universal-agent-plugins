@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,8 +154,11 @@ func grokProjectContractMutateHTTP(r *http.Request, kind string) {
 
 func TestGrokProjectNativeProviderRouteRequiresLiteralOriginAndLoopback(t *testing.T) {
 	for _, kind := range []string{"valid", "absolute", "escaped", "foreign-peer", "missing-peer"} {
-		r := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-		r.Host, r.RemoteAddr = "127.0.0.1:12345", "127.0.0.1:12346"
+		r, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/chat/completions", http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Host, r.RemoteAddr, r.RequestURI = "127.0.0.1:12345", "127.0.0.1:12346", "/v1/chat/completions"
 		r.Header.Set("Content-Type", "application/json")
 		switch kind {
 		case "absolute":
@@ -180,8 +182,22 @@ func TestGrokProjectNativeProviderEncodedCredentialIsRefusedBeforeCapture(t *tes
 	if bytes.Contains(encoded, []byte(p.key)) || !grokProjectPrivateCredential(p.redact(encoded)) {
 		t.Fatal("encoded private fixture credential escaped final refusal")
 	}
+	for _, stream := range [][]byte{
+		bytes.Join([][]byte{[]byte(`{"event":"start"}`), encoded}, []byte{'\n'}),
+		bytes.Join([][]byte{encoded, []byte(`{"event":"end"}`), {}}, []byte{'\n'}),
+	} {
+		if bytes.Contains(stream, []byte("uap-grok-private-")) || !grokProjectPrivateCredential(p.redact(stream)) {
+			t.Fatal("escaped private credential in native JSONL escaped final refusal")
+		}
+	}
 	if grokProjectPrivateCredential(p.redact([]byte(p.key))) {
 		t.Fatal("exact fixture credential was not redacted")
+	}
+	if grokProjectPrivateCredential([]byte("{\"event\":\"start\"}\n{\"event\":\"end\"}\n")) {
+		t.Fatal("ordinary bounded native JSONL falsely reported a credential")
+	}
+	if !grokProjectPrivateCredential(bytes.Repeat([]byte{' '}, (1<<20)+1)) {
+		t.Fatal("privacy scan exceeded the existing capture member bound")
 	}
 }
 

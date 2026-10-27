@@ -209,6 +209,14 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(member=name), self.assertRaises(ValueError):
                 runtime.cli_attempt_members({**bodies, name: bodies[name] + canary}, self.source, "grok")
         encoded = b'{"opaque":"\\u0075ap-grok-private-' + b"a" * 32 + b'"}'
+        for stream in (b'{"event":"start"}\n' + encoded, encoded + b'\n{"event":"end"}\n'):
+            self.assertNotIn(b"uap-grok-private-", stream)
+            self.assertTrue(runtime.grok_private_credential(stream))
+            for present in (bodies, {"runtime-attempt.json": bodies["runtime-attempt.json"]}):
+                with self.subTest(provider="grok-provider.json" in present), self.assertRaises(ValueError):
+                    runtime.cli_attempt_members({**present, "probe-events.jsonl": stream}, self.source, "grok")
+        self.assertFalse(runtime.grok_private_credential(b'{"event":"start"}\n{"event":"end"}\n'))
+        self.assertTrue(runtime.grok_private_credential(b" " * ((1 << 20) + 1)))
         with self.assertRaises(ValueError):
             runtime.cli_attempt_members({**bodies, "grok-provider.request.json": encoded}, self.source, "grok")
         with self.assertRaises(ValueError):

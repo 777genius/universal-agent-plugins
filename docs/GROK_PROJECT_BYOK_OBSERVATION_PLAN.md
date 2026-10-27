@@ -137,3 +137,45 @@ Python admission contracts pass in0.023 seconds. The Go gates are pending the
 exclusive shared validation slot; this checkpoint does not claim they passed.
 No vendor executable has run locally. The genuine new-source first capture and
 all subsequent full native lifecycle proof remain outstanding.
+
+## Final correction and actual local verification
+
+An independent critic subsequently found that whole-JSON decoding alone misses
+an escaped private-key prefix in a multi-record native JSONL stream. The final
+correction retains raw and whole-JSON canaries, then checks each bounded JSON
+record before capture and at final admission. Go uses a Go1.22-compatible
+`bytes.Cut` loop without an all-lines allocation; Python checks every Grok
+member, including envelopes without a provider receipt, through bounded
+`BytesIO` iteration. The existing one-MiB native member bound applies first.
+Actual first/last-record escaped-prefix controls, benign JSONL and over-bound
+controls cover the demonstrated gap. Both independent critics re-reviewed the
+correction and approved the final bytes.
+
+The actual affected lint initially reported three concrete issues: the inert
+route request needed an explicit context and `http.NoBody`, and connection-state
+accounting needed a tagged switch. These were fixed without suppression or a
+newer-than-Go1.22 API; both critics approved the exact mechanical delta. Final
+provider source SHA256 is
+`1cdd22201b8b18966515b92f1026fd2ee8a732bc393e4cbf900c353f11dc9d8a`,
+and its contract file is
+`6aeaf8af3953324b28075e042835b4875e3e66e2c780b831c4fb30bc93bba801`.
+The shared Python admission source/test hashes are
+`21f93c824812be17d06a4e7ce70757e3caf957d50686e4353eb0c26d2adaa568`
+and `1d22830536b24de7241ecd40942ab7a5c06696288153fdc1882ff8b1bf406f98`.
+
+Final focused Grok/provider/shared-CLI inert Go tests passed in `1.026s`.
+All23 Python admission contracts passed in `0.031s`. Actual all-enabled affected
+lint and unfiltered whole-file size/complexity/architecture lint each reported
+`0 issues`; gofmt and diff whitespace checks pass. Checks used the exclusive
+slot, canonical Go1.26.10, bounded existing caches and direct source indexing
+after the duplicate toolchain cleanup. No vendor executable ran locally.
+
+The actual prior Grok native envelope from source
+`b4a2d5dea1cc2cd9a0165660924732ec6e1df811`, tree
+`d09f2103389f697b3c6c5afb3f01056aae247d93`, also re-admitted all19 closed members
+under the corrected Python code. Its inner SHA256 is
+`dfa0d82412f2654e51bcfcde0c856f00763774dd77c5617b99e284f85704b354`.
+The failed-attempt result, all five false qualification flags, false vendor-auth
+and false real-model flags remain unchanged. These local checks qualify the
+fixture correction only; genuine acceptance of the documented provider settings
+and the complete native project lifecycle remain outstanding.

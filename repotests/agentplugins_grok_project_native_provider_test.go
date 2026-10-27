@@ -102,9 +102,10 @@ func (p *grokProjectProvider) configuration() []byte {
 
 func (p *grokProjectProvider) connectionState(_ net.Conn, state http.ConnState) {
 	p.mu.Lock()
-	if state == http.StateNew {
+	switch state {
+	case http.StateNew:
 		p.connections++
-	} else if state == http.StateClosed || state == http.StateHijacked {
+	case http.StateClosed, http.StateHijacked:
 		p.connections--
 	}
 	p.mu.Unlock()
@@ -258,9 +259,22 @@ func (p *grokProjectProvider) redact(body []byte) []byte {
 
 func grokProjectPrivateCredential(body []byte) bool {
 	marker := []byte("uap-grok-private-")
-	if bytes.Contains(body, marker) {
+	if len(body) > 1<<20 || bytes.Contains(body, marker) || grokProjectEncodedCredential(body, marker) {
 		return true
 	}
+	// Native streaming-json is a sequence of individually encoded JSON records.
+	// The existing member bound also bounds this scan; no raw body is retained.
+	for len(body) != 0 {
+		line, rest, _ := bytes.Cut(body, []byte{'\n'})
+		if len(line) != 0 && grokProjectEncodedCredential(line, marker) {
+			return true
+		}
+		body = rest
+	}
+	return false
+}
+
+func grokProjectEncodedCredential(body, marker []byte) bool {
 	value, err := projectNativeRuntimeJSON(body)
 	if err != nil {
 		return false
