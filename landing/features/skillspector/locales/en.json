@@ -31,7 +31,8 @@
       "older": "This report is older than seven days or describes a different revision. It does not establish the current state.",
       "staticParseLimit": "Some expressions exceeded the static parser’s limits.",
       "referenceMissing": "Some local file references were not found in the scanned Skill files; they may be created at runtime.",
-      "analyzerIncomplete": "An analyzer did not complete all planned checks."
+      "analyzerIncomplete": "An analyzer did not complete all planned checks.",
+      "pendingCoverage": "{checked} of {total} selected skills checked. Remaining skills are waiting for a background check."
     }
   }
 }

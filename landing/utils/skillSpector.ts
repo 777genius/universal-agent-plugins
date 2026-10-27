@@ -200,8 +200,17 @@ export function skillSpectorAssessment(
           ? record.kind === 'plugin_skill' && record.plugin_path === subject.path
           : record.kind === 'standalone_skill' && record.skill_name === subject.name;
       });
+  const coverage =
+    report?.schema_version === 2 && subject?.kind === 'plugin'
+      ? report.plugin_coverage.find(
+          (item) =>
+            item.repository.toLowerCase() === subject.repository.toLowerCase() &&
+            item.plugin_path === subject.path,
+        )
+      : undefined;
   const findingCount = records.reduce((sum, record) => sum + record.finding_count, 0);
-  if (!records.length) return { status: 'notChecked', findingCount, outOfDate: false, records };
+  if (!records.length)
+    return { status: 'notChecked', findingCount, outOfDate: false, records, coverage };
   const outOfDate = records.some(
     (record) =>
       (record.scanned_at !== null &&
@@ -210,14 +219,15 @@ export function skillSpectorAssessment(
   );
   const status = records.every((record) => record.status === 'error')
     ? 'error'
-    : records.some((record) => record.status !== 'complete' || record.errors.length)
+    : records.some((record) => record.status !== 'complete' || record.errors.length) ||
+        coverage?.pending
       ? 'partial'
       : outOfDate
         ? 'historical'
         : findingCount
           ? 'findingsCount'
           : 'noFindings';
-  return { status, findingCount, outOfDate, records };
+  return { status, findingCount, outOfDate, records, coverage };
 }
 
 export function skillSpectorSourceUrl(record: SkillSpectorRecord): string {

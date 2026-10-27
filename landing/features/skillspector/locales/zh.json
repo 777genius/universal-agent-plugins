@@ -31,7 +31,8 @@
       "older": "此报告已超过七天，或描述的是其他修订版本。它不能证明当前状态。",
       "staticParseLimit": "部分表达式超出了静态解析器的限制。",
       "referenceMissing": "在已扫描的技能文件中未找到部分引用的本地文件；这些文件可能在运行时创建。",
-      "analyzerIncomplete": "某个分析器未完成所有计划的检查。"
+      "analyzerIncomplete": "某个分析器未完成所有计划的检查。",
+      "pendingCoverage": "已检查 {total} 个所选技能中的 {checked} 个。其余技能正在等待后台检查。"
     }
   }
 }

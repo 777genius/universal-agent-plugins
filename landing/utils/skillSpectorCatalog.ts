@@ -62,6 +62,7 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
     'selection_digest',
     'coverage',
     'shards',
+    'plugin_coverage',
   ]);
   metadata(manifest);
   if (
@@ -110,7 +111,38 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
     paths.add(shard.path);
     records += shard.record_count;
   }
-  if (records !== coverage.reported) invalid();
+  if (
+    records !== coverage.reported ||
+    !Array.isArray(manifest.plugin_coverage) ||
+    manifest.plugin_coverage.length > 10_000
+  )
+    invalid();
+  const plugins = new Set<string>();
+  let pluginSelected = 0,
+    pluginReported = 0;
+  for (const item of manifest.plugin_coverage) {
+    const plugin = object(item);
+    keys(plugin, ['repository', 'plugin_path', 'selected', 'reported', 'pending']);
+    if (
+      !validRepository(plugin.repository) ||
+      typeof plugin.plugin_path !== 'string' ||
+      plugin.plugin_path.length > 1000 ||
+      !/^(?:[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)?$/.test(plugin.plugin_path) ||
+      plugin.plugin_path.split('/').some((part) => ['.', '..', '.git'].includes(part)) ||
+      !count(plugin.selected) ||
+      !plugin.selected ||
+      !count(plugin.reported) ||
+      !count(plugin.pending) ||
+      plugin.selected !== plugin.reported + plugin.pending
+    )
+      invalid();
+    const key = JSON.stringify([plugin.repository.toLowerCase(), plugin.plugin_path]);
+    if (plugins.has(key)) invalid();
+    plugins.add(key);
+    pluginSelected += plugin.selected;
+    pluginReported += plugin.reported;
+  }
+  if (pluginSelected > coverage.selected || pluginReported > coverage.reported) invalid();
   return value as SkillSpectorManifest;
 }
 
@@ -263,6 +295,21 @@ export function createSkillSpectorClient(
             ids.add(record.id);
             subjects.add(subject);
           }
+          const pluginCounts = new Map<string, number>();
+          for (const record of records) {
+            if (record.kind === 'plugin_skill')
+              pluginCounts.set(
+                record.plugin_path!,
+                (pluginCounts.get(record.plugin_path!) ?? 0) + 1,
+              );
+          }
+          for (const plugin of manifest.plugin_coverage.filter(
+            (item) => item.repository.toLowerCase() === key,
+          )) {
+            if ((pluginCounts.get(plugin.plugin_path) ?? 0) !== plugin.reported) invalid();
+            pluginCounts.delete(plugin.plugin_path);
+          }
+          if (pluginCounts.size) invalid();
           return { ...manifest, records };
         })();
         repositories.set(key, pending);

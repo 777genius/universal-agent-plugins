@@ -48,6 +48,14 @@ export interface SkillSpectorManifest {
   selection_digest: string;
   coverage: { selected: number; reported: number; pending: number };
   shards: SkillSpectorShardDescriptor[];
+  plugin_coverage: SkillSpectorPluginCoverage[];
+}
+export interface SkillSpectorPluginCoverage {
+  repository: string;
+  plugin_path: string;
+  selected: number;
+  reported: number;
+  pending: number;
 }
 export interface SkillSpectorShardDescriptor {
   repository: string;
@@ -69,5 +77,6 @@ export interface SkillSpectorAssessment {
   status: SkillSpectorStatus;
   findingCount: number;
   outOfDate: boolean;
+  coverage?: SkillSpectorPluginCoverage;
   records: SkillSpectorRecord[];
 }

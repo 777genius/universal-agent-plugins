@@ -6,6 +6,7 @@ import type {
   SkillSpectorRecord,
   SkillSpectorShardDescriptor,
 } from '../types/skillSpector.ts';
+import { skillSpectorAssessment } from '../utils/skillSpector.ts';
 import {
   createSkillSpectorClient,
   decodeSkillSpectorManifest,
@@ -25,6 +26,8 @@ async function catalog(repositories = ['owner/one', 'owner/two']) {
   for (const [index, repository] of repositories.entries()) {
     const record: SkillSpectorRecord = structuredClone(fixture.records[0]);
     record.id = `record-${index}`;
+    record.kind = 'standalone_skill';
+    record.plugin_path = null;
     record.source.repository = repository;
     const shard = {
       schema_version: 2,
@@ -58,10 +61,35 @@ async function catalog(repositories = ['owner/one', 'owner/two']) {
     selection_digest: `sha256:${'b'.repeat(64)}`,
     coverage: { selected: repositories.length + 5, reported: repositories.length, pending: 5 },
     shards: descriptors,
+    plugin_coverage: [],
   };
   bodies.set(manifestUrl, JSON.stringify(manifest));
   return { manifest, bodies };
 }
+async function updateShard(
+  data: Awaited<ReturnType<typeof catalog>>,
+  index: number,
+  update: (value: any) => void,
+) {
+  const descriptor = data.manifest.shards[index]!;
+  const oldUrl = new URL(descriptor.path, manifestUrl).href;
+  const shard = JSON.parse(data.bodies.get(oldUrl)!);
+  update(shard);
+  const body = JSON.stringify(shard);
+  const bytes = new TextEncoder().encode(body);
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+  data.manifest.shards[index] = {
+    ...descriptor,
+    path: `shards/${hash}.json`,
+    digest: `sha256:${hash}`,
+    bytes: bytes.byteLength,
+  };
+  data.bodies.set(new URL(data.manifest.shards[index]!.path, manifestUrl).href, body);
+  data.bodies.set(manifestUrl, JSON.stringify(data.manifest));
+}
+
 function fetchFrom(bodies: Map<string, string>, requests: string[] = []) {
   return (async (input: string | URL | Request) => {
     const url = String(input);
@@ -76,6 +104,22 @@ describe('bounded SkillSpector repository catalog', () => {
     const { manifest } = await catalog();
     assert.equal(decodeSkillSpectorManifest(manifest).coverage.pending, 5);
     for (const change of [
+      (value: SkillSpectorManifest) => {
+        value.plugin_coverage = [
+          {
+            repository: 'owner/one',
+            plugin_path: '../outside',
+            selected: 1,
+            reported: 0,
+            pending: 1,
+          },
+        ];
+      },
+      (value: SkillSpectorManifest) => {
+        value.plugin_coverage = [
+          { repository: 'owner/one', plugin_path: '', selected: 0, reported: 0, pending: 0 },
+        ];
+      },
       (value: SkillSpectorManifest) => {
         value.coverage.pending++;
       },
@@ -234,6 +278,85 @@ describe('bounded SkillSpector repository catalog', () => {
     assert.equal(settled, false);
     release();
     assert.equal((await pending).records.length, 2);
+  });
+
+  it('never presents one of thirteen selected plugin roots as a complete clean assessment', async () => {
+    const data = await catalog(['owner/one']);
+    data.manifest.coverage = { selected: 13, reported: 1, pending: 12 };
+    data.manifest.plugin_coverage = [
+      {
+        repository: 'owner/one',
+        plugin_path: 'plugins/example',
+        selected: 13,
+        reported: 1,
+        pending: 12,
+      },
+    ];
+    await updateShard(data, 0, (shard) => {
+      shard.records[0].kind = 'plugin_skill';
+      shard.records[0].plugin_path = 'plugins/example';
+    });
+    const report = await createSkillSpectorClient(
+      manifestUrl,
+      legacyUrl,
+      fetchFrom(data.bodies),
+    ).reportFor('owner/one');
+    const subject = {
+      kind: 'plugin' as const,
+      repository: 'owner/one',
+      path: 'plugins/example',
+      revision: report.records[0]!.source.revision,
+    };
+    const assessment = skillSpectorAssessment(report, subject);
+    assert.equal(assessment.status, 'partial');
+    assert.equal(assessment.coverage?.pending, 12);
+    const empty = {
+      ...report,
+      records: [],
+      plugin_coverage: [{ ...data.manifest.plugin_coverage[0]!, reported: 0, pending: 13 }],
+    };
+    assert.equal(skillSpectorAssessment(empty, subject).status, 'notChecked');
+    const failed = {
+      ...report,
+      records: report.records.map((record) => ({
+        ...record,
+        status: 'error' as const,
+        errors: [{ code: 'scan_failed', message: 'Failed' }],
+      })),
+    };
+    assert.equal(skillSpectorAssessment(failed, subject).status, 'error');
+  });
+
+  it('requires plugin coverage counts to agree with all loaded repository records', async () => {
+    const data = await catalog(['owner/one']);
+    data.manifest.coverage = { selected: 13, reported: 1, pending: 12 };
+    data.manifest.plugin_coverage = [
+      {
+        repository: 'owner/one',
+        plugin_path: 'plugins/example',
+        selected: 13,
+        reported: 0,
+        pending: 13,
+      },
+    ];
+    await updateShard(data, 0, (shard) => {
+      shard.records[0].kind = 'plugin_skill';
+      shard.records[0].plugin_path = 'plugins/example';
+    });
+    await assert.rejects(
+      createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(data.bodies)).reportFor(
+        'owner/one',
+      ),
+      /invalid/,
+    );
+    data.manifest.plugin_coverage = [];
+    data.bodies.set(manifestUrl, JSON.stringify(data.manifest));
+    await assert.rejects(
+      createSkillSpectorClient(manifestUrl, legacyUrl, fetchFrom(data.bodies)).reportFor(
+        'owner/one',
+      ),
+      /invalid/,
+    );
   });
 
   it('falls back only when the v2 manifest is missing, preserving strict legacy bounds', async () => {

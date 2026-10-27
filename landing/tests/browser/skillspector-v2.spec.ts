@@ -42,6 +42,7 @@ function wire(records: SkillSpectorRecord[]) {
     selection_digest: `sha256:${'a'.repeat(64)}`,
     coverage: { selected: 10_000, reported: records.length, pending: 10_000 - records.length },
     shards,
+    plugin_coverage: [],
   };
   return { manifest, bodies };
 }
@@ -133,4 +134,61 @@ for (const width of [1280, 390]) {
     );
     expect(errors).toEqual([]);
   });
+}
+
+for (const width of [1280, 390]) {
+  for (const reported of [0, 1]) {
+    test(`plugin with ${reported} of 13 reported roots never appears clean (${width})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const errors = await offline(page);
+      const index = registryFixture();
+      const plugin = index.plugins[0]!;
+      plugin.components = ['skills'];
+      for (const distribution of plugin.distributions) {
+        distribution.components = ['skills'];
+        for (const release of distribution.releases) release.components = ['skills'];
+      }
+      const scanned = record(plugin.source.repository, 'example');
+      scanned.kind = 'plugin_skill';
+      scanned.plugin_path = plugin.source.path;
+      scanned.source.path = `${plugin.source.path}/skills/example`;
+      scanned.source.revision = plugin.source.revision!;
+      const { manifest, bodies } = wire(reported ? [scanned] : []);
+      manifest.coverage = { selected: 13, reported, pending: 13 - reported };
+      manifest.plugin_coverage = [
+        {
+          repository: plugin.source.repository,
+          plugin_path: plugin.source.path,
+          selected: 13,
+          reported,
+          pending: 13 - reported,
+        },
+      ];
+      await page.route('**/reports/skillspector/v2/**', (route) => {
+        const suffix = new URL(route.request().url()).pathname.split('/v2/')[1]!;
+        return suffix === 'index.json'
+          ? route.fulfill({ json: manifest })
+          : route.fulfill({ body: bodies.get(suffix), contentType: 'application/json' });
+      });
+      await projections(page, index);
+      await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
+      const assessment = page.locator(
+        '.plugin-card[data-install-source="i18n-state-00"] .skillspector',
+      );
+      await expect(assessment).toHaveClass(
+        reported ? /skillspector--partial/ : /skillspector--notChecked/,
+      );
+      await expect(assessment.locator(':scope > summary')).not.toContainText('No findings');
+      await assessment.locator(':scope > summary').click();
+      await expect(assessment).toContainText(
+        `${reported} of 13 selected skills checked. Remaining skills are waiting for a background check.`,
+      );
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      expect(errors).toEqual([]);
+    });
+  }
 }

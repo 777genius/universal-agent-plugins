@@ -86,6 +86,14 @@ const coverageLimits = computed(() => {
       <strong>{{
         t(`registryUi.skillSpector.${scope === 'plugin' ? 'pluginScope' : 'skillScope'}`)
       }}</strong>
+      <p v-if="assessment.coverage?.pending">
+        {{
+          t('registryUi.skillSpector.pendingCoverage', {
+            checked: n(assessment.coverage.reported),
+            total: n(assessment.coverage.selected),
+          })
+        }}
+      </p>
       <p v-if="reportStatus !== 'ready'">
         {{ t(`registryUi.skillSpector.${reportStatus}Details`) }}
       </p>
