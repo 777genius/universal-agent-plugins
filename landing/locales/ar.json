@@ -208,6 +208,17 @@
     "buildGuideLink": "افتح دليل الإنشاء"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "تبعيات مترابطة",
+      "title": "إضافتان. تبعية مشتركة واحدة.",
+      "description": "ثبّت الإضافة مع تبعياتها. تُثبّت التبعيات المشتركة ذات الإصدار المتوافق نفسه مرة واحدة فقط.",
+      "demoPackage": "حزمة توضيحية",
+      "installed": "مثبّتة",
+      "alreadyInstalled": "مثبّتة مسبقًا",
+      "shared": "مشتركة",
+      "caption": "الحزم ومخطط التبعيات للتوضيح. تشترك الحزمتان في Playwright؛ وContext7 مثبّتة مسبقًا.",
+      "graphDescription": "تعتمد marketing-kit على Playwright وHubSpot وNotion. وتعتمد Web Design Kit على حزمة Playwright نفسها وFigma وContext7. جميع الحزم مثبّتة؛ وكانت Context7 مثبّتة مسبقًا."
+    },
     "restore": {
       "title": "إصدارات الإضافات نفسها على حاسوبك القادم",
       "guide": "الدليل",

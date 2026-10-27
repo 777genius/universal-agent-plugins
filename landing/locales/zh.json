@@ -345,6 +345,17 @@
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "相互连接的依赖",
+      "title": "两个插件，共享一个依赖。",
+      "description": "安装插件及其依赖。版本相同且兼容的共享依赖只安装一次。",
+      "demoPackage": "演示软件包",
+      "installed": "已安装",
+      "alreadyInstalled": "此前已安装",
+      "shared": "共享",
+      "caption": "软件包和依赖图仅作示例。两个软件包共享 Playwright；Context7 此前已安装。",
+      "graphDescription": "marketing-kit 依赖 Playwright、HubSpot 和 Notion。Web Design Kit 依赖同一个 Playwright 软件包、Figma 和 Context7。所有软件包均已安装；Context7 此前已安装。"
+    },
     "restore": {
       "title": "在下一台电脑上使用相同的插件版本",
       "guide": "指南",

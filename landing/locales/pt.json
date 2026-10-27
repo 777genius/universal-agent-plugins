@@ -208,6 +208,17 @@
     "buildGuideLink": "Abrir o guia de criação"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "Dependências conectadas",
+      "title": "Dois plugins. Uma dependência compartilhada.",
+      "description": "Instale um plugin com suas dependências. Dependências compartilhadas da mesma versão compatível são instaladas uma única vez.",
+      "demoPackage": "Pacote de demonstração",
+      "installed": "Instalado",
+      "alreadyInstalled": "Já instalado",
+      "shared": "compartilhada",
+      "caption": "Pacotes e grafo ilustrativos. Os dois pacotes compartilham Playwright; Context7 já está instalado.",
+      "graphDescription": "marketing-kit depende de Playwright, HubSpot e Notion. Web Design Kit depende do mesmo pacote Playwright, Figma e Context7. Todos os pacotes estão instalados; Context7 já estava instalado."
+    },
     "restore": {
       "title": "As mesmas versões de plugins no seu próximo computador",
       "guide": "Guia",
