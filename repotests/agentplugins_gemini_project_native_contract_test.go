@@ -97,8 +97,9 @@ func geminiProjectNativeStderrAllowed(body []byte) bool {
 	const terminal = "Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.\n" +
 		"Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n" + ripgrep
 	const startupMetrics = terminal + "[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.\n"
+	const missingStartMark = startupMetrics + "[STARTUP] Cannot measure phase 'cleanup_ops': start mark 'startup:cleanup_ops:start' not found (likely cleared by reset).\n"
 	switch string(body) {
-	case "", ripgrep, terminal, startupMetrics:
+	case "", ripgrep, terminal, startupMetrics, missingStartMark:
 		return true
 	default:
 		return false
@@ -157,6 +158,40 @@ Ripgrep is not available. Falling back to GrepTool.
 	} {
 		if geminiProjectNativeStderrAllowed([]byte(body)) {
 			t.Fatalf("unmeasured startup-metrics diagnostic %d admitted", index)
+		}
+	}
+}
+
+func TestGeminiProjectNativeMissingStartMarkAdmitsOnlyWholeMeasuredTuple(t *testing.T) {
+	const observed = `Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.
+Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.
+Ripgrep is not available. Falling back to GrepTool.
+[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.
+[STARTUP] Cannot measure phase 'cleanup_ops': start mark 'startup:cleanup_ops:start' not found (likely cleared by reset).
+`
+	const suffix = "[STARTUP] Cannot measure phase 'cleanup_ops': start mark 'startup:cleanup_ops:start' not found (likely cleared by reset).\n"
+	if len(observed) != 541 || fmt.Sprintf("%x", sha256.Sum256([]byte(observed))) != "4a44629c8b644a0e5629b463e0fc14392bda3ef65c08cca2e0cd8963ff59d3c2" {
+		t.Fatal("independent measured missing-start-mark tuple differs")
+	}
+	if len(suffix) != 122 || fmt.Sprintf("%x", sha256.Sum256([]byte(suffix))) != "2bc542b67a6f3474557140033c8830144135651234852ee38e78b9b4aa32a01a" {
+		t.Fatal("independent measured missing-start-mark suffix differs")
+	}
+	if !geminiProjectNativeStderrAllowed([]byte(observed)) {
+		t.Fatal("exact measured missing-start-mark tuple refused")
+	}
+	lines := strings.SplitAfter(observed, "\n")
+	for index, body := range []string{
+		suffix, lines[0] + lines[1] + lines[2] + suffix, lines[0] + lines[1] + lines[2] + suffix + lines[3],
+		observed[:len(observed)-1], observed + "\n", "\n" + observed, observed + suffix, observed + observed,
+		strings.ReplaceAll(observed, "\n", "\r\n"), strings.ReplaceAll(observed, "cleanup_ops", "config"),
+		strings.Replace(observed, "startup:cleanup_ops:start", "startup:config:start", 1),
+		strings.Replace(observed, "likely cleared by reset", "cleanup failed", 1),
+		observed + "Early cleanup failed: private error\n", observed + "[STARTUP] unknown metrics\n",
+		observed + "API request failed\nError: private stack\n", observed + "Not signed in\n",
+		"\x1b[31m" + observed, observed + "\x00",
+	} {
+		if geminiProjectNativeStderrAllowed([]byte(body)) {
+			t.Fatalf("unmeasured missing-start-mark diagnostic %d admitted", index)
 		}
 	}
 }
