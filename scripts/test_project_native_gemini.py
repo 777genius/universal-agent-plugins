@@ -82,6 +82,84 @@ class GeminiCollectorTests(unittest.TestCase):
                          "627ecbbc677b2ca1e37a8b6894cd23619ddcf0ab7e1b1c16bdc460229c434234")
         return body
 
+    def observed_mcp_stderr(self):
+        # Independent literal from source-bound artifact12714503565.
+        body = ("Configured MCP servers:\n\n"
+                "⛔ uap-gemini-research-user: http://127.0.0.1:9/uap-gemini-research-user (http) - Blocked\n"
+                "⛔ uap-gemini-research-a: http://127.0.0.1:9/uap-gemini-research-a (http) - Blocked\n").encode()
+        self.assertEqual(len(body), 201)
+        self.assertEqual(hashlib.sha256(body).hexdigest(),
+                         "13b38cbfb721679de46a7ab935acc81b597c8a34c10ea57fa21b77d45c6ea595")
+        return body
+
+    def test_measured_nonempty_mcp_stderr_uses_existing_scope_parser(self):
+        ctx, body = self.context(), self.observed_mcp_stderr()
+        ctx.replace["observed"] = ({"exit": 0, "error": None}, b"", body)
+        chosen = gemini._probe(ctx, {}, "observed", ("mcp", "list"))
+        self.assertEqual(chosen, body)
+        rows, untrusted = gemini.parse_mcp(chosen)
+        self.assertFalse(untrusted)
+        self.assertEqual(set(gemini._require_mcp(rows, ("user", "a"), "Blocked")),
+                         {"uap-gemini-research-user", "uap-gemini-research-a"})
+
+    def test_complete_stderr_inventory_keeps_user_sibling_and_untrusted_assertions(self):
+        ctx = self.context()
+        original = ctx.probe
+        def stderr_inventory(label, arguments, **kwargs):
+            record, stdout, stderr = original(label, arguments, **kwargs)
+            return (record, b"", stdout) if arguments == ["mcp", "list"] else (record, stdout, stderr)
+        ctx.probe = stderr_inventory
+        result = gemini.collect(ctx)
+        self.assertEqual(len(ctx.calls), 18)
+        self.assertTrue(all(row["status"] == "passed" for row in result["cases"]))
+        self.assertEqual(set(result["observations"]["scopes"]["b"]["mcp"]),
+                         {gemini.NAMES["user"], gemini.NAMES["b"]})
+        self.assertFalse(any(value for key, value in result["observations"].items() if key.endswith("_qualified")))
+
+    def test_nonempty_mcp_stderr_refuses_other_commands_channels_and_capture_failures(self):
+        body = self.observed_mcp_stderr()
+        lines = body.splitlines(keepends=True)
+        for stderr in [body + b"Authentication required\n", b"unknown warning\n" + body,
+                       body + lines[-1], b"\xff", b"\x1b[2J" + body, body + b"\x00", b"Configured MCP servers:\n"]:
+            ctx = self.context()
+            ctx.replace["observed"] = ({"exit": 0, "error": None}, b"", stderr)
+            with self.subTest(stderr=stderr), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", ("mcp", "list"))
+        for arguments, record, stdout, stderr in [
+                (("mcp", "list", "extra"), {"exit": 0, "error": None}, b"", body),
+                (("skills", "list", "--all"), {"exit": 0, "error": None}, b"", body),
+                (("mcp", "list"), {"exit": 0, "error": None}, body, body),
+                (("mcp", "list"), {"exit": 1, "error": None}, b"", body),
+                (("mcp", "list"), {"exit": False, "error": None}, b"", body),
+                (("mcp", "list"), {"exit": 0}, b"", body),
+                (("mcp", "list"), {"exit": 0, "error": "timeout"}, b"", body),
+                (("mcp", "list"), {"exit": 0, "error": False}, b"", body),
+                (("mcp", "list"), {"exit": 0, "error": None}, "", body),
+                (("mcp", "list"), {"exit": 0, "error": None}, b"", bytearray(body))]:
+            ctx = self.context()
+            ctx.replace["observed"] = (record, stdout, stderr)
+            with self.subTest(arguments=arguments, record=record), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "observed", arguments)
+
+    def test_stderr_inventory_cannot_hide_foreign_scope_policy_or_authored_mutation(self):
+        body = self.observed_mcp_stderr()
+        for fault in ("foreign-name", "foreign-endpoint", "connected", "missing-warning", "authored-mutation"):
+            ctx = self.context()
+            changed = body
+            if fault == "foreign-name":
+                changed = body.replace(b"uap-gemini-research-a", b"uap-gemini-research-b")
+            elif fault == "foreign-endpoint":
+                changed = body.replace(b"127.0.0.1:9", b"127.0.0.1:10")
+            elif fault == "connected":
+                changed = body.decode().replace("⛔", "✓").replace("Blocked", "Connected").encode()
+            def captured():
+                if fault == "authored-mutation":
+                    (ctx.home / ".gemini/settings.json").write_text("{}\n")
+                return {"exit": 0, "error": None}, b"", changed
+            ctx.replace["untrusted-a-mcp" if fault == "missing-warning" else "configured-a-mcp"] = captured
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                gemini.collect(ctx)
+
     def test_exact_measured_refresh_diagnostic_preserves_complete_source_observation(self):
         ctx = self.context()
         body = skill_text([(gemini.NAMES[scope], (ctx.home if scope == "user" else ctx.projects[scope]) /

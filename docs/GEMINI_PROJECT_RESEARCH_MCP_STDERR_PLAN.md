@@ -86,3 +86,17 @@ Fresh genuine research must complete all remaining stages before claiming a
 complete read-only observation; it grants no runtime/MCP/auth/model/lifecycle
 qualification. Those source-bound native cycles remain separate obligations.
 No source pin, trust/permission policy, new process, release/new PR or VS change.
+
+## Completed local validation
+
+Both independent plan and complete code reviews approved the exact two-file
+channel correction. The complete Gemini research module passed all25 tests
+(0.129s), including full user/A/B/untrusted discovery, exact literal/hash,
+capture/channel/parser refusal and authored-file mutation controls. Independent
+root rerun also passed25 tests (0.116s). The exact retained201-byte stderr and
+its original successful command receipt replay through the actual _probe,
+parse_mcp and held user/A Blocked selection passed; the old incomplete archive
+was left unchanged. Both Python ASTs and diff whitespace checks passed.
+No Go, vendor, native client/model or positive hosted guard was executed.
+Fresh genuine completion of the remaining research stages is still required;
+none of this source observation establishes runtime or lifecycle qualification.

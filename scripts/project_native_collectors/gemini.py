@@ -143,11 +143,20 @@ def _probe(ctx, owned, label, arguments, project="a"):
     # with zero stdout bytes and exit zero. Preserve both raw capture channels;
     # only this whole measured response supplies the existing empty-list parser.
     empty_mcp = tuple(arguments) == ("mcp", "list") and stdout == b"" and stderr == _EMPTY_MCP
-    if stderr and not known_stderr and not refresh_stderr and not empty_mcp:
+    # The same pinned MCP logger emits nonempty inventory on stderr. Accept
+    # only the complete existing grammar, then retain all caller scope/trust checks.
+    listed_mcp = False
+    if tuple(arguments) == ("mcp", "list") and stdout == b"" and stderr:
+        try:
+            rows, _ = parse_mcp(stderr)
+            listed_mcp = bool(rows)
+        except (ValueError, UnicodeError):
+            pass
+    if stderr and not known_stderr and not refresh_stderr and not empty_mcp and not listed_mcp:
         raise ValueError("Gemini probe did not finish cleanly: " + label)
     for path, body in owned.items():
         _unchanged(path, body)
-    return stderr if empty_mcp else stdout
+    return stderr if empty_mcp or listed_mcp else stdout
 
 
 def _require_skills(rows, scopes, paths):
