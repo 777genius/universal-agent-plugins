@@ -120,6 +120,14 @@ class CopilotReadinessContracts(unittest.TestCase):
         self.assertTrue(members(prefix, SOURCE)["test_failed"])
 
     def test_source_command_acquisition_and_owned_authority_mismatch_refused(self):
+        for key, value in (("source_binding_id", ""), ("source_binding_id", False), ("source_binding_id", []),
+                           ("source_binding_id", "foreign"), ("requested_source", "/foreign"),
+                           ("canonical_source", "/foreign"), ("resolved_revision", "foreign")):
+            bodies = candidate()
+            row = json.loads(bodies["runtime-attempt.json"])
+            row["installation_source"][key] = value
+            bodies["runtime-attempt.json"] = encoded(row)
+            self.refused(bodies)
         for key, value in (("source_identity", {}), ("native_session_id", "foreign"), ("provider_call_id", "foreign"),
                            ("elapsed_ms", 150000), ("native_command_started_at", "2026-10-27T19:31:21Z"),
                            ("native_command_ended_at", "2026-10-27T18:31:21Z"), ("mode", "unknown"),
@@ -212,6 +220,24 @@ class CopilotReadinessContracts(unittest.TestCase):
                 row["private"] = "uap-copilot-private-canary"
             bodies["provider-request-2.json"] = encoded(row)
             self.refused(bodies)
+
+    def test_public_installation_and_coherently_replaced_binding_receipt_ids_refuse(self):
+        for fault in ("installation", "client-and-receipt", "data", "physical"):
+            bodies = candidate()
+            summary = json.loads(bodies["runtime-attempt.json"])
+            public = json.loads(bodies["add-A.stdout.log"])
+            if fault == "installation":
+                public["data"]["targets"][0]["output"]["result"]["installation_id"] = "550e8400-e29b-41d4-a716-446655440000"
+            elif fault == "client-and-receipt":
+                summary["binding"]["client_binding_id"] = "client_" + "0" * 24
+                summary["binding"]["receipts"][0]["client_binding_id"] = summary["binding"]["client_binding_id"]
+            elif fault == "data":
+                summary["binding"]["data_receipt_id"] = "data_" + "0" * 24
+            else:
+                public["data"]["targets"][0]["output"]["result"]["plan"]["physical_artifact_id"] = "native-proof-" + "0" * 12
+            bodies["runtime-attempt.json"], bodies["add-A.stdout.log"] = encoded(summary), encoded(public)
+            with self.subTest(fault=fault):
+                self.refused(bodies)
         for fault in ("root", "pid", "session", "timestamp", "extra", "reorder", "duplicate"):
             bodies = candidate()
             rows = [json.loads(line) for line in bodies["probe-events.jsonl"].splitlines()]

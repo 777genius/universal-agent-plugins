@@ -259,12 +259,18 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 		t.Fatal("exact installed project receipt differs")
 	}
 	installation := state.Installations[0]
-	if installation.Source.CanonicalSource != f.base.Package || installation.Source.SourceBindingID == "" || installation.Source.TreeDigest == "" || installation.Package.DeclaredName != "native-proof" || installation.Package.Version != "1.0.0" || installation.Package.ManifestDigest == "" {
+	if len(installation.DataReceipts) != 1 {
+		t.Fatal("exact installed data receipt count differs")
+	}
+	if !copilotReadinessLocalSource(installation.Source, f.base.Package) || installation.Source.TreeDigest == "" || installation.Package.DeclaredName != "native-proof" || installation.Package.Version != "1.0.0" || installation.Package.ManifestDigest == "" {
 		t.Fatal("selected local package identity differs")
 	}
 	f.evidence["installation_source"] = installation.Source
-	for _, binding := range installation.Clients {
+	for key, binding := range installation.Clients {
 		data := installation.DataReceipts[binding.DataReceiptID]
+		if key != binding.ClientBindingID || !copilotReadinessBindingIDs(installation.InstallationID, binding, data, f.base.Project) {
+			t.Fatal("derived installed binding/data authority differs")
+		}
 		if binding.ClientID != "copilot" || binding.Scope != "project" || binding.NativeProfileRoot != f.base.Project || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || data.State != domain.DataReceiptOwned || data.Scope != "project" || data.DataReceiptID != binding.DataReceiptID || data.PhysicalBackend != binding.PhysicalArtifact || data.OwnershipDigest == "" {
 			t.Fatal("installed Prepared/data authority differs")
 		}

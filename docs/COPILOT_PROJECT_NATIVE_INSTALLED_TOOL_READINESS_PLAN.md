@@ -174,3 +174,51 @@ semantic join. Contradictory structural success is rejected.
 
 Validation and independent exact-code reviews must finish before root
 publication. No vendor or public installer executable is run locally.
+
+## Independent code findings closed
+
+Root's independent code review found that the new Python reader accepted an
+unchecked source_binding_id. Native-CLI review separately found UUID/pattern
+checks without derived joins for public installation, physical package, client
+binding and data receipt identities. These were concrete inert counterexamples,
+not newly observed native behavior. Both findings are corrected within the
+approved exact source/binding/data authority boundary.
+
+The reader now derives the no-repository direct-local source ID from the held
+canonical source path followed by two NUL bytes, using SHA256 first12bytes.
+The live fixture independently requires that ID, the exact requested/canonical
+source and absence of repository/subpath/revision/alternate source metadata.
+The reader derives physical package, client and data IDs from the public
+installation ID using the current exact domain/provider framing. The live
+fixture performs the same independent joins from its held installed receipt,
+requires the state map key and exact one data receipt, and checks the exact
+data ownership digest and selected paths. Literal independently reconstructed
+positive controls and foreign/missing/type/source controls cover the source
+ID. Distinct controls replace the public UUID, coherently replace client and
+receipt references, replace the data ID, physical ID, locator/scope and
+ownership digest. Historical raw fixture bytes remain unchanged.
+
+The separate exact-role semantic change was reconciled after the mechanical
+commit; current root R1 and native-CLI R2 plan/code reviews approved the exact
+five-role switch and14 actual full-request controls. Imported historical
+review timing claims were explicitly corrected rather than treated as proof.
+
+## Current-base preservation and validation
+
+A true merge of current program base a412ba5e137fdcb7e004393229b323211ed746e1
+is recorded as2ab933ce. Its only conflict was the shared held-file runtime
+helper: full comparison proved the Cline base was a strict superset, so the
+merge retains that exact base blob. The shared Python automatic merge retains
+all14 Cline functions from the base and every prior Copilot/common function;
+only cline_members and cline_service_argv intentionally take their base
+versions. All38 other own changed files remain byte-identical across the
+merge. The static preservation report has SHA256
+`4ca8e166f6b4d3e4bd1906d9082d468f69f80ef861b489c367d126758262b3ae`.
+
+Post-base focused Copilot/shared Go contracts passed in0.218s. The new
+Copilot, shared-runtime and preserved Cline-cycle Python contracts passed
+all39tests in10.256s. Initial leaf focused contracts passed in0.253s; initial
+all-enabled root lint against443fa8d and unfiltered whole-root six-linter
+gate each reported zero issues. Post-base final lint and independent exact
+code reviews are recorded after those gates; no vendor or public installer
+executable has been run locally. All five qualification flags remain false.

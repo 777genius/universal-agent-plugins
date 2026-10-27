@@ -130,6 +130,8 @@ def authority(bodies, result, commands):
     require(instant(binding["updated_at"]) <= instant(result["native_command_started_at"]))
     source = obj(result["installation_source"], "source_binding_id requested_source canonical_source resolved_revision tree_digest")
     values(source, {"requested_source": root + "/package", "canonical_source": root + "/package", "resolved_revision": ""})
+    expected_source_id = "src_" + hashlib.sha256((root + "/package\0\0").encode()).hexdigest()[:24]
+    require(type(source["source_binding_id"]) is str and source["source_binding_id"] == expected_source_id)
     require(type(source["tree_digest"]) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", source["tree_digest"]))
     revision = obj(binding["package_revision"], "version tree_digest manifest_digest")
     values(revision, {"version": "1.0.0", "tree_digest": source["tree_digest"]})
@@ -183,7 +185,12 @@ def public_receipt(body, result, binding, source, revision, active, project, phy
                     "tree_digest": source["tree_digest"], "manifest_digest": revision["manifest_digest"]})
     outcome = output["result"]
     require(type(outcome) is dict)
-    uuid(outcome["installation_id"])
+    installation = uuid(outcome["installation_id"])
+    expected_physical = "native-proof-" + hashlib.sha256(installation.encode()).hexdigest()[:12]
+    expected_client = "client_" + hashlib.sha256("\0".join((installation, "copilot", "project", active)).encode()).hexdigest()[:24]
+    expected_data = "data_" + hashlib.sha256("\0".join((installation, physical, "project")).encode()).hexdigest()[:24]
+    require(physical == expected_physical and binding["client_binding_id"] == expected_client
+            and binding["data_receipt_id"] == expected_data)
     values(outcome, {"requires_confirmation": False, "mutated": True, "group_phase": "external_completed"})
     values(outcome["plan"], {"client_id": "copilot", "scope": "project", "status": "ready", "package_mode": "native",
            "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated", "physical_artifact_id": physical})

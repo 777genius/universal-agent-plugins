@@ -10,7 +10,28 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+func copilotReadinessLocalSource(source domain.SourceBinding, root string) bool {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || root == "/" {
+		return false
+	}
+	expected := "src_" + copilotProjectConfigHash([]byte(root + "\x00\x00"))[:24]
+	return source.SourceBindingID == expected && source.RequestedSource == root && source.CanonicalSource == root && source.Repository == "" && source.PackageSubpath == "" && source.ResolvedRevision == "" && source.SourceKind == "" && source.SourceURL == "" && source.ArchiveSHA256 == "" && source.StableSourceKey == "" && source.Publisher == ""
+}
+func copilotReadinessBindingIDs(installation string, binding domain.ClientBinding, data domain.DataReceipt, project string) bool {
+	if !copilotReadinessID(installation) {
+		return false
+	}
+	physical := "native-proof-" + copilotProjectConfigHash([]byte(installation))[:12]
+	active, locator := filepath.Join(project, ".uap", "managed", "clients", "copilot", physical), filepath.Join(project, ".uap", "plugin-data", physical)
+	clientID := "client_" + copilotProjectConfigHash([]byte(installation + "\x00copilot\x00project\x00" + active))[:24]
+	dataID := "data_" + copilotProjectConfigHash([]byte(installation + "\x00" + physical + "\x00project"))[:24]
+	ownership := copilotReadinessDigest([]byte("agentplugins-plugin-data-v1\x00" + dataID + "\x00" + locator))
+	return binding.PhysicalArtifact == physical && binding.TargetLocator == active && binding.ClientBindingID == clientID && binding.DataReceiptID == dataID && data.DataReceiptID == dataID && data.PhysicalBackend == physical && data.Locator == locator && data.Scope == "project" && data.OwnershipDigest == ownership
+}
 
 func copilotReadinessDigest(body []byte) string {
 	h := sha256.Sum256(body)
