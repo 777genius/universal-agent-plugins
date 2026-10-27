@@ -61,7 +61,7 @@ func projectNativeCLIArguments(client, executable, view, prompt string) ([]strin
 	case "grok":
 		// Source-guided candidate: unlike --tools "" (which parses as None), the
 		// strict permission parser maps --deny "" to Deny/Any/no pattern.
-		return []string{executable, "--single", prompt, "--output-format", "streaming-json", "--permission-mode", "default", "--deny", "", "--no-subagents", "--disable-web-search", "--max-turns", "1"}, nil
+		return []string{executable, "--single", prompt, "--output-format", "streaming-json", "--permission-mode", "default", "--deny", "", "--no-subagents", "--disable-web-search", "--max-turns", "1", "--model", grokProjectProviderModel}, nil
 	case "kiro":
 		return []string{executable, "chat", "--v2", "--no-interactive", prompt}, nil
 	case "windsurf":
@@ -93,10 +93,17 @@ type projectNativeCLIAttempt struct {
 	used                                                                         map[string]bool
 	evidence                                                                     map[string]any
 	binding                                                                      domain.ClientBinding
+	grok                                                                         *grokProjectProvider
 }
 
 func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 	t.Helper()
+	if f.grok != nil {
+		body = f.grok.redact(body)
+		if grokProjectPrivateCredential(body) {
+			t.Fatal("unredacted Grok fixture credential refused")
+		}
+	}
 	total := len(body)
 	for _, b := range f.files {
 		total += len(b)
@@ -129,6 +136,9 @@ func (f *projectNativeCLIAttempt) env() []string {
 	env := append(f.base.env(f.bin), "NO_COLOR=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0")
 	if f.spec.client == "grok" {
 		env = append(env, "GROK_DISABLE_AUTOUPDATER=1")
+		if f.grok != nil {
+			env = append(env, "UAP_GROK_TEST_PROVIDER_KEY="+f.grok.key)
+		}
 	}
 	return env
 }
@@ -648,6 +658,9 @@ func projectNativeCLIClosedView(root, name string, skill []byte) error {
 func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 	t.Helper()
 	defer f.cancel()
+	if f.grok != nil {
+		f.grok.finish(t, f)
+	}
 	if time.Since(f.started) > 180*time.Second {
 		t.Error("original CLI attempt total deadline exceeded")
 	}
@@ -659,6 +672,14 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 	}
 	raw, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(raw, '\n'))
+	if f.grok != nil {
+		for _, body := range f.files {
+			if grokProjectPrivateCredential(body) {
+				t.Error("unredacted Grok fixture credential refused")
+				return
+			}
+		}
+	}
 	file, err := os.OpenFile(filepath.Join(f.output, "research.zip"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		t.Error(err)
@@ -699,6 +720,10 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	}
 	f := newProjectNativeCLIAttempt(t, spec)
 	defer f.finish(t)
+	if client == "grok" {
+		// finish owns cleanup before any listener or native child can start.
+		f.configureGrokProvider(t)
+	}
 	f.setup(t)
 	if client == "grok" {
 		f.inspectGrokPrepared(t)

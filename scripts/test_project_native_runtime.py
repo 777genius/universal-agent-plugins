@@ -146,6 +146,75 @@ class RuntimeTests(unittest.TestCase):
     def cline_result(self):
         return {**self.cli_result("qoder"), "client": "cline", "version": "3.0.73"}
 
+    def grok_provider_bodies(self):
+        row = {"transport": "scripted loopback OpenAI chat-completions SSE; no real model",
+               "model": "uap-grok-fixture", "started": True, "requests": 1, "responses": 1,
+               "credential_matched": True, "failure": "none", "shutdown_complete": True, "forced_close": False}
+        return {"runtime-attempt.json": json.dumps(self.cli_result("grok")).encode(),
+                "grok-provider.json": json.dumps(row).encode(),
+                "grok-provider.request.json": b'{"model":"uap-grok-fixture","messages":[{"role":"user","content":"inert"}],"stream":true,"opaque":"captured only"}',
+                "grok-provider.response.sse": b"inert provider response envelope; no native qualification"}
+
+    def test_grok_provider_closed_capture_remains_a_failed_unqualified_attempt(self):
+        bodies = self.grok_provider_bodies()
+        result = runtime.cli_attempt_members(bodies, self.source, "grok")
+        self.assertTrue(result["test_failed"])
+        self.assertFalse(result["runtime_attempt_complete"])
+        self.assertFalse(any(result["qualification"].values()))
+        for missing in bodies:
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({key: body for key, body in bodies.items() if key != missing}, self.source, "grok")
+        for client in ("qoder", "kiro", "windsurf"):
+            with self.subTest(client=client), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "runtime-attempt.json": json.dumps(self.cli_result(client)).encode()}, self.source, client)
+        for extra in ("profile.json", "grok-provider-2.request.json", "grok-provider.headers.json"):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, extra: b"{}"}, self.source, "grok")
+
+    def test_grok_provider_receipt_rejects_forged_counts_fields_and_cleanup(self):
+        bodies = self.grok_provider_bodies()
+        original = json.loads(bodies["grok-provider.json"])
+        changes = ({"requests": True}, {"responses": 2}, {"requests": 0}, {"responses": 0},
+                   {"started": False}, {"credential_matched": False}, {"shutdown_complete": 1},
+                   {"shutdown_complete": False}, {"forced_close": True}, {"failure": "private arbitrary error"},
+                   {"failure": []}, {"model": "foreign"}, {"transport": "real model"}, {"extra": "private"})
+        for change in changes:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps({**original, **change}).encode()}, self.source, "grok")
+        for name, body in (("grok-provider.json", b" " * 2049 + bodies["grok-provider.json"]),
+                           ("grok-provider.request.json", b"[]"), ("grok-provider.request.json", b'{"x":1,"x":2}'),
+                           ("grok-provider.response.sse", b"\n")):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, name: body}, self.source, "grok")
+
+    def test_grok_provider_partial_failures_keep_only_their_actual_members(self):
+        bodies = self.grok_provider_bodies()
+        original = json.loads(bodies["grok-provider.json"])
+        for requests, failure, started in ((0, "listen", False), (0, "credential", True), (1, "request-shape", True), (1, "response-write", True)):
+            row = {**original, "requests": requests, "responses": 0, "failure": failure, "started": started,
+                   "credential_matched": bool(requests), "shutdown_complete": started}
+            present = {key: value for key, value in bodies.items() if key not in
+                       ({"grok-provider.response.sse"} | ({"grok-provider.request.json"} if not requests else set()))}
+            present["grok-provider.json"] = json.dumps(row).encode()
+            result = runtime.cli_attempt_members(present, self.source, "grok")
+            self.assertTrue(result["test_failed"])
+            self.assertFalse(any(result["qualification"].values()))
+            with self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**present, "grok-provider.response.sse": b"unrecorded response"}, self.source, "grok")
+
+    def test_grok_provider_private_canary_is_refused_in_every_capture_surface(self):
+        bodies = self.grok_provider_bodies()
+        canary = b"uap-grok-private-" + b"a" * 32
+        for name in bodies:
+            with self.subTest(member=name), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, name: bodies[name] + canary}, self.source, "grok")
+        encoded = b'{"opaque":"\\u0075ap-grok-private-' + b"a" * 32 + b'"}'
+        with self.assertRaises(ValueError):
+            runtime.cli_attempt_members({**bodies, "grok-provider.request.json": encoded}, self.source, "grok")
+        with self.assertRaises(ValueError):
+            runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(self.cli_result("grok")).encode(),
+                                         "probe-events.jsonl": canary}, self.source, "grok")
+
     def test_catalog_triple_is_admitted_only_for_qoder_and_never_qualifies_it(self):
         command = {"argv": ["/owned/qodercli", "plugins", "list", "--json", "--plugin-dir", "/owned/A/.agentplugins-qoder-native"],
                    "cwd": "/owned/A", "exit": 0, "error": False, "deadline": False, "elapsed_ms": 1,

@@ -49,7 +49,7 @@ func TestProjectNativeCLIAttemptToolRestrictionsCannotBecomeApproval(t *testing.
 				t.Fatal("Qoder measured empty tool restriction absent")
 			}
 		case "grok":
-			if strings.Contains(joined, "--tools") || !strings.Contains(joined, "--deny\x00\x00--no-subagents") {
+			if strings.Contains(joined, "--tools") || !strings.Contains(joined, "--deny\x00\x00--no-subagents") || !strings.HasSuffix(joined, "--max-turns\x001\x00--model\x00uap-grok-fixture") {
 				t.Fatal("Grok empty allowlist bug or missing unconditional deny")
 			}
 		case "kiro":

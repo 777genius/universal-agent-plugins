@@ -118,3 +118,22 @@ gofmt/whitespace checks and retained actual failed Grok envelope replay. No
 vendor process executes locally. Root alone publishes to existing PR522 with
 fresh actual ref and expected_sha, force=false. No new PR or release; VS Code
 is deferred by the latest explicit owner instruction.
+
+
+## Review checkpoint
+
+CLI R1 and desktop R2 independently approved plan SHA256
+dd85798b4871626281b79ca3e4692584a5158633b46ef403be544fe3d804ff56
+before plan commit b9a40b860061b3671fff62cb9f17be2da69ae195 and source edits.
+The listener is created only after deferred finish owns cleanup, before the
+first native command. The implementation additionally enforces a literal
+origin-form RequestURI, held Host, single authorization/content-type values
+and actual loopback peer; no unknown request field supplies qualification.
+
+Both critics independently approved the complete six-file implementation
+manifest SHA256 7a33859c0ac4df509f0e18021b5c4a169ee41d58cd30a99ff114da585ddcfd20,
+conditional on actual focused Go and both lint gates. All23 existing/new shared
+Python admission contracts pass in0.023 seconds. The Go gates are pending the
+exclusive shared validation slot; this checkpoint does not claim they passed.
+No vendor executable has run locally. The genuine new-source first capture and
+all subsequent full native lifecycle proof remain outstanding.

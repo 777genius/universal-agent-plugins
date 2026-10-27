@@ -221,10 +221,57 @@ def kimi_members(bodies, source):
     return result
 
 
+def grok_provider_members(bodies, client):
+    if client == "grok" and any(b"uap-grok-private-" in body for body in bodies.values()):
+        raise ValueError("unredacted Grok fixture credential refused")
+    members = {"grok-provider.json", "grok-provider.request.json", "grok-provider.response.sse"}
+    present = set(bodies) & members
+    if not present:
+        return set()
+    if client != "grok" or "grok-provider.json" not in present:
+        raise ValueError("Grok-only provider receipt required")
+    if len(bodies["grok-provider.json"]) > 2048:
+        raise ValueError("Grok provider receipt bound exceeded")
+    row = strict_json(bodies["grok-provider.json"])
+    fields = {"transport", "model", "started", "requests", "responses", "credential_matched",
+              "failure", "shutdown_complete", "forced_close"}
+    failures = {"none", "listen", "serve", "deadline", "route", "credential", "duplicate",
+                "body", "request-shape", "response-write", "cleanup"}
+    if (type(row) is not dict or set(row) != fields
+            or row["transport"] != "scripted loopback OpenAI chat-completions SSE; no real model"
+            or row["model"] != "uap-grok-fixture"
+            or type(row["failure"]) is not str or row["failure"] not in failures
+            or any(type(row[key]) is not bool for key in ("started", "credential_matched", "shutdown_complete", "forced_close"))
+            or any(type(row[key]) is not int or not 0 <= row[key] <= 1 for key in ("requests", "responses"))
+            or row["responses"] > row["requests"]):
+        raise ValueError("finite Grok provider receipt differs")
+    if ((not row["started"] and (row["failure"] != "listen" or row["requests"] or row["responses"]
+                                 or row["credential_matched"] or row["shutdown_complete"] or row["forced_close"]))
+            or (row["requests"] and (not row["started"] or not row["credential_matched"]))
+            or (row["failure"] == "none" and (row["requests"] != row["responses"]
+                                               or row["forced_close"] or not row["shutdown_complete"]))):
+        raise ValueError("Grok partial capture or cleanup state differs")
+    required = {"grok-provider.json"}
+    if row["requests"]:
+        required.add("grok-provider.request.json")
+    if row["responses"]:
+        required.add("grok-provider.response.sse")
+    if present != required or any(not bodies[name].strip() for name in present):
+        raise ValueError("Grok provider member counts differ")
+    if row["requests"]:
+        request = strict_json(bodies["grok-provider.request.json"])
+        if type(request) is not dict:
+            raise ValueError("Grok opaque captured request must be a JSON object")
+        if "uap-grok-private-" in json.dumps(request):
+            raise ValueError("encoded Grok fixture credential refused")
+    return members
+
+
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
+    allowed |= grok_provider_members(bodies, client)
     commands = CLI_COMMANDS
     if client == "qoder":
         commands += ("native-catalog",)
