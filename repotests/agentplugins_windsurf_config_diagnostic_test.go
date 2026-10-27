@@ -24,15 +24,21 @@ type windsurfConfigField struct {
 	MatchesAuthored bool   `json:"matches_authored"`
 }
 
+type windsurfConfigAdditionalFields struct {
+	Documented   map[string]string `json:"documented"`
+	UnknownCount int               `json:"unknown_count"`
+}
+
 type windsurfConfigChange struct {
-	ExpectedSHA256  string               `json:"expected_sha256,omitempty"`
-	ObservedSHA256  string               `json:"observed_sha256,omitempty"`
-	GuardError      bool                 `json:"guard_error"`
-	Status          string               `json:"status"`
-	StrictJSONValid *bool                `json:"strict_json_valid,omitempty"`
-	TopLevelFields  *int                 `json:"top_level_fields,omitempty"`
-	AutoUpdate      *windsurfConfigField `json:"auto_update,omitempty"`
-	Permissions     *windsurfConfigField `json:"permissions,omitempty"`
+	ExpectedSHA256   string                          `json:"expected_sha256,omitempty"`
+	ObservedSHA256   string                          `json:"observed_sha256,omitempty"`
+	GuardError       bool                            `json:"guard_error"`
+	Status           string                          `json:"status"`
+	StrictJSONValid  *bool                           `json:"strict_json_valid,omitempty"`
+	TopLevelFields   *int                            `json:"top_level_fields,omitempty"`
+	AutoUpdate       *windsurfConfigField            `json:"auto_update,omitempty"`
+	Permissions      *windsurfConfigField            `json:"permissions,omitempty"`
+	AdditionalFields *windsurfConfigAdditionalFields `json:"additional_fields,omitempty"`
 }
 
 func (f *projectNativeCLIAttempt) captureWindsurfConfigChange(path, expected, observed string, guardErr error) {
@@ -116,31 +122,57 @@ func windsurfConfigDiagnostic(expected, observed string, guardErr error, read fu
 	change.TopLevelFields, change.Status = &count, "captured"
 	change.AutoUpdate = windsurfConfigCompareField(object, baseline, "auto_update")
 	change.Permissions = windsurfConfigCompareField(object, baseline, "permissions")
+	change.AdditionalFields = windsurfConfigClassifyAddedFields(object)
 	return change
+}
+
+func windsurfConfigClassifyAddedFields(object map[string]any) *windsurfConfigAdditionalFields {
+	fields := &windsurfConfigAdditionalFields{Documented: map[string]string{}, UnknownCount: len(object)}
+	for _, key := range []string{"auto_update", "permissions"} {
+		if _, present := object[key]; present {
+			fields.UnknownCount--
+		}
+	}
+	// Exact names from the pinned official config reference, not permission to
+	// accept them in the main config or to expose any corresponding value.
+	for _, key := range []string{
+		"agent", "attribution", "include_gitignored_files", "keymap", "local_tools_bypass_permissions", "mcpServers", "notify", "proxy",
+		"read_config_from", "respect_gitignore", "sandbox", "show_hints", "show_path", "subagents_enabled", "theme_mode", "unicode_mode",
+	} {
+		if value, present := object[key]; present {
+			fields.Documented[key] = windsurfConfigValueType(value)
+			fields.UnknownCount--
+		}
+	}
+	return fields
 }
 
 func windsurfConfigCompareField(object, authored map[string]any, key string) *windsurfConfigField {
 	value, present := object[key]
 	kind := "absent"
 	if present {
-		switch value.(type) {
-		case nil:
-			kind = "null"
-		case bool:
-			kind = "boolean"
-		case string:
-			kind = "string"
-		case json.Number:
-			kind = "number"
-		case []any:
-			kind = "array"
-		case map[string]any:
-			kind = "object"
-		default:
-			kind = "other"
-		}
+		kind = windsurfConfigValueType(value)
 	}
 	return &windsurfConfigField{Present: present, Type: kind, MatchesAuthored: present && reflect.DeepEqual(value, authored[key])}
+}
+
+func windsurfConfigValueType(value any) string {
+	switch value.(type) {
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case string:
+		return "string"
+	case json.Number:
+		return "number"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	default:
+		return "other"
+	}
 }
 
 func newWindsurfConfigDiagnostic(t *testing.T) (*projectNativeCLIAttempt, string, []byte) {

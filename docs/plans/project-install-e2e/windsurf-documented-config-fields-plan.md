@@ -164,3 +164,24 @@ tools-call or ordinary authenticated agent runtime. All runtime qualifications
 remain false until their own real protocol/process/cleanup evidence exists.
 The known login-canceled prompt and unknown config addition remain distinct
 open boundaries; this assessment does not remove either.
+
+## Actual implementation validation
+
+Root and CLI independently approved original plan SHA256
+`dafc84a906e397d57821c12cce6d25fe49dce01c7b6d96447ab6b9a016d719cf`
+before source edits. CLI and shell reviewed the complete two-file code, and
+root independently reviewed its source/authority boundary. Final helper SHA256
+is `06601096db60fd45cc73bc0dccb1e8cf42838e7e86f4d3e1626b99a32aa97b79`;
+new contracts SHA256 is
+`6b4295ad7406791429fd1f5d2c173c5175d54641146d683057579302efeedaa3`.
+
+Actual focused inert Go contracts passed in `0.077s`, including all16 fixed
+names with six JSON types, complete-registry/private-key/type/count/empty-object
+controls, matching-digest parser refusals and retained Windsurf/shared argv/tool
+restrictions. Actual all-enabled affected lint and unfiltered whole-file size/
+complexity/architecture lint each reported `0 issues`; gofmt/diff checks pass.
+No source correction was needed after either code review or these checks.
+The unchanged Python envelope had already re-admitted the actual370 source's
+16-member failed capture with all flags false. No local vendor/positive native
+guard ran. Original protected digest/fatal/maps and all qualification flags
+remain unchanged; a fresh genuine run must identify the added field.
