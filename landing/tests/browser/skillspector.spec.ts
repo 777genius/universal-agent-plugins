@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { loadRegistryIndex } from '../../build/load-registry';
 import { catalogVisiblePlugins } from '../../utils/filter';
@@ -6,11 +6,20 @@ import type { SkillSpectorRecord, SkillSpectorReport } from '../../types/skillSp
 import {
   deferred,
   navigate,
-  offline,
+  offline as offlineCatalog,
   projections,
   registryFixture,
   wording,
 } from './i18n-state.helpers';
+
+/** These fixtures explicitly exercise the retained v1 feed through 404 fallback. */
+async function offline(page: Page) {
+  const errors = await offlineCatalog(page);
+  await page.route('**/reports/skillspector/v2/index.json', (route) =>
+    route.fulfill({ status: 404 }),
+  );
+  return errors;
+}
 
 const digest = `sha256:${'1'.repeat(64)}`;
 const profileDigest = 'sha256:ddd91212d95a717ab6c067d99e9f32a64b8dd55589bdf47a36695a85320187d5';
