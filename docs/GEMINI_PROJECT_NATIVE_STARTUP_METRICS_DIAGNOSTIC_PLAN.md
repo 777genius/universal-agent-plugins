@@ -98,3 +98,30 @@ or hosted eligibility spoof runs locally. Root alone publishes to existing
 PR526 with a fresh ref/tree check. Fresh genuine complete native and separate
 full user/A/B lifecycle evidence remain necessary before qualification.
 No release/new PR or VS Code work.
+
+## Implemented and recovered validation
+
+Independent CLI and desktop plan/code reviews approved the exact whole-tuple
+amendment. Reviewed contract SHA256 is
+371aab6e68a99b701c4bc5e5c2c0bbb8e563b916f0b300d10c1d84b65c6bcf19.
+After workspace replacement, this source file and the original plan were
+restored byte-for-byte; both original hashes and source-review GOs still match.
+The exact raw archives and pinned full sources were re-downloaded and verified.
+
+Fresh ^TestGeminiProjectNative contracts and an offline full actual aaf native
+stream/probe replay passed in0.016s. The replay held seven independent member
+hashes, original installed literals, receipt target/data, original HOME/root,
+nonce, successful captured command and constructed native call/sentinel IDs.
+It admitted the actual419-byte diagnostic and complete captured init/user/
+tool-use/tool-result/assistant/result stream through unchanged strict validators,
+including independent initialize/list/call probe-event facts and PID/session
+joins. No subsequent grammar amendment was needed. The retained original
+runtime_attempt_complete=false and all five false flags were explicitly checked.
+
+The temporary replay file was removed before both lint gates and is absent
+from the committed tree. Actual all-enabled affected lint against recovered
+pland57d2f83 and the unfiltered whole-file six-linter gate each reported zero
+issues. Source formatting and whitespace checks pass. No vendor/installer,
+HTTP listener, native child or positive hosted guard ran locally. Fresh genuine
+execution on this corrected source and the separate full lifecycle remain
+required; offline admission does not relabel the actual failed aaf capture.

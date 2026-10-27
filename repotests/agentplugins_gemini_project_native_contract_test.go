@@ -94,8 +94,9 @@ func geminiProjectNativeStderrAllowed(body []byte) bool {
 	const ripgrep = "Ripgrep is not available. Falling back to GrepTool.\n"
 	const terminal = "Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.\n" +
 		"Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.\n" + ripgrep
+	const startupMetrics = terminal + "[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.\n"
 	switch string(body) {
-	case "", ripgrep, terminal:
+	case "", ripgrep, terminal, startupMetrics:
 		return true
 	default:
 		return false
@@ -121,12 +122,39 @@ Ripgrep is not available. Falling back to GrepTool.
 		strings.ReplaceAll(observed, "\n", "\r\n"), lines[0], lines[1], lines[0] + lines[1],
 		lines[1] + lines[0] + lines[2], lines[2] + lines[0] + lines[1],
 		strings.Replace(observed, "TERM=dumb", "TERM=vt100", 1), strings.Replace(observed, "256-color", "truecolor", 1),
-		observed + "[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.\n",
 		observed + "API request failed\nError: private stack\n", observed + "Not signed in\n",
 		"\x1b[31m" + observed, observed + "\x00",
 	} {
 		if geminiProjectNativeStderrAllowed([]byte(body)) {
 			t.Fatalf("unmeasured or failing diagnostic %d admitted", index)
+		}
+	}
+}
+
+func TestGeminiProjectNativeStartupMetricsAdmitsOnlyWholeMeasuredTuple(t *testing.T) {
+	const observed = `Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.
+Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.
+Ripgrep is not available. Falling back to GrepTool.
+[STARTUP] Phase 'cleanup_ops' was started but never ended. Skipping metrics.
+`
+	if len(observed) != 419 || fmt.Sprintf("%x", sha256.Sum256([]byte(observed))) != "315efcf74c381fe9f43bc921c84091ca24436a267b3bfcd76b5c705089309c7f" {
+		t.Fatal("independent measured startup-metrics tuple differs")
+	}
+	if !geminiProjectNativeStderrAllowed([]byte(observed)) {
+		t.Fatal("exact measured startup-metrics tuple refused")
+	}
+	lines := strings.SplitAfter(observed, "\n")
+	for index, body := range []string{
+		lines[3], lines[2] + lines[3], lines[3] + lines[0] + lines[1] + lines[2],
+		observed[:len(observed)-1], observed + "\n", "\n" + observed, observed + lines[3], observed + observed,
+		strings.ReplaceAll(observed, "\n", "\r\n"), strings.Replace(observed, "cleanup_ops", "config", 1),
+		strings.Replace(observed, "Skipping metrics.", "Early cleanup failed:", 1),
+		observed + "Early cleanup failed: private error\n", observed + "[STARTUP] unknown metrics\n",
+		observed + "API request failed\nError: private stack\n", observed + "Not signed in\n",
+		"\x1b[31m" + observed, observed + "\x00",
+	} {
+		if geminiProjectNativeStderrAllowed([]byte(body)) {
+			t.Fatalf("unmeasured startup-metrics diagnostic %d admitted", index)
 		}
 	}
 }
