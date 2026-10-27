@@ -5,6 +5,9 @@ service is separate from the static GitHub Pages landing site. Only
 `api.universal-agent-plugins.com` routes to this service; the apex and `www`
 remain on GitHub Pages. The API contract is
 [skills-catalog.openapi.yaml](contracts/skills-catalog.openapi.yaml).
+The optional service-only source preview has a separate
+[skills-resolve.openapi.yaml](contracts/skills-resolve.openapi.yaml) contract;
+it does not alter the anonymous listing DTO or landing pages.
 
 Regenerate the landing DTOs after changing the contract:
 
@@ -55,18 +58,21 @@ CATALOG_SHA=$(git rev-parse HEAD)
 CATALOG_GOARCH=amd64
 CATALOG_BUILD_DIR=$(mktemp -d)
 go version
-go test ./internal/skillscatalog ./cmd/skills-catalog-api
-CGO_ENABLED=0 GOOS=linux GOARCH="$CATALOG_GOARCH" go build -trimpath -buildvcs=false -o "$CATALOG_BUILD_DIR/skills-catalog-api" ./cmd/skills-catalog-api
+go test ./internal/skillscatalog ./internal/skillsresolve/... ./cmd/skills-catalog-api
+GOWORK=off CGO_ENABLED=0 GOOS=linux GOARCH="$CATALOG_GOARCH" go build -mod=readonly -trimpath -buildvcs=false -o "$CATALOG_BUILD_DIR/skills-catalog-api" ./cmd/skills-catalog-api
 shasum -a 256 "$CATALOG_BUILD_DIR/skills-catalog-api"
 file "$CATALOG_BUILD_DIR/skills-catalog-api"
 ```
 
 `CATALOG_GOARCH=amd64` is an example, not an assertion about the destination.
 Do not label an artifact with `CATALOG_SHA` if the source has uncommitted edits.
-No Node runtime, Docker, database, tokens, or application secrets are needed
-on the destination. HTTPS access to `www.skills.sh`, working DNS, and the
-system CA trust store are required. Never expose an upstream-origin override
-or caller-supplied proxy URL.
+Anonymous catalog browsing needs no Node runtime, Docker, database, tokens or
+application secrets. HTTPS access to `www.skills.sh`, working DNS, and the
+system CA trust store are required. Optional source resolution also needs Git,
+HTTPS access to `github.com`, and its own narrow service capability. Never
+expose an upstream-origin override or caller-supplied proxy URL. The root module
+declares local replacements for the existing source-reader workspace modules,
+so the binary above also builds reproducibly with `GOWORK=off` from this checkout.
 
 ## Stage and activate
 
@@ -174,7 +180,7 @@ no usable cache, the API returns structured 503 and a retry delay.
 The cache holds at most 128 records with at most 2 MiB per response. Fetches have
 bounded concurrency and rate, and upstream 429 retry delays apply. No cron or
 refresh daemon is required. The unit's Go memory target is 192 MiB, with a
-256 MiB cgroup hard limit, and task/file-descriptor limits. The memory target is
+512 MiB cgroup hard limit, and task/file-descriptor limits. The memory target is
 soft; the [cgroup limit](https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html#MemoryMax=)
 can terminate the service if exceeded. Check normal browse/search traffic and
 journal evidence before changing these limits.
@@ -190,6 +196,70 @@ After the bounded restart budget is exhausted, diagnose the failure before using
 `systemctl reset-failed uap-skills-catalog.service` and restarting. Keep previous
 release binaries and deployment evidence for rollback. Do not run
 `systemctl clean` or remove the state directory during a normal update.
+
+## Optional immutable source preview
+
+This feature is disabled until the operator supplies a dedicated capability in
+the root-owned mode-0600 `/etc/uap-skills-catalog/resolver.env` file:
+`SKILLS_RESOLVER_SERVICE_TOKEN` must contain 32–512 non-control bytes. Do not reuse
+a GitHub token, an end-user session, or a database credential. Provision the same
+capability only to the authorized backend consumer. Token provisioning and
+production activation are separate operator actions, not performed by this
+source change. Missing/invalid configuration leaves source preview unavailable
+while existing anonymous search and health continue to work.
+
+Use the reviewed unit on a Linux cgroup-v2 host, with Git and CA certificates
+installed. It mounts a **private 256 MiB tmpfs** at `/tmp`; it does not mount or
+clean the host's temporary directory. The service is unprivileged and has a
+512 MiB cgroup memory limit, 64-task limit and one-CPU quota. `NewHosted` verifies
+the temporary filesystem type/size and the actual current cgroup memory/PID
+limits before enabling the endpoint. Unsupported hosts fail unavailable. The
+unit's Go heap target remains 192 MiB because tmpfs and Git also count toward the
+memory ceiling. Keep **one service replica**: resolver admission is one active
+request per process, burst two with one token added every five seconds. Do not
+scale this recipe without revisiting the aggregate capacity limit.
+
+`POST /v1/skills/resolve` accepts no browser Origin, query string, arbitrary URL,
+credentials, CLI arguments or local path. It requires its service bearer token
+and a strict JSON body of at most 8 KiB. Unknown/duplicate fields and null values
+are errors. Initial discovery resolves the public GitHub default branch once;
+explicit selection requires the returned full commit and actual skill directory
+path. The empty path means repository root. This handler never resolves a moving
+branch again during explicit selection. Missing/ambiguous/partial discovery is
+reported truthfully; the consumer must not guess a directory from a listing slug.
+
+Runtime bounds are 20,000 tree entries, depth 32, 128 candidates, 4 MiB metadata,
+64 KiB per document, 2 MiB aggregate document reads and 256 KiB encoded response.
+The overall HTTP budget is 30 seconds; Git work stops early enough to retain five
+seconds for process-tree termination, inside the 35-second server write timeout.
+Git uses filtered immutable trees without checkout, HTTPS only, no redirects,
+and isolated configuration/credentials. Temporary files are removed on success
+and failure. Filtering plus time/disk limits is not a total network-byte counter.
+
+Only the original UTF-8 `SKILL.md` is returned, together with its SHA-256 and
+immutable source identity. CRLF is preserved and invalid UTF-8 is rejected.
+Symlinks, gitlinks and unsupported selected-tree kinds cannot produce a resolved
+preview. Ordinary companion files are reported as present but their bytes are
+not requested; this is advisory presence information, not a full bundle manifest.
+Consumers must apply their existing text-dependency rules, disclose omissions,
+and scan exactly the text they will import. Preview itself makes no safety claim.
+
+Before activation, qualify `Skills source resolution` on the exact reviewed
+commit. Its real Git tests exercise discovery, source movement, selected unsafe
+entries, size limits and cleanup. Its second step runs a static Go probe in a
+network-disabled, read-only `FROM scratch` container as UID 65532, under the actual
+memory/PID/tmpfs limits, and fills that private filesystem until `ENOSPC`. It then
+verifies cleanup restores space. This is isolated CI validation, not a production
+fault-injection recipe. Record the run/commit and binary digest with the existing
+release evidence. Do not count the ordinary test lane's skipped kernel probe as
+passing; the dedicated container execution is required.
+
+After operator activation, use the authorized backend consumer to verify a
+known public immutable fixture and rehash the returned UTF-8 text. Also verify
+unauthorized requests fail, browser Origin is rejected, and anonymous browsing
+remains available. A health response alone does not qualify source resolution.
+Never log the service token, raw source responses or Git diagnostics as routine
+telemetry. HTTP errors are sanitized; 503 responses include a retry delay.
 
 ## Rollback this service only
 
