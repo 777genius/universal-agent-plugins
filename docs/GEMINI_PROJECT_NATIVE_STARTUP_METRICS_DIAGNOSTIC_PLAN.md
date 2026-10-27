@@ -279,3 +279,24 @@ before any code edit. Receipts SHA256:
 Both independently reverified actual541B/prefix419B/suffix122B hashes, official
 Git blob/source bytes and the preserved strict caller positions. Root freshly
 checked PR526 remains239 before creating this isolated checkout.
+
+## Exact missing-start-mark implementation and executed gates
+
+Code `2f67eac62185d52ef4aa51704da088924e753b17`, tree
+`d7bb418dcfb143ac7343102da59ec903f768c5d0`, received independent root and
+`native_e2e_finish` CODE GOs. Receipt SHA256s:
+`ac84195d4fb9cba90ce844c68d938ada5e0aa1511612c7e1d3b7255a1fc7ec01` and
+`52ef6c112ea543304b4d25c2026280bb34e46a12eabeee49b39f5fbdfece2f6c`.
+Only one contract code file changed: exactly one541-byte tuple, independent
+541/122-byte hashes and18 hostile variants; every previous byte outside these
+additions and both complete callers remain preserved.
+
+Executed focused Gemini/shared inert Go PASS1.175s;62Python contracts PASS;
+full-root affected all-enabled and unfiltered six-linter gates both zero issues.
+An initial default-sandbox process/socket prerequisite failure is retained; the
+unchanged exact suite passed with ordinary loopback/process capabilities. No
+vendor/client/scanner/public installer binary was run locally. Original239
+Gemini27-member failed archive and inherited Cline54-member successful archive
+re-admit with all raw members and summaries unchanged; replay receipt SHA256
+`73e547a8bdff2883b5321eedf2df67c06dc86bb629c5818fc7600d70b0629c64`.
+Current Gemini remains unqualified until a new exact-source genuine hosted pass.
