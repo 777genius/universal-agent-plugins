@@ -37,16 +37,35 @@ func copilotUserMetadataRefusal() []byte {
 }
 
 func copilotUserMetadataDelta(before, after *copilotUserMetadata) []byte {
-	if before == nil || after == nil || len(before.nodes) == 0 || len(after.nodes) == 0 || len(before.nodes) > copilotUserMetadataEntries || len(after.nodes) > copilotUserMetadataEntries || len(before.parents) != len(after.parents) {
+	return copilotMetadataDeltaAtStage(before, after, "add-user")
+}
+
+func copilotMetadataRefusalAtStage(stage string) []byte {
+	switch stage {
+	case "add-user":
 		return copilotUserMetadataRefusal()
+	case "native-list":
+		return []byte(`{"stage":"native-list","status":"refused"}`)
+	default:
+		return nil
+	}
+}
+
+func copilotMetadataDeltaAtStage(before, after *copilotUserMetadata, stage string) []byte {
+	refused := copilotMetadataRefusalAtStage(stage)
+	if refused == nil {
+		return nil
+	}
+	if before == nil || after == nil || len(before.nodes) == 0 || len(after.nodes) == 0 || len(before.nodes) > copilotUserMetadataEntries || len(after.nodes) > copilotUserMetadataEntries || len(before.parents) != len(after.parents) {
+		return refused
 	}
 	for i, parent := range before.parents {
 		if !copilotUserMetadataIdentity(parent, after.parents[i]) {
-			return copilotUserMetadataRefusal()
+			return refused
 		}
 	}
 	if !copilotUserMetadataIdentity(before.nodes["."].stat, after.nodes["."].stat) {
-		return copilotUserMetadataRefusal()
+		return refused
 	}
 	keys := map[string]bool{}
 	for name := range before.nodes {
@@ -78,13 +97,13 @@ func copilotUserMetadataDelta(before, after *copilotUserMetadata) []byte {
 	sort.Slice(changes, func(i, j int) bool { return changes[i].PathSHA256 < changes[j].PathSHA256 })
 	count := min(len(changes), 16)
 	for {
-		projection := copilotUserMetadataProjection{"add-user", "observed", len(before.nodes), len(after.nodes), len(changes), len(changes) - count, append([]copilotUserMetadataChange{}, changes[:count]...)}
+		projection := copilotUserMetadataProjection{stage, "observed", len(before.nodes), len(after.nodes), len(changes), len(changes) - count, append([]copilotUserMetadataChange{}, changes[:count]...)}
 		body, err := json.Marshal(projection)
 		if err == nil && len(body) <= copilotUserMetadataLimit {
 			return body
 		}
 		if count == 0 {
-			return copilotUserMetadataRefusal()
+			return refused
 		}
 		count--
 	}

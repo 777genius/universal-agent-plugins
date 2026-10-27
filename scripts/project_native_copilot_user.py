@@ -16,14 +16,14 @@ SCANNER = {"archive_sha256": "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4
            "route": "prepopulated supported scanner cache; ordinary CLI security assessment", "source_tag": "v0.1.3", "version": "0.1.3"}
 
 
-def metadata(body):
+def metadata(body, stage="add-user"):
     from project_native_runtime import strict_json
-    require(len(body) <= 2048)
+    require(stage in ("add-user", "native-list") and len(body) <= 2048)
     row = strict_json(body)
-    if same(row, {"stage": "add-user", "status": "refused"}):
+    if same(row, {"stage": stage, "status": "refused"}):
         return
     obj(row, "stage status before_entries after_entries changed_entries omitted_count entries")
-    values(row, {"stage": "add-user", "status": "observed"})
+    values(row, {"stage": stage, "status": "observed"})
     for key in ("before_entries", "after_entries"):
         natural(row[key], 1024)
         require(row[key] >= 1)
