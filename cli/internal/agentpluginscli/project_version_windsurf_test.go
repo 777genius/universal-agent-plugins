@@ -11,7 +11,7 @@ import (
 )
 
 func projectVersionDevin() domain.DetectedClient {
-	return domain.DetectedClient{ClientID: domain.ClientWindsurf, DisplayName: "original Devin", Status: domain.DetectionDetected, ExecutablePath: "/fixture/bin/devin", Surfaces: []domain.ClientSurface{{ID: "devin_cli", Detected: true, Evidence: "original discovery"}}}
+	return domain.DetectedClient{ClientID: domain.ClientWindsurf, DisplayName: "original Devin", Status: domain.DetectionDetected, ExecutablePath: projectVersionFixturePath("bin", "devin"), Surfaces: []domain.ClientSurface{{ID: "devin_cli", Detected: true, Evidence: "original discovery"}}}
 }
 
 func TestProjectVersionUnionIsIDBoundAtomicAndPreservesEmptyCascadeRoot(t *testing.T) {
@@ -88,8 +88,8 @@ func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *test
 			opts, scope, target := &options{}, domain.ScopeProject, domain.ClientWindsurf
 			switch kind {
 			case "legacy-primary", "secondary-surface":
-				client.ExecutablePath = "/fixture/bin/windsurf"
-				client.ConfigRoot = "/fixture/user/.codeium/windsurf"
+				client.ExecutablePath = projectVersionFixturePath("bin", "windsurf")
+				client.ConfigRoot = projectVersionFixturePath("user", ".codeium", "windsurf")
 				if kind == "legacy-primary" {
 					client.Surfaces = nil
 				}
