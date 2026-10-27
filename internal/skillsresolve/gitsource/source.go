@@ -118,7 +118,7 @@ func (r *hostedRunner) Run(ctx context.Context, command sourceacquisition.Comman
 	command.Args = append([]string{"-c", "protocol.allow=never", "-c", "protocol.https.allow=always", "-c", "http.followRedirects=false"}, command.Args...)
 	runner := r.runner
 	if runner == nil {
-		runner = sourceacquisition.OSRunner{}
+		runner = sourceacquisition.OSRunner{ReportCleanupEvidence: true}
 	}
 	output, err := runner.Run(ctx, command)
 	if errors.Is(err, sourceacquisition.ErrGitCleanupUnconfirmed) {

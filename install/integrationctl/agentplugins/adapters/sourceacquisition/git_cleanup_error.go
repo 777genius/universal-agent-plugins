@@ -18,8 +18,8 @@ func (err *gitCleanupUnconfirmedError) Unwrap() []error {
 	return []error{err.cause, ErrGitCleanupUnconfirmed}
 }
 
-func gitCleanupEvidence(result legacyports.CommandResult, cause error) error {
-	if result.NoChildStarted || result.CleanupComplete {
+func (runner OSRunner) withCleanupEvidence(result legacyports.CommandResult, cause error) error {
+	if !runner.ReportCleanupEvidence || result.NoChildStarted || result.CleanupComplete {
 		return cause
 	}
 	if cause == nil {

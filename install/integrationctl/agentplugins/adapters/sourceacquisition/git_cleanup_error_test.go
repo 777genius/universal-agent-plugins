@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -24,7 +25,10 @@ func TestGitCleanupEvidencePreservesDiagnosticsAndClosure(t *testing.T) {
 		{"unattested success", legacyports.CommandResult{}, nil, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := gitCleanupEvidence(tc.result, tc.cause)
+			if err := (OSRunner{}).withCleanupEvidence(tc.result, tc.cause); err != tc.cause { //nolint:errorlint // The default CLI contract preserves exact error identity, including nil.
+				t.Fatal("default CLI error contract changed", err)
+			}
+			err := (OSRunner{ReportCleanupEvidence: true}).withCleanupEvidence(tc.result, tc.cause)
 			if errors.Is(err, ErrGitCleanupUnconfirmed) != tc.unsafe {
 				t.Fatal("incorrect cleanup attestation", err)
 			}
@@ -35,5 +39,18 @@ func TestGitCleanupEvidencePreservesDiagnosticsAndClosure(t *testing.T) {
 				t.Fatal("wrapped cleanup uncertainty was lost")
 			}
 		})
+	}
+}
+
+func TestGitCleanupEvidenceKeepsDefaultStdoutLimitClassification(t *testing.T) {
+	result := legacyports.CommandResult{}
+	cause := processadapter.ErrStdoutLimitExceeded
+	legacy := (OSRunner{}).withCleanupEvidence(result, cause)
+	if legacy != cause || !processadapter.IsOnlyStdoutLimitExceeded(legacy) { //nolint:errorlint // Adding even a wrapper would change this legacy classification contract.
+		t.Fatal("default stdout limit classification changed", legacy)
+	}
+	hosted := (OSRunner{ReportCleanupEvidence: true}).withCleanupEvidence(result, cause)
+	if !errors.Is(hosted, cause) || !errors.Is(hosted, ErrGitCleanupUnconfirmed) || processadapter.IsOnlyStdoutLimitExceeded(hosted) {
+		t.Fatal("hosted stdout limit lost cleanup uncertainty", hosted)
 	}
 }

@@ -46,9 +46,13 @@ type Runner interface {
 	Run(context.Context, Command) ([]byte, error)
 }
 
-type OSRunner struct{}
+type OSRunner struct {
+	// ReportCleanupEvidence lets hosted callers refuse further launches after
+	// uncertain cleanup without changing the default CLI error contract.
+	ReportCleanupEvidence bool
+}
 
-func (OSRunner) Run(ctx context.Context, command Command) (body []byte, resultErr error) {
+func (runner OSRunner) Run(ctx context.Context, command Command) (body []byte, resultErr error) {
 	if len(command.Stdin) != 0 {
 		return nil, fmt.Errorf("git stdin is unsupported by the contained runner")
 	}
@@ -74,7 +78,7 @@ func (OSRunner) Run(ctx context.Context, command Command) (body []byte, resultEr
 		Argv: append([]string{"git"}, args...), Dir: command.Dir,
 		Env: environment, StdoutLimitBytes: command.MaxOutputBytes,
 	}, 5*time.Second)
-	defer func() { resultErr = gitCleanupEvidence(result, resultErr) }()
+	defer func() { resultErr = runner.withCleanupEvidence(result, resultErr) }()
 	output := append(append([]byte(nil), result.Stdout...), result.Stderr...)
 	if err != nil {
 		if processadapter.IsOnlyStdoutLimitExceeded(err) ||
