@@ -80,3 +80,24 @@ no replacement PR, release, acquired local vendor execution or VS work.
 Fresh genuine hosted evidence must identify the member difference before
 any semantic interpretation or fixture-change plan proceeds.
 
+## Completed review and local verification
+
+The approved plan is local commit5cc3acf5; the implementation is2f0a28c3.
+Two independent code critics approved exact diagnostic SHA256
+694a4db4dce6b86402ec57a61ca111ca3f6badbe9cb18687eb0e580802939753
+and contract SHA256
+1dc35e8262efa983206034c429b5329baf4bdc654c432808d27c053042d3890a.
+Focused Copilot/shared inert contracts passed in0.054s. Actual all-enabled
+affected lint from the approved plan and the unfiltered whole-file
+revive/funlen/gocyclo/gocognit/dupl/depguard gate each reported zero issues.
+Formatting and whitespace checks pass. The unchanged source-bound9cd envelope
+re-admits with21 members, failed/incomplete and all five qualifications false;
+all24 frontend stdout/stderr byte lengths and hashes were rechecked.
+The new controls use the real protectedDigest path, independently stated
+canonical value/name hashes, absent/null and numeric-token distinctions, all
+JSON types,100 changed members in both object orders, exact omitted counts and
+the complete2KiB bound. The original actual child-process fatal guard tests
+still pass. No vendor executable, installer or positive hosted guard ran locally.
+This diagnostic does not accept the changed original profile or establish a
+runtime/lifecycle result. Fresh genuine native evidence remains required.
+
