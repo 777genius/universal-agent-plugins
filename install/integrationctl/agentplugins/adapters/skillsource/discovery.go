@@ -61,6 +61,9 @@ type Preview struct {
 	Path, Markdown, RawContent string
 	Resources                  []Resource
 	Skill                      domain.Skill
+	// Hosted text-only consumers must not infer completeness from Resources,
+	// which intentionally omits unsupported Git entries for legacy UI callers.
+	HasUnsupportedResources bool
 }
 type Session struct {
 	source      Source
@@ -381,7 +384,9 @@ func (s *Session) Preview(ctx context.Context, p string) (Preview, error) {
 		if err := ctx.Err(); err != nil {
 			return preview, err
 		}
-		if e.Type != "blob" || (e.Mode != "100644" && e.Mode != "100755" && e.Mode != "120000") {
+		ordinary := e.Type == "blob" && (e.Mode == "100644" || e.Mode == "100755")
+		preview.HasUnsupportedResources = preview.HasUnsupportedResources || !ordinary
+		if !ordinary && (e.Type != "blob" || e.Mode != "120000") {
 			continue
 		}
 		rel := e.Path
