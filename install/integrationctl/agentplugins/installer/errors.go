@@ -26,12 +26,18 @@ var (
 	ErrCompatibilityUnavailable = errors.New("sibling compatibility checks are unavailable")
 	ErrTargetFactsUnavailable   = errors.New("target facts are unavailable or conflict with owned state")
 	ErrMigrationRequired        = statev2.ErrMigrationRequired
+	ErrStateCorrupt             = statev2.ErrStateCorrupt
+	ErrUnsupportedStateSchema   = statev2.ErrUnsupportedStateSchema
 )
 
 // MigrationRequiredError reports the readable on-disk schema and required
 // writer schema. Use errors.As to read its fields and errors.Is with
 // ErrMigrationRequired to classify it through installer error wrappers.
 type MigrationRequiredError = statev2.MigrationRequiredError
+
+// UnsupportedStateSchemaError exposes the observed and supported writer
+// schemas. SourceSchema > TargetSchema means the host needs a newer SDK/binary.
+type UnsupportedStateSchemaError = statev2.UnsupportedStateSchemaError
 
 // lifecycleConflictReason names the conflict a lifecycle error reports instead
 // of an incomplete outcome. A saved dependency waiting for a pin change has

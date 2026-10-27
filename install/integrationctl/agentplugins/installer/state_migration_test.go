@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -279,5 +280,156 @@ func TestStateMigrationConcurrentAppliesCommitOnce(t *testing.T) {
 	backups, _ := filepath.Glob(eng.cfg.StateFile + ".schema*.backup-agentplugins-*")
 	if successes != 1 || len(backups) != 1 {
 		t.Fatalf("applies: successes=%d backups=%v", successes, backups)
+	}
+}
+
+func TestStateMigrationClassifiesCorruptAndUnsupportedState(t *testing.T) {
+	for _, test := range []struct {
+		name, body string
+		want       error
+		schema     int
+	}{
+		{name: "invalid-json", body: `{`, want: ErrStateCorrupt},
+		{name: "invalid-record", body: `{"schema_version":5,"installations":[{}]}`, want: ErrStateCorrupt},
+		{name: "unknown-field", body: `{"schema_version":4,"installations":[],"unknown":true}`, want: ErrStateCorrupt},
+		{name: "future", body: `{"schema_version":99,"installations":[]}`, want: ErrUnsupportedStateSchema, schema: 99},
+		{name: "unsupported-old", body: `{"schema_version":1,"installations":[]}`, want: ErrUnsupportedStateSchema, schema: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			eng, err := newTestEngine(t, Config{StateRoot: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeMigrationState(t, eng, []byte(test.body))
+			_, err = eng.PrepareStateMigration(t.Context())
+			if !errors.Is(err, test.want) {
+				t.Fatalf("unclassified refusal: %v", err)
+			}
+			if test.schema != 0 {
+				var unsupported *UnsupportedStateSchemaError
+				if !errors.As(err, &unsupported) || unsupported.SourceSchema != test.schema || unsupported.TargetSchema != domain.StateSchemaVersion {
+					t.Fatalf("missing unsupported schema facts: %v", err)
+				}
+			}
+			assertMigrationStateBytes(t, eng, []byte(test.body))
+		})
+	}
+}
+
+func TestStateMigrationChangedInvalidStateRefusesStaleReview(t *testing.T) {
+	for _, replacement := range []string{`{`, `{"schema_version":99,"installations":[]}`, `{"schema_version":5,"installations":[{}]}`, "missing"} {
+		t.Run(replacement, func(t *testing.T) {
+			eng, err := newTestEngine(t, Config{StateRoot: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeMigrationState(t, eng, legacyMigrationFixture(4))
+			plan, err := eng.PrepareStateMigration(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if replacement == "missing" {
+				if err := os.Remove(eng.cfg.StateFile); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				writeMigrationState(t, eng, []byte(replacement))
+			}
+			if _, err := eng.ApplyStateMigration(t.Context(), plan); !errors.Is(err, ErrPlanChanged) {
+				t.Fatalf("changed invalid state was diagnosed as the reviewed state: %v", err)
+			}
+			if _, err := os.Lstat(eng.cfg.LockFile); !os.IsNotExist(err) {
+				t.Fatalf("stale review acquired the mutation lock: %v", err)
+			}
+		})
+	}
+}
+
+func TestStateMigrationBindsLockAndPendingJournalPaths(t *testing.T) {
+	eng, err := newTestEngine(t, Config{StateRoot: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := legacyMigrationFixture(4)
+	writeMigrationState(t, eng, original)
+	plan, err := eng.PrepareStateMigration(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A journal that appears in the reviewed namespace must not be bypassed by
+	// a parent process accidentally choosing a different operations directory.
+	plantOpenJournal(t, eng, "reviewed-namespace")
+	for _, path := range []string{"lock", "operations"} {
+		t.Run(path, func(t *testing.T) {
+			cfg := eng.cfg
+			if path == "lock" {
+				cfg.LockFile = filepath.Join(cfg.StateRoot, "other.lock")
+			} else {
+				cfg.OperationsDir = filepath.Join(cfg.StateRoot, "other-operations")
+			}
+			parent, err := newTestEngine(t, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parent.ApplyStateMigration(t.Context(), plan); !errors.Is(err, ErrPlanChanged) {
+				t.Fatalf("accepted migration with changed %s path: %v", path, err)
+			}
+			assertMigrationStateBytes(t, eng, original)
+		})
+	}
+}
+
+func TestStateMigrationClassifiesPersistedPendingWork(t *testing.T) {
+	for _, kind := range []string{"transaction-receipt", "binding-receipt", "native-intent"} {
+		t.Run(kind, func(t *testing.T) {
+			eng, err := newTestEngine(t, Config{StateRoot: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeMigrationState(t, eng, legacyMigrationFixture(4))
+			state, err := eng.store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding := state.Installations[0].Clients["client_demo"]
+			receipt := domain.MutationReceipt{OperationID: "pending-op", Sequence: 1, MutationType: "directory_swap", ClientBindingID: binding.ClientBindingID, Phase: "state_committed"}
+			switch kind {
+			case "transaction-receipt":
+				state.TransactionReceipts = []domain.MutationReceipt{receipt}
+			case "binding-receipt":
+				binding.Receipts = []domain.MutationReceipt{receipt}
+			case "native-intent":
+				root := t.TempDir()
+				canonical := "sha256:" + strings.Repeat("a", 64)
+				selected, err := physicalCursorSelection(root, filepath.Join(root, "observer"), filepath.Join(root, "binding"), canonical, nil, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				selected, err = selected.WithProjectionDigest("sha256:" + strings.Repeat("b", 64))
+				if err != nil {
+					t.Fatal(err)
+				}
+				facts, _ := selected.CursorFacts()
+				object := selected.CursorOwnership(facts.PlannedReceipt)
+				binding.ClientID, binding.TargetLocator, binding.NativeProfileRoot = "cursor", facts.Selector, root
+				binding.PackageRevision.TreeDigest = canonical
+				binding.SelectedDelivery, binding.NativeObjects, binding.NativeActivationAttempt = selected, []domain.NativeObjectOwnership{object}, "pending-native-op"
+				binding.PendingNativeIntent = &domain.PendingNativeIntent{AttemptID: binding.NativeActivationAttempt, Direction: domain.NativeIntentRegister, Delivery: selected, PreviousCursorObject: object}
+			}
+			state.Installations[0].Clients[binding.ClientBindingID] = binding
+			state.SchemaVersion = 4
+			original, err := json.Marshal(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			writeMigrationState(t, eng, original)
+			if _, err := eng.PrepareStateMigration(t.Context()); !errors.Is(err, ErrRecoveryRequired) {
+				t.Fatalf("persisted %s lost recovery classification: %v", kind, err)
+			}
+			assertMigrationStateBytes(t, eng, original)
+			if _, err := os.Lstat(eng.cfg.LockFile); !os.IsNotExist(err) {
+				t.Fatalf("pending work acquired mutation lock: %v", err)
+			}
+		})
 	}
 }

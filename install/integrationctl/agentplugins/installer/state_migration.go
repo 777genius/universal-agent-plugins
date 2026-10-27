@@ -21,6 +21,8 @@ import (
 type StateMigrationPlan struct {
 	StateRoot     string `json:"state_root"`
 	StateFile     string `json:"state_file"`
+	LockFile      string `json:"lock_file"`
+	OperationsDir string `json:"operations_dir"`
 	StateDigest   string `json:"state_digest"`
 	Required      bool   `json:"required"`
 	SourceSchema  int    `json:"source_schema"`
@@ -52,7 +54,8 @@ func (e *Engine) PrepareStateMigration(ctx context.Context) (StateMigrationPlan,
 	if err := e.CheckProjectNamespace(); err != nil {
 		return StateMigrationPlan{}, err
 	}
-	plan := StateMigrationPlan{StateRoot: e.cfg.StateRoot, StateFile: e.cfg.StateFile, TargetSchema: domain.StateSchemaVersion}
+	plan := StateMigrationPlan{StateRoot: e.cfg.StateRoot, StateFile: e.cfg.StateFile,
+		LockFile: e.cfg.LockFile, OperationsDir: e.cfg.OperationsDir, TargetSchema: domain.StateSchemaVersion}
 	body, err := os.ReadFile(e.cfg.StateFile)
 	if os.IsNotExist(err) {
 		plan.StateDigest, plan.SourceSchema = "missing", domain.StateSchemaVersion
@@ -82,6 +85,9 @@ func (e *Engine) PrepareStateMigration(ctx context.Context) (StateMigrationPlan,
 		if live, readErr := os.ReadFile(e.cfg.StateFile); readErr == nil && migrationDigest(live) != plan.StateDigest {
 			return StateMigrationPlan{}, ErrPlanChanged
 		}
+		if errors.Is(err, statemigration.ErrPendingRecovery) {
+			return StateMigrationPlan{}, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+		}
 		return StateMigrationPlan{}, err
 	}
 	if review.LegacyDigest != plan.StateDigest || review.SourceSchema != plan.SourceSchema {
@@ -97,11 +103,29 @@ func (e *Engine) PrepareStateMigration(ctx context.Context) (StateMigrationPlan,
 // A no-change plan is also rechecked, so a newly appeared old state cannot be
 // mistaken for the missing or current state the host reviewed.
 func (e *Engine) ApplyStateMigration(ctx context.Context, plan StateMigrationPlan) (StateMigrationResult, error) {
-	if plan.StateRoot != e.cfg.StateRoot || plan.StateFile != e.cfg.StateFile {
+	if ctx == nil {
+		return StateMigrationResult{}, fmt.Errorf("%w: context is required", ErrInvalidRequest)
+	}
+	if err := ctx.Err(); err != nil {
+		return StateMigrationResult{}, err
+	}
+	if err := e.CheckProjectNamespace(); err != nil {
+		return StateMigrationResult{}, err
+	}
+	if plan.StateRoot != e.cfg.StateRoot || plan.StateFile != e.cfg.StateFile ||
+		plan.LockFile != e.cfg.LockFile || plan.OperationsDir != e.cfg.OperationsDir {
 		return StateMigrationResult{}, ErrPlanChanged
+	}
+	// Compare the reviewed bytes before decoding. Changed corrupt or future
+	// state is a stale review, rather than a diagnosis of the reviewed state.
+	if err := e.checkStateMigrationDigest(plan.StateDigest); err != nil {
+		return StateMigrationResult{}, err
 	}
 	live, err := e.PrepareStateMigration(ctx)
 	if err != nil {
+		if changed := e.checkStateMigrationDigest(plan.StateDigest); errors.Is(changed, ErrPlanChanged) {
+			return StateMigrationResult{}, changed
+		}
 		return StateMigrationResult{}, err
 	}
 	if live != plan {
@@ -112,10 +136,37 @@ func (e *Engine) ApplyStateMigration(ctx context.Context, plan StateMigrationPla
 	}
 	report, err := e.stateMigrator().MigrateCurrentV2(ctx, plan.StateDigest)
 	result := StateMigrationResult{BackupPath: report.BackupPath, Migrated: report.Migrated, NeedsRebind: report.NeedsRebind}
+	// A replacement can also race the precheck and the migrator's read-only
+	// validation. Once a backup exists, retain the actual commit error instead.
+	if err != nil && report.BackupPath == "" {
+		if changed := e.checkStateMigrationDigest(plan.StateDigest); errors.Is(changed, ErrPlanChanged) {
+			return result, changed
+		}
+	}
 	if errors.Is(err, statemigration.ErrPlanChanged) {
 		return result, fmt.Errorf("%w: %w", ErrPlanChanged, err)
 	}
+	if errors.Is(err, statemigration.ErrPendingRecovery) {
+		return result, fmt.Errorf("%w: %w", ErrRecoveryRequired, err)
+	}
 	return result, err
+}
+
+func (e *Engine) checkStateMigrationDigest(expected string) error {
+	body, err := os.ReadFile(e.cfg.StateFile)
+	if os.IsNotExist(err) {
+		if expected == "missing" {
+			return nil
+		}
+		return ErrPlanChanged
+	}
+	if err != nil {
+		return fmt.Errorf("read authoritative state: %w", err)
+	}
+	if migrationDigest(body) != expected {
+		return ErrPlanChanged
+	}
+	return nil
 }
 
 func (e *Engine) stateMigrator() statemigration.Migrator {

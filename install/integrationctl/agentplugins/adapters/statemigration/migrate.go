@@ -22,6 +22,10 @@ import (
 // ErrPlanChanged refuses a migration whose reviewed bytes are no longer live.
 var ErrPlanChanged = errors.New("state changed after review; rerun migrate-state --dry-run")
 
+// ErrPendingRecovery identifies persisted old-schema receipts and native intents
+// that must be recovered with the corresponding previous SDK or binary.
+var ErrPendingRecovery = errors.New("old-schema pending recovery requires the corresponding previous SDK/binary; recover with it, then rerun migration dry-run and apply")
+
 type Migrator struct {
 	LegacyPath string
 	V2Store    statev2.Store
@@ -621,20 +625,19 @@ func firstNonEmpty(values ...string) string {
 }
 
 func refusePendingOldState(state domain.StateFileV2) error {
-	refusal := fmt.Errorf("old-schema pending recovery requires the corresponding previous SDK/binary; recover with it, then rerun migration dry-run and apply")
 	for _, r := range state.TransactionReceipts {
 		if r.Phase != "" && r.Phase != "committed" {
-			return refusal
+			return ErrPendingRecovery
 		}
 	}
 	for _, i := range state.Installations {
 		for _, b := range i.Clients {
 			if b.PendingNativeIntent != nil {
-				return refusal
+				return ErrPendingRecovery
 			}
 			for _, r := range b.Receipts {
 				if r.Phase != "" && r.Phase != "committed" {
-					return refusal
+					return ErrPendingRecovery
 				}
 			}
 		}

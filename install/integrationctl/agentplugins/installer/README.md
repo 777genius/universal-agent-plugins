@@ -122,7 +122,9 @@ work remains the normal recovery flow's responsibility.
 Missing and current state return `Required=false`; applying that plan rechecks
 the observed state and returns `NoChange=true` without creating a backup or a
 lock. Corrupt and future schemas are rejected. A changed review returns
-`ErrPlanChanged`. Plans include state paths and a digest and may be serialized
+`ErrPlanChanged`, including when the reviewed state was replaced by corrupt or
+unsupported bytes. Plans bind the state root/file, mutation lock and operations
+directory as well as the digest and may be serialized
 between a host's confirmation process and its parent apply process. A new
 review after successful migration is a no-op; replaying an old required review
 is refused. Passing a canceled context never starts migration.
@@ -131,6 +133,13 @@ Read-only inspection remains compatible with old schemas. Mutation guards
 report `ErrMigrationRequired`, with `MigrationRequiredError.SourceSchema` and
 `TargetSchema` available through `errors.As`; hosts do not need to parse an
 error message or edit state JSON.
+
+For actionable refusal diagnostics, `errors.Is(err, ErrStateCorrupt)` identifies
+invalid state records or JSON, `ErrRecoveryRequired` identifies old pending work,
+and `ErrUnsupportedStateSchema` identifies an incompatible on-disk schema.
+`errors.As` into `*UnsupportedStateSchemaError` exposes `SourceSchema` and
+`TargetSchema`; a source greater than the target requires a newer SDK/binary.
+I/O and namespace errors retain their original classification.
 
 Prepare freezes the selected adapter's complete `SelectedDelivery` through the
 public Plan/DeliveryPlan and each group PlanTarget. Apply regenerates that

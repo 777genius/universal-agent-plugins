@@ -44,7 +44,7 @@ func (store Store) SchemaVersion() (int, error) {
 		SchemaVersion int `json:"schema_version"`
 	}
 	if err := json.Unmarshal(body, &header); err != nil {
-		return 0, fmt.Errorf("decode state header: %w", err)
+		return 0, fmt.Errorf("%w: decode state header: %w", ErrStateCorrupt, err)
 	}
 	return header.SchemaVersion, nil
 }
@@ -58,7 +58,7 @@ func (store Store) RequireMutationReady() error {
 		return &MigrationRequiredError{SourceSchema: version, TargetSchema: domain.StateSchemaVersion}
 	}
 	if version != domain.StateSchemaVersion {
-		return fmt.Errorf("unsupported state schema_version %d", version)
+		return &UnsupportedStateSchemaError{SourceSchema: version, TargetSchema: domain.StateSchemaVersion}
 	}
 	return nil
 }
@@ -93,7 +93,7 @@ func (store Store) Load() (domain.StateFileV2, error) {
 		SchemaVersion int `json:"schema_version"`
 	}
 	if err := json.Unmarshal(body, &header); err != nil {
-		return domain.StateFileV2{}, fmt.Errorf("decode state v2 header: %w", err)
+		return domain.StateFileV2{}, fmt.Errorf("%w: decode state v2 header: %w", ErrStateCorrupt, err)
 	}
 	var state domain.StateFileV2
 	switch header.SchemaVersion {
@@ -106,20 +106,20 @@ func (store Store) Load() (domain.StateFileV2, error) {
 	case domain.PreviousStateSchemaV4:
 		err = decodeStrictJSON(body, &state)
 		if len(state.EnvironmentReceipts) != 0 {
-			return domain.StateFileV2{}, fmt.Errorf("schema 4 cannot contain environment ownership")
+			return domain.StateFileV2{}, fmt.Errorf("%w: schema 4 cannot contain environment ownership", ErrStateCorrupt)
 		}
 		state.SchemaVersion = domain.StateSchemaVersion
 		normalizeCurrentState(&state)
 	case domain.StateSchemaVersion:
 		err = decodeStrictJSON(body, &state)
 	default:
-		return domain.StateFileV2{}, fmt.Errorf("unsupported state schema_version %d; this build reads %d-%d and writes only %d", header.SchemaVersion, domain.LegacyStateSchemaVersion, domain.PreviousStateSchemaV4, domain.StateSchemaVersion)
+		return domain.StateFileV2{}, &UnsupportedStateSchemaError{SourceSchema: header.SchemaVersion, TargetSchema: domain.StateSchemaVersion}
 	}
 	if err != nil {
-		return domain.StateFileV2{}, err
+		return domain.StateFileV2{}, fmt.Errorf("%w: %w", ErrStateCorrupt, err)
 	}
 	if err := Validate(state); err != nil {
-		return domain.StateFileV2{}, fmt.Errorf("validate state: %w", err)
+		return domain.StateFileV2{}, fmt.Errorf("%w: validate state: %w", ErrStateCorrupt, err)
 	}
 	if err := store.validateProject(state); err != nil {
 		return domain.StateFileV2{}, err
