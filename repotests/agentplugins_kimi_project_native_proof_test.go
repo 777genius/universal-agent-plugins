@@ -65,7 +65,7 @@ func kimiProjectProofState(body []byte) (domain.StateFileV2, error) {
 	if err := decoder.Decode(&state); err != nil {
 		return state, err
 	}
-	if state.SchemaVersion != 2 {
+	if state.SchemaVersion != domain.StateSchemaVersion {
 		return state, fmt.Errorf("Kimi state schema differs")
 	}
 	return state, nil

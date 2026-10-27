@@ -5,6 +5,7 @@ package pluginkitairepo_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -383,13 +384,27 @@ func TestKimiProjectProofUserProjectionAndCanceledCaptureStayUnadmitted(t *testi
 	}
 }
 
+func TestKimiProjectProofStateAcceptsCurrentSchema(t *testing.T) {
+	body := []byte(fmt.Sprintf(`{"schema_version":%d,"installations":[]}`, domain.StateSchemaVersion))
+	state, err := kimiProjectProofState(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.SchemaVersion != domain.StateSchemaVersion || len(state.Installations) != 0 {
+		t.Fatal("current empty state did not decode intact")
+	}
+}
+
 func TestKimiProjectProofStateRefusesUnknownAndDuplicateFacts(t *testing.T) {
 	for _, body := range []string{
-		`{"schema_version":2,"installations":[],"unknown":true}`,
-		`{"schema_version":2,"installations":[{"source":{"unknown":"nonempty"}}]}`,
-		`{"schema_version":2,"installations":[{"clients":{"id":{"native_objects":[{"kind":"managed_package_directory","unknown":true}]}}}]}`,
-		`{"schema_version":2,"schema_version":2,"installations":[]}`,
+		fmt.Sprintf(`{"schema_version":%d,"installations":[],"unknown":true}`, domain.StateSchemaVersion),
+		fmt.Sprintf(`{"schema_version":%d,"installations":[{"source":{"unknown":"nonempty"}}]}`, domain.StateSchemaVersion),
+		fmt.Sprintf(`{"schema_version":%d,"installations":[{"clients":{"id":{"native_objects":[{"kind":"managed_package_directory","unknown":true}]}}}]}`, domain.StateSchemaVersion),
+		fmt.Sprintf(`{"schema_version":%d,"schema_version":%d,"installations":[]}`, domain.StateSchemaVersion, domain.StateSchemaVersion),
+		`{"schema_version":2,"installations":[]}`,
 		`{"schema_version":3,"installations":[]}`,
+		`{"schema_version":4,"installations":[]}`,
+		fmt.Sprintf(`{"schema_version":%d,"installations":[]}`, domain.StateSchemaVersion+1),
 	} {
 		if _, err := kimiProjectProofState([]byte(body)); err == nil {
 			t.Fatal("unknown, duplicate or unsupported state facts accepted")
