@@ -562,7 +562,7 @@ class KimiCollectorTests(unittest.TestCase):
             kimi._installed_catalog([row], [])
 
     def test_installed_skill_names_paths_sources_and_absence_are_exact(self):
-        expected = {"name": "uap-kimi-native-user", "description": "Kimi installed user-one",
+        expected = {"name": "uap-kimi-native-user:uap-kimi-native-user", "description": "Kimi installed user-one",
                     "path": "/owned/home/plugins/managed/user/skills/user/SKILL.md", "source": "extra"}
         self.assertEqual(kimi._installed_skills({"skills": [expected]}, [expected]), [expected["name"]])
         for key, value in (("name", "uap-kimi-native-b"), ("description", "other revision"),
@@ -574,6 +574,22 @@ class KimiCollectorTests(unittest.TestCase):
                 kimi._installed_skills({"skills": rows}, [expected])
         with self.assertRaises(ValueError):
             kimi._installed_skills({"skills": [expected]}, [])
+
+    def test_installed_plugin_qualified_user_and_direct_project_names_remain_distinct(self):
+        user = {"name": "uap-kimi-native-user:uap-kimi-native-user", "description": "Kimi installed user-one",
+                "path": "/owned/home/plugins/managed/user/skills/uap-kimi-native-user/SKILL.md", "source": "extra"}
+        for scope in ("a", "b", "c"):
+            project = {"name": "uap-kimi-native-" + scope, "description": "Kimi installed " + scope + "-one",
+                       "path": "/owned/" + scope + "/.kimi-code/skills/uap-kimi-native-" + scope + "/SKILL.md", "source": "project"}
+            expected = [user, project]
+            self.assertEqual(kimi._installed_skills({"skills": expected}, expected), sorted(row["name"] for row in expected))
+            for wrong in ("uap-kimi-native-user", "foreign:uap-kimi-native-user", "uap-kimi-native-user:foreign"):
+                with self.subTest(scope=scope, wrong=wrong), self.assertRaises(ValueError):
+                    kimi._installed_skills({"skills": [{**user, "name": wrong}, project]}, expected)
+            for changed in ([user, user, project], [project], [user, {**project, "name": "uap-kimi-native-foreign"}],
+                            [{**user, "path": "/foreign/SKILL.md"}, project], [{**user, "source": "user"}, project]):
+                with self.subTest(scope=scope, changed=changed), self.assertRaises(ValueError):
+                    kimi._installed_skills({"skills": changed}, expected)
 
     def test_installed_authority_hash_or_inline_replacement_fails_before_service(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -382,11 +382,11 @@ func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust boo
 				continue
 			}
 			p := f.packages[key]
-			source := "project"
-			if key == "user" {
-				source = "extra"
+			skill, err := kimiProjectExpectedSkill(key, p)
+			if err != nil {
+				t.Fatal(err)
 			}
-			skills[scope] = append(skills[scope], map[string]any{"name": p.Name, "description": "Kimi installed " + p.Revision, "path": p.Skill, "source": source, "sha256": kimiProjectProofSHA(p.Proof.authored["skills/"+p.Name+"/SKILL.md"].Body)})
+			skills[scope] = append(skills[scope], skill)
 		}
 		if selected[scope] {
 			p := f.packages[scope]
