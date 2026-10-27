@@ -105,6 +105,36 @@ describe('SkillSpector historical display reports', () => {
     assert.equal(decoded.records[1]!.findings_truncated, true);
   });
 
+  it('accepts only the two pinned static profiles during the larger-selection rollout', () => {
+    for (const profileDigest of [
+      'sha256:ddd91212d95a717ab6c067d99e9f32a64b8dd55589bdf47a36695a85320187d5',
+      'sha256:cf80ad7d737bc7eab6d282a48e63a0d94941e8fd9bde53dbace1222378780c44',
+    ]) {
+      const value = report();
+      value.profile.digest = profileDigest;
+      assert.equal(decodeSkillSpectorReport(value, now).profile.digest, profileDigest);
+    }
+    const unknown = report();
+    unknown.profile.digest = `sha256:${'0'.repeat(64)}`;
+    assert.throws(() => decodeSkillSpectorReport(unknown, now), /invalid/);
+  });
+
+  it('accepts 128 bounded roots and rejects a report above the new limit', () => {
+    const records = Array.from({ length: 128 }, (_, index) =>
+      record({
+        id: `selected-${index}`,
+        skill_name: `example-${index}`,
+        source: { ...record().source, path: `plugins/example/skills/example-${index}` },
+      }),
+    );
+    const value = report(records);
+    value.profile.digest =
+      'sha256:cf80ad7d737bc7eab6d282a48e63a0d94941e8fd9bde53dbace1222378780c44';
+    assert.equal(decodeSkillSpectorReport(value, now).records.length, 128);
+    value.records.push(record({ id: 'selected-128' }));
+    assert.throws(() => decodeSkillSpectorReport(value, now), /invalid/);
+  });
+
   it('decodes complete and failed records without interpreting failure as clean', () => {
     assert.equal(decodeSkillSpectorReport(report(), now).records[0]?.status, 'complete');
     const failed = record({

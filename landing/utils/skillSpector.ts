@@ -10,7 +10,11 @@ const revisionPattern = /^[0-9a-f]{40}$/;
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const namespace = 'SkillSpector report';
-const profileDigest = 'sha256:ddd91212d95a717ab6c067d99e9f32a64b8dd55589bdf47a36695a85320187d5';
+// Keep the original 256-file profile valid while the bounded 512-file profile rolls out.
+const profileDigests = new Set([
+  'sha256:ddd91212d95a717ab6c067d99e9f32a64b8dd55589bdf47a36695a85320187d5',
+  'sha256:cf80ad7d737bc7eab6d282a48e63a0d94941e8fd9bde53dbace1222378780c44',
+]);
 
 /** Read only the bounded static display document; no credentials or scanner calls. */
 export async function loadSkillSpectorReport(
@@ -78,11 +82,12 @@ export function decodeSkillSpectorReport(value: unknown, now = new Date()): Skil
     scanner.version !== '2.13.1' ||
     scanner.revision !== 'f3b25697d76256998ca9d42c198d256258d4c035' ||
     profile.id !== 'static-only-v1' ||
-    profile.digest !== profileDigest ||
+    typeof profile.digest !== 'string' ||
+    !profileDigests.has(profile.digest) ||
     report.scope !== 'selected_sources' ||
     !digest(report.selection_digest) ||
     !Array.isArray(report.records) ||
-    report.records.length > 64
+    report.records.length > 128
   )
     invalid();
   const ids = new Set<string>();
