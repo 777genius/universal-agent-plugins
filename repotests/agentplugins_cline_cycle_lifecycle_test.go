@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func (c *clineProjectCycle) apply(t *testing.T, label, scope string, mutated bool) {
@@ -149,15 +151,46 @@ func (c *clineProjectCycle) missingA(t *testing.T) {
 	r := c.recipes["a"]
 	c.proof(t, r, "before-missing-a")
 	c.f.check(t)
-	// The held ordinary single-link source-bound leaf is the sole injected fault.
+	owned := filepath.Dir(r.SkillPath)
+	skillBody := r.Authored["skills/"+r.Skill+"/SKILL.md"]
+	digest := "sha256:" + clineAttemptSHA(append(append([]byte("f\x00SKILL.md\x00-\x00"), skillBody...), 0))
+	want := domain.NativeObjectOwnership{ObjectID: "cline_project_skill_directory:" + r.Skill, Kind: "cline_project_skill_directory", LogicalName: r.Skill, Path: owned, SourceRelative: "skills/" + r.Skill, ManagedDigest: digest, ProtectionClass: "managed"}
+	count := 0
+	for _, object := range r.Binding.NativeObjects {
+		if object.Kind == want.Kind {
+			if !reflect.DeepEqual(object, want) {
+				t.Fatal("Cline missing fault does not match exact independently owned skill")
+			}
+			count++
+		}
+	}
+	if r.Scope != "a" || count != 1 {
+		t.Fatal("Cline missing fault requires the sole project-a owned skill")
+	}
 	if _, err := projectNativeRuntimeRead(r.SkillPath, 1<<20); err != nil {
 		t.Fatal(err)
 	}
+	identity, err := os.Lstat(owned)
+	if err != nil || !identity.IsDir() || identity.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("Cline exact owned fault directory is not ordinary", err)
+	}
 	delete(c.f.protected, r.SkillPath)
-	delete(c.f.trees, filepath.Dir(filepath.Dir(r.SkillPath)))
+	delete(c.f.trees, filepath.Dir(owned))
 	if err := os.Remove(r.SkillPath); err != nil {
 		t.Fatal(err)
 	}
+	current, err := os.Lstat(owned)
+	if err != nil || !os.SameFile(identity, current) {
+		t.Fatal("Cline held fault directory changed", err)
+	}
+	// Nonrecursive removal refuses any additional entry rather than deleting it.
+	if err := os.Remove(owned); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(owned); !os.IsNotExist(err) {
+		t.Fatal("Cline exact owned skill directory remains after absence fault")
+	}
+	c.f.check(t)
 }
 func TestAgentpluginsClineNativeProjectCompleteCycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT") != "1" {

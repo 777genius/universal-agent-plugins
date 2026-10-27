@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -64,7 +65,7 @@ func clineCycleLoaded(t *testing.T, c *clineProjectCycle, r *clineCycleRecipe) d
 	}
 	return envelope
 }
-func clineCycleStageActual(t *testing.T, c *clineProjectCycle, scope string) {
+func clineCycleStageActual(t *testing.T, c *clineProjectCycle, scope string) domain.ActivationRequest {
 	t.Helper()
 	r := c.recipes[scope]
 	envelope := clineCycleLoaded(t, c, r)
@@ -106,7 +107,8 @@ func clineCycleStageActual(t *testing.T, c *clineProjectCycle, scope string) {
 	}
 	delete(c.f.trees, filepath.Dir(filepath.Dir(r.SkillPath)))
 	delete(c.f.protected, r.Config)
-	out, err := adapter.Activate(c.f.ctx, clients.Env{NativeConfig: nativeconfig.New()}, domain.ActivationRequest{Client: client, Plan: plan, Delivery: delivery, DeclaredName: clineCycleName})
+	request := domain.ActivationRequest{Client: client, Plan: plan, Delivery: delivery, DeclaredName: clineCycleName}
+	out, err := adapter.Activate(c.f.ctx, clients.Env{NativeConfig: nativeconfig.New()}, request)
 	if err != nil || out.Verification != domain.VerificationInstalled {
 		t.Fatal("actual inert Cline file activation", err)
 	}
@@ -133,9 +135,56 @@ func clineCycleStageActual(t *testing.T, c *clineProjectCycle, scope string) {
 		t.Fatal(err)
 	}
 	c.proof(t, r, "add-"+scope)
+	return request
 }
 func TestClineCycleRecipeProofMatchesActualUserAndProjectStager(t *testing.T) {
 	for _, scope := range []string{"user", "a"} {
 		t.Run(scope, func(t *testing.T) { c := clineCycleInert(t); clineCycleStageActual(t, c, scope) })
+	}
+}
+
+func TestClineCycleMissingOwnedDirectoryRepairsButPartialTamperingRefuses(t *testing.T) {
+	for _, kind := range []string{"absent", "leaf", "extra"} {
+		t.Run(kind, func(t *testing.T) {
+			c := clineCycleInert(t)
+			request := clineCycleStageActual(t, c, "a")
+			r := c.recipes["a"]
+			request.Replacing = true
+			request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), r.Binding.NativeObjects...)
+			if kind == "absent" {
+				c.missingA(t)
+				if _, err := os.Lstat(filepath.Dir(r.SkillPath)); !os.IsNotExist(err) {
+					t.Fatal("fault left the exact independently owned directory present")
+				}
+			} else {
+				delete(c.f.protected, r.SkillPath)
+				delete(c.f.trees, filepath.Dir(filepath.Dir(r.SkillPath)))
+				if kind == "leaf" {
+					if err := os.Remove(r.SkillPath); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					projectNativeRuntimeWrite(t, filepath.Join(filepath.Dir(r.SkillPath), "foreign.txt"), []byte("foreign must remain\n"), 0600)
+				}
+			}
+			before, err := clineAttemptTree(filepath.Dir(filepath.Dir(r.SkillPath)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.f.check(t)
+			out, err := cline.New().Activate(c.f.ctx, clients.Env{NativeConfig: nativeconfig.New()}, request)
+			c.f.check(t)
+			if kind == "absent" {
+				if err != nil || out.Verification != domain.VerificationInstalled || out.Activation != domain.ActivationPrepared {
+					t.Fatal("actual adapter did not restore exact absent owned directory", err)
+				}
+				c.proof(t, r, "inert-restored-directory")
+				return
+			}
+			after, treeErr := clineAttemptTree(filepath.Dir(filepath.Dir(r.SkillPath)))
+			if err == nil || treeErr != nil || out.Verification != domain.VerificationFailed || out.NativeEffect != domain.NativeEffectUnchanged || !reflect.DeepEqual(out.NativeObjects, request.PreviousNativeObjects) || !reflect.DeepEqual(before, after) {
+				t.Fatal("partial skill tampering was adopted, changed or reported installed", err, treeErr)
+			}
+		})
 	}
 }
