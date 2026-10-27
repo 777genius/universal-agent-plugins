@@ -276,3 +276,56 @@ adoption, native grammar, credential or qualification. Confirm against the
 actual adapter positive that each preauthored lock remains byte/metadata
 identical; actual modified-body/mode/replaced/extra-lock negatives must refuse.
 Obtain two independent reviews of this narrow refinement before its seed edit.
+
+## Exact implementation review and validation (2026-10-27)
+
+The original7d97 plan has root and shell GOs. The exact writer-lock refinement
+eae27d has independent CLI and shell GOs; it preauthors and freezes writer
+state rather than accepting a new child mutation. Final source is17 files,
+reviewed tree `ba3abdc76371a0fffc5b41b8e3285aa22f7ad35c` and manifest
+`a44549751851564a601130953605359b48e3287ae3f5c72d07733e77d6dc3b0d`.
+CLI and shell independently verified every final file SHA/tree and gave CODE
+GO after the complete source review and all finite corrections below.
+
+The real Loader/Planner/Stager/transaction Kernel/Windsurf adapter/Store
+positive covers all three scopes. Exact writer locks retain their full
+held identity/body. Complete original A/B/outside cwd trees additionally
+refuse sibling spill; Git opens only its fresh .git subtree, while public
+project changes are restricted to independently proved .uap/.devin closures.
+A refused Git delta registers no partial baseline. Strict public JSON rejects
+duplicate, trailing and nonfinite bodies before the installer-envelope check.
+Public source/receipt proofs are bracketed by complete accepted state/profile/
+cwd frames, correlate the raw state hash, and freeze cloned proven maps only.
+An actual post-proof file mutation refuses instead of becoming a new baseline.
+
+The current writer's InstallIntentAutomatic is empty with omitempty; a fresh
+automatic binding therefore omits install_intent. The new Python mode requires
+that exact representation, rejecting literal automatic, prepare, present-empty
+and wrong types. A permanent inert contract sends actual U/A/B Store/Kernel/
+adapter proofs into isolated stdlib Python admission, closing the previously
+masked handwritten-envelope mismatch. It never runs a vendor or mocks hosted
+admission. Native profile diagnostics still execute the original immutable/
+protected check before the stronger complete-frame fallback fatal.
+
+Final exact-source checks: focused Windsurf component/config Go contracts
+PASS0.495s including the actual current-writer/Python bridge; the existing
+runtime Python selection runs all21 contracts PASS0.090s (CLI independently
+reran them PASS0.065s). Affected all-enabled lint reports0 issues; the
+unfiltered whole-file revive/funlen/gocyclo/gocognit/dupl/depguard pass reports0.
+Canonical gofmt, four Python AST checks and staged whitespace checks are clean.
+No native/vendor executable ran locally. All new capture qualifications,
+runtime completion, vendor authentication and real-model flags remain false.
+
+The required prior source7a hosted capture is now independently closed:
+run40493714864/native122166215199, native artifact12733095724 has16 members,
+frontend12733145635 has25. API outer SHA/ZIP CRC/ordinary closure, exact source
+7a159104/tree f86474, clean build/source and all24 frontend stream joins pass;
+new source admission still admits this legacy capture unchanged as failed and
+allfalse. Audit SHA256 is
+`597006ca60fbf1f49721e5339843805460efe72cb516a03f28cb707f31145904`.
+Its new unknown-member diagnostic reports key SHA matching the literal version
+and number semantic-JSON SHA matching1; original protected config still differs
+and fails. This neither accepts that mutation nor establishes a native writer
+schema/policy. The new component mode still needs a fresh genuine source-bound
+capture and independent raw review before any later grammar or qualification
+amendment. Root alone may publish this slice to existing PR528; no release.
