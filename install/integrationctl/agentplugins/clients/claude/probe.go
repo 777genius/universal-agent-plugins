@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ const (
 	claudeProbeMaxEnvironmentValue = 4096
 	claudeProbeMaxEnvironmentTotal = 32768
 	claudeProbeTreeExitGrace       = 5 * time.Second
-	ClaudeProbeTimeout             = 15 * time.Second
+	ClaudeProbeTimeout             = 30 * time.Second
 )
 
 type claudeDescendantGraceRunner interface {
@@ -66,12 +67,30 @@ func RunClaudeListCommand(ctx context.Context, runner ports.CommandRunner, comma
 	if runner == nil {
 		return legacyports.CommandResult{}, fmt.Errorf("Claude Code CLI runner is unavailable")
 	}
-	bounded, cancel := context.WithTimeout(ctx, ClaudeProbeTimeout)
+	return runClaudeListCommandWithin(ctx, runner, command, ClaudeProbeTimeout)
+}
+
+func runClaudeListCommandWithin(ctx context.Context, runner ports.CommandRunner, command legacyports.Command, budget time.Duration) (legacyports.CommandResult, error) {
+	started := time.Now()
+	bounded, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	var result legacyports.CommandResult
+	var err error
 	if supervised, ok := runner.(claudeDescendantGraceRunner); ok {
-		return supervised.RunWithDescendantExitGrace(bounded, command, claudeProbeTreeExitGrace)
+		result, err = supervised.RunWithDescendantExitGrace(bounded, command, claudeProbeTreeExitGrace)
+	} else {
+		result, err = runner.Run(bounded, command)
 	}
-	return runner.Run(bounded, command)
+	if err != nil && !result.CleanupComplete && !result.NoChildStarted {
+		err = &domain.UnclosedClientProbe{Operation: "Claude Code plugin listing", Err: err}
+	}
+	if err != nil && ctx.Err() == nil && errors.Is(bounded.Err(), context.DeadlineExceeded) && errors.Is(err, context.DeadlineExceeded) {
+		if result.CleanupComplete || result.NoChildStarted {
+			return result, &domain.IsolatedProbeTimeout{Operation: "Claude Code plugin listing", Budget: budget, Elapsed: time.Since(started), Err: err}
+		}
+		return result, fmt.Errorf("claude code plugin listing exceeded %s probe budget after %s; process cleanup unconfirmed: %w", budget, time.Since(started).Round(time.Millisecond), err)
+	}
+	return result, err
 }
 
 func ClaudeListCommand(executable, configRoot, activePath string) (legacyports.Command, error) {
@@ -183,3 +202,5 @@ func environmentSize(environment []string) int {
 	}
 	return total
 }
+
+func (*Adapter) NativeDiscoveryTimeout() time.Duration { return ClaudeProbeTimeout }
