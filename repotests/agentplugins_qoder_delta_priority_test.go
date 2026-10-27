@@ -15,6 +15,13 @@ func qoderDeltaPriorityLess(a, b qoderDeltaEntry, otherFirst bool) bool {
 	if otherFirst && (a.Area == "other") != (b.Area == "other") {
 		return a.Area == "other"
 	}
+	if otherFirst && a.Area == "other" && b.Area == "other" {
+		aFile := a.Before.Kind == "file" || a.After.Kind == "file"
+		bFile := b.Before.Kind == "file" || b.After.Kind == "file"
+		if aFile != bFile {
+			return aFile
+		}
+	}
 	return a.rank < b.rank || (a.rank == b.rank && a.KeySHA256 < b.KeySHA256)
 }
 
