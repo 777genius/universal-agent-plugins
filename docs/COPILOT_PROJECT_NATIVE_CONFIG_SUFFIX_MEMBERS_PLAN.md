@@ -100,4 +100,3 @@ the complete2KiB bound. The original actual child-process fatal guard tests
 still pass. No vendor executable, installer or positive hosted guard ran locally.
 This diagnostic does not accept the changed original profile or establish a
 runtime/lifecycle result. Fresh genuine native evidence remains required.
-
