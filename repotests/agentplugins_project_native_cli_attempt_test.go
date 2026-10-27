@@ -112,6 +112,7 @@ func (f *projectNativeCLIAttempt) check(t *testing.T) {
 		for path, want := range inventory {
 			got, err := projectNativeRuntimeDigest(path)
 			if err != nil || got != want {
+				f.captureWindsurfConfigChange(path, want, got, err)
 				t.Fatalf("native CLI immutable/protected identity changed: %s (%v)", path, err)
 			}
 		}

@@ -92,3 +92,25 @@ and source identity. Obtain independent code review before root-owned
 publication to existing PR528; no release or new PR. A fresh genuine capture
 must supply the missing bounded projection before any separate behavioral or
 authentication plan. Never weaken the still-failing protection guard.
+
+## Review and actual validation
+
+Plan SHA256 `3c456aaeafc872934a87244c5ce388a4de6bfbd083f04d0b90e54cb47d9b100e`
+received independent root R1 and CLI R2 GOs before plan commit
+`6d63f0cb1a160c4541f5566354649935c275235d` and implementation. Independent
+CLI and shell critics reviewed the complete helper/contracts and unchanged
+fatal hook, then confirmed the final two test-setup corrections: checked writes
+to existing inert files replace the exclusive-create helper only where the
+tests intentionally mutate those files. The first check exposed that setup
+error; no diagnostic or guard was relaxed to correct it.
+
+Final focused Windsurf and retained shared CLI inert contracts PASS in 0.016
+seconds. Actual all-enabled changed-line lint and the unfiltered whole-file
+size/architecture gate each report 0 issues; gofmt and whitespace checks pass.
+All 18 unchanged shared Python runtime-admission contracts PASS in 0.014 seconds.
+The actual current-source closed 16-member Windsurf native envelope re-admits
+with its exact original source, retained failure and all qualifications false.
+These inert checks ran no native/vendor binary, model, listener or network
+operation. The original
+config digest guard still fails on any mismatch; a fresh genuine hosted run
+must supply the new bounded comparison before any separate behavioral change.
