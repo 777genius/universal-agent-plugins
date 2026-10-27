@@ -90,7 +90,9 @@ def approval(value, session_id, call_id, args):
     action = "Approve " + TOOL
     if isinstance(value, dict):
         kimi._string(value.get("approval_id"), 256)
-        _integer(value.get("turn_id"), 1)
+        _integer(value.get("turn_id"))
+        if value["turn_id"] != 0:
+            raise ValueError("Kimi approval is not the selected fresh first turn")
         if (value.get("session_id") != session_id or value.get("agent_id") != "main"
                 or value.get("tool_call_id") != call_id or value.get("tool_name") != TOOL
                 or value.get("action") != action or value.get("tool_input_display") != {

@@ -56,7 +56,7 @@ class CaptureService(live.Service):
             action = "Approve " + attempt.TOOL
             detail = {"nonce": "owned-nonce", "operation": "write", "marker": "owned-marker"}
             data = {"items": [{"approval_id": "approval_owned", "session_id": "session_owned",
-                    "agent_id": "main", "turn_id": 1, "tool_call_id": "provider_owned",
+                    "agent_id": "main", "turn_id": 0, "tool_call_id": "provider_owned",
                     "tool_name": attempt.TOOL, "action": action,
                     "tool_input_display": {"kind": "generic", "summary": action, "detail": detail},
                     "created_at": STAMP, "expires_at": "2026-10-27T12:00:00Z"}]}
@@ -64,6 +64,8 @@ class CaptureService(live.Service):
                 data["items"][0]["tool_name"] = "Bash"
             if self.ctx.fault == "permission-outer":
                 data["unmeasured_field"] = TOKEN + KEY
+            if self.ctx.fault == "later-turn":
+                data["items"][0]["turn_id"] = 1
         elif label == "approve-once":
             data = {"resolved": True, "resolved_at": STAMP}
         elif label.startswith("snapshot-"):
@@ -218,6 +220,30 @@ class KimiAttemptContracts(unittest.TestCase):
                 self.assertTrue(all(TOKEN.encode() not in body and KEY.encode() not in body
                                     for body in ctx.captures.values()))
 
+    def test_fresh_turn_zero_reaches_only_exact_one_call_approval_and_later_turn_stops(self):
+        for fault in (None, "later-turn"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as root:
+                ctx = CaptureContext(root, fault=fault)
+                if fault is None:
+                    result = self.observe_capture(ctx)
+                    self.assertEqual(result["native_turn_id"], 0)
+                    self.assertIs(result["native_capture_complete"], False)
+                    self.assertIs(result["native_history_grammar_frozen"], False)
+                    approved = [row for row in ctx.services[0].calls if row[0] == "approve-once"]
+                    self.assertEqual(len(approved), 1)
+                    self.assertEqual(approved[0][1:3], ("POST", "/api/v1/sessions/session_owned/approvals/approval_owned"))
+                    self.assertEqual(approved[0][4], {"decision": "approved"})
+                    self.assertTrue(ctx.summary["commands"][0]["cleanup"]["shutdown_acknowledged"])
+                    self.assertFalse((ctx.data / "native-marker.txt").exists())
+                else:
+                    with self.assertRaisesRegex(ValueError, "common service refused"):
+                        self.observe_capture(ctx)
+                    labels = [row[0] for row in ctx.services[0].calls]
+                    self.assertEqual(labels[-1], "approvals-0")
+                    self.assertNotIn("approve-once", labels)
+                    self.assertNotIn("shutdown", labels)
+                    self.assertEqual(ctx.summary["http_requests"], [])
+
     def test_both_real_entrypoint_failure_branches_emit_only_finite_diagnostic_then_fail(self):
         for module, argument, collector, reason in (
                 (attempt.kimi, "--installed-request", "installed", "Kimi installed API observation failed; private capture quarantined"),
@@ -295,7 +321,7 @@ class KimiAttemptContracts(unittest.TestCase):
     def approval(self):
         action = "Approve " + attempt.TOOL
         args = {"nonce": "owned-nonce", "operation": "write", "marker": "owned-marker"}
-        value = {"approval_id": "approval_owned", "session_id": "session_owned", "agent_id": "main", "turn_id": 1,
+        value = {"approval_id": "approval_owned", "session_id": "session_owned", "agent_id": "main", "turn_id": 0,
                  "tool_call_id": "provider_owned", "tool_name": attempt.TOOL, "action": action,
                  "tool_input_display": {"kind": "generic", "summary": action, "detail": args},
                  "created_at": "2026-10-26T12:00:00Z", "expires_at": "2026-10-27T12:00:00Z"}
@@ -303,15 +329,20 @@ class KimiAttemptContracts(unittest.TestCase):
 
     def test_approval_requires_exact_session_turn_provider_call_and_arguments(self):
         value, args = self.approval()
-        self.assertEqual(attempt.approval(value, "session_owned", "provider_owned", args), ("approval_owned", 1))
+        self.assertEqual(attempt.approval(value, "session_owned", "provider_owned", args), ("approval_owned", 0))
         for key, wrong in (("session_id", "session_foreign"), ("agent_id", "foreign"), ("turn_id", True),
-                           ("turn_id", 0), ("tool_call_id", "foreign-call"), ("tool_name", "Bash"),
+                           ("turn_id", -1), ("turn_id", 1), ("turn_id", 100), ("turn_id", "0"), ("turn_id", None),
+                           ("tool_call_id", "foreign-call"), ("tool_name", "Bash"),
                            ("action", "Approve everything"), ("approval_id", 7), ("scope", "session")):
             with self.subTest(key=key, wrong=wrong):
                 changed = copy.deepcopy(value)
                 changed[key] = wrong
                 with self.assertRaises(ValueError):
                     attempt.approval(changed, "session_owned", "provider_owned", args)
+        changed = copy.deepcopy(value)
+        del changed["turn_id"]
+        with self.assertRaises(ValueError):
+            attempt.approval(changed, "session_owned", "provider_owned", args)
         changed = copy.deepcopy(value)
         changed["tool_input_display"]["detail"]["operation"] = "read"
         with self.assertRaises(ValueError):
