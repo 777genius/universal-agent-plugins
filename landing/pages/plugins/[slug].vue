@@ -50,11 +50,12 @@ const initialTarget =
 const targets = ref<ClientID[]>(initialTarget ? [initialTarget] : []);
 const autoDetect = ref(true);
 const trustLabel = computed(() => t('registryUi.detail.reviewedListing'));
-const siteUrl = productRootUrl(
-  String(config.public.siteUrl),
-  String(config.app.baseURL),
-).replace(/\/+$/, '');
-const localizedUrl = (path: string) => `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
+const siteUrl = productRootUrl(String(config.public.siteUrl), String(config.app.baseURL)).replace(
+  /\/+$/,
+  '',
+);
+const localizedUrl = (path: string) =>
+  `${siteUrl}${localizedPath(path, locale.value as KnownLocale)}`;
 const pluginUrl = computed(() => localizedUrl(`/plugins/${plugin.name}/`));
 const pluginSchemaId = computed(() => `${pluginUrl.value}#plugin`);
 const breadcrumbId = computed(() => `${pluginUrl.value}#breadcrumb`);
@@ -250,6 +251,16 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
                 </li>
               </ul>
             </div>
+            <SkillSpectorAssessment
+              :subject="{
+                kind: 'plugin',
+                repository: plugin.source.repository,
+                path: plugin.source.path,
+                revision: plugin.source.revision,
+              }"
+              :name="plugin.display_name"
+              scope="plugin"
+            />
           </div>
         </div>
       </v-container>

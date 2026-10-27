@@ -286,11 +286,23 @@ function updateAutoDetect(value: boolean) {
       </AppTooltip>
       <span aria-hidden="true"> · </span>{{ t('registryUi.card.agentPlugins10') }}
     </p>
-    <SecurityAssessmentBadge
-      v-if="plugin.security && !discoveryStale"
-      :plugin="plugin"
-      :details-to="securityDetailURL"
-    />
+    <div class="plugin-card__assessments">
+      <SecurityAssessmentBadge
+        v-if="plugin.security && !discoveryStale"
+        :plugin="plugin"
+        :details-to="securityDetailURL"
+      />
+      <SkillSpectorAssessment
+        :subject="{
+          kind: 'plugin',
+          repository: plugin.source.repository,
+          path: plugin.source.path,
+          revision: plugin.source.revision,
+        }"
+        :name="plugin.display_name"
+        scope="plugin"
+      />
+    </div>
     <p class="plugin-card__description">{{ plugin.description }}</p>
     <details v-if="alternatives.length" class="plugin-other-sources">
       <summary>
@@ -423,6 +435,16 @@ function updateAutoDetect(value: boolean) {
 </template>
 
 <style scoped lang="scss">
+.plugin-card__assessments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0 12px;
+  min-width: 0;
+}
+.plugin-card__assessments :deep(.skillspector[open]) {
+  flex-basis: 100%;
+}
 .plugin-card__actions {
   display: flex;
   align-items: center;
