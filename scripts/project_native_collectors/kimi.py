@@ -780,6 +780,7 @@ class _KimiFailureDiagnostic:
         self.collector, self.stage, self.phase = collector, "host-admission", "enter"
         self.kind, self.ctx, self.observer_entered = None, None, False
         self.approval_refusal = None
+        self.approval_poll_refusal = None
 
     def step(self, stage, phase="enter"):
         if stage not in _FAILURE_STAGES or phase not in _FAILURE_PHASES:
@@ -811,12 +812,15 @@ class _KimiFailureDiagnostic:
                 result = callback(service)
             except Exception as error:
                 self.kind = self.exception_kind(error)
-                if (self.approval_refusal is None and self.collector == "single-tool"
+                if (self.approval_refusal is None and self.approval_poll_refusal is None
+                        and self.collector == "single-tool"
                         and self.stage == "approvals" and self.phase == "validate"):
                     try:
-                        from project_native_collectors import kimi_approval_facts
+                        from project_native_collectors import kimi_approval_facts, kimi_approval_poll
                         if isinstance(error, kimi_approval_facts.Refusal):
                             self.approval_refusal = error.public()
+                        elif isinstance(error, kimi_approval_poll.Refusal):
+                            self.approval_poll_refusal = error.public()
                     except Exception:
                         pass  # Optional facts must never replace the original refusal.
                 raise
@@ -843,13 +847,21 @@ class _KimiFailureDiagnostic:
                  "cleanup_reported": all(type(item) is bool for item in cleanup.values()), "cleanup": cleanup}
         if isinstance(error, _InstalledProfileRefusal):
             value["profile_refusal"] = error.public()
-        if (self.approval_refusal is not None and self.collector == "single-tool"
+        if (self.approval_refusal is not None and self.approval_poll_refusal is None
+                and self.collector == "single-tool"
                 and self.stage == "approvals" and self.phase == "validate"):
             try:
                 from project_native_collectors import kimi_approval_facts
                 value["approval_refusal"] = kimi_approval_facts.validate(self.approval_refusal)
             except Exception:
                 pass  # Keep the generic finite diagnostic if optional facts are invalid.
+        if (self.approval_poll_refusal is not None and self.approval_refusal is None
+                and self.collector == "single-tool" and self.stage == "approvals" and self.phase == "validate"):
+            try:
+                from project_native_collectors import kimi_approval_poll
+                value["approval_poll_refusal"] = kimi_approval_poll.validate(self.approval_poll_refusal)
+            except Exception:
+                pass  # The original quarantine failure remains authoritative.
         line = "Kimi collector failure: " + json.dumps(value, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n"
         if len(line.encode()) > 2048:
             raise ValueError("Kimi diagnostic bound exceeded")

@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import project_native_research as shared
 from project_native_collectors import kimi
 from project_native_collectors import kimi_approval_facts
+from project_native_collectors import kimi_approval_poll
 
 TOOL = "mcp__uap-kimi-native-a__inspect_runtime"
 MODEL = "uap-kimi-native-model"
@@ -225,7 +226,7 @@ def observe(ctx, request, diagnostic=None):
                 candidate = None
                 if isinstance(pending, dict) and isinstance(pending.get("items"), list):
                     if len(pending["items"]) > 1:
-                        raise ValueError("Kimi has foreign or multiple pending approvals")
+                        raise kimi_approval_poll.Refusal("multiple-pending", index + 1)
                     if pending["items"]:
                         # An extra container field must not mask a mismatched
                         # session/tool/permission in its already known entry.
@@ -234,13 +235,13 @@ def observe(ctx, request, diagnostic=None):
                 if not isinstance(pending["items"], list):
                     raise ResponseSchemaRefusal("approval")
                 if len(pending["items"]) > 1:
-                    raise ValueError("Kimi has foreign or multiple pending approvals")
+                    raise kimi_approval_poll.Refusal("multiple-pending", index + 1)
                 if pending["items"]:
                     matched = candidate
                     break
                 time.sleep(min(0.25, service.remaining()))
             if matched is None:
-                raise ValueError("Kimi exact native manual approval was not observed")
+                raise kimi_approval_poll.Refusal("no-pending-after-polls", 20)
             diagnostic.step("pre-call")
             no_call(ctx, event_path, marker_path)
             validated["native_turn_id"], validated["approval_id"] = matched[1], matched[0]

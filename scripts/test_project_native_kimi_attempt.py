@@ -66,6 +66,10 @@ class CaptureService(live.Service):
                 data["unmeasured_field"] = TOKEN + KEY
             if self.ctx.fault == "later-turn":
                 data["items"][0]["turn_id"] = 1
+            if self.ctx.fault == "multiple-pending":
+                data["items"].append({"private-pending-row": TOKEN + KEY + " /private/path"})
+            elif self.ctx.fault == "empty-pending":
+                data["items"] = []
         elif label == "approve-once":
             data = {"resolved": True, "resolved_at": STAMP}
         elif label.startswith("snapshot-"):
