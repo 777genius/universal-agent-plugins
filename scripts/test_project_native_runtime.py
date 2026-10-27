@@ -1,5 +1,6 @@
 """Inert native envelope and exact selection regressions; no client execution."""
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -146,6 +147,114 @@ class RuntimeTests(unittest.TestCase):
     def cline_result(self):
         return {**self.cli_result("qoder"), "client": "cline", "version": "3.0.73"}
 
+    def cline_cycle_bodies(self, complete=True):
+        result = {**self.cline_result(), "capture_mode": "cline-complete-cycle-first-capture",
+                  "cycle_capture_review_required": True, "cycle_observed_complete": complete,
+                  "cycle_public_stages": list(runtime.CLINE_CYCLE_PUBLIC) if complete else [],
+                  "cycle_listing_stages": list(runtime.CLINE_CYCLE_LISTINGS) if complete else [],
+                  "cycle_acp_stages": list(runtime.CLINE_CYCLE_ACP) if complete else []}
+        records = {name: [] for name in runtime.CLINE_CYCLE_AGGREGATES}
+        bodies = {}
+        def stream(body):
+            return {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(),
+                    "body": runtime.base64.b64encode(body).decode()}
+        def add(name, stage, value):
+            records[name].append({"stage": stage, "value": value})
+        if complete:
+            result["attempt_stage"] = "complete-cycle-capture-review"
+            result["cycle_provider_cleanup"] = {"shutdown_complete": True, "forced_close": False, "error": False,
+                                                 "completed_stages": list(runtime.CLINE_CYCLE_ACP)}
+            for label in runtime.CLINE_CYCLE_PUBLIC:
+                absent = label == "repeat-remove-a"
+                row = {"argv": ["/inert/public", label], "cwd": "/inert/A", "exit": int(absent),
+                       "error": False, "error_kind": "none", "deadline": False}
+                bodies[label + ".command.json"] = json.dumps(row).encode()
+                bodies[label + ".stdout.log"] = b"" if absent else b"{}"
+                bodies[label + ".stderr.log"] = (b'agentplugins: plugin is not installed for target "cline" in project scope; no target was changed\n' if absent else b"")
+            for index, stage in enumerate(runtime.CLINE_CYCLE_ACP):
+                empty = stage in runtime.CLINE_CYCLE_EMPTY
+                add("cycle-native-acp.jsonl", stage, stream(b'{"inert":"admission only"}\n'))
+                add("cycle-probe-events.jsonl", stage, stream(b"" if empty else b'{"inert":"admission only"}\n'))
+                add("cycle-native-commands.jsonl", stage, {"argv": ["/inert/cline", "--auto-approve", "false", "--cwd", "/inert/A", "--acp"],
+                    "cwd": "/inert/A", "mcp_settings_override": "/inert/A/mcp.json", "auto_approve": False,
+                    "injected_mcp_servers": [], "error": False, "deadline": False, "error_stream": stream(b""),
+                    "started_at": "2026-10-27T00:00:00Z", "ended_at": "2026-10-27T00:00:01Z",
+                    "session": f"1793012345678_{index:05d}_cli", "cleanup": "existing OS strict planned duplex shutdown; entire delegated descendant cgroup"})
+                count = 1 if empty else 2
+                for number in range(count):
+                    for name in ("cycle-provider-requests.jsonl", "cycle-provider-responses.jsonl"):
+                        add(name, stage, {"index": number, "stream": stream(b"{}")})
+                add("cycle-provider-receipts.jsonl", stage, {"requests": count, "responses": count, "empty": empty,
+                    "exact_call_issued": not empty, "single_call_approved": not empty, "error": False,
+                    "call_id": stage, "prompt": stage, "sentinel": stage, "operation": "empty" if empty else ("write" if stage.startswith("installed-") else "read")})
+            for stage in runtime.CLINE_CYCLE_LISTINGS:
+                for kind in ("skills", "mcp"):
+                    add("cycle-discovery.jsonl", stage, {"kind": kind, "argv": ["/inert/cline", "--auto-approve", "false", "--cwd", "/inert/A", "config", kind, "--json"],
+                        "cwd": "/inert/A", "mcp_settings_override": True, "stdout": stream(b"[]"), "stderr": stream(b""),
+                        "exit": 0, "error": False, "deadline": False})
+            for stage in runtime.CLINE_CYCLE_PROOF:
+                if stage.startswith("source-"):
+                    value = {"source": "/inert/source", "digest": "sha256:inert", "files": {}}
+                else:
+                    value = {"scope": "a", "revision": "a-one", "removed": stage.startswith("remove"),
+                             "state": stream(b'{"schema_version":5,"installations":[]}'), "binding": {}, "source_digest": "sha256:inert"}
+                add("cycle-proof.jsonl", stage, value)
+        for name, rows in records.items():
+            bodies[name] = b"".join(json.dumps(row).encode() + b"\n" for row in rows)
+        bodies["runtime-attempt.json"] = json.dumps(result).encode()
+        return bodies
+
+    def test_cline_cycle_capture_is_closed_and_always_unqualified(self):
+        for complete in (False, True):
+            bodies = self.cline_cycle_bodies(complete)
+            result = runtime.cline_members(bodies, self.source)
+            self.assertTrue(result["test_failed"])
+            self.assertFalse(result["runtime_attempt_complete"])
+            self.assertFalse(any(result["qualification"].values()))
+        bodies = self.cline_cycle_bodies()
+        self.assertEqual(len(bodies), 54)
+        for member in bodies:
+            with self.subTest(missing=member), self.assertRaises(ValueError):
+                runtime.cline_members({name: body for name, body in bodies.items() if name != member}, self.source)
+        for change in ({"runtime_attempt_complete": True}, {"test_failed": False}, {"cycle_capture_review_required": False},
+                       {"cycle_public_stages": list(runtime.CLINE_CYCLE_PUBLIC[:-1])}, {"cycle_listing_stages": []},
+                       {"cycle_acp_stages": []}, {"source_identity": {}}, {"cycle_provider_cleanup": {}}):
+            result = json.loads(bodies["runtime-attempt.json"])
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.cline_members({**bodies, "runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source)
+
+    def test_cline_cycle_rejects_stage_skip_duplicates_receipts_and_encoded_canaries(self):
+        bodies = self.cline_cycle_bodies()
+        for member in runtime.CLINE_CYCLE_AGGREGATES:
+            rows = [json.loads(line) for line in bodies[member].splitlines()]
+            for changed in (rows[1:], [rows[0], *rows], [{**rows[0], "stage": "unregistered"}, *rows[1:]]):
+                with self.subTest(member=member), self.assertRaises(ValueError):
+                    runtime.cline_members({**bodies, member: b"".join(json.dumps(row).encode() + b"\n" for row in changed)}, self.source)
+        member = "cycle-native-acp.jsonl"
+        rows = [json.loads(line) for line in bodies[member].splitlines()]
+        for value in ({**rows[0]["value"], "bytes": True}, {**rows[0]["value"], "sha256": "0" * 64},
+                      {**rows[0]["value"], "body": "%%"}):
+            changed = [{**rows[0], "value": value}, *rows[1:]]
+            with self.assertRaises(ValueError):
+                runtime.cline_members({**bodies, member: b"".join(json.dumps(row).encode() + b"\n" for row in changed)}, self.source)
+        raw = b'{"start":true}\n{"opaque":"\\u0075ap-cline-private-inert"}\n'
+        self.assertNotIn(b"uap-cline-private-", raw)
+        self.assertTrue(runtime.cline_cycle_private(raw))
+        nested = b'{"key":"\\u0075ap-cline-private-inert"}'
+        for _ in range(8):
+            nested = json.dumps({"content": nested.decode()}).encode()
+            self.assertNotIn(b"uap-cline-private-", nested)
+            self.assertTrue(runtime.cline_cycle_private(nested))
+            self.assertTrue(runtime.cline_cycle_private(b'{"first":true}\n' + nested))
+        benign = json.dumps({"content": '{"key":"ordinary"}\n{"tail":true}'}).encode()
+        self.assertFalse(runtime.cline_cycle_private(benign))
+        for ambiguous in (b"\xff", b'{"same":1,"same":2}', b"[" * 65 + b"0" + b"]" * 65,
+                          b"[" + b"0," * 17000 + b"0]"):
+            self.assertTrue(runtime.cline_cycle_private(ambiguous))
+        value = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "body": runtime.base64.b64encode(raw).decode()}
+        with self.assertRaises(ValueError):
+            runtime.cline_cycle_stream(value)
+
     def cline_complete_bodies(self):
         # Inert envelope receipts; actual native grammar is replayed by the Go
         # contracts from the two exact measured nonsecret JSONL fixtures.
@@ -283,7 +392,7 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn(argument, argv)
             index = argv.index("/usr/bin/env")
             self.assertEqual(argv[index + 1], "-i")
-            self.assertEqual(argv[-5:], [str(test), "-test.run=^TestAgentpluginsClineNativeProjectRuntimeAttempt$", "-test.count=1", "-test.v", "-test.timeout=180s"])
+            self.assertEqual(argv[-5:], [str(test), "-test.run=^TestAgentpluginsClineNativeProjectCompleteCycle$", "-test.count=1", "-test.v", "-test.timeout=180s"])
             for selected, selected_unit, uid, stamp in (({**env, "LD_PRELOAD": "unexpected"}, unit, 1001, origin),
                     ({**env, "HOME": "first\nsecond"}, unit, 1001, origin), (env, "ssh.service", 1001, origin),
                     (env, unit, 0, origin), (env, unit, 1001, 0)):

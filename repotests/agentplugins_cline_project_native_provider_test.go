@@ -36,6 +36,8 @@ type clineProjectProvider struct {
 	facts                                   map[string]any
 	failure                                 error
 	cancel                                  context.CancelFunc
+	operation, sentinel                     string
+	empty                                   bool
 }
 
 func newClineProjectProvider(t *testing.T, f *clineProjectAttempt) *clineProjectProvider {
@@ -101,7 +103,23 @@ func (p *clineProjectProvider) capture(t *testing.T, f *clineProjectAttempt) {
 	f.keep(t, "provider.json", raw)
 }
 func (p *clineProjectProvider) arguments() map[string]any {
-	return map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}
+	operation := p.operation
+	if operation == "" {
+		operation = "write"
+	}
+	return map[string]any{"nonce": p.nonce, "operation": operation, "marker": p.marker}
+}
+func (p *clineProjectProvider) doneText() string {
+	if p.sentinel != "" {
+		return p.sentinel
+	}
+	return "UAP_CLINE_DONE_" + p.nonce
+}
+func (p *clineProjectProvider) promptText() string {
+	if p.empty {
+		return p.prompt + " Return only " + p.doneText() + ". Do not call any built-in or MCP tool or change any file."
+	}
+	return p.prompt + " Call only " + clineAttemptTool + " with the exact supplied harmless nonce/operation/marker. Do not call built-in tools or any other MCP server."
 }
 func clineAttemptProviderRequest(r *http.Request, host, key string) bool {
 	return r.Method == "POST" && r.Host == host && !r.URL.IsAbs() && r.URL.Host == "" && r.URL.Path == "/v1/chat/completions" && r.URL.RawPath == "" && r.URL.RawQuery == "" && r.Header.Get("Authorization") == "Bearer "+key && len(r.Header.Values("Authorization")) == 1 && r.Header.Get("Content-Type") == "application/json" && len(r.Header.Values("Content-Type")) == 1
@@ -120,11 +138,15 @@ func (p *clineProjectProvider) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	p.mu.Lock()
 	index := len(p.requests)
-	if index < 2 {
+	limit := 2
+	if p.empty {
+		limit = 1
+	}
+	if index < limit {
 		p.requests = append(p.requests, bytes.Clone(raw))
 	}
 	p.mu.Unlock()
-	if index >= 2 {
+	if index >= limit {
 		http.Error(w, "request count", 400)
 		p.fail(fmt.Errorf("third provider request forbidden"))
 		return
@@ -136,7 +158,7 @@ func (p *clineProjectProvider) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.mu.Lock()
-	if index == 0 {
+	if index == 0 && !p.empty {
 		p.issued = true
 	} else {
 		p.facts = facts
@@ -152,11 +174,11 @@ func (p *clineProjectProvider) serve(w http.ResponseWriter, r *http.Request) {
 		m["choices"] = []any{map[string]any{"index": 0, "delta": delta, "finish_reason": reason}}
 		return m
 	}
-	if index == 0 {
+	if index == 0 && !p.empty {
 		args, _ := json.Marshal(p.arguments())
 		chunks = []map[string]any{chunk(map[string]any{"role": "assistant", "tool_calls": []any{map[string]any{"index": 0, "id": p.callID, "type": "function", "function": map[string]any{"name": clineAttemptTool, "arguments": string(args)}}}}, nil), chunk(map[string]any{}, "tool_calls")}
 	} else {
-		chunks = []map[string]any{chunk(map[string]any{"role": "assistant", "content": "UAP_CLINE_DONE_" + p.nonce}, nil), chunk(map[string]any{}, "stop")}
+		chunks = []map[string]any{chunk(map[string]any{"role": "assistant", "content": p.doneText()}, nil), chunk(map[string]any{}, "stop")}
 	}
 	var response bytes.Buffer
 	for _, c := range chunks {
@@ -236,7 +258,7 @@ func (p *clineProjectProvider) validateRequest(raw []byte, index int) (map[strin
 			return nil, fmt.Errorf("foreign native MCP tool visible")
 		}
 	}
-	if !selected {
+	if selected == p.empty {
 		return nil, fmt.Errorf("installed A MCP tool absent from actual provider catalog")
 	}
 	messages, ok := m["messages"].([]any)
@@ -517,6 +539,9 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 	approved := false
 	completed := false
 	progress, chunks := 0, 0
+	if f.provider.empty {
+		progress = 5
+	}
 	infoSeen := false
 	text := ""
 	requestIDs := map[string]bool{}
@@ -629,7 +654,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 					return fmt.Errorf("native final text bound")
 				}
 			case "session_info_update":
-				if progress != 5 || infoSeen || text != "UAP_CLINE_DONE_"+f.base.Nonce || projectNativeRuntimeKeys(update, "sessionUpdate updatedAt", "") != nil {
+				if progress != 5 || infoSeen || text != f.provider.doneText() || projectNativeRuntimeKeys(update, "sessionUpdate updatedAt", "") != nil {
 					return fmt.Errorf("native session info keys")
 				}
 				stamp, ok := update["updatedAt"].(string)
@@ -680,11 +705,11 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 			session = result["sessionId"].(string)
 			f.evidence["native_session_id"] = session
 			stage = 3
-			if err := send(3, "session/prompt", map[string]any{"sessionId": session, "prompt": []any{map[string]string{"type": "text", "text": f.provider.prompt + " Call only " + clineAttemptTool + " with the exact supplied harmless nonce/operation/marker. Do not call built-in tools or any other MCP server."}}}); err != nil {
+			if err := send(3, "session/prompt", map[string]any{"sessionId": session, "prompt": []any{map[string]string{"type": "text", "text": f.provider.promptText()}}}); err != nil {
 				return err
 			}
 		case 3:
-			if projectNativeRuntimeKeys(result, "stopReason", "") != nil || result["stopReason"] != "end_turn" || !approved || !completed || progress != 5 || !infoSeen || text != "UAP_CLINE_DONE_"+f.base.Nonce {
+			if projectNativeRuntimeKeys(result, "stopReason", "") != nil || result["stopReason"] != "end_turn" || (!f.provider.empty && (!approved || !completed)) || progress != 5 || !infoSeen || text != f.provider.doneText() {
 				return fmt.Errorf("complete native prompt/tool/result/sentinel join missing")
 			}
 			return nil

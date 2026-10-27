@@ -62,6 +62,8 @@ type clineProjectAttempt struct {
 	authored                                                                        map[string][]byte
 	sourceDigest                                                                    string
 	nativeStart, nativeEnd                                                          time.Time
+	cycle                                                                           bool
+	absent                                                                          map[string]bool
 }
 
 func clineAttemptRemaining(origin, now int64) (time.Duration, time.Duration, error) {
@@ -137,6 +139,14 @@ func clineAttemptTree(root string) (map[string]string, error) {
 }
 func (f *clineProjectAttempt) check(t *testing.T) {
 	t.Helper()
+	for path := range f.absent {
+		if err := projectNativeRuntimeParents(path); err != nil {
+			t.Fatal("Cline expected-absence parent authority changed")
+		}
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatal("Cline independently unallocated path appeared")
+		}
+	}
 	for _, inventory := range []map[string]string{f.immutable, f.protected} {
 		for path, want := range inventory {
 			got, err := projectNativeRuntimeDigest(path)
@@ -636,7 +646,7 @@ func (f *clineProjectAttempt) finish(t *testing.T) {
 		f.evidence["runtime_attempt_complete"] = false
 	}
 	f.evidence["test_failed"], f.evidence["elapsed_ms"] = t.Failed(), time.Duration(clineAttemptMonotonic()-f.origin).Milliseconds()
-	if f.base != nil {
+	if f.base != nil && !f.cycle {
 		if raw, err := projectNativeRuntimeRead(f.base.Events, 1<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", raw)
 		}
