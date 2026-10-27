@@ -39,15 +39,18 @@ var observerPins = map[string]string{
 var artifactName = regexp.MustCompile("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 
 type inputRequest struct {
-	UID          int    `json:"uid"`
-	GID          int    `json:"gid"`
-	EUID         int    `json:"euid"`
-	EGID         int    `json:"egid"`
-	StartNS      int64  `json:"start_monotonic_ns"`
-	SourceCommit string `json:"source_commit"`
-	ObserverRoot string `json:"observer_root"`
-	OutputRoot   string `json:"output_root"`
-	HelperSHA    string `json:"helper_sha256"`
+	Mode         string        `json:"mode,omitempty"`
+	Trusted      *trustedInput `json:"trusted,omitempty"`
+	UID          int           `json:"uid"`
+	GID          int           `json:"gid"`
+	EUID         int           `json:"euid"`
+	EGID         int           `json:"egid"`
+	StartNS      int64         `json:"start_monotonic_ns"`
+	SourceCommit string        `json:"source_commit"`
+	SourceTree   string        `json:"source_tree,omitempty"`
+	ObserverRoot string        `json:"observer_root"`
+	OutputRoot   string        `json:"output_root"`
+	HelperSHA    string        `json:"helper_sha256"`
 }
 type sealedRequest struct {
 	Input            inputRequest      `json:"input"`
@@ -66,6 +69,7 @@ type isolationProof struct {
 	Interfaces       []string `json:"interfaces"`
 	CapabilitiesZero bool     `json:"capabilities_zero"`
 	NoNewPrivileges  bool     `json:"no_new_privileges"`
+	LoopbackReady    bool     `json:"loopback_ready,omitempty"`
 }
 type childRecord struct {
 	Label          string         `json:"label"`
@@ -101,15 +105,20 @@ type controller struct {
 	displayAssets        map[string]heldDisplayAsset
 	createdDisplayParent os.FileInfo
 	displayCleanupErr    error
+	trustedState         *trustedLifecycle
+	scannerCache         *trustedScannerCache
 }
 
 func deadlineAt(start int64, limit time.Duration) (time.Time, error) {
+	return deadlineAtMaximum(start, limit, 480*time.Second)
+}
+func deadlineAtMaximum(start int64, limit, maximum time.Duration) (time.Time, error) {
 	var now unix.Timespec
 	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &now); err != nil {
 		return time.Time{}, err
 	}
 	ns := now.Nano()
-	if start <= 0 || start > ns || ns-start > int64(480*time.Second) || limit <= 0 || limit > 480*time.Second {
+	if start <= 0 || start > ns || ns-start > int64(maximum) || limit <= 0 || limit > maximum {
 		return time.Time{}, fmt.Errorf("monotonic task budget authority refused")
 	}
 	return time.Now().Add(limit - time.Duration(ns-start)), nil

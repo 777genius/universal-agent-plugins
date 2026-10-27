@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -76,12 +75,14 @@ func decodeInput(root string) (inputRequest, error) {
 	if req.UID != uid || req.EUID != uid || req.GID != gid || req.EGID != gid || req.SourceCommit != buildCommit || !shaPattern.MatchString(req.HelperSHA) {
 		return req, fmt.Errorf("request identity or source differs from trusted caller")
 	}
-	deadline, err := deadlineAt(req.StartNS, 420*time.Second)
+	deadline, err := inputDeadline(req, "work")
 	if err != nil || time.Until(deadline) <= 0 {
 		return req, fmt.Errorf("work budget exhausted before initialization")
 	}
-	if _, err = exactDirectory(req.ObserverRoot, uid); err != nil {
-		return req, err
+	if req.Mode == "" {
+		if _, err = exactDirectory(req.ObserverRoot, uid); err != nil {
+			return req, err
+		}
 	}
 	if _, err = exactDirectory(req.OutputRoot, uid); err != nil {
 		return req, err
@@ -111,7 +112,7 @@ func bootstrap(root string) (resultErr error) {
 	if err != nil {
 		return err
 	}
-	deadline, err := deadlineAt(req.StartNS, 420*time.Second)
+	deadline, err := inputDeadline(req, "work")
 	if err != nil {
 		return err
 	}
@@ -147,8 +148,14 @@ func prepareSealed(ctx context.Context, root, base string, req inputRequest) err
 	if err != nil {
 		return err
 	}
-	if err := copyObserver(ctx, req.ObserverRoot, base, req.UID); err != nil {
-		return err
+	if req.Mode == trustedProjectMode {
+		if err := sealTrustedInputs(ctx, req, base); err != nil {
+			return err
+		}
+	} else {
+		if err := copyObserver(ctx, req.ObserverRoot, base, req.UID); err != nil {
+			return err
+		}
 	}
 	source, err := os.Executable()
 	if err != nil {
@@ -355,8 +362,17 @@ func runSealed(base string) (err error) {
 	}
 	defer func() { _ = c.output.Close() }()
 	runErr := c.execute()
-	out, stderr, baseErr := cleanSealedCapture(base)
-	cleanupErr := errors.Join(baseErr, c.displayCleanupErr)
+	scannerErr := c.closeTrustedScanner()
+	var out, stderr []byte
+	var baseErr error
+	if scannerErr == nil {
+		out, stderr, baseErr = cleanSealedCapture(base)
+	} else {
+		// A foreign or unreleased mount must never grant recursive deletion
+		// authority over whichever tree currently occupies that task path.
+		baseErr = fmt.Errorf("sealed-root deletion withheld after scanner mount release failure")
+	}
+	cleanupErr := errors.Join(baseErr, c.displayCleanupErr, scannerErr)
 	cleaned = true
 	return c.finish(runErr, cleanupErr, out, stderr)
 }
@@ -375,14 +391,17 @@ func loadSealedRequest(base string) (sealedRequest, error) {
 	if err != nil || req.Base != base || req.Input.UID != uid || req.Input.GID != gid || req.Input.SourceCommit != buildCommit {
 		return sealedRequest{}, fmt.Errorf("sealed request identity differs")
 	}
+	if _, err := inputDeadline(req.Input, "work"); err != nil {
+		return sealedRequest{}, err
+	}
 	return req, nil
 }
 func sealedWork(req sealedRequest) (context.Context, context.CancelFunc, time.Time, error) {
-	final, err := deadlineAt(req.Input.StartNS, 440*time.Second)
+	final, err := inputDeadline(req.Input, "final")
 	if err != nil {
 		return nil, nil, time.Time{}, err
 	}
-	deadline, err := deadlineAt(req.Input.StartNS, 420*time.Second)
+	deadline, err := inputDeadline(req.Input, "work")
 	if err != nil {
 		return nil, nil, time.Time{}, err
 	}
@@ -412,62 +431,6 @@ func newSealedController(work context.Context, req sealedRequest, cancel context
 	}
 	c.parentNS = ns.Ino
 	return c, nil
-}
-func (c *controller) finish(runErr, cleanupErr error, out, stderr []byte) error {
-	if e := c.keep("root-cleanup.stdout.log", out); e != nil {
-		cleanupErr = errors.Join(cleanupErr, e)
-	}
-	if e := c.keep("root-cleanup.stderr.log", stderr); e != nil {
-		cleanupErr = errors.Join(cleanupErr, e)
-	}
-	outHash, errHash := sha256.Sum256(out), sha256.Sum256(stderr)
-	summary := map[string]any{"evidence_kind": "vscode-pinned-untrusted-workspace-research", "source_commit": buildCommit, "version": publisherVersion, "publisher_commit": publisherCommit, "collection_complete": runErr == nil && cleanupErr == nil, "native_project_qualified": false, "native_mcp_initialization_qualified": false, "native_runtime_qualified": false, "children": c.children, "observations": c.observations, "executable_hashes": c.hashes, "error": clipped(runErr), "cleanup": map[string]any{"complete": cleanupErr == nil, "error": clipped(cleanupErr), "stdout_file": "root-cleanup.stdout.log", "stderr_file": "root-cleanup.stderr.log", "stdout_bytes": len(out), "stderr_bytes": len(stderr), "stdout_sha256": hex.EncodeToString(outHash[:]), "stderr_sha256": hex.EncodeToString(errHash[:])}, "diagnostics": "verifier-prefixed merged streams; planned teardown may truncate trailing diagnostics; API result is separate"}
-	body, e := encode(summary, 1<<20)
-	if e != nil {
-		return errors.Join(runErr, cleanupErr, e)
-	}
-	if e = c.keep("vscode-workspace-controller.json", body); e != nil {
-		return errors.Join(runErr, cleanupErr, e)
-	}
-	if e = c.publish(); e != nil {
-		return errors.Join(runErr, cleanupErr, e)
-	}
-	public, e := encode(map[string]any{"collection_complete": runErr == nil && cleanupErr == nil, "cleanup_complete": cleanupErr == nil, "error": clipped(errors.Join(runErr, cleanupErr))}, controlLimit)
-	if e != nil {
-		return errors.Join(runErr, cleanupErr, e)
-	}
-	_, e = os.Stdout.Write(public)
-	return errors.Join(runErr, cleanupErr, e)
-}
-func (c *controller) publish() error {
-	before, err := c.output.Stat()
-	if err != nil {
-		return err
-	}
-	current, err := os.Lstat(c.request.Input.OutputRoot)
-	if err != nil || !os.SameFile(before, current) || !current.IsDir() {
-		return fmt.Errorf("evidence output root changed")
-	}
-	for _, name := range sortedKeys(c.files) {
-		deadline, e := deadlineAt(c.request.Input.StartNS, 450*time.Second)
-		if e != nil || time.Until(deadline) <= 0 {
-			return fmt.Errorf("controller publication deadline")
-		}
-		fd, err := unix.Openat(int(c.output.Fd()), name, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
-		if err != nil {
-			return err
-		}
-		f := os.NewFile(uintptr(fd), name)
-		_, err = f.Write(c.files[name])
-		if err == nil {
-			err = f.Chown(c.request.Input.UID, c.request.Input.GID)
-		}
-		closeErr := f.Close()
-		if err != nil || closeErr != nil {
-			return errors.Join(err, closeErr)
-		}
-	}
-	return nil
 }
 func main() {
 	if err := hostedRoot(); err != nil {

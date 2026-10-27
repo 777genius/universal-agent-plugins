@@ -108,11 +108,14 @@ os.close(parent_fd)
 '''
 
 
-def cleanup_frontend(root, identity, output):
-    record, _, _ = run_probe(["/usr/bin/python3", "-I", "-c", FRONTEND_CLEANUP_CODE,
+def cleanup_frontend(root, identity, output, *, memory_only=False):
+    record, stdout, stderr = run_probe(["/usr/bin/python3", "-I", "-c", FRONTEND_CLEANUP_CODE,
                               str(root), str(identity.st_dev), str(identity.st_ino), str(identity.st_uid)],
-                             Path("/"), {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, output, "cleanup", timeout=5)
-    return {"complete": record["exit"] == 0 and record["error"] is None, "probe": record}
+                             Path("/"), {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"}, output, "cleanup", timeout=5, memory_only=memory_only)
+    result = {"complete": record["exit"] == 0 and record["error"] is None, "probe": record}
+    if memory_only:
+        result["_streams"] = {"stdout": stdout, "stderr": stderr}
+    return result
 
 
 def digest(path):
@@ -171,7 +174,8 @@ def signal_controller(process, sig, errors):
         errors.append("controller signal permission refused; cleanup not proved")
 
 
-def capture_controller(argv, repo, output, origin_ns):
+def capture_controller(argv, repo, output, origin_ns, *, trusted_project=False, memory_only=False):
+    return_seconds, kill_seconds = (870, 880) if trusted_project else (ROOT_TIMEOUT, ROOT_KILL)
     env = {key: os.environ[key] for key in GUARD_KEYS}
     env.update({"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"})
     record = {"argv": argv, "cwd": str(repo), "error": None, "controller_reaped": False}
@@ -186,12 +190,12 @@ def capture_controller(argv, repo, output, origin_ns):
                 selector.register(pipe, selectors.EVENT_READ, name)
             while selector.get_map() or process.poll() is None:
                 elapsed = (time.monotonic_ns() - origin_ns) / 1e9
-                if elapsed >= ROOT_TIMEOUT and not stopping:
+                if elapsed >= return_seconds and not stopping:
                     errors.append("controller exceeded reserved return deadline")
                     process.stdin.close()
                     signal_controller(process, signal.SIGTERM, errors)
                     stopping = True
-                if elapsed >= ROOT_KILL:
+                if elapsed >= kill_seconds:
                     signal_controller(process, signal.SIGKILL, errors)
                     errors.append("controller terminal watchdog reached; cleanup unproved")
                     break
@@ -224,8 +228,11 @@ def capture_controller(argv, repo, output, origin_ns):
     record["exit"] = None if process is None else process.returncode
     for stream, body in buffers.items():
         path = output / ("controller." + stream + ".log")
-        path.write_bytes(body)
+        if not memory_only:
+            path.write_bytes(body)
         record.update({stream + "_file": path.name, stream + "_bytes": len(body), stream + "_sha256": hashlib.sha256(body).hexdigest()})
+    if memory_only:
+        record["_streams"] = {name: bytes(body) for name, body in buffers.items()}
     if errors or not record["controller_reaped"] or record["exit"] != 0:
         record["error"] = "; ".join(errors or ["fixed controller returned failure"])[:2048]
     return record
@@ -279,12 +286,12 @@ class RefuseNewImports:
         raise ImportError("post-native import refused: " + fullname)
 
 
-def publish_from_memory(output, summary, work_seconds=4.0, reap_seconds=1.0):
+def publish_from_memory(output, summary, work_seconds=4.0, reap_seconds=1.0, *, allowed_names=None):
     pid = os.fork()
     if pid == 0:
         try:
             sys.meta_path = [RefuseNewImports()]
-            accepted = publisher.publish_artifacts(output, summary, allowed_names=allowed_artifact_names())
+            accepted = publisher.publish_artifacts(output, summary, allowed_names=allowed_artifact_names() if allowed_names is None else allowed_names)
             os._exit(0 if accepted else 10)
         except BaseException:
             os._exit(2)

@@ -36,6 +36,7 @@ PINS = {
         "claude": ("npm", "@anthropic-ai/claude-code-linux-x64", "2.1.263", "claude-code-linux-x64-2.1.263.tgz", "sha512-0IrvpLd/0FP0acQw59T4Cvx/r4nwAXKBrW0WyhIXymzYWurPCLztB+Icu9MkeewAUI+p3PTXsSfmilv/n6XlAQ==", "claude"),
         "opencode": ("npm", "opencode-linux-x64", "1.18.34", "opencode-linux-x64-1.18.34.tgz", "sha512-RTAMjCve4euxP2QKLuvRmdoW5J5DQK1DiZqt+7slfixyjAEi79QC2Df2oYKogibaAI4IEU8uzenoJeEl3k+UEw==", "opencode"),
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz", "sha256:2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da", "lintai"),
+        "lintai-musl": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz", "sha256:3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b", "lintai"),
     },
     "linux-arm64": {
         "rg": ("github", "BurntSushi/ripgrep", "15.2.0", "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz", "sha256:a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d", "rg"),
@@ -77,6 +78,32 @@ PROJECT_TESTS = {
     "claude": {"TestAgentpluginsClaudeNativeProjectPreparedLifecycle", "TestAgentpluginsClaudeNativeTrustedProjectDiscovery"},
     "opencode": {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"},
 }
+
+
+def frozen_installer(args):
+    """The existing producer modes retain their authenticated historical pins."""
+    return bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only
+
+
+def current_source_scanner_pin(target):
+    """Current Linux amd64 source resolves the separately pinned portable asset."""
+    return PINS[target]["lintai-musl" if target == "linux-amd64" else "lintai"]
+
+
+def producer_tool_pin(args, name):
+    if name == "lintai" and not frozen_installer(args):
+        return current_source_scanner_pin(args.target)
+    return PINS[args.target][name]
+
+
+def require_scanner_asset(args, evidence):
+    """Bind the acquired receipt to the installer producer before execution."""
+    kind, repository, version, archive, integrity, _ = producer_tool_pin(args, "lintai")
+    if kind != "github" or any(evidence.get(key) != expected for key, expected in (
+        ("source", f"https://github.com/{repository}/releases/tag/{version}"),
+        ("version", version), ("archive", archive), ("archive_integrity", integrity),
+    )):
+        raise ValueError("scanner acquisition differs from installer producer policy")
 
 
 def select_native_tests(client, project_components=False, released=False):
@@ -338,7 +365,7 @@ def prepared_tools(args, directory):
     """Keep standalone acquisition, but consume only frozen bytes when supplied."""
     names = (args.client, 'lintai', 'rg')
     if args.prepared_input is None:
-        return {name: provision(PINS[args.target][name], directory, name) for name in names}
+        return {name: provision(producer_tool_pin(args, name), directory, name) for name in names}
     record = load_prepared(args)
     root = args.prepared_input.resolve()
     result = {}
@@ -380,7 +407,7 @@ def main():
         parser.error("--release-tag and --release-commit must be supplied together")
     try:
         pattern, required_tests = select_native_tests(args.client, args.project_components,
-            bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only)
+            frozen_installer(args))
     except ValueError as error:
         parser.error(str(error))
     require_hosted(args.target)
@@ -406,12 +433,13 @@ def main():
         if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=source):
             raise RuntimeError("native proof must build a clean exact checkout")
         for key in (args.client, "lintai", "rg"):
-            require_verified_pin(PINS[args.target][key][4])
+            require_verified_pin(producer_tool_pin(args, key)[4])
         binary_dir = scratch / "bin"
         binary_dir.mkdir()
         tools = prepared_tools(args, binary_dir)
         client, client_evidence = tools[args.client]
         scanner, scanner_evidence = tools["lintai"]
+        require_scanner_asset(args, scanner_evidence)
         identity["client_asset"] = client_evidence
         identity["scanner_asset"] = scanner_evidence
         _, identity["ripgrep_asset"] = tools["rg"]
@@ -432,7 +460,7 @@ def main():
         evidence_root.mkdir()
         home = scratch / "home"
         home.mkdir()
-        env = {**profile_environment(home, args.target), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", **disposable_runtime_environment(args.target), "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": PINS[args.target]["lintai"][4].split(":", 1)[1]}
+        env = {**profile_environment(home, args.target), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", **disposable_runtime_environment(args.target), "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": scanner_evidence["archive_integrity"].split(":", 1)[1]}
         if os.name == "nt":
             env["SystemRoot"] = os.environ["SystemRoot"]
             env["COMSPEC"] = str(Path(env["SystemRoot"]) / "System32/cmd.exe")

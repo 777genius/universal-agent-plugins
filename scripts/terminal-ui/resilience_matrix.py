@@ -204,10 +204,11 @@ def parse_envelope(stdout):
 
 
 class Matrix:
-    def __init__(self, binary, timeout, scanner_binary=None):
+    def __init__(self, binary, timeout, scanner_binary=None, scanner_cache_platform=None):
         self.binary = binary
         self.timeout = timeout
         self.scanner_binary = scanner_binary
+        self.scanner_cache_platform = scanner_cache_platform
 
     def command(self, fixture, evidence, label, *args, expect=None,
                 closed_stdout=False, closed_stderr=False, preexec_fn=None):
@@ -915,7 +916,8 @@ class Matrix:
         for target in ALL_CLIENTS:
             client_fixture = Fixture(
                 fixture.root / ("client-" + target),
-                scanner_binary=self.scanner_binary)
+                scanner_binary=self.scanner_binary,
+                scanner_cache_platform=self.scanner_cache_platform)
             seed_ten_clients(client_fixture)
             if target == "codex":
                 prepare_codex_registry(client_fixture)
@@ -1142,7 +1144,8 @@ class Matrix:
         method = getattr(self, "case_" + name.replace("-", "_"))
         with tempfile.TemporaryDirectory(
                 prefix="uap-resilience-") as temp:
-            fixture = Fixture(temp, scanner_binary=self.scanner_binary)
+            fixture = Fixture(temp, scanner_binary=self.scanner_binary,
+                scanner_cache_platform=self.scanner_cache_platform)
             method(fixture, evidence)
             fixture.validate_stubs()
 
@@ -1159,7 +1162,7 @@ def main():
     check(binary.is_file(), "binary must be a regular file")
     args.artifacts.mkdir(parents=True, exist_ok=False)
     scanner_evidence = prepare_scanner(args)
-    matrix = Matrix(binary, args.timeout, args.scanner_path)
+    matrix = Matrix(binary, args.timeout, args.scanner_path, args.scanner_cache_platform)
     report = {
         "platform": platform.platform(),
         "binary": str(binary),
@@ -1170,6 +1173,7 @@ def main():
         "isolation": (
             "fresh disposable HOME, clients, state and package per case"),
         "scanner": scanner_evidence,
+        "scanner_cache_platform": args.scanner_cache_platform,
         "cases": [],
     }
     for name in args.case or CASES:

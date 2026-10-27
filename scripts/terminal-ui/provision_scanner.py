@@ -15,14 +15,14 @@ def main():
     spec = importlib.util.spec_from_file_location('native_matrix', Path(__file__).resolve().parents[1] / 'run-native-client-matrix.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    _, repo, version, archive, digest, basename = module.PINS[args.target]['lintai']
+    _, repo, version, archive, digest, basename = module.current_source_scanner_pin(args.target)
     url = f'https://github.com/{repo}/releases/download/{version}/{archive}'
     with urllib.request.urlopen(url, timeout=120) as response:
         body = response.read(100 << 20)
     module.verify_digest(body, digest)
     args.output.mkdir(parents=True, exist_ok=True)
     (args.output / archive).write_bytes(body)
-    (args.output / 'scanner.json').write_text(json.dumps({'url': url, 'digest': digest}))
+    (args.output / 'scanner.json').write_text(json.dumps({'url': url, 'digest': digest, 'archive': archive, 'selection': 'current-source scanner pin'}))
 
 
 if __name__ == '__main__':

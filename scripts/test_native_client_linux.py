@@ -85,7 +85,9 @@ class PreparedInputTests(unittest.TestCase):
         path = directory / name
         path.write_bytes(('frozen-' + name).encode())
         path.chmod(0o600)
-        return path, dict(source='fixture', version=pin[2], archive=pin[3],
+        source = (f'https://github.com/{pin[1]}/releases/tag/{pin[2]}' if pin[0] == 'github'
+                  else f'https://registry.npmjs.org/{pin[1]}/-/{pin[3]}')
+        return path, dict(source=source, version=pin[2], archive=pin[3],
                           archive_integrity=pin[4], binary_sha256=matrix.draft.digest(path))
 
     def prepare_fixture(self, temp, state='public', client='codex'):
@@ -242,9 +244,27 @@ class PreparedInputTests(unittest.TestCase):
                         matrix.prepared_tools(args, runtime)
                     self.assertEqual(list(runtime.iterdir()), [])
 
+    def test_frozen_prepared_tools_refuse_portable_pin_substitution(self):
+        with TemporaryDirectory() as temp, patch.dict(matrix.os.environ, {}, clear=True), ExitStack() as stack:
+            args = self.prepare_fixture(temp)
+            manifest = args.prepared_input / 'prepared.json'
+            record = json.loads(manifest.read_bytes())
+            pin = matrix.PINS['linux-amd64']['lintai-musl']
+            record['tools']['lintai']['pin'] = list(pin)
+            record['tools']['lintai']['evidence'].update(version=pin[2], archive=pin[3], archive_integrity=pin[4])
+            manifest.write_text(json.dumps(record))
+            matrix.os.environ['PREPARED_SHA256'] = matrix.draft.digest(manifest)
+            directory = Path(temp) / 'bin'
+            directory.mkdir()
+            self.forbid_acquisition(stack)
+            with self.assertRaisesRegex(ValueError, 'prepared tool pin mismatch'):
+                matrix.prepared_tools(args, directory)
+            self.assertEqual(list(directory.iterdir()), [])
+
     def test_standalone_tools_keep_acquisition(self):
         with TemporaryDirectory() as temp, patch.object(matrix, 'provision', side_effect=self.fake_provision) as acquire:
-            args = SimpleNamespace(prepared_input=None, client='claude', target='linux-amd64')
+            args = SimpleNamespace(prepared_input=None, client='claude', target='linux-amd64',
+                                   release_tag=None, release_state='public', prepare_only=False)
             tools = matrix.prepared_tools(args, Path(temp))
             self.assertEqual(set(tools), {'claude', 'lintai', 'rg'})
             self.assertEqual(acquire.call_count, 3)
@@ -289,6 +309,83 @@ class PreparedInputTests(unittest.TestCase):
                 with self.assertRaises(BuildReached):
                     matrix.main()
                 run.assert_called_once()
+
+
+class ScannerProducerTests(unittest.TestCase):
+    @staticmethod
+    def args(target='linux-amd64', **changes):
+        return SimpleNamespace(**dict(dict(target=target, client='codex', release_tag=None,
+                                          release_state='public', prepared_input=None, prepare_only=False), **changes))
+
+    def test_actual_standalone_acquisition_selects_source_and_frozen_pins(self):
+        for target in matrix.PINS:
+            for released in (False, True):
+                with self.subTest(target=target, released=released), TemporaryDirectory() as temp:
+                    args = self.args(target, release_tag='agentplugins-v1.2.3' if released else None)
+                    with patch.object(matrix, 'provision', side_effect=PreparedInputTests.fake_provision) as acquire:
+                        result = matrix.prepared_tools(args, Path(temp))
+                    self.assertEqual(set(result), {'codex', 'lintai', 'rg'})
+                    expected = matrix.PINS[target]['lintai-musl' if target == 'linux-amd64' and not released else 'lintai']
+                    self.assertEqual(acquire.call_args_list[1].args, (expected, Path(temp), 'lintai'))
+                    self.assertEqual(acquire.call_args_list[0].args[0], matrix.PINS[target]['codex'])
+                    self.assertEqual(acquire.call_args_list[2].args[0], matrix.PINS[target]['rg'])
+                    matrix.require_scanner_asset(args, result['lintai'][1])
+
+    def test_all_existing_frozen_modes_keep_original_scanner_and_project_refusal(self):
+        for changes in (dict(release_tag='agentplugins-v1.2.3'), dict(release_state='draft'),
+                        dict(prepared_input=Path('authenticated-prepared')), dict(prepare_only=True)):
+            with self.subTest(changes=changes):
+                args = self.args(**changes)
+                self.assertEqual(matrix.producer_tool_pin(args, 'lintai'), matrix.PINS['linux-amd64']['lintai'])
+                with self.assertRaisesRegex(ValueError, 'current-source'):
+                    matrix.select_native_tests(args.client, True, matrix.frozen_installer(args))
+        self.assertFalse(matrix.frozen_installer(self.args()))
+
+    def test_source_main_binds_actual_scanner_receipt_before_any_build(self):
+        class BuildReached(Exception):
+            pass
+
+        for mutation in ('none', 'gnu', 'source', 'version', 'archive', 'archive_integrity'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temp, ExitStack() as stack:
+                stack.enter_context(patch.dict(matrix.os.environ, dict(RUNNER_TEMP=temp, EXPECTED_COMMIT='a'*40,
+                                                                     SystemRoot=temp), clear=True))
+                stack.enter_context(patch.object(sys, 'argv', ['runner', '--client', 'codex', '--target', 'linux-amd64',
+                                                              '--output', str(Path(temp) / 'output'), '--project-components']))
+                stack.enter_context(patch.object(matrix, 'require_hosted'))
+                stack.enter_context(patch.object(matrix, 'disposable_runtime_environment', return_value={}))
+                stack.enter_context(patch.object(matrix.shutil, 'which', return_value=sys.executable))
+                stack.enter_context(patch.object(matrix, 'find_git_bash', return_value=None))
+                stack.enter_context(patch.object(matrix.subprocess, 'check_output',
+                                                side_effect=['a'*40, 'b'*40, b'', 'git version fixture']))
+
+                def provision(pin, directory, name):
+                    if name == 'lintai' and mutation == 'gnu':
+                        pin = matrix.PINS['linux-amd64']['lintai']
+                    path, evidence = PreparedInputTests.fake_provision(pin, directory, name)
+                    if name == 'lintai' and mutation not in ('none', 'gnu'):
+                        evidence[mutation] = 'wrong producer receipt'
+                    return path, evidence
+
+                stack.enter_context(patch.object(matrix, 'provision', side_effect=provision))
+
+                def build(command, **kwargs):
+                    self.assertEqual(command[:2], ['go', 'build'])
+                    self.assertEqual(kwargs['env']['AGENTPLUGINS_LINTAI_ARCHIVE_SHA256'],
+                                     matrix.PINS['linux-amd64']['lintai-musl'][4][7:])
+                    raise BuildReached()
+
+                execution = stack.enter_context(patch.object(matrix.subprocess, 'run', side_effect=build))
+                if mutation == 'none':
+                    with self.assertRaises(BuildReached):
+                        matrix.main()
+                    execution.assert_called_once()
+                else:
+                    with self.assertRaisesRegex(ValueError, 'scanner acquisition differs'):
+                        matrix.main()
+                    execution.assert_not_called()
+                record = json.loads((Path(temp) / 'output/runner-evidence.json').read_text())
+                self.assertEqual(record['status'], 'failed')
+                self.assertNotIn('passed_tests', record)
 
 
 if __name__ == "__main__":

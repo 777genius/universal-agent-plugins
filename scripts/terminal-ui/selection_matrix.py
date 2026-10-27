@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 
-from harness import Fixture, Session, Screen, SELECT, CONFIRM, LIFECYCLE, EMPTY_SELECTION, check, clean, hashes
+from harness import Fixture, Session, Screen, SELECT, CONFIRM, LIFECYCLE, EMPTY_SELECTION, check, clean, hashes, scanner_cache_options, resolve_scanner_cache_platform
 
 TARGETS = ('codex', 'cursor')
 SETS = {'codex': ('codex',), 'cursor': ('cursor',), 'both': TARGETS}
@@ -211,10 +211,10 @@ else:
 ''')
 
 
-def run_case(name, binary, evidence, timeout):
+def run_case(name, binary, evidence, timeout, scanner_cache_platform=None):
     evidence.mkdir()
     with tempfile.TemporaryDirectory(prefix='selection-matrix-') as tmp:
-        fixture = Fixture(tmp)
+        fixture = Fixture(tmp, scanner_cache_platform=scanner_cache_platform)
         native = fixture.package / '.codex-plugin/plugin.json'
         native.parent.mkdir()
         native.write_text(json.dumps({'name': 'pty-synthetic', 'version': '1.0.0'}))
@@ -337,7 +337,9 @@ def main():
     parser.add_argument('--artifacts', required=True, type=Path)
     parser.add_argument('--timeout', type=float, default=8)
     parser.add_argument('--case', action='append', choices=CASES)
+    scanner_cache_options(parser)
     args = parser.parse_args()
+    cache_platform = resolve_scanner_cache_platform(args.scanner_cache_platform, current_source=bool(args.build_go))
     if os.name != 'posix': parser.error('Windows selection matrix NOT COVERED; Unix PTY required')
     if not 0 < args.timeout <= 30: parser.error('timeout must be in (0, 30]')
     repo = Path(__file__).resolve().parents[2]
@@ -367,10 +369,11 @@ def main():
                   'binary_source_equivalence': 'built from current source in this run' if args.build_go else 'not established; supplied binary',
                   'client_registry': 'synthetic Codex registry and install protocol; version-only Cursor; no real client qualification',
                   'scanner': 'synthetic protocol stub; UI evidence only',
+                  'scanner_cache_platform': cache_platform,
                   'windows': 'not covered', 'macos': 'not run' if platform.system() != 'Darwin' else 'native'}
     results = []
     for name in args.case or CASES:
-        result = run_case(name, binary, args.artifacts / name, args.timeout)
+        result = run_case(name, binary, args.artifacts / name, args.timeout, scanner_cache_platform=cache_platform)
         result.update(provenance)
         (args.artifacts / name / 'outcome.json').write_text(json.dumps(result, indent=2))
         results.append(result)

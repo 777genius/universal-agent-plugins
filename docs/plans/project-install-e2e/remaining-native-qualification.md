@@ -532,6 +532,737 @@ execution; publish post-native streams through the original directory identity
 and no-follow descriptors. Unknown files, replaced directories, incomplete
 stages, forced cleanup, or late results cannot qualify.
 
+### Observed VS Code first-launch settings correction
+
+Trusted run [40359430087](https://github.com/777genius/universal-agent-plugins/actions/runs/40359430087)
+at source tree `e3ca3a42425acbf8777495ead681d5de2d8057e7` completed pinned
+preparation but failed the first `empty-a` stage. Artifact `12667643294`
+reports only the native dialog `Welcome to Visual Studio Code` during workspace
+trust, changed protected user `settings.json` bytes and unproved teardown.
+All five qualification flags remain false; no runtime lifecycle is inferred.
+
+Before rerunning, author two current settings in the fresh original user profile:
+`workbench.welcomePage.experimentalOnboarding=false` and
+`extensions.autoUpdate="off"`. At the exact pinned publisher commit,
+`startupPage.ts` blob `777f3ad872c6de562252c1635e423c63692a3225` honors the
+onboarding setting before opening the optional welcome modal;
+`gettingStarted.contribution.ts` blob `067580a4b11550f219f8031d4c9b3827c140121c`
+registers that boolean. `extensions.contribution.ts` blob
+`695859cadf68c11ffc5d7a94c3d4a5302343aa3f` accepts the current `"off"` value
+without migrating it, while the old fixture boolean `false` triggers a native
+rewrite to `"off"`. This source-supported correction does not establish that
+the migration was the sole cause of the observed protected-byte difference.
+
+Freeze these authored bytes before the first native child using the existing
+strict inventory. Do not adopt a post-native settings baseline. Preserve the
+exact workspace/MCP trust UI, updater suppression, normal Electron sandbox,
+ordinary-user isolation, process primitive, source pins, deadlines and closed
+artifact inventory. Do not add a welcome-dialog action, authentication step or
+cleanup exception. Run the existing inert controller contracts, then rerun the
+exact trusted lifecycle on genuine hosted Ubuntu 22.04. Any remaining native
+settings change, unknown UI or cleanup failure still fails and requires its own
+observed diagnosis. Two independent plan-review rounds precede implementation.
+
+### Observed VS Code startup focus investigation
+
+The corrected genuine [run 40363268218](https://github.com/777genius/universal-agent-plugins/actions/runs/40363268218)
+at source tree `b89e5d8774d4c6c502dbb48117999afeceb443a9` again failed
+`empty-a` during workspace trust, now with no visible dialog. Native artifact
+`12669876292` (SHA256
+`5b94fbd4aa55d6c291cf1957120a4d79dfa2105be43bd0b53664a623134f4f7c`)
+contains no welcome modal or protected-settings error. Teardown remains unproved
+and every qualification remains false.
+
+At the pinned publisher commit, `workspace.contribution.ts` blob
+`6cccbced7b7c304d1e9678fab1559a584f9ecc44` starts the trust modal only when
+`hostService.hasFocus` is true or its focus event subsequently fires. The native
+`nativeHostService.ts` blob `86a3d521e1bef4ff05c0d91c949c91cdca643e4b`
+implements that getter with `getActiveDocument().hasFocus()`. The native
+environment inherits `disableWorkspaceTrust` only from the explicit
+`--disable-workspace-trust` argument (`environment/common/environmentService.ts`
+blob `004d0614c938a3e9371c4f78a92a2a57b0058a10`); the frozen native argv does
+not contain that flag. Neither development nor test entrypoint presence is that
+getter's condition. The retained artifact does not measure native window focus;
+focus starvation is a source-supported hypothesis, not an observed cause.
+
+After admitting the sole actual workbench and before the unchanged trust flow,
+record only the boolean result of the constant expression
+`document.hasFocus()`, call the existing pinned Playwright
+[`page.bringToFront()`](https://playwright.dev/docs/api/class-page#page-bring-to-front)
+on that same page once, and wait at most three seconds for a true boolean.
+Bound the complete focus step to five seconds inside the original 60-second
+stage. Retain before/after booleans with stage/nonce in one bounded
+`driver-focus` diagnostic in the already admitted merged stream. No document
+content, endpoint, new artifact member or new result-envelope field is exposed.
+Use the driver's existing bounded-promise helper for the focus action and reads.
+Missing/malformed booleans or a false final focus fail before any trust or server
+action; an initially false focus is retained as an observation.
+
+This is normal activation of the already selected genuine workbench; it does not
+set trust, invoke a hidden native command or synthesize a focus event. Keep the
+exact canonical-folder trust dialog and unchecked-parent assertion, all existing
+MCP UI/API, source/tool pins, settings baselines, process primitive, sandbox,
+deadlines and cleanup gates. Do not substitute a resource-trust dialog or accept
+absence of the expected dialog. Run existing inert contracts and pinned strict
+TypeScript compilation, then inspect the next genuine hosted artifact. Two
+independent plan-review rounds precede this narrow driver correction.
+
+### Observed VS Code integration-test dialog suppression
+
+Genuine [run 40365228366](https://github.com/777genius/universal-agent-plugins/actions/runs/40365228366)
+at source tree `7d4ed4d9a114f26f6c2d1af834331f7e715b31b5` measured native
+document focus true both before and after activation, but still found no
+workspace-trust dialog in `empty-a`. Native artifact `12671090860` has SHA256
+`a6ad556f079a2b78715aa89f226d860984f840b6f527d351eed4945b97fe262d`.
+Focus starvation is not supported by that observation. No stage completed;
+cleanup and all five qualification cases remain unproved.
+
+The exact pinned publisher's
+`src/vs/workbench/services/dialogs/common/dialogService.ts`, blob
+`20ddfdcf4ec10c6ef509095f948604b37bad4e8a`, refuses `prompt()` whenever both
+extension-development mode and an extension-test entrypoint are present. The
+frozen trusted argv selects precisely that integration-test mode. This is a
+source-supported explanation for the missing dialog; it must not be treated as
+an approved trust decision or bypassed by changing a native trust service.
+
+For trusted mode only, remove the `--extensionTestsPath <observer>/runner.js`
+pair from both the controller's fixed argv and the driver's exact argv validator.
+All other arguments, proposed APIs, publisher and module pins stay fixed. This
+supersedes only that pair in the earlier trusted argv contract. Keep the legacy
+untrusted observer's independent integration-test invocation unchanged.
+
+Use the owned development extension's existing `onStartupFinished` activation
+event and sealed `extension.js` main module to invoke and await the existing
+`runner.js` exported `run()` function. The publisher's normal activation loader
+is `extHostExtensionService.ts` blob
+`42008549e96dff8258de6d38d1b8c3e89df8735d`. Declare only this observer's
+`capabilities.untrustedWorkspaces.supported=true`, supported by the pinned
+`extensionsRegistry.ts` blob `4f9fc31696f3c6d40d70320cda4d10a076fc8e86`.
+That lets the passive observer wait for the existing sealed UI challenge while
+the workspace is initially restricted. It registers no command, definition,
+tool or trust permission. Keep the complete sealed runtime closure unchanged.
+
+The observer still waits for the driver challenge and requires actual canonical
+folder identity and `workspace.isTrusted=true` before observing installed skills
+or calling the gateway. The driver still accepts only the exact native workspace
+trust dialog with the parent checkbox unchecked, then the existing exact MCP
+trust/start flow. No trust database, hidden command, synthetic UI event, native
+source patch, blanket approval or sandbox override is introduced. Preserve all
+original-user baselines, nonce/session joins, deadlines, artifact admission and
+strict cleanup. Run existing inert contracts and pinned strict TypeScript
+compilation, then inspect genuine hosted lifecycle evidence. Two independent
+plan-review rounds precede this narrow controller/observer correction.
+
+### Observed VS Code startup-prompt setting
+
+Genuine [run 40368973193](https://github.com/777genius/universal-agent-plugins/actions/runs/40368973193)
+at source tree `00a4a30cf9b4065feca1b0eec577afca3b61126f` used normal
+extension activation but again failed `empty-a` with native focus true/true and
+no visible workspace-trust dialog. Native artifact `12672882701` has SHA256
+`db8b4be131ece70b3121b6b2d153d84fef63f50d00e0667ebd9db01243aaed04`.
+No stage or qualification completed, and cleanup remains unproved.
+
+The same exact pinned `workspace.contribution.ts` blob
+`6cccbced7b7c304d1e9678fab1559a584f9ecc44` registers
+`security.workspace.trust.startupPrompt` with default `"never"` and explicitly
+returns from startup trust prompting for that value. The fixture previously
+set trust enablement but omitted the prompt setting. Author only
+`security.workspace.trust.startupPrompt="always"` in the fresh original user's
+settings before the existing strict preservation baseline. This requests the
+already frozen native dialog; it grants no trust and does not substitute any
+other interaction. Native trusted workspaces still skip prompting, while A/B
+must each receive their own exact native trust decision. Preserve the normal
+development-host invocation, canonical folder/unchecked-parent checks, passive
+observer handoff, all existing MCP UI, settings bytes, sandbox and deadlines.
+
+### VS Code source and installed-package receipt framing
+
+Independent source inspection found an additional fixture mismatch before any
+native run reached public installation. VS Code has no
+`QualifiedLocalInstallerFacade` trait, so its fixed public local-source adds use
+the existing lifecycle service and `providers.Stager`. The provider records
+installed `managed_package_directory` digests from
+`packagesnapshot.Builder.Build`, while the current trusted fixture uses its
+newer `packagedigest.DigestCaptured` source digest for that installed receipt.
+The authored `SourceDigest`, selected source binding and package revision
+correctly retain the newer acquired `PackageSnapshot.TreeDigest` identity.
+No native installation or product defect is inferred from this source finding.
+
+Preserve the current bounded, held, ordinary-file/directory capture and its
+canonical parent, original UID, single-link, path/depth/size checks. Keep
+`packagedigest.DigestCaptured` policy validation and source identity unchanged.
+Add only a private installed-receipt helper within `vscodeworkspace`, using the
+provider's exact lexical NUL-delimited `dir`/`file`, slash-relative path,
+executable boolean, decimal byte length and held file bytes. It has no algorithm
+selector, alternate fallback or returned-receipt adoption. Route only installed
+managed-package expectations through it; maintain complete exact object
+count/kind/ID/name/path/digest equality and all separate probe/launcher checks.
+Do not add a production digest API or change any provider, adapter or installer.
+
+Keep the acquired-source parity test and add meaningful inert user-skill and
+mixed project cases through the actual VS Code adapter, project planner and
+`providers.Stager`. Compare held installed bytes with the actual staged object
+and `packagesnapshot` verification, require the source identity to remain the
+newer snapshot digest, and demonstrate the two framings differ. Retain negative
+source/receipt/probe-adoption/link checks and exercise file/executable/empty
+directory changes. No vendor process executes in these tests. Independently
+review both subsections twice before implementation, then rerun the exact
+genuine hosted lifecycle; every unobserved or failed stage remains unqualified.
+
+### Observed VS Code pinned-scanner cache handoff
+
+Genuine same-head retry of [run 40373529167](https://github.com/777genius/universal-agent-plugins/actions/runs/40373529167),
+job `121768023210`, executed source `ee4556e222cc14e5e1c355428b42e8d4df4a7ace`
+(tree `46a998ba83fc8e6d3f905ab37d7129c598d950d7`). Native artifact
+`12677341866` has SHA256
+`e9f7b93e0c68f99895d86c9ca2f5ac23919b75e2e3013a4307e6b1446eb1ec5d`.
+Both `empty-a` and `empty-b` completed with separate exact native trust decisions,
+actual trusted canonical folders, inherited user skill discovery and publisher
+exit zero. The next public `add-user` failed before installation: its ordinary
+security evaluator attempted to download lintai inside the loopback-only network
+namespace and DNS access was refused. Installed-package checks and native MCP
+stages were not reached; all five qualifications remain false.
+
+The frontend already acquires archive SHA256
+`2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da`
+and its exact executable member SHA256
+`b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba`.
+`sealTrustedInputs` currently seals this as `<base>/executables/lintai`, but
+`trustedCommand` sets `AGENTPLUGINS_HOME=<trustedRoot>/installer-state`.
+Production `compose.go` constructs `securityscan.ReleaseScanner` at that home's
+`security/lintai` cache, and `release.go` resolves only
+`0.1.3/linux-amd64/lintai` underneath it; putting lintai on PATH cannot select
+it. This is a dedicated fixture handoff omission, not a production scanner or
+network-policy defect. The existing ordinary native fixtures already prepopulate
+this exact supported cache before their public installer operations.
+
+The first cache plan failed both independent reviews: a root-owned read-only
+leaf can be temporarily substituted through a native-owned writable ancestor,
+and post-command equality cannot prevent executing that substitution. Source
+inspection also rules out a root-owned sticky installer-state directory:
+`statev2.Store.Save` and `processlock.Lock.Acquire` unconditionally chmod their
+state/lock parent to `0700`. The user-scope public CLI must own that directory.
+Do not change those production semantics or assume sticky modes survive them.
+
+Use this exact fixture-only filesystem seam instead, before any native child:
+
+| Node below sealed base | Owner/group | Mode and authority |
+| --- | --- | --- |
+| `trusted` | `0:0` | `0755`; prevents replacing the state ancestor |
+| `trusted/installer-state` | original UID:GID | `0700`; unchanged CLI state/lock/temp/managed writes |
+| `trusted/installer-state/security` | `0:0` | `0555`; one exact task-owned self-bind mount |
+| `security/assessments` | original UID:GID | `0700`; real assessment-cache temporary/atomic writes |
+| `security/lintai`, `security/lintai/0.1.3`, `security/lintai/0.1.3/linux-amd64` | `0:0` | `0555`; fixed nonwritable scanner ancestors |
+| `security/lintai/0.1.3/linux-amd64/lintai` | `0:0` | `0555`; exact pinned, ordinary single-link ELF copy |
+
+All paths are the fixed descendants above, never caller-selected mount operands.
+Keep the existing immutable sealed scanner source and archive/member pins.
+Create the fresh cache copy with bounded held-parent/file operations, exclusive
+creation, no alias following or replacement, and exact ELF/hash checks. Precreate
+only empty ordinary `a-events.jsonl` and `b-events.jsonl` at `trusted`, owned by
+the original UID:GID with mode `0600`, before sealing that root. The probe's
+existing `O_CREATE|O_APPEND` works on these files without directory write access;
+`trustedEvents` already treats absent and zero-byte logs as the same empty byte
+stream. No native event is fabricated. Its marker still writes only plugin data.
+Other existing home, project, result, source and temporary children retain their
+original-user ownership and writable layouts; later authored source/result writes
+stay inside those precreated children.
+
+One self-bind mount of the exact `security` directory in the controller's current
+mount namespace prevents renaming/unlinking this entry through the writable
+state parent. Do not add a new mount namespace, recursive mount, alternate view,
+scanner override or mount on a system/shared directory. Every fixture process
+and existing view of this one task path sees the same protected mountpoint.
+The nonwritable root-owned subtree protects scanner contents; the native-owned
+assessment child remains writable. Primary Linux source at commit
+`e8f897f4afef0031fe618a8e94127a0934896aba` backs this seam: `fs/namei.c` blob
+`9342fa6a38c2bad85c13144b8d8ae4940e88e7e6` returns `EBUSY` for rename of
+old/new local mountpoints and rmdir/unlink of mountpoints; `fs/namespace.c` blob
+`5a51315c6678145467520800ceedc3378df5e7da` makes that test namespace-local
+and requires namespace `CAP_SYS_ADMIN` for mount/unmount. This is design support,
+not a claim about the actual runner; the hosted filesystem/UID contracts below
+must succeed, or native execution is refused. Original native UID, NNP and zero
+capabilities remain unchanged, including no authority to unmount this boundary.
+
+Hold and record the original dev/inode, UID/GID and declared mode of every
+ancestor from the admitted sealed base through the cache and both branches,
+plus the cache file's size, single-link identity and digest. The root-owned
+`trusted`, `security`, `lintai`, version and platform directories and cache file
+retain their owner/mode and linked identities throughout child execution; the
+security mount remains bound throughout that interval. The native-owned
+`installer-state` and `assessments` directories may legitimately chmod themselves
+and perform the documented state/temp/assessment writes. Their original inode
+and owner/group remain fixed, and their mode must be `0700` at each existing
+`checkTrustedAssets` stage boundary; their mode is not an immutable in-child
+invariant. Directory mtime/ctime/size are not frozen where entries legitimately
+change. Native ownership of `installer-state` does not authorize renaming that
+directory, because its `trusted` parent is root-owned and nonwritable; likewise,
+`assessments` cannot be replaced through its nonwritable `security` parent.
+
+Record and require the exact security mount ID independently of dev/inode;
+missing, detached, replaced or foreign/stacked mount state fails closed. Recheck
+all original records and declared boundary modes in every `checkTrustedAssets`;
+never recapture a replacement baseline. Keep strict read-only scanner-subtree
+preservation too. Once sealed, `trustedDirectory` and `trustedWrite` must not
+chown, chmod or rewrite a root-owned protected ancestor/cache node. A controller
+helper request for any recorded directory may only verify its original record
+and current boundary mode, not repair a changed one. The native owner's normal
+CLI writes and mode operations above remain permitted. Other ordinary fixture
+mutations retain their existing held IO guards.
+
+After the existing child/display supervision returns, release only this exact
+recorded task mount, after matching all held ancestry and mount identities, using
+ordinary unmount with no lazy/force/fallback behavior. Then retain the existing
+held-root deletion. Unexpected identity, busy/unmount failure or root-cleanup
+failure makes cleanup incomplete and qualification false. A resource-unmount
+attempt after a failed exchange cannot turn that child's failed tree proof into
+success. No controller/native sequence may execute after releasing this boundary;
+no new evidence member or successful-cleanup exception is introduced.
+
+The public CLI must continue using its unmodified required ReleaseScanner,
+normal security policy/report validation and ordinary assessment cache. Do not
+add a scanner override, fake security result, inherited cache, PATH fallback,
+network interface, native download, alternate pin or vendor execution locally.
+Keep source/receipt equality, original-user authority, native trust/MCP UI,
+sandbox, command tables, original deadlines, closed artifacts and qualification
+rules unchanged. After the observed public failure the existing display exchange
+was unsuccessful, its strict supervisor reported forced cleanup and display
+unlink authority was withheld. Retain that honest cleanup failure and the current
+success-only teardown/asset-unlink contract; no separate cleanup change is
+justified by this evidence.
+
+Add inert held-identity contracts for exact cache placement, missing or changed
+file bytes/mode/inode/owner, original ancestor replacement/mode/owner/symlink,
+hard links, unexpected destinations, pin mismatch and mount identity/cleanup
+refusals. On the genuine hosted privileged test path, build the same finite
+layout using inert ELF bytes, then actually drop to the original UID/GID with
+zero capabilities. Denial tests target the root-owned `trusted`, `security`,
+`lintai`, version and platform directories and scanner leaf: attempts to rename,
+exchange, unlink, rewrite or chmod those nodes, including temporary substitution
+of the security entry, must be denied before mutation. Also require denial of
+renaming/replacing native-owned `installer-state` and `assessments` through their
+root-owned nonwritable parents. These negative tests do not prohibit the native
+owner's chmod or documented contents writes within those two writable
+directories. Root-only chmod-and-restore demonstrations do not satisfy this
+contract. Positive tests in that same UID require owner chmod to `0700`, real
+statev2 save, mutation lock, state/temp writes, assessment-cache store/atomic
+replacement and normal event-log append to succeed. Check the declared native
+directory modes at stage boundaries, with owner mode drift detected there;
+root-owned chain owner/mode and mount binding stay protected during execution.
+Independently exercise real ReleaseScanner
+cache resolution with an expressly inert executable and a transport that
+refuses/counts network requests: PATH alone must miss; the seeded cache must run
+without download. Empty inert output is not a security report or a qualification.
+The hosted contract must also prove exact ordinary unmount and owned-root cleanup;
+unsupported privileges/filesystem semantics fail before any vendor, without a
+weaker fallback. Local environments without these privileges may run only the
+remaining inert contracts and cannot claim that hosted gate passed. No vendor
+process executes locally. Two independent reviews of this revised plan precede
+fixture implementation, independent code review and the exact hosted lifecycle.
+
+### Observed scanner metadata-contract timestamp collision
+
+Genuine hosted [run 40389182925](https://github.com/777genius/universal-agent-plugins/actions/runs/40389182925),
+job `121805371213`, checked exact source
+`bd42cfedc8a8c48dce0615f008981089c3590598` (tree
+`459e041d038a2aa9251b148c3bda7f9c93c4b00d`). Its inert controller contracts
+failed in `TestTrustedScannerHeldAncestryRejectsReplacementAndMetadataDrift/file-bytes`:
+the metadata-only held-node check accepted a same-size rewrite from
+`held original` to `held changed!`. The log does not contain the actual stat
+timestamps; a same-quantum timestamp collision is an inference from that check's
+size/mtime/ctime comparisons. No native lifecycle ran and no native artifact was
+admitted. This result does not establish failure of the separate pinned digest
+and full subtree inventory checks in `trustedScannerCache.verify`.
+
+Keep held-node verification's existing inode, ownership, mode, single-link,
+size, timestamp and mount rules. Make its byte-size mutation contract
+deterministic by naming that subcase `file-size` and writing distinctly longer
+bytes. Extract only the existing unchanged pinned-digest and strict-inventory
+tail of `trustedScannerCache.verify` into `verifyContents`, called at the same
+point after all existing ancestry and mount checks. Do not add hashing, change
+admission order, relax an authority check or move a production boundary.
+
+Exercise that exact content helper with an actual ordinary temporary cache
+subtree. First require its original digest and inventory to pass. Then require
+refusal of an equal-size byte rewrite even after restoring the original mtime,
+and independently require refusal of scanner mode and empty-directory inventory
+changes. The metadata-only subcase no longer claims to prove byte integrity;
+the production content check proves that separate contract. Preserve the genuine
+hosted original-UID/self-bind/cache-route gate unchanged and require it before
+the editor. Two independent plan reviews precede this fixture-only amendment,
+followed by independent code review, focused inert validation and a fresh exact
+hosted lifecycle. All unobserved native stages remain unqualified.
+
+### Observed VS Code inert deadline contract on a short-uptime host
+
+Genuine hosted run 40389182726, job 121805371389, checked source bd42cfedc8a8c48dce0615f008981089c3590598 (tree 459e041d038a2aa9251b148c3bda7f9c93c4b00d). Before any untrusted native workbench observation, TestTrustedDeadlineKeepsOriginalOriginAndClosedMode failed at trusted_lifecycle_linux_test.go:47: "legacy budget changed monotonic task budget authority refused". The later missing ZIP is a consequence of never starting observation, not native evidence.
+
+The inert test constructs its real CLOCK_MONOTONIC origin by subtracting 100 seconds without checking uptime. deadlineAtMaximum correctly refuses nonpositive, future or over-budget origins. A host with less than 100 seconds of monotonic uptime therefore cannot satisfy that test's setup. The logs contain no sampled clock value; short uptime is a source-backed inference, not observed telemetry. The roughly 21-second controller build/test log interval does not itself measure system uptime.
+
+Change only the deadline test in install/integrationctl/research/vscodeworkspace/trusted_lifecycle_linux_test.go plus this recorded plan. Let the artificial elapsed interval be min(100 seconds, CLOCK_MONOTONIC nanoseconds / 2), require it to be positive, and derive the one original StartNS by subtracting that interval from the sampled monotonic time. Require the same legacy and trusted work deadlines to retain that origin: 420 seconds minus elapsed and 840 seconds minus elapsed, with the existing one-second tolerance. Add explicit zero and negative origin refusals alongside the existing future-origin and closed-mode negatives. Do not sleep, skip the test, reset an origin, mock the production clock or change production deadline logic, limits, native execution, permissions, acquisition, cleanup or qualification.
+
+Two independent reviews of this exact plan precede implementation. Review the exact implementation independently, then run the focused actual deadline/Trusted inert contracts and changed-lines lint using the existing shared caches. The corrected scanner-content candidate b1f23a707894d83e7d3f3315304a54de6f265374 remains independently reviewable; this is a separate test-only correction. Genuine hosted untrusted/trusted runs remain mandatory and all unobserved native stages remain unqualified.
+
+### VS Code Required-lane lint completion
+
+The published scanner-content and short-uptime corrections are reviewed local
+source `ea13f5bd067752b12da917972373a7c2c61bfa0a`, tree
+`355cd394b6caf21a17e230949a3040f00ad1963e`, published as
+`73f6b9c3e26709409d8ad9e1502683675683ebad`. Focused trusted contracts pass;
+the genuine hosted UID/mount and complete editor lifecycle remain mandatory.
+Do not fold this separate lint completion into those earlier evidence claims.
+
+An unfiltered golangci-lint 2.13.2 run over the VS Code controller package found
+37 issues. All are introduced by this VS Code PR relative to exact program
+parent `b16b5c5d28cdc734856ac414521d40d9c8d8dfd5`, rather than inherited
+parent debt. The six trusted files below are absent at that parent. The other
+three parent blobs are `69769e21d82a22da8f9beeaa5cac63dad587491c`
+(bootstrap), `df94165a627843df50e9a33534fd25ed1e568923` (workbench), and
+`20ee7541e104e2a693cf6741271e0e1cc413ef00` (files), independently checked
+through the GitHub file API and against the local parent source.
+
+| File below `install/integrationctl/research/vscodeworkspace/` | Findings |
+| --- | --- |
+| `trusted_fixture_linux.go` | 14: errcheck 3, funlen 3, gocognit 4, gocyclo 3, revive 1 |
+| `trusted_contract_linux.go` | 3: funlen, gocognit, gocyclo |
+| `trusted_lifecycle_linux.go` | 3: funlen, gocognit, gocyclo |
+| `trusted_observe_linux.go` | 9: funlen 2, gocognit 3, gocyclo 3, staticcheck 1 |
+| `trusted_receipt_linux_test.go` | 2: errcheck, prealloc |
+| `trusted_lifecycle_linux_test.go` | 1: predeclared `copy` name shadowing |
+| `bootstrap_linux.go` | 1: file length crossed 500 lines |
+| `workbench_linux.go` | 1: file length crossed 500 lines |
+| `files_linux.go` | 3: preserved default-limit parser wrappers became unused |
+
+Clear these actual Required-lane findings through cohesive extractions and the
+small correctness/style fixes below. Keep the existing package, Linux build
+tags, original entry points and concrete fixture authority. Do not change
+production adapters or installer behavior, linter settings/baselines, directives,
+client pins, native argv/environment, process primitives, time budgets, trust,
+permissions, source/receipt identity, event grammar, artifact membership or
+qualification. No generic runner, validation framework or alternate engine is
+introduced. New helper files are in this same controller package only.
+
+#### Concrete extraction and preservation map
+
+- `copyTrustedTools`: extract the existing bounded filesystem-walk callback into
+  a named tool-entry copier using the same context, root/target, UID, expected
+  and seen maps and one original entry counter. Keep manifest checks before the
+  walk, exact per-entry check/copy/seen order, complete-member check, package
+  validation, final manifest rehash and output write in their present order.
+  This is a finite fixture helper, not a reusable copy abstraction.
+- `trustedFixtures`: extract the contiguous home/profile/foreign-user setup and
+  project/source setup into named fixture helpers. Keep nonce creation and
+  trusted-state initialization first, existing directory/settings/foreign/user
+  writes in their present order, then A/B/user project/source creation, scanner
+  preparation and protected-baseline registration. Preserve every literal and
+  original ownership boundary. Keep scanner sealing before native execution.
+- Move the existing package capture/digest functions into
+  `trusted_package_linux.go`; extract only their walk callback to reduce nested
+  complexity, retaining the same captured-entry order, counter/byte/depth bounds,
+  parent checks, ordinary IO, context checks and both distinct digest framings.
+  Move receipt functions into `trusted_receipt_linux.go`; leave fixture/state
+  and preservation helpers in `trusted_fixture_linux.go`, below its file limit.
+- `trustedReceipt`: separate exact state read/parse/selection, immutable selected
+  source/package validation, generic binding validation and project-only
+  data/locator validation into named helpers. Keep every existing condition,
+  error and first-failure order. Retain the one-client iteration and original
+  assignment order for Data, Skill, Binding and Installation, then compare
+  source/native skill bytes and validate object ownership.
+- `trustedReceiptObjects`: separate untransformed-source comparisons/digest,
+  project executable/skill ownership and native MCP receipt construction from
+  final ownership-inventory comparison. Keep source checks before installed
+  digest, executable checks before skill/MCP checks, exact independent expected
+  projection and strict inventory equality. Do not derive expectations from
+  native output or combine acquired and installed framing.
+- `trustedSequence`: keep its original entry point and replace contiguous blocks
+  with named phase helpers: empty baselines; user/A/B add and receipts; installed
+  A/B observations and B protection; unchanged A reconciliation/repair; changed
+  A source/update; missing A repair/restart; A removal and B observation; repeated
+  A removal; final asset/event capture. Pass only the exact existing old-package,
+  retained snapshots and event bytes between phases. Preserve shallow snapshot
+  semantics, unprotect/reprotect order, all public argv/labels and native stage
+  order. Only the original final point may set Complete=true.
+- `validateTrustedObservation`: split closed driver/proof/exit checks, closed
+  observer/context/PID/skill checks, per-selected-server definition/UI checks,
+  gateway-call/fresh-probe/facts checks and event correlation into named helpers
+  in `trusted_observation_validation_linux.go`. Preserve strict object keys,
+  normalization of authored expectations only, check/error order, cardinality,
+  namespace/PID exclusions and single-session admission. Set Sessions[session]
+  only after the same event-history/prefix and initialize/list/call validation.
+  The De Morgan rewrite of the exit refusal must accept exactly the existing
+  zero-exit/no-signal or nil-code/SIGTERM alternatives.
+- `validateTrustedProbeEvents`: extract per-line decode/identity/time validation
+  and the existing finite initialize/list/call transition/count block into named
+  helpers in `trusted_probe_events_linux.go`. Keep bounds 3..32, exact event
+  grammar, ordering, permitted repeated list, required counts and error strings.
+- `trustedObserve`: extract driver request/result-path/frame preparation, the
+  existing bounded result-poll callback and partial-observation capture. Keep
+  the initial original-work-budget/asset admission, exact sealed request paths
+  and GUI argv/env, 65-second context, 25-ms poll, start timestamp immediately
+  before the same strictInput call, partial evidence on failure, final asset
+  recheck, successful-stage append and observations append in the same order.
+  No helper starts a fresh task budget or new process.
+- Move `finish`/`publish` intact from bootstrap into `sealed_output_linux.go`,
+  and the four closed observation-envelope/context/policy/identity validators
+  intact from workbench into `observation_envelope_linux.go`. Retain names and
+  callers. Adjust imports only; this clears the two file-size findings without
+  changing cleanup, publication or untrusted observer behavior.
+- Preserve `readJSONValue`, `readJSONObject` and `readJSONArray` and their 256-item
+  semantics. Route the existing default-limit parse through those wrappers;
+  let the 4096-item trusted-manifest path retain the parameterized functions.
+  Preserve depth limits, duplicate-key rejection, trailing-input checks and
+  token order. Do not delete wrappers, add implicit fallback or widen either
+  input's supported limits.
+- Explicitly check the three previously unchecked deferred descriptor closes at
+  their current cleanup points, joining close errors with the original result
+  without masking it; successful behavior and defer order remain unchanged.
+  The receipt test checks snapshot removal in its existing deferred cleanup.
+  Preallocate only the existing expected-argument slice capacity, and rename the
+  local `copy` variable without changing its independent pointer copy.
+
+Before implementation, obtain root and an independent second plan review of
+this exact text and address findings. Preserve the reviewed pre-lint source as
+its own commit. No source is retired: the moves retain every implementation and
+legacy entry point, and helper extraction preserves the existing contracts.
+
+After independent implementation review, run the entire affected controller
+package's inert tests, including its legacy/untrusted, scanner, receipt, closed
+JSON and deadline contracts, plus the existing Python frontend/toolchain and
+wrapper contracts that bind these names/entry points. The privileged hosted
+UID/mount test remains explicitly skipped locally and required on the genuine
+runner. Run unfiltered golangci-lint 2.13.2 on this entire package and its whole-
+file size/architecture checks, require zero issues, and inspect the diff for
+unchanged command tables, literal settings, guard/order and cleanup behavior.
+Use the already approved private temporary/cache capacity for validation;
+execute no vendor binaries locally. Commit/push only after independent code GO
+and these checks, then inspect fresh genuine hosted artifacts before claiming
+any native completion or merge qualification.
+
+### Bounded diagnostics for an exit-one scanner failure
+
+#### Observed failure and limits
+
+Genuine VS Code trusted run 40400045559, job 121843130833, at source
+73f6b9c3e26709409d8ad9e1502683675683ebad/tree
+355cd394b6caf21a17e230949a3040f00ad1963e passed its inert hosted contracts,
+completed empty-a and empty-b, then failed public add-user before installation:
+"security assessment failed before installation: lintai returned invalid JSON".
+Native artifact 12687549067 retains that public error, but not the internal
+scanner's stdout, stderr or exit. All five qualifications remain false and
+native/display cleanup is not proved. Frontend cleanup is a separate success.
+
+CommandScanner runs the actual admitted executable once with the fixed argv
+scan-agent-plugin <packageRoot>, cwd packageRoot, its existing allowlisted
+environment, default 30-second context and 8-MiB stdout/64-KiB stderr limits.
+It currently accepts exit zero or one and drops stderr for both. The evaluator
+then independently rejects empty/non-JSON output, unsupported report/policy
+identity, runtime errors and other invalid assessment facts. The observed error
+therefore establishes accepted exit zero/one and a refusal for empty, oversized
+or non-JSON stdout, not the actual scanner exit or a measured cause. The later
+inert regression below proves the intended stream cap was bypassable.
+
+Static inspection of the already acquired exact GNU archive
+2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da and
+member b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba
+found a strong GLIBC_2.39 version need (Flags:none) and the associated undefined
+pidfd_getpid/pidfd_spawnp symbols. The standard Ubuntu 22.04 libc baseline is
+2.35. GNU glibc 2.35 loader source reports a missing strong version and exits
+one before main. This is a strong compatibility inference; the actual loaded
+libc version and loader diagnostic have not been captured. The upstream
+v0.1.3 tag source emits a JSON report before a normal findings exit and prints
+ordinary command errors to stderr with exit two; source is not proof that the
+released bytes exactly reproduce its build.
+
+#### Exact production change
+
+Change only install/integrationctl/agentplugins/adapters/securityscan/scanner.go
+plus a focused new inert CommandScanner test file and the recorded plan. The
+shared production adapter owns this error; do not introduce a VS-only wrapper,
+scanner substitute, extra command/preflight or second execution. Root will
+coordinate integration through the existing program/client PRs.
+
+Keep timeout and both overflow checks at their current precedence. Keep the
+existing non-exit-one error branch, argv/cwd/environment, deadlines, limits and
+return values unchanged. In the existing accepted-exit-one branch only, check
+json.Valid on the already captured stdout. If it is false, return failure with
+a fixed diagnostic identifying actual exit 1, the exact stdout byte count, and
+strings.TrimSpace of the already bounded stderr, using the same stderr policy
+as the existing non-one failure branch. Example diagnostic shape:
+"lintai security scan failed (exit 1, invalid JSON, 0 stdout bytes): <stderr>".
+Do not return captured stdout as a successful scan in that branch.
+
+Retain valid-JSON exit-one output byte-for-byte for the existing evaluator and
+its full report/identity/runtime-error/assessment validation. Do not equate
+json.Valid with a valid security report. Exit-zero behavior, including its
+existing later invalid-JSON rejection, stays unchanged. No successful outcome,
+report, assessment or cache entry may be fabricated or rescued by diagnostics.
+The change tightens only an already failing exit-one/non-JSON path and makes
+its actual process failure visible before the evaluator's generic error.
+
+Do not emit raw stdout, report bodies, scanned file contents, environment or
+credentials; the byte count is sufficient to distinguish empty from malformed
+output. Retain the existing 64-KiB stderr ceiling and fail on overflow before
+formatting any diagnostic. Do not enlarge buffers or add output files, artifact
+members, result fields, general callbacks, inherited credentials or a debug
+switch. The existing bounded public add-user log will carry the error through
+the unchanged capture/admission path. No new external communication occurs.
+
+#### Inert verification and review gates
+
+Use an expressly inert temporary shell/helper executable, never a vendor,
+through the real CommandScanner.Scan path with the same fixed argv and cwd.
+Keep these process tests on supported POSIX test platforms; preserve the
+existing cross-platform evaluator/report tests without weakening their gates.
+Verify:
+
+- Exact valid reports with exit zero and with exit one return unchanged bytes;
+  the real evaluator still accepts/classifies the valid exit-one findings.
+- Exit one with empty stdout and a loader-shaped stderr sentinel returns a
+  failure exposing actual exit one, zero stdout bytes and trimmed stderr.
+- Exit one with non-JSON stdout refuses and reports its byte count without
+  leaking a distinct raw-stdout sentinel into the error.
+- Syntactically valid but unsupported exit-one JSON still reaches and fails the
+  existing independent report/identity validation.
+- Exit-zero invalid JSON and non-one process errors retain their existing
+  behavior. Stderr overflow remains an output-limit failure, never a truncated
+  diagnostic accepted as a scan or a disclosure beyond the existing bound.
+
+Run the focused scanner/evaluator contracts and affected unfiltered lint after
+independent code review, using the approved private temporary/cache capacity.
+Do not run the vendor locally. Obtain two independent reviews of this exact
+plan before implementation and independent review of the exact implementation
+before pushing. Then use one genuine unchanged Ubuntu 22 trusted workflow to
+collect the actual diagnostic; retain its source/tree/artifact identities and
+all failures. If it still follows the unchanged exit-zero invalid-JSON route,
+report that limitation rather than broadening the code silently.
+
+A host/pin/selection correction requires a separate evidence-bound plan after
+reviewing that result. Preserve the prior Ubuntu 24 sandbox failure, GNU/musl
+cache identity separation, native trust/permissions, process containment and
+all qualification/cleanup rules. No host, archive, scanner selection or
+sandbox change is authorized by this diagnostic amendment.
+
+### Enforce the scanner's intended stream bounds before publishing diagnostics
+
+This amends the independently reviewed exit-one diagnostic plan (scratch
+SHA256 89ef9097a66617f12338b99f43c7ce112cc13c8e344fcf262e6bf80a0cdec09c;
+recorded plan c845eb97b0bd9b954014a8139aea19fa8a44e08b). The initial diagnostic
+implementation 7eefe3c9204fb9d1452fe7de76445dbd9ce7c9b7/tree
+520917a812f91350d73670cc8784c23268f58c8b is NOT approved for publication.
+
+#### Actual inert regression and corrected historical inference
+
+The real CommandScanner process tests executed locally against an expressly
+inert POSIX script. Every prior scanner/evaluator test and every new valid-report,
+exit-one diagnostic, unsupported-report and exit-zero/non-one case passed. The
+new stderr-overflow case failed: a script writing maxScannerError+1 bytes and
+exiting one reached the formatted invalid-JSON diagnostic instead of the
+existing output-limit refusal. Full package result: FAIL, 0.039 seconds. No
+vendor binary ran and no result is native qualification evidence.
+
+The existing limitedBuffer embeds bytes.Buffer and therefore promotes its
+ReadFrom method. os/exec copies a child pipe using io.Copy; that fast path can
+invoke the promoted bytes.Buffer.ReadFrom, bypassing limitedBuffer.Write and
+its overflow flag. The only production limitedBuffer instances are the
+CommandScanner stdout and stderr buffers in scanner.go. Their consumers need
+only Write, Bytes, Len and String. No other caller requires ReaderFrom or a
+promoted bytes.Buffer API.
+
+Correct the earlier bounded-output inference in the recorded diagnostic plan.
+decodeReport uses the same generic invalid-JSON error for empty output, output
+larger than 8 MiB, or syntactically invalid output. The effective intended cap
+was bypassable, so the VS73/5942 artifact establishes accepted exit zero/one and
+one of those three refusal conditions; the actual scanner stdout, stderr and
+exit remain unretained. Do not claim the old 8-MiB/64-KiB caps actually held.
+The independently observed GNU ELF strong GLIBC_2.39 requirement and Ubuntu22
+baseline remain a separate loader-compatibility inference, not actual captured
+loader stderr.
+
+#### Exact bound repair
+
+Change only the existing scanner.go buffer implementation and the focused
+scanner_process_test.go, plus this recorded plan/correction. Replace the
+anonymous embedded bytes.Buffer with one named private bytes.Buffer field.
+Update the existing bounded Write to use that field without changing its
+limit, truncation, overflow flag, return-count or error behavior. Add only the
+three explicit Bytes, Len and String forwarding methods required by the current
+scanner callers. Do not implement ReaderFrom, embed another interface, expose
+an unbounded writer or add a copy helper, sink, process primitive or execution.
+All child output must consequently traverse the existing bounded Write even
+when os/exec/io.Copy chooses an optimized method path.
+
+Retain the intended 8-MiB stdout and 64-KiB stderr limits, existing timeout then
+overflow precedence and already reviewed three-line exit-one/non-JSON diagnostic.
+Keep valid in-bound output byte-for-byte, full evaluator/report/identity checks,
+exit-zero/non-one behavior, child argv/cwd/environment and cancellation unchanged.
+The repaired bounds intentionally refuse output that exceeded the declared cap
+but previously slipped through the promoted method. Do not weaken an assertion
+or enlarge a limit to make the regression pass.
+
+#### Verification and independent review
+
+Extend the actual inert CommandScanner process tests to cover BOTH stdout and
+stderr at their respective limit+1, with exit zero and exit one. Each must return
+no successful body and the existing exact output-limit failure, before any
+invalid-JSON diagnostic. Retain the valid zero/one report byte-parity and real
+evaluator classification tests and all other reviewed negatives. Keep failure
+messages concise: report lengths/classification rather than dumping a large
+stream or stderr error. Tests execute only the expressly inert temporary helper.
+
+Two independent reviews of this exact amendment precede implementation. Record
+it in the consolidated plan, including the corrected historical inference,
+before code. Review the exact final implementation independently, run the full
+affected securityscan package and affected unfiltered lint in the coordinated
+approved private cache/temp slot, and require zero issues/failures. Never run a
+vendor locally. Only then may root publish the combined bounded diagnostic and
+request one genuine unchanged-host Ubuntu22 lifecycle to capture actual scanner
+failure facts through its existing admitted public log.
+
+No host, GNU/musl asset, release selector, cache identity, report schema, artifact
+member, raw stdout disclosure, ambient credentials, native permission, sandbox,
+deadline or qualification changes are authorized by this amendment.
+
+### Scanner diagnostic validation: inherited lint findings and actual Required gates
+
+Validation of final code `56856d510e3342db2472fbd354cfbbe7cb3f58f0`
+(tree `ae5ca58ee7d2575b0c4d5da170826db12834441c`) found five unfiltered
+lint issues in unchanged parent files, so the earlier plan's expectation of
+zero issues from that broader invocation is corrected by observed evidence.
+Do not describe the entire unfiltered package as clean or change unrelated
+provider/cache code to meet that mistaken expectation.
+
+Exact GitHub file metadata at parent
+`b16b5c5d28cdc734856ac414521d40d9c8d8dfd5` matches the local unchanged blobs:
+
+| File below `install/integrationctl/agentplugins/adapters/securityscan/` | Parent/current blob | Inherited findings |
+| --- | --- | --- |
+| `cache.go` | `bb5f7213bd0d0a04a1cec4879ba463eafb64e1d6` | line 67: unchecked deferred `os.Remove` |
+| `release.go` | `46ae62b4f2b537069b65f224321d3e6fe3f4265b` | lines 107, 128, 180: unchecked deferred body close, temporary remove, gzip close; line 99: gocritic prefers `http.NoBody` |
+
+The pre-diagnostic scanner.go blob at local c75 is
+`403fcc9a38aa8875c224ab8ed792d15ec51c6b56`, also byte-exact to that parent.
+Thus the actual changed-lines run from c75 covers the complete scanner delta,
+and the new process-test file is included in full.
+
+Actual final verification, using golangci-lint 2.13.2 and the approved private
+cache/temp capacity with one CPU, is:
+
+- Full securityscan package tests: PASS, 0.281 seconds, including both actual
+  process streams at limit+1 for exit zero and one, valid reports and evaluator
+  classification, bounded diagnostics, and the prior refusal paths.
+- All enabled linters on changed lines from c75: zero issues.
+- The actual Required whole-file size/architecture selection
+  `revive,funlen,gocyclo,gocognit,dupl,depguard`: zero issues.
+- Broader unfiltered package lint: the five inherited findings above, with none
+  in scanner.go or scanner_process_test.go. No suppression or exclusion changed.
+
+This is a validation-only addendum matching the existing Required workflow's
+changed-lines plus whole-file size/architecture gates. It changes no product
+source, tests, assertions, linter settings or baseline. Root and independent CLI
+review must approve this exact addendum before publication; the independently
+reviewed product code remains frozen. No vendor executable ran locally, and
+native scanner cause/qualification remains for genuine hosted observation.
+
 ## Gemini and Copilot runtime-attempt amendment
 
 This amendment first admits bounded, explicitly unqualified runtime research for
@@ -1118,3 +1849,275 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+
+## Reviewed portable scanner amendment (2026-10-26)
+
+Plan SHA-256: `d5fb2db3cceb112c974beed31f9144c91df7e93c213add0cbac2099fc037d0b0`.
+Independent plan reviews: root R1 GO and cli_completion R2 GO, both bound to this exact text before implementation.
+
+# Portable Linux amd64 scanner: observed-failure amendment
+
+This is the final plan for independent review, superseding the preparatory
+portable-policy and producer-coupling DRAFT notes. It changes no product source
+until two independent plan GOs and a recorded consolidated-plan commit.
+Preserve the existing scanner/evaluator, source/receipt, process, permission,
+trust/MCP, cleanup, artifact and qualification contracts in the consolidated plan.
+
+## Actual evidence and chosen surface
+
+Genuine run 40404315364 / job 121858008835 executed
+160906e8d9cc6ef15e07ca9775aa78b22b505f84/tree8be1c7a901ea2da91ad59b314f8a96a9feec9eef.
+Native artifact 12690158855 outerSHA256
+682c1914a94b00b3b80d89bed716b7dba9fdea2bbbb83d2e05cc2eae44b23fe1
+contains only research.zip with 20 canonical unique flat file members; frontend
+12689949178 outerSHA256fe69f497ef77ec826cda976a935feaa0000289e1693228c0a8dcbda734c9d565
+has the same envelope with 29 members. Root, CLI and desktop independently read
+these closed bytes. Actual add-user.merged.log (740B, SHA256
+248ff5a7e5d7a806ef7257f31ac492ab1a9d694bae85efa3368cad6dd352ba3c)
+now records scanner exit 1, zero stdout and actual libc.so.6 refusal for required
+GLIBC_2.39 from cached GNU lintai 0.1.3. This confirms that loader failure, without
+measuring the host's full libc version. Empty A/B passed; installation/MCP stopped;
+native/display cleanup false, frontend cleanup true, all five qualifications false.
+
+Keep Ubuntu 22 and every existing genuine-host/source/original-UID guard. Setup
+image 20261012.322.1 and environment image 20261023.322.3 conflict and remain separate
+facts. Prior Ubuntu 24 run 40182639794 failed the normal Electron sandbox; do not
+change host, AppArmor/sysctl, NNP/capabilities, executable modes, process/cgroup/
+namespace primitives, trust or sandbox flags to evade either retained failure.
+
+## Deterministic production choice and preservation
+
+For every declared linux/amd64 target, ReleaseScanner.resolve chooses the existing
+linux/amd64-musl asset and cache 0.1.3/linux-amd64-musl/lintai. Other targets stay
+unchanged. Keep GNU releaseAssets/cache bytes/history; never rewrite, migrate,
+delete or relabel them. GNU-only cache is not a portable hit. No ABI/file probe,
+retry/fallback, environment selector, new public option, dual seeding or extra
+process. Keep real scan-agent-plugin, repaired output bounds/diagnostics, report
+and policy identity/runtime-error checks, assessment semantics and transactions.
+
+Exact portable v0.1.3 archive is lintai-v0.1.3-x86_64-unknown-linux-musl.tar.gz,
+3,317,017 B, SHA256 3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b;
+member lintai-v0.1.3-x86_64-unknown-linux-musl/lintai is 9,797,344 B,
+SHA256 033cc9672601d318a2c8012f85905e02d9908d865b58ef665e7701816edb6f1a.
+Use only the existing official777genius/lintai v0.1.3 release origin and full
+archive/member admission. Static ELF64 x86-64 PIE has no PT_INTERP/DT_NEEDED/version
+table; that is compatibility evidence, not runtime qualification.
+
+Preservation inventory: usesMusl is current private filesystem-probe policy,
+one resolve caller, no external/public or legacy-YAML consumer/tests/dependencies
+owned by it. Adapt supported scanner resolution to the target condition and
+retire only this obsolete private probe. Preserve GNU asset/cache capability
+and all useful legacy source/tests/docs. No dummy caller, redundant exported API,
+unused suppression or other deletion. This disposition is part of plan review.
+
+## Source versus frozen producers: preserve the original literal manifest
+
+Keep PINS[linux-amd64][lintai] exact GNU unchanged. Add same-version sibling
+lintai-musl in that same literal manifest; runtime/prepared toolnames remain
+exactly client/lintai/rg, with no new target or record schema.
+
+Concrete shared helpers: frozen_installer(args) reuses the existing predicate
+release_tag OR draft OR prepared_input OR prepare_only; use it for current
+source-project admission and selection. current_source_scanner_pin(target)
+returns named musl only for linux-amd64, original scanner otherwise. A selected
+producer-tool-pin helper uses that source pin only outside frozen mode.
+Default release_state=public alone is NOT frozen: the actual source branch has
+no release_tag/prepared_input/prepare_only and builds ./cmd/agentplugins.
+Tagged public, authenticated draft, prepare-only and prepared consumption keep
+original GNU tuples. Preserve prepared_release/load_prepared exact tuples,
+state/tag/commit/target, file closure, PREPARED_SHA256, no credentials/acquisition
+fallback, offline literal-PINS verification and historical GNU provenance fixtures.
+
+Standalone prepared_tools, main pin admission and existing archive-SHA env must
+use the same selected pin. Require actual scanner_asset source/version/archive/
+integrity to match the selected producer pin BEFORE build/native execution;
+env archiveSHA comes from that verified receipt. GNU substitution cannot produce
+current-source portable proof. Keep installer/attestation/bootstrap/version and
+scanner_asset/provenance schemas unchanged; no new hidden mode env or inference
+from commit inequality. Current-source runtime/VS/TUI provisioner use the shared
+current_source_scanner_pin helper, not the historical default entry.
+
+Deliberate future boundary: preserving currently admitted frozenGNU installers
+does not admit a future post-policy released/draft producer automatically. Its
+portable scanner policy must be explicitly bound to its reviewed frozen producer
+identity/manifest before qualification. No version guessing, trying both variants
+or general multi-version framework now. No release is published in this program.
+
+## Actual fixture handoffs
+
+Go nativeProvisionScanner retains nativeBinary, nativeSHA, supplied expected hash,
+ordinary copy and rehash. A small private input-admission helper (declared OS/CPU,
+actual/expected binary digest, supplied archiveSHA→platform/error) maps Linux amd64
+GNU 2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da→linux-amd64,
+musl 3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b→linux-amd64-musl.
+Wrong digest, unknown archive or platform refuses before seeding; other platforms keep
+exact single pins. No host-loader probe. ArchiveSHA truthfully routes supplied
+bytes, not producer policy: source→musl enforcement remains at authenticated
+Python acquisition above, not an isolated Go receipt.
+
+VS SCANNER_ARCHIVE/trustedScannerArchive and sealed/UID cachechain change to the
+portable tuple/key. Preserve bounded archive/unique ordinary member/hash handoff,
+held ancestry/root modes, exact single self-bind, valid exchange-denial geometry,
+real state/lock/assessment writes, no-network actual ReleaseScanner cache test,
+ordinary unmount and fail-closed cleanup. Hosted UID/mount gate stays mandatory
+before vendor execution; inert ELF cannot become report/native proof.
+
+## Terminal UI preserving manual/raw compatibility
+
+Workflow always builds source: provision_scanner uses shared sourcepin helper;
+Linux matrix filename becomes musl; other OS entries unchanged. Add musl to
+known archive/pin/cache-identity records while retaining GNU mappings/history.
+Known archive determines truthful key; conflicting explicit declaration fails.
+
+Add harness-only --scanner-cache-platform / optional Fixture keyword. Validate
+fixed key against actual OS/CPU before seeding/execution; no arbitrary path or
+product CLI/env option. Linux amd64 source default islinux-amd64-musl, other native
+keys unchanged. Raw trusted-SHA input onLinux amd64 requires explicitGNU-or-musl
+cache declaration: frozen raw bytes stay trusted raw/unclassified, cache is
+caller-declared, never pinned-asset/ABI/portable-policy proof even on hash match.
+Preserve useful manual/raw input, trusted hash and frozen copy; other platforms'
+raw behavior unchanged. No-scanner stubs stay SYNTHETIC/UI-only, with source
+musl default and explicitGNU legacy placement. No dual seeding or autodetection.
+
+Forward the declaration through every arbitrary-binary consumer/nestedFixture:
+harness, resilience, selection --binary, plugin_matrix, ui_regressions,
+Windows ConPTY and npm_packed_flow. Selection --build-go is a known current-source producer: reject
+an explicit legacy GNU cache declaration BEFORE any build or fixture creation.
+Keep explicit GNU placement available for arbitrary supplied --binary; it is
+not source-policy proof. Windows retains its correct
+.exe cache and mandatory-real-scanner rule. Record actual known archive/member
+hash and resolved key; preserve raw/synthetic limitations. Update README current
+and oldGNU/raw examples; distinguish archive compatibility from actually executed
+host coverage (portable scanner does not qualify a musl-host terminal run).
+
+Two additional production Fixture consumers are explicitly preserved:
+- historical_state_flow builds the existing finite RELEASES (agentplugins-v0.1.4,
+  v0.1.5 and v0.1.6). Preserve its original Linux amd64 GNU SYNTHETIC fixture placement
+  explicitly, retaining one cache rather than applying the new source default;
+  other platforms retain their existing key. This is fixture compatibility, not
+  a claim that these historical producers execute lintai or prove its ABI.
+  Actual historical main wiring lacks the current scanner evaluator; keep the
+  historical add, current update-before-migration refusal, migrate/remove,
+  backup/state/cleanup checks and supplied-current-binary provenance. None of
+  these migration steps establishes current-source portable scanner policy.
+  No dual cache, source-portable proof or generic future-tag inference.
+- npm_packed_flow merely admits a supplied --binary file and packs those bytes;
+  its npm wrapper/manifest does not prove construction from current source.
+  Forward the same harness-only manual cache declaration, with source-placement
+  default and explicit GNU route, and preserve supplied/synthetic provenance
+  limitations. Record resolved cache placement without claiming installer/source
+  equivalence from the wrapper. No new product switch or scanner execution.
+
+## Disjoint implementation ownership and gates
+
+After both plan GOs, desktop records this exact accepted text in consolidated document
+BEFORE code. Work in existing desktop checkout; no clones or mixed early commits.
+
+- Desktop: securityscan/release.go +new resolver tests; research-vscode-project.py;
+  VS trusted_budget/seed/UID and affectedcontracts; consolidatedplan/final staging.
+- Root: run-native-client-matrix.py +producer/prepared tests; project_native_runtime.py
+  andtests; nativefixtureGo +small admission helper and inert cache tests.
+- Shell: terminal-ui harness/provisioner/resilience/windows_conpty/selection/plugin/
+  ui_regressions, historical_state_flow, npm_packed_flow, terminal-ui.yml, README
+  and affected focusedtests (including new small flow-contract tests if needed).
+- CLI independentcritic. Rootcode reviewed desktop+CLI; desktop/shell reviewed
+  root+CLI; exactassembledtree reviewed before finalcommit/push. Desktop stages/
+  commits only after all workers report. Preserve scanner.go diagnostic/boundfix.
+
+Meaningful inert requirements:
+1. Actualresolve proves portable selection with existing GNU-only cache, exact musl
+   request/checksum refusal, correct cache hit/no network, GNU unchanged andother
+   targets unchanged; no vendor execution or productiondigest mutation.
+2. Full securityscan keeps actual both-stream cap+1 exit0/1, valid exit-one reports/full evaluator,
+   policy/report/runtime errors andassessment cache gates.
+3. Actual producer helpers cover default source/tagged public/prepared public/draft/
+   prepare-only and refuse GNU source substitution before execution. Preserve strict
+   three-tool sets, prepared no-network/tamper/missing/mixed/credential refusals,
+   AST literal pin verification andallhistorical GNU fixtures.
+4. Go admission negatives use errors, not a native child; positive tests call actual
+   nativeProvisionScanner with inert ordinary bytes and verify two truthful cache
+   routes/unchanged other cache. Retain full native fixture identity/framing tests.
+5. Full VS controller, frontend --contracts, toolchain/workspace/native research
+   andgatewaywrapper contracts remain; genuine UID/mount is explicitly unproved
+   locally. Pythonmatrix/linux/draft/released/runtime/research/capture/artifact
+   contracts run where affected, with actual handoff negatives, not constant mirrors.
+6. TUI tests prove source-only musl, known GNU, archive-conflict/wrong-host/key refusal,
+   raw explicit declaration + trusted hash/unclassified record/freeze, all nested option
+   propagation, --build-go legacy-declaration refusal before build/fixture,
+   UI-only stubs, non-Linux/Windows preservation and provisioner filename.
+   Historical flow tests exercise its real fixture-construction seam with inert
+   builders/runners: finite historical GNU SYNTHETIC placement, exactly one cache,
+   retained operation/migration/remove order and no scanner-execution or
+   source-portable claim. npm flow tests
+   exercise argument-to-Fixture propagation for default and explicit legacy key,
+   refusing invalid/wrong-host placement before packing/execution and preserving
+   supplied/synthetic provenance. No historical or vendor binary executes locally.
+7. Actual Required changed-lines +whole-file size/architecture gates in affected
+   modules, existing config/toolchain. Report inherited untouched debt honestly;
+   no suppression/baseline growth/unrelated cleanup. Coordinate private Go/lintslot.
+
+After code GOs and inert PASS, genuine unchangedUbuntu 22VS must run the UID/mount/cache gate,
+then real public add-user/A/B scan/evaluate/install on fresh nonce-bound packages/empty
+assessment cache with exact portable bytes. Inspect existing closed provenance,
+public results, receipts, all native MCP stages andfull cleanup; download/static ELF/
+cache hit alone never qualifies. New failure needs observed-contract review.
+Retain all 14 existing Claude/Codex/OpenCode user/project required tests selected
+by matrix REQUIRED_TESTS|PROJECT_TESTS, supported genuine OS matrix andno-skip rule,
+plus all affected remaining-client public/runtime gates on exact combined source.
+Frozen GNU lanes remain distinct from source portable proof. Preserve auth/model
+limitations, independent raw review andall merge/release gates.
+
+
+## Portable scanner implementation: review and inert validation
+
+The accepted policy plan was recorded before source changes in e769538689f44e68b8b93ab071454b309be98410.
+Final independently reviewed file manifests are desktop 9 files SHA-256
+d7a190794ee0b54551c583ff49887e0bf813761fd32d42218235e08a8a8a3f26;
+root 7 files ff3047061840d21e711f687ab27228210949e31e018d1ef278601d46a97b6c26;
+and terminal 13 files 768b54cb3027fc7e1fc3da52d31b2aec725adfbd587ff93bd1239000e62173a0.
+Desktop's production/VS slice has root and CLI independent code GOs; root's
+shared producer/fixture slice has desktop and CLI independent code GOs. Terminal
+review found and fixed generated reproduction commands losing the declared
+legacy cache route; the final report contract checks both default and GNU keys.
+
+Actual local inert validation:
+- Full securityscan package PASS (0.190s) and full VS controller package PASS
+  (1.144s). After the request-capture mutex review fix, focused actual resolver
+  tests PASS (0.012s); production bytes were unchanged by that test-only fix.
+- New actual VS scanner acquisition handoff 3 tests PASS (0.002s), existing
+  workspace 17 PASS (0.219s), toolchain 8 PASS (0.010s), and frontend --contracts
+  PASS. The new suite is in the hosted workflow's existing bounded pre-vendor
+  inert command list, preserving original source/host guards.
+- Shared producer/runtime Python suites 145 PASS (4.106s) and the offline frozen
+  verifier substitution negative PASS (0.012s), as reported by the owning root
+  worker. Actual new Go scanner admission/cache tests PASS (0.010s), including
+  declared-CPU refusals and both truthful cache routes without scanner execution.
+- Terminal full inert discovery PASS: 99 tests (19.807s), 3 existing expected
+  real-installer/native-Windows skips. The final reproduction fix's 8 flow
+  contracts PASS (2.232s); no real installer or vendor ran locally.
+- Affected actual Required changed-line and unfiltered whole-file size/architecture
+  lint gates report 0 issues for desktop and shared Go slices. The 5 previously
+  documented inherited correctness/style findings remain unchanged; this does
+  not claim unfiltered all-linter zero.
+
+A broader local NativeFixture run failed in unchanged immutable Git acquisition:
+ordinary process containment preflight returned ErrOrdinaryContainmentUnsupported
+because this environment lacks the live task children primitive. No full fixture
+PASS is claimed; no containment guard, skip or production fallback was added.
+No vendor executable ran locally. The final exact published source still needs
+its genuine Ubuntu 22 UID/mount/cache gate, real public scan/evaluate/install,
+complete editor/MCP lifecycle and cleanup evidence, plus the retained required
+Claude/Codex/OpenCode and remaining-client native gates. Static ELF compatibility,
+inert cache hits and these contracts do not establish native qualification.
+
+The final terminal 13-file manifest has root and CLI independent code GOs,
+with an additional independent desktop review and the reproduction finding fixed.
+
+Same-parent CI alignment copies exactly two files from parent
+`b16b5c5d28cdc734856ac414521d40d9c8d8dfd5`: project-native-runtime.yml blob
+`66fb12161a3d1cfe6992cfeada8fbf44ad54fda6` and project-native-research.yml blob
+`3527cc1a416407850af2b858a79a6cc2668109fd`. Root independently compared the
+remote full bytes; desktop confirmed the local blobs and concurrency-only diff.
+Groups now distinguish event/run identity, and only PR runs cancel superseded
+PR work. No runtime/native gate changes accompany this alignment.

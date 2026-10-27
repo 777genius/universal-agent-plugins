@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -118,7 +117,11 @@ func (c *controller) sourcePaths(label string) []string {
 	return []string{filepath.Join(base, "observer"), filepath.Join(base, "projects"), filepath.Join(base, "home", ".copilot", "skills"), filepath.Join(base, "probes", label, "profile", "User", "settings.json"), filepath.Join(base, "probes", label, "profile", "User", "mcp.json")}
 }
 func (c *controller) checkPublisher() error {
-	if err := immutableAncestors(filepath.Join(c.request.Base, "observer")); err != nil {
+	observer := filepath.Join(c.request.Base, "observer")
+	if c.request.Input.Mode == trustedProjectMode {
+		observer = filepath.Join(c.request.Base, "tools", "observer")
+	}
+	if err := immutableAncestors(observer); err != nil {
 		return err
 	}
 	self := filepath.Join(c.request.Base, "control", "controller")
@@ -385,7 +388,11 @@ func (c *controller) execute() (resultErr error) {
 		c.displayCleanupErr = errors.Join(c.displayCleanupErr, c.closeDisplayAssets())
 		resultErr = errors.Join(resultErr, c.displayCleanupErr)
 	}()
-	if err := c.fixtures(); err != nil {
+	fixtures := c.fixtures
+	if c.request.Input.Mode == trustedProjectMode {
+		fixtures = c.trustedFixtures
+	}
+	if err := fixtures(); err != nil {
 		return err
 	}
 	if err := c.setupDisplay(); err != nil {
@@ -395,13 +402,28 @@ func (c *controller) execute() (resultErr error) {
 		return err
 	}
 	env := c.environment(filepath.Join(c.request.Base, "projects", "A"), "", "")
+	if c.request.Input.Mode == trustedProjectMode {
+		env = c.trustedEnvironment()
+	}
 	argv := []string{"/usr/bin/Xvfb", display, "-screen", "0", "1024x768x24", "-nolisten", "tcp", "-auth", filepath.Join(c.request.Base, "auth", "authority")}
 	displayCtx, cancel := context.WithDeadline(context.Background(), c.deadline)
 	defer cancel()
 	attemptedDisplay = true
-	record, err := runDisplayTable(c.work, func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
+	outer := func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
 		return c.strict(displayCtx, "Xvfb", argv, c.request.Base, env, exchange)
-	}, c.displayReady, c.observe)
+	}
+	var record childRecord
+	var err error
+	if c.request.Input.Mode == trustedProjectMode {
+		record, err = outer(func(ctx context.Context, proof isolationProof) error {
+			if err := c.displayReady(ctx, proof); err != nil {
+				return err
+			}
+			return c.trustedSequence(ctx)
+		})
+	} else {
+		record, err = runDisplayTable(c.work, outer, c.displayReady, c.observe)
+	}
 	reapedDisplay = record.TreeReaped
 	return err
 }
@@ -428,59 +450,4 @@ func (c *controller) waitObservation(ctx context.Context, label, result, folder 
 		case <-tick.C:
 		}
 	}
-}
-func validateObservationEnvelope(m map[string]any) error {
-	if m["collected"] == true {
-		if _, present := m["stage_error"]; present {
-			return fmt.Errorf("successful observer envelope contains stage_error")
-		}
-	}
-	allowed := map[string]bool{}
-	for _, key := range []string{"schema_version", "collected", "stage_error", "version", "app_root", "app_host", "observer", "folder", "trusted", "policy", "mcp", "skills", "native_project_qualified", "native_mcp_initialization_qualified", "native_runtime_qualified"} {
-		allowed[key] = true
-	}
-	for key := range m {
-		if !allowed[key] {
-			return fmt.Errorf("unknown observer result field")
-		}
-	}
-	if m["schema_version"] != json.Number("1") || m["native_project_qualified"] != false || m["native_mcp_initialization_qualified"] != false || m["native_runtime_qualified"] != false {
-		return fmt.Errorf("observer schema/qualification differs")
-	}
-	return nil
-}
-func validateObservationContext(m map[string]any, base, folder string) error {
-	if m["version"] != publisherVersion || m["app_root"] != filepath.Join(base, "publisher", publisherPrefix, "resources", "app") || m["app_host"] != "desktop" || m["trusted"] != false {
-		return fmt.Errorf("publisher/context differs")
-	}
-	if err := metadataURI(m["folder"]); err != nil {
-		return err
-	}
-	selected, ok := m["folder"].(map[string]any)
-	if !ok || selected["scheme"] != "file" || selected["authority"] != "" || selected["path"] != folder || selected["value"] != "file://"+folder {
-		return fmt.Errorf("selected native folder differs")
-	}
-	return nil
-}
-func validateObservationPolicy(m map[string]any) error {
-	policy, policyErr := objectKeys(m["policy"], []string{"skills_enabled", "mcp_access", "mcp_autostart"}, nil)
-	ok := policyErr == nil
-	if !ok || policy["mcp_autostart"] != "never" {
-		return fmt.Errorf("actual restrictive policy missing")
-	}
-	if _, ok = policy["skills_enabled"].(bool); !ok {
-		return fmt.Errorf("unknown skills policy type")
-	}
-	if value := policy["mcp_access"]; value != "all" && value != "none" && value != "registry" {
-		return fmt.Errorf("unknown MCP policy type")
-	}
-	return nil
-}
-func validateObserverIdentity(m map[string]any) error {
-	observer, observerErr := objectKeys(m["observer"], []string{"id", "mode", "proposals"}, nil)
-	ok := observerErr == nil
-	if !ok || observer["id"] != "uap-research.workspace-observer" || observer["mode"] != json.Number("3") || !reflect.DeepEqual(observer["proposals"], []any{"mcpServerDefinitions", "chatPromptFiles"}) {
-		return fmt.Errorf("observer identity/proposals differ")
-	}
-	return nil
 }

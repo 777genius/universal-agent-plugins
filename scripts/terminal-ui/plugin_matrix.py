@@ -23,7 +23,7 @@ import tempfile
 import threading
 import time
 
-from harness import Fixture, Session, SELECT, CONFIRM, LIFECYCLE, check, clean, hashes, prepare_opencode_fixture
+from harness import Fixture, Session, SELECT, CONFIRM, LIFECYCLE, check, clean, hashes, prepare_opencode_fixture, scanner_cache_options, resolve_scanner_cache_platform
 
 SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/'
 KINDS = ('empty', 'skill', 'stdio-missing', 'http-auth', 'mixed', 'malformed',
@@ -220,12 +220,12 @@ def check_auth_unknown(plan):
               in plan['warnings'], 'Cursor discovery uncertainty missing')
 
 
-def run_case(case, binary, evidence, timeout=8):
+def run_case(case, binary, evidence, timeout=8, scanner_cache_platform=None):
     kind, action = case.split(':')
     check(case in CASES, 'unknown case')
     evidence.mkdir(parents=True)
     with tempfile.TemporaryDirectory(prefix='uap-plugin-matrix-') as tmp, local_endpoint(kind == 'http-auth') as (url, requests):
-        fixture = Fixture(tmp)
+        fixture = Fixture(tmp, scanner_cache_platform=scanner_cache_platform)
         package(fixture, kind, url)
         if action == 'all-ten':
             seed_ten_clients(fixture)
@@ -416,7 +416,9 @@ def main():
     parser.add_argument('--artifacts', type=Path, required=True)
     parser.add_argument('--case', action='append', choices=CASES)
     parser.add_argument('--timeout', type=float, default=8)
+    scanner_cache_options(parser)
     args = parser.parse_args()
+    cache_platform = resolve_scanner_cache_platform(args.scanner_cache_platform)
     check(os.name == 'posix', 'coverage gap: rich keyboard ConPTY lane not qualified; use native Windows harness separately')
     binary = args.binary.resolve(strict=True)
     args.artifacts.mkdir(parents=True, exist_ok=False)
@@ -424,7 +426,7 @@ def main():
     report = {'source_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True).strip(),
               'binary': str(binary), 'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
               'binary_source_link': 'Supplied binary SHA256 recorded; consult external build receipt for source parity.',
-              'platform': platform.system(),
+              'platform': platform.system(), 'scanner_cache_platform': cache_platform,
               'audit_matrix': AUDIT_MATRIX,
               'fixture_contracts': {
                   'manifest': 'install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json',
@@ -439,9 +441,10 @@ def main():
     for case in args.case or CASES:
         entry = {'case': case, 'status': 'pass',
                  'repro': shlex.join(['python3', str(Path(__file__).resolve()), '--binary', str(binary),
+                                     '--scanner-cache-platform', cache_platform,
                                      '--case', case, '--artifacts', '/tmp/uap-plugin-matrix-repro-' + case.replace(':', '-')])}
         try:
-            run_case(case, binary, args.artifacts / case.replace(':', '-'), args.timeout)
+            run_case(case, binary, args.artifacts / case.replace(':', '-'), args.timeout, scanner_cache_platform=cache_platform)
         except Exception as error:
             entry.update(status='fail', error=str(error), fix_owner='Unassigned; coordinating owner to triage. Production files outside lane scope.')
         report['cases'].append(entry)

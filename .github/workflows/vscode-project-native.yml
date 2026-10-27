@@ -1,0 +1,153 @@
+name: VS Code Trusted Project Native
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/vscode-project-native.yml'
+      - 'scripts/research-vscode-project.py'
+      - 'scripts/research-vscode-workspace.py'
+      - 'scripts/project_native_vscode_toolchain.py'
+      - 'scripts/vscode-project-runtime-observer/**'
+      - 'repotests/agentplugins_vscode_project_native_gateway_test.go'
+      - 'repotests/testdata/agentplugins_native_probe/**'
+      - 'install/integrationctl/research/vscodeworkspace/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: vscode-project-native-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native:
+    name: VS Code 1.143.1 trusted development-host gateway lifecycle
+    runs-on: ubuntu-22.04
+    timeout-minutes: 28
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Admit actual ordinary-user Ubuntu 22 and exact clean source
+        run: |
+          python3 - <<'PYTHON'
+          import importlib.util, os, sys
+          from pathlib import Path
+          root = Path.cwd()
+          sys.path.insert(0, str(root / 'scripts'))
+          spec = importlib.util.spec_from_file_location('trusted_frontend_guard', root / 'scripts/research-vscode-project.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          module.guard()
+          env = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'GIT_CONFIG_NOSYSTEM': '1', 'GIT_CONFIG_GLOBAL': '/dev/null', 'GIT_TERMINAL_PROMPT': '0'}
+          def query(*args):
+              record, stdout, stderr = module.shared.run_probe(['/usr/bin/git', *args], root, env, Path('/tmp'), 'source-guard', timeout=10, limit=65536, memory_only=True)
+              if record['error'] is not None or record['exit'] != 0 or stderr:
+                  raise SystemExit('bounded clean source query failed')
+              return stdout.decode('ascii', errors='strict').strip()
+          commit, tree = query('rev-parse', 'HEAD'), query('rev-parse', 'HEAD^{tree}')
+          if commit != os.environ['EXPECTED_COMMIT'] or not module.legacy.SOURCE_RE.fullmatch(tree) or query('status', '--porcelain', '--untracked-files=normal'):
+              raise SystemExit('exact clean trusted source required')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('EXPECTED_TREE=' + tree + '\n')
+          PYTHON
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Run inert frontend, toolchain, controller and wrapper contracts
+        run: |
+          python3 - <<'PYTHON'
+          import importlib.util, os, shutil, sys
+          from pathlib import Path
+          root = Path.cwd()
+          sys.path.insert(0, str(root / 'scripts'))
+          spec = importlib.util.spec_from_file_location('trusted_contracts', root / 'scripts/research-vscode-project.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          module.guard()
+          go = Path(shutil.which('go')).resolve(strict=True)
+          home = Path(os.environ['RUNNER_TEMP']) / 'vscode-project-contract-home'
+          home.mkdir(mode=0o700)
+          env = {'PATH': str(go.parent) + ':/usr/bin:/bin', 'HOME': str(home), 'LANG': 'C.UTF-8', 'GOTOOLCHAIN': 'local', 'GOENV': 'off', 'GOMAXPROCS': '2', 'GOCACHE': str(home / 'cache'), 'GOMODCACHE': str(home / 'modules'), 'GOPROXY': 'https://proxy.golang.org', 'GOSUMDB': 'sum.golang.org'}
+          env.update({key: os.environ[key] for key in module.legacy.GUARD_KEYS})
+          commands = [(['/usr/bin/python3', 'scripts/research-vscode-project.py', '--contracts'], 10),
+                      (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_project_native_vscode_toolchain.py'], 30),
+                      (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_workspace_research.py'], 30),
+                      (['/usr/bin/python3', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_vscode_project_research.py'], 30),
+                      ([str(go), 'test', '-p=1', './install/integrationctl/research/vscodeworkspace'], 240),
+                      ([str(go), 'test', '-p=1', './repotests', '-run', '^TestVSCodeProjectGatewayEvidence', '-count=1'], 240)]
+          for index, (argv, seconds) in enumerate(commands):
+              record, stdout, stderr = module.shared.run_probe(argv, root, env, home, 'contract-' + str(index), timeout=seconds, limit=1048576, memory_only=True)
+              print(stdout.decode('utf-8', errors='strict'))
+              if record['error'] is not None or record['exit'] != 0:
+                  print(stderr.decode('utf-8', errors='replace'))
+                  raise SystemExit('required inert trusted project contracts failed')
+          PYTHON
+      - name: Run exact public-install and native-gateway lifecycle
+        env:
+          AGENTPLUGINS_VSCODE_PROJECT_NATIVE_E2E: '1'
+          AGENTPLUGINS_VSCODE_PROJECT_OUTPUT: ${{ runner.temp }}/vscode-project-native
+        run: |
+          python3 - <<'PYTHON'
+          import importlib.util, os, shutil, sys
+          from pathlib import Path
+          root = Path.cwd()
+          sys.path.insert(0, str(root / 'scripts'))
+          spec = importlib.util.spec_from_file_location('trusted_native_wrapper', root / 'scripts/research-vscode-project.py')
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          module.guard()
+          go = Path(shutil.which('go')).resolve(strict=True)
+          home = Path(os.environ['RUNNER_TEMP']) / 'vscode-project-test-home'
+          home.mkdir(mode=0o700)
+          contract = Path(os.environ['RUNNER_TEMP']) / 'vscode-project-contract-home'
+          env = {'PATH': str(go.parent) + ':/usr/bin:/bin', 'HOME': str(home), 'LANG': 'C.UTF-8', 'GOTOOLCHAIN': 'local', 'GOENV': 'off', 'GOMAXPROCS': '2', 'GOCACHE': str(contract / 'cache'), 'GOMODCACHE': str(contract / 'modules'), 'GOPROXY': 'https://proxy.golang.org', 'GOSUMDB': 'sum.golang.org', 'PLUGIN_KIT_AI_REPO_ROOT': str(root)}
+          for key in ('GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT', 'AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED', 'EXPECTED_COMMIT', 'EXPECTED_TREE', 'ImageOS', 'ImageVersion', 'AGENTPLUGINS_VSCODE_PROJECT_NATIVE_E2E', 'AGENTPLUGINS_VSCODE_PROJECT_OUTPUT'):
+              env[key] = os.environ[key]
+          record, stdout, stderr = module.shared.run_probe([str(go), 'test', '-p=1', './repotests', '-run', '^TestAgentpluginsVSCodeNativeProjectGatewayLifecycle$', '-count=1', '-v', '-timeout=16m'], root, env, home, 'gateway-lifecycle', timeout=980, limit=1048576, memory_only=True)
+          print(stdout.decode('utf-8', errors='strict'))
+          selected = b'=== RUN   TestAgentpluginsVSCodeNativeProjectGatewayLifecycle' in stdout
+          passed = b'--- PASS: TestAgentpluginsVSCodeNativeProjectGatewayLifecycle ' in stdout
+          skipped = b'--- SKIP: TestAgentpluginsVSCodeNativeProjectGatewayLifecycle' in stdout
+          if record['error'] is not None or record['exit'] != 0 or not selected or not passed or skipped:
+              print(stderr.decode('utf-8', errors='replace'))
+              raise SystemExit('exact trusted native lifecycle failed or did not execute')
+          PYTHON
+      - name: Admit only the two exact closed ZIP files
+        id: admission
+        if: ${{ always() }}
+        env:
+          EVIDENCE: ${{ runner.temp }}/vscode-project-native
+        run: |
+          /usr/bin/python3 -I - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          root = Path(os.environ['EVIDENCE'])
+          for label in ('frontend', 'native'):
+              path = root / label / 'upload/research.zip'
+              if not path.exists():
+                  continue
+              before = path.lstat()
+              if path.resolve() != path or not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_uid != os.getuid() or before.st_size > 32 * 1024 * 1024:
+                  raise SystemExit('refusing aliased or unbounded trusted evidence ZIP')
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  output.write(label + '=true\n')
+          PYTHON
+      - name: Upload exact source, compiler and prepared-input receipt
+        if: ${{ always() && steps.admission.outputs.frontend == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: vscode-1.143.1-trusted-project-frontend-linux-amd64
+          path: ${{ runner.temp }}/vscode-project-native/frontend/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload exact admitted native lifecycle evidence
+        if: ${{ always() && steps.admission.outputs.native == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: vscode-1.143.1-trusted-project-native-linux-amd64
+          path: ${{ runner.temp }}/vscode-project-native/native/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14

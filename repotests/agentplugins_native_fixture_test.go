@@ -470,37 +470,11 @@ func nativeProvisionScanner(t *testing.T, f *nativeFixture) map[string]string {
 	t.Helper()
 	binary := nativeBinary(t, "AGENTPLUGINS_LINTAI_BIN")
 	digest := nativeSHA(t, binary)
-	if expected := os.Getenv("AGENTPLUGINS_LINTAI_SHA256"); len(expected) != 64 || digest != expected {
-		t.Fatal("provisioned lintai binary digest mismatch")
-	}
-	// Platform/digest pins mirror agentplugins/adapters/securityscan/release.go's
-	// releaseAssets table exactly, so this cache prepopulation stays consistent
-	// with what the real ReleaseScanner would resolve to on the same host.
-	platform := runtime.GOOS + "-" + runtime.GOARCH
-	if platform == "linux-amd64" {
-		for _, path := range []string{"/lib/ld-musl-x86_64.so.1", "/lib64/ld-musl-x86_64.so.1"} {
-			if _, err := os.Stat(path); err == nil {
-				platform += "-musl"
-				break
-			}
-		}
-	}
-	pins := map[string]string{
-		"darwin-arm64":     "be8b263e2323074080d928ea7c2129458299a6d03f7a9f178dfc1aa8e6bc17ff",
-		"darwin-amd64":     "abc170612a847bf1a896ef85a4ee93977baa8275f303dac3ed27bf34050b7513",
-		"linux-arm64":      "132a37610575bd251ecaf0be4c6090dad144dd1397c99aad989a3944c63c3d4a",
-		"linux-amd64":      "2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da",
-		"linux-amd64-musl": "3da60f749c61e2caca029a44a9ce422d570aef8c57f82ce51c411c8cec12f61b",
-		"windows-amd64":    "2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911",
-		"windows-arm64":    "484c30e7ef55310e0aec595c06870dbb5454ae7d29404ca797e00acad6011453",
-	}
-	archive, ok := pins[platform]
-	if !ok {
-		t.Fatalf("lintai security scanner has no pinned platform asset for %s", platform)
-	}
-
-	if os.Getenv("AGENTPLUGINS_LINTAI_ARCHIVE_SHA256") != archive {
-		t.Fatal("lintai archive provenance does not match pinned platform asset")
+	archive := os.Getenv("AGENTPLUGINS_LINTAI_ARCHIVE_SHA256")
+	platform, err := nativeScannerInputPlatform(runtime.GOOS, runtime.GOARCH,
+		digest, os.Getenv("AGENTPLUGINS_LINTAI_SHA256"), archive)
+	if err != nil {
+		t.Fatal(err)
 	}
 	destination := filepath.Join(f.Root, "installer-state", "security", "lintai", "0.1.3", platform, nativeExecutableName("lintai"))
 	b, err := os.ReadFile(binary)

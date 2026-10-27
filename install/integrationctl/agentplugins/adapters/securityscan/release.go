@@ -66,7 +66,7 @@ func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 		goarch = runtime.GOARCH
 	}
 	key := goos + "/" + goarch
-	if goos == "linux" && goarch == "amd64" && usesMusl() {
+	if goos == "linux" && goarch == "amd64" {
 		key += "-musl"
 	}
 	asset, ok := releaseAssets[key]
@@ -197,16 +197,4 @@ func extractReleaseBinary(body []byte, zipAsset bool, binaryName string) ([]byte
 		return value, nil
 	}
 	return nil, errors.New("lintai release archive does not contain the expected binary")
-}
-
-func usesMusl() bool {
-	if runtime.GOOS != "linux" {
-		return false
-	}
-	for _, candidate := range []string{"/lib/ld-musl-x86_64.so.1", "/lib64/ld-musl-x86_64.so.1"} {
-		if _, err := os.Stat(candidate); err == nil {
-			return true
-		}
-	}
-	return false
 }

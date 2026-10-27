@@ -63,6 +63,9 @@ func (scanner CommandScanner) Scan(ctx context.Context, packageRoot string) ([]b
 		if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
 			return nil, fmt.Errorf("lintai security scan failed: %s", strings.TrimSpace(stderr.String()))
 		}
+		if !json.Valid(stdout.Bytes()) {
+			return nil, fmt.Errorf("lintai security scan failed (exit 1, invalid JSON, %d stdout bytes): %s", stdout.Len(), strings.TrimSpace(stderr.String()))
+		}
 	}
 	return append([]byte(nil), stdout.Bytes()...), nil
 }
@@ -82,21 +85,25 @@ func scannerEnvironment() []string {
 }
 
 type limitedBuffer struct {
-	bytes.Buffer
+	data     bytes.Buffer
 	limit    int
 	overflow bool
 }
 
+func (buffer *limitedBuffer) Bytes() []byte  { return buffer.data.Bytes() }
+func (buffer *limitedBuffer) Len() int       { return buffer.data.Len() }
+func (buffer *limitedBuffer) String() string { return buffer.data.String() }
+
 func (buffer *limitedBuffer) Write(value []byte) (int, error) {
-	if buffer.Buffer.Len()+len(value) > buffer.limit {
-		remaining := buffer.limit - buffer.Buffer.Len()
+	if buffer.data.Len()+len(value) > buffer.limit {
+		remaining := buffer.limit - buffer.data.Len()
 		if remaining > 0 {
-			_, _ = buffer.Buffer.Write(value[:remaining])
+			_, _ = buffer.data.Write(value[:remaining])
 		}
 		buffer.overflow = true
 		return len(value), nil
 	}
-	return buffer.Buffer.Write(value)
+	return buffer.data.Write(value)
 }
 
 type rawReport struct {
