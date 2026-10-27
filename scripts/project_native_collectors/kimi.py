@@ -105,6 +105,47 @@ _INSTALLED_ENVIRONMENT_KEYS = (
     "HOME", "USERPROFILE", "TMPDIR", "TEMP", "TMP", "XDG_CONFIG_HOME", "XDG_CACHE_HOME",
     "XDG_STATE_HOME", "XDG_DATA_HOME", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_GLOBAL", "GIT_TERMINAL_PROMPT",
 )
+_PROFILE_ROLES = frozenset((*_INSTALLED_ENVIRONMENT_KEYS, "root", "ancestor", "descriptors"))
+_PROFILE_REASONS = frozenset(("key-set", "missing", "type", "value", "canonical", "open",
+                              "uid", "gid", "mode", "held-identity", "linked-identity", "close"))
+
+
+class _InstalledProfileRefusal(ValueError):
+    def __init__(self, role, reason, category="validation", metadata=None):
+        super().__init__("Kimi existing profile refused")
+        if metadata is not None and type(metadata) is not dict:
+            raise ValueError("Kimi profile refusal metadata container differs")
+        self.role, self.reason, self.category = role, reason, category
+        self.metadata = dict(metadata) if metadata is not None else None
+        self.public()
+
+    def public(self):
+        if (any(type(value) is not str for value in (self.role, self.reason, self.category))
+                or self.role not in _PROFILE_ROLES or self.reason not in _PROFILE_REASONS
+                or self.category not in ("os", "validation")
+                or (self.reason in ("open", "close")) != (self.category == "os")):
+            raise ValueError("Kimi profile refusal classification differs")
+        value = {"role": self.role, "reason": self.reason}
+        if self.metadata is not None:
+            if (type(self.metadata) is not dict or set(self.metadata) != {"mode", "directory", "uid_matches", "gid_matches"}
+                    or type(self.metadata["mode"]) is not int or not 0 <= self.metadata["mode"] <= 0o7777
+                    or any(type(self.metadata[key]) is not bool for key in ("directory", "uid_matches", "gid_matches"))):
+                raise ValueError("Kimi profile refusal held metadata differs")
+            value["metadata"] = dict(self.metadata)
+        return value
+
+
+def _profile_refuse(role, reason, info):
+    metadata = {"mode": stat.S_IMODE(info.st_mode), "directory": stat.S_ISDIR(info.st_mode),
+                "uid_matches": info.st_uid == os.getuid(), "gid_matches": info.st_gid == os.getgid()}
+    raise _InstalledProfileRefusal(role, reason, metadata=metadata)
+
+
+def _profile_open(name, flags, parent, role):
+    try:
+        return os.open(name, flags, dir_fd=parent)
+    except OSError:
+        raise _InstalledProfileRefusal(role, "open", "os") from None
 
 
 def _installed_directory_identity(info, private):
@@ -113,38 +154,45 @@ def _installed_directory_identity(info, private):
 
 
 def _verify_installed_profile_edges(edges, held, flags):
-    for parent, name, descriptor, before, private in edges:
+    for parent, name, descriptor, before, private, role in edges:
         expected = _installed_directory_identity(before, private)
-        if _installed_directory_identity(os.fstat(descriptor), private) != expected:
-            raise ValueError("Kimi existing profile held directory changed")
-        linked = os.open(name, flags, dir_fd=parent)
+        current = os.fstat(descriptor)
+        if _installed_directory_identity(current, private) != expected:
+            _profile_refuse(role, "held-identity", current)
+        linked = _profile_open(name, flags, parent, role)
         held.append(linked)
-        if _installed_directory_identity(os.fstat(linked), private) != expected:
-            raise ValueError("Kimi existing profile linked directory changed")
+        current = os.fstat(linked)
+        if _installed_directory_identity(current, private) != expected:
+            _profile_refuse(role, "linked-identity", current)
 
 
 def _installed_profile_directories(root):
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
     held, edges = [], []
 
-    def open_directory(parent, name, private):
-        descriptor = os.open(name, flags, dir_fd=parent)
+    def open_directory(parent, name, private, role):
+        descriptor = _profile_open(name, flags, parent, role)
         held.append(descriptor)
         before = os.fstat(descriptor)
-        if (not stat.S_ISDIR(before.st_mode) or (private and
-                (before.st_uid != os.getuid() or before.st_gid != os.getgid()
-                 or stat.S_IMODE(before.st_mode) != 0o700))):
-            raise ValueError("Kimi existing profile directory authority differs")
-        edges.append((parent, name, descriptor, before, private))
+        if not stat.S_ISDIR(before.st_mode):
+            _profile_refuse(role, "type", before)
+        if private:
+            for valid, reason in ((before.st_uid == os.getuid(), "uid"), (before.st_gid == os.getgid(), "gid"),
+                                  (stat.S_IMODE(before.st_mode) == 0o700, "mode")):
+                if not valid:
+                    _profile_refuse(role, reason, before)
+        edges.append((parent, name, descriptor, before, private, role))
         return descriptor
 
     try:
-        parent = os.open("/", flags)
+        parent = _profile_open("/", flags, None, "ancestor")
         held.append(parent)
         for index, part in enumerate(root.parts[1:], 1):
-            parent = open_directory(parent, part, index == len(root.parts) - 1)
-        for name in ("home", "tmp", "xdg-config", "xdg-cache", "xdg-state", "xdg-data"):
-            open_directory(parent, name, True)
+            private = index == len(root.parts) - 1
+            parent = open_directory(parent, part, private, "root" if private else "ancestor")
+        for name, role in (("home", "HOME"), ("tmp", "TMPDIR"), ("xdg-config", "XDG_CONFIG_HOME"),
+                           ("xdg-cache", "XDG_CACHE_HOME"), ("xdg-state", "XDG_STATE_HOME"), ("xdg-data", "XDG_DATA_HOME")):
+            open_directory(parent, name, True, role)
         _verify_installed_profile_edges(edges, held, flags)
     finally:
         failed = False
@@ -154,7 +202,12 @@ def _installed_profile_directories(root):
             except OSError:
                 failed = True
         if failed:
-            raise ValueError("Kimi existing profile descriptor close failed") from None
+            raise _InstalledProfileRefusal("descriptors", "close", "os") from None
+
+
+def _installed_environment_from_process(root, home):
+    """The actual entrypoint snapshot seam reads only the twelve held keys."""
+    return _installed_environment(root, home, {key: os.environ.get(key) for key in _INSTALLED_ENVIRONMENT_KEYS})
 
 
 def _installed_environment(root, home, observed):
@@ -162,15 +215,23 @@ def _installed_environment(root, home, observed):
     if (not root.is_absolute() or len(root.parts) > 64 or len(str(root)) > 4096
             or root.anchor != "/" or root == Path("/") or os.path.normpath(str(root)) != str(root)
             or home != root / "home"):
-        raise ValueError("Kimi existing profile root/home differs")
+        raise _InstalledProfileRefusal("root", "canonical")
     expected = {"HOME": str(home), "USERPROFILE": str(home),
                 "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
                 "XDG_CONFIG_HOME": str(root / "xdg-config"), "XDG_CACHE_HOME": str(root / "xdg-cache"),
                 "XDG_STATE_HOME": str(root / "xdg-state"), "XDG_DATA_HOME": str(root / "xdg-data"),
                 "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
-    if (type(observed) is not dict or set(observed) != set(_INSTALLED_ENVIRONMENT_KEYS)
-            or any(type(observed[key]) is not str or observed[key] != value for key, value in expected.items())):
-        raise ValueError("Kimi existing profile held environment differs")
+    if type(observed) is not dict:
+        raise _InstalledProfileRefusal("root", "key-set")
+    for key, value in expected.items():
+        if key not in observed or observed[key] is None:
+            raise _InstalledProfileRefusal(key, "missing")
+        if type(observed[key]) is not str:
+            raise _InstalledProfileRefusal(key, "type")
+        if observed[key] != value:
+            raise _InstalledProfileRefusal(key, "value")
+    if set(observed) != set(_INSTALLED_ENVIRONMENT_KEYS):
+        raise _InstalledProfileRefusal("root", "key-set")
     _installed_profile_directories(root)
     env = dict(observed)
     env.update({"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "NO_COLOR": "1", "TERM": "dumb",
@@ -733,6 +794,9 @@ class _KimiFailureDiagnostic:
 
     @staticmethod
     def exception_kind(error):
+        if isinstance(error, _InstalledProfileRefusal):
+            error.public()
+            return error.category
         for kind, classes in (("timeout", (TimeoutError,)), ("validation", (ValueError,)),
                               ("type", (TypeError,)), ("key", (KeyError,)), ("os", (OSError,))):
             if isinstance(error, classes):
@@ -768,6 +832,8 @@ class _KimiFailureDiagnostic:
                  "stage": self.stage, "phase": self.phase, "exception_kind": kind,
                  "observer_entered": self.observer_entered, "service_recorded": recorded,
                  "cleanup_reported": all(type(item) is bool for item in cleanup.values()), "cleanup": cleanup}
+        if isinstance(error, _InstalledProfileRefusal):
+            value["profile_refusal"] = error.public()
         line = "Kimi collector failure: " + json.dumps(value, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n"
         if len(line.encode()) > 2048:
             raise ValueError("Kimi diagnostic bound exceeded")
@@ -1028,7 +1094,7 @@ def _installed_main(request_path, diagnostic=None):
     ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-api",
                    "commands": [], "qualification": {"mcp-tools-call": False}}
     diagnostic.ctx = ctx
-    ctx.env = _installed_environment(root, home, {key: os.environ.get(key) for key in _INSTALLED_ENVIRONMENT_KEYS})
+    ctx.env = _installed_environment_from_process(root, home)
     with shared.Budget(65) as budget:
         ctx.budget = budget
         ctx.summary["observations"] = observe_installed(ctx, value["observation"], diagnostic)

@@ -1,6 +1,7 @@
 """Inert Kimi collector contracts; never acquires or executes vendor bytes."""
 import importlib.util
 import copy
+import contextlib
 import hashlib
 from datetime import datetime, timezone
 import io
@@ -48,11 +49,11 @@ class KimiInstalledProfileEnvironmentTests(unittest.TestCase):
             before, held = self.snapshot(root), dict(observed)
             expected = {**held, "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "NO_COLOR": "1",
                         "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"}
-            with patch.dict(os.environ, {"KIMI_API_KEY": "private-canary", "HTTPS_PROXY": "private-proxy",
+            with patch.dict(os.environ, {**observed, "KIMI_API_KEY": "private-canary", "HTTPS_PROXY": "private-proxy",
                                          "LD_PRELOAD": "private-loader", "NPM_CONFIG_USERCONFIG": "foreign-profile"}), \
                     patch.object(Path, "resolve", side_effect=AssertionError("profile helper must not resolve aliases")):
                 for _ in range(2):
-                    env = kimi._installed_environment(root, root / "home", observed)
+                    env = kimi._installed_environment_from_process(root, root / "home")
                     self.assertEqual(env, expected)
                     env["HOME"] = "changed-returned-mapping"
             self.assertEqual(observed, held)
@@ -111,8 +112,9 @@ class KimiInstalledProfileEnvironmentTests(unittest.TestCase):
             alias.symlink_to(root, target_is_directory=True)
             aliased = {key: value.replace(str(root), str(alias)) for key, value in observed.items()}
             with patch.object(Path, "resolve", side_effect=AssertionError("profile helper must not resolve aliases")):
-                with self.assertRaises(OSError):
+                with self.assertRaises(kimi._InstalledProfileRefusal) as caught:
                     kimi._installed_environment(alias, alias / "home", aliased)
+                self.assertEqual(caught.exception.category, "os")
             alias.unlink()
             after = self.snapshot(root)
             self.assertEqual({k: v for k, v in after.items() if k != "."},
@@ -152,10 +154,67 @@ class KimiInstalledProfileEnvironmentTests(unittest.TestCase):
                 if len(calls) == 1:
                     raise OSError("private close failure canary")
             with patch.object(kimi.os, "close", side_effect=fail_once):
-                with self.assertRaisesRegex(ValueError, "descriptor close failed"):
+                with self.assertRaises(kimi._InstalledProfileRefusal) as caught:
                     kimi._installed_environment(root, root / "home", observed)
+            self.assertEqual(caught.exception.public(), {"role": "descriptors", "reason": "close"})
+            self.assertEqual(caught.exception.category, "os")
             self.assertGreater(len(calls), 6)
             self.assertEqual(self.snapshot(root), before)
+
+    def test_context_refusal_exposes_only_finite_role_reason_and_actually_held_metadata(self):
+        for fault, role, reason, category in (("value", "HOME", "value", "validation"),
+                ("mode", "HOME", "mode", "validation"), ("missing", "XDG_CACHE_HOME", "open", "os"),
+                ("alias", "TMPDIR", "open", "os"), ("uid", "root", "uid", "validation"),
+                ("gid", "root", "gid", "validation")):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                observed = self.fixture(root)
+                if fault == "value":
+                    observed["HOME"] = "/private-context-canary"
+                elif fault == "mode":
+                    (root / "home").chmod(0o755)
+                elif fault == "missing":
+                    (root / "xdg-cache").rmdir()
+                elif fault == "alias":
+                    (root / "tmp").rmdir()
+                    (root / "tmp").symlink_to(root / "home", target_is_directory=True)
+                with contextlib.ExitStack() as stack:
+                    if fault in ("uid", "gid"):
+                        name = "get" + fault
+                        stack.enter_context(patch.object(kimi.os, name, return_value=getattr(os, name)() + 1))
+                    with self.assertRaises(kimi._InstalledProfileRefusal) as caught:
+                        kimi._installed_environment(root, root / "home", observed)
+                diagnostic = kimi._KimiFailureDiagnostic("installed")
+                diagnostic.step("context")
+                line = diagnostic.line(caught.exception)
+                value = json.loads(line.split(": ", 1)[1])
+                self.assertEqual(value["exception_kind"], category)
+                self.assertEqual(value["profile_refusal"]["role"], role)
+                self.assertEqual(value["profile_refusal"]["reason"], reason)
+                self.assertEqual("metadata" in value["profile_refusal"], fault in ("mode", "uid", "gid"))
+                if fault == "mode":
+                    self.assertEqual(value["profile_refusal"]["metadata"],
+                                     {"mode": 0o755, "directory": True, "uid_matches": True, "gid_matches": True})
+                self.assertFalse(value["observer_entered"] or value["service_recorded"] or value["cleanup_reported"])
+                self.assertTrue(all(item is None for item in value["cleanup"].values()))
+                self.assertLess(len(line.encode()), 2048)
+                self.assertNotIn(str(root), line)
+                self.assertNotIn("private-context-canary", line)
+
+    def test_context_refusal_rejects_unknown_or_malformed_diagnostic_state(self):
+        for role, reason, category, metadata in (("private-role", "mode", "validation", None),
+                ("HOME", "private-reason", "validation", None), ("HOME", "open", "validation", None),
+                ("HOME", "value", "os", None), ("HOME", "mode", "private-category", None),
+                ("HOME", "mode", "validation", {"mode": True, "directory": True, "uid_matches": True, "gid_matches": True}),
+                ("HOME", "mode", "validation", {"mode": 0o10000, "directory": True, "uid_matches": True, "gid_matches": True}),
+                ("HOME", "mode", "validation", {"mode": 0o700, "directory": "private", "uid_matches": True, "gid_matches": True})):
+            with self.subTest(role=role, reason=reason), self.assertRaises(ValueError):
+                kimi._InstalledProfileRefusal(role, reason, category, metadata)
+        error = kimi._InstalledProfileRefusal("HOME", "mode")
+        error.role = "private-error-canary"
+        stream = io.StringIO()
+        kimi._emit_failure_diagnostic(kimi._KimiFailureDiagnostic("installed"), error, stream)
+        self.assertEqual(stream.getvalue(), "")
 
 
 def help_body(command):

@@ -106,3 +106,18 @@ Require a genuine source-bound follow-up to identify the component's actual
 context condition and advance the single-tool adapter. Later source/ownership
 or API amendments still need their own measured plan; full lifecycle, MCP and
 cleanup qualification remains mandatory. No release/new PR/VS work.
+
+## Completed local validation
+
+Both independent plan and complete code reviews approved the exact four-file
+correction. The actual twelve-key process snapshot adapter is now exercised
+from both installed modules, including repeated no-mutation/private-canary
+controls. Nine focused real profile/adapter/refusal contracts passed (0.053s).
+The complete collector, single-tool and shared-supervisor suite passed all56
+tests (16.650s); root independently reran all44 Kimi module tests (3.962s).
+All four Python ASTs and diff whitespace checks passed. Finite role/reason and
+held metadata controls verify mode/owner/group/open/close failures, original
+os category, null unreached cleanup, bounded output and malformed-state refusal.
+No Go, vendor/native client, model or positive hosted guard was executed.
+The component's actual context predicate is still unclaimed until a new genuine
+source-bound capture reports it; none of this promotes the old failed evidence.

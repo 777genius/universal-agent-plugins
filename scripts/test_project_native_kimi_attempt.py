@@ -159,7 +159,8 @@ class KimiAttemptContracts(unittest.TestCase):
                     "XDG_STATE_HOME": str(root / "xdg-state"), "XDG_DATA_HOME": str(root / "xdg-data"),
                     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
             for _ in range(2):
-                env = attempt.kimi._installed_environment(root, root / "home", held)
+                with patch.dict(os.environ, held):
+                    env = attempt.kimi._installed_environment_from_process(root, root / "home")
                 self.assertEqual({key: env[key] for key in held}, held)
                 self.assertEqual(len(env), 17)
                 self.assertEqual(env["KIMI_CODE_NO_AUTO_UPDATE"], "1")
