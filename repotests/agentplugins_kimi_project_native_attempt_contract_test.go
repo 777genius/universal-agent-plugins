@@ -4,8 +4,10 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -58,7 +60,10 @@ func TestKimiSingleToolProviderOwnsOnlyOneTwoTurnExchange(t *testing.T) {
 		}
 		send := func(value map[string]any, wrongKey, wrongHost bool) *httptest.ResponseRecorder {
 			body, _ := json.Marshal(value)
-			r := httptest.NewRequest("POST", p.server.URL+"/v1/chat/completions", bytes.NewReader(body))
+			r, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.server.URL+"/v1/chat/completions", bytes.NewReader(body))
+			if err != nil {
+				t.Fatalf("construct in-process request: %v", err)
+			}
 			r.Header.Set("Authorization", "Bearer "+p.key)
 			r.Header.Set("Content-Type", "application/json")
 			if wrongKey {

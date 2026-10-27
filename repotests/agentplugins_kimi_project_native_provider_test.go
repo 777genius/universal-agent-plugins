@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -134,7 +135,7 @@ type kimiAttemptProvider struct {
 }
 
 func (p *kimiAttemptProvider) start() error {
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp4", "127.0.0.1:0")
 	if err != nil {
 		return err
 	}
