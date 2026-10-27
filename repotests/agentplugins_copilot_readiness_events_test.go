@@ -1,0 +1,151 @@
+//go:build linux
+
+package pluginkitairepo_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"time"
+)
+
+const copilotReadinessMode = "copilot-installed-tool-readiness"
+const copilotReadinessPrompt = "Call only the installed inspect_runtime tool once for the fixture challenge."
+
+var copilotReadinessUUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+// The finite sequence and closed fields are measured in genuine source9b8d,
+// run40553325878/native12760476935. Parent UUIDs are not session identities.
+var copilotReadinessGrammar = [26][2]string{
+	{"session.mcp_server_status_changed", "serverName status"},
+	{"session.mcp_server_status_changed", "serverName status configSource"},
+	{"session.mcp_server_tools_loaded", "serverName toolCount"},
+	{"session.skills_loaded", "skills"},
+	{"session.info", "infoType message"},
+	{"session.mcp_servers_loaded", "servers"},
+	{"session.tools_updated", "model"},
+	{"user.message", "content transformedContent messageId supportedNativeDocumentMimeTypes delivery interactionId turnId parentAgentTaskId"},
+	{"assistant.turn_start", "turnId interactionId"},
+	{"model.call_start", "turnId model"},
+	{"assistant.tool_call_delta", "toolCallId toolName toolType inputDelta"},
+	{"model.call_finished", "turnId dispatchDurationMs outcome editClassifierVersion interactionId containsBuiltInFileEditRequest"},
+	{"assistant.message", "messageId originatingMessageId model content toolRequests interactionId turnId rte apiCallId"},
+	{"tool.execution_start", "toolCallId toolName arguments turnId model toolTitle mcpServerName mcpConfigServerName mcpTransport mcpConfigSource mcpToolName"},
+	{"model.call_final_result", "model isByok result"},
+	{"tool.execution_complete", "toolCallId model interactionId turnId rte success result toolTelemetry"},
+	{"assistant.turn_end", "turnId"},
+	{"assistant.turn_start", "turnId interactionId"},
+	{"model.call_start", "turnId model"},
+	{"assistant.message_start", "messageId"},
+	{"assistant.message_delta", "messageId deltaContent"},
+	{"model.call_finished", "turnId dispatchDurationMs outcome editClassifierVersion interactionId containsBuiltInFileEditRequest"},
+	{"assistant.message", "messageId originatingMessageId model content toolRequests interactionId turnId rte apiCallId"},
+	{"model.call_final_result", "model isByok result"},
+	{"assistant.turn_end", "turnId"},
+	{"assistant.idle", ""},
+}
+
+type copilotReadinessStream struct {
+	rows    []map[string]any
+	data    []map[string]any
+	session string
+}
+
+func copilotReadinessObject(value any, keys string) (map[string]any, error) {
+	row, ok := value.(map[string]any)
+	if !ok || projectNativeRuntimeKeys(row, keys, "") != nil {
+		return nil, fmt.Errorf("Copilot readiness closed object")
+	}
+	return row, nil
+}
+func copilotReadinessNatural(value any, limit int64) bool {
+	n, ok := value.(json.Number)
+	if !ok {
+		return false
+	}
+	i, err := n.Int64()
+	return err == nil && i >= 0 && i <= limit
+}
+func copilotReadinessID(value any) bool {
+	s, ok := value.(string)
+	return ok && copilotReadinessUUID.MatchString(s)
+}
+func copilotReadinessDecode(body []byte, start, end time.Time) (*copilotReadinessStream, error) {
+	if len(body) > copilotProjectBodyLimit || !bytes.HasSuffix(body, []byte{'\n'}) || start.IsZero() || end.Before(start) || end.Sub(start) > 60*time.Second {
+		return nil, fmt.Errorf("Copilot readiness stream/command interval")
+	}
+	lines := bytes.Split(bytes.TrimSuffix(body, []byte{'\n'}), []byte{'\n'})
+	if len(lines) != 27 {
+		return nil, fmt.Errorf("Copilot readiness finite event count")
+	}
+	s := &copilotReadinessStream{}
+	seen := map[any]bool{}
+	last := start
+	for i, line := range lines {
+		v, err := projectNativeRuntimeJSON(line)
+		keys := "type data id timestamp parentId"
+		ephemeral := i < 7 || i == 9 || i == 10 || i == 11 || i == 14 || (i >= 18 && i <= 21) || i == 23 || i == 25
+		if ephemeral {
+			keys += " ephemeral"
+		}
+		if i == 26 {
+			keys = "type timestamp sessionId exitCode usage"
+		}
+		row, shapeErr := copilotReadinessObject(v, keys)
+		if err != nil || shapeErr != nil {
+			return nil, fmt.Errorf("Copilot readiness event shape")
+		}
+		stamp, ok := row["timestamp"].(string)
+		when, err := time.Parse(time.RFC3339Nano, stamp)
+		if !ok || err != nil || when.Before(last) || when.After(end) {
+			return nil, fmt.Errorf("Copilot readiness event time")
+		}
+		last = when
+		s.rows = append(s.rows, row)
+		if i == 26 {
+			if row["type"] != "result" || !copilotReadinessID(row["sessionId"]) || seen[row["sessionId"]] || row["exitCode"] != json.Number("0") {
+				return nil, fmt.Errorf("Copilot readiness terminal session/result")
+			}
+			s.session = row["sessionId"].(string)
+			continue
+		}
+		if row["type"] != copilotReadinessGrammar[i][0] || !copilotReadinessID(row["id"]) || seen[row["id"]] || !copilotReadinessID(row["parentId"]) || ephemeral && row["ephemeral"] != true {
+			return nil, fmt.Errorf("Copilot readiness event identity/order")
+		}
+		seen[row["id"]] = true
+		data, err := copilotReadinessObject(row["data"], copilotReadinessGrammar[i][1])
+		if err != nil {
+			return nil, err
+		}
+		s.data = append(s.data, data)
+	}
+	if err := s.parents(seen); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+func (s *copilotReadinessStream) parents(ids map[any]bool) error {
+	external := map[any]bool{}
+	for _, i := range []int{0, 8, 11, 21} {
+		parent := s.rows[i]["parentId"]
+		if ids[parent] || external[parent] || parent == s.session {
+			return fmt.Errorf("Copilot readiness external parent identity")
+		}
+		external[parent] = true
+	}
+	for i := 1; i < 8; i++ {
+		if s.rows[i]["parentId"] != s.rows[0]["parentId"] {
+			return fmt.Errorf("Copilot readiness startup parent")
+		}
+	}
+	for _, edge := range [][2]int{{9, 8}, {10, 8}, {13, 12}, {14, 13}, {15, 13}, {16, 15}, {17, 16}, {18, 17}, {19, 17}, {20, 17}, {23, 22}, {24, 22}, {25, 24}} {
+		if s.rows[edge[0]]["parentId"] != s.rows[edge[1]]["id"] {
+			return fmt.Errorf("Copilot readiness exported parent edge")
+		}
+	}
+	if s.rows[12]["parentId"] != s.rows[11]["parentId"] || s.rows[22]["parentId"] != s.rows[21]["parentId"] {
+		return fmt.Errorf("Copilot readiness shared external parent")
+	}
+	return nil
+}

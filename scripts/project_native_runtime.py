@@ -124,6 +124,11 @@ def write_new(path, body, mode=0o600):
 
 
 def attempt_members(bodies, source, client="copilot"):
+    if client == "copilot" and "runtime-attempt.json" in bodies:
+        result = strict_json(bodies["runtime-attempt.json"])
+        if isinstance(result, dict) and result.get("mode") == "copilot-installed-tool-readiness":
+            from project_native_copilot_readiness import members
+            return members(bodies, source)
     required = {"runtime-attempt.json"}
     installed = {"copilot": {"mcp.json.installed", "uapcopilota-SKILL.md.installed"},
                  "gemini": {".gemini-settings.json.installed", "uapgeminia-SKILL.md.installed"}}

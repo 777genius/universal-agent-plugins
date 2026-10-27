@@ -57,6 +57,8 @@ type copilotProjectAttempt struct {
 	ctx                                            context.Context
 	cancel                                         context.CancelFunc
 	started                                        time.Time
+	nativeStarted, nativeEnded                     time.Time
+	readinessObserved                              bool
 	files                                          map[string][]byte
 	immutable                                      map[string]string
 	protected                                      map[string]string
@@ -100,7 +102,15 @@ func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, ar
 	ctx, cancel := context.WithTimeout(f.ctx, timeout)
 	defer cancel()
 	began := time.Now()
+	if label == "native-attempt" {
+		f.nativeStarted = began.UTC()
+		f.evidence["native_command_started_at"] = f.nativeStarted.Format(time.RFC3339Nano)
+	}
 	result, err := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: argv, Env: env, Dir: cwd, StdoutLimitBytes: copilotProjectBodyLimit}, 5*time.Second)
+	if label == "native-attempt" {
+		f.nativeEnded = time.Now().UTC()
+		f.evidence["native_command_ended_at"] = f.nativeEnded.Format(time.RFC3339Nano)
+	}
 	f.keep(t, label+".stdout.log", result.Stdout)
 	f.keep(t, label+".stderr.log", result.Stderr)
 	record := map[string]any{"argv": argv, "cwd": cwd, "exit": result.ExitCode, "elapsed_ms": time.Since(began).Milliseconds(), "error": err != nil, "context_error": ctx.Err() != nil, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"}
@@ -123,6 +133,8 @@ func newCopilotProjectAttempt(t *testing.T) *copilotProjectAttempt {
 	}
 	f := &copilotProjectAttempt{started: started, files: map[string][]byte{}, immutable: map[string]string{}, protected: map[string]string{}, evidence: map[string]any{"client": "copilot", "provider_kind": "scripted_loopback", "runtime_attempt_complete": false, "activation": "prepared", "vendor_authentication_qualified": false, "real_model_qualified": false, "qualification": map[string]bool{"project-lifecycle": false, "native-restart-removal": false, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}}}
 	f.ctx, f.cancel = context.WithDeadline(context.Background(), started.Add(150*time.Second))
+	f.evidence["mode"] = copilotReadinessMode
+	f.evidence["provider_closed"] = false
 	f.output = os.Getenv("AGENTPLUGINS_PROJECT_NATIVE_OUTPUT")
 	if !filepath.IsAbs(f.output) {
 		t.Fatal("explicit attempt output directory required")
@@ -273,6 +285,11 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 		t.Fatal("installed native ownership paths differ")
 	}
 	f.captureInstalled(t, owned["copilot_project_mcp_server"], filepath.Join(owned["copilot_project_skill_directory"], "SKILL.md"))
+	if err := f.installedReadiness(); err != nil {
+		t.Fatal(err)
+	}
+	f.protected[owned["copilot_project_mcp_server"]] = copilotProjectConfigHash(f.files["mcp.json.installed"])
+	f.protected[filepath.Join(owned["copilot_project_skill_directory"], "SKILL.md")] = copilotProjectConfigHash(f.files["uapcopilota-SKILL.md.installed"])
 	f.evidence["binding"] = f.binding
 	f.evidence["data_locator"] = f.data
 	if _, err := os.Lstat(f.base.Events); !os.IsNotExist(err) {
@@ -281,6 +298,16 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 	f.check(t)
 }
 func (f *copilotProjectAttempt) validateFacts(body string) error {
+	log, err := projectNativeRuntimeRead(f.base.Events, 2<<20)
+	if err != nil {
+		return err
+	}
+	return f.validateFactsLog(body, log)
+}
+func (f *copilotProjectAttempt) validateFactsLog(body string, log []byte) error {
+	if len(log) > 2<<20 {
+		return fmt.Errorf("Copilot probe event bound")
+	}
 	value, err := projectNativeRuntimeJSON([]byte(body))
 	if err != nil {
 		return err
@@ -299,10 +326,6 @@ func (f *copilotProjectAttempt) validateFacts(body string) error {
 	// Bind that measured expansion to the held original HOME, never ambient env.
 	if facts.Nonce != f.base.Nonce || facts.Revision != "A-one" || facts.Root != f.binding.TargetLocator || facts.Data != f.data || facts.CWD != f.binding.TargetLocator || !reflect.DeepEqual(facts.Argv, []string{"argument with spaces", f.binding.TargetLocator + "/argument", "${UNKNOWN}"}) || facts.Literal != "literal ${UNKNOWN} "+f.base.Home || facts.Once != f.binding.TargetLocator+"/${UNKNOWN}" || facts.Marker != "retained-"+f.base.Nonce || facts.PID <= 0 || facts.Session == "" {
 		return fmt.Errorf("returned probe authority/nonce/revision/cwd/marker differs")
-	}
-	log, err := projectNativeRuntimeRead(f.base.Events, 2<<20)
-	if err != nil {
-		return err
 	}
 	methods := map[string]int{}
 	lastTime := time.Time{}
@@ -356,13 +379,14 @@ func (f *copilotProjectAttempt) finish(t *testing.T) {
 	if time.Since(f.started) > 180*time.Second {
 		t.Error("attempt total budget exceeded")
 	}
-	f.evidence["test_failed"] = t.Failed()
-	f.evidence["elapsed_ms"] = time.Since(f.started).Milliseconds()
 	if f.base != nil {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 2<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
+	f.finalizeReadiness(t)
+	f.evidence["test_failed"] = t.Failed()
+	f.evidence["elapsed_ms"] = time.Since(f.started).Milliseconds()
 	body, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(body, '\n'))
 	file, err := os.OpenFile(filepath.Join(f.output, "research.zip"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -408,6 +432,7 @@ func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T) {
 	}
 	defer func() {
 		p.server.Close()
+		f.evidence["provider_closed"] = true
 		p.mu.Lock()
 		defer p.mu.Unlock()
 		for i, body := range p.requests {
@@ -419,8 +444,8 @@ func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T) {
 		}
 	}()
 	env := append(f.env(), "COPILOT_PROVIDER_TYPE=openai", "COPILOT_PROVIDER_BASE_URL="+p.server.URL+"/v1", "COPILOT_PROVIDER_WIRE_API=completions", "COPILOT_MODEL=uap-fixture-model")
-	args := []string{f.client, "-p", "Call only the installed inspect_runtime tool once for the fixture challenge.", "--output-format", "json", "--no-auto-update", "--disable-client-telemetry", "--disable-builtin-mcps", "--available-tools=uapcopilota-inspect_runtime", "--allow-tool=uapcopilota(inspect_runtime)", "--deny-tool=shell", "--deny-tool=write", "--deny-tool=read", "--deny-tool=url", "--deny-tool=memory"}
-	f.command(t, "native-attempt", f.base.Project, env, args, 60*time.Second)
+	args := []string{f.client, "-p", copilotReadinessPrompt, "--output-format", "json", "--no-auto-update", "--disable-client-telemetry", "--disable-builtin-mcps", "--available-tools=uapcopilota-inspect_runtime", "--allow-tool=uapcopilota(inspect_runtime)", "--deny-tool=shell", "--deny-tool=write", "--deny-tool=read", "--deny-tool=url", "--deny-tool=memory"}
+	result := f.command(t, "native-attempt", f.base.Project, env, args, 60*time.Second)
 	p.server.Close()
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -428,7 +453,15 @@ func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T) {
 		t.Fatalf("native provider exchange incomplete: %v", p.err)
 	}
 	f.evidence["probe_facts"] = f.facts
-	// The exact pinned JSONL grammar is deliberately an observation gate. This
-	// first capture cannot infer native session identity from provider/probe IDs.
-	t.Fatal("Copilot native JSONL session/event grammar requires genuine capture review; runtime attempt remains unqualified")
+	if len(result.Stderr) != 0 {
+		t.Fatal("Copilot readiness native stderr is not empty")
+	}
+	session, err := f.readiness(result.Stdout, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.check(t)
+	f.evidence["native_session_id"] = session
+	f.evidence["provider_call_id"] = p.id
+	f.readinessObserved = true
 }
