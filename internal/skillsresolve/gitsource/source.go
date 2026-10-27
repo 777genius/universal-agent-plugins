@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -96,13 +96,21 @@ func safePath(path string) bool {
 // hostedRunner only receives trusted core-generated Git arguments. No user
 // input can switch transports, redirects, helpers or native credentials.
 type hostedRunner struct {
+	mu       sync.Mutex
 	runner   sourceacquisition.Runner
-	poisoned atomic.Bool
+	poisoned bool
 }
 
 func (r *hostedRunner) Run(ctx context.Context, command sourceacquisition.Command) ([]byte, error) {
-	if r.poisoned.Load() {
+	// Discovery may request two documents concurrently. Admission and cleanup
+	// evidence share one lock so queued work cannot launch after an uncertain exit.
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.poisoned {
 		return nil, sourceacquisition.ErrGitCleanupUnconfirmed
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if command.NativeCredentials {
 		return nil, skillsresolve.ErrInvalidRequest
@@ -114,7 +122,7 @@ func (r *hostedRunner) Run(ctx context.Context, command sourceacquisition.Comman
 	}
 	output, err := runner.Run(ctx, command)
 	if errors.Is(err, sourceacquisition.ErrGitCleanupUnconfirmed) {
-		r.poisoned.Store(true)
+		r.poisoned = true
 	}
 	return output, err
 }

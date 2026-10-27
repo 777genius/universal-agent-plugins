@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
@@ -60,5 +62,37 @@ func TestHostedRunnerCanRetryConfirmedTransportFailure(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatal("confirmed cleanup incorrectly poisoned the resolver", calls)
+	}
+}
+
+func TestHostedRunnerRefusesConcurrentWorkAfterUnconfirmedCleanup(t *testing.T) {
+	firstStarted, release, extraStarted := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var calls atomic.Int32
+	runner := &hostedRunner{runner: runnerFunc(func(context.Context, sourceacquisition.Command) ([]byte, error) {
+		if calls.Add(1) == 1 {
+			close(firstStarted)
+			<-release
+			return nil, sourceacquisition.ErrGitCleanupUnconfirmed
+		}
+		close(extraStarted)
+		return []byte("unexpected Git launch"), nil
+	})}
+	finished := make(chan error, 2)
+	run := func() { _, err := runner.Run(t.Context(), sourceacquisition.Command{}); finished <- err }
+	go run()
+	<-firstStarted
+	go run()
+	select {
+	case <-extraStarted:
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	for range 2 {
+		if err := <-finished; !errors.Is(err, sourceacquisition.ErrGitCleanupUnconfirmed) {
+			t.Error("concurrent admission escaped cleanup uncertainty", err)
+		}
+	}
+	if calls.Load() != 1 {
+		t.Fatal("concurrent Git work bypassed process cleanup admission", calls.Load())
 	}
 }
