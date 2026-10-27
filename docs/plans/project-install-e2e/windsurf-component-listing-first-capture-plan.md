@@ -252,3 +252,27 @@ affected all-enabled and unfiltered whole-file gates in a granted exclusive
 slot, formatting/AST/diff checks and two independent exact-code reviews. Root
 alone publishes to existing PR528 with a fresh non-forced expected-head lease
 after current7a evidence is audited. No new PR, release or VS Code work.
+
+## Source-bound implementation preflight: exact inert writer locks
+
+The actual inert Loader/Planner/Stager/transaction/Windsurf-adapter positive
+contract found one fixture omission before publication: the unchanged native
+writer creates the empty sibling `mcp_config.json.agentplugins.lock` during
+public installation. This is UAP writer state, not a vendor-created profile
+exception. `nativeconfig/writer_lock_paths.go` fixes that exact suffix and
+`nativeconfig/lock_unix.go` opens it with O_CREAT/O_RDWR/O_NOFOLLOW, validates
+an ordinary file, holds Flock and closes without writing or chmodding it.
+The files are under install/integrationctl/agentplugins/adapters; their exact
+baseline SHA256 values are recorded in the companion review manifest.
+
+Before opening the fixture baseline, author exactly that empty0600 ordinary
+single-link/current-UID/GID sibling for each of the three authored MCP configs.
+Freeze its full held identity/body/mode with the existing native/profile tree.
+The public child may only hold/release its lock; no body, mode, inode or time
+change is allowed. Native commands retain complete exact six-root equality,
+and unknown lock names or any other added/changed member still fail. This
+adds no public-mutation acceptance exception, production change, baseline
+adoption, native grammar, credential or qualification. Confirm against the
+actual adapter positive that each preauthored lock remains byte/metadata
+identical; actual modified-body/mode/replaced/extra-lock negatives must refuse.
+Obtain two independent reviews of this narrow refinement before its seed edit.
