@@ -270,5 +270,11 @@ class RuntimeTests(unittest.TestCase):
             runtime.kimi_call_members({**bodies, "git-c.command.json": json.dumps({**command, "cleanup": "assumed"}).encode()}, self.source)
 
 
+def load_tests(loader, tests, pattern):
+    if pattern in (None, "test_project_native_runtime.py"):
+        tests.addTests(loader.loadTestsFromName("test_project_native_windsurf_components.WindsurfComponentTests"))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()

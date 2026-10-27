@@ -5,5 +5,5 @@ package pluginkitairepo_test
 import "testing"
 
 func TestAgentpluginsDevinNativeProjectRuntimeAttempt(t *testing.T) {
-	projectNativeCLIRuntimeAttempt(t, "windsurf")
+	windsurfComponentFirstCapture(t)
 }

@@ -224,6 +224,12 @@ def kimi_members(bodies, source):
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
+    initial = strict_json(bodies.get("runtime-attempt.json", b"{}"))
+    if "capture_mode" in initial:
+        if client != "windsurf":
+            raise ValueError("unregistered native CLI capture mode")
+        import project_native_windsurf_components as windsurf_components
+        return windsurf_components.members(bodies, source, initial, strict_json)
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
     for label in commands:
