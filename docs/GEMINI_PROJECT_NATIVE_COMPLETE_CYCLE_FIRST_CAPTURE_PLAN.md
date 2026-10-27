@@ -225,7 +225,7 @@ Preserve original150-second work origin,180-second final bound, ordinary OS
 descendant supervision/5-second grace,80 members,2MiB/member and16MiB total.
 Do not renew a stage or cleanup deadline. Public/Git/version deadlines are
 30seconds, listing10seconds and native sessions60seconds, each bounded by
-the original context. If50 total operations cannot finish inside that budget,
+the original context. If40 total operations cannot finish inside that budget,
 retain the exact failing prefix; do not increase budgets as part of this plan.
 
 Keep16 public raw triples (48 members), runtime-attempt.json and exactly8
