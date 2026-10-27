@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SkillSpectorSubject } from '~/types/skillSpector';
+import type { SkillSpectorRecord, SkillSpectorSubject } from '~/types/skillSpector';
 import {
   skillSpectorAssessment,
   skillSpectorFindingLocation,
@@ -37,6 +37,19 @@ const label = computed(() => {
     ? `${t('registryUi.skillSpector.historical')}: ${status}`
     : status;
 });
+function recordLabel(record: SkillSpectorRecord, showCount = false) {
+  const status =
+    record.status === 'complete'
+      ? record.finding_count
+        ? 'findingsCount'
+        : 'noFindings'
+      : record.status;
+  let label = t(`registryUi.skillSpector.${status}`, { count: n(record.finding_count) });
+  if (showCount && record.status !== 'complete' && record.finding_count) {
+    label += ` · ${t('registryUi.skillSpector.findingsCount', { count: n(record.finding_count) })}`;
+  }
+  return label;
+}
 const coverageLimits = computed(() => {
   const messages: Record<string, string> = {
     static_parse_limit: 'staticParseLimit',
@@ -91,59 +104,71 @@ const coverageLimits = computed(() => {
         <p v-if="scope === 'skill'">{{ t('registryUi.skillSpector.unverified') }}</p>
         <ul class="skillspector__records">
           <li v-for="record in assessment.records" :key="record.id">
-            <a :href="skillSpectorSourceUrl(record)" target="_blank" rel="noreferrer"
-              >{{ record.source.path || record.skill_name || record.source.repository }} ↗</a
+            <component
+              :is="assessment.records.length > 1 ? 'details' : 'div'"
+              :class="{ skillspector__record: assessment.records.length > 1 }"
             >
-            <p v-if="record.scanned_at">
-              {{
-                t('registryUi.skillSpector.checked', {
-                  date: formatSecurityDate(record.scanned_at, locale),
-                })
-              }}
-            </p>
-            <p>
-              {{ t('registryUi.skillSpector.revision') }}: <code>{{ record.source.revision }}</code>
-            </p>
-            <p>
-              {{
-                t(
-                  `registryUi.skillSpector.${record.status === 'complete' ? (record.finding_count ? 'findingsCount' : 'noFindings') : record.status}`,
-                  { count: n(record.finding_count) },
-                )
-              }}
-            </p>
-            <p v-if="record.findings_truncated">
-              {{
-                t('registryUi.skillSpector.truncated', {
-                  shown: n(record.findings.length),
-                  total: n(record.finding_count),
-                })
-              }}
-            </p>
-            <ul
-              v-if="record.findings.length"
-              class="skillspector__findings"
-              :aria-label="t('registryUi.skillSpector.findings')"
-            >
-              <li v-for="(finding, index) in record.findings" :key="index">
-                <code>{{ finding.rule }} · {{ finding.severity }}</code>
-                <p>{{ finding.message }}</p>
-                <a
-                  v-if="skillSpectorFindingUrl(record, finding)"
-                  :href="skillSpectorFindingUrl(record, finding)"
-                  target="_blank"
-                  rel="noreferrer"
-                  ><code>{{ skillSpectorFindingLocation(finding) }}</code> ↗</a
+              <summary v-if="assessment.records.length > 1" class="skillspector__record-summary">
+                <span
+                  >{{
+                    record.skill_name ||
+                    record.source.path.split('/').at(-1) ||
+                    record.source.repository
+                  }}
+                  · {{ recordLabel(record, true) }}</span
                 >
-                <code v-else>{{ skillSpectorFindingLocation(finding) }}</code>
-              </li>
-            </ul>
-            <ul v-if="record.errors.length" :aria-label="t('registryUi.skillSpector.errors')">
-              <li v-for="(error, index) in record.errors" :key="index">
-                <code>{{ error.code }}</code
-                >: {{ error.message }}
-              </li>
-            </ul>
+                <span class="skillspector__arrow" aria-hidden="true">⌄</span>
+              </summary>
+              <div :class="{ 'skillspector__record-body': assessment.records.length > 1 }">
+                <a :href="skillSpectorSourceUrl(record)" target="_blank" rel="noreferrer"
+                  >{{ record.source.path || record.skill_name || record.source.repository }} ↗</a
+                >
+                <p v-if="record.scanned_at">
+                  {{
+                    t('registryUi.skillSpector.checked', {
+                      date: formatSecurityDate(record.scanned_at, locale),
+                    })
+                  }}
+                </p>
+                <p>
+                  {{ t('registryUi.skillSpector.revision') }}:
+                  <code>{{ record.source.revision }}</code>
+                </p>
+                <p>{{ recordLabel(record) }}</p>
+                <p v-if="record.findings_truncated">
+                  {{
+                    t('registryUi.skillSpector.truncated', {
+                      shown: n(record.findings.length),
+                      total: n(record.finding_count),
+                    })
+                  }}
+                </p>
+                <ul
+                  v-if="record.findings.length"
+                  class="skillspector__findings"
+                  :aria-label="t('registryUi.skillSpector.findings')"
+                >
+                  <li v-for="(finding, index) in record.findings" :key="index">
+                    <code>{{ finding.rule }} · {{ finding.severity }}</code>
+                    <p>{{ finding.message }}</p>
+                    <a
+                      v-if="skillSpectorFindingUrl(record, finding)"
+                      :href="skillSpectorFindingUrl(record, finding)"
+                      target="_blank"
+                      rel="noreferrer"
+                      ><code>{{ skillSpectorFindingLocation(finding) }}</code> ↗</a
+                    >
+                    <code v-else>{{ skillSpectorFindingLocation(finding) }}</code>
+                  </li>
+                </ul>
+                <ul v-if="record.errors.length" :aria-label="t('registryUi.skillSpector.errors')">
+                  <li v-for="(error, index) in record.errors" :key="index">
+                    <code>{{ error.code }}</code
+                    >: {{ error.message }}
+                  </li>
+                </ul>
+              </div>
+            </component>
           </li>
         </ul>
       </template>
@@ -188,7 +213,8 @@ const coverageLimits = computed(() => {
 .skillspector > summary::-webkit-details-marker {
   display: none;
 }
-.skillspector > summary:focus-visible {
+.skillspector > summary:focus-visible,
+.skillspector__record-summary:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: 3px;
   border-radius: 4px;
@@ -206,7 +232,8 @@ const coverageLimits = computed(() => {
   flex-shrink: 0;
   margin-inline-start: 2px;
 }
-.skillspector[open] .skillspector__arrow {
+.skillspector[open] > summary > .skillspector__arrow,
+.skillspector__record[open] > summary > .skillspector__arrow {
   transform: rotate(180deg);
 }
 .skillspector--noFindings > summary {
@@ -238,6 +265,22 @@ const coverageLimits = computed(() => {
   font-size: 0.75rem;
   white-space: normal;
 }
+.skillspector__record-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 600;
+}
+.skillspector__record-summary::-webkit-details-marker {
+  display: none;
+}
+.skillspector__record-body {
+  margin-top: 8px;
+}
 .skillspector__records {
   list-style: none;
   padding: 0;
@@ -259,7 +302,8 @@ const coverageLimits = computed(() => {
   color: var(--subtle);
 }
 @media (max-width: 600px), (pointer: coarse) {
-  .skillspector > summary {
+  .skillspector > summary,
+  .skillspector__record-summary {
     min-height: 44px;
   }
 }

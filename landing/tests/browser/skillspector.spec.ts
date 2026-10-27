@@ -126,10 +126,10 @@ for (const mobile of [false, true]) {
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       const details = card.locator('.skillspector');
       await expect(details).toHaveClass(/skillspector--partial/);
-      await expect(details.locator('summary')).toContainText(
+      await expect(details.locator(':scope > summary')).toContainText(
         'Selected skills: Checked with limitations',
       );
-      await details.locator('summary').focus();
+      await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
       await expect(details).toHaveAttribute('open', '');
       await expect(details).toContainText('Selected skills in this plugin');
@@ -153,7 +153,7 @@ for (const mobile of [false, true]) {
       expect(sizes.body).toBeGreaterThanOrEqual(13);
       expect(sizes.code).toBeGreaterThanOrEqual(12);
       expect(sizes.height).toBeGreaterThanOrEqual(mobile ? 44 : 32);
-      await details.locator('summary').focus();
+      await details.locator(':scope > summary').focus();
       await page.keyboard.press('Space');
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
@@ -208,8 +208,8 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
     await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     const details = card.locator('.skillspector');
-    await expect(details.locator('summary')).toContainText('Loading report');
-    await details.locator('summary').click();
+    await expect(details.locator(':scope > summary')).toContainText('Loading report');
+    await details.locator(':scope > summary').click();
     await expect(details).toContainText('Loading the published assessment…');
     await expect(details).not.toContainText('No published assessment matches this listing.');
     await expect(details.locator('.skillspector__details')).toHaveAttribute('aria-busy', 'true');
@@ -218,10 +218,10 @@ for (const result of ['malformed', 'unavailable', 'unselected'] as const) {
     ).toBeEnabled();
     gate.release();
     if (result === 'unselected') {
-      await expect(details.locator('summary')).toContainText('Not checked');
+      await expect(details.locator(':scope > summary')).toContainText('Not checked');
       await expect(details).toContainText('No published assessment matches this listing.');
     } else {
-      await expect(details.locator('summary')).toContainText('Report unavailable');
+      await expect(details.locator(':scope > summary')).toContainText('Report unavailable');
       await expect(details).toContainText('This listing’s check status is unknown.');
       await expect(details).not.toContainText('No published assessment matches this listing.');
     }
@@ -261,11 +261,14 @@ test('partial reports explain coverage and link the visible finding count to sca
   await projections(page, index);
   await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
   const details = page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector');
-  await expect(details.locator('summary')).toContainText('Checked with limitations · Findings: 50');
-  await details.locator('summary').click();
+  await expect(details.locator(':scope > summary')).toContainText(
+    'Checked with limitations · Findings: 50',
+  );
+  await details.locator(':scope > summary').click();
   await expect(details).toContainText('Some expressions exceeded the static parser’s limits.');
   await expect(details).toContainText('Some local file references were not found');
   await expect(details).toContainText('An analyzer did not complete all planned checks.');
+  await expect(details.locator('.skillspector__record')).toHaveCount(0);
   const firstFinding = details.locator('.skillspector__findings a').first();
   await expect(firstFinding).toHaveText('SKILL.md:50 ↗');
   await expect(firstFinding).toHaveAttribute(
@@ -323,5 +326,74 @@ test('real Directory metadata limits SkillSpector to listings with Skill files',
   const mcpCard = page.locator(`.plugin-card[data-install-source="${mcpOnly.install_source}"]`);
   await expect(mcpCard).toBeVisible();
   await expect(mcpCard.locator('.skillspector')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('multiple selected skills stay collapsed and let users open a later skill directly', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await offline(page);
+  const index = skillRegistryFixture();
+  const source = index.plugins[0]!.source;
+  const fixture: SkillSpectorReport = JSON.parse(
+    readFileSync(new URL('../fixtures/skillspector-report.json', import.meta.url), 'utf8'),
+  );
+  const records: SkillSpectorRecord[] = Array.from({ length: 13 }, (_, i) => ({
+    ...fixture.records[0]!,
+    id: `selected-${i}`,
+    plugin_path: source.path,
+    skill_name: i === 11 ? 'cloudflare-wrangler' : `selected-skill-${i}`,
+    source: {
+      ...fixture.records[0]!.source,
+      repository: source.repository,
+      revision: source.revision!,
+      path: `${source.path}/skills/selected-${i}`,
+    },
+    scanned_at: checked(),
+  }));
+  Object.assign(records[0]!, {
+    status: 'partial',
+    finding_count: 50,
+    findings_truncated: true,
+    findings: fixture.records[1]!.findings,
+    errors: fixture.records[1]!.errors,
+  });
+  Object.assign(records[11]!, { finding_count: 1, findings: [fixture.records[1]!.findings[0]!] });
+  Object.assign(records[12]!, {
+    status: 'error',
+    scanned_at: null,
+    errors: [{ code: 'scan_failed', message: 'This selected skill could not be checked.' }],
+  });
+  await page.route('**/reports/skillspector/v1/index.json', (route) =>
+    route.fulfill({ json: { ...fixture, generated_at: checked(), records } }),
+  );
+  await projections(page, index);
+  await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
+  const assessment = page.locator(
+    '.plugin-card[data-install-source="i18n-state-00"] .skillspector',
+  );
+  await assessment.locator(':scope > summary').click();
+  const children = assessment.locator('.skillspector__record');
+  await expect(children).toHaveCount(13);
+  await expect(assessment.locator('.skillspector__record[open]')).toHaveCount(0);
+  const later = children.nth(11);
+  await expect(later.locator('summary')).toContainText('cloudflare-wrangler · Findings: 1');
+  await later.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(later).toHaveAttribute('open', '');
+  await expect(children.first()).not.toHaveAttribute('open');
+  await expect(later.locator('.skillspector__findings a')).toHaveAttribute(
+    'href',
+    `https://github.com/${source.repository}/blob/${source.revision}/${records[11]!.source.path}/SKILL.md#L50`,
+  );
+  const failed = children.last();
+  await expect(failed.locator('summary')).toContainText('Check failed');
+  await failed.locator('summary').click();
+  await expect(failed).toContainText('This selected skill could not be checked.');
+  expect(
+    await failed.locator('summary').evaluate((element) => element.getBoundingClientRect().height),
+  ).toBeGreaterThanOrEqual(44);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
 });
