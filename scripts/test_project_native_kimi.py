@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 from types import SimpleNamespace
 import tempfile
 import time
@@ -18,6 +19,143 @@ SPEC = importlib.util.spec_from_file_location(
     "kimi_project_collector", Path(__file__).with_name("project_native_collectors") / "kimi.py")
 kimi = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(kimi)
+
+
+class KimiInstalledProfileEnvironmentTests(unittest.TestCase):
+    def fixture(self, root):
+        for name in ("home", "tmp", "xdg-config", "xdg-cache", "xdg-state", "xdg-data"):
+            (root / name).mkdir(mode=0o700)
+        return {"HOME": str(root / "home"), "USERPROFILE": str(root / "home"),
+                "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
+                "XDG_CONFIG_HOME": str(root / "xdg-config"), "XDG_CACHE_HOME": str(root / "xdg-cache"),
+                "XDG_STATE_HOME": str(root / "xdg-state"), "XDG_DATA_HOME": str(root / "xdg-data"),
+                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
+
+    def snapshot(self, root):
+        result = {}
+        for path in [root, *sorted(root.rglob("*"))]:
+            info = path.lstat()
+            body = path.read_bytes() if stat.S_ISREG(info.st_mode) else None
+            result[str(path.relative_to(root))] = (kimi._identity(info), info.st_gid, body)
+        return result
+
+    def test_existing_profile_is_nonmutating_and_reusable_without_ambient_secrets(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed = self.fixture(root)
+            for relative in ("home/git-config", "home/npm-user-config", "xdg-config/foreign-config"):
+                (root / relative).write_bytes(b"private existing configuration canary\n")
+            before, held = self.snapshot(root), dict(observed)
+            expected = {**held, "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "NO_COLOR": "1",
+                        "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"}
+            with patch.dict(os.environ, {"KIMI_API_KEY": "private-canary", "HTTPS_PROXY": "private-proxy",
+                                         "LD_PRELOAD": "private-loader", "NPM_CONFIG_USERCONFIG": "foreign-profile"}), \
+                    patch.object(Path, "resolve", side_effect=AssertionError("profile helper must not resolve aliases")):
+                for _ in range(2):
+                    env = kimi._installed_environment(root, root / "home", observed)
+                    self.assertEqual(env, expected)
+                    env["HOME"] = "changed-returned-mapping"
+            self.assertEqual(observed, held)
+            self.assertEqual(self.snapshot(root), before)
+            self.assertFalse((root / "home/config").exists())
+            self.assertFalse((root / "home/npm-cache").exists())
+            self.assertFalse((root / "home/npm-global-config").exists())
+
+    def test_each_missing_changed_nonstring_or_extra_held_value_refuses_without_writes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed = self.fixture(root)
+            before = self.snapshot(root)
+            for key in observed:
+                for kind in ("missing", "foreign", "nonstring"):
+                    value = dict(observed)
+                    if kind == "missing":
+                        del value[key]
+                    else:
+                        value[key] = "foreign-profile" if kind == "foreign" else None
+                    with self.subTest(key=key, kind=kind), self.assertRaises(ValueError):
+                        kimi._installed_environment(root, root / "home", value)
+            with self.assertRaises(ValueError):
+                kimi._installed_environment(root, root / "home", {**observed, "KIMI_API_KEY": "private"})
+            self.assertEqual(self.snapshot(root), before)
+
+    def test_each_selected_directory_must_be_existing_owned_private_and_not_an_alias(self):
+        for name in ("home", "tmp", "xdg-config", "xdg-cache", "xdg-state", "xdg-data"):
+            for kind in ("missing", "regular", "alias", "mode"):
+                with self.subTest(name=name, kind=kind), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve()
+                    observed = self.fixture(root)
+                    path = root / name
+                    if kind == "mode":
+                        path.chmod(0o755)
+                    else:
+                        path.rmdir()
+                        if kind == "regular":
+                            path.write_bytes(b"not a directory")
+                        elif kind == "alias":
+                            path.symlink_to(root / "tmp" if name != "tmp" else root / "home", target_is_directory=True)
+                    before = self.snapshot(root)
+                    with self.assertRaises((ValueError, OSError)):
+                        kimi._installed_environment(root, root / "home", observed)
+                    self.assertEqual(self.snapshot(root), before)
+
+    def test_owner_group_and_ancestor_alias_refuse(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed = self.fixture(root)
+            before = self.snapshot(root)
+            for key, value in (("getuid", os.getuid()), ("getgid", os.getgid())):
+                with patch.object(kimi.os, key, return_value=value + 1), self.assertRaises(ValueError):
+                    kimi._installed_environment(root, root / "home", observed)
+            alias = root / "alias"
+            alias.symlink_to(root, target_is_directory=True)
+            aliased = {key: value.replace(str(root), str(alias)) for key, value in observed.items()}
+            with patch.object(Path, "resolve", side_effect=AssertionError("profile helper must not resolve aliases")):
+                with self.assertRaises(OSError):
+                    kimi._installed_environment(alias, alias / "home", aliased)
+            alias.unlink()
+            after = self.snapshot(root)
+            self.assertEqual({k: v for k, v in after.items() if k != "."},
+                             {k: v for k, v in before.items() if k != "."})
+
+    def test_held_directory_replacement_refuses_and_closes_every_descriptor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed = self.fixture(root)
+            verify, close, open_file = kimi._verify_installed_profile_edges, os.close, os.open
+            opened = []
+            def track_open(*args, **kwargs):
+                descriptor = open_file(*args, **kwargs)
+                opened.append(descriptor)
+                return descriptor
+            def replace(edges, held, flags):
+                (root / "xdg-config").rename(root / "held-original")
+                (root / "xdg-config").mkdir(mode=0o700)
+                verify(edges, held, flags)
+            with patch.object(kimi, "_verify_installed_profile_edges", side_effect=replace), \
+                    patch.object(kimi.os, "open", side_effect=track_open), \
+                    patch.object(kimi.os, "close", wraps=close) as closes:
+                with self.assertRaises(ValueError):
+                    kimi._installed_environment(root, root / "home", observed)
+            self.assertCountEqual([call.args[0] for call in closes.call_args_list], opened)
+            self.assertGreater(len(opened), 6)
+
+    def test_close_failure_refuses_after_closing_the_remaining_descriptors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed = self.fixture(root)
+            before, close = self.snapshot(root), os.close
+            calls = []
+            def fail_once(descriptor):
+                close(descriptor)
+                calls.append(descriptor)
+                if len(calls) == 1:
+                    raise OSError("private close failure canary")
+            with patch.object(kimi.os, "close", side_effect=fail_once):
+                with self.assertRaisesRegex(ValueError, "descriptor close failed"):
+                    kimi._installed_environment(root, root / "home", observed)
+            self.assertGreater(len(calls), 6)
+            self.assertEqual(self.snapshot(root), before)
 
 
 def help_body(command):

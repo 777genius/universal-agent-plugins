@@ -101,6 +101,83 @@ def _identity(info):
             info.st_size, info.st_mtime_ns, info.st_ctime_ns)
 
 
+_INSTALLED_ENVIRONMENT_KEYS = (
+    "HOME", "USERPROFILE", "TMPDIR", "TEMP", "TMP", "XDG_CONFIG_HOME", "XDG_CACHE_HOME",
+    "XDG_STATE_HOME", "XDG_DATA_HOME", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_GLOBAL", "GIT_TERMINAL_PROMPT",
+)
+
+
+def _installed_directory_identity(info, private):
+    identity = (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+    return identity + (info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns) if private else identity
+
+
+def _verify_installed_profile_edges(edges, held, flags):
+    for parent, name, descriptor, before, private in edges:
+        expected = _installed_directory_identity(before, private)
+        if _installed_directory_identity(os.fstat(descriptor), private) != expected:
+            raise ValueError("Kimi existing profile held directory changed")
+        linked = os.open(name, flags, dir_fd=parent)
+        held.append(linked)
+        if _installed_directory_identity(os.fstat(linked), private) != expected:
+            raise ValueError("Kimi existing profile linked directory changed")
+
+
+def _installed_profile_directories(root):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    held, edges = [], []
+
+    def open_directory(parent, name, private):
+        descriptor = os.open(name, flags, dir_fd=parent)
+        held.append(descriptor)
+        before = os.fstat(descriptor)
+        if (not stat.S_ISDIR(before.st_mode) or (private and
+                (before.st_uid != os.getuid() or before.st_gid != os.getgid()
+                 or stat.S_IMODE(before.st_mode) != 0o700))):
+            raise ValueError("Kimi existing profile directory authority differs")
+        edges.append((parent, name, descriptor, before, private))
+        return descriptor
+
+    try:
+        parent = os.open("/", flags)
+        held.append(parent)
+        for index, part in enumerate(root.parts[1:], 1):
+            parent = open_directory(parent, part, index == len(root.parts) - 1)
+        for name in ("home", "tmp", "xdg-config", "xdg-cache", "xdg-state", "xdg-data"):
+            open_directory(parent, name, True)
+        _verify_installed_profile_edges(edges, held, flags)
+    finally:
+        failed = False
+        for descriptor in reversed(held):
+            try:
+                os.close(descriptor)
+            except OSError:
+                failed = True
+        if failed:
+            raise ValueError("Kimi existing profile descriptor close failed") from None
+
+
+def _installed_environment(root, home, observed):
+    """Validate the original Go-owned profile; never provision or repair it."""
+    if (not root.is_absolute() or len(root.parts) > 64 or len(str(root)) > 4096
+            or root.anchor != "/" or root == Path("/") or os.path.normpath(str(root)) != str(root)
+            or home != root / "home"):
+        raise ValueError("Kimi existing profile root/home differs")
+    expected = {"HOME": str(home), "USERPROFILE": str(home),
+                "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
+                "XDG_CONFIG_HOME": str(root / "xdg-config"), "XDG_CACHE_HOME": str(root / "xdg-cache"),
+                "XDG_STATE_HOME": str(root / "xdg-state"), "XDG_DATA_HOME": str(root / "xdg-data"),
+                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
+    if (type(observed) is not dict or set(observed) != set(_INSTALLED_ENVIRONMENT_KEYS)
+            or any(type(observed[key]) is not str or observed[key] != value for key, value in expected.items())):
+        raise ValueError("Kimi existing profile held environment differs")
+    _installed_profile_directories(root)
+    env = dict(observed)
+    env.update({"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "NO_COLOR": "1", "TERM": "dumb",
+                "KIMI_CODE_NO_AUTO_UPDATE": "1"})
+    return env
+
+
 def _parent(root, path, create=False):
     """Open owned ancestors with directory FDs; aliases cannot redirect I/O."""
     root, path = Path(root), Path(path)
@@ -951,8 +1028,7 @@ def _installed_main(request_path, diagnostic=None):
     ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-api",
                    "commands": [], "qualification": {"mcp-tools-call": False}}
     diagnostic.ctx = ctx
-    ctx.env = shared.legacy.runtime_environment(home, root / "tmp")
-    ctx.env.update({"NO_COLOR": "1", "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"})
+    ctx.env = _installed_environment(root, home, {key: os.environ.get(key) for key in _INSTALLED_ENVIRONMENT_KEYS})
     with shared.Budget(65) as budget:
         ctx.budget = budget
         ctx.summary["observations"] = observe_installed(ctx, value["observation"], diagnostic)

@@ -145,6 +145,29 @@ class CaptureContext:
 
 
 class KimiAttemptContracts(unittest.TestCase):
+    def test_single_tool_context_uses_original_existing_profile_without_initialization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            for name in ("home", "tmp", "xdg-config", "xdg-cache", "xdg-state", "xdg-data"):
+                (root / name).mkdir(mode=0o700)
+            config = root / "home" / "original-provider-config"
+            config.write_bytes(b"private existing provider canary\n")
+            before = config.lstat()
+            held = {"HOME": str(root / "home"), "USERPROFILE": str(root / "home"),
+                    "TMPDIR": str(root / "tmp"), "TEMP": str(root / "tmp"), "TMP": str(root / "tmp"),
+                    "XDG_CONFIG_HOME": str(root / "xdg-config"), "XDG_CACHE_HOME": str(root / "xdg-cache"),
+                    "XDG_STATE_HOME": str(root / "xdg-state"), "XDG_DATA_HOME": str(root / "xdg-data"),
+                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull, "GIT_TERMINAL_PROMPT": "0"}
+            for _ in range(2):
+                env = attempt.kimi._installed_environment(root, root / "home", held)
+                self.assertEqual({key: env[key] for key in held}, held)
+                self.assertEqual(len(env), 17)
+                self.assertEqual(env["KIMI_CODE_NO_AUTO_UPDATE"], "1")
+                self.assertNotIn("GITHUB_ACTIONS", env)
+            self.assertEqual(config.read_bytes(), b"private existing provider canary\n")
+            self.assertEqual(attempt.kimi._identity(config.lstat()), attempt.kimi._identity(before))
+            self.assertFalse((root / "home" / "config").exists())
+
     def observe_capture(self, ctx, closed=True, diagnostic=None):
         # Previously qualified workspace/catalog validators are separate inert
         # contracts. Exercise only the new response stages and real cleanup.

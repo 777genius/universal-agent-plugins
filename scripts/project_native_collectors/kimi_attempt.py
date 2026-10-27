@@ -318,8 +318,8 @@ def main(request_path, diagnostic=None):
     ctx.summary = {"schema_version": 1, "client": "kimi", "phase": "installed-single-tool-attempt",
                    "commands": [], "qualification": {name: False for name in shared.QUALIFICATION_CASES}}
     diagnostic.ctx = ctx
-    ctx.env = shared.legacy.runtime_environment(home, root / "tmp")
-    ctx.env.update({"NO_COLOR": "1", "TERM": "dumb", "KIMI_CODE_NO_AUTO_UPDATE": "1"})
+    ctx.env = kimi._installed_environment(root, home,
+        {key: os.environ.get(key) for key in kimi._INSTALLED_ENVIRONMENT_KEYS})
     with shared.Budget(65) as budget:
         ctx.budget = budget
         ctx.summary["observations"] = observe(ctx, value["observation"], diagnostic)

@@ -126,3 +126,22 @@ existing PR524. No pin, public mutation, auth workaround, release/new PR or VS
 Code work. Require fresh genuine source-bound runs to pass unchanged context
 admission and expose the next actual boundary; full lifecycle, restart/removal
 and MCP qualifications still require their complete native evidence.
+
+## Completed local validation
+
+Both independent plan reviews approved this finite existing-profile handoff.
+Code review required removal of an added Path.resolve call from the new helper;
+the final helper uses lexical canonical checks and held no-follow traversal.
+The original earlier request guard remains unchanged. Tests explicitly forbid
+Path.resolve while exercising both an unchanged original profile and a matching
+alias-shaped environment, so an alias cannot be silently resolved into authority.
+
+All 54 collector, single-tool and shared-supervisor tests passed on the final
+bytes (16.459s), including real owned temporary directory nonmutation, exact
+held environment controls, missing/wrong keys, type/mode/owner/group refusal,
+symlink/ancestor rejection, deterministic held-directory replacement, complete
+descriptor closure and failed-close refusal. All four Python ASTs and diff
+whitespace checks passed. These checks ran inert source contracts and the
+existing private supervisor child; they did not set eligible hosted markers or
+execute a native client, installer or model. No Go was needed. Genuine
+source-bound hosted context/API/cleanup and full lifecycle proof remain required.
