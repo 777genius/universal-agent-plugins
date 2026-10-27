@@ -189,13 +189,30 @@ exit1 refusal above. Do not broaden the shared command matcher.
 Run14 native `skills list --all` observations in fixed order: baseline-a,
 baseline-b, baseline-user, installed-user, installed-a, installed-b,
 repeat-add-a, unchanged-update-a, intact-repair-a, updated-a, repaired-a,
-removed-a, removed-b, removed-user. Baseline has only authored disabled foreign
-rows. User seesU, A seesU+A, B seesU+B, removedA/B seeU, finaloutside sees no
+removed-a, removed-b, removed-user. Baseline has no owned rows; authored disabled foreign
+rows and the exact pinned built-in rows remain. User seesU, A seesU+A, B seesU+B, removedA/B seeU, finaloutside sees no
 owned skill. Verify native exact path/enabled/nonbuiltin/description against
 independent source recipes plus each original foreign row; reject sibling,
 missing, foreign or stale revision. Read exact installed SKILL.md bytes too.
 Do not claim native prompt-body activation merely from catalog description;
 the built-in skill activation tool remains denied by policy.
+
+The already closed2ff research configured-a-skills stdout also contains the
+two native built-ins `antigravity-support` and `skill-creator`; this is not a
+new full-cycle grammar observation. Preserve those two exact enabled/builtin
+rows, independent names/descriptions and paths under held client/builtin,
+with no other builtin or unknown catalog row admitted. Independently read the
+full pinned6006c14 files: antigravity-support SKILL.md git blob
+`a209de7a801138187caf982ed81afe6b5507d7c0`, SHA256
+`2b866bce962f642be8c0dd74ffc2548fa29f2100bc945518b2f738b7d7d6fd38`;
+skill-creator SKILL.md git blob`d85afc668a24b3a3c7a16f912947a0304fa21745`,
+SHA256`aab93935325978cb5a54b4907ae1ca11d7b4a903925ed0cc1739345392280db9`.
+These exact whole-file hashes are also already present in the actual2ff
+acquisition/runtime identity; retain and revalidate them before native catalog
+comparison. A builtin never counts as a fixture skill, exposed provider tool,
+activation result or additional authority. Add exact-name/path/description/
+builtin/enabled and extra/missing builtin hostile catalog controls. All owned,
+foreign, raw output and deny-all tool policy checks above remain unchanged.
 
 | Fresh native session, in sequence | Cwd | Advertised owned MCP / selected action |
 | --- | --- | --- |
