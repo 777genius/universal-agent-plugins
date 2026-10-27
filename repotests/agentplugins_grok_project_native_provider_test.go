@@ -48,6 +48,7 @@ type grokProjectProvider struct {
 	connections    int
 	attempted      bool
 	request, reply []byte
+	authoredConfig []byte
 	receipt        grokProjectProviderReceipt
 }
 
@@ -72,7 +73,9 @@ func (f *projectNativeCLIAttempt) configureGrokProvider(t *testing.T) {
 		t.Fatal("Grok loopback listener could not start")
 	}
 	path := filepath.Join(f.base.Home, ".grok", "config.toml")
-	projectNativeRuntimeWrite(t, path, f.grok.configuration(), 0600)
+	configuration := f.grok.configuration()
+	projectNativeRuntimeWrite(t, path, configuration, 0600)
+	f.grok.authoredConfig = bytes.Clone(configuration)
 	f.protected[path] = nativeSHA(t, path)
 	f.evidence["provider_mode"] = "documented original-HOME custom provider; first opaque request observation; no vendor account"
 }

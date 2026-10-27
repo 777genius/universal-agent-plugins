@@ -115,10 +115,13 @@ func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
 }
 func (f *projectNativeCLIAttempt) check(t *testing.T) {
 	t.Helper()
-	for _, inventory := range []map[string]string{f.immutable, f.protected} {
+	for index, inventory := range []map[string]string{f.immutable, f.protected} {
 		for path, want := range inventory {
 			got, err := projectNativeRuntimeDigest(path)
 			if err != nil || got != want {
+				if index == 1 && err == nil {
+					f.observeGrokConfigMutation(path, want, got)
+				}
 				t.Fatalf("native CLI immutable/protected identity changed: %s (%v)", path, err)
 			}
 		}
