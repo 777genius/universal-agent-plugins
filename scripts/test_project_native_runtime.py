@@ -460,7 +460,7 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.kimi_call_members({**bodies, "git-c.command.json": json.dumps({**command, "cleanup": "assumed"}).encode()}, self.source)
 
-    def kimi_synthetic_completed_capture(self):
+    def kimi_synthetic_completed_capture(self, probe_pid=17):
         """Independent inert protocol records, never a measured native capture."""
         encode = lambda value: json.dumps(value, separators=(",", ":")).encode()
         digest = lambda body: hashlib.sha256(body).hexdigest()
@@ -475,7 +475,7 @@ class RuntimeTests(unittest.TestCase):
         sentinel, marker = "UAP_KIMI_DONE_" + nonce, "retained-" + nonce
         args = {"nonce": nonce + "-a", "operation": "write", "marker": marker}
         facts = {"nonce": nonce + "-a", "revision": "a-one", "cwd": active, "argv": ["Kimi owned a", active + "/argument"],
-                 "plugin_root": active, "plugin_data": data, "literal": "", "once": "", "marker": marker, "pid": 17, "session": "17-1767323048000000000"}
+                 "plugin_root": active, "plugin_data": data, "literal": "", "once": "", "marker": marker, "pid": probe_pid, "session": str(probe_pid) + "-1767323048000000000"}
         server = {"transport": "stdio", "command": active + "/io.github.777genius.agentplugins/managed-stdio-v1/agentplugins",
                   "args": ["--internal-stdio-v1", active, data, active, "plugin", "--", "./bin/probe", "Kimi owned a", active + "/argument"],
                   "env": {"PLUGIN_ROOT": active, "PLUGIN_DATA": data, "UAP_TEST_ROOT": root, "UAP_TEST_EVENTS": root + "/a-events.jsonl", "UAP_TEST_NONCE": nonce + "-a", "UAP_TEST_REVISION": "a-one"}}
@@ -498,7 +498,7 @@ class RuntimeTests(unittest.TestCase):
             bodies[label + ".command.json"] = encode(command)
         bodies["add-a.stdout.log"] = encode({"schema_version": 1, "command": "add", "result": "success", "data": {"targets": [{"target": "kimi", "output": {"result": {"installation_id": "inert-python-installation", "mutated": True}}}]}})
         bodies["version.stdout.log"] = b"2.3.2\n"
-        bodies["probe-events.jsonl"] = b"".join(encode({"method": method, "pid": 17, "session": facts["session"], "nonce": nonce + "-a",
+        bodies["probe-events.jsonl"] = b"".join(encode({"method": method, "pid": probe_pid, "session": facts["session"], "nonce": nonce + "-a",
              "timestamp": f"2026-01-02T03:04:08.00{index}Z", "facts": facts if method == "tools/call" else None}) + b"\n"
              for index, method in enumerate(("initialize", "tools/list", "tools/call")))
         declaration = {"type": "function", "function": {"name": "mcp__uap-kimi-native-a__inspect_runtime", "description": "Inspect only disposable fixture runtime facts.",
@@ -561,7 +561,7 @@ class RuntimeTests(unittest.TestCase):
         bodies["native-data-proof.json"] = encode({"schema_version": 1, "before": inventory, "after_without_marker": inventory, "marker_body": marker, "marker_bytes": len(marker), "marker_sha256": digest(marker.encode())})
         proof = {"native_session_id": session, "native_turn_id": 0, "provider_call_id": call, "approval_id": approval, "prompt_id": prompt_id, "terminal_reason": "completed",
                  "message_count": 4, "snapshot_count": 1, "history_sha256": digest(raw["kimi-single-tool-history.http.json"].encode()), "terminal_snapshot_sha256": digest(raw["kimi-single-tool-snapshot-0.http.json"].encode()),
-                 "probe_pid": 17, "probe_session": facts["session"], "started_at": "2026-01-02T03:04:05Z", "ended_at": "2026-01-02T03:04:11Z", "data_proof_sha256": digest(bodies["native-data-proof.json"])}
+                 "probe_pid": probe_pid, "probe_session": facts["session"], "started_at": "2026-01-02T03:04:05Z", "ended_at": "2026-01-02T03:04:11Z", "data_proof_sha256": digest(bodies["native-data-proof.json"])}
         result = {**self.cli_result("qoder"), "client": "kimi", "version": "2.3.2", "phase": "installed-single-tool-attempt", "provider_kind": "scripted-openai-chat-completions", "elapsed_ms": 8000,
                   "runtime_attempt_complete": True, "test_failed": False, "native_capture_complete": True, "native_history_grammar_frozen": True, "provider_returned": True,
                   "provider_call_id": call, "native_session_id": session, "native_turn_id": 0, "probe_facts": facts, "native_history": proof,
@@ -778,6 +778,85 @@ class RuntimeTests(unittest.TestCase):
                     else: response["data"]["trusted"] = int(response["data"]["trusted"])
                 self.kimi_mutate_http_coherently(bodies, label, mutate)
                 runtime.kimi_call_members(bodies, self.source)
+    def test_kimi_success_json_numbers_and_keys_match_go_byte_reader(self):
+        for kind in ("integer-overflow", "negative-integer-overflow", "key-utf8"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "finite float64 number|JSON key bound"):
+                bodies = self.kimi_synthetic_completed_capture()
+                def mutate(response):
+                    key = "é" * 2049 if kind == "key-utf8" else "inert-number"
+                    response["data"]["capabilities"][key] = (-(10 ** 400) if kind == "negative-integer-overflow" else 10 ** 400) if kind != "key-utf8" else True
+                self.kimi_mutate_http_coherently(bodies, "meta", mutate)
+                runtime.kimi_call_members(bodies, self.source)
+
+        bodies = self.kimi_synthetic_completed_capture()
+        self.kimi_mutate_http_coherently(bodies, "meta", lambda response: response["data"]["capabilities"].update({"é" * 2048: 10 ** 308}))
+        self.assertTrue(runtime.kimi_call_members(bodies, self.source)["runtime_attempt_complete"])
+
+    def test_kimi_native_identifier_and_epoch_limits_are_utf8_bytes(self):
+        cases = (("message", "msg_\x00owned", False), ("message", "é" * 200, False), ("message", "é" * 128, True),
+                 ("epoch", "é" * 200, False), ("epoch", "é" * 128, True),
+                 ("workspace", "wd_" + "a" * 250 + "_" + "1" * 12, False), ("workspace", "wd_" + "a" * 240 + "_" + "1" * 12, True))
+        for kind, replacement, accepted in cases:
+            with self.subTest(kind=kind, utf8_bytes=len(replacement.encode())):
+                bodies = self.kimi_synthetic_completed_capture()
+                def mutate(raw):
+                    if kind == "epoch":
+                        response = json.loads(raw["kimi-single-tool-snapshot-0.http.json"])
+                        response["data"]["epoch"] = replacement
+                        raw["kimi-single-tool-snapshot-0.http.json"] = json.dumps(response)
+                    else:
+                        old = "msg_inert_call" if kind == "message" else "wd_project_111111111111"
+                        before, after = (json.dumps(old), json.dumps(replacement)) if kind == "message" else (old, replacement)
+                        for name in raw: raw[name] = raw[name].replace(before, after)
+                self.kimi_mutate_raw_coherently(bodies, mutate)
+                if accepted:
+                    self.assertTrue(runtime.kimi_call_members(bodies, self.source)["runtime_attempt_complete"])
+                else:
+                    with self.assertRaisesRegex(ValueError, "message identity|snapshot authority|workspace/trust"):
+                        runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_success_outer_commands_have_go_text_and_arity_bounds(self):
+        for kind in ("argv-nul", "argv-ascii-long", "argv-utf8-long", "argv-empty", "argc", "cwd-nul", "cwd-ascii-long", "cwd-utf8-long", "cwd-empty"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "command text/arity"):
+                bodies = self.kimi_synthetic_completed_capture()
+                command = json.loads(bodies["git-a.command.json"])
+                if kind == "argc": command["argv"] += ["inert"] * 28
+                else:
+                    field = "cwd" if kind.startswith("cwd") else "argv"
+                    value = "/inert/\x00git" if kind.endswith("nul") else "/" + "a" * 4096 if kind.endswith("ascii-long") else "/" + "é" * 2048 if kind.endswith("utf8-long") else ""
+                    if field == "cwd": command[field] = value
+                    else: command[field][0] = value
+                bodies["git-a.command.json"] = json.dumps(command).encode()
+                runtime.kimi_call_members(bodies, self.source)
+        bodies = self.kimi_synthetic_completed_capture()
+        command = json.loads(bodies["git-a.command.json"])
+        command["argv"][0] = "/" + "a" * 4095
+        bodies["git-a.command.json"] = json.dumps(command).encode()
+        self.assertTrue(runtime.kimi_call_members(bodies, self.source)["runtime_attempt_complete"])
+
+    def test_kimi_native_proof_integers_refuse_float_and_boolean_equality(self):
+        self.assertTrue(runtime.kimi_call_members(self.kimi_synthetic_completed_capture(probe_pid=1), self.source)["runtime_attempt_complete"])
+        for field, value, pid in (("message_count", 4.0, 17), ("message_count", True, 17), ("message_count", False, 17),
+                                  ("probe_pid", 17.0, 17), ("probe_pid", True, 1), ("probe_pid", False, 1)):
+            with self.subTest(field=field, value=value, pid=pid), self.assertRaisesRegex(ValueError, "proof integer types/bounds"):
+                bodies = self.kimi_synthetic_completed_capture(probe_pid=pid)
+                result = json.loads(bodies["runtime-attempt.json"])
+                result["native_history"][field] = value
+                bodies["runtime-attempt.json"] = json.dumps(result).encode()
+                runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_owned_inventory_nul_and_utf8_paths_refuse_coherent_proof(self):
+        for path in ("owned\x00name", "é" * 2049):
+            with self.subTest(utf8_bytes=len(path.encode())), self.assertRaisesRegex(ValueError, "owned inventory entry|JSON key bound"):
+                bodies = self.kimi_synthetic_completed_capture()
+                data = json.loads(bodies["native-data-proof.json"])
+                for key in ("before", "after_without_marker"): data[key][path] = "0600:" + "a" * 64
+                bodies["native-data-proof.json"] = json.dumps(data).encode()
+                result = json.loads(bodies["runtime-attempt.json"])
+                result["native_history"]["data_proof_sha256"] = hashlib.sha256(bodies["native-data-proof.json"]).hexdigest()
+                bodies["runtime-attempt.json"] = json.dumps(result).encode()
+                runtime.kimi_call_members(bodies, self.source)
+
     def test_kimi_synthetic_success_cannot_cover_failed_or_foreign_raw(self):
         for kind in ("terminal-failed", "empty-sentinel", "wrong-call", "extra-message", "history-more", "forced", "changed-data", "wrong-marker", "wrong-proof", "foreign-source", "lifecycle-flag", "wrong-cache", "unknown-file"):
             with self.subTest(kind=kind), self.assertRaises(ValueError):

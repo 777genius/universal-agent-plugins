@@ -161,3 +161,18 @@ synthetic controls mutate each of these predicates, including nested binding
 types and authority keys, while updating affected HTTP receipts and terminal
 proof digests. Original measured9e failures retain all false single-call flags;
 none of these source corrections establishes a fresh native observation.
+
+The corrected `9a642` candidate received a further pair of NO-GOs for success-reader
+boundary parity. Python's finite JSON walk now checks every number for finite
+float64 conversion and counts keys as UTF8 bytes. Native message IDs require
+nonempty, NUL-free text within 256 bytes; workspace IDs and epochs retain Go's
+256 byte limit. Native proof message count and probe PID require actual integers,
+including refusal of Python Boolean/numeric equality substitutes. Successful
+outer command records retain the exact closed shape and require 1..32 nonempty,
+NUL-free arguments and a nonempty cwd, each at most 4096 UTF8 bytes. Both readers
+refuse NUL in owned inventory paths; the existing 4096 byte key bound remains.
+Coherent synthetic controls exercise these findings, including valid byte-limit
+cases and a fully joined PID 1 record before a Boolean proof mutation. Historical
+failed/component reader bodies, live collectors, commands, protocol, budgets and
+authorities remain unchanged. These controls still require exact-source executed
+gates and fresh independent CODE reviews before publication.

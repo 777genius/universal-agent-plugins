@@ -1047,7 +1047,7 @@ func kimiAttemptDataProof(body []byte, facts map[string]any) error {
 	}
 	for name, raw := range inventory {
 		text, ok := raw.(string)
-		if !ok || !kimiAttemptInventoryValue.MatchString(text) || len(name) > 4096 || strings.Contains(name, "\\") || filepath.IsAbs(name) || filepath.ToSlash(filepath.Clean(name)) != name || name == ".." || strings.HasPrefix(name, "../") || len(strings.Split(name, "/")) > 32 {
+		if !ok || !kimiAttemptInventoryValue.MatchString(text) || len(name) > 4096 || strings.ContainsRune(name, 0) || strings.Contains(name, "\\") || filepath.IsAbs(name) || filepath.ToSlash(filepath.Clean(name)) != name || name == ".." || strings.HasPrefix(name, "../") || len(strings.Split(name, "/")) > 32 {
 			return fmt.Errorf("Kimi owned data inventory entry differs")
 		}
 		if name == "." && !strings.HasSuffix(text, ":directory") {

@@ -610,6 +610,23 @@ func TestKimiSingleToolBindingAuthorityIsClosedAndTyped(t *testing.T) {
 	}
 }
 
+func TestKimiSingleToolOwnedInventoryRejectsNULAndUTF8Overflow(t *testing.T) {
+	for _, name := range []string{"owned\x00name", strings.Repeat("é", 2049)} {
+		files, _ := kimiSyntheticCompletedHistory(t)
+		data := kimiHistoryDecode(t, files["native-data-proof.json"])
+		for _, key := range []string{"before", "after_without_marker"} {
+			data[key].(map[string]any)[name] = "0600:" + strings.Repeat("a", 64)
+		}
+		files["native-data-proof.json"] = kimiHistoryEncode(t, data)
+		result := kimiHistoryDecode(t, files["runtime-attempt.json"])
+		result["native_history"].(map[string]any)["data_proof_sha256"] = kimiProjectProofSHA(files["native-data-proof.json"])
+		files["runtime-attempt.json"] = kimiHistoryEncode(t, result)
+		if err := kimiAttemptAdmit(files); err == nil {
+			t.Fatal("invalid owned path admitted with coherent data proof", name)
+		}
+	}
+}
+
 func TestKimiSingleToolLateFlagsDataAndProviderClosure(t *testing.T) {
 	files, expected := kimiSyntheticCompletedHistory(t)
 	for _, kind := range []string{"marker", "marker-sha", "inventory", "unknown-inventory", "missing-owner", "oversized", "extra-field"} {
