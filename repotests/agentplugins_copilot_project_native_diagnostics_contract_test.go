@@ -394,3 +394,90 @@ func TestCopilotProjectNativeConfigDiagnosticCorrelatesExactGuardSnapshot(t *tes
 		t.Fatal("private read error was reflected")
 	}
 }
+
+func TestCopilotProjectNativeConfigSuffixMembersPreserveTypesAndPrivateHashes(t *testing.T) {
+	const nullHash = "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+	for _, tc := range []struct{ before, after, oldType, newType, oldHash, newHash string }{
+		{"", "null", "absent", "null", "", nullHash},
+		{"null", "", "null", "absent", nullHash, ""},
+		{"true", "false", "boolean", "boolean", "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b", "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"},
+		{"1", "1.0", "number", "number", "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b", "d0ff5974b6aa52cf562bea5921840c032a860a91a3512f7fe8f768f6bbe005f6"},
+		{`"private-before-value"`, `"private-after-value"`, "string", "string", "4756854de2207db20c77d3914d9aefe77c0d6695742ce2243b06a8332f6d1798", "ccbe7324a86d730a1f2c5d22bb7dac6475692499fcce939ae32221d77f18a274"},
+		{`["private-array-value"]`, `{"nested":"private-object-value"}`, "array", "object", "aeedd015ae0418c83e87694ac2a8ff6e4ff443854643bbc90d954b26ebb04cb3", "c0be3fc965ed828dd024d04cad67ffdaab2be39d0cf9d1086b131038da39c83e"},
+	} {
+		object := func(value string) []byte {
+			body := `{"trustedFolders":["A","B"]`
+			if value != "" {
+				body += `,"private-one-key":` + value
+			}
+			return []byte(body + "}")
+		}
+		baseline, body := object(tc.before), append([]byte("// private-comment-canary\n"), object(tc.after)...)
+		f := copilotProjectConfigFixture(t, baseline)
+		want := f.protected[f.originalConfigPath]
+		copilotProjectWriteConfig(t, f, body)
+		got, err := f.protectedDigest(f.originalConfigPath, want)
+		change := copilotProjectRecordedChange(t, f)
+		p := change.LeadingCommentProbe
+		if err != nil || got == want || change.Status != "invalid-json" || p == nil || p.MemberDelta == nil || p.SemanticallyEqual == nil || *p.SemanticallyEqual || p.TrustedFoldersMatch == nil || !*p.TrustedFoldersMatch {
+			t.Fatal("suffix member observation replaced original failure or trust facts")
+		}
+		d := p.MemberDelta
+		oldFields, newFields := 2, 2
+		if tc.before == "" {
+			oldFields = 1
+		}
+		if tc.after == "" {
+			newFields = 1
+		}
+		member := copilotProjectConfigSuffixMember{"b4ff3321122d762f828581a2a4c29dbcdf7f60a1ac622a59d8f16b3c387de37c", tc.oldType, tc.newType, tc.oldHash, tc.newHash}
+		if d.Status != "captured" || d.BeforeFields != oldFields || d.AfterFields != newFields || d.ChangedFields != 1 || d.OmittedCount != 0 || !reflect.DeepEqual(d.Members, []copilotProjectConfigSuffixMember{member}) {
+			t.Fatal("presence-aware type or independently expected value hash differs")
+		}
+		encoded := copilotProjectContractBody(t, change)
+		if len(encoded) > 2<<10 || bytes.Contains(encoded, []byte("private-")) || bytes.Contains(encoded, []byte("trustedFolders")) || bytes.Contains(encoded, []byte("nested")) {
+			t.Fatal("suffix diagnostic exceeded its complete bound or exposed private bytes")
+		}
+		actual, err := os.ReadFile(f.originalConfigPath)
+		if err != nil || !bytes.Equal(actual, body) || !bytes.Equal(f.originalConfigBaseline, baseline) || f.protected[f.originalConfigPath] != want {
+			t.Fatal("suffix diagnostic rewrote or adopted original authority")
+		}
+	}
+}
+
+func TestCopilotProjectNativeConfigSuffixMemberCountsOrderAndCompleteBound(t *testing.T) {
+	var previous []copilotProjectConfigSuffixMember
+	for _, reverse := range []bool{false, true} {
+		before, after := `{"trustedFolders":["A","B"]`, `{"trustedFolders":["A","B"]`
+		for i := range 100 {
+			index := i
+			if reverse {
+				index = 99 - i
+			}
+			before += fmt.Sprintf(`,"private-key-%03d":true`, index)
+			after += fmt.Sprintf(`,"private-key-%03d":false`, index)
+		}
+		baseline, body := []byte(before+"}"), []byte("//"+strings.Repeat("x", 4093)+"\n"+after+"}")
+		f := copilotProjectConfigFixture(t, baseline)
+		want := f.protected[f.originalConfigPath]
+		copilotProjectWriteConfig(t, f, body)
+		got, err := f.protectedDigest(f.originalConfigPath, want)
+		change := copilotProjectRecordedChange(t, f)
+		if err != nil || got == want || change.LeadingCommentProbe == nil || change.LeadingCommentProbe.MemberDelta == nil {
+			t.Fatal("maximum prefix/changed-map diagnostic missed original failure")
+		}
+		d := change.LeadingCommentProbe.MemberDelta
+		if d.Status != "entry-limit" || d.BeforeFields != 101 || d.AfterFields != 101 || d.ChangedFields != 100 || len(d.Members) != 3 || d.OmittedCount != 97 || len(copilotProjectContractBody(t, change)) > 2<<10 {
+			t.Fatal("complete diagnostic cap, deterministic entry limit or exact counts differ")
+		}
+		for i, digest := range []string{"00fcf287dade8c3029d2e30771902e1c351d2112af3fdb95933b5049cc93aaf0", "0401377f50697597d8fb543117c0c2667402c1113df49fe1c136b17e3be5e213", "06c1237ab15604a07fdac6acc726f72db6a62ba06e77dd027e91ab749958c82e"} {
+			if d.Members[i].KeySHA256 != digest || d.Members[i].BeforeType != "boolean" || d.Members[i].AfterType != "boolean" || d.Members[i].BeforeValueSHA256 != "b5bea41b6c623f7c09f1bf24dcae58ebab3c0cdd90ad966bc43a45b44867e12b" || d.Members[i].AfterValueSHA256 != "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa" {
+				t.Fatal("selected member order or independent hash differs")
+			}
+		}
+		if reverse && !reflect.DeepEqual(previous, d.Members) {
+			t.Fatal("object ordering changed deterministic diagnostic selection")
+		}
+		previous = d.Members
+	}
+}

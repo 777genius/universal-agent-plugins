@@ -44,14 +44,32 @@ type copilotProjectConfigChange struct {
 }
 
 type copilotProjectConfigPrefix struct {
-	Status              string `json:"status"`
-	PrefixBytes         int    `json:"prefix_bytes,omitempty"`
-	CommentLines        int    `json:"comment_lines,omitempty"`
-	PrefixSHA256        string `json:"prefix_sha256,omitempty"`
-	SuffixBytes         int    `json:"suffix_bytes,omitempty"`
-	SuffixJSONReason    string `json:"suffix_json_reason,omitempty"`
-	SemanticallyEqual   *bool  `json:"semantically_equal,omitempty"`
-	TrustedFoldersMatch *bool  `json:"trusted_folders_match,omitempty"`
+	Status              string                           `json:"status"`
+	PrefixBytes         int                              `json:"prefix_bytes,omitempty"`
+	CommentLines        int                              `json:"comment_lines,omitempty"`
+	PrefixSHA256        string                           `json:"prefix_sha256,omitempty"`
+	SuffixBytes         int                              `json:"suffix_bytes,omitempty"`
+	SuffixJSONReason    string                           `json:"suffix_json_reason,omitempty"`
+	SemanticallyEqual   *bool                            `json:"semantically_equal,omitempty"`
+	TrustedFoldersMatch *bool                            `json:"trusted_folders_match,omitempty"`
+	MemberDelta         *copilotProjectConfigSuffixDelta `json:"member_delta,omitempty"`
+}
+
+type copilotProjectConfigSuffixDelta struct {
+	Status        string                             `json:"status"`
+	BeforeFields  int                                `json:"before_fields"`
+	AfterFields   int                                `json:"after_fields"`
+	ChangedFields int                                `json:"changed_fields"`
+	OmittedCount  int                                `json:"omitted_count"`
+	Members       []copilotProjectConfigSuffixMember `json:"members"`
+}
+
+type copilotProjectConfigSuffixMember struct {
+	KeySHA256         string `json:"key_sha256"`
+	BeforeType        string `json:"before_type"`
+	AfterType         string `json:"after_type"`
+	BeforeValueSHA256 string `json:"before_value_sha256,omitempty"`
+	AfterValueSHA256  string `json:"after_value_sha256,omitempty"`
 }
 
 func (f *copilotProjectAttempt) captureInstalled(t *testing.T, mcp, skill string) {
@@ -115,7 +133,7 @@ func copilotProjectConfigDiagnostic(baseline []byte, expected, observed string, 
 		if original, ok := before.(map[string]any); beforeErr == nil && ok && change.ObservedJSONReason == "syntax" {
 			change.LeadingCommentProbe = copilotProjectConfigLeadingComments(original, body)
 		}
-		return change
+		return copilotProjectBoundSuffixDiagnostic(change)
 	}
 	beforeObject, okBefore := before.(map[string]any)
 	afterObject, okAfter := after.(map[string]any)
@@ -156,7 +174,76 @@ func copilotProjectConfigLeadingComments(original map[string]any, body []byte) *
 	afterTrust, hasTrust := current["trustedFolders"]
 	trusted := hadTrust == hasTrust && reflect.DeepEqual(beforeTrust, afterTrust)
 	result.Status, result.SemanticallyEqual, result.TrustedFoldersMatch = "captured", &equal, &trusted
+	result.MemberDelta = copilotProjectConfigSuffixMembers(original, current)
 	return result
+}
+
+func copilotProjectConfigSuffixMembers(before, after map[string]any) *copilotProjectConfigSuffixDelta {
+	result := &copilotProjectConfigSuffixDelta{Status: "captured", BeforeFields: len(before), AfterFields: len(after), Members: []copilotProjectConfigSuffixMember{}}
+	keys := make(map[string]bool, len(before)+len(after))
+	for key := range before {
+		keys[key] = true
+	}
+	for key := range after {
+		keys[key] = true
+	}
+	for key := range keys {
+		old, had := before[key]
+		current, has := after[key]
+		if had == has && reflect.DeepEqual(old, current) {
+			continue
+		}
+		result.ChangedFields++
+		member := copilotProjectConfigSuffixMember{KeySHA256: copilotProjectConfigHash([]byte(key)), BeforeType: copilotProjectConfigValueType(old, had), AfterType: copilotProjectConfigValueType(current, has)}
+		var beforeErr, afterErr error
+		member.BeforeValueSHA256, beforeErr = copilotProjectConfigValueHash(old, had)
+		member.AfterValueSHA256, afterErr = copilotProjectConfigValueHash(current, has)
+		if beforeErr != nil || afterErr != nil {
+			result.Status = "value-refused"
+		}
+		result.Members = append(result.Members, member)
+	}
+	if result.Status == "value-refused" {
+		result.Members, result.OmittedCount = nil, result.ChangedFields
+		return result
+	}
+	sort.Slice(result.Members, func(i, j int) bool { return result.Members[i].KeySHA256 < result.Members[j].KeySHA256 })
+	if len(result.Members) > 3 {
+		result.Members = result.Members[:3]
+		result.Status = "entry-limit"
+	}
+	result.OmittedCount = result.ChangedFields - len(result.Members)
+	return result
+}
+
+func copilotProjectConfigValueHash(value any, present bool) (string, error) {
+	if !present {
+		return "", nil
+	}
+	body, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	return copilotProjectConfigHash(body), nil
+}
+
+func copilotProjectBoundSuffixDiagnostic(change copilotProjectConfigChange) copilotProjectConfigChange {
+	if change.LeadingCommentProbe == nil || change.LeadingCommentProbe.MemberDelta == nil {
+		return change
+	}
+	delta := change.LeadingCommentProbe.MemberDelta
+	for {
+		body, err := json.Marshal(change)
+		if err == nil && len(body) <= 2<<10 {
+			return change
+		}
+		if len(delta.Members) == 0 {
+			change.LeadingCommentProbe = &copilotProjectConfigPrefix{Status: "diagnostic-bound", MemberDelta: &copilotProjectConfigSuffixDelta{Status: "diagnostic-bound", BeforeFields: delta.BeforeFields, AfterFields: delta.AfterFields, ChangedFields: delta.ChangedFields, OmittedCount: delta.ChangedFields}}
+			return change
+		}
+		delta.Members = delta.Members[:len(delta.Members)-1]
+		delta.Status, delta.OmittedCount = "entry-limit", delta.ChangedFields-len(delta.Members)
+	}
 }
 
 // This private projection never changes the original invalid-json/digest result.
