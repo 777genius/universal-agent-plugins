@@ -1291,3 +1291,43 @@ review verified all 5777 nonconflicting tree entries and every nonblank plan
 line from both parents; Qoder-owned source was unchanged by this merge.
 Focused inert verification and exact-code review are recorded separately once
 completed; this accepted plan does not claim those gates or native success.
+
+### Qoder anonymous-metadata amendment: exact implementation validation
+
+Code commit `ff5c144de817423e5430b92ad9dc099ed01db760`, tree
+`0a3c1a1d2d51d1fb812b801664d8e14e1348eef7`, contains only the private
+Qoder helper, its inert contracts, twelve shared-fixture hook lines and the
+accepted record above. The helper opens the original profile and absent auth
+parent through the existing held no-follow mechanics, creates only the three
+exclusive ordinary files, and verifies their bytes against independently
+generated inputs before publishing protected digests. Each existing selected
+command retains its original before/after check. The new private recipe check
+also pins initial device/inode, owner/group, full mode, file length/link count
+and byte digest; current linked identities are checked after held reads.
+
+Root independently approved the helper/shared/accepted-record delta and
+bounded test corrections. CLI independently reviewed exact final tree
+`0a3c1a1d2d51d1fb812b801664d8e14e1348eef7` and gave CODE GO without remaining
+findings. Tests preserve all child inodes during auth/profile parent replacement,
+so those negatives specifically prove the initial parent identity check. Other
+controls cover all three files' early same-byte chmod/replacement, changed
+bytes/types/links, preexisting targets, exclusive partial-write refusal, exact
+four-entry authoring and full-profile sibling/mode/byte inequality. Foreign
+held UID/GID controls always run for all five nodes; an additional real chown
+control explicitly reports unsupported privilege/user-namespace capability.
+Ordinary reads and same-mode chmod do not pin access/change timestamps.
+
+Focused inert `^(TestQoder|TestProjectNativeCLI)` passed in 0.139 seconds with
+Go 1.26.10. The actual all-enabled root lint gate with
+`--new-from-merge-base=a412ba5e137fdcb7e004393229b323211ed746e1` reported zero
+issues. The unchanged unfiltered whole-root
+revive/funlen/gocyclo/gocognit/dupl/depguard gate reported zero issues. Gofmt and
+staged whitespace checks were clean. No client, public installer, package hook
+or positive hosted guard ran locally.
+
+No current native artifact has been relabeled or promoted. The genuine
+1973a955 runtime 40566031581 still fails complete original-profile equality,
+with all five qualification flags false and eight omitted entries unknown.
+The npm/standalone equivalence caveat remains. Fresh genuine hosted evidence
+must establish the next boundary; any additional profile drift or genuine
+account refusal remains a failed observation. Root alone owns publication.
