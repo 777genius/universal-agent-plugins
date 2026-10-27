@@ -95,3 +95,28 @@ publishes reviewed incremental commits to existingPR524 on a fresh ref.
 Fresh genuine source-bound evidence must pass the original context/privacy
 gate and reveal or complete subsequent actual stages before any runtime or
 full lifecycle qualification. No release/newPR or VS Code work.
+
+## Implemented and recovered validation
+
+The exact plan received independent root and desktop GOs before code. Complete
+implementation review received desktop and CLI GOs on these exact SHA256s:
+
+- lifecycle: 0b758ace0cac43c9a8b7c3917cb3ddf1a5444f3c5e6dba651bb82985757065cc
+- single-tool: 3e885dd5b22afab3f4a69ab305d067eec1bbc53b0fa35764cd72158fa0a8aa9f
+- helper/contracts: dd8d61405e489e6dc3050e1172aac4445d5bfc68bbce4464d892cc9046b6e4cd
+- Python contract: d14be5f4e940abdc11f6dee1c12d2209b4eb171c47921728415d314d4be62b69
+
+After the execution workspace was replaced, all four source files and the
+original plan were reconstructed byte-for-byte from the published1c0 source
+and reviewed patches; every recorded SHA matched. The raw archives and exact
+source/tree/clean command-stream joins were independently restored and checked.
+No original unpublished local commit ID is claimed for the recovered history.
+
+Fresh focused ^TestKimiProject|^TestKimiSingleTool contracts passed in0.176s,
+including actual filesystem root-authoring and strict proof controls. The full
+57-test Kimi/attempt/service Python suite passed in16.484s. Actual all-enabled
+affected lint against recovered plan96ebef5b and the unfiltered whole-file
+revive/funlen/gocyclo/gocognit/dupl/depguard gate each reported zero issues.
+Gofmt-list, Python AST and whitespace checks pass. No vendor/installer process
+or positive hosted guard ran locally. The source-bound1c0 failure remains
+failed/all-false; a fresh genuine run of this correction is still mandatory.

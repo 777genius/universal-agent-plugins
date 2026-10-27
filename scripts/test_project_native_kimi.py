@@ -80,6 +80,19 @@ class KimiInstalledProfileEnvironmentTests(unittest.TestCase):
                 kimi._installed_environment(root, root / "home", {**observed, "KIMI_API_KEY": "private"})
             self.assertEqual(self.snapshot(root), before)
 
+    def test_later_root_mode_drift_still_refuses_without_repair(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observed = self.fixture(root)
+            root.chmod(0o755)
+            before = self.snapshot(root)
+            with self.assertRaises(kimi._InstalledProfileRefusal) as caught:
+                kimi._installed_environment(root, root / "home", observed)
+            self.assertEqual(caught.exception.public(),
+                             {"role": "root", "reason": "mode", "metadata":
+                              {"mode": 0o755, "directory": True, "uid_matches": True, "gid_matches": True}})
+            self.assertEqual(self.snapshot(root), before)
+
     def test_each_selected_directory_must_be_existing_owned_private_and_not_an_alias(self):
         for name in ("home", "tmp", "xdg-config", "xdg-cache", "xdg-state", "xdg-data"):
             for kind in ("missing", "regular", "alias", "mode"):

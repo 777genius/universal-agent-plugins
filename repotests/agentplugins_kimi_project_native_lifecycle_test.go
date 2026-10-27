@@ -187,6 +187,9 @@ func newKimiProjectNativeFixture(t *testing.T) *kimiProjectNativeFixture {
 	f.evidence["source_identity"], f.evidence["acquisition"] = identitySource, identity
 	f.check(t)
 	f.base = newNativeFixture(t, false)
+	if err := kimiProjectPrivateFixtureRoot(f.base.Root); err != nil {
+		t.Fatal(err)
+	}
 	f.base.ClientBinDir = filepath.Dir(f.client)
 	f.projects = map[string]string{"a": f.base.Project, "b": filepath.Join(f.base.Root, "project-b"), "c": filepath.Join(f.base.Root, "project-c"), "user": filepath.Join(f.base.Root, "outside")}
 	for key, path := range f.projects {
