@@ -724,7 +724,7 @@ func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
 			return nil
 		}
 		if !info.Mode().IsRegular() || identity.Nlink != 1 || info.Size() < 0 {
-			return fmt.Errorf("Qoder profile ordinary single-link file required")
+			return projectNativeCLIQoderProfileRefusal(rel, info, identity.Nlink)
 		}
 		total += info.Size()
 		if total > 256<<20 {
@@ -739,6 +739,15 @@ func projectNativeCLIQoderProfile(root string) (map[string]string, error) {
 		return nil
 	})
 	return result, err
+}
+
+// Report only metadata already held by the refusing Lstat, never link targets
+// or entry contents. Quote a bounded relative name to keep controls inert.
+func projectNativeCLIQoderProfileRefusal(rel string, info os.FileInfo, links uint64) error {
+	if len(rel) > 256 {
+		rel = rel[:256] + "...[truncated]"
+	}
+	return fmt.Errorf("Qoder profile ordinary single-link file required: entry=%q mode=%s nlink=%d size=%d", rel, info.Mode().String(), links, info.Size())
 }
 
 func projectNativeCLIQoderCatalogJSON(body []byte) (string, error) {

@@ -6,10 +6,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -221,6 +223,70 @@ func TestProjectNativeCLIQoderCatalogCannotMutateOriginalProfileCache(t *testing
 				t.Fatal("catalog profile/cache change omitted", kind)
 			}
 		})
+	}
+}
+
+func TestProjectNativeCLIQoderProfileRefusalReportsOnlyBoundedEntryMetadata(t *testing.T) {
+	for _, kind := range []string{"symlink", "hardlink", "long-control-symlink"} {
+		t.Run(kind, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), ".qoder")
+			target := filepath.Join(t.TempDir(), "outside-target")
+			body := []byte("foreign target contents must not enter diagnostics\n")
+			projectNativeRuntimeWrite(t, target, body, 0600)
+			rel := "entry"
+			if kind == "long-control-symlink" {
+				rel = filepath.Join(strings.Repeat("a", 100)+"\n\"", strings.Repeat("b", 100), strings.Repeat("c", 100), "entry")
+			}
+			path := filepath.Join(root, rel)
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			link := os.Symlink
+			if kind == "hardlink" {
+				link = os.Link
+			}
+			if err := link(target, path); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Lstat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			targetInfo, err := os.Lstat(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = projectNativeCLIQoderProfile(root)
+			projectNativeCLIQoderRefusalMetadata(t, root, target, rel, info, err)
+			after, err := os.Lstat(path)
+			if err != nil || !projectNativeRuntimeStableStat(info.Sys(), after.Sys()) {
+				t.Fatal("refusal changed the original entry")
+			}
+			targetAfter, err := os.Lstat(target)
+			if err != nil || !projectNativeRuntimeStableStat(targetInfo.Sys(), targetAfter.Sys()) {
+				t.Fatal("refusal changed foreign target identity")
+			}
+			got, err := os.ReadFile(target)
+			if err != nil || !bytes.Equal(got, body) {
+				t.Fatal("refusal changed foreign target contents")
+			}
+		})
+	}
+}
+
+func projectNativeCLIQoderRefusalMetadata(t *testing.T, root, target, rel string, info os.FileInfo, refusal error) {
+	t.Helper()
+	identity, ok := info.Sys().(*syscall.Stat_t)
+	if refusal == nil || !ok {
+		t.Fatal("refusal and actual Linux entry metadata required")
+	}
+	message := refusal.Error()
+	if len(rel) > 256 {
+		rel = rel[:256] + "...[truncated]"
+	}
+	want := fmt.Sprintf("Qoder profile ordinary single-link file required: entry=%q mode=%s nlink=%d size=%d", rel, info.Mode().String(), identity.Nlink, info.Size())
+	if message != want || len(message) > 2<<10 || strings.ContainsAny(message, "\r\n") || strings.Contains(message, root) || strings.Contains(message, target) || strings.Contains(message, "foreign target contents") {
+		t.Fatalf("bounded entry metadata differs or leaks foreign authority: %q", message)
 	}
 }
 

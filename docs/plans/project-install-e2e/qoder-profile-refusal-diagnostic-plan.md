@@ -73,3 +73,20 @@ gofmt/whitespace checks and obtain independent code review before root-owned
 publication to existing PR523; no new PR or release. Fresh genuine hosted raw
 evidence must identify the refused entry before a separate behavioral plan can
 be considered. Passing inert diagnostics does not qualify native operation.
+
+## Review and actual validation
+
+Plan SHA256 `65bb9cf95226fae7efb64928db07abb5827bc5720025c5e59f8130874deccb6c`
+received independent CLI R1 and shell R2 GOs before plan commit
+`255247bdc1870178cc272484c2350b3c1bd82779` and implementation. Both critics
+reviewed the final code bytes, including the mechanically removed redundant
+link-count conversion reported by actual unconvert lint. Final focused inert
+Qoder inventory/catalog and exact command contracts PASS in 0.010 seconds,
+including all three new actual link/metadata cases and all six retained profile
+mutation cases. Actual all-enabled changed-line lint and the unfiltered
+whole-file size/architecture gate each report 0 issues; gofmt and whitespace
+checks are clean. An initial invocation stopped before tests because disabling
+the repository's required Go workspace hid its local nested modules; the
+unchanged existing go.work was then used for the successful checks. No vendor
+or network process ran, no qualification changed, and fresh genuine hosted
+diagnostic evidence remains required before any behavioral correction.
