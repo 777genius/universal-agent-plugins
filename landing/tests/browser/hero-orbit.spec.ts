@@ -116,7 +116,7 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   });
   await expect(field).toHaveClass(/hero-agent-field--active/);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
 });
 
 test('logos travel clockwise along a stationary ring and stay upright', async ({ page }) => {
@@ -258,7 +258,7 @@ test('logo thickness follows the viewing angle without extra animation loops', a
     expect(first.x * opposite.x + first.y * opposite.y).toBeLessThan(-1);
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
   await expect(field.locator('.hero-agent-field__face')).toHaveCount(uniqueLogos.length);
 });
 
@@ -394,7 +394,7 @@ test('orbit follows scrolling with a small upward and leftward drift, then retur
   for (const distance of [400, 1000, 400, 0]) {
     await page.mouse.wheel(0, distance - await page.evaluate(() => window.scrollY));
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(distance);
-    await expect.poll(async () => Math.round((await field.boundingBox())!.y - start.y)).toBe(-distance * 0.12);
+    await expect.poll(async () => (await field.boundingBox())!.y - start.y).toBeCloseTo(-distance * 0.12, 0);
     expect((await field.boundingBox())!.x - start.x).toBeCloseTo(-distance * 0.025, 0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
@@ -413,5 +413,5 @@ test('orbit follows scrolling with a small upward and leftward drift, then retur
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(field).toHaveCSS('translate', 'none');
-  expect(await field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
+  await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
 });
