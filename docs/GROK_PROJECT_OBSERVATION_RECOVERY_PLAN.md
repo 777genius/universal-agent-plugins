@@ -101,3 +101,11 @@ hosted eligibility may run locally. Source pins, original HOME, authority,
 process cleanup, all five qualifications and the deliberate capture failure
 remain unchanged. Root alone publishes small reviewed commits to the existing
 PR with a fresh non-forced head lease. No release, replacement PR or VS Code work.
+
+## Reconstructed source validation, 2026-10-27
+
+CLI R1 and shell R2 independently approved plan SHA256602585766fd034764fc12a226d50b72570908904f83f34faa23ef2c0d84c5798 before source edits. Both then reviewed the complete reconstructed five-file slice and gave code GOs on the final exact hashes. The existing route predicate is byte-identical. A concrete noctx lint finding was fixed with the Go1.22-compatible checked `http.NewRequestWithContext` test helper; both critics reviewed that final helper and its callsites.
+
+Focused Grok/shared inert Go contracts passed in1.067s, including an actual test-binary child that verifies nested credential refusal before any capture persistence. The runtime Python suite passed28 tests in0.088s. All-enabled affected-line lint and the unfiltered six-linter whole-file gate each reported0 issues. No vendor client or positive hosted guard ran locally.
+
+The genuine6f native/frontend archives were reacquired with their original API sizes/SHA256 and inner hashes. Canonical unique ordinary members, bounded sizes and CRCs were checked. Exact source6f/treeb272, empty source/build-clean streams, all24 frontend stream length/hash joins and all20 native bodies passed reconstruction replay. The original route failure, zero requests/responses, unmatched credential and normal provider shutdown remain unchanged. Admission is still failed/incomplete, with all five qualification, vendor-authentication and real-model flags false. This validates the recovered scanner and envelope; it does not qualify native execution or identify the unseen route/TOML changes.

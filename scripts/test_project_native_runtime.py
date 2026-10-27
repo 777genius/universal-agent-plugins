@@ -202,6 +202,54 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runtime.cli_attempt_members({**present, "grok-provider.response.sse": b"unrecorded response"}, self.source, "grok")
 
+    def grok_route_bodies(self):
+        bodies = self.grok_provider_bodies()
+        row = json.loads(bodies["grok-provider.json"])
+        row.update(requests=0, responses=0, credential_matched=False, failure="route")
+        row["route_observation"] = {
+            "method": "POST", "uri": "/v1/chat/completions", "peer_loopback": True, "host_matches": True,
+            "relative_url": True, "empty_url_host": True, "empty_raw_path": True, "content_type_exact": False,
+            "content_type_count": "one", "content_type_kind": "json-utf8"}
+        del bodies["grok-provider.request.json"]
+        del bodies["grok-provider.response.sse"]
+        return bodies, row
+
+    def test_grok_route_observation_is_optional_closed_and_never_qualifies(self):
+        bodies, row = self.grok_route_bodies()
+        for change in ({}, {"method": "GET", "content_type_exact": True, "content_type_kind": "json-bare"},
+                       {"uri": "/models", "content_type_exact": True, "content_type_kind": "json-bare"},
+                       {"content_type_count": "none", "content_type_kind": "missing"},
+                       {"content_type_count": "multiple", "content_type_kind": "other"}):
+            updated = {**row, "route_observation": {**row["route_observation"], **change}}
+            result = runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps(updated).encode()},
+                                                 self.source, "grok")
+            self.assertFalse(any(result["qualification"].values()))
+        del row["route_observation"]
+        runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps(row).encode()}, self.source, "grok")
+
+    def test_grok_route_observation_refuses_forged_types_enums_fields_and_contradictions(self):
+        bodies, row = self.grok_route_bodies()
+        observation = row["route_observation"]
+        for change in ({"method": []}, {"method": "PUT"}, {"uri": "/private-query?token=private"},
+                       {"peer_loopback": 1}, {"content_type_count": 1}, {"content_type_kind": None},
+                       {"extra": "private-value"}, {"content_type_count": "none"},
+                       {"content_type_kind": "missing"}, {"content_type_count": "multiple"},
+                       {"content_type_exact": True}, {"content_type_exact": True, "content_type_kind": "json-bare"}):
+            updated = {**row, "route_observation": {**observation, **change}}
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps(updated).encode()},
+                                           self.source, "grok")
+        for key in observation:
+            incomplete = {name: value for name, value in observation.items() if name != key}
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps({**row, "route_observation": incomplete}).encode()},
+                                           self.source, "grok")
+        for change in ({"failure": "serve"}, {"route_observation": None}, {"route_observation": []},
+                       {"started": False, "failure": "listen", "shutdown_complete": False}):
+            with self.subTest(row=change), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps({**row, **change}).encode()},
+                                           self.source, "grok")
+
     def test_grok_provider_private_canary_is_refused_in_every_capture_surface(self):
         bodies = self.grok_provider_bodies()
         canary = b"uap-grok-private-" + b"a" * 32
@@ -222,6 +270,56 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(self.cli_result("grok")).encode(),
                                          "probe-events.jsonl": canary}, self.source, "grok")
+
+    def test_grok_nested_semantic_json_strings_are_refused_before_admission(self):
+        bodies = self.grok_provider_bodies()
+        for seed in (b'{"key":"\\u0075ap-grok-private-inert"}',
+                     b'{"\\u0075ap-grok-private-inert":"ordinary"}', b'["\\u0075ap-grok-private-inert"]'):
+            nested = seed
+            for _ in range(8):
+                nested = json.dumps({"content": nested.decode()}).encode()
+                for raw in (nested, b'{"first":true}\n' + nested + b"\n"):
+                    self.assertNotIn(b"uap-grok-private-", raw)
+                    self.assertTrue(runtime.grok_private_credential(raw))
+                    with self.assertRaises(ValueError):
+                        runtime.cli_attempt_members({**bodies, "probe-events.jsonl": raw}, self.source, "grok")
+        benign = json.dumps({"content": '{"key":"ordinary"}\n{"tail":true}'}).encode()
+        self.assertFalse(runtime.grok_private_credential(benign))
+        self.assertFalse(runtime.grok_private_credential(b"ordinary non-JSON diagnostic"))
+
+    def test_grok_privacy_budget_is_shared_across_lines_siblings_and_nested_text(self):
+        for raw in (b"\xff", b'{"same":1,"same":2}', b"[" * 33 + b"0" + b"]" * 33,
+                    b"[" + b"0," * 17000 + b"0]", json.dumps({"k" * 4097: True}).encode()):
+            self.assertTrue(runtime.grok_private_credential(raw))
+        self.assertTrue(runtime.grok_private_credential(
+            b'{"n":' + b"9" * 5000 + b',"key":"\\u0075ap-grok-private-inert"}'))
+        nested = json.dumps("x" * 4096).encode()
+        for _ in range(2):
+            nested = json.dumps({"content": nested.decode()}).encode()
+        self.assertFalse(runtime.grok_private_credential(nested))
+        self.assertTrue(runtime.grok_private_credential(nested + b"\n" + nested + b"\n"))
+        for keys in (("first", "last"), ("last", "first")):
+            siblings = json.dumps({key: nested.decode() for key in keys}).encode()
+            self.assertTrue(runtime.grok_private_credential(siblings))
+        self.assertFalse(runtime.grok_private_credential(b" " * (1 << 20)))
+
+    def test_grok_numeric_privacy_refusal_requires_complete_json_syntax(self):
+        text = b"1e999" + b"a" * 59
+        for raw in (text, b"-1e999ordinary", b"1e999 []", b"1e999 1e999", b"NaN", b"Infinity",
+                    json.dumps({"metadata": text.decode()}).encode(),
+                    json.dumps({text.decode(): "ordinary"}).encode(),
+                    text + b'\n{"event":"ordinary"}\n'):
+            self.assertFalse(runtime.grok_private_credential(raw))
+        for raw in (b"1e999", b'{"n":1e999}', b"[1e999]", json.dumps("1e999").encode(),
+                    text + b'\n{"opaque":"\\u0075ap-grok-private-inert"}\n',
+                    b"[1e999," + b"[" * 10050 + b"]" * 10050 + b"]"):
+            self.assertTrue(runtime.grok_private_credential(raw))
+        bodies = self.grok_provider_bodies()
+        runtime.cli_attempt_members({**bodies, "probe-events.jsonl": json.dumps({"metadata": text.decode()}).encode()},
+                                    self.source, "grok")
+        with self.assertRaises(ValueError):
+            runtime.cli_attempt_members({**bodies, "probe-events.jsonl": text +
+                b'\n{"opaque":"\\u0075ap-grok-private-inert"}\n'}, self.source, "grok")
 
     def test_catalog_triple_is_admitted_only_for_qoder_and_never_qualifies_it(self):
         command = {"argv": ["/owned/qodercli", "plugins", "list", "--json", "--plugin-dir", "/owned/A/.agentplugins-qoder-native"],

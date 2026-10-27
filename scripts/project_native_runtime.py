@@ -221,20 +221,104 @@ def kimi_members(bodies, source):
     return result
 
 
-def grok_encoded_credential(body):
-    try:
-        value = strict_json(body)
-    except (ValueError, UnicodeError, RecursionError):
-        return False
-    return "uap-grok-private-" in json.dumps(value)
-
-
 def grok_private_credential(body):
-    if len(body) > 1 << 20 or b"uap-grok-private-" in body or grok_encoded_credential(body):
+    if len(body) > 1 << 20 or b"uap-grok-private-" in body:
         return True
-    # BytesIO iterates records without allocating an unbounded line list. The
-    # closed Grok member bound applies before either semantic JSON scan.
-    return any(grok_encoded_credential(line) for line in io.BytesIO(body) if line.strip())
+    budget = [4 * len(body), 16384]
+
+    def numeric_refusal(raw, error):
+        if str(error) != "nonfinite JSON" or len(raw) > budget[0]:
+            return True
+        budget[0] -= len(raw)
+        try:
+            json.loads(raw.decode("utf-8", errors="strict"), parse_int=lambda _: None, parse_float=lambda _: None,
+                       parse_constant=lambda _: (_ for _ in ()).throw(json.JSONDecodeError("Non-JSON constant", "", 0)))
+        except json.JSONDecodeError:
+            return False
+        except (UnicodeError, RecursionError, ValueError):
+            return True
+        return True
+
+    def encoded(raw, depth):
+        if depth > 64 or len(raw) > budget[0]:
+            return True
+        budget[0] -= len(raw)
+        try:
+            value = strict_json(raw)
+        except (UnicodeError, RecursionError):
+            return True
+        except ValueError as error:
+            if not isinstance(error, json.JSONDecodeError) and numeric_refusal(raw, error):
+                return True
+            if b"\n" not in raw:
+                return False
+            for line in io.BytesIO(raw):
+                line = line.removesuffix(b"\n")
+                if len(line) > budget[0]:
+                    return True
+                budget[0] -= len(line)
+                try:
+                    value = strict_json(line)
+                except (UnicodeError, RecursionError):
+                    return True
+                except ValueError as line_error:
+                    if not isinstance(line_error, json.JSONDecodeError) and numeric_refusal(line, line_error):
+                        return True
+                    continue
+                if visit(value, depth):
+                    return True
+            return False
+        return visit(value, depth)
+
+    def visit(value, depth, structure=0):
+        budget[1] -= 1
+        if depth > 64 or structure > 32 or budget[1] < 0:
+            return True
+        if type(value) is str:
+            try:
+                raw = value.encode("utf-8", errors="strict")
+            except UnicodeError:
+                return True
+            return b"uap-grok-private-" in raw or encoded(raw, depth + 1)
+        if type(value) is dict:
+            for key, item in value.items():
+                try:
+                    if len(key.encode("utf-8", errors="strict")) > 4096:
+                        return True
+                except UnicodeError:
+                    return True
+                if visit(key, depth + 1, structure + 1) or visit(item, depth + 1, structure + 1):
+                    return True
+        elif type(value) is list:
+            return any(visit(item, depth + 1, structure + 1) for item in value)
+        return False
+
+    return encoded(body, 0)
+
+
+def grok_provider_route_observation(row):
+    if "route_observation" not in row:
+        return
+    observation = row["route_observation"]
+    flags = {"peer_loopback", "host_matches", "relative_url", "empty_url_host", "empty_raw_path", "content_type_exact"}
+    fields = flags | {"method", "uri", "content_type_count", "content_type_kind"}
+    uris = {"/v1/chat/completions", "/chat/completions", "/v1/models", "/models", "/v1/responses", "/responses", "other"}
+    if (row["failure"] != "route" or not row["started"] or type(observation) is not dict or set(observation) != fields
+            or any(type(observation[key]) is not bool for key in flags)
+            or type(observation["method"]) is not str or observation["method"] not in {"POST", "GET", "other"}
+            or type(observation["uri"]) is not str or observation["uri"] not in uris
+            or type(observation["content_type_count"]) is not str
+            or observation["content_type_count"] not in {"none", "one", "multiple"}
+            or type(observation["content_type_kind"]) is not str
+            or observation["content_type_kind"] not in {"missing", "json-bare", "json-utf8", "other"}):
+        raise ValueError("finite Grok route observation differs")
+    count, kind = observation["content_type_count"], observation["content_type_kind"]
+    if ((count == "none") != (kind == "missing") or (count == "multiple" and kind != "other")
+            or (kind in {"json-bare", "json-utf8"} and count != "one")
+            or (observation["content_type_exact"] and (count != "one" or kind != "json-bare"))
+            or (observation["method"] == "POST" and observation["uri"] == "/v1/chat/completions"
+                and all(observation[key] for key in flags))):
+        raise ValueError("contradictory Grok route observation")
 
 
 def grok_provider_members(bodies, client):
@@ -253,7 +337,7 @@ def grok_provider_members(bodies, client):
               "failure", "shutdown_complete", "forced_close"}
     failures = {"none", "listen", "serve", "deadline", "route", "credential", "duplicate",
                 "body", "request-shape", "response-write", "cleanup"}
-    if (type(row) is not dict or set(row) != fields
+    if (type(row) is not dict or set(row) not in (fields, fields | {"route_observation"})
             or row["transport"] != "scripted loopback OpenAI chat-completions SSE; no real model"
             or row["model"] != "uap-grok-fixture"
             or type(row["failure"]) is not str or row["failure"] not in failures
@@ -267,6 +351,7 @@ def grok_provider_members(bodies, client):
             or (row["failure"] == "none" and (row["requests"] != row["responses"]
                                                or row["forced_close"] or not row["shutdown_complete"]))):
         raise ValueError("Grok partial capture or cleanup state differs")
+    grok_provider_route_observation(row)
     required = {"grok-provider.json"}
     if row["requests"]:
         required.add("grok-provider.request.json")

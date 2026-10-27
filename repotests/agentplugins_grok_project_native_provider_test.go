@@ -23,15 +23,16 @@ const grokProjectProviderModel = "uap-grok-fixture"
 const grokProjectProviderTransport = "scripted loopback OpenAI chat-completions SSE; no real model"
 
 type grokProjectProviderReceipt struct {
-	Transport         string `json:"transport"`
-	Model             string `json:"model"`
-	Started           bool   `json:"started"`
-	Requests          int    `json:"requests"`
-	Responses         int    `json:"responses"`
-	CredentialMatched bool   `json:"credential_matched"`
-	Failure           string `json:"failure"`
-	ShutdownComplete  bool   `json:"shutdown_complete"`
-	ForcedClose       bool   `json:"forced_close"`
+	Transport         string                       `json:"transport"`
+	Model             string                       `json:"model"`
+	Started           bool                         `json:"started"`
+	Requests          int                          `json:"requests"`
+	Responses         int                          `json:"responses"`
+	CredentialMatched bool                         `json:"credential_matched"`
+	Failure           string                       `json:"failure"`
+	ShutdownComplete  bool                         `json:"shutdown_complete"`
+	ForcedClose       bool                         `json:"forced_close"`
+	RouteObservation  *grokProjectRouteObservation `json:"route_observation,omitempty"`
 }
 
 type grokProjectProvider struct {
@@ -116,12 +117,7 @@ func (p *grokProjectProvider) connectionState(_ net.Conn, state http.ConnState) 
 }
 
 func (p *grokProjectProvider) fail(reason string) {
-	p.mu.Lock()
-	if p.receipt.Failure == "none" {
-		p.receipt.Failure = reason
-	}
-	p.mu.Unlock()
-	p.cancel()
+	p.failWithRequest(reason, nil)
 }
 
 func grokProjectProviderRoute(r *http.Request, host string) bool {
@@ -151,7 +147,7 @@ func (p *grokProjectProvider) admit(w http.ResponseWriter, r *http.Request) bool
 	p.mu.Unlock()
 	if reason != "none" {
 		http.Error(w, "closed Grok provider request refused", http.StatusBadRequest)
-		p.fail(reason)
+		p.failWithRequest(reason, r)
 		return false
 	}
 	return true
@@ -255,32 +251,6 @@ func (p *grokProjectProvider) stop() bool {
 
 func (p *grokProjectProvider) redact(body []byte) []byte {
 	return bytes.ReplaceAll(body, []byte(p.key), []byte("[redacted-grok-fixture-key]"))
-}
-
-func grokProjectPrivateCredential(body []byte) bool {
-	marker := []byte("uap-grok-private-")
-	if len(body) > 1<<20 || bytes.Contains(body, marker) || grokProjectEncodedCredential(body, marker) {
-		return true
-	}
-	// Native streaming-json is a sequence of individually encoded JSON records.
-	// The existing member bound also bounds this scan; no raw body is retained.
-	for len(body) != 0 {
-		line, rest, _ := bytes.Cut(body, []byte{'\n'})
-		if len(line) != 0 && grokProjectEncodedCredential(line, marker) {
-			return true
-		}
-		body = rest
-	}
-	return false
-}
-
-func grokProjectEncodedCredential(body, marker []byte) bool {
-	value, err := projectNativeRuntimeJSON(body)
-	if err != nil {
-		return false
-	}
-	decoded, err := json.Marshal(value)
-	return err == nil && bytes.Contains(decoded, marker)
 }
 
 func (p *grokProjectProvider) finish(t *testing.T, f *projectNativeCLIAttempt) {
