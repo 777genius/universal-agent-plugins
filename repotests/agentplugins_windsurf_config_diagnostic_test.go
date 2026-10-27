@@ -25,8 +25,9 @@ type windsurfConfigField struct {
 }
 
 type windsurfConfigAdditionalFields struct {
-	Documented   map[string]string `json:"documented"`
-	UnknownCount int               `json:"unknown_count"`
+	Documented         map[string]string            `json:"documented"`
+	UnknownCount       int                          `json:"unknown_count"`
+	UnknownObservation *windsurfConfigUnknownMember `json:"unknown_observation,omitempty"`
 }
 
 type windsurfConfigChange struct {
@@ -144,6 +145,7 @@ func windsurfConfigClassifyAddedFields(object map[string]any) *windsurfConfigAdd
 			fields.UnknownCount--
 		}
 	}
+	fields.UnknownObservation = windsurfConfigObserveUnknown(object, fields)
 	return fields
 }
 

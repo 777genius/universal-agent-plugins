@@ -120,3 +120,27 @@ observation independently of ordinary login-canceled startup. Their actual
 output grammar, project/user source selection, mutation boundaries and absence
 behavior still need a separate finite hosted observation plan. This slice does
 not add those commands or promote their help/documentation into native proof.
+
+## Validation record (2026-10-27)
+
+Root and CLI independently approved the exact plan above before source edits.
+Both reviewed the complete two-file implementation and actual-file contracts;
+both gave final code GO for SHA256
+`ef57ac1cecb93288f9c17cb88ece08110c052f36b4373b52168e944687996634`
+(existing diagnostic) and
+`b66b254fa56be07baca91a961c7378add2e931fcf2b2d463233bbd001736146e`
+(new unknown-member helper/contracts). No source delta followed those reviews.
+The new projection explicitly refuses the old type helper's unreachable other
+case, preserving the approved six-value type enum.
+
+The focused inert Windsurf and shared fixed-command/updater/version selection
+passed in0.081s using Go1.26.10, `-p=1`, `-count=1` and a90-second timeout.
+The actual all-enabled affected-line lint from plan commit `b5619225` reported
+zero issues. The unfiltered whole-file `revive,funlen,gocyclo,gocognit,dupl,depguard`
+gate also reported zero issues; gofmt and whitespace checks are clean.
+
+The source-bound4e7 native sixteen-member capture remains failed/unqualified;
+the existing Python admission and shared guard hook were not changed. No
+vendor/client/positive hosted admission ran locally. A fresh genuine capture
+must establish the unknown member's bounded metadata before any separate
+source-backed configuration or discovery amendment.
