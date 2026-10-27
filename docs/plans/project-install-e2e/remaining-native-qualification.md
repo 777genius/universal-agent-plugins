@@ -1463,3 +1463,28 @@ caller, whose complete file SHA256 is
 `20ba3af567f4f0499220ff6ad7202993a4a4a292d6c41493f41cf174f804ba72`.
 This factual correction changes no guard, authorized scope or intended tests.
 The previous plan-only commit remains preserved in history.
+
+### Four-detail implementation and executed validation
+
+Reviewed code `393bd1cd777eee598d48000f53c0235f34c09e08`, tree
+`782cd158b1d579da3ad8f30c44c13042d91f0619`, received independent CODE GOs
+from `gemini_qoder_finish` and `native_e2e_finish`, both GPT-6.1 Sol xhigh.
+Receipt SHA256s are `c59a544e54b12a5339e138307bf7ac2e6940d4f06ab570683676f03a1032c3dc`
+and `ca520b77c7eb95774f73fb8ef7233c8c5d31bd7234316162ab9a29ab3637d71c`.
+Only the three retained-count literals change in the formatter. Strict parsing,
+priority comparator, whole-object 2048-byte bound, runtime reader and complete
+unconditional fatal caller remain unchanged. Independently stated fourth hashes
+and actual filesystem four/five-difference controls preserve the previous prefix,
+truthful omissions, privacy and held-map/profile nonmutation. Four maximum valid
+changed-file details serialize to 1845 bytes.
+
+Executed on that exact code: focused Qoder/shared inert Go contracts PASS; full
+root affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1`
+and unfiltered six-linter gate both zero issues; existing runtime Python contracts
+PASS. Full command outputs and their SHA256s are retained in the gate receipt.
+Original failed4f archive re-admits with all16 members and summary byte-identical,
+all five flags false. The native reader SHA256 remains
+`f3403d72755fde23afe46aaafb709fe4a1f78be9691324c07e2bbfe3f125cdf6`.
+No native client, vendor executable, public installer executable or scanner ran
+locally. Fresh genuine hosted output is still required; this change grants no
+log allowance, lifecycle qualification, authentication or model claim.
