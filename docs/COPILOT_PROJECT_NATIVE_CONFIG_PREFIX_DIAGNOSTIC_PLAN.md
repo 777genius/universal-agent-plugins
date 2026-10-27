@@ -107,3 +107,26 @@ pinned client's actual output. Any later fixture-format or authority amendment
 requires its own concrete source-bound plan/reviews. The complete user/A/B
 lifecycle, restart/removal/repeated removal and actual native tool-session proof
 remain required. No release/new PR or deferred VS Code work is included.
+
+## Actual implementation validation
+
+Shell and desktop independently approved the final plan SHA256
+`0db0c55dcd6502e0ce516189f8de34fc7882482f63515f9b2c2f11f5ab36cfd8`
+before implementation, then reviewed the complete two-file code against the
+separate plan commit `881d3dbab157e031741cbb165ac4fa20c8f24c11`.
+Both gave final code GOs with no findings. Diagnostic source SHA256 is
+`9ef2839d772a3bba46361e5d465729951948c95193ec05b22e163d9e11144f41`;
+contract SHA256 is
+`71fa655aa3a9aa89f1c3d0e4c27f83ab198685d03f27e24a06c22ef8c2ccc02d`.
+
+Focused Copilot and retained strict-runtime JSON contracts passed in `0.047s`.
+The actual inert child exercised the original fatal guard for both whitespace
+and equal-object leading-comment changes. All-enabled affected lint and
+unfiltered whole-file size/complexity/architecture lint each reported `0 issues`.
+Formatting and whitespace checks pass. The exact prior f742 native envelope
+re-admitted with21 members and unchanged inner SHA256
+`29a79bdd280785c67f38d02952d8e1c8a88c35decfe09de3517e2dd007a8caad`:
+failed/incomplete, all five qualifications false, authentication/model false,
+and the original syntax diagnostic without hypothetical prefix evidence.
+No vendor process or positive hosted eligibility guard ran locally. A fresh
+genuine source-bound capture remains necessary before interpreting the prefix.

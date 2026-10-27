@@ -3,6 +3,7 @@
 package pluginkitairepo_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"unicode"
+	"unicode/utf8"
 )
 
 const copilotProjectConfigDiagnosticLimit = 16 << 10
@@ -37,6 +40,18 @@ type copilotProjectConfigChange struct {
 	SemanticallyEqual   *bool                              `json:"semantically_equal,omitempty"`
 	TrustedFoldersMatch *bool                              `json:"trusted_folders_match,omitempty"`
 	ChangedMembers      []copilotProjectConfigMemberChange `json:"changed_members,omitempty"`
+	LeadingCommentProbe *copilotProjectConfigPrefix        `json:"leading_comment_probe,omitempty"`
+}
+
+type copilotProjectConfigPrefix struct {
+	Status              string `json:"status"`
+	PrefixBytes         int    `json:"prefix_bytes,omitempty"`
+	CommentLines        int    `json:"comment_lines,omitempty"`
+	PrefixSHA256        string `json:"prefix_sha256,omitempty"`
+	SuffixBytes         int    `json:"suffix_bytes,omitempty"`
+	SuffixJSONReason    string `json:"suffix_json_reason,omitempty"`
+	SemanticallyEqual   *bool  `json:"semantically_equal,omitempty"`
+	TrustedFoldersMatch *bool  `json:"trusted_folders_match,omitempty"`
 }
 
 func (f *copilotProjectAttempt) captureInstalled(t *testing.T, mcp, skill string) {
@@ -96,7 +111,11 @@ func copilotProjectConfigDiagnostic(baseline []byte, expected, observed string, 
 	after, afterErr := projectNativeRuntimeJSON(body)
 	change.Status = "invalid-json"
 	if beforeErr != nil || afterErr != nil {
-		return copilotProjectInvalidJSON(change, baseline, body, beforeErr, afterErr)
+		change = copilotProjectInvalidJSON(change, baseline, body, beforeErr, afterErr)
+		if original, ok := before.(map[string]any); beforeErr == nil && ok && change.ObservedJSONReason == "syntax" {
+			change.LeadingCommentProbe = copilotProjectConfigLeadingComments(original, body)
+		}
+		return change
 	}
 	beforeObject, okBefore := before.(map[string]any)
 	afterObject, okAfter := after.(map[string]any)
@@ -113,6 +132,66 @@ func copilotProjectConfigDiagnostic(baseline []byte, expected, observed string, 
 	trusted := reflect.DeepEqual(beforeObject["trustedFolders"], afterObject["trustedFolders"])
 	change.Status, change.SemanticallyEqual, change.TrustedFoldersMatch = "captured", &equal, &trusted
 	return change
+}
+
+func copilotProjectConfigLeadingComments(original map[string]any, body []byte) *copilotProjectConfigPrefix {
+	end, lines, status := copilotProjectConfigCommentEnd(body)
+	result := &copilotProjectConfigPrefix{Status: status}
+	if status != "candidate" {
+		return result
+	}
+	result.Status, result.PrefixBytes, result.CommentLines = "suffix-refused", end, lines
+	result.PrefixSHA256, result.SuffixBytes = copilotProjectConfigHash(body[:end]), len(body)-end
+	value, err := projectNativeRuntimeJSON(body[end:])
+	result.SuffixJSONReason = copilotProjectJSONErrorKind(err)
+	if err != nil {
+		return result
+	}
+	current, ok := value.(map[string]any)
+	if !ok {
+		return result
+	}
+	equal := reflect.DeepEqual(original, current)
+	beforeTrust, hadTrust := original["trustedFolders"]
+	afterTrust, hasTrust := current["trustedFolders"]
+	trusted := hadTrust == hasTrust && reflect.DeepEqual(beforeTrust, afterTrust)
+	result.Status, result.SemanticallyEqual, result.TrustedFoldersMatch = "captured", &equal, &trusted
+	return result
+}
+
+// This private projection never changes the original invalid-json/digest result.
+func copilotProjectConfigCommentEnd(body []byte) (int, int, string) {
+	if len(body) > copilotProjectConfigDiagnosticLimit || !utf8.Valid(body) {
+		return 0, 0, "prefix-refused"
+	}
+	end, lines := 0, 0
+	for {
+		for end < len(body) && bytes.IndexByte([]byte(" \t\r\n"), body[end]) >= 0 {
+			end++
+			if end > 4096 {
+				return 0, 0, "prefix-refused"
+			}
+		}
+		if !bytes.HasPrefix(body[end:], []byte("//")) {
+			break
+		}
+		newline := bytes.IndexByte(body[end:], '\n')
+		if newline < 0 || end+newline+1 > 4096 || lines == 16 {
+			return 0, 0, "prefix-refused"
+		}
+		comment := body[end : end+newline+1]
+		if bytes.IndexFunc(comment, func(r rune) bool { return unicode.IsControl(r) && r != '\t' && r != '\r' && r != '\n' }) >= 0 {
+			return 0, 0, "prefix-refused"
+		}
+		end, lines = end+newline+1, lines+1
+	}
+	if lines == 0 {
+		return 0, 0, "absent"
+	}
+	if end == len(body) || body[end] != '{' {
+		return 0, 0, "prefix-refused"
+	}
+	return end, lines, "candidate"
 }
 
 func copilotProjectInvalidJSON(change copilotProjectConfigChange, baseline, observed []byte, beforeErr, afterErr error) copilotProjectConfigChange {

@@ -123,21 +123,139 @@ func TestCopilotProjectNativeConfigJSONRefusalsExposeOnlyFiniteFacts(t *testing.
 
 func TestCopilotProjectNativeConfigMismatchStillFailsActualGuard(t *testing.T) {
 	const marker = "UAP_COPILOT_CONFIG_GUARD_INERT_CHILD"
-	if os.Getenv(marker) == "1" {
+	if mode := os.Getenv(marker); mode == "1" || mode == "prefix" {
 		f := copilotProjectConfigFixture(t, []byte(`{"trustedFolders":["A","B"]}`))
-		copilotProjectWriteConfig(t, f, []byte("{ \"trustedFolders\": [\"A\", \"B\"] }\n"))
+		body := "{ \"trustedFolders\": [\"A\", \"B\"] }\n"
+		if mode == "prefix" {
+			body = "// inert leading comment\n" + body
+		}
+		copilotProjectWriteConfig(t, f, []byte(body))
 		f.check(t)
 		return
 	}
 	// Only this Go contract is executed in the child, never an acquired client.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCopilotProjectNativeConfigMismatchStillFailsActualGuard$", "-test.count=1")
-	cmd.Env = append(os.Environ(), marker+"=1")
-	output, err := cmd.CombinedOutput()
-	var exited *exec.ExitError
-	if !errors.As(err, &exited) || exited.ExitCode() != 1 || !bytes.Contains(output, []byte("original authority changed:")) {
-		t.Fatalf("original config mismatch did not fail the actual guard: %v, %.1024s", err, output)
+	for _, mode := range []string{"1", "prefix"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCopilotProjectNativeConfigMismatchStillFailsActualGuard$", "-test.count=1")
+		cmd.Env = append(os.Environ(), marker+"="+mode)
+		output, err := cmd.CombinedOutput()
+		cancel()
+		var exited *exec.ExitError
+		if !errors.As(err, &exited) || exited.ExitCode() != 1 || !bytes.Contains(output, []byte("original authority changed:")) {
+			t.Fatalf("original config mismatch did not fail the actual guard: %v, %.1024s", err, output)
+		}
+	}
+}
+
+func TestCopilotProjectNativeConfigPrefixMetadataNeverAdoptsOriginal(t *testing.T) {
+	baseline := []byte(`{"trustedFolders":["/private/A","/private/B"],"private-key":"private-value"}`)
+	const prefix = "// private-comment-canary\n// User settings belong in settings.json\n"
+	f := copilotProjectConfigFixture(t, baseline)
+	want := f.protected[f.originalConfigPath]
+	body := append([]byte(prefix), baseline...)
+	copilotProjectWriteConfig(t, f, body)
+	got, err := f.protectedDigest(f.originalConfigPath, want)
+	change := copilotProjectRecordedChange(t, f)
+	p := change.LeadingCommentProbe
+	if err != nil || got == want || change.Status != "invalid-json" || change.ObservedJSONReason != "syntax" || p == nil || p.Status != "captured" {
+		t.Fatal("comment projection replaced original failure")
+	}
+	if p.PrefixBytes != 67 || p.CommentLines != 2 || p.PrefixSHA256 != "3a3761e2eaa39ca22d590c1650b43c80031bddaac196b4a940c8c86ad9a00c25" || p.SuffixBytes != len(baseline) || p.SuffixJSONReason != "valid" || p.SemanticallyEqual == nil || !*p.SemanticallyEqual || p.TrustedFoldersMatch == nil || !*p.TrustedFoldersMatch {
+		t.Fatal("bounded prefix or exact private semantic comparison differs")
+	}
+	if change.SemanticallyEqual != nil || change.TrustedFoldersMatch != nil || len(change.ChangedMembers) != 0 || f.protected[f.originalConfigPath] != want || !bytes.Equal(f.originalConfigBaseline, baseline) {
+		t.Fatal("diagnostic promoted or renewed original authority")
+	}
+	encoded := copilotProjectContractBody(t, change)
+	for _, private := range []string{"private-comment-canary", "User settings", "settings.json", "private-key", "private-value", "trustedFolders", "/private/", f.originalConfigPath} {
+		if bytes.Contains(encoded, []byte(private)) {
+			t.Fatal("private comment, path, key or value escaped projection")
+		}
+	}
+	actual, err := os.ReadFile(f.originalConfigPath)
+	if err != nil || !bytes.Equal(actual, body) {
+		t.Fatal("diagnostic modified the held original config")
+	}
+}
+
+func TestCopilotProjectNativeConfigPrefixKeepsExactSemanticAndTrustFacts(t *testing.T) {
+	baseline := []byte(`{"trustedFolders":["A","B"]}`)
+	for _, tc := range []struct {
+		body           string
+		equal, trusted bool
+	}{
+		{" \t\r\n// fixture\n \n{ \"trustedFolders\": [\"A\", \"B\"] }\n", true, true},
+		{"// fixture\n{\"trustedFolders\":[\"B\",\"A\"]}", false, false},
+		{"// fixture\n{\"trustedFolders\":[\"A\",\"B\"],\"private\":\"canary\"}", false, true},
+		{"// fixture\n{\"trustedFolders\":null}", false, false},
+		{"// fixture\n{}", false, false},
+	} {
+		change := copilotProjectConfigDiagnostic(baseline, copilotProjectConfigHash(baseline), copilotProjectConfigHash([]byte(tc.body)), nil, func() ([]byte, error) { return []byte(tc.body), nil })
+		p := change.LeadingCommentProbe
+		if change.Status != "invalid-json" || p == nil || p.Status != "captured" || p.SemanticallyEqual == nil || *p.SemanticallyEqual != tc.equal || p.TrustedFoldersMatch == nil || *p.TrustedFoldersMatch != tc.trusted {
+			t.Fatal("prefix projection changed exact object/trust semantics")
+		}
+	}
+}
+
+func TestCopilotProjectNativeConfigPrefixRefusesOtherSyntaxAndBounds(t *testing.T) {
+	baseline := []byte(`{"trustedFolders":["A","B"]}`)
+	for index, tc := range []struct{ body, status, reason string }{
+		{"/* private */{}", "absent", ""}, {"\xef\xbb\xbf{}", "absent", ""},
+		{"{\"x\":1,//private\n\"y\":2}", "absent", ""},
+		{"// no terminating LF{}", "prefix-refused", ""}, {"// private\n[]", "prefix-refused", ""},
+		{"// private\x00\n{}", "prefix-refused", ""}, {"// private\x7f\n{}", "prefix-refused", ""},
+		{"// private\u0085\n{}", "prefix-refused", ""},
+		{strings.Repeat("//x\n", 17) + "{}", "prefix-refused", ""},
+		{"//" + strings.Repeat("x", 4094) + "\n{}", "prefix-refused", ""},
+		{"// private\n{\"x\":@}", "suffix-refused", "syntax"},
+		{"// private\n{\"x\":1,\"x\":2}", "suffix-refused", "duplicate-key"},
+		{"// private\n{\"x\":1e10000}", "suffix-refused", "nonfinite-number"},
+		{"// private\n{\"x\":" + strings.Repeat("[", 34) + strings.Repeat("]", 34) + "}", "suffix-refused", "structure-limit"},
+		{"// private\n{\"x\":1,}", "suffix-refused", "syntax"},
+		{"// private\n{} {}", "suffix-refused", "trailing-data"},
+		{"// private\n{\"url\":\"https://inert.invalid/a//b\",/*private*/\"x\":1}", "suffix-refused", "syntax"},
+	} {
+		change := copilotProjectConfigDiagnostic(baseline, copilotProjectConfigHash(baseline), copilotProjectConfigHash([]byte(tc.body)), nil, func() ([]byte, error) { return []byte(tc.body), nil })
+		p := change.LeadingCommentProbe
+		if change.Status != "invalid-json" || p == nil || p.Status != tc.status || p.SuffixJSONReason != tc.reason || p.SemanticallyEqual != nil || p.TrustedFoldersMatch != nil {
+			t.Fatal("unadmitted prefix/suffix syntax escaped finite refusal", index)
+		}
+	}
+	for _, prefix := range []string{strings.Repeat("//x\n", 16), "//" + strings.Repeat("x", 4093) + "\n"} {
+		p := copilotProjectConfigLeadingComments(map[string]any{}, []byte(prefix+"{}"))
+		if p.Status != "captured" || p.PrefixBytes != len(prefix) || p.PrefixBytes > 4096 || p.CommentLines > 16 {
+			t.Fatal("exact finite prefix boundary refused")
+		}
+	}
+}
+
+func TestCopilotProjectNativeConfigPrefixRequiresOriginalEligibleBranch(t *testing.T) {
+	invalidUTF8 := []byte("// private\xff\n{}")
+	invalid := copilotProjectConfigDiagnostic([]byte(`{}`), copilotProjectConfigHash([]byte(`{}`)), copilotProjectConfigHash(invalidUTF8), nil, func() ([]byte, error) { return invalidUTF8, nil })
+	if invalid.Status != "invalid-json" || invalid.ObservedJSONReason != "body-limit" || invalid.LeadingCommentProbe != nil {
+		t.Fatal("non-UTF8 body escaped the original strict-parser refusal")
+	}
+	if _, _, status := copilotProjectConfigCommentEnd(invalidUTF8); status != "prefix-refused" {
+		t.Fatal("private prefix scanner admitted non-UTF8 bytes")
+	}
+	for _, baseline := range [][]byte{[]byte(`{`), []byte(`[]`)} {
+		body := []byte("// private\n{}")
+		change := copilotProjectConfigDiagnostic(baseline, copilotProjectConfigHash(baseline), copilotProjectConfigHash(body), nil, func() ([]byte, error) { return body, nil })
+		if change.LeadingCommentProbe != nil {
+			t.Fatal("prefix projection used invalid or non-object original authority")
+		}
+	}
+	baseline, body := []byte(`{}`), []byte("// private\n{}")
+	for _, observed := range []string{"different-held-digest", copilotProjectConfigHash(body)} {
+		guardErr := errors.New("private guard failure")
+		change := copilotProjectConfigDiagnostic(baseline, copilotProjectConfigHash(baseline), observed, guardErr, func() ([]byte, error) {
+			t.Fatal("guard failure attempted prefix read")
+			return nil, nil
+		})
+		if change.LeadingCommentProbe != nil {
+			t.Fatal("guard failure produced prefix evidence")
+		}
 	}
 }
 
