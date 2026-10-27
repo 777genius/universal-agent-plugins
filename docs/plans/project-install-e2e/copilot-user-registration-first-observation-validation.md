@@ -76,3 +76,68 @@ at its actual source-bound boundary. All five, vendor-account and real-model
 flags remain false. A full lifecycle, user/project catalog precedence and
 zero-tool provider grammar still require their own source or measured evidence.
 Root alone owns publication and fresh-head reconciliation; no release is made.
+
+
+## Exact disabled-builtin empty registry correction
+
+The genuine source2c2ac7f1758514f61fc1c88cabc4ad89d6612625 capture in
+run40599529602 reached only the intended empty-registry review barrier.
+Native12778157833 contains14 members; frontend12778237718 contains25 with24
+stream joins. Both independent raw reviews verify the exact138-byte stdout:
+no installed plugins followed by disabled builtin browser-use v0.0.4, under
+Copilot1.0.103. Its SHA256 is
+`f09cb232e9a7f7bd379daed96099ea1fdf8f6644dcc390ce43c7854874d7e879`.
+The existing generic parser treats this whole output as Indeterminate. The
+metadata records three changes with zero omissions, but exposes no path roles
+or ownership exception. Inherited Cline also completed successfully and was
+independently audited before the next publication.
+
+The accepted narrow production plan is committed at
+2ab397bf76b59ff8f8152991643a3c90dbd1d2f0, plan SHA256
+`eca2d5c8d5a29b8a0ce08566cbc3f0712013029db87700cac38ebeea0e2dfd65`,
+after root and independent Kimi PLAN GOs. Code
+4eba242630e518723d80d325ca20bf03ab9ffe40, tree
+671ea6346df418303367b5f24f4bc7455dea0ba3, has two independent full CODE GOs:
+Kimi receipt0059958e23f5186ad39d519d7033be51986955c1fa86f3fcaa538766bd8a5eb5
+and native receiptb56069c17151aeec61df9f80b4e811fe4721dffd96c6dd0159268d81d3b069c4.
+Root authored this code and does not count as its independent code critic.
+
+The production branch requires exact whole observed bytes, the held Copilot
+client and user scope, nonproject target context, a nonempty canonical name
+other than browser-use under case-insensitive comparison, and a successful
+ordinary native registry command. A post-run context check also refuses a
+runner that cancels while returning exit0/nil. It returns only Clear for the
+unrelated requested identity. Generic classifiers, old shared tests, VS Code
+and Copilot adapters, original runner/full-tree grace and original first-add
+entrypoint/guards remain byte-identical. Only the canonical Copilot test/file/
+optin selection and its expectation return to the original public-first-add.
+
+Measured current-code local gates with Go1.26.10 and golangci-lint2.13.2:
+
+- Nested product-module old/new shared Copilot and Copilot adapter contracts:
+ 7 top-level tests, no skips, both packages PASS. The new tests use only an
+ in-memory tree-aware runner and independently authored exact text.
+- Six Python contract modules:73 PASS in18.436seconds, including runtime,
+ Copilot/readiness/user/empty-registry and service controls.
+- Actual affected all-enabled lint against
+ a412ba5e137fdcb7e004393229b323211ed746e1: zero issues in both root and nested
+ product module. Whole unfiltered six linters: zero issues in both modules.
+- Historical189e readiness21-member pass,922 user14-member failure and2c2
+ empty14-member failure each replay identically through their original full
+ reader and current full reader. All original bytes/hashes and allfivefalse
+ qualification outcomes are preserved; none is promoted by the parser fix.
+
+The local-gate receipt SHA256 is `007515fa75fe69a3595eb1824ed57dea325489a4d87ca25f3ee3d6df0cc13690`.
+The original two strict process tests cannot execute on this local host's
+missing /proc task/children interface. They were not modified, newly excluded
+or rerun solely to repeat that capability failure. The actual2c2 full hosted
+Go gate proved both RUN/PASS with no skips; that historical pass is not counted
+as a fresh-source pass. The unchanged workflow still requires the complete
+unexcluded Copilot/native-runtime Go command to pass before the next native
+job. No new source-native outcome is claimed here.
+
+The next fresh hosted public-first-add capture remains deliberately failed-only:
+allfive/runtime/account/model false, even if it reaches its final review
+barrier. Earlier fatal command/profile/cleanup failures retain their original
+failure boundary. No profile adoption, warmup, trust, provider, prompt or probe
+is introduced, and no release or VS Code work follows.
