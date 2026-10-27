@@ -1,6 +1,7 @@
 package installer_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -38,26 +39,54 @@ func kimiSDKIntactPair(t *testing.T) (*kimiSDKFixture, *kimiSDKFixture) {
 func TestProjectKimiSDKIntactRepairPreservesMCPSelection(t *testing.T) {
 	a, b := kimiSDKIntactPair(t)
 	binding := a.binding(t)
+	installation := kimiSDKIntactInstallation(t, a)
 	mcp := filepath.Join(a.project, ".kimi-code", "mcp.json")
 	skill := filepath.Join(a.project, ".kimi-code", "skills", "docs", "SKILL.md")
 	beforeMCP, beforeSkill := kimiSDKRead(t, mcp), kimiSDKRead(t, skill)
-	beforeB := kimiSDKRead(t, filepath.Join(b.project, ".uap", "state-v2.json"))
+	beforeB, beforeUser := qoderSDKTree(t, b.project), qoderSDKTree(t, a.user)
 	result := a.apply(t, installer.OpRepair, "repair-intact")
-	if !result.Mutated || result.Client.Activation != string(domain.ActivationPrepared) {
-		t.Fatal("intact repair lost its actual prepared mutation outcome")
-	}
+	kimiSDKIntactSelection(t, result.Delivery)
 	if kimiSDKRead(t, mcp) != beforeMCP || kimiSDKRead(t, skill) != beforeSkill {
 		t.Fatal("intact SDK repair changed native skill or MCP bytes")
 	}
 	repaired := a.binding(t)
-	if repaired.ClientBindingID != binding.ClientBindingID || repaired.PhysicalArtifact != binding.PhysicalArtifact || repaired.DataReceiptID != binding.DataReceiptID || !reflect.DeepEqual(repaired.NativeObjects, binding.NativeObjects) {
+	after := kimiSDKIntactInstallation(t, a)
+	if after.InstallationID != installation.InstallationID || !reflect.DeepEqual(after.Source, installation.Source) || !reflect.DeepEqual(after.Package, installation.Package) {
+		t.Fatal("intact SDK repair changed installation or pinned source identity")
+	}
+	if repaired.Activation != domain.ActivationPrepared || repaired.Verification != domain.VerificationInstalled || repaired.ClientBindingID != binding.ClientBindingID || repaired.PhysicalArtifact != binding.PhysicalArtifact || repaired.DataReceiptID != binding.DataReceiptID || !reflect.DeepEqual(repaired.NativeObjects, binding.NativeObjects) {
 		t.Fatal("intact SDK repair changed held binding, data or native ownership")
 	}
-	if kimiSDKRead(t, filepath.Join(b.project, ".uap", "state-v2.json")) != beforeB || kimiSDKRead(t, filepath.Join(a.user, "mcp.json")) != kimiSDKIntactForeign || kimiSDKRead(t, filepath.Join(a.data, "keep.txt")) != "retained data" {
-		t.Fatal("intact SDK repair changed user, B or retained data")
+	if !reflect.DeepEqual(beforeB, qoderSDKTree(t, b.project)) || !reflect.DeepEqual(beforeUser, qoderSDKTree(t, a.user)) {
+		t.Fatal("intact SDK repair changed original user or B trees")
+	}
+	if kimiSDKRead(t, filepath.Join(a.data, "keep.txt")) != "retained data" {
+		t.Fatal("intact SDK repair changed retained data")
 	}
 	kimiSDKCheckStdio(t, a)
 	kimiSDKCheckStdio(t, b)
+}
+
+func kimiSDKIntactInstallation(t *testing.T, f *kimiSDKFixture) domain.Installation {
+	t.Helper()
+	var state domain.StateFileV2
+	if err := json.Unmarshal([]byte(kimiSDKRead(t, filepath.Join(f.project, ".uap", "state-v2.json"))), &state); err != nil || len(state.Installations) != 1 {
+		t.Fatal("SDK did not persist one selected installation", err)
+	}
+	return state.Installations[0]
+}
+
+func kimiSDKIntactSelection(t *testing.T, plan *installer.DeliveryPlan) {
+	t.Helper()
+	if plan == nil {
+		t.Fatal("intact SDK repair omitted its actual delivery plan")
+	}
+	for _, component := range plan.Components {
+		if component.Kind == string(domain.ComponentMCPServer) && component.Name == "docs" && component.Support == string(domain.SupportNative) && component.Reason == "" {
+			return
+		}
+	}
+	t.Fatal("intact SDK repair did not retain native MCP support")
 }
 
 const kimiSDKIntactForeign = `{"mcpServers":{"original-user":{"transport":"http","url":"https://original.test/mcp"}},"preference":"keep"}`

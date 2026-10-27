@@ -22,6 +22,7 @@ var (
 	_ clients.TargetLayout              = (*Adapter)(nil)
 	_ clients.PlanRefiner               = (*Adapter)(nil)
 	_ clients.SelectionReader           = (*Adapter)(nil)
+	_ clients.ScopedSelectionReader     = (*Adapter)(nil)
 	_ clients.Projector                 = (*Adapter)(nil)
 	_ clients.Lifecycle                 = (*Adapter)(nil)
 	_ clients.ActivationPreflighter     = (*Adapter)(nil)
@@ -59,6 +60,17 @@ func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
 	// The projected manifest is the Kimi MCP selection document and declares
 	// "mcpServers" only when servers were selected.
 	return clients.SelectionLayout{File: filepath.Join(".kimi-plugin", "plugin.json"), Nested: true, ServersMemberOptional: true}
+}
+
+func (a *Adapter) ManagedMCPSelectionForScope(scope domain.InstallScope) (clients.SelectionLayout, error) {
+	switch scope {
+	case domain.ScopeUser:
+		return a.ManagedMCPSelection(), nil
+	case domain.ScopeProject:
+		return clients.SelectionLayout{File: "mcp.json", Nested: true}, nil
+	default:
+		return clients.SelectionLayout{}, fmt.Errorf("kimi managed selection requires an explicit user or project scope")
+	}
 }
 
 const reloadAction = "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
