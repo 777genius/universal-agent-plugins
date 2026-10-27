@@ -98,11 +98,12 @@ func (f *copilotProjectAttempt) check(t *testing.T) {
 }
 func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, argv []string, timeout time.Duration) ports.CommandResult {
 	t.Helper()
-	if f.evidence["mode"] == copilotUserRegistrationMode {
+	switch f.evidence["mode"] {
+	case copilotUserRegistrationMode:
 		if err := f.userRegistrationCommand(label, cwd, argv, timeout); err != nil {
 			t.Fatal(err)
 		}
-	} else if f.evidence["mode"] == copilotEmptyRegistryMode {
+	case copilotEmptyRegistryMode:
 		if err := f.emptyRegistryCommand(label, cwd, argv, timeout); err != nil {
 			t.Fatal(err)
 		}
@@ -406,11 +407,12 @@ func (f *copilotProjectAttempt) finish(t *testing.T) {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
-	if f.evidence["mode"] == copilotUserRegistrationMode {
+	switch f.evidence["mode"] {
+	case copilotUserRegistrationMode:
 		f.finalizeUserRegistration(t)
-	} else if f.evidence["mode"] == copilotEmptyRegistryMode {
+	case copilotEmptyRegistryMode:
 		f.finalizeEmptyRegistry(t)
-	} else {
+	default:
 		f.finalizeReadiness(t)
 	}
 	f.evidence["test_failed"] = t.Failed()
