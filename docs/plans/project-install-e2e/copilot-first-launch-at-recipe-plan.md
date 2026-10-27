@@ -132,3 +132,31 @@ diagnostic; do not fold an allowance into this slice. The deliberate native
 JSONL capture-review gate and all qualification/authentication/model flags
 remain unchanged. Complete user/A/B/update/repair/remove/restart/MCP evidence
 and any later qualification amendment remain separate required work.
+
+
+## Implementation validation — 2026-10-27
+
+The original plan SHA256 above the validation addition was
+`82ac6cadbcd50d27bbc9d01b5ed25eb4756f5d7f3e289ea522bf03eff106c359`.
+Root R1 and shell R2 independently approved it before implementation. Desktop
+and shell independently reviewed the complete two-file implementation and
+issued code GOs for attempt SHA256
+`498a09bb8ef49a9f5a225975f0ae8a85febc5131b8ace268d7c2cf51ad0c6481`
+and contract SHA256
+`fab361e8189640681b56fa86a938aaf6eded108b2eb95cefaa1b7c58b25ff710`.
+
+Root verified those exact file hashes and ran the focused inert Copilot/shared
+contracts: PASS (0.045s). The affected all-enabled lint gate and the unfiltered
+whole-package revive/funlen/gocyclo/gocognit/dupl/depguard gate each reported
+zero issues. Formatting and diff checks were clean. No vendor executable,
+account action or positive hosted-environment mock ran locally.
+
+The real-file controls prove the exact two-key bare JSON recipe, private mode,
+held non-UTC origin converted to UTC without changing the context/deadline,
+zero-origin refusal before any write, and complete rejection of changed or
+removed firstLaunchAt, trust changes, foreign fields and comment prefixes.
+The existing fatal guard and diagnostic/provider/session behavior remain in
+place. The prior 8b native exit-zero capture remains a failed protected-profile
+attempt; this source change does not promote it. A fresh genuine hosted run
+must show that the pinned CLI preserves the authored configuration, followed
+by the remaining independently verified user/A/B lifecycle work.

@@ -4,6 +4,8 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
@@ -18,6 +20,115 @@ import (
 
 func copilotProjectContractRequest() map[string]any {
 	return map[string]any{"model": "uap-fixture-model", "stream": true, "messages": []any{map[string]any{"role": "user", "content": "fixture"}}, "tools": []any{map[string]any{"type": "function", "function": map[string]any{"name": "uapcopilota-inspect_runtime", "description": "Inspect only disposable fixture runtime facts.", "parameters": map[string]any{"type": "object", "properties": map[string]any{"nonce": map[string]any{"type": "string"}, "operation": map[string]any{"type": "string"}, "marker": map[string]any{"type": "string"}}, "required": []any{"nonce"}, "additionalProperties": false}}}}}
+}
+
+func copilotProjectOriginalConfigFixture(t *testing.T) *copilotProjectAttempt {
+	t.Helper()
+	root := t.TempDir()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC))
+	t.Cleanup(cancel)
+	f := &copilotProjectAttempt{
+		base:  &nativeFixture{Home: filepath.Join(root, "home"), Project: filepath.Join(root, "A")},
+		other: filepath.Join(root, "B"), ctx: ctx, protected: map[string]string{}, evidence: map[string]any{},
+		started: time.Date(2026, 10, 20, 12, 34, 56, 123456789, time.FixedZone("fixture-origin", 5*3600+30*60)),
+	}
+	for _, path := range []string{f.base.Home, f.base.Project, f.other} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return f
+}
+
+func TestCopilotProjectNativeOriginalConfigAuthorsHeldFirstLaunchWithoutChangingOrigin(t *testing.T) {
+	f := copilotProjectOriginalConfigFixture(t)
+	started, originalContext := f.started, f.ctx
+	deadline, _ := f.ctx.Deadline()
+	if err := f.authorOriginalConfig(t); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte(fmt.Sprintf("{\"firstLaunchAt\":\"2026-10-20T07:04:56.123456789Z\",\"trustedFolders\":[%q,%q]}\n", f.base.Project, f.other))
+	body, err := projectNativeRuntimeRead(f.originalConfigPath, copilotProjectConfigDiagnosticLimit)
+	info, statErr := os.Lstat(f.originalConfigPath)
+	if err != nil || statErr != nil || info.Mode() != 0600 || !bytes.Equal(body, want) || !bytes.Equal(f.originalConfigBaseline, want) {
+		t.Fatal("exact independently authored two-field original config differs", err, statErr)
+	}
+	wantSHA := fmt.Sprintf("%x", sha256.Sum256(want))
+	if len(f.protected) != 1 || f.protected[f.originalConfigPath] != wantSHA || f.originalConfigPath != filepath.Join(f.base.Home, ".copilot", "config.json") {
+		t.Fatal("original config expectation was not frozen from the independent recipe")
+	}
+	afterDeadline, ok := f.ctx.Deadline()
+	if !ok || afterDeadline != deadline || f.ctx != originalContext || f.started != started {
+		t.Fatal("metadata formatting changed the original clock or deadline")
+	}
+	f.check(t)
+	if len(f.evidence) != 0 {
+		t.Fatal("unchanged authored config acquired a mutation exception")
+	}
+}
+
+func TestCopilotProjectNativeOriginalConfigRejectsZeroStartBeforeAnyWrite(t *testing.T) {
+	f := copilotProjectOriginalConfigFixture(t)
+	f.started = time.Time{}
+	if err := f.authorOriginalConfig(t); err == nil {
+		t.Fatal("zero attempt origin was replaced by a fresh clock")
+	}
+	_, err := os.Lstat(filepath.Join(f.base.Home, ".copilot", "config.json"))
+	entries, readErr := os.ReadDir(f.base.Home)
+	if !os.IsNotExist(err) || readErr != nil || len(entries) != 0 || f.originalConfigPath != "" || len(f.originalConfigBaseline) != 0 || len(f.protected) != 0 {
+		t.Fatal("zero-origin refusal wrote or froze an original profile")
+	}
+}
+
+func copilotProjectOriginalConfigMutation(t *testing.T, f *copilotProjectAttempt, kind string) []byte {
+	t.Helper()
+	if kind == "comments" {
+		return append([]byte("// fixture comment one\n// fixture comment two\n"), f.originalConfigBaseline...)
+	}
+	value, err := projectNativeRuntimeJSON(f.originalConfigBaseline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object := value.(map[string]any)
+	switch kind {
+	case "changed-time":
+		object["firstLaunchAt"] = "2026-10-21T07:04:56.123456789Z"
+	case "removed-time":
+		delete(object, "firstLaunchAt")
+	case "trust":
+		object["trustedFolders"] = []string{f.base.Project}
+	case "foreign":
+		object["foreignState"] = "must remain refused"
+	default:
+		t.Fatal("unregistered original-config mutation")
+	}
+	return append(copilotProjectContractBody(t, object), '\n')
+}
+
+func TestCopilotProjectNativeOriginalConfigKeepsCompleteByteMutationGuard(t *testing.T) {
+	for _, kind := range []string{"changed-time", "removed-time", "trust", "foreign", "comments"} {
+		t.Run(kind, func(t *testing.T) {
+			f := copilotProjectOriginalConfigFixture(t)
+			if err := f.authorOriginalConfig(t); err != nil {
+				t.Fatal(err)
+			}
+			baseline := bytes.Clone(f.originalConfigBaseline)
+			wantSHA := f.protected[f.originalConfigPath]
+			changed := copilotProjectOriginalConfigMutation(t, f, kind)
+			if err := os.WriteFile(f.originalConfigPath, changed, 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.protectedDigest(f.originalConfigPath, wantSHA)
+			change, ok := f.evidence["original_config_change"].(copilotProjectConfigChange)
+			if err != nil || got == wantSHA || got != fmt.Sprintf("%x", sha256.Sum256(changed)) || !ok || change.ExpectedSHA256 != wantSHA || change.ObservedSHA256 != got {
+				t.Fatal("complete original byte guard or exact mutation diagnostic changed", err)
+			}
+			after, err := projectNativeRuntimeRead(f.originalConfigPath, copilotProjectConfigDiagnosticLimit)
+			if err != nil || !bytes.Equal(after, changed) || !bytes.Equal(f.originalConfigBaseline, baseline) || f.protected[f.originalConfigPath] != wantSHA {
+				t.Fatal("mutation projection rewrote or adopted original authority", err)
+			}
+		})
+	}
 }
 
 func TestCopilotProjectNativeReturnedFactsRequireExactInstalledAuthorityAndEvents(t *testing.T) {

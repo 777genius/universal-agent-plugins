@@ -182,6 +182,26 @@ func newCopilotProjectAttempt(t *testing.T) *copilotProjectAttempt {
 
 	return f
 }
+func (f *copilotProjectAttempt) authorOriginalConfig(t *testing.T) error {
+	t.Helper()
+	if f.started.IsZero() {
+		return fmt.Errorf("held nonzero Copilot attempt start required")
+	}
+	body, err := json.Marshal(map[string]any{
+		"firstLaunchAt":  f.started.UTC().Format(time.RFC3339Nano),
+		"trustedFolders": []string{f.base.Project, f.other},
+	})
+	if err != nil {
+		return fmt.Errorf("author original Copilot config: %w", err)
+	}
+	body = append(body, '\n')
+	trust := filepath.Join(f.base.Home, ".copilot", "config.json")
+	projectNativeRuntimeWrite(t, trust, body, 0600)
+	f.originalConfigPath, f.originalConfigBaseline = trust, bytes.Clone(body)
+	// Freeze the independently authored recipe, never a later observed rewrite.
+	f.protected[trust] = copilotProjectConfigHash(body)
+	return nil
+}
 func (f *copilotProjectAttempt) setup(t *testing.T) {
 	t.Helper()
 	for _, project := range []struct{ name, path string }{{"A", f.base.Project}, {"B", f.other}} {
@@ -190,12 +210,9 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 			t.Fatal("Git project setup emitted diagnostics")
 		}
 	}
-	trust := filepath.Join(f.base.Home, ".copilot", "config.json")
-	body, _ := json.Marshal(map[string]any{"trustedFolders": []string{f.base.Project, f.other}})
-	body = append(body, '\n')
-	f.originalConfigPath, f.originalConfigBaseline = trust, bytes.Clone(body)
-	projectNativeRuntimeWrite(t, trust, f.originalConfigBaseline, 0600)
-	f.protected[trust] = nativeSHA(t, trust)
+	if err := f.authorOriginalConfig(t); err != nil {
+		t.Fatal(err)
+	}
 	r := f.command(t, "version", f.outside, f.env(), []string{f.client, "--version"}, 30*time.Second)
 	if string(r.Stdout) != "GitHub Copilot CLI 1.0.103.\nRun 'copilot update' to check for updates.\n" || len(r.Stderr) != 0 {
 		t.Fatal("exact pinned Copilot version differs")
