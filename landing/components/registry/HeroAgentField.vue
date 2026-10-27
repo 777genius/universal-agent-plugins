@@ -4,6 +4,7 @@ const field = ref<HTMLElement>();
 const position = ref<{ left: string; top: string; width: string; height: string }>();
 let resizeObserver: ResizeObserver | undefined;
 let scrollFrame: number | undefined;
+let catalogTop: number | undefined;
 
 // Follow the viewport, with a gentle upward/leftward drift in viewport pixels.
 const updateScroll = () => {
@@ -11,12 +12,27 @@ const updateScroll = () => {
   const distance = Math.max(0, window.scrollY);
   field.value?.style.setProperty('--scroll-x', `${-distance * 0.025}px`);
   field.value?.style.setProperty('--scroll-y', `${-distance * 0.12}px`);
+  // Defocus as the catalog enters the screen; stay soft throughout the list.
+  const progress =
+    catalogTop === undefined
+      ? 0
+      : Math.min(
+          1,
+          Math.max(
+            0,
+            (distance - Math.max(0, catalogTop - window.innerHeight)) / (window.innerHeight * 0.6),
+          ),
+        );
+  const eased = progress * progress * (3 - 2 * progress);
+  field.value?.style.setProperty('--scroll-blur', `${eased * 12}px`);
 };
 const scheduleScroll = () => {
   if (scrollFrame === undefined) scrollFrame = requestAnimationFrame(updateScroll);
 };
 const measureAnchor = () => {
   if (!anchor.value) return;
+  const catalog = anchor.value.closest('.unified-home')?.querySelector('#plugins');
+  catalogTop = catalog ? catalog.getBoundingClientRect().top + window.scrollY : undefined;
   const bounds = anchor.value.getBoundingClientRect();
   const anchorLeft = bounds.left + window.scrollX;
   const anchorTop = bounds.top + window.scrollY;
@@ -42,6 +58,8 @@ onMounted(async () => {
   if (anchor.value && 'ResizeObserver' in window) {
     resizeObserver = new ResizeObserver(measureAnchor);
     resizeObserver.observe(anchor.value);
+    const home = anchor.value.closest('.unified-home');
+    if (home) resizeObserver.observe(home);
   }
   await nextTick();
   updateScroll();
