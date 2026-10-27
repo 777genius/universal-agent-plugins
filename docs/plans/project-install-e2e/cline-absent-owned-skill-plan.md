@@ -90,3 +90,21 @@ PR525 with a fresh non-forced head lease. Review the next actual source-bound
 native archive, including empty-mode grammar, remaining repair/removal/restart
 and user/A/B/MCP authority before any separate qualification amendment.
 No new PR, release, VS work or qualification promotion.
+
+## Actual candidate validation
+
+Desktop and shell independently approved both the exact original plan
+SHA2561d62e737d8475e768b1ff90c8c0f635c246714fd70dbd508e26320ab95838d79
+and complete two-file implementation. The final lifecycle file remains
+SHA2561fa1b8ee4cd45268ad6f5da251b42665d72fb15288e360e53b38459fc20c6e96;
+the actual Stager/adapter contract file remains
+SHA2568016b74c507052af60a8c7acb83cc572485518790023d4fd000bef7fc88231b1.
+With the separately validated numeric privacy correction preserved, offline
+focused Cline cycle/project contracts passed in0.171s. The real adapter
+restored the exact absent owned directory; partial-leaf and extra-file
+tampering still failed without adoption or mutation. Checked-in all-enabled
+affected-line lint and unfiltered six-linter whole-file gates each reported
+0issues; gofmt and diff checks are clean. No vendor, installer or positive
+hosted guard ran locally. The public repair result and complete fresh native
+cycle remain future source-bound observations; all qualification gates and
+the intentional first-complete-capture failure remain unchanged.
