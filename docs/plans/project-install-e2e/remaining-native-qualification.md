@@ -1476,3 +1476,87 @@ Both checked the actual unknown internal refusal boundary and current source,
 including fixed source/pin/profile/process gates and1024/depth32/16/2048 bounds.
 Root implements this isolated diagnostic; all existing production and previous
 observations remain preserved.
+
+
+## Copilot unchanged inert process contracts: hosted execution amendment (2026-10-27)
+
+Accepted exact pre-code plan SHA256 `435f0ff8fe6240e00497329e1e4068258f208fc7d0651f282afc4ad4c081de1c`. Independent plan GOs: native reviewer `091a987f16bcb3357e3a8988587850e8249cf142be8318198419223db5c47a73`, Gemini reviewer `eb8150f5ccc4b9aefb278b531e6433e434d0522684700bdda706e7c79145d16d`. The full local process gate remains failed on its recorded environment prerequisite; the proposed real hosted execution remains pending.
+
+### Accepted execution amendment
+
+PRE-CODE execution amendment to the accepted empty-registry diagnostic plan
+30858baf6e6d894641c59650d117e5f95672aaaa58b7bf2f2edf4712f8e7bc0e.
+Two independent plan reviews precede the workflow edit. No native capability,
+profile authority, test assertion, containment prerequisite or release changes.
+
+## Observed local gate limitation
+
+Frozen diagnostic source 7e193758d73c5ab8a374ffdabc1ad27aa941c348,
+tree 6740f5640cd45584054c7938e22006a889610ca0, has two exact independent code
+GOs. Its full focused Go command actually failed. The two failures are
+TestCopilotEmptyRegistryActualInertCommandKeepsOpaqueBytes and
+TestCopilotEmptyRegistryOriginalFatalGuardCannotContinue. The unchanged ordinary
+process supervisor refuses before running either owned inert child because this
+environment lacks /proc/<pid>/task/<tid>/children. A separate diagnostic using
+the unchanged supervisor reproduced the same refusal for immediate and naturally
+delayed inert children, including outside the ordinary execution sandbox.
+The original failed log is retained at
+/tmp/uap-copilot-empty-registry-gates/focused-go.log, SHA256
+0c5547b83c3eb0daffffe0a42e75d13c4142aefbc79edc581e2467e642ae4bec.
+This is not a successful process gate. Neither test nor the supervisor may be
+skipped inside source, relaxed, replaced with a fake process or labelled passed.
+
+The existing Project Native Runtime admission job only runs Python selection
+contracts; the native job compiles the Go test binary and selects the opted-in
+native test. It does not execute the new inert Go tests. The Required workflow's
+full Go lane only triggers on PRs to main/master, not this stacked draft leaf.
+Therefore merely pushing the existing source would not resolve this gate.
+
+## Smallest additional gate
+
+Change only .github/workflows/project-native-runtime.yml: after the existing
+selection step, add the already pinned actions/setup-go revision with Go1.26.10,
+cache false, and a focused inert contract command. Both steps are conditional on
+the actual selected matrix containing client copilot. Use the existing finite
+matrix output, not a user-controlled command or new flag. The command is exactly:
+
+    go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'
+
+The existing contracts job remains on ubuntu-24.04 with its existing five-minute
+deadline, exact head checkout and contents-read permissions. Do not add native
+opt-in, vendor acquisition, installer/scanner execution, credentials, environmental
+eligibility overrides, shell eval, retries or fallbacks. These tests execute only
+owned inert children, fixture HTTP/JSON and local source contracts. Preserve the
+two process tests byte-for-byte and execute both without an exclusion in CI.
+The complete native matrix still depends on successful contracts, so no native
+observation starts if this gate fails. Existing native host admission, selection,
+limits, pinned actions, workflow events/concurrency and native commands remain
+unchanged. Other client-only matrices do not incur this additional Go step.
+
+Add a small source contract to the existing runtime Python tests which verifies
+the conditional two steps, exact pinned toolchain and full focused invocation,
+and that native remains dependent on contracts. Use existing test conventions;
+do not add a YAML library or general workflow parser.
+
+## Honest execution and publication order
+
+Preserve the original full local failure. A separately named local subset may
+exclude only the two identified OSRunner process contracts, with the exact
+exclusion recorded; this establishes only the remaining inert contracts. Execute
+all affected Python contracts, affected all-enabled lint and unfiltered six-linter
+gate. Fix only the two already measured QF1003 dispatch style findings through
+equivalent tagged switches; preserve old mode behavior and command body guards.
+Re-run gates and obtain two code critics for the exact final source, including
+the workflow amendment and lint fix. Replay the previous922 failed and189e
+readiness raw evidence with both old and new readers as already required.
+
+After those gates and reviews, root may normally fast-forward the existing draft
+PR527 source solely to obtain the missing hosted execution, after confirming the
+old actual run has fully completed and the expected branch head is unchanged.
+Record both process tests as pending, never local-pass. Do not merge, qualify or
+claim the full gate until the actual exact-source GitHub run shows each process
+test executed and passed. Obtain source/job identity and raw job log proof, then
+audit the new bounded native diagnostic artifact normally. A CI process test
+failure stays blocking and is diagnosed from its real result. A successful inert
+gate proves its contract only; this new native observation still stops at the
+unconditional failed-only review barrier with all qualification flags false.
