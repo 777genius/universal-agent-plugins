@@ -304,7 +304,7 @@ def grok_provider_route_observation(row):
     observation = row["route_observation"]
     flags = {"peer_loopback", "host_matches", "relative_url", "empty_url_host", "empty_raw_path", "content_type_exact"}
     fields = flags | {"method", "uri", "content_type_count", "content_type_kind"}
-    uris = {"/v1/chat/completions", "/chat/completions", "/v1/models", "/models", "/v1/responses", "/responses", "other"}
+    uris = {"/", "/v1/chat/completions", "/chat/completions", "/v1/models", "/models", "/v1/responses", "/responses", "other"}
     if (row["failure"] != "route" or not row["started"] or type(observation) is not dict or set(observation) != fields
             or any(type(observation[key]) is not bool for key in flags)
             or type(observation["method"]) is not str or observation["method"] not in {"POST", "GET", "other"}

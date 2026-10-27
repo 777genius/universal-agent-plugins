@@ -251,6 +251,22 @@ class RuntimeTests(unittest.TestCase):
                 runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps({**row, **change}).encode()},
                                            self.source, "grok")
 
+    def test_grok_origin_route_is_only_failed_evidence_and_never_normalizes_uris(self):
+        bodies, row = self.grok_route_bodies()
+        observation = {**row["route_observation"], "method": "GET", "uri": "/",
+                       "content_type_count": "none", "content_type_kind": "missing"}
+        row["route_observation"] = observation
+        result = runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps(row).encode()},
+                                             self.source, "grok")
+        self.assertTrue(result["test_failed"])
+        self.assertFalse(result["runtime_attempt_complete"])
+        self.assertFalse(any(result["qualification"].values()))
+        for uri in ("/?credential=private-query", "//", "/v1/", "/%2F", "http://private-host/", "/private-root"):
+            rejected = {**row, "route_observation": {**observation, "uri": uri}}
+            with self.subTest(uri=uri), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "grok-provider.json": json.dumps(rejected).encode()},
+                                           self.source, "grok")
+
     def test_grok_provider_private_canary_is_refused_in_every_capture_surface(self):
         bodies = self.grok_provider_bodies()
         canary = b"uap-grok-private-" + b"a" * 32

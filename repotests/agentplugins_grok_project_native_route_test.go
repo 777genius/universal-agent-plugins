@@ -47,7 +47,7 @@ func grokProjectObserveRoute(request *http.Request, host string) grokProjectRout
 		observation.Method = request.Method
 	}
 	switch request.RequestURI {
-	case "/v1/chat/completions", "/chat/completions", "/v1/models", "/models", "/v1/responses", "/responses":
+	case "/", "/v1/chat/completions", "/chat/completions", "/v1/models", "/models", "/v1/responses", "/responses":
 		observation.URI = request.RequestURI
 	}
 	peer, _, err := net.SplitHostPort(request.RemoteAddr)
@@ -188,5 +188,49 @@ func TestGrokProjectNonRouteFirstFailureCannotAcquireRouteMetadata(t *testing.T)
 			t.Fatal("later route failure replaced an earlier failure")
 		}
 		p.stop()
+	}
+}
+
+func TestGrokProjectOriginGETIsObservedWhileAdmissionStillRefuses(t *testing.T) {
+	p := grokProjectContractProvider(t)
+	r := grokProjectContractRequest(t, p, grokProjectContractBody(t, p))
+	r.Method, r.URL.Path = http.MethodGet, "/"
+	r.Body, r.ContentLength = http.NoBody, 0
+	r.Header.Del("Content-Type")
+	r.Header.Set("Authorization", "Bearer private-origin-header")
+	status, _ := grokProjectContractSend(t, r)
+	p.stop()
+	if status != http.StatusBadRequest || p.ctx.Err() == nil || p.receipt.Failure != "route" || p.receipt.Requests != 0 || p.receipt.Responses != 0 || p.receipt.CredentialMatched || p.request != nil || p.reply != nil {
+		t.Fatal("origin diagnostic changed rejection, cancellation or provider admission")
+	}
+	want := grokProjectRouteObservation{Method: "GET", URI: "/", PeerLoopback: true, HostMatches: true,
+		RelativeURL: true, EmptyURLHost: true, EmptyRawPath: true, ContentTypeCount: "none", ContentTypeKind: "missing"}
+	if p.receipt.RouteObservation == nil || *p.receipt.RouteObservation != want {
+		t.Fatal("actual inert rejected origin request lost its finite facts")
+	}
+	p.failWithRequest("route", grokProjectRouteTestRequest(t, http.MethodGet, "/models"))
+	p.fail("cleanup")
+	if p.receipt.Failure != "route" || *p.receipt.RouteObservation != want {
+		t.Fatal("later failure replaced the first rejected origin request")
+	}
+	raw, err := json.Marshal(p.receipt.RouteObservation)
+	if err != nil || len(raw) > 512 || bytes.Contains(raw, []byte("private")) {
+		t.Fatal("origin observation exceeded bounds or exposed a private header")
+	}
+}
+
+func TestGrokProjectOriginObservationDoesNotNormalizePrivateRootLikeURIs(t *testing.T) {
+	for _, uri := range []string{"/?credential=private-query", "//", "/v1/", "/%2F", "http://private-host/", "/private-root"} {
+		r := grokProjectRouteTestRequest(t, http.MethodGet, uri)
+		r.Host, r.RemoteAddr = "127.0.0.1:12345", "127.0.0.1:12346"
+		r.Header.Set("Authorization", "Bearer private-root-header")
+		got := grokProjectObserveRoute(r, r.Host)
+		if got.URI != "other" || grokProjectProviderRoute(r, r.Host) {
+			t.Fatal("root-like request was normalized or admitted")
+		}
+		raw, err := json.Marshal(got)
+		if err != nil || len(raw) > 512 || bytes.Contains(raw, []byte("private")) {
+			t.Fatal("root-like request exposed private attributes")
+		}
 	}
 }
