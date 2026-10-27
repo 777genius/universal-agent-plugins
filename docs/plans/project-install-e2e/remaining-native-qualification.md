@@ -1060,6 +1060,115 @@ before a later separately reviewed integration into the full lifecycle. This
 attempt cannot inherit component-lifecycle success or claim vendor OAuth or
 real-model qualification.
 
+## Observed Cline standalone CLI presence correction
+
+Genuine Cline runtime [40357515451](https://github.com/777genius/universal-agent-plugins/actions/runs/40357515451)
+at source `4a5c4d32e8882217a9439fb6833938731943011e`, tree
+`9eeda83072ec9adae47b7b11b0bb7a7d40ef0a05`, executed the exact acquired
+`package/bin/cline --auto-approve false --version` successfully and printed
+`3.0.73`. The public project `add-a` then refused `target "cline" was not detected`
+before any target mutation. Native artifact `12671534049`, SHA256
+`ed0637625cba4c40ed2f3ccaac582deb3a024e2bc1613813faa97acc827e4560`,
+and frontend `12671673849`, SHA256
+`47d1583165a7e7a8af5282c5d3d655583a49a7f2cd8640f18d9ca03bf33c7a05`,
+retain that result. The child's original controlled PATH already includes the
+verified CLI's containing directory. No native ACP session was started.
+
+The production Cline adapter currently observes only four editor-extension or
+editor-globalStorage surfaces. Its supported project file preparation does not
+require an editor or a version-probe executable, and its own activation guidance
+already allows a fresh Cline CLI process. A real standalone CLI is therefore
+missing presence evidence, not missing files to be fabricated in an editor home.
+
+Append one `cline_cli` presence surface through the existing read-only
+`host.BinarySurface("cline_cli", "cline")` mechanism. Keep the four existing
+editor surface IDs, order and rules intact and keep ConfigRoot at the original
+`HomeDir/.cline`. Preserve the adapter's empty ExecutablePath: this bounded
+correction reports observed CLI presence for the existing file-based lifecycle;
+it does not introduce native version probes, a primary executable selection
+policy, a CLI version qualification or automatic client execution. The pinned
+hosted fixture independently retains its exact acquired executable/version and
+all ordinary-user, runtime-file, provider, approval and process checks.
+
+Do not count an authored `.cline` directory or a project configuration as
+installation evidence; without a supported editor surface or PATH binary the
+client remains not detected. Add no fallback executable names, fabricated
+extension directories, fake detector flags, profile relocation, extra native
+invocation or change to project activation/ownership. Existing editor-only and
+coexistence cases retain their original user authority. Prepared state and
+all runtime/authentication/model qualifications remain unchanged.
+
+Update the three detection goldens only with the new absent CLI surface for
+their existing editor-only fixtures. Add focused detector tests for CLI-only,
+editor-only, coexistence and no-supported-surface cases, preserving exact
+ConfigRoot and the unchanged empty executable/version metadata. Both ordinary
+and explicit targeted-version discovery must perform zero native probes for
+Cline under this presence-only contract. Add a public local project add/remove
+regression using the real detector with an inert PATH lookup and no editor
+installation, verifying project ownership and original-user/sibling preservation;
+no vendor executable runs locally. Then rerun the existing actual hosted ACP
+attempt, with its separately reviewed installed-receipt framing correction.
+Two independent plan reviews precede this product detection change.
+
+## Observed native CLI installed-package receipt framing correction
+
+Genuine Kiro run [40354148388](https://github.com/777genius/universal-agent-plugins/actions/runs/40354148388),
+job `121708484979`, source `d650ef37ff5cd2f38f6b784ebcd9723c47e62cf7`, tree
+`6b2be08d15092de328f2644478036f8c751e2b94`, completed public project add with
+Prepared activation and installation verification, then refused the exact native
+ownership comparison before any restricted startup. Native artifact `12672746098`
+(SHA-256 `26403a83fe3bdf64819d29d652011a3265b78ee977310cbd068830d44dbad75b`)
+and frontend artifact `12671093626` (SHA-256
+`4582142ca5697d5ab25576759d2431945caaebb5bc493876e2f1377886020ff4`)
+retain that failure. Independent reconstruction from the captured selected skill
+and MCP entry matches their two recorded object digests; the fixture's managed
+package framing uses a different production contract.
+
+The exact fixed local-source/no-save public add in these four startup attempts
+uses `runAddManyLoaded` and the existing lifecycle service. Kiro, Windsurf/Devin,
+Grok and Qoder do not have `QualifiedLocalInstallerFacade`; that trait is set
+only for Codex and Claude. `cli/cmd/agentplugins/compose.go` wires
+`providers.Stager` into the lifecycle service. Its `assembleDelivery` records
+`packagesnapshot.Builder.Build(...).Digest`, and its installed verification uses
+that same builder. The shared attempt instead currently uses the newer,
+domain-separated `agentplugins/adapters/packagedigest.DigestCaptured` result.
+The four fixed specifications therefore need the same correction; no different
+Grok/Qoder route or algorithm is inferred from their uncompleted runtime runs.
+
+Change only the independently computed expected installed managed-package
+digest in these fixtures to the exact selected provider's existing framing:
+lexically ordered held entries; `dir` or `file`, relative slash path, executable
+boolean and decimal content length separated by NULs, followed by exact file
+bytes. Keep the current bounded held reads, full ordinary-file ownership/link
+checks, canonical parent checks, entry/depth/byte ceilings and the existing
+captured-path policy validation. Use no client-configurable digest choice and no
+alternate digest fallback. Exact object count, kind, ID, logical name, path and
+digest equality remain mandatory. Production routes and digest implementations,
+source identity, installed source/receipt checks, native argv, profiles, trust,
+permissions, deadlines, cleanup, artifact members and qualification remain unchanged.
+
+Cline's separate installed ACP attempt uses that same non-facade lifecycle and
+Stager route, and its installed `installedEntries` comparison has the identical
+framing mismatch. Route that one installed-receipt expectation through the same
+small strict held-entry helper in `agentplugins_project_native_runtime_test.go`.
+Keep Cline's separate `sourceDigest` and package-revision expectation on
+`packagedigest.DigestCaptured`: source acquisition/loading deliberately retains
+the newer `PackageSnapshot.TreeDigest` identity. The installed receipt and
+source digest must remain separate; neither is copied from a returned receipt.
+The shared helper accepts only previously held ordinary files/directories,
+retains captured-path policy validation, and offers no algorithm selector.
+
+Replace the self-selected newer-builder parity contract with inert staging
+through the actual four registered client adapters plus Cline, project planner
+and `providers.Stager`, including the mixed Kiro/Devin managed-launcher
+projections and Cline's separate native transport projection.
+Compare the helper's held-byte digest against the actual staged managed object
+and `packagesnapshot` verifier; explicitly show the newer framing differs and
+Cline's independent source identity still matches the newer source builder.
+Exercise content/executable/directory changes and retained hardlink/alias
+refusal. No vendor process executes. Propagate the reviewed shared-helper/contract and caller deltas to the relevant
+leaves; all initial completion and qualification flags stay false.
+
 ## Observed Darwin completed-process cleanup correction
 
 Genuine baseline [run 40367376473](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376473),
