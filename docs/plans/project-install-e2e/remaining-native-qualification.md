@@ -1331,3 +1331,12 @@ with all five qualification flags false and eight omitted entries unknown.
 The npm/standalone equivalence caveat remains. Fresh genuine hosted evidence
 must establish the next boundary; any additional profile drift or genuine
 account refusal remains a failed observation. Root alone owns publication.
+
+## Qoder exact auth-membership correction (2026-10-27)
+
+Independent review found that an unknown auth sibling could enter the later
+catalog baseline after setup. The [reviewed addendum](qoder-auth-membership-addendum-plan.md)
+and [actual validation](qoder-auth-membership-validation.md) close that early
+window while preserving the original metadata commits and complete-profile guard.
+This source correction supplies no native qualification; fresh hosted evidence
+and the existing lifecycle gates remain required.
