@@ -60,11 +60,12 @@ class KiroCollectorTests(unittest.TestCase):
         self.assertFalse(any(value for key, value in facts.items() if key.endswith("_qualified")))
         self.assertIsNone(facts["read_only_authentication_boundary"])
         self.assertEqual(len(facts["raw_source_list_observations"]), 6)
-        self.assertEqual(len(ctx.calls), 15)
+        self.assertEqual(len(ctx.calls), 16)
         for env in ctx.probe_envs:
             self.assertEqual(env, {"PATH": str(ctx.root / "client/kirocli/bin") + ":/usr/bin:/bin"})
         for _, arguments, _, extra_env, timeout in ctx.calls:
             self.assertIn(arguments, [["--version"], *[list(args) for _, args, _ in kiro.HELP],
+                                      ["agent", "list"],
                                       ["mcp", "list", "workspace"], ["mcp", "list", "global"]])
             self.assertIsNone(extra_env)
             self.assertEqual(timeout, 30)
@@ -91,7 +92,8 @@ class KiroCollectorTests(unittest.TestCase):
         self.assertEqual(len(kiro.HELP), 8)
         self.assertEqual(ctx.calls[8], (
             "agent-help", ["agent", "--help"], "a", None, 30))
-        self.assertEqual(ctx.calls[9][0], "a-workspace-raw-list")
+        self.assertEqual(ctx.calls[9][0], "a-agent-raw-list")
+        self.assertEqual(ctx.calls[10][0], "a-workspace-raw-list")
         self.assertEqual([case["id"] for case in result["cases"]], ["kiro.help"])
         self.assertFalse(any(value for key, value in result["observations"].items()
                              if key.endswith("_qualified")))
@@ -99,6 +101,107 @@ class KiroCollectorTests(unittest.TestCase):
             "kiro.scope-observation", "kiro.project-lifecycle",
             "kiro.native-restart-removal", "kiro.mcp-initialize",
             "kiro.mcp-tools-list", "kiro.mcp-tools-call"])
+
+    def test_agent_list_is_exact_opaque_and_precedes_authored_markers(self):
+        ctx = self.context()
+
+        def agent_list():
+            self.assertEqual(ctx.calls[-1], (
+                "a-agent-raw-list", ["agent", "list"], "a", None, 30))
+            self.assertEqual([call[0] for call in ctx.calls[:-1]],
+                             ["version", *[label for label, _, _ in kiro.HELP]])
+            for root in (ctx.home, *ctx.projects.values()):
+                self.assertFalse((root / ".kiro/settings/mcp.json").exists())
+                self.assertFalse((root / ".kiro/agents").exists())
+            return {"exit": 0, "error": None}, b"Opaque read-only listing.\n", b""
+
+        ctx.replace["a-agent-raw-list"] = agent_list
+        result = kiro.collect(ctx)
+        self.assertEqual(len(ctx.calls), 16)
+        self.assertEqual(ctx.calls[10][0], "a-workspace-raw-list")
+        self.assertEqual(result["observations"]["raw_agent_list_observation"], {
+            "probe": "a-agent-raw-list", "cwd_selection": "a",
+            "sha256_normalized_text": "e6616a2becdf2dabb3a944c65dcce5bc4ddf730b350aaa269974fb0d1a9617b2",
+            "interpretation": "opaque available-agent listing; no skill/MCP selection or runtime qualification",
+        })
+        self.assertEqual([row["id"] for row in result["cases"]], ["kiro.help"])
+        self.assertFalse(any(value for key, value in result["observations"].items()
+                             if key.endswith("_qualified")))
+        for root in (ctx.home, *ctx.projects.values()):
+            self.assertFalse((root / ".kiro/agents").exists())
+
+    def test_agent_list_wrong_route_refuses_before_any_child(self):
+        routes = [(("agent", verb), "a") for verb in (
+            "--help", "create", "edit", "validate", "migrate", "upgrade", "set-default")]
+        routes += [(("mcp", "list", "workspace"), "a"),
+                   (("agent", "list", "--extra"), "a")]
+        routes += [(("agent", "list"), project) for project in ("b", "user", "outside")]
+        for arguments, project in routes:
+            ctx = self.context()
+            with self.subTest(arguments=arguments, project=project):
+                with self.assertRaisesRegex(ValueError, "exact argv/project"):
+                    kiro._probe(ctx, {}, "a-agent-raw-list", arguments, project)
+                self.assertEqual(ctx.calls, [])
+
+    def test_agent_list_failures_stop_before_configuration_or_later_lists(self):
+        good = ({"exit": 0, "error": None}, b"Opaque agent list\n", b"")
+        replacements = [({"exit": value, "error": None}, good[1], good[2])
+                        for value in (1, True, "0", None)]
+        replacements += [({}, good[1], good[2]), ({"exit": 0}, good[1], good[2]),
+                         ({"exit": 0, "error": "capture failed"}, good[1], good[2]),
+                         (None, good[1], good[2]),
+                         ({"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR)]
+        replacements += [(good[0], body, good[2]) for body in (
+            "Opaque agent list", bytearray(good[1]), None, b"", b" \n",
+            b"error: unknown\n", b"Please log in\n", b"\xff", b"\x1b[2Jagents", b"agents\x00")]
+        replacements += [(good[0], good[1], body) for body in (
+            "", None, bytearray(), b"warning\n", kiro._ALL_HELP_STDERR, kiro._LIST_AUTH_STDERR)]
+        for replacement in replacements:
+            ctx = self.context()
+            ctx.replace["a-agent-raw-list"] = replacement
+            with self.subTest(replacement=replacement), self.assertRaises(ValueError):
+                kiro.collect(ctx)
+            self.assertEqual(len(ctx.calls), 10)
+            self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+            for root in (ctx.home, *ctx.projects.values()):
+                self.assertFalse((root / ".kiro/settings/mcp.json").exists())
+                self.assertFalse((root / ".kiro/agents").exists())
+
+    def test_agent_list_rechecks_companions_and_path_before_markers(self):
+        for mutation in ("companion", "path"):
+            ctx = self.context()
+
+            def changed():
+                if mutation == "companion":
+                    (ctx.root / "client/kirocli/bin/kiro-cli-chat").chmod(0o600)
+                else:
+                    ctx.env["PATH"] = "/usr/bin:/bin"
+                return {"exit": 0, "error": None}, b"Opaque agent list\n", b""
+
+            ctx.replace["a-agent-raw-list"] = changed
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                kiro.collect(ctx)
+            self.assertEqual(len(ctx.calls), 10)
+            self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+            for root in (ctx.home, *ctx.projects.values()):
+                self.assertFalse((root / ".kiro/settings/mcp.json").exists())
+
+    def test_preexisting_authored_marker_conflict_remains_unadopted(self):
+        ctx = self.context()
+        original = ctx.home / ".kiro/settings/mcp.json"
+        original.parent.mkdir(parents=True)
+        original.write_bytes(b"original user bytes\n")
+        original.chmod(0o600)
+        before = original.stat()
+        with self.assertRaises(FileExistsError):
+            kiro.collect(ctx)
+        self.assertEqual(len(ctx.calls), 10)
+        self.assertEqual(ctx.calls[-1][0], "a-agent-raw-list")
+        self.assertEqual(original.read_bytes(), b"original user bytes\n")
+        after = original.stat()
+        for field in ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink",
+                      "st_size", "st_mtime_ns", "st_ctime_ns"):
+            self.assertEqual(getattr(after, field), getattr(before, field))
 
     def test_agent_help_wrong_route_refuses_before_any_child(self):
         routes = [(("agent", "list"), "a"), (("chat", "--help"), "a"),
@@ -265,9 +368,11 @@ class KiroCollectorTests(unittest.TestCase):
         ctx.replace["a-workspace-raw-list"] = (
             {"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR)
         result = kiro.collect(ctx)
-        self.assertEqual(len(ctx.calls), 10)
-        self.assertEqual(ctx.calls[-2], (
+        self.assertEqual(len(ctx.calls), 11)
+        self.assertEqual(ctx.calls[-3], (
             "agent-help", ["agent", "--help"], "a", None, 30))
+        self.assertEqual(ctx.calls[-2], (
+            "a-agent-raw-list", ["agent", "list"], "a", None, 30))
         self.assertEqual(ctx.calls[-1], (
             "a-workspace-raw-list", ["mcp", "list", "workspace"], "a", None, 30))
         self.assertTrue(all(call[-1] == 30 for call in ctx.calls))
@@ -307,11 +412,11 @@ class KiroCollectorTests(unittest.TestCase):
             ctx.replace["a-workspace-raw-list"] = replacement
             with self.subTest(replacement=replacement), self.assertRaises(ValueError):
                 kiro.collect(ctx)
-            self.assertEqual(len(ctx.calls), 10)
+            self.assertEqual(len(ctx.calls), 11)
 
     def test_authentication_tuple_cannot_be_misrouted_to_other_operations(self):
         for label in ("version", "top-help", "all-help", "mcp-help",
-                      "agent-help", "a-global-raw-list", "b-workspace-raw-list", "user-global-raw-list"):
+                      "agent-help", "a-agent-raw-list", "a-global-raw-list", "b-workspace-raw-list", "user-global-raw-list"):
             ctx = self.context()
             ctx.replace[label] = ({"exit": 1, "error": None}, b"", kiro._LIST_AUTH_STDERR)
             with self.subTest(label=label), self.assertRaises(ValueError):
@@ -344,7 +449,7 @@ class KiroCollectorTests(unittest.TestCase):
             ctx.replace["a-workspace-raw-list"] = changed
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 kiro.collect(ctx)
-            self.assertEqual(len(ctx.calls), 10)
+            self.assertEqual(len(ctx.calls), 11)
 
     def test_config_mutation_fails(self):
         ctx = self.context()

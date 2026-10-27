@@ -1212,6 +1212,44 @@ execution is permitted locally. Obtain two independent plan approvals before
 code, then independent implementation review and a fresh genuine hosted
 capture before claiming that the amended research path completed.
 
+## Kiro opaque agent-list first-capture amendment
+
+The genuine PR529 source `d5d7b2186d873b097677e1b4e52bfcd2097a007a`,
+help run `40553356151` / artifact `12760035043` (outer SHA256
+`311c206bbe8ec0038afcaf7b634a6f2eaa24c8f4586d0e45144dc663fa6a2830`),
+exports exact pinned `agent --help`: 1172 bytes, SHA256
+`8d44a934188eebb8c0ac9d70b5d77166b1ca1443ffda2f1931fde6564d72ff4d`.
+It documents `agent list` and containing-cwd local-agent discovery. This
+advertisement is command authority, not observed UAP skill/MCP discovery.
+Current native chat and the exclusive first MCP list remain auth-blocked.
+
+Root R1 and independent desktop R2 approved the exact plan SHA256
+`223d58fe3a1c9b4f806c697a1e587ed1faee5ea2e8a2fbb436f407aa23d6a227`
+before implementation. Add only `a-agent-raw-list`, exact `agent list` from
+project A, after all eight help commands and before authored MCP markers.
+The original 30-second probe/aggregate bounds, exact launcher/three-companion
+identity and sealed PATH checks remain unchanged. The new label rejects any
+other argv/project before a child. Strict clean exit/stream/safe-text checks
+apply; no authentication exception, retry or later operation after failure.
+
+Keep raw streams through the existing probe capture and one fixed hash-only
+`raw_agent_list_observation`. The text stays opaque; no agent names, schema,
+skill selection, trust, account/model or runtime qualification is inferred.
+Only the existing help case passes, with the same six unobserved IDs and all
+false qualification flags. Full collector calls become 16 and the current
+first-MCP-auth path becomes 11; its archive becomes 35 members within existing
+bounds. The old 33-member source capture receives no invented observation.
+
+All 23 Kiro Python contracts passed in 0.417s. They cover exact pre-marker
+order/route/hash projection, wrong typed process/streams and unsafe/error text,
+exclusive old-auth-tuple behavior, companion/PATH mutation and refusal to
+adopt preexisting authored marker bytes. Both changed ASTs and whitespace
+checks pass. Actual old 33-member research and 16-member native archives replay
+unchanged: help observation remains source-bound, native failed/incomplete
+with all five qualifications false. No Go, vendor, public installer or hosted
+guard ran locally. Independent exact-code review precedes root publication;
+the new actual command requires fresh genuine capture and raw interpretation.
+
 ## Completion gate
 
 For each client, retain the exact source commit/tree, archive and executable

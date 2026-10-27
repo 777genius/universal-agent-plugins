@@ -85,6 +85,9 @@ def _probe(ctx, owned, label, arguments, project="a"):
     if label == "agent-help" and (
             tuple(arguments) != ("agent", "--help") or project != "a"):
         raise ValueError("Kiro agent-help requires exact argv/project")
+    if label == "a-agent-raw-list" and (
+            tuple(arguments) != ("agent", "list") or project != "a"):
+        raise ValueError("Kiro agent-list requires exact argv/project")
     if label == "all-help" and tuple(arguments) != ("--help-all",):
         raise ValueError("Kiro all-help stderr exception requires exact argv")
     if label == "a-workspace-raw-list" and (
@@ -146,6 +149,12 @@ def collect(ctx):
                 or "Usage:" in value or "USAGE:" in value))):
             raise ValueError("unrecognized pinned Kiro help: " + label)
         help_text[label] = value
+    agent_text = _probe(ctx, owned, "a-agent-raw-list", ("agent", "list"))
+    agent_observation = {
+        "probe": "a-agent-raw-list", "cwd_selection": "a",
+        "sha256_normalized_text": hashlib.sha256(agent_text.encode()).hexdigest(),
+        "interpretation": "opaque available-agent listing; no skill/MCP selection or runtime qualification",
+    }
     for scope in ("a", "b", "user"):
         native = (home if scope == "user" else projects[scope]) / ".kiro/settings/mcp.json"
         _parents(native)
@@ -178,6 +187,7 @@ def collect(ctx):
              "advertised": {"acp_agent_engine": "--agent-engine" in help_text["acp-help"],
                             "acp_auth_method": "--auth-method" in help_text["acp-help"],
                             "chat_trust_workspace": "--trust-workspace" in help_text["chat-help"]},
+             "raw_agent_list_observation": agent_observation,
              "raw_source_list_observations": captures,
              "read_only_authentication_boundary": auth_boundary,
              "surface": "pinned help and read-only mcp list observations or exact authentication-required boundary; disabled inert remote markers",
