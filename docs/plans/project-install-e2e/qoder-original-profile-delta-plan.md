@@ -125,3 +125,28 @@ catalog demonstrates exact flag-view inventory, while its original-profile
 write still blocks read-only catalog preservation and all later native startup/
 full-cycle claims. The earlier component-cycle design remains conditional;
 this diagnostic neither promotes its catalog schema nor implements that cycle.
+
+## Validation record (2026-10-27)
+
+Root and shell independently approved the exact plan above before source edits.
+Both reviewed the complete formatter, unchanged fatal boundary and actual-file
+controls. Their findings corrected the formatter's file-record limit to the
+existing inventory's 64MiB and added independently expected detail metadata,
+link-record hashes and deterministic selection controls. Both approved the
+corrected code; the sole later source delta uses Go1.22 integer range for the
+4097-entry refusal test after the affected lint reported `intrange`.
+
+The final focused inert Qoder, log-link and shared argv/scope contract selection
+passed in 0.049s with Go1.26.10, `-p=1`, `-count=1` and a 90-second timeout.
+The all-enabled affected-line lint from plan commit `85c6e4c6` reported zero
+issues. The unfiltered whole-file `revive,funlen,gocyclo,gocognit,dupl,depguard`
+gate also reported zero issues. Gofmt and whitespace checks are clean.
+
+Final SHA256 values are `9af92f1e609ea12922851664058cd807950bab695e084311bef8cb9f462ca392`
+for the existing shared attempt file and
+`32a95141f2cd4cb51930ddea5d5430be8cfe70b4fe91284db326a511dafe4740`
+for the new formatter/contracts file. The unchanged Python admission replay
+accepted the audited source-bound `ccd9dc9e` 16-member failure with all five
+qualifications, vendor authentication and real-model qualification false.
+No vendor client or positive hosted admission ran locally. A fresh genuine
+hosted capture remains necessary to identify the original-profile mutation.

@@ -806,6 +806,9 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 		result := f.command(t, "native-catalog", f.base.Project, []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}, 30*time.Second)
 		after, err := projectNativeCLIQoderProfile(profile)
 		if err != nil || !reflect.DeepEqual(after, before) {
+			if err == nil {
+				f.evidence["qoder_original_profile_change"] = qoderOriginalProfileDelta(before, after)
+			}
 			t.Fatal("Qoder catalog changed the complete original user profile/cache")
 		}
 		if len(result.Stderr) != 0 {
