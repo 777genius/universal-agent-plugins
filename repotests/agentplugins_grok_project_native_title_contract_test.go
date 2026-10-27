@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -217,7 +216,11 @@ func (grokTitleContractWriteFailure) Write([]byte) (int, error) {
 
 func TestGrokProjectTitleFixtureResponseWriteFailureCannotRecordCompletion(t *testing.T) {
 	_, title := grokTitleContractProvider(t)
-	request := httptest.NewRequestWithContext(title.transport.ctx, http.MethodPost, "/v1/chat/completions", strings.NewReader(grokTitleContractGolden))
+	request, err := http.NewRequestWithContext(title.transport.ctx, http.MethodPost, "/v1/chat/completions", strings.NewReader(grokTitleContractGolden))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.RequestURI = "/v1/chat/completions"
 	request.Host = title.transport.listener.Addr().String()
 	request.RemoteAddr = "127.0.0.1:12345"
 	request.Header.Set("Content-Type", "application/json")
