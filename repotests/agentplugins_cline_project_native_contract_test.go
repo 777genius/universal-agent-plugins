@@ -231,8 +231,8 @@ func TestClineProjectNativeACPRejectsUnknownAndDuplicatePermissionWithoutBroadAp
 		if got := strings.Count(output.String(), `"optionId":"allow_once"`); got != want {
 			t.Fatalf("positive decision count %d want%d: %s", got, want, output.String())
 		}
-		if !strings.Contains(output.String(), `"outcome":"cancelled"`) || !strings.Contains(output.String(), `"mcpServers":[]`) {
-			t.Fatal("unknown request not cancelled or source-only session injection changed")
+		if !strings.Contains(output.String(), `"outcome":"`+clineACPRefusalOutcome+`"`) || !strings.Contains(output.String(), `"mcpServers":[]`) {
+			t.Fatal("unknown request not canceled or source-only session injection changed")
 		}
 	}
 }
@@ -256,7 +256,10 @@ func TestClineProjectNativeFactsRejectCaseAliasesAndUnknownFields(t *testing.T) 
 }
 func TestClineProjectNativeProviderLiteralHostAndOriginFormAreRequired(t *testing.T) {
 	request := func() *http.Request {
-		r, _ := http.NewRequest("POST", "/v1/chat/completions", nil)
+		r, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "/v1/chat/completions", http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
 		r.Host = "127.0.0.1:32100"
 		r.Header.Set("Authorization", "Bearer inert-key")
 		r.Header.Set("Content-Type", "application/json")
@@ -400,7 +403,11 @@ func TestClineProjectNativeInstalledPayloadCannotAdoptChangedProbeSourceOrProduc
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer packagedigest.Remove(snapshot)
+				defer func() {
+					if err := packagedigest.Remove(snapshot); err != nil {
+						t.Errorf("remove captured snapshot: %v", err)
+					}
+				}()
 				if captured != snapshot.TreeDigest {
 					t.Fatal("held captured framing differs from real installer package digest")
 				}
@@ -447,7 +454,8 @@ func TestClineProjectNativeProbeEventsMustBeOrderedAndFreshWithinNativeInterval(
 	end := start.Add(time.Second)
 	facts := map[string]any{"nonce": "owned", "revision": "a-one", "cwd": "/owned/A", "argv": []any{}, "plugin_root": "/owned/A", "plugin_data": "/owned/data", "literal": "", "once": "", "marker": "retained", "pid": json.Number("123"), "session": "owned-session"}
 	for _, kind := range []string{"valid", "list-first", "call-first", "call-before-list", "repeat-init", "list-after-call", "stale", "future", "wrong-session", "wrong-facts"} {
-		methods := []string{"initialize", "tools/list", "tools/call"}
+		methods := make([]string, 0, 5)
+		methods = append(methods, "initialize", "tools/list", "tools/call")
 		switch kind {
 		case "list-first":
 			methods = []string{"tools/list", "initialize", "tools/call"}

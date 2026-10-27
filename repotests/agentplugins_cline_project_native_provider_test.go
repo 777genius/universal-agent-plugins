@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const clineACPRefusalOutcome = "cancelled" //nolint:misspell // Exact native ACP wire value.
+
 // Source grammar: cline c7185735 ACP/permissions/tool-utils and the shipping
 // lock's @ai-sdk/openai-compatible 3.0.58 (chat source 17d09ac4). Unknown wire
 // extensions fail; initial genuine captures cannot turn qualification true.
@@ -38,7 +40,7 @@ type clineProjectProvider struct {
 
 func newClineProjectProvider(t *testing.T, f *clineProjectAttempt) *clineProjectProvider {
 	t.Helper()
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -381,8 +383,11 @@ func clineAttemptFacts(raw []byte) (map[string]any, error) {
 func (p *clineProjectProvider) verify(f *clineProjectAttempt) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.failure != nil || len(p.requests) != 2 || len(p.responses) != 2 || !p.issued || !p.approved || p.facts == nil {
-		return fmt.Errorf("complete Cline native/provider/approval join missing: %v", p.failure)
+	if p.failure != nil {
+		return fmt.Errorf("complete Cline native/provider/approval join missing: %w", p.failure)
+	}
+	if len(p.requests) != 2 || len(p.responses) != 2 || !p.issued || !p.approved || p.facts == nil {
+		return errors.New("complete Cline native/provider/approval join missing")
 	}
 	facts := p.facts
 	if !reflect.DeepEqual(f.nativeFacts, facts) {
@@ -543,7 +548,7 @@ func (f *clineProjectAttempt) acp(w io.Writer, r io.Reader, transcript *bytes.Bu
 				validID := idOK && (projectNativeRuntimeText(id, 128) || projectNativeRuntimeNumber(id, 0, 1<<31, true))
 				if !validID || requestIDs[idText] || stage != 3 || approved || !issued || clineAttemptPermission(params, session, f.provider.callID, f.provider.arguments()) != nil {
 					if validID {
-						_ = write(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}})
+						_ = write(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"outcome": map[string]any{"outcome": clineACPRefusalOutcome}}})
 					}
 					_ = write(map[string]any{"jsonrpc": "2.0", "method": "session/cancel", "params": map[string]string{"sessionId": session}})
 					return fmt.Errorf("unknown, duplicate or mismatched native permission refused")
@@ -682,7 +687,7 @@ func clineAttemptSession(result map[string]any) error {
 		return fmt.Errorf("unmeasured ACP session-new keys")
 	}
 	session, ok := result["sessionId"].(string)
-	if !ok || !regexp.MustCompile(`^[0-9]{13}_[A-Za-z0-9_-]{5}_cli$`).MatchString(session) {
+	if !ok || !regexp.MustCompile(`^\d{13}_[A-Za-z0-9_-]{5}_cli$`).MatchString(session) {
 		return fmt.Errorf("native generated ACP session identity grammar")
 	}
 	modes, ok := result["modes"].(map[string]any)
