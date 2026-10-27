@@ -283,3 +283,29 @@ a fresh complete successful source-bound run before qualification and merge.
 An unexpected native behavior fails for measured interpretation; do not
 weaken the plan to turn a partial cycle green. Preserve all earlier evidence,
 user/source/pin/ownership gates and combined integration requirements.
+
+## Implementation and validation record
+
+The two reviewed plan commits are dc9c7fc1 and 52e676a9; the latter corrects only
+the existing supervisor's natural-exit API interpretation. Code commit
+6b19ecaabe263d8d463fb23ea1bcdc9330562b3a has independently reviewed tree
+3dccec164c164f27e19994201b1a0d9a35e359e7 and 16 changed source/test files.
+Root and both independent critics approved exact manifest SHA256
+f9a43a2d0f09826bdde3c623813aa5ce7bee1df8df7cb1363ac70bc35f1e0fac.
+Review fixes close blank legacy-user data authority with exact-zero receipts
+and guarded absence until removal, reject malformed/coerced skill metadata,
+and inspect bounded nested JSON/JSONL strings before evidence encoding.
+
+Actual focused Cline cycle/current measured-grammar contracts pass in 0.115s,
+including real current Store/loader/planner/Stager/DataManager and loopback
+phase fixtures. Affected all-enabled lint and the unchanged whole-file six-
+linter size/architecture gate both report 0 issues. The 22 Python runtime tests
+pass in 1.571s and 5 shared Cline tests in 0.001s; whitespace checks are clean.
+The optional inert shell-only natural-exit control cannot run on this local
+proc surface (ErrOrdinaryContainmentUnsupported); its pure refusal controls
+pass, and genuine hosted/runtime admission remains fatal and unchanged.
+The retained genuine 9d 21-member successful single-attempt artifact re-admits
+unchanged with all qualification flags false. No vendor or installer was run
+locally. This candidate still requires the genuine full-cycle first capture,
+its intentional final failure, independent empty/full-cycle raw review and a
+separately reviewed amendment plus fresh complete success before qualification.
