@@ -95,6 +95,7 @@ type projectNativeCLIAttempt struct {
 	evidence                                                                     map[string]any
 	binding                                                                      domain.ClientBinding
 	qoderMetadata                                                                *qoderOriginalMetadata
+	qoderTelemetry                                                               *qoderEmptyTelemetry
 }
 
 func (f *projectNativeCLIAttempt) keep(t *testing.T, name string, body []byte) {
@@ -112,6 +113,11 @@ func (f *projectNativeCLIAttempt) check(t *testing.T) {
 	t.Helper()
 	if f.spec.client == "qoder" && f.qoderMetadata != nil {
 		if err := f.qoderMetadata.check(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if f.spec.client == "qoder" && f.qoderTelemetry != nil {
+		if err := f.qoderTelemetry.check(); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -341,6 +347,10 @@ func newProjectNativeCLIAttempt(t *testing.T, spec projectNativeCLISpec) *projec
 	}
 	if spec.client == "qoder" {
 		f.qoderMetadata, err = qoderAuthorOriginalMetadata(filepath.Join(f.base.Home, ".qoder"), f.protected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.qoderTelemetry, err = qoderAuthorEmptyTelemetry(f.ctx, filepath.Join(f.base.Home, ".qoder"))
 		if err != nil {
 			t.Fatal(err)
 		}
