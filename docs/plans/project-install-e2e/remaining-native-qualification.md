@@ -1352,3 +1352,127 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+
+# Copilot: fixed empty native registry first capture
+
+PRE-CODE proposal. Root authors implementation only after two independent plan
+GOs. Read AGENTS.md, PROJECT_INSTALL_OWNER_SCOPE.md and capability preservation.
+No VS Code changes, release, native local execution or classifier widening.
+
+## Exact new actual evidence
+
+Published PR527 source922b705222927897fe54bb45e8665d8873fd790d,
+treebceb65e8cb04029e48012742a6975a22c6431481. Hosted runtime40584763860,
+job122484811964 failed on the public add-user command at22:17:09Z.
+Native12774483132 outer3232B SHA256
+2fbdecf541f20a9f4584485a91268859b368194fc5d636c99c2cafe321f4c3bb,
+inner46faf1136207357b8172fb73bcdad59a645ba7917b8d277adf550ddbef967506,
+14ordinary closed members. Frontend12774782735 outer3456B SHA256
+7b546cd3c597ff72b4184f8dbc0900454a1213865253ca6a4f021fe2b2ec256d,
+25members. Exact clean source/tree/build,24frontend stream joins, actual pins and
+unchanged exact-source failed-envelope Python admission pass. Independent audit
+/tmp/uap-copilot-922-current-40584763860/independent-raw-audit.json SHA256
+f7056506d11f174c91a4211c47855b4b540e3f3a62c8c3f56291239aa65d1cca.
+
+Actual prefix is git-A,git-B,version,add-user. Public add exits1 in1248ms with
+error=false,context_error=false and ordinary full-descendant closure. Strict JSON
+reports preflight_failed,0success/1failed,mutated=false; the ordinary scanner has
+3files and0findings. Exact stderr records target copilot identity preflight:
+native identity ownership is indeterminate; refusing mutation. No fixture native
+catalog, prompt or probe is reached. All5/runtime/auth/model flags remain false.
+Read-only metadata is observed2before/4after,3changed/0omitted. The two new opaque
+records are a0700directory and0600file; the third is the same originally owned
+0700root directory identity with bookkeeping changed. Hashes do not authorize a
+path/role/content inference or a profile allowance.
+
+## Existing source and uncertainty
+
+Current user-scope copilot.Adapter.InspectNativeRegistry delegates to
+shared.InspectCopilotRegistry. With held native executable and runner, the source
+calls exactly `copilot plugin list` through RunNativeRegistry and strict current
+listing classification. Provider combinedIdentityState also refuses an
+indeterminate prepared finding, so do not state the final public refusal alone
+proves the specific internal classifier branch. Its internal raw stdout/stderr,
+exit and cause are not exported by this artifact. No native registry absence,
+known empty grammar, successful public registration or permission is established.
+
+Relevant exact922 source files are
+install/integrationctl/agentplugins/clients/copilot/identity.go,
+install/integrationctl/agentplugins/clients/shared/copilot_identity.go (SHA256
+d784b9e56c45e72f95deac76ae1a5e9b7930673b50979959e3a4523c056ad6e3),
+install/integrationctl/agentplugins/providers/native_identity.go and
+install/integrationctl/agentplugins/usecase/identity.go.
+
+## Proposed smallest new observation
+
+Preserve the entire existing922 first-public-add observation and controls; do not
+change its fatal process guard or run a child after fatal failure. Add a distinct
+failed-only opt-in `copilot-empty-registry-first-capture` observation using the
+existing bounded collector, original HOME fixture, immutable executable/pin and
+full-descendant supervisor. It runs only fixed git-A,git-B,version then one exact
+`[held-copilot,"plugin","list"]` command from the existing fixed outside cwd.
+Every command retains30seconds; total work150/overall180seconds remains fixed.
+No public add, install, remove, provider, prompt or probe starts in this mode.
+Use the already authored firstLaunchAt/trustedFolders recipe and frozen original
+config, with all normal source/file/owner/no-follow/auth/probe guards intact.
+The new mode never accepts a returned path or creates a replacement user profile.
+
+Capture native-list raw stdout/stderr and normal command receipt under the existing
+bounded member/byte/omission controls. The same held-metadata capture/projection
+may describe this one command with a truthful fixed native-list stage. Preserve
+its1024inventory cap,16detail cap,whole-object2048byte cap and existing private
+path/content exclusions; never renew before/after values. Existing add-user
+metadata bytes/stage and contracts remain byte-identical. If projection is shared,
+accept only the two fixed stages add-user/native-list; retain1024entries,depth32,
+16details and the2048whole-object bound for both, including refusal envelopes.
+A new-stage byte-length increase must not bypass the existing whole-object bound. Snapshot before this one
+command, with read-only deferred projection only; deferred work never launches a
+child. A nonzero exit/capture/context/cleanup error remains fatal through the
+original command guard. If command exits0, retain bytes as opaque evidence and
+unconditionally t.Fatal at a review barrier. Listing interpretation and all5/
+runtime/auth/model flags remain false regardless of returned text or parseability.
+
+The new mode permits at most14total archive members (four command triples,
+one metadata projection and one summary), forbids every provider/probe member,
+and uses only prepare,before-list,native-list,review-barrier stages with matching
+complete command prefixes. A zero exit never authorizes a positive flag.
+
+Add the new mode to exact-prefix/closed-file admission and current source selector
+without deleting earlier modes or changing old failed-envelope acceptance. Keep
+workflow event/routing/admission, official source/runtime pins, real-host opt-in,
+credentials, commands for other modes and all production adapter/classifier code
+byte-identical. No automatic retry at unchanged source. Only root publishes.
+
+## Meaningful verification and review
+
+Before code, freeze exact source/head after two independent plan GOs. Inert
+controls must establish fixed complete/prefix argv,cwd,timeout and member closure;
+reject wrong/unrecorded/extra command,provider/probe,unknown mode/stage,oversized
+stream/metadata and false success/qualification. Exercise one normal inert child
+with output and one failed inert child to prove the original fatal behavior and
+that no subsequent command runs. Verify config/source/metadata canaries and no
+profile/map adoption. Historical922 source exact admission and the new reader's
+unchanged922 replay must return the same original raw summary/member bytes; keep
+previous189e success separate and readable. Existing source selectors retain
+exact old guards and new mode selects only the new named opted-in test.
+
+Run focused Copilot/shared inert Go contracts, affected Python contracts, actual
+affected all-enabled and unfiltered six-linter gates, gofmt and whitespace under
+the serialized slots. Do not execute any native/vendor, scanner or public installer
+binary locally. Obtain two exact code critics and executed receipts before root's
+normal expected-head fast-forward. Only a new genuine hosted capture can establish
+what this fixed direct listing actually prints. Later grammar, registration,
+profile allowances and full-cycle claims require separate evidence and review.
+
+## Accepted empty-registry plan before implementation
+
+Exact draft SHA256 `30858baf6e6d894641c59650d117e5f95672aaaa58b7bf2f2edf4712f8e7bc0e`
+received independent GPT-6.1 Sol xhigh PLAN GOs from `kimi_e2e_finish` and
+`gemini_qoder_finish` before code edits. Receipt SHA256s are
+`7fb5c7f31e1246af7d89d020e0bbe53cd16c676c9ced5919e037d7a8386f26bc`
+and `f2b5a84d34b44acb73f44757f9fb7e37bd91befe1ff92a38bac9da4903e900d4`.
+Both checked the actual unknown internal refusal boundary and current source,
+including fixed source/pin/profile/process gates and1024/depth32/16/2048 bounds.
+Root implements this isolated diagnostic; all existing production and previous
+observations remain preserved.
