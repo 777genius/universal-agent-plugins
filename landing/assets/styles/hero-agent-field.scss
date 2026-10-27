@@ -23,6 +23,7 @@
   inset: auto;
   z-index: -1;
   translate: var(--scroll-x, 0px) var(--scroll-y, 0px);
+  filter: blur(var(--scroll-blur, 0px));
   will-change: translate;
 }
 .hero-agent-field__plane {

@@ -415,3 +415,28 @@ test('orbit follows scrolling with a small upward and leftward drift, then retur
   await expect(field).toHaveCSS('translate', 'none');
   await expect.poll(() => field.evaluate((node) => node.getAnimations({ subtree: true }).length)).toBe(0);
 });
+
+
+test('orbit progressively defocuses near the catalog and sharpens again at the hero', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('./');
+  const field = page.locator('.hero-agent-field--fixed');
+  await expect(field).toHaveCSS('filter', 'blur(0px)');
+  const catalogTop = await page.locator('#plugins').evaluate((node) => node.getBoundingClientRect().top + scrollY);
+  const blur = () => field.evaluate((node) => Number.parseFloat(getComputedStyle(node).filter.slice(5)));
+  // Heading at 70% of the screen: visibly softening, without an abrupt switch.
+  await page.mouse.wheel(0, catalogTop - 700);
+  await expect.poll(blur).toBeGreaterThan(2);
+  expect(await blur()).toBeLessThan(10);
+  await page.mouse.wheel(0, 400);
+  await expect(field).toHaveCSS('filter', 'blur(12px)');
+  await page.mouse.wheel(0, 500);
+  await expect(field).toHaveCSS('filter', 'blur(12px)');
+  await page.mouse.wheel(0, -await page.evaluate(() => scrollY));
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
+  await expect(field).toHaveCSS('filter', 'blur(0px)');
+  // Mobile layout has a different catalog offset; resizing must refresh it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#plugins').scrollIntoViewIfNeeded();
+  await expect(field).toHaveCSS('filter', 'blur(12px)');
+});
