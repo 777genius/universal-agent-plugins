@@ -318,3 +318,16 @@ the frozen plan/code on existing PR526 after fresh-head reconciliation. Audit
 the new genuine full-cycle raw before proposing any separate completion
 amendment. All account authentication and real-model qualification remain
 false throughout scripted-provider proof.
+
+### Local inert supervisor capability control
+
+The new inert fixed `/bin/sh` natural-exit control encountered the existing
+typed `process.ErrOrdinaryContainmentUnsupported` prerequisite refusal in this
+local container (a live `/proc/PID/task/TID/children` interface is unavailable).
+As in the separately reviewed Cline control, only that exact `errors.Is`
+sentinel may skip this local OS primitive test; it is never counted as a passed
+native or containment proof. All pure exact-exit/hostile outcome controls run
+unconditionally in a separate test. Every actual hosted cycle still uses the
+unchanged full-descendant supervisor and treats missing containment, cleanup,
+context and capture failures as fatal. No new capability fallback, alternate
+runner, hosted marker or real-runtime skip is authorized.
