@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,10 +14,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"syscall"
 	"testing"
 	"unicode/utf8"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 )
 
 // Shared held-file mechanics for the source-only native project suites.
@@ -292,7 +296,7 @@ func TestProjectNativeRuntimeValidationContracts(t *testing.T) {
 		}
 	})
 	t.Run("bounded scalar types", func(t *testing.T) {
-		if !projectNativeRuntimeText("abc", 3) || projectNativeRuntimeText("abcd", 3) || projectNativeRuntimeText("a\x00b", 3) || projectNativeRuntimeText(3, 3) {
+		if !projectNativeRuntimeText("abc", 3) || projectNativeRuntimeText("abcd", 3) || !projectNativeRuntimeText("abcd", 4) || projectNativeRuntimeText("a\x00b", 3) || projectNativeRuntimeText(3, 3) {
 			t.Fatal("bounded text contract differs")
 		}
 		if !projectNativeRuntimeNumber(json.Number("2"), 1, 3, true) || !projectNativeRuntimeNumber(json.Number("2.5"), 1, 3, false) {
@@ -331,4 +335,39 @@ func TestProjectNativeRuntimeValidationContracts(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The public non-facade lifecycle records packagesnapshot framing for installed
+// managed objects. Source PackageSnapshot.TreeDigest retains its separate v1
+// framing. Inputs here are previously bounded, held ordinary-file captures.
+func projectNativeRuntimeInstalledDigest(ctx context.Context, captured []packagedigest.CapturedEntry) (string, error) {
+	if _, err := packagedigest.DigestCaptured(ctx, captured); err != nil {
+		return "", err
+	}
+	items := append([]packagedigest.CapturedEntry(nil), captured...)
+	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
+	hash := sha256.New()
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		kind := "file"
+		switch item.Kind {
+		case "directory":
+			kind = "dir"
+		case "file":
+		default:
+			return "", fmt.Errorf("installed package capture requires ordinary files/directories")
+		}
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%t\x00%d\x00", kind, item.Path, item.Executable, len(item.Content))
+		for body := item.Content; len(body) > 0; {
+			if err := ctx.Err(); err != nil {
+				return "", err
+			}
+			n := min(len(body), 32*1024)
+			_, _ = hash.Write(body[:n])
+			body = body[n:]
+		}
+	}
+	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), nil
 }
