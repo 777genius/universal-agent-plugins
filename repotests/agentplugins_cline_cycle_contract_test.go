@@ -189,6 +189,44 @@ func TestClineCycleProviderCannotArmAcrossUnclosedOrUnregisteredStage(t *testing
 		t.Fatal("idle request did not fail closed")
 	}
 }
+func TestClineCyclePrivacyNumericPrefixRequiresCompleteJSON(t *testing.T) {
+	benign := append([]byte("1e999"), bytes.Repeat([]byte{'a'}, 59)...)
+	if len(benign) != 64 || clineCyclePrivateCredential(benign) || clineCyclePrivateCredential([]byte("1e999 1e999")) {
+		t.Fatal("ordinary incomplete numeric-prefix text falsely refused")
+	}
+	outer, err := json.Marshal(map[string]any{string(benign): []any{string(benign), map[string]string{"nested": string(benign)}}})
+	if err != nil || clineCyclePrivateCredential(outer) || clineCyclePrivateCredential(append(append(append([]byte{}, outer...), '\n'), outer...)) {
+		t.Fatal("ordinary nested numeric-prefix text falsely refused")
+	}
+	budget := clineCyclePrivacyBudget{text: 4 * len(benign), nodes: 16384}
+	if clineCycleCompleteNumericJSON(benign, &budget) || budget.text != 3*len(benign) {
+		t.Fatal("complete-document syntax attempt did not debit original byte budget")
+	}
+	for _, raw := range [][]byte{[]byte("1e999"), []byte("{\"n\":1e999}"), []byte("[1e999]")} {
+		if !clineCyclePrivateCredential(raw) {
+			t.Fatal("complete nonfinite JSON admitted")
+		}
+	}
+	for _, raw := range [][]byte{benign, []byte("1e999 1e999"), []byte("NaN"), []byte("Infinity"), []byte("-Infinity")} {
+		budget := clineCyclePrivacyBudget{text: 4 * len(raw), nodes: 16384}
+		if clineCycleCompleteNumericJSON(raw, &budget) {
+			t.Fatal("nonstandard or incomplete syntax classified as complete JSON")
+		}
+	}
+	later := append(append(append([]byte{}, benign...), '\n'), []byte("{\"key\":\"\\u0075ap-cline-private-inert\"}")...)
+	if !clineCyclePrivateCredential(later) {
+		t.Fatal("numeric-prefix line hid a later encoded canary")
+	}
+	deep := append(bytes.Repeat([]byte{'['}, 10050), bytes.Repeat([]byte{']'}, 10050)...)
+	budget = clineCyclePrivacyBudget{text: 4 * len(deep), nodes: 16384}
+	if !clineCycleCompleteNumericJSON(deep, &budget) {
+		t.Fatal("syntax recursion resource refusal lost")
+	}
+	budget = clineCyclePrivacyBudget{text: len(benign) - 1, nodes: 16384}
+	if !clineCycleCompleteNumericJSON(benign, &budget) {
+		t.Fatal("syntax inspection exceeded the original shared work budget")
+	}
+}
 func TestClineCyclePrivacyInspectsJSONLBeforeBase64(t *testing.T) {
 	encoded := []byte(`{"opaque":"\u0075ap-cline-private-0123456789abcdef"}`)
 	for _, raw := range [][]byte{encoded, append([]byte("{\"first\":true}\n"), encoded...), append(append([]byte{}, encoded...), []byte("\n{\"last\":true}\n")...)} {

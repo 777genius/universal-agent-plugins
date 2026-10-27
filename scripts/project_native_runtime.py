@@ -275,6 +275,22 @@ CLINE_CYCLE_AGGREGATES = ("cycle-native-acp.jsonl", "cycle-native-commands.jsonl
     "cycle-probe-events.jsonl", "cycle-proof.jsonl")
 
 
+def cline_cycle_complete_numeric_json(raw, budget):
+    if len(raw) > budget[0]:
+        return True
+    budget[0] -= len(raw)
+    def reject_constant(_):
+        raise json.JSONDecodeError("nonstandard JSON constant", "", 0)
+    try:
+        json.loads(raw.decode("utf-8", errors="strict"), parse_int=lambda _: 0,
+                   parse_float=lambda _: 0, parse_constant=reject_constant)
+    except json.JSONDecodeError:
+        return False
+    except (UnicodeError, RecursionError, ValueError):
+        return True
+    return True
+
+
 def cline_cycle_private(body):
     if len(body) > 1 << 20 or b"uap-cline-private-" in body:
         return True
@@ -290,7 +306,10 @@ def cline_cycle_private(body):
         except RecursionError:
             return True
         except ValueError as error:
-            if not isinstance(error, json.JSONDecodeError):
+            if str(error) == "nonfinite JSON":
+                if cline_cycle_complete_numeric_json(raw, budget):
+                    return True
+            elif not isinstance(error, json.JSONDecodeError):
                 return True
             if b"\n" not in raw:
                 return False
@@ -303,7 +322,10 @@ def cline_cycle_private(body):
                 except (UnicodeError, RecursionError):
                     return True
                 except ValueError as line_error:
-                    if not isinstance(line_error, json.JSONDecodeError):
+                    if str(line_error) == "nonfinite JSON":
+                        if cline_cycle_complete_numeric_json(line, budget):
+                            return True
+                    elif not isinstance(line_error, json.JSONDecodeError):
                         return True
                     continue
                 if visit(value, depth):

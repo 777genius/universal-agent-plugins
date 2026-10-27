@@ -223,6 +223,26 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 runtime.cline_members({**bodies, "runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source)
 
+    def test_cline_cycle_numeric_prefix_requires_complete_json_syntax(self):
+        benign = b"1e999" + b"a" * 59
+        self.assertEqual(len(benign), 64)
+        self.assertFalse(runtime.cline_cycle_private(benign))
+        self.assertFalse(runtime.cline_cycle_private(b"1e999 1e999"))
+        outer = json.dumps({benign.decode(): [benign.decode(), {"nested": benign.decode()}]}).encode()
+        self.assertFalse(runtime.cline_cycle_private(outer))
+        self.assertFalse(runtime.cline_cycle_private(outer + b"\n" + outer))
+        budget = [4 * len(benign), 16384]
+        self.assertFalse(runtime.cline_cycle_complete_numeric_json(benign, budget))
+        self.assertEqual(budget[0], 3 * len(benign))
+        for raw in (b"1e999", b'{"n":1e999}', b"[1e999]"):
+            self.assertTrue(runtime.cline_cycle_private(raw))
+        for raw in (benign, b"1e999 1e999", b"NaN", b"Infinity", b"-Infinity"):
+            self.assertFalse(runtime.cline_cycle_complete_numeric_json(raw, [4 * len(raw), 16384]))
+        self.assertTrue(runtime.cline_cycle_private(benign + b'\n{"key":"\\u0075ap-cline-private-inert"}'))
+        deep = b"[" * 10050 + b"]" * 10050
+        self.assertTrue(runtime.cline_cycle_complete_numeric_json(deep, [4 * len(deep), 16384]))
+        self.assertTrue(runtime.cline_cycle_complete_numeric_json(benign, [len(benign) - 1, 16384]))
+
     def test_cline_cycle_rejects_stage_skip_duplicates_receipts_and_encoded_canaries(self):
         bodies = self.cline_cycle_bodies()
         for member in runtime.CLINE_CYCLE_AGGREGATES:

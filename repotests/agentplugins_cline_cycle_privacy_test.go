@@ -4,6 +4,10 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -29,6 +33,9 @@ func clineCycleCredentialJSON(raw, marker []byte, depth int, budget *clineCycleP
 	if clineCyclePrivacyParseBound(err) {
 		return true
 	}
+	if clineCycleNonfiniteRefusal(raw, err, budget) {
+		return true
+	}
 	if !bytes.Contains(raw, []byte{'\n'}) {
 		return false
 	}
@@ -39,7 +46,7 @@ func clineCycleCredentialJSON(raw, marker []byte, depth int, budget *clineCycleP
 		}
 		budget.text -= len(line)
 		value, err := projectNativeRuntimeJSON(line)
-		if clineCyclePrivacyParseBound(err) || (err == nil && clineCycleCredentialValue(value, marker, depth, budget)) {
+		if clineCyclePrivacyParseBound(err) || clineCycleNonfiniteRefusal(line, err, budget) || (err == nil && clineCycleCredentialValue(value, marker, depth, budget)) {
 			return true
 		}
 		raw = rest
@@ -51,10 +58,39 @@ func clineCyclePrivacyParseBound(err error) bool {
 		return false
 	}
 	switch err.Error() {
-	case "JSON structure limit", "JSON key", "duplicate JSON key", "nonfinite JSON number":
+	case "JSON structure limit", "JSON key", "duplicate JSON key":
 		return true
 	}
 	return false
+}
+func clineCycleNonfiniteRefusal(raw []byte, err error, budget *clineCyclePrivacyBudget) bool {
+	if err == nil || err.Error() != "nonfinite JSON number" {
+		return false
+	}
+	return clineCycleCompleteNumericJSON(raw, budget)
+}
+func clineCycleCompleteNumericJSON(raw []byte, budget *clineCyclePrivacyBudget) bool {
+	if len(raw) > budget.text {
+		return true
+	}
+	budget.text -= len(raw)
+	d := json.NewDecoder(bytes.NewReader(raw))
+	var value json.RawMessage
+	if err := d.Decode(&value); err != nil {
+		return clineCycleSyntaxResource(err)
+	}
+	err := d.Decode(&value)
+	return errors.Is(err, io.EOF) || clineCycleSyntaxResource(err)
+}
+func clineCycleSyntaxResource(err error) bool {
+	if err == nil || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return false
+	}
+	var syntax *json.SyntaxError
+	if errors.As(err, &syntax) {
+		return strings.Contains(syntax.Error(), "exceeded max depth")
+	}
+	return true
 }
 func clineCycleCredentialValue(value any, marker []byte, depth int, budget *clineCyclePrivacyBudget) bool {
 	budget.nodes--
