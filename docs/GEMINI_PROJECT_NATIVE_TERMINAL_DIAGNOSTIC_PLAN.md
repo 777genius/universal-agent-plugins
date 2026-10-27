@@ -98,4 +98,3 @@ Checks used the granted exclusive slot, pinned Go1.26.10 with Go1.22 source
 compatibility, private shared-memory temporary/lint directories and existing
 bounded module/build caches. No vendor, installer, hosted guard or model ran
 locally. The fresh genuine hosted result remains a required separate proof.
-
