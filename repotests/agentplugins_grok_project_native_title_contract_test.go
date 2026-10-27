@@ -217,7 +217,7 @@ func (grokTitleContractWriteFailure) Write([]byte) (int, error) {
 
 func TestGrokProjectTitleFixtureResponseWriteFailureCannotRecordCompletion(t *testing.T) {
 	_, title := grokTitleContractProvider(t)
-	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(grokTitleContractGolden))
+	request := httptest.NewRequestWithContext(title.transport.ctx, http.MethodPost, "/v1/chat/completions", strings.NewReader(grokTitleContractGolden))
 	request.Host = title.transport.listener.Addr().String()
 	request.RemoteAddr = "127.0.0.1:12345"
 	request.Header.Set("Content-Type", "application/json")
