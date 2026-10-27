@@ -454,8 +454,7 @@ func TestClineProjectNativeProbeEventsMustBeOrderedAndFreshWithinNativeInterval(
 	end := start.Add(time.Second)
 	facts := map[string]any{"nonce": "owned", "revision": "a-one", "cwd": "/owned/A", "argv": []any{}, "plugin_root": "/owned/A", "plugin_data": "/owned/data", "literal": "", "once": "", "marker": "retained", "pid": json.Number("123"), "session": "owned-session"}
 	for _, kind := range []string{"valid", "list-first", "call-first", "call-before-list", "repeat-init", "list-after-call", "stale", "future", "wrong-session", "wrong-facts"} {
-		methods := make([]string, 0, 5)
-		methods = append(methods, "initialize", "tools/list", "tools/call")
+		methods := []string{"initialize", "tools/list", "tools/call"}
 		switch kind {
 		case "list-first":
 			methods = []string{"tools/list", "initialize", "tools/call"}
@@ -466,7 +465,7 @@ func TestClineProjectNativeProbeEventsMustBeOrderedAndFreshWithinNativeInterval(
 		case "repeat-init":
 			methods = []string{"initialize", "initialize", "tools/list", "tools/call"}
 		case "list-after-call":
-			methods = append(methods, "tools/list")
+			methods = []string{"initialize", "tools/list", "tools/call", "tools/list"}
 		}
 		var raw bytes.Buffer
 		for index, method := range methods {
