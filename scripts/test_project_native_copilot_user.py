@@ -175,9 +175,9 @@ class CopilotUserCaptureContracts(unittest.TestCase):
 
     def test_exact_single_canonical_selection_and_preserved_readiness_entrypoint(self):
         case = runtime.CASES["copilot"]
-        self.assertEqual(case, {"test": "TestAgentpluginsCopilotNativeEmptyRegistryFirstObservation",
-            "file": "repotests/agentplugins_copilot_empty_registry_attempt_test.go",
-            "optin": "AGENTPLUGINS_COPILOT_EMPTY_REGISTRY_FIRST_CAPTURE", "seconds": 180, "phase": "runtime-attempt"})
+        self.assertEqual(case, {"test": "TestAgentpluginsCopilotNativeUserRegistrationFirstObservation",
+            "file": "repotests/agentplugins_copilot_user_registration_attempt_test.go",
+            "optin": "AGENTPLUGINS_COPILOT_USER_REGISTRY_FIRST_CAPTURE", "seconds": 180, "phase": "runtime-attempt"})
         source = Path(__file__).resolve().parents[1]
         self.assertIn("func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T)",
                       (source / "repotests/agentplugins_copilot_project_native_attempt_test.go").read_text())

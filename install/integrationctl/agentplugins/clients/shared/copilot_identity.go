@@ -50,11 +50,29 @@ func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.Deliver
 	if result.ExitCode != 0 {
 		return clients.RegistryIndeterminate, fmt.Errorf("the Copilot plugin registry command failed with exit code %d", result.ExitCode)
 	}
+	if copilotUserEmptyWithDisabledBuiltin(result.Stdout, plan) {
+		if err := ctx.Err(); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		return clients.RegistryClear, nil
+	}
 	expectedPath := plan.ActivePath
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
 	}
 	return CopilotRegistryFindingAt(result.Stdout, plan.DeclaredName, ManagedMarketplaceName(plan.PhysicalArtifactID), MarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
+}
+
+// Copilot 1.0.103 appends this exact disabled builtin to an empty user registry.
+// Its presence proves neither ownership nor absence for a same-name request.
+// Keep this observed tuple separate from the generic Copilot/VS Code grammars.
+func copilotUserEmptyWithDisabledBuiltin(stdout []byte, plan domain.DeliveryPlan) bool {
+	const empty = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n" +
+		"Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
+	name := plan.DeclaredName
+	return plan.ClientID == domain.ClientCopilot && plan.Scope == domain.ScopeUser &&
+		plan.TargetContext.Scope != domain.ScopeProject && name != "" && name == strings.TrimSpace(name) &&
+		!strings.EqualFold(name, "browser-use") && string(stdout) == empty
 }
 
 // CopilotRegistryFinding classifies a Copilot/VS Code `plugin list` document
