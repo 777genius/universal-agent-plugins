@@ -4,6 +4,7 @@ Acquisition and bounded process capture reuse the existing research runner. A
 valid artifact never changes a failed test into a passed qualification.
 """
 import argparse
+import base64
 import hashlib
 import io
 import json
@@ -19,11 +20,12 @@ import time
 import zipfile
 
 import project_native_research as shared
+import project_native_cline_cycle as cline_cycle_success
 
 SOURCE = shared.SOURCE
 CASES = {
-    "cline": {"test": "TestAgentpluginsClineNativeProjectRuntimeAttempt",
-              "file": "repotests/agentplugins_cline_project_native_attempt_test.go",
+    "cline": {"test": "TestAgentpluginsClineNativeProjectCompleteCycle",
+              "file": "repotests/agentplugins_cline_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
               "phase": "runtime-attempt"},
     "copilot": {"test": "TestAgentpluginsCopilotNativeProjectRuntimeAttempt",
@@ -264,9 +266,331 @@ def cli_attempt_members(bodies, source, client):
     return result
 
 
+CLINE_CYCLE_PUBLIC = ("git-a", "git-b", "version", "add-user", "add-a", "add-b", "repeat-add-a",
+    "unchanged-update-a", "intact-repair-a", "update-a", "missing-repair-a", "remove-a", "repeat-remove-a", "remove-b", "remove-user")
+CLINE_CYCLE_LISTINGS = ("empty-a", "empty-b", "installed-user", "installed-a", "installed-b", "stable-a",
+    "updated-a", "repaired-a", "removed-a", "remaining-b", "removed-b", "removed-user", "final-a", "final-b")
+CLINE_CYCLE_ACP = ("empty-a", "empty-b", "installed-a", "installed-b", "updated-a", "repaired-a",
+    "removed-a", "remaining-b", "final-a", "final-b")
+CLINE_CYCLE_EMPTY = frozenset(("empty-a", "empty-b", "removed-a", "final-a", "final-b"))
+CLINE_CYCLE_PROOF = ("source-user-user-one", "source-a-a-one", "source-b-b-one", "add-user", "add-a", "add-b",
+    "repeat-add-a", "unchanged-update-a", "intact-repair-a", "before-source-revision-a", "source-a-a-two",
+    "update-a", "before-missing-a", "missing-repair-a", "remove-a", "repeat-remove-a", "remove-b", "remove-user")
+CLINE_CYCLE_AGGREGATES = ("cycle-native-acp.jsonl", "cycle-native-commands.jsonl", "cycle-discovery.jsonl",
+    "cycle-provider-requests.jsonl", "cycle-provider-responses.jsonl", "cycle-provider-receipts.jsonl",
+    "cycle-probe-events.jsonl", "cycle-proof.jsonl")
+
+
+def cline_cycle_complete_numeric_json(raw, budget):
+    if len(raw) > budget[0]:
+        return True
+    budget[0] -= len(raw)
+    def reject_constant(_):
+        raise json.JSONDecodeError("nonstandard JSON constant", "", 0)
+    try:
+        json.loads(raw.decode("utf-8", errors="strict"), parse_int=lambda _: 0,
+                   parse_float=lambda _: 0, parse_constant=reject_constant)
+    except json.JSONDecodeError:
+        return False
+    except (UnicodeError, RecursionError, ValueError):
+        return True
+    return True
+
+
+def cline_cycle_private(body):
+    if len(body) > 1 << 20 or b"uap-cline-private-" in body:
+        return True
+    budget = [4 * len(body), 16384]
+    def encoded(raw, depth):
+        if depth > 64 or len(raw) > budget[0]:
+            return True
+        budget[0] -= len(raw)
+        try:
+            value = strict_json(raw)
+        except UnicodeError:
+            return True
+        except RecursionError:
+            return True
+        except ValueError as error:
+            if str(error) == "nonfinite JSON":
+                if cline_cycle_complete_numeric_json(raw, budget):
+                    return True
+            elif not isinstance(error, json.JSONDecodeError):
+                return True
+            if b"\n" not in raw:
+                return False
+            for line in io.BytesIO(raw):
+                if len(line) > budget[0]:
+                    return True
+                budget[0] -= len(line)
+                try:
+                    value = strict_json(line)
+                except (UnicodeError, RecursionError):
+                    return True
+                except ValueError as line_error:
+                    if str(line_error) == "nonfinite JSON":
+                        if cline_cycle_complete_numeric_json(line, budget):
+                            return True
+                    elif not isinstance(line_error, json.JSONDecodeError):
+                        return True
+                    continue
+                if visit(value, depth):
+                    return True
+            return False
+        return visit(value, depth)
+    def visit(value, depth, document_depth=0):
+        budget[1] -= 1
+        # Mirror the preserved Go strict decoder's per-document structure cap;
+        # depth64 separately bounds traversal across nested JSON strings.
+        if depth > 64 or document_depth > 32 or budget[1] < 0:
+            return True
+        if type(value) is str:
+            try:
+                raw = value.encode("utf-8", errors="strict")
+            except UnicodeError:
+                return True
+            if b"uap-cline-private-" in raw:
+                return True
+            return encoded(raw, depth + 1)
+        if type(value) is dict:
+            try:
+                invalid_key = any(len(key.encode("utf-8", errors="strict")) > 4096 for key in value)
+            except UnicodeError:
+                return True
+            if invalid_key:
+                return True
+            return any(visit(key, depth + 1, document_depth + 1) or visit(item, depth + 1, document_depth + 1) for key, item in value.items())
+        if type(value) is list:
+            return any(visit(item, depth + 1, document_depth + 1) for item in value)
+        return False
+    return encoded(body, 0)
+
+
+def cline_cycle_stream(row):
+    if (type(row) is not dict or set(row) != {"bytes", "sha256", "body"}
+            or type(row["bytes"]) is not int or not 0 <= row["bytes"] <= 1 << 20
+            or not isinstance(row["body"], str) or len(row["body"]) > (1 << 20) * 4 // 3 + 4
+            or not isinstance(row["sha256"], str) or re.fullmatch(r"[0-9a-f]{64}", row["sha256"]) is None):
+        raise ValueError("closed Cline cycle raw stream receipt required")
+    try:
+        body = base64.b64decode(row["body"], validate=True)
+    except ValueError as error:
+        raise ValueError("Cline cycle raw base64 differs") from error
+    if len(body) != row["bytes"] or hashlib.sha256(body).hexdigest() != row["sha256"] or cline_cycle_private(body):
+        raise ValueError("Cline cycle raw bytes/hash/private canary differs")
+    return body
+
+
+def cline_cycle_rows(body):
+    if len(body) > 1 << 20 or (body and not body.endswith(b"\n")) or cline_cycle_private(body):
+        raise ValueError("bounded complete Cline cycle aggregate required")
+    rows = []
+    for line in io.BytesIO(body):
+        row = strict_json(line)
+        if (len(rows) >= 128 or type(row) is not dict or set(row) != {"stage", "value"}
+                or not isinstance(row["stage"], str) or type(row["value"]) is not dict):
+            raise ValueError("closed Cline cycle stage record required")
+        rows.append(row)
+    return rows
+
+
+def cline_cycle_prefix(actual, expected):
+    return type(actual) is list and actual == list(expected[:len(actual)])
+
+
+def cline_cycle_records(rows, order, repeat=False):
+    seen, previous = set(), -1
+    for row in rows:
+        if row["stage"] not in order:
+            raise ValueError("unregistered Cline cycle stage")
+        index = order.index(row["stage"])
+        if index < previous or index > previous + 1 or (not repeat and index == previous):
+            raise ValueError("Cline cycle skipped, duplicate or reordered stage")
+        previous = index
+        seen.add(row["stage"])
+    return seen
+
+
+def cline_cycle_members(bodies, source):
+    required = {"runtime-attempt.json", *CLINE_CYCLE_AGGREGATES}
+    allowed = required | {label + suffix for label in CLINE_CYCLE_PUBLIC
+                          for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+    if (not required <= set(bodies) or set(bodies) - allowed or len(bodies) > 54
+            or sum(map(len, bodies.values())) > 12 << 20
+            or any(cline_cycle_private(body) for body in bodies.values())):
+        raise ValueError("Cline cycle closed member/size/private boundary")
+    result = strict_json(bodies["runtime-attempt.json"])
+    if type(result) is not dict:
+        raise ValueError("Cline cycle result object required")
+    first_capture = result.get("capture_mode") == "cline-complete-cycle-first-capture"
+    success = result.get("runtime_attempt_complete") is True and result.get("test_failed") is False
+    failed = result.get("runtime_attempt_complete") is False and result.get("test_failed") is True
+    if (type(result) is not dict or result.get("capture_mode") != "cline-complete-cycle-first-capture"
+            or result.get("client") != "cline" or result.get("version") != "3.0.73"
+            or result.get("runtime_attempt_complete") is not False or result.get("test_failed") is not True
+            or result.get("cycle_capture_review_required") is not True or result.get("activation") != "prepared"
+            or result.get("vendor_authentication_qualified") is not False or result.get("real_model_qualified") is not False
+            or result.get("source_identity") != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
+                "installer_source_state": "committed", "installer_patch_sha256": []}
+            or type(result.get("qualification")) is not dict or set(result["qualification"]) != set(shared.QUALIFICATION_CASES)
+            or any(value is not False for value in result["qualification"].values())):
+        if (type(result) is not dict or result.get("capture_mode") != "cline-complete-cycle"
+                or result.get("client") != "cline" or result.get("version") != "3.0.73"
+                or not (success or failed) or result.get("cycle_capture_review_required") is not False
+                or result.get("activation") != "prepared" or result.get("vendor_authentication_qualified") is not False
+                or result.get("real_model_qualified") is not False
+                or result.get("source_identity") != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
+                    "installer_source_state": "committed", "installer_patch_sha256": []}
+                or type(result.get("qualification")) is not dict or set(result["qualification"]) != set(shared.QUALIFICATION_CASES)
+                or any(value is not success for value in result["qualification"].values())):
+            raise ValueError("Cline cycle result/qualification pair differs")
+    complete = result.get("cycle_observed_complete", False)
+    if type(complete) is not bool:
+        raise ValueError("Cline cycle completion type differs")
+    if success and not complete:
+        raise ValueError("Cline success requires observed complete cycle")
+    public = []
+    for label in CLINE_CYCLE_PUBLIC:
+        triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+        if set(bodies) & triple:
+            if not triple <= set(bodies):
+                raise ValueError("Cline cycle partial public triple")
+            row = strict_json(bodies[label + ".command.json"])
+            if (type(row) is not dict or set(row) != {"argv", "cwd", "exit", "error", "error_kind", "deadline"}
+                    or type(row["argv"]) is not list or not row["argv"] or any(type(value) is not str for value in row["argv"])
+                    or type(row["cwd"]) is not str or type(row["exit"]) is not int
+                    or type(row["error"]) is not bool or type(row["deadline"]) is not bool
+                    or row["error_kind"] not in ("none", "exit", "capture")):
+                raise ValueError("Cline cycle closed public command receipt")
+            if complete:
+                absent = label == "repeat-remove-a"
+                if (row["exit"] != int(absent) or row["error"] is not False or row["deadline"]
+                        or row["error_kind"] != "none"
+                        or (absent and (bodies[label + ".stdout.log"] or bodies[label + ".stderr.log"] !=
+                            b'agentplugins: plugin is not installed for target "cline" in project scope; no target was changed\n'))):
+                    raise ValueError("Cline cycle public success/exact repeat-removal differs")
+            public.append(label)
+    if (not cline_cycle_prefix(public, CLINE_CYCLE_PUBLIC) or result.get("cycle_public_stages") != public
+            or not cline_cycle_prefix(result.get("cycle_listing_stages"), CLINE_CYCLE_LISTINGS)
+            or not cline_cycle_prefix(result.get("cycle_acp_stages"), CLINE_CYCLE_ACP)):
+        raise ValueError("Cline cycle summary stage matrix differs")
+    rows = {name: cline_cycle_rows(bodies[name]) for name in CLINE_CYCLE_AGGREGATES}
+    for name in ("cycle-native-acp.jsonl", "cycle-native-commands.jsonl", "cycle-provider-receipts.jsonl", "cycle-probe-events.jsonl"):
+        cline_cycle_records(rows[name], CLINE_CYCLE_ACP)
+    cline_cycle_records(rows["cycle-discovery.jsonl"], CLINE_CYCLE_LISTINGS, True)
+    cline_cycle_records(rows["cycle-proof.jsonl"], CLINE_CYCLE_PROOF)
+    for name in ("cycle-native-acp.jsonl", "cycle-probe-events.jsonl"):
+        for row in rows[name]:
+            raw = cline_cycle_stream(row["value"])
+            if name == "cycle-native-acp.jsonl" and complete and not raw.strip():
+                raise ValueError("Cline complete native transcript missing")
+            if name == "cycle-probe-events.jsonl" and ((row["stage"] in CLINE_CYCLE_EMPTY and raw)
+                    or (complete and row["stage"] not in CLINE_CYCLE_EMPTY and not raw.strip())):
+                raise ValueError("Cline empty/calling probe capture differs")
+    cline_cycle_structured(rows, complete)
+    if complete:
+        if (len(bodies) != 54 or public != list(CLINE_CYCLE_PUBLIC)
+                or result["cycle_listing_stages"] != list(CLINE_CYCLE_LISTINGS)
+                or result["cycle_acp_stages"] != list(CLINE_CYCLE_ACP)
+                or result.get("attempt_stage") != ("complete-cycle-capture-review" if first_capture else "complete-cycle")):
+            raise ValueError("complete Cline cycle matrix required")
+        for name in ("cycle-native-acp.jsonl", "cycle-native-commands.jsonl", "cycle-provider-receipts.jsonl", "cycle-probe-events.jsonl"):
+            if [row["stage"] for row in rows[name]] != list(CLINE_CYCLE_ACP):
+                raise ValueError("complete Cline cycle ACP closure required")
+        if [row["stage"] for row in rows["cycle-proof.jsonl"]] != list(CLINE_CYCLE_PROOF):
+            raise ValueError("complete Cline cycle source/state proof closure required")
+        cleanup = result.get("cycle_provider_cleanup")
+        if cleanup != {"shutdown_complete": True, "forced_close": False, "error": False, "completed_stages": list(CLINE_CYCLE_ACP)}:
+            raise ValueError("complete Cline cycle provider cleanup required")
+    if success:
+        cline_cycle_success.validate_success(rows, strict_json, cline_cycle_stream)
+    return result
+
+
+def cline_cycle_structured(rows, complete):
+    identifiers = {key: set() for key in ("call_id", "prompt", "sentinel")}
+    for name in ("cycle-provider-requests.jsonl", "cycle-provider-responses.jsonl"):
+        cline_cycle_records(rows[name], CLINE_CYCLE_ACP, True)
+        counts = {}
+        for row in rows[name]:
+            value, stage = row["value"], row["stage"]
+            if set(value) != {"index", "stream"} or type(value["index"]) is not int or value["index"] != counts.get(stage, 0):
+                raise ValueError("Cline cycle provider sequence differs")
+            raw = cline_cycle_stream(value["stream"])
+            counts[stage] = counts.get(stage, 0) + 1
+            if counts[stage] > (1 if stage in CLINE_CYCLE_EMPTY else 2) or not raw.strip():
+                raise ValueError("Cline cycle provider bound/empty stream")
+        for row in rows["cycle-provider-receipts.jsonl"]:
+            key = "requests" if "requests" in name else "responses"
+            if row["value"].get(key) != counts.get(row["stage"], 0):
+                raise ValueError("Cline cycle provider receipt/member count differs")
+    for row in rows["cycle-provider-receipts.jsonl"]:
+        value, empty = row["value"], row["stage"] in CLINE_CYCLE_EMPTY
+        operation = "empty" if empty else ("write" if row["stage"] in ("installed-a", "installed-b") else "read")
+        fields = {"requests", "responses", "empty", "exact_call_issued", "single_call_approved", "error", "call_id", "prompt", "sentinel", "operation"}
+        if (set(value) != fields or value["empty"] is not empty
+                or any(type(value[key]) is not bool for key in ("empty", "exact_call_issued", "single_call_approved", "error"))
+                or any(type(value[key]) is not int or not 0 <= value[key] <= (1 if empty else 2) for key in ("requests", "responses"))
+                or value["responses"] > value["requests"] or value["operation"] != operation
+                or any(type(value[key]) is not str or not value[key] or len(value[key]) > 256 for key in ("call_id", "prompt", "sentinel", "operation"))):
+            raise ValueError("Cline cycle finite provider stage receipt")
+        for key in identifiers:
+            if value[key] in identifiers[key]:
+                raise ValueError("Cline cycle provider phase identity reused")
+            identifiers[key].add(value[key])
+        if complete and (value["requests"] != (1 if empty else 2) or value["responses"] != value["requests"] or value["error"]
+                or value["exact_call_issued"] is not (not empty) or value["single_call_approved"] is not (not empty)):
+            raise ValueError("Cline cycle provider complete stage differs")
+    for row in rows["cycle-discovery.jsonl"]:
+        value = row["value"]
+        if (set(value) != {"kind", "argv", "cwd", "mcp_settings_override", "stdout", "stderr", "exit", "error", "deadline"}
+                or value["kind"] not in ("skills", "mcp") or type(value["argv"]) is not list or len(value["argv"]) != 8
+                or any(type(arg) is not str for arg in value["argv"]) or type(value["cwd"]) is not str
+                or value["argv"][1:] != ["--auto-approve", "false", "--cwd", value["cwd"], "config", value["kind"], "--json"]
+                or type(value["mcp_settings_override"]) is not bool or type(value["exit"]) is not int
+                or type(value["error"]) is not bool or type(value["deadline"]) is not bool):
+            raise ValueError("Cline cycle discovery receipt differs")
+        cline_cycle_stream(value["stdout"])
+        stderr = cline_cycle_stream(value["stderr"])
+        if complete and (value["exit"] != 0 or value["error"] is not False or value["deadline"] is not False or stderr):
+            raise ValueError("Cline cycle discovery command did not complete")
+    expected = [(stage, kind) for stage in CLINE_CYCLE_LISTINGS for kind in ("skills", "mcp")]
+    actual = [(row["stage"], row["value"]["kind"]) for row in rows["cycle-discovery.jsonl"]]
+    if actual != expected[:len(actual)] or (complete and actual != expected):
+        raise ValueError("Cline cycle exact listing pair closure")
+    for row in rows["cycle-proof.jsonl"]:
+        value = row["value"]
+        if row["stage"].startswith("source-"):
+            if set(value) != {"source", "digest", "files"} or type(value["files"]) is not dict:
+                raise ValueError("Cline cycle independent source recipe receipt")
+        else:
+            if set(value) != {"scope", "revision", "removed", "state", "binding", "source_digest"} or value["scope"] not in ("user", "a", "b") or type(value["removed"]) is not bool:
+                raise ValueError("Cline cycle installed proof receipt")
+            cline_cycle_stream(value["state"])
+    for row in rows["cycle-native-commands.jsonl"]:
+        value = row["value"]
+        if (set(value) != {"argv", "cwd", "mcp_settings_override", "auto_approve", "injected_mcp_servers", "error", "deadline", "error_stream", "started_at", "ended_at", "session", "cleanup"}
+                or value["auto_approve"] is not False or value["injected_mcp_servers"] != []
+                or type(value["argv"]) is not list or len(value["argv"]) != 6 or any(type(arg) is not str for arg in value["argv"])
+                or type(value["cwd"]) is not str or value["argv"][1:] != ["--auto-approve", "false", "--cwd", value["cwd"], "--acp"]
+                or type(value["mcp_settings_override"]) is not str or type(value["started_at"]) is not str or type(value["ended_at"]) is not str
+                or type(value["error"]) is not bool or type(value["deadline"]) is not bool
+                or value["cleanup"] != "existing OS strict planned duplex shutdown; entire delegated descendant cgroup"):
+            raise ValueError("Cline cycle native command authority receipt")
+        diagnostic = cline_cycle_stream(value["error_stream"])
+        if complete and (value["error"] is not False or value["deadline"] is not False or diagnostic
+                or not isinstance(value["session"], str) or re.fullmatch(r"\d{13}_[A-Za-z0-9_-]{5}_cli", value["session"]) is None):
+            raise ValueError("Cline cycle native process/session/cleanup failure")
+
+
 def cline_members(bodies, source):
+    if "runtime-attempt.json" in bodies:
+        result = strict_json(bodies["runtime-attempt.json"])
+        if isinstance(result, dict) and result.get("capture_mode") in ("cline-complete-cycle-first-capture", "cline-complete-cycle"):
+            return cline_cycle_members(bodies, source)
     allowed = {"runtime-attempt.json", "probe-events.jsonl", "provider.json",
                "native-acp.jsonl", "native-acp.command.json", "native-acp.error.log"}
+    public_rows, acp_row, provider = {}, None, None
     for label in CLINE_COMMANDS:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple
@@ -280,16 +604,18 @@ def cline_members(bodies, source):
                     or not isinstance(row["cwd"], str) or type(row["exit"]) is not int
                     or type(row["error"]) is not bool or type(row["deadline"]) is not bool):
                 raise ValueError("Cline public command receipt differs")
+            public_rows[label] = row
     for number in (1, 2):
         allowed |= {f"provider-{number}.request.json", f"provider-{number}.response.log"}
     if "runtime-attempt.json" not in bodies or set(bodies) - allowed:
         raise ValueError("unrecorded Cline ACP artifact member")
     result = strict_json(bodies["runtime-attempt.json"])
     if (not isinstance(result, dict) or result.get("client") != "cline" or result.get("version") != "3.0.73"
-            or result.get("runtime_attempt_complete") is not False or result.get("test_failed") is not True
+            or not ((result.get("runtime_attempt_complete") is False and result.get("test_failed") is True)
+                    or (result.get("runtime_attempt_complete") is True and result.get("test_failed") is False))
             or result.get("activation") != "prepared" or result.get("vendor_authentication_qualified") is not False
             or result.get("real_model_qualified") is not False):
-        raise ValueError("unreviewed Cline ACP capture cannot qualify")
+        raise ValueError("Cline ACP result pair or fixed identity differs")
     qualification = result.get("qualification")
     if (not isinstance(qualification, dict) or set(qualification) != set(shared.QUALIFICATION_CASES)
             or any(value is not False for value in qualification.values())):
@@ -302,6 +628,7 @@ def cline_members(bodies, source):
         raise ValueError("incomplete Cline ACP command capture")
     if acp <= set(bodies):
         row = strict_json(bodies["native-acp.command.json"])
+        acp_row = row
         if (not isinstance(row, dict) or set(row) != {"argv", "cwd", "mcp_settings_override", "auto_approve",
                 "injected_mcp_servers", "error", "elapsed_ms", "cleanup", "stderr_contract"}
                 or not isinstance(row["argv"], list) or not row["argv"]
@@ -330,6 +657,26 @@ def cline_members(bodies, source):
                 or any(type(provider.get(key)) is not bool for key in ("exact_call_issued", "single_call_approved", "error"))
                 or provider.get("transport") != "loopback scripted OpenAI chat-completions SSE; no real model"):
             raise ValueError("Cline provider receipt differs")
+    if result["runtime_attempt_complete"]:
+        required = {"runtime-attempt.json", "probe-events.jsonl", "provider.json", *acp}
+        required |= {label + suffix for label in CLINE_COMMANDS
+                     for suffix in (".command.json", ".stdout.log", ".stderr.log")}
+        required |= {f"provider-{number}.{suffix}" for number in (1, 2)
+                     for suffix in ("request.json", "response.log")}
+        nonempty = {"native-acp.jsonl", "probe-events.jsonl", "provider-1.request.json", "provider-2.request.json",
+                    "provider-1.response.log", "provider-2.response.log"}
+        if (set(bodies) != required or any(not bodies.get(name, b"").strip() for name in nonempty)
+                or set(public_rows) != set(CLINE_COMMANDS)
+                or any(row["exit"] != 0 or row["error"] or row["deadline"] for row in public_rows.values())
+                or acp_row is None or acp_row["error"] is not False
+                or provider is None or provider["requests"] != 2 or provider["responses"] != 2
+                or provider["exact_call_issued"] is not True or provider["single_call_approved"] is not True
+                or provider["error"] is not False or "error_text" in provider
+                or result.get("native_exchange_observed") is not True
+                or result.get("attempt_stage") != "native-installed-acp"
+                or not isinstance(result.get("native_session_id"), str)
+                or re.fullmatch(r"\d{13}_[A-Za-z0-9_-]{5}_cli", result["native_session_id"]) is None):
+            raise ValueError("complete Cline installed ACP closure and successful receipts required")
     if any(re.search(rb"uap-cline-private-[0-9a-f]+", body) for body in bodies.values()):
         raise ValueError("unredacted fixture provider key refused")
     return result
@@ -574,7 +921,7 @@ def cline_service_argv(tests, env, output, unit, uid, gid, origin_ns):
             "--property=NoNewPrivileges=yes", "--property=KillMode=control-group", "--property=RuntimeMaxSec=180s",
             "--property=TimeoutStopSec=30s", "--working-directory=" + str(output), "/usr/bin/env", "-i",
             *(key + "=" + selected[key] for key in sorted(selected)), str(tests),
-            "-test.run=^TestAgentpluginsClineNativeProjectRuntimeAttempt$", "-test.count=1", "-test.v", "-test.timeout=180s"]
+            "-test.run=^TestAgentpluginsClineNativeProjectCompleteCycle$", "-test.count=1", "-test.v", "-test.timeout=180s"]
 
 
 def cline_unit_state(body, unit):
