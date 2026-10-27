@@ -82,3 +82,24 @@ gates remain required. The failed native trace cannot be converted into a
 passing terminal session by this amendment. Research diagnostics have a
 separate plan and commit; no new PR, release or VS Code work is included.
 
+
+## Actual implementation validation
+
+Both independent plan reviews (root and CLI) approved original plan SHA256
+4785cc2654ab6a7940f6f95a22a651c492c12736a054980484d84a5b33281441
+before implementation. Both independent code reviews approved the exact final
+provider SHA13081532237a89b364d1cc667f9148716d2f0efaf3f1932f6e00e34feb66929f
+and contract SHA4b50a01322cebd24e28f6bcdd903277c37b39289483ba9d37c26bf02bfb852eb.
+
+The affected inert Gemini contracts plus the exact retained native request2
+replay pass in0.013 seconds. The temporary offline replay test verified its
+fixed SHA256 and one call/one response, then was removed before final source
+checks and commit. It did not execute Gemini. The initial affected lint found
+one test-only staticcheck QF1003; the equivalent tagged switch received both
+independent final GOs. Its focused provider cases pass in0.011 seconds. Final
+all-enabled affected lint and whole-file size/architecture gate each report
+zero issues; gofmt and whitespace checks are clean. No vendor binary ran.
+
+The separate research correction remains its own plan/code history. Fresh
+genuine native execution, unchanged native stderr/session/terminal checks and
+applicable full lifecycle proof remain required; no flag is promoted here.

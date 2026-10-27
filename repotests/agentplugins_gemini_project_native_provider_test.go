@@ -21,6 +21,10 @@ import (
 const geminiProjectWaitDescription = "Set to true to wait for all previously requested tools in this turn to complete before starting. Set to false (or omit) to run in parallel. Use true when this tool depends on the output of previous tools."
 const geminiProjectModel = "gemini-2.5-flash"
 
+// Pinned geminiChat.ts blob095a5292 injects this exact first-call signature and
+// strips name__ from HTTP history while retaining it in the native stream.
+const geminiProjectThoughtSignature = "skip_thought_signature_validator"
+
 func geminiProjectContents(value any, tool, id string, args map[string]any) ([]map[string]any, error) {
 	rows, ok := value.([]any)
 	if !ok || len(rows) == 0 || len(rows) > 128 {
@@ -41,21 +45,24 @@ func geminiProjectContents(value any, tool, id string, args map[string]any) ([]m
 		}
 		for _, value := range items {
 			part, ok := value.(map[string]any)
-			if !ok || len(part) != 1 {
+			if !ok {
 				return nil, fmt.Errorf("Gemini part union")
 			}
 			if text, ok := part["text"]; ok {
-				if !projectNativeRuntimeText(text, projectNativeRuntimeBodyLimit) {
+				if len(part) != 1 || !projectNativeRuntimeText(text, projectNativeRuntimeBodyLimit) {
 					return nil, fmt.Errorf("Gemini text part")
 				}
 			} else if value, ok := part["functionCall"]; ok {
+				if row["role"] != "model" || projectNativeRuntimeKeys(part, "functionCall thoughtSignature", "") != nil || part["thoughtSignature"] != geminiProjectThoughtSignature {
+					return nil, fmt.Errorf("Gemini model call signature differs")
+				}
 				call, ok := value.(map[string]any)
 				if !ok || projectNativeRuntimeKeys(call, "id name args", "") != nil || call["id"] != id || call["name"] != tool || !reflect.DeepEqual(call["args"], args) {
 					return nil, fmt.Errorf("Gemini function call identity/arguments")
 				}
 			} else if value, ok := part["functionResponse"]; ok {
 				response, ok := value.(map[string]any)
-				if !ok || projectNativeRuntimeKeys(response, "id name response", "") != nil || response["id"] != id || response["name"] != tool {
+				if len(part) != 1 || !ok || projectNativeRuntimeKeys(response, "id name response", "") != nil || response["id"] != id || response["name"] != tool {
 					return nil, fmt.Errorf("Gemini function response identity")
 				}
 				output, ok := response["response"].(map[string]any)
@@ -246,20 +253,21 @@ func geminiProjectEnum(value any, allowed string) bool {
 }
 
 type geminiProjectProvider struct {
-	mu                                     sync.Mutex
-	server                                 *httptest.Server
-	tool, id, key, nonce, marker, sentinel string
-	requests                               [][]byte
-	routes                                 []string
-	streams                                int
-	err                                    error
-	returned                               bool
-	validate                               func(string) error
+	mu                                             sync.Mutex
+	server                                         *httptest.Server
+	tool, id, wireID, key, nonce, marker, sentinel string
+	requests                                       [][]byte
+	routes                                         []string
+	streams                                        int
+	err                                            error
+	returned                                       bool
+	validate                                       func(string) error
 }
 
 func newGeminiProjectProvider(nonce, key string, validate func(string) error) *geminiProjectProvider {
 	tool := "mcp_uapgeminia_inspect_runtime"
-	return &geminiProjectProvider{tool: tool, id: tool + "__uap_" + nonce + "_attempt", nonce: nonce, key: key, marker: "retained-" + nonce, sentinel: "UAP_DONE_" + nonce + "_attempt", validate: validate}
+	wireID := "uap_" + nonce + "_attempt"
+	return &geminiProjectProvider{tool: tool, id: tool + "__" + wireID, wireID: wireID, nonce: nonce, key: key, marker: "retained-" + nonce, sentinel: "UAP_DONE_" + nonce + "_attempt", validate: validate}
 }
 func (p *geminiProjectProvider) start() error {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
@@ -292,7 +300,7 @@ func (p *geminiProjectProvider) serve(w http.ResponseWriter, r *http.Request) {
 	p.requests = append(p.requests, bytes.ReplaceAll(body, []byte(p.key), []byte("[redacted]")))
 	p.routes = append(p.routes, r.URL.RequestURI())
 	args := map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}
-	parts, err := geminiProjectRequest(body, p.tool, p.id, args, count)
+	parts, err := geminiProjectRequest(body, p.tool, p.wireID, args, count)
 	if err != nil {
 		fail(err)
 		return

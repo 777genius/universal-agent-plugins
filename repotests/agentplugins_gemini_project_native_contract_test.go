@@ -176,14 +176,69 @@ func TestGeminiProjectNativeSchemaAcceptsOnlyExactVendorWaitProperty(t *testing.
 		case "missing-schema-field":
 			delete(schema, "required")
 		}
-		_, err := geminiProjectRequest(geminiProjectContractBody(t, m), p.tool, p.id, args, false)
+		_, err := geminiProjectRequest(geminiProjectContractBody(t, m), p.tool, p.wireID, args, false)
 		if (err == nil) != (kind == "valid") {
 			t.Fatalf("%s schema: %v", kind, err)
 		}
 	}
 }
+func TestGeminiProjectNativeCallPartRequiresMeasuredSignatureAndWireIdentity(t *testing.T) {
+	p := newGeminiProjectProvider("nonce", "private-fixture-key", nil)
+	if p.id != "mcp_uapgeminia_inspect_runtime__uap_nonce_attempt" || p.wireID != "uap_nonce_attempt" || p.id == p.wireID {
+		t.Fatal("source-defined native and wire identities differ")
+	}
+	args := map[string]any{"nonce": "nonce", "operation": "write", "marker": "retained-nonce"}
+	for _, kind := range []string{"valid", "missing-signature", "empty-signature", "foreign-signature", "null-signature", "bool-signature", "object-signature", "unknown-key", "extra-payload", "text-signature", "response-signature", "wrong-role", "missing-role", "native-id", "foreign-id", "foreign-tool", "foreign-arguments", "null-call"} {
+		call := map[string]any{"id": "uap_nonce_attempt", "name": "mcp_uapgeminia_inspect_runtime", "args": map[string]any{"nonce": "nonce", "operation": "write", "marker": "retained-nonce"}}
+		part := map[string]any{"functionCall": call, "thoughtSignature": "skip_thought_signature_validator"}
+		row := map[string]any{"role": "model", "parts": []any{part}}
+		switch kind {
+		case "missing-signature":
+			delete(part, "thoughtSignature")
+		case "empty-signature":
+			part["thoughtSignature"] = ""
+		case "foreign-signature":
+			part["thoughtSignature"] = "unreviewed-signature"
+		case "null-signature":
+			part["thoughtSignature"] = nil
+		case "bool-signature":
+			part["thoughtSignature"] = true
+		case "object-signature":
+			part["thoughtSignature"] = map[string]any{"value": "skip_thought_signature_validator"}
+		case "unknown-key":
+			part["thought"] = true
+		case "extra-payload":
+			part["text"] = "extra"
+		case "text-signature":
+			delete(part, "functionCall")
+			part["text"] = "extra"
+		case "response-signature":
+			delete(part, "functionCall")
+			part["functionResponse"] = map[string]any{"id": p.wireID, "name": p.tool, "response": map[string]any{"output": "facts"}}
+		case "wrong-role":
+			row["role"] = "user"
+		case "missing-role":
+			delete(row, "role")
+		case "native-id":
+			call["id"] = p.id
+		case "foreign-id":
+			call["id"] = "foreign"
+		case "foreign-tool":
+			call["name"] = "mcp_uapgeminib_inspect_runtime"
+		case "foreign-arguments":
+			call["args"].(map[string]any)["operation"] = "read"
+		case "null-call":
+			part["functionCall"] = nil
+		}
+		_, err := geminiProjectContents([]any{row}, p.tool, p.wireID, args)
+		if (err == nil) != (kind == "valid") {
+			t.Fatalf("%s call part: %v", kind, err)
+		}
+	}
+}
+
 func TestGeminiProjectNativeProviderRequiresExactReturnWrapperAndIdentity(t *testing.T) {
-	for _, kind := range []string{"valid", "wrong-id", "wrong-wrapper", "wrong-facts", "wrong-route", "wrong-key"} {
+	for _, kind := range []string{"valid", "wrong-id", "wrong-call-id", "native-call-id", "native-response-id", "wrong-wrapper", "wrong-facts", "wrong-route", "wrong-key"} {
 		t.Run(kind, func(t *testing.T) {
 			p := newGeminiProjectProvider("nonce", "private-fixture-key", func(body string) error {
 				if body != "facts" {
@@ -214,12 +269,15 @@ func TestGeminiProjectNativeProviderRequiresExactReturnWrapperAndIdentity(t *tes
 				}
 				return
 			}
-			if first.Code != 200 || strings.Contains(first.Body.String(), p.sentinel) {
+			if first.Code != 200 || strings.Contains(first.Body.String(), p.sentinel) || !strings.Contains(first.Body.String(), `"id":"`+p.id+`"`) {
 				t.Fatal("premature sentinel")
 			}
-			id, output := p.id, "<untrusted_context>\nfacts\n</untrusted_context>"
+			id, output := p.wireID, "<untrusted_context>\nfacts\n</untrusted_context>"
 			if kind == "wrong-id" {
 				id = "wrong"
+			}
+			if kind == "native-response-id" {
+				id = p.id
 			}
 			if kind == "wrong-wrapper" {
 				output = "facts"
@@ -228,7 +286,14 @@ func TestGeminiProjectNativeProviderRequiresExactReturnWrapperAndIdentity(t *tes
 				output = strings.ReplaceAll(output, "facts", "wrong")
 			}
 			m := geminiProjectContractRequest(p)
-			m["contents"] = []any{map[string]any{"role": "model", "parts": []any{map[string]any{"functionCall": map[string]any{"id": p.id, "name": p.tool, "args": map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}}}}}, map[string]any{"role": "user", "parts": []any{map[string]any{"functionResponse": map[string]any{"id": id, "name": p.tool, "response": map[string]any{"output": output}}}}}}
+			callID := p.wireID
+			switch kind {
+			case "wrong-call-id":
+				callID = "wrong"
+			case "native-call-id":
+				callID = p.id
+			}
+			m["contents"] = []any{map[string]any{"role": "model", "parts": []any{map[string]any{"functionCall": map[string]any{"id": callID, "name": p.tool, "args": map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}}, "thoughtSignature": "skip_thought_signature_validator"}}}, map[string]any{"role": "user", "parts": []any{map[string]any{"functionResponse": map[string]any{"id": id, "name": p.tool, "response": map[string]any{"output": output}}}}}}
 			second := send(m)
 			if kind == "valid" {
 				if second.Code != 200 || !p.returned || !strings.Contains(second.Body.String(), p.sentinel) {
@@ -243,11 +308,13 @@ func TestGeminiProjectNativeProviderRequiresExactReturnWrapperAndIdentity(t *tes
 func TestGeminiProjectNativeStreamRejectsWrongIdentityOrderAndTerminal(t *testing.T) {
 	p := newGeminiProjectProvider("nonce", "private-fixture-key", nil)
 	timestamp := time.Now().UTC().Format(time.RFC3339Nano)
-	for _, kind := range []string{"valid", "wrong-id", "wrong-order", "bad-terminal", "missing-result", "unknown-field"} {
+	for _, kind := range []string{"valid", "wrong-id", "wire-id", "wrong-order", "bad-terminal", "missing-result", "unknown-field"} {
 		rows := []map[string]any{{"type": "init", "timestamp": timestamp, "session_id": "native-session", "model": geminiProjectModel}, {"type": "message", "timestamp": timestamp, "role": "user", "content": "fixture"}, {"type": "tool_use", "timestamp": timestamp, "tool_name": p.tool, "tool_id": p.id, "parameters": map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}}, {"type": "tool_result", "timestamp": timestamp, "tool_id": p.id, "status": "success", "output": "facts"}, {"type": "message", "timestamp": timestamp, "role": "assistant", "content": p.sentinel, "delta": true}, {"type": "result", "timestamp": timestamp, "status": "success"}}
 		switch kind {
 		case "wrong-id":
 			rows[3]["tool_id"] = "other"
+		case "wire-id":
+			rows[2]["tool_id"], rows[3]["tool_id"] = p.wireID, p.wireID
 		case "wrong-order":
 			rows[2], rows[3] = rows[3], rows[2]
 		case "bad-terminal":
