@@ -28,8 +28,8 @@ var (
 // ID reports the client this adapter serves.
 func (*Adapter) ID() domain.ClientID { return domain.ClientCline }
 
-// DetectSurfaces probes the extension in both host editors. Editor
-// globalStorage is only a detection surface: Cline's shared native
+// DetectSurfaces observes the standalone CLI and extensions in both host editors.
+// Editor globalStorage is only a detection surface: Cline's shared native
 // configuration and skill roots live under its product-owned home.
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	vscodeConfig := filepath.Join(host.VSCodeConfigRoot(), "globalStorage", storageName)
@@ -41,6 +41,7 @@ func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 			host.DirectorySurface("cline_vscode_config", vscodeConfig),
 			host.ExtensionSurface("cline_cursor_extension", filepath.Join(host.HomeDir(), ".cursor", "extensions"), storageName, "cline.cline"),
 			host.DirectorySurface("cline_cursor_config", cursorConfig),
+			host.BinarySurface("cline_cli", "cline"),
 		},
 	}
 }
