@@ -1,0 +1,30 @@
+{
+  "registryUi": {
+    "skillSpector": {
+      "notChecked": "Not checked",
+      "noFindings": "No findings",
+      "findingsCount": "Findings: {count}",
+      "partial": "Partial check",
+      "error": "Check failed",
+      "detailsFor": "SkillSpector details for {name}",
+      "pluginScope": "Selected skills in this plugin",
+      "skillScope": "Historical Skill report",
+      "absent": "No published assessment matches this listing.",
+      "checked": "Checked {date}",
+      "revision": "Revision",
+      "scanner": "Static checks only · SkillSpector {version}",
+      "disclaimer": "This historical report covers only the listed Skill files at the recorded revision. It does not run code or guarantee safety.",
+      "unverified": "The current revision of this listing has not been verified.",
+      "incomplete": "Some Skill checks did not finish. Review the available findings and errors.",
+      "source": "Source files",
+      "findings": "Findings",
+      "errors": "Check errors",
+      "empty": "No findings were reported by the completed static checks.",
+      "selected": "Only a selection of catalog sources is checked.",
+      "truncated": "Showing {shown} of {total} findings.",
+      "selectedSkills": "Selected skills",
+      "historical": "Historical report",
+      "older": "This report is older than seven days or describes a different revision. It does not establish the current state."
+    }
+  }
+}

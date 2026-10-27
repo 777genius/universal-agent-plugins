@@ -1,0 +1,30 @@
+{
+  "registryUi": {
+    "skillSpector": {
+      "notChecked": "未检查",
+      "noFindings": "未发现问题",
+      "findingsCount": "发现问题：{count}",
+      "partial": "部分检查",
+      "error": "检查失败",
+      "detailsFor": "{name} 的 SkillSpector 详情",
+      "pluginScope": "此插件中选定的技能",
+      "skillScope": "技能历史报告",
+      "absent": "没有与此条目匹配的已发布评估。",
+      "checked": "检查日期：{date}",
+      "revision": "修订版本",
+      "scanner": "仅静态检查 · SkillSpector {version}",
+      "disclaimer": "此历史报告仅涵盖所记录修订版本中的指定技能文件。它不会运行代码，也不保证安全。",
+      "unverified": "此条目的当前修订版本尚未验证。",
+      "incomplete": "部分技能检查未完成。请查看已有的问题和错误。",
+      "source": "源文件",
+      "findings": "发现的问题",
+      "errors": "检查错误",
+      "empty": "已完成的静态检查未报告问题。",
+      "selected": "仅检查目录中部分选定来源。",
+      "truncated": "显示 {total} 个问题中的 {shown} 个。",
+      "selectedSkills": "选定技能",
+      "historical": "历史报告",
+      "older": "此报告已超过七天，或描述的是其他修订版本。它不能证明当前状态。"
+    }
+  }
+}
