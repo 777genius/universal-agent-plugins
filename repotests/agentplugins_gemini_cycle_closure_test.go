@@ -58,6 +58,15 @@ func geminiCycleStateClosure(before, after map[string]geminiCycleRecord, r *gemi
 	for name := range geminiCycleKeys(before, after) {
 		a, had := before[name]
 		b, has := after[name]
+		if name == "installer-tmp" {
+			if !geminiCycleParent(a, b, had, has) {
+				return fmt.Errorf("Gemini installer temporary parent identity")
+			}
+			continue
+		}
+		if strings.HasPrefix(name, "installer-tmp/") {
+			return fmt.Errorf("Gemini installer temporary residue")
+		}
 		if had && has && a == b {
 			continue
 		}
