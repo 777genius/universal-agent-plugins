@@ -1340,3 +1340,107 @@ and [actual validation](qoder-auth-membership-validation.md) close that early
 window while preserving the original metadata commits and complete-profile guard.
 This source correction supplies no native qualification; fresh hosted evidence
 and the existing lifecycle gates remain required.
+
+
+# Qoder: complete the measured four-entry profile delta diagnostic
+
+PRE-CODE draft. Read AGENTS.md, owner scope and capability-preservation rules.
+Obtain two independent GPT-6.1 Sol xhigh plan GOs before implementation. This is
+diagnostic-only work on existing PR523, not permission for native log mutation,
+profile relocation, a native retry at unchanged source, a release or VS Code.
+
+## Exact new genuine evidence
+
+Published source 4f034eb374bb585f0bc409763e62f0058bebabed, tree
+3d04ce2878cf93239cfa2f9a2564dc2c6a931bc3. Actual runtime40585824651,
+Qoder job122486483093, fails the original complete-profile equality guard after
+4.42 seconds. Every recorded prefix command exits0 without a capture/context
+error. Public add succeeds Prepared; plugins list exits0 in1149ms and selects
+the one exact receipt-owned enabled flag-view plugin with one skill and no MCP.
+No native prompt, later lifecycle or authentication/model result was reached.
+
+Native artifact12773802932 is4508B,16closed members, outer SHA256
+750064bd0a084ff22e5109e3e114f6d7ed7a21bbfe98d3cafea4f9afddc3a581;
+frontend12774277343 has25members, outer
+a8dd9a901886a9c3eb7f28a090d6aaa7a370ddc76e1898f063760c0dd4e28d3e.
+API identities, ordinary ZIP membership/CRCs, clean exact source/tree/build,
+all24frontend stream joins and unchanged exact-source failed admission pass.
+Root semantic audit independently joins official archive/executable pins,
+public source/package/binding/physical/receipt identities and native catalog.
+Record /tmp/uap-qoder-4f-current-40585824651/root-semantic-audit.json,
+SHA25636c431d8799a7ae513ef30bab98452afa3e9a3fb9283fb9b8003aae8da9e0cff.
+
+The complete delta now has15before/18after,3added/0removed/1changed.
+Its area counts are exactly3logs and1log-latest; every other area is0.
+The three retained details show changed latest symlink, added0755directory and
+added0644file of994B. One entry is still explicitly omitted. Its name, kind,
+mode and bytes remain unknown. The prior three telemetry directories no longer
+appear as differences; that correction does not authorize any remaining change.
+
+Pinned npm1.1.78 source defines a candidate per-run directory, qodercli.log,
+manifest.json and latest-link replacement before CLI argument parsing. It does
+not identify the omitted native entry or prove npm/standalone implementation
+equivalence. No quiet/telemetry setting is assumed to suppress these writes.
+
+## Proposed finite diagnostic amendment
+
+Change only qoderDeltaBound's maximum retained metadata details from3to4.
+Preserve the existing complete-object2KiB JSON bound,4096-entry input bound,
+strict inventory-record grammar, finite areas/kinds/operations, hashed keys,
+hashed file/link records, and all numeric/mode constraints. Preserve the exact
+existing other-file priority and deterministic area/hash ordering. The first
+three selected details must remain identical; the fourth is the next detail
+under that same ordering. No raw name, path, link target, contents or credential
+is added and no filesystem read, enumeration or command is added.
+
+At exactly four valid differences the existing status becomes captured and
+omitted_count becomes0; at five or more it remains entry-limit with exactly
+total-minus4 omissions. The whole-object bound still refuses oversized output;
+it is never increased or bypassed. This is a bounded formatter over the already
+held unequal maps, not a new baseline, a permission decision or log classifier.
+
+All complete-profile, auth/metadata, empty telemetry, no-follow identity,
+original HOME, immutable source, catalog, deadlines and process cleanup gates
+remain byte-identical. The original t.Fatal after collecting this diagnostic
+remains unconditional for unequal original profiles. All five/native/auth/model
+flags stay false. Python admission, commands, workflow selection and source pins
+are unchanged; historical failed raw archives must re-admit byte-identically.
+
+## Meaningful verification
+
+Update the existing independent expected metadata/count assertions only where
+the intentional fourth retained detail changes them. Keep all prior checks,
+priority cases, hostile records, actual-filesystem nonmutation, private-canary
+checks and the fatal full-profile child control. State independent literal key
+and content digests for the fourth selected fixture entries; do not replace
+assertions with expectations computed through the formatter being tested.
+
+Exercise an actual inert filesystem with a latest-link replacement plus a new
+log directory/two files: four details, exact counters, captured/zero omissions,
+complete serialized object<=2048bytes, original maps/profile unchanged. Add a
+fifth difference and verify exact one omission and unchanged prefix ordering.
+Preserve zero/one/seven other-area cases with corrected exact fourth selection;
+verify reverse insertion gives the same result. Extend the existing largest
+valid file-record control to five entries, retaining four with truthful omission
+and the unchanged complete-object limit. Unknown records remain refused.
+
+Run focused Qoder/shared inert Go contracts, existing runtime Python contracts,
+actual full-root affected all-enabled and unfiltered six-linter gates, gofmt,
+whitespace and unchanged original4f failed-envelope replay. No native/vendor,
+scanner or public installer executable runs locally. Serialize Go/lint slots;
+do not overlap snapshot-sensitive Go with other Python fixture mutations.
+
+## Review, source and publication
+
+After both plan GOs, recheck remote head and create an isolated worktree from
+the agreed current4f. Commit this accepted amendment to the existing consolidated
+remaining-native-qualification.md before code. Limit code to the Qoder formatter
+and its affected/new inert contracts; do not merge unrelated leaf sources.
+Two independent exact implementation reviews and executed gates follow. Root
+alone publishes a normal expected-head fast-forward to existing PR523 and audits
+the resulting genuine capture. Preserve concurrent work and all failed history.
+This amendment grants no eventual log allowance or full-cycle qualification.
+
+## Accepted Qoder diagnostic amendment before implementation
+
+The exact draft SHA256 `49e8fdec9188273f924542bf13469e44c83393ade9bc5c392ad0d5ddb68bfe4a` received independent GPT-6.1 Sol xhigh plan GOs from `vscode_finish` (R1) and `native_finish` (R2) before any code edit. Both reviewers inspected the current formatter and exact failed capture; the original full-profile failure and all qualification limits remain required.
