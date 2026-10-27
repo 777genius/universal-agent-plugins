@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -269,8 +270,8 @@ func newGeminiProjectProvider(nonce, key string, validate func(string) error) *g
 	wireID := "uap_" + nonce + "_attempt"
 	return &geminiProjectProvider{tool: tool, id: tool + "__" + wireID, wireID: wireID, nonce: nonce, key: key, marker: "retained-" + nonce, sentinel: "UAP_DONE_" + nonce + "_attempt", validate: validate}
 }
-func (p *geminiProjectProvider) start() error {
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+func (p *geminiProjectProvider) start(ctx context.Context) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp4", "127.0.0.1:0")
 	if err != nil {
 		return err
 	}

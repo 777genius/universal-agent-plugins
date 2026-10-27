@@ -4,9 +4,11 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
@@ -199,12 +201,13 @@ func geminiProjectStream(body []byte, p *geminiProjectProvider, prompt string, v
 					return "", fmt.Errorf("Gemini delta type")
 				}
 			}
-			if row["role"] == "user" {
+			switch row["role"] {
+			case "user":
 				if stage != 1 || row["content"] != prompt {
 					return "", fmt.Errorf("Gemini initial user message")
 				}
 				stage = 2
-			} else if row["role"] == "assistant" {
+			case "assistant":
 				if stage != 4 && stage != 5 {
 					return "", fmt.Errorf("Gemini assistant out of order")
 				}
@@ -213,7 +216,7 @@ func geminiProjectStream(body []byte, p *geminiProjectProvider, prompt string, v
 					return "", fmt.Errorf("Gemini unexpected assistant text")
 				}
 				stage = 5
-			} else {
+			default:
 				return "", fmt.Errorf("Gemini message role")
 			}
 		case "tool_use":
@@ -398,7 +401,12 @@ func TestGeminiProjectNativeProviderRequiresExactReturnWrapperAndIdentity(t *tes
 				if kind == "wrong-route" {
 					route += "&extra=1"
 				}
-				r := httptest.NewRequest("POST", p.server.URL+route, bytes.NewReader(geminiProjectContractBody(t, value)))
+				target := p.server.URL + route
+				r, err := http.NewRequestWithContext(context.Background(), "POST", target, bytes.NewReader(geminiProjectContractBody(t, value)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.RequestURI = target
 				r.Header.Set("Content-Type", "application/json")
 				r.Header.Set("x-goog-api-key", p.key)
 				if kind == "wrong-key" {

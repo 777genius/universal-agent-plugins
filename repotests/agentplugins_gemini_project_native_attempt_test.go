@@ -483,7 +483,7 @@ func TestAgentpluginsGeminiNativeProjectRuntimeAttempt(t *testing.T) {
 	defer f.finish(t)
 	f.setup(t)
 	p := newGeminiProjectProvider(f.base.Nonce, f.secret, f.validateFacts)
-	if err := p.start(); err != nil {
+	if err := p.start(f.ctx); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
