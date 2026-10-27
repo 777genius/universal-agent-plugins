@@ -1421,3 +1421,182 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+
+# Grok: isolate the measured initial-title side call in a fixed fixture
+
+PRE-CODE proposal. Two independent exact-plan GOs before implementation. Read
+AGENTS.md, PROJECT_INSTALL_OWNER_SCOPE.md and capability preservation. No release,
+VS Code, trust widening, real account/model, local native execution or generic
+provider/model acceptance. Root alone publishes to existing PR522.
+
+## New source-bound actual evidence
+
+Current611f7dd79a923a3b8e445222cde8395bd1af1062,
+treee2b94d93297bbbf9ef316af922a87c426ac083d7. Runtime40586113413,
+job122486692802 fails after3.68seconds. Native12775012222 outer5333B SHA256
+d1aa56111ae7e3270069b47abcc9a022dfdd7e3fa0ee444ccd43e1f70701c7d3,
+inner e4869bdb8bd69c35a21090d7bd0fb441d4930f2b6358992e6a7707dd6fcfc3a9,
+21ordinary closed members. Frontend12774612789 outer3395B SHA256
+0a2b462b88809e6dcc861e8123a00d929e48709d9130c5b6aa70b6a0f645e32d,
+25members. Exact source/tree/cleanbuild,24stream joins, official archive/executable
+pins, public add/source/package/physical/binding/receipt joins and exact-source
+failed-envelope reader replay pass independent audit
+/tmp/uap-grok-611-current-40586113413/independent-raw-audit.json SHA256
+f36b98f1cb8585efce2cdfd616557cabe4f3b0132aafb26e4b2ee1da7ed2f45c.
+
+Public add exits0 Prepared. Actual inspect exits0 in68ms and selects exactly the
+receipt-owned project plugin,enabled=false,projectTrusted=false,one provided
+skill,zero loaded skills and no MCP. Native startup is canceled after364ms by
+provider request-shape refusal: one captured authenticated literal-loopback POST,
+zero responses,ordinary provider shutdown,forced_close=false. The body is an
+initial-title call with model=grok-4.6,two messages,stream=true,temperature1,
+max_tokens100 and forced session_title function schema. It is not the main
+uap-grok-fixture request. The main provider correctly refuses it; no completed
+native output or loaded skill is proved. Every5/runtime/auth/model flag is false.
+
+## Exact publisher source and limits
+
+Official xai-org/grok-build snapshot2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8
+contains independently Git-blob/SHA-verified source retained in
+/tmp/uap-grok-title-source, research /tmp/uap-grok-title-source-research.json.
+Shipping buildf50904eaee6c is unresolved in that public Git snapshot; neither the
+request's agreement with source nor the earlier optout proves binary equivalence.
+
+- config/mod.rs blob568b51d0631e3fb2f1331b107501a5f9b1b72ea3,
+  SHA256a84e2c680ec3ef795d2847c7b1832247e797392d7e9f7f2d17b410585c936f63,
+  lines500-625: `[models] session_summary` / GROK_SESSION_SUMMARY_MODEL resolves
+  the auxiliary title model; empty values fall back to compiled grok-4.6.
+- session/summary.rs blobf0c3ae859ffb6ffe3f891fca4f2b458cca601209,
+  SHA2568d9dafb70d64704c48d1b27330af4218b8ba5a51cb8b20814557f974d06d7806:
+  SummaryGenerator starts an initial title task on first nonempty content.
+- session/helpers/session_summary.rs blob0f2af81e78701043b8446a8bffb2272921f3802c,
+  SHA256fde704829e87366b93280fe031e01aaaca2d5bd169a67d0bc777f3013f7f8837,
+  lines188-244 constructs the measured two-message session_title request and
+  reads a title from returned function-call arguments.
+- agent/mvp_agent/agent_ops.rs blobfa77f1ec809cf3c944ba91895a73ba422a24054a,
+  SHA256399735fd57b748735efaaef3f956c6b428af60bbe436754031e91a9342e776bd,
+  lines85-135 resolves the configured auxiliary model's sampler; missing model
+  resolution falls back to the primary sampler with the auxiliary model slug.
+- agent/config.rs bloba430462ad3b8e0611368ad2051f093827d7babee,
+  SHA25651eadad05c42e19954fe0822dd187dc59694252bec34d513cc329a05394b47a2,
+  lines4489-4515 returns a catalogued custom auxiliary model's own endpoint/key;
+  lines4597-4612 preserves them while stamping local context/max_retries.
+
+The examined CLI/summary/persistence source has no verified initial-title disable
+setting. GROK_TITLE_REFRESH controls later turn-checkpoint refresh and does not
+suppress the initial SummaryGenerator. Do not add it as an assumed solution.
+
+## Proposed narrow fixture boundary
+
+Preserve the original main provider's literal authenticated POST route, loopback,
+Host,MIME,credential,body/model,one-request/response,count,failure,cancellation and
+cleanup predicates. Main provider admission/capture/serve/response functions and
+the shared native command fatal/review-barrier path remain byte-identical. Do not
+let the main provider accept grok-4.6,a title request,unknown models or a second
+request. Original Prepared/untrusted/disabled inspection remains unchanged.
+
+Only for the existing Grok attempt with its held main provider, start one separate
+fixed loopback title fixture before configuring children. Generate its own fresh
+private128bit fixture key,distinct from the main key. Author the original HOME's
+already frozen config before startup with `[models] session_summary =
+"uap-grok-title-fixture"` and a separate `[model.uap-grok-title-fixture]` entry:
+that exact model, its held127.0.0.1:random/v1 endpoint, its dedicated env_key,
+chat_completions backend,unsupported search/reasoning and max_retries0, matching
+the established custom-model recipe. Keep default/main model,original HOME,
+marketplace sentinel,existing shared-client optout and all other config unchanged.
+Add exactly the held title key to the existing closed child environment; do not
+import ambient GROK/session-summary/title keys or alter global environment.
+
+The title fixture is a bounded one-exchange sibling with its own count, raw
+request/response and finite receipt. Reuse only existing strict route/ordinary
+transport cleanup helpers where this does not alter the main model boundary.
+Require exact POST /v1/chat/completions,loopback peer,matching Host,relative URL,
+empty URL host/raw path,one application/json and one exact Bearer dedicated key.
+Reject redirects,GET/prewarm,missing/wrong/multiple credential or MIME and second
+attempts immediately. Original context origins150/180seconds and native60seconds
+are unchanged; listener limits/deadlines are no larger than existing provider.
+
+Require whole strict duplicate-free bounded JSON with the exact source-derived
+current schema: model uap-grok-title-fixture; stream true; stream_options exactly
+include_usage true; temperature1;max_tokens100; exactly the measured system text
+and current fixed harmless prompt wrapped in user_query; exactly one session_title
+function with measured description,strict single-string field schema and exact
+forced tool_choice. Reject extra/missing fields,wrong text/model/schema,tool calls,
+NaN/trailing data and body>1MiB. Do not interpret or forward returned native paths.
+After exact route/authentication and the1MiB read bound, require a whole strict
+JSON object before retention. Check both original held fixture keys against raw
+bytes and recursively decoded JSON strings/keys (including JSON-escaped spellings)
+before any body capture. Any privacy match fails/cancels without retaining body.
+Malformed/nonJSON/trailing/duplicate/nonfinite/oversized bodies and all credential
+failures likewise retain no raw body. Only a safe bounded strict JSON object is
+captured, with requests=1, before the full fixed title-schema check; a schema
+refusal retains that safe request,records0responses,cancels and stays allfalse.
+No response or raw capture follows malformed/oversize/privacy refusal.
+
+Return exactly one deterministic OpenAI chat-completions SSE tool-call result for
+session_title with fixed harmless title `Disposable plugin startup observation`,
+finish_reason=tool_calls and one[DONE]. No generic text fallback or model request
+forwarding. This synthetic title function is internal title metadata,never native
+MCP,installation,skill loading,authentication or real model evidence. Main provider
+continues its existing one fixed response only for its original fixture model.
+Add a finite privacy refusal only to the new title receipt/validator; original
+main provider failure grammar stays byte-identical. Both fixture listeners must
+shut down ordinarily with descendants/connection
+closure; either failure or forced close remains failure. Keep the original main admission/handler functions byte-identical. Extend only
+the existing retention redaction hook to redact both held private keys from every
+retained child/provider stream; no raw headers/key values. Its decoded/raw privacy
+checks must refuse an unsafe title body before retention rather than rewriting
+that raw request. Original main body/model/count/route predicates are untouched.
+
+Export only three new finite names grok-title-provider.json,
+grok-title-provider.request.json and grok-title-provider.response.sse with receipt/
+request/response presence matching actual0/1counts. Receipt<=2048bytes,ordinary
+closed output membership and existing stream/aggregate bounds remain unchanged.
+Extend Python admission in a separate explicit title-member validator; do not
+relax the original main receipt validator. Require exact fixed title role/model/
+transport,finite failures,booleans/counts,coherent response and closure and private
+key refusal. Old611/a1af/c6 failed archives must re-admit unchanged byte-for-byte.
+The existing unconditional final review-barrier failure stays intact even if both
+responses and native exit0 are observed. Every qualification flag stays false.
+
+## Meaningful verification, review and publication
+
+New inert controls independently build literal measured-title requests and assert
+one exact response/count/receipt/membership. Reject main model/title mixups,
+unknown/extra/missing fields,changed system/prompt/schema,wrong endpoint/credential/
+MIME,oversized/duplicate/trailing bodies,second call,context failure,write failure
+and nonordinary closure. Verify exact SSE tool-call name/id/argument/title/DONE
+with independently stated literals/digests. Test both key canaries in retained raw
+and encoded JSON and closed child env with conflicting ambient values. Exercise
+configuration parsing for exactly two held distinct model endpoints/keys and
+unchanged default/main/sentinel; no vendor process. Preserve all existing main
+provider negative cases and exact old-source failed-reader replays. Verify the
+main handler functions and original unconditional native fatal/review barrier
+are unchanged by hashes/diff,not renamed or bypassed.
+
+Freeze the reviewed plan in existing consolidated remaining-native-qualification
+before code; create isolated checkout from fresh agreed current611 and preserve
+concurrent work. Two independent exact code critics follow implementation. Run
+focused Grok/shared inert Go,affected runtime Python,actual affected full-root
+all-enabled and unfiltered six-linter gates,gofmt,whitespace under serialized slots.
+No native/vendor,scanner or public installer binary runs locally. Root publishes
+normal expected-head fast-forward only after gates and critics; then audit the
+new genuine hosted capture. If shipping ignores the auxiliary model setting or
+emits a different request,retain the refusal and plan from that evidence. No
+broad fallback,changed trust,parser assumption or completed-cycle claim follows.
+
+## Accepted dedicated-title amendment before implementation
+
+Exact plan SHA256 `72cc3bcbe925d310806833836d6fa97d65dd1693ad0bcaaf9069e7939f8da07b`
+received independent PLAN GOs from root and GPT-6.1 Sol xhigh
+`gemini_qoder_finish` before any code edit. Receipt SHA256s are
+`13a6e861fa554a9e106bdf9cde5711e4136a45b140086eab64c310068dbdc3bd` and
+`134bb3ba23b7cd1ccbc553faa2f18a2d68a50df859ed6c82c469a157168ab614`.
+Both rehashed all18 pinned primary files and reviewed separate auxiliary model
+resolution and exact measured title schema. The original title config recipe
+is authored before the existing initial baseline freeze; no later baseline
+adoption is allowed. Safe bounded route/auth/strict-JSON/raw-and-decoded-key
+privacy precede request retention; schema refusal sends no response. Main
+provider handlers and existing fatal/review barrier remain unchanged.
+Root freshly checked PR522 remains611 before this isolated checkout.
