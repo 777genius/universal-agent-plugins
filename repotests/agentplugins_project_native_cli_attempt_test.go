@@ -140,7 +140,7 @@ func (f *projectNativeCLIAttempt) env() []string {
 	if f.spec.client == "grok" {
 		env = append(env, "GROK_DISABLE_AUTOUPDATER=1")
 		if f.grok != nil {
-			env = append(env, "UAP_GROK_TEST_PROVIDER_KEY="+f.grok.key)
+			env = append(env, "UAP_GROK_TEST_PROVIDER_KEY="+f.grok.key, "GROK_SAMPLER_SHARED_CLIENT=0")
 		}
 	}
 	return env
