@@ -14,6 +14,7 @@ var qoderFilePriorityExpected = []struct{ key, digest string }{
 	{"1c789d8c54f84d9a76bb9e9c466fd82edc93600e0ae1096beb1aa2caae60c045", "0bf9b4479f31c38fe151c1ee8166988124d602088321bb0568bad105c279342d"},
 	{"5b16aaa9c4be8b1466c2722c7fa908a2b7e41e6ea4c487f9a19cd536f1a655e4", "83e787826d4b24b98e62a63c91474209e44436757410c905e885fc36c1aad374"},
 	{"9c39a648892eec9283695b692d95e346f397274fb8d9e284c9a7eaf005d2fea0", "b012dc678157d20bc91a92eb1f4f2087a9d819be3d287674757833b62fd1d7fd"},
+	{"a999891db345cf1910a7dd3194ccb1219501dbfbc262cdc5dd5c0448fe9d0874", "ab043a60050db6204df933f8fa0b12d03f920fb3dba9bee5bc519d261fcce57e"},
 }
 
 func qoderFilePriorityAddDirectories(t *testing.T, root string) {
@@ -60,8 +61,8 @@ func TestQoderProfileDeltaPrioritizesHeldOtherFilesOverDirectoryOnlyChanges(t *t
 	unchanged := qoderDeltaUnchanged(t, root)
 	delta := qoderDeltaContract(t, before, after)
 	areas := map[string]int{"log-latest": 1, "logs": 3, "settings": 0, "plugin-cache": 0, "plugins": 0, "cache": 0, "other": 7}
-	if delta.Status != "entry-limit" || delta.BeforeEntries != len(before) || delta.AfterEntries != len(before)+10 || delta.Added != 10 || delta.Removed != 0 || delta.Changed != 1 || delta.OmittedCount != 8 || len(delta.Entries) != 3 || !reflect.DeepEqual(delta.Areas, areas) {
-		t.Fatal("file priority changed complete counts, areas or three-detail/eight-omission bounds")
+	if delta.Status != "entry-limit" || delta.BeforeEntries != len(before) || delta.AfterEntries != len(before)+10 || delta.Added != 10 || delta.Removed != 0 || delta.Changed != 1 || delta.OmittedCount != 7 || len(delta.Entries) != 4 || !reflect.DeepEqual(delta.Areas, areas) {
+		t.Fatal("file priority changed complete counts, areas or four-detail/seven-omission bounds")
 	}
 	size := int64(15)
 	for index, want := range qoderFilePriorityExpected {
@@ -127,7 +128,7 @@ func TestQoderProfileDeltaAllDirectoryOtherChangesKeepPreviousHashOrder(t *testi
 	after := qoderDeltaSnapshot(t, root)
 	unchanged := qoderDeltaUnchanged(t, root)
 	delta := qoderDeltaContract(t, before, after)
-	if delta.Status != "entry-limit" || delta.Added != 5 || delta.Removed != 0 || delta.Changed != 0 || delta.Areas["other"] != 5 || delta.OmittedCount != 2 || len(delta.Entries) != 3 {
+	if delta.Status != "entry-limit" || delta.Added != 5 || delta.Removed != 0 || delta.Changed != 0 || delta.Areas["other"] != 5 || delta.OmittedCount != 1 || len(delta.Entries) != 4 {
 		t.Fatal("directory-only priority changed previous counts or bounds")
 	}
 	for index, want := range qoderFilePriorityExpected {

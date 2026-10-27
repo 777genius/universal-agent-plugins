@@ -88,9 +88,9 @@ func qoderDeltaBound(delta qoderProfileDelta) qoderProfileDelta {
 		return qoderDeltaPriorityLess(a, b, delta.Areas["other"] > 0)
 	})
 	delta.Status = "captured"
-	if len(delta.Entries) > 3 {
-		delta.OmittedCount, delta.Status = len(delta.Entries)-3, "entry-limit"
-		delta.Entries = delta.Entries[:3]
+	if len(delta.Entries) > 4 {
+		delta.OmittedCount, delta.Status = len(delta.Entries)-4, "entry-limit"
+		delta.Entries = delta.Entries[:4]
 	}
 	if raw, err := json.Marshal(delta); err != nil || len(raw) > 2<<10 {
 		return qoderProfileDelta{Status: "diagnostic-bound"}
@@ -361,18 +361,18 @@ func qoderDeltaUnchanged(t *testing.T, root string) func() {
 func TestQoderProfileDeltaBoundsDetailsAndRefusesMalformedHeldRecords(t *testing.T) {
 	before, after := map[string]string{}, map[string]string{}
 	mode := strconv.FormatUint(uint64(os.ModeSetuid|os.ModeSetgid|os.ModeSticky|0777), 8)
-	for _, name := range []string{"PRIVATE-KEY-one", "PRIVATE-KEY-two", "PRIVATE-KEY-three", "PRIVATE-KEY-four"} {
+	for _, name := range []string{"PRIVATE-KEY-one", "PRIVATE-KEY-two", "PRIVATE-KEY-three", "PRIVATE-KEY-four", "PRIVATE-KEY-five"} {
 		before["cache/"+name] = "file:" + mode + ":67108864:" + strings.Repeat("a", 64)
 		after["cache/"+name] = "file:" + mode + ":67108864:" + strings.Repeat("b", 64)
 	}
 	delta := qoderDeltaContract(t, before, after)
-	if delta.Status != "entry-limit" || delta.Changed != 4 || delta.Areas["cache"] != 4 || delta.OmittedCount != 1 || len(delta.Entries) != 3 {
+	if delta.Status != "entry-limit" || delta.Changed != 5 || delta.Areas["cache"] != 5 || delta.OmittedCount != 1 || len(delta.Entries) != 4 {
 		t.Fatal("larger delta was silently truncated")
 	}
 	if again := qoderOriginalProfileDelta(before, after); !reflect.DeepEqual(delta, again) {
 		t.Fatal("hashed bounded selection is not deterministic")
 	}
-	wantDigests := []string{"53dc54f1a425947b2f6b8175aee8b2cc6cd4abe4a5c5a57162bf0f834419e346", "62b14fde114d9eb0efda38990c4afb861568275b5ccb6d929f123f9e0ee2c140", "8018caba2e34bf352146720b5528dfa3b229b0899a268f4e4035b3107f24c9c5"}
+	wantDigests := []string{"53dc54f1a425947b2f6b8175aee8b2cc6cd4abe4a5c5a57162bf0f834419e346", "62b14fde114d9eb0efda38990c4afb861568275b5ccb6d929f123f9e0ee2c140", "8018caba2e34bf352146720b5528dfa3b229b0899a268f4e4035b3107f24c9c5", "8d8f07ab09d35e8ee4436986ddbf96dc98c950c3bd9cbcda9d9e334ed943a6f4"}
 	size := int64(64 << 20)
 	for index, digest := range wantDigests {
 		qoderDeltaRequireDetail(t, delta, qoderDeltaEntry{KeySHA256: digest, Area: "cache", Operation: "changed", Before: qoderDeltaRecord{Kind: "file", Mode: mode, Bytes: &size, ContentSHA256: strings.Repeat("a", 64)}, After: qoderDeltaRecord{Kind: "file", Mode: mode, Bytes: &size, ContentSHA256: strings.Repeat("b", 64)}})
@@ -382,7 +382,7 @@ func TestQoderProfileDeltaBoundsDetailsAndRefusesMalformedHeldRecords(t *testing
 	}
 	delta.Areas["cache"] = -1
 	delta.Entries[0].KeySHA256 = "PRIVATE-KEY"
-	if len(before) != 4 || len(after) != 4 || after["cache/PRIVATE-KEY-one"] != "file:"+mode+":67108864:"+strings.Repeat("b", 64) {
+	if len(before) != 5 || len(after) != 5 || after["cache/PRIVATE-KEY-one"] != "file:"+mode+":67108864:"+strings.Repeat("b", 64) {
 		t.Fatal("returned diagnostic aliases an input inventory")
 	}
 	for _, record := range []string{"PRIVATE-BODY", "file:600:1:PRIVATE-BODY", "directory:600", "file:600:-1:" + strings.Repeat("a", 64), "file:600:67108865:" + strings.Repeat("a", 64), "symlink:PRIVATE-BODY"} {
