@@ -1611,3 +1611,128 @@ The held original HOME is authored once with separate main and initial-title loo
 Actual final focused inert Go contracts passed (package 2.150s); affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1` and unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard each reported zero issues. The 41 Python contracts passed in 8.678s on preceding source `3edd581c5b9e3c39b7089dd4d9a5c78233d86b81`; the entire scripts tree is identical through final source (`2d4ac1a96e1f5ccf3a0d6ca7af546d4a39753406`). Original611 and a1af failed archives retain all21/20 member bytes and summaries with all flags false under original and current readers. Gate and transfer receipt SHA256 `954aba61be3972a92fb6a551e7e144b7b655e7a7e0ac58d11999e249b3fd296e`.
 
 Two measured inert-test lint issues were corrected without changing the module version or any guard: context propagation and Go1.22-compatible HTTP request construction. Earlier failed logs remain in scratch audit evidence. No vendor client, public installer or scanner executed locally. Publication only schedules a fresh genuine hosted diagnostic; public-source/shipping equivalence, completed startup, loaded skills, user/project lifecycle and authentication remain unproved.
+
+
+---
+
+# Grok: bounded capture of the already-refused second main request
+
+PRE-CODE diagnostic amendment. Two independent exact-plan GOs and root's accepted plan commit before source changes. Root alone performs Git/GitHub mutations/publication. No local native/acquired client/public installer/scanner execution. No production adapter, provider acceptance, trust/profile authority, native pin, workflow/selection, model, tool, permission or qualification expansion. VS Code and releases remain deferred.
+
+## 1. Measured source-bound need
+
+Current PR522 source `348e2ce8b3bca4f117673a3b6bf80bedf8a64975`, tree `b12330110d2dea50e613bf36ac3b3485c4cd2f1c`, checkout `/tmp/uap-grok-dedicated-title-current`. Hosted run40599296059 native122524071409 failed23:25:43 UTC. Inherited Cline122524071582 completed success23:28:09; all current captures are completed, preserved and independently audited. Do not rerun unchanged source.
+
+Actual evidence is preserved under `/tmp/uap-grok-348-current-40599296059`:
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Native | 12778988075 | 6629d43cc1a3d835d95949afb06b279334f158cc166e847bfe9d949da30b3e86 | 96fd685041010dbf1d9bcfc7f11eb7680f145cf3160608a1ed5898bfad33e153 | 25 |
+| Frontend | 12778368337 | 066b0b7fc95d8819779838b46df0b24add56bf6a8bceac148180be270ef67d60 | 9ee9b68f7c5317b1c2677584eec9077ca4a62b66504a1124cb7371fa9a64c915 | 25 |
+
+Independent raw/source receipt `/tmp/uap-grok-348-current-40599296059/independent-raw-audit.json`, SHA256 `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`, verifies API/ZIP/CRC,24 frontend streams, exact current source/build/pins/scanner and public installation/source/physical/binding/committed receipt joins. Root's second detailed raw review is pending when this draft is written; do not count the peer receipt as two completed raw reviews.
+
+Public add exits0 Prepared. Actual native inspection exits0 and retains projectTrusted=false, plugin enabled=false, zero loaded skills and no MCP. No native skill execution or lifecycle proof follows.
+
+The separately configured title fixture now succeeds exactly once:1220byte strict request SHA256 `6310901ba3d8138dbf06eb01e447139f815a42424513ed048263f39b1ced658a`;570byte exact SSE SHA256 `eea6c4c389c7e27cf0e6d1cc9e705bc84a4d77ae8c5afddaa846ec8255e6ed68`; correct credential, failure none, ordinary shutdown, no forced close. The original main fixture retains one42233byte request SHA256 `001a585d3fc552ec983c8b996b0b4fd0acc719cb1759710a6534cd4d481affff` and one394byte original response SHA256 `f2c19ea9dbc0ddbf7cc2facaa5d2d01877897afa0f6fea33cc5651c0ecc9f7b9`.
+
+Native stdout1476bytes SHA256 `2cefc7bfe383c0a900df87811d4e0dacc14dccc34ae7c97e30960d70ef0ef562` has two available_commands frames, the main sentinel text, usage and a successful end_turn. This is followed by an actual second main HTTP attempt that hits the unchanged provider's duplicate guard. Main receipt remains requests1/responses1/credential_matched true/failure duplicate/shutdown_complete true/forced_close false. The native command is cancelled after369ms, exit-1/errortrue/deadline=true; total fixture3549ms. The deadline field is ctx.Err()!=nil, not evidence of an elapsed60second timeout. Its original child/capture/cleanup guard remains fatal. No probe or tool exchange exists; allfive/runtime/auth/model flags remain false.
+
+### What source establishes, and what it does not
+
+`grokProjectProvider.admit` checks the original context, literal loopback POST route, matching Host/relative URL/no raw path, exact single application/json and one matching Bearer key before assigning duplicate when attempted is already true. It calls failWithRequest and returns before serve reaches body read. failWithRequest cancels the original context. Therefore the second attempt passed these route/header/auth predicates, but its body/model/purpose was neither read nor retained. The requests counter counts retained requests, not HTTP attempts.
+
+No current raw evidence establishes a retry, second auxiliary role, equivalent body, additional prompt or new valid model grammar. Public publisher source may inform future analysis but cannot reconstruct an uncaptured actual request. No new response/admission is justified. A bounded failure-only observation of the already-refused request is the smallest concrete next step.
+
+Pins remain1.0.70 archive11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc / executable22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9; shipping buildf50904eaee6c. Public source snapshot2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8 is not claimed equivalent to that unresolved shipping build. This amendment changes no native configuration or source-guided protocol.
+
+## 2. Exact diagnostic eligibility and refusal
+
+Instrument only the original main provider's duplicate refusal in the existing canonical main+title Grok fixture. The title transport remains a distinct one-call fixture and is never eligible. A duplicate body may be observed only when all original route/header/auth/context checks already passed, and under the existing provider lock:
+
+* This is the held main provider, with its distinct held title fixture/keys configured.
+* The first original main exchange has already retained exactly1 request and written exactly1 response.
+* No earlier duplicate diagnostic has been claimed.
+
+Claim this diagnostic once, atomically. Do not increment original Requests/Responses, reset attempted/failure, start another model/HTTP request, change model admission, or grant a response. Concurrent duplicates, third/further attempts and all other original refusal reasons retain their original immediate refusal/cancellation with no additional body capture. Do not record a second refused-body slot or retry a refused/partial capture.
+
+### Explicit ordering and unchanged origins
+
+The diagnostic must read a body before invoking the original duplicate cancellation, because that cancellation tears down the handler's BaseContext and native child. This is an explicit narrow timing change for the one eligible already-refused request. It is not described as byte-identical immediate cancellation.
+
+After the original duplicate decision/one-shot claim, read at most1MiB+1 through the existing request body under the original unrenewed5second HTTP ReadTimeout and the unchanged original work/total contexts. Do not set a new read deadline, extend a server deadline, sleep, rebase an origin or add a new context budget. Check the original context before and after observation; a cancelled/expired origin refuses raw retention. The pre-existing native60second/work150second/total180second limits remain fatal. If the original work context expires during a partial body, existing final cleanup may abort the read; retain a finite refusal, not partial raw bytes.
+
+Regardless of capture result, the existing closed-provider HTTP400 refusal and failure=duplicate/cancellation path execute. Use an unconditional deferred failure/cancellation safeguard for the diagnostic branch so read/parse/privacy errors cannot return as accepted. No SSE/content response is sent for the second request, and no provider acceptance or counter increase follows. Any cleanup failure remains failure evidence. All other rejection paths remain immediate.
+
+## 3. Raw privacy/structure gate before retention
+
+A complete body must be nonempty, at most1MiB, UTF8 and one whole strict JSON object through the existing duplicate-rejecting finite Go decoder: depth32,16384nodes,4096byte keys, finite numbers, no trailing document. Reject array/scalar/null/malformed/duplicate/nonfinite/deep/oversized/truncated/invalidUTF8 without keeping raw bytes.
+
+Before retaining the object, check both original held main/title keys against raw bytes and the fully decoded/re-encoded object. Reuse the existing recursive Grok credential/privacy scanner on raw and decoded representations to catch JSON-escaped/nested strings and keys under its existing shared resource budgets. Any credential/private-namespace or privacy resource refusal retains no body. No file/profile/header/URL/private key or untrusted field is copied into diagnostic metadata. Do not redact a failing body into apparent safe evidence; raw retention occurs only after strict structure and privacy pass.
+
+A safe bounded strict object is retained opaquely even if its model/messages/other semantics are unfamiliar. That retention is diagnostic evidence of refused input; it is not a new provider schema. Do not classify the body as a retry/auxiliary/tool/result or act on its content. Keep the first original request/response and title request/response unmodified.
+
+## 4. Finite additional artifacts
+
+Add at most these two fixed Grok-only members, exported from the actual held main duplicate observation during existing finish:
+
+| Member | Bound | Purpose |
+| --- | --- | --- |
+| grok-provider.duplicate.json | 2048bytes | Closed diagnostic receipt, never successful provider evidence. |
+| grok-provider.duplicate-request.json | 1MiB | Optional complete raw refused JSON object after privacy gate. |
+
+The receipt has exactly schema_version(integer1), role(`main-duplicate-diagnostic`), attempt_index(integer2), status, original_failure(`duplicate`), response_issued(booleanfalse), captured_bytes(integer) and captured_sha256(string). Status is exactly one of captured/body-refused/json-refused/privacy-refused/context-refused. Captured requires the raw member, exact positive byte length<=1MiB and recomputed lowercase64hex SHA256. Every refused status requires no raw member, captured_bytes=0 and captured_sha256 empty. No inferred cause/model, raw headers, profile content or arbitrary error string is serialized. No receipt is present when no eligible diagnostic was claimed.
+
+The original main receipt remains the original schema and failure duplicate with Requests/Responses1. The title receipt remains unchanged. New artifacts cannot coexist with another client, missing main/title fixture evidence, nonduplicate main failure, incomplete first exchange, unknown receipt fields/statuses or a successful runtime tuple. No raw member may appear without its receipt; no captured receipt may omit/mismatch raw. Existing historical failures without these members remain accepted unchanged.
+
+At the measured25member full capture, this adds at most2 members (27total); original per-member/archive aggregate/privacy bounds remain unchanged. Do not raise generic archive limits, admit arbitrary new member names or alter frontend evidence. The unchanged shared final privacy/secret-free checks must recheck exported bytes before persistence.
+
+## 5. Implementation boundaries
+
+Expected source edits are only:
+
+* Existing `agentplugins_grok_project_native_provider_test.go`: small private one-shot observation state, exact duplicate-only hook and finish export. The original context/route/auth guards, first request capture/model predicate, fixed response bytes, original refusal message/failure value, counters, transport configuration and stop/cleanup body remain unchanged except the explicit bounded-before-cancel diagnostic ordering above.
+* New small dedicated Grok refused-duplicate helper and inert contract files for bounded capture/privacy/schema and actual HTTP refusal behavior.
+* Existing `scripts/project_native_runtime.py`: one exact Grok duplicate-member validator and narrow allowed-member union. Existing main/title receipt/response validators stay byte-identical.
+* A focused Python contract addition covering only the closed new diagnostic; preserve all old tests/outcomes and exact selectors. Add no workflow/new native lane.
+* Accepted plan and concise factual validation documentation.
+
+Keep main/title model configuration, environment, title handler/schema/SSE, original user HOME/profile freeze, Prepared/untrusted/disabled inspection, public installation, command fatal barrier, all process/supervisor/environment/authority guards and other clients byte-identical. No change to the original number of accepted main/title exchanges or any qualification field. If implementation needs another path/behavior or privacy/budget exception, stop for exact amended review before editing it.
+
+## 6. Meaningful checks and next actual evidence
+
+Under root's serialized test slot, inert HTTP contracts perform the actual first accepted main request/response and one eligible second request to the held loopback fixture, with an independently authored harmless JSON object and separate held title key. Assert first response bytes/counters unchanged; second is HTTP400, never SSE/200, original context cancels, Failure duplicate remains, accepted counts1/1 remain, only one diagnostic retained, and ordinary existing stop behavior or truthful forced failure. Synthetic capture is not native evidence.
+
+Exercise malformed/duplicate/trailing/nonfinite/null/array/deep/node/key/UTF8/oversize/partial bodies and raw/escaped/nested main/title credential strings and keys. Check zero raw retention on every refusal. Wrong/multiple auth, route/query/method/host/MIME/loopback/context, incomplete first exchange, title-provider duplicate and third/concurrent attempt cannot acquire another capture. Partial-body cancellation stays within existing server/original origins, fails truthfully, renews no context and sends no accepted response. A new synthetic raw object must remain ordinary data; no real tool/model is invoked.
+
+Both Go artifact helper and independent Python reader contracts enforce exact member/receipt relation, status typing, byte/hash/privacy revalidation, fixed role/index/failure/false response flag, first-exchange receipt joins and client isolation. Coherent hash-updated malicious objects must fail privacy/structure, not only mismatch hashes. Unknown/extra receipt fields, altered counters, forged success flags, missing title/main evidence, raw without receipt, duplicate raw slot, unknown files and refused status with a body refuse. Existing failed-only runtime boundary/allfivefalse remains mandatory.
+
+Execute focused inert Grok provider/title/project/native-runtime contracts plus affected Python runtime contracts, gofmt/whitespace, affected all-enabled lint againsta412ba5e137fdcb7e004393229b323211ed746e1 and whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Record actual command/source/exits/log hashes; no skipped predicate or revised production assertion. No native/vendor/client/public installer/scanner execution locally. Broaden only for concrete remaining risk.
+
+Scratch pure readers replay unchanged34825member capture and prior61121member/representative earlier captures with their original exact source identities; original bytes/hashes/outcomes remain unchanged. Preserve inherited current Cline success independently. No old capture is relabeled or promoted. Obtain two full exact-source CODE critics and measured gates before root normal-FF publication.
+
+Only a fresh genuine current-source hosted capture may provide the actual second raw object or precise refusal metadata. Audit its exact source/tree/pins/public/inspection/first/title/duplicate evidence and full fatal/cleanup boundary independently before any new proposal. Even an observed safe second JSON body grants no response or completion; this lane remains failed/allfivefalse/runtimefalse/authfalse/modelfalse. No speculative second-auxiliary response, retry allowance, trust change or generic provider admission follows.
+
+## Baseline preservation anchors
+
+| Path | SHA256 |
+| --- | --- |
+| `repotests/agentplugins_grok_project_native_provider_test.go` | 6cb8f0f06e3e8a5ffec6dfb654e1566000ac9ca8dec1d450c4aa0d27a2421c65 |
+| `repotests/agentplugins_grok_project_native_route_test.go` | e41da580ebea3277d155e6a443149bb4463b65cc40fcf3fa3fa6d6f7ba78ccf7 |
+| `repotests/agentplugins_grok_project_native_title_test.go` | 76d595042a2fc2d3639cb4dad0568b8691485f342101689a76a97d844cf27658 |
+| `repotests/agentplugins_grok_project_native_privacy_test.go` | 4df4765a0caec14e4aa55963cb3000e1204ed0a9c1d1afe122d46cf6210c5164 |
+| `repotests/agentplugins_project_native_cli_attempt_test.go` | 07f40ed4e0def62f58698cd6d8ce839d407e6bc751e952680460affe39670791 |
+| `repotests/agentplugins_grok_project_native_attempt_test.go` | ee4f42b4574190e5350a1dde9f0bc4f90517bd5d1da70d27d78916e317f1aea4 |
+| `repotests/agentplugins_grok_project_native_environment_test.go` | dbbae16a28cfe9e893c30475ba8bfac343b41b06c3c264ad7dc0d2965b69cdb4 |
+| `scripts/project_native_runtime.py` | 24f39c61856d689535ac2fea81e01890caa780f4b74630b78c12c0df39cd6aee |
+
+This draft author read source/raw and wrote this scratch proposal only. No implementation, tests/gates/native execution or Git/GitHub mutations occurred for this plan.
+
+
+## Accepted refused-duplicate diagnostic plan before implementation
+
+Root R1 GO receipt SHA256 `089275e9328eff1c195bbc1915d56391868c0de6c7c4c7ba48c95aaab2f62969` and independent Kimi R2 GO receipt SHA256 `60d45fb3f2056ac8bfa2d9f0a8809efd9b372dbe7c720fc8c4097c9558aad4df` approve the exact draft above, SHA256 `670b875b7f2283058fcf3220a5cc3b222831e368c72b95bc10392e8bb233c0db`, before any implementation.
+
+The draft-time pending root RAW review is now complete: root receipt SHA256 `32168fb35ff64fedba411599187159a3090a4556ccc4ce101a937549019ee423`, alongside independent peer receipt `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`. Both preserve actual348 failed-only source-bound evidence; no qualification follows. Current native and inherited Cline jobs are complete and retained.
+
+Both critics require the one eligible duplicate/first-failure decision to be atomic with no earlier failure overwrite, with no provider mutex held during bounded body/privacy work. Every path must execute original HTTP400 and duplicate cancellation, keep accepted counters1/1 and original read/work/total origins, and export only a settled finite receipt with no partial or private body. Independent Python finite byte/number validation and concurrent/partial-read controls are required by the accepted plan. Root alone owns commits/publication after two CODE GOs and measured gates.
