@@ -55,6 +55,7 @@ type geminiProjectCycle struct {
 	probePIDs                 map[int64]bool
 	settings                  map[string]map[string]any
 	profileBefore             map[string]map[string]geminiCycleRecord
+	assessments               map[string]geminiCycleAssessment
 	owner                     *geminiCycleProvider
 	stage                     string
 	observed                  bool
@@ -70,7 +71,7 @@ func newGeminiProjectCycle(f *geminiProjectAttempt) *geminiProjectCycle {
 	f.evidence["cycle_capture_review_required"] = true
 	f.evidence["cycle_observed_complete"] = false
 	f.evidence["cycle_layout"] = map[string]string{"root": f.base.Root, "home": f.base.Home, "a": f.base.Project, "b": f.other, "outside": f.outside, "installer": f.installer, "client": f.client, "node": f.node, "git": f.git}
-	return &geminiProjectCycle{f: f, recipes: map[string]*geminiCycleRecipe{}, frozen: map[string]map[string]geminiCycleRecord{}, fileFrames: map[string]geminiCycleFileFrame{}, absent: map[string]bool{}, open: map[string]bool{}, aggregates: map[string][]byte{}, public: []string{}, listings: []string{}, natives: []string{}, sessions: map[string]bool{}, probeSessions: map[string]bool{}, probePIDs: map[int64]bool{}, settings: map[string]map[string]any{}, profileBefore: map[string]map[string]geminiCycleRecord{}, stage: "prepare"}
+	return &geminiProjectCycle{f: f, recipes: map[string]*geminiCycleRecipe{}, frozen: map[string]map[string]geminiCycleRecord{}, fileFrames: map[string]geminiCycleFileFrame{}, absent: map[string]bool{}, open: map[string]bool{}, aggregates: map[string][]byte{}, public: []string{}, listings: []string{}, natives: []string{}, sessions: map[string]bool{}, probeSessions: map[string]bool{}, probePIDs: map[int64]bool{}, settings: map[string]map[string]any{}, profileBefore: map[string]map[string]geminiCycleRecord{}, assessments: map[string]geminiCycleAssessment{}, stage: "prepare"}
 }
 func (c *geminiProjectCycle) stream(t *testing.T, raw []byte) geminiCycleBytes {
 	t.Helper()

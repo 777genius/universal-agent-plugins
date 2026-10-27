@@ -36,10 +36,18 @@ func geminiCycleState(raw []byte) (domain.StateFileV2, error) {
 }
 func (c *geminiProjectCycle) proof(t *testing.T, r *geminiCycleRecipe, stage string) {
 	t.Helper()
+	c.proofWithAssessment(t, r, stage, nil)
+}
+func (c *geminiProjectCycle) proofWithAssessment(t *testing.T, r *geminiCycleRecipe, stage string, assessment *geminiCycleAssessment) {
+	t.Helper()
 	// Capture the full selected authorities before interpretation and freeze
 	// these same maps only after a second complete snapshot proves stability.
 	before := map[string]map[string]geminiCycleRecord{}
-	for _, path := range []string{r.StateRoot, r.Profile, r.Project} {
+	global := c.recipes["user"].StateRoot
+	for _, path := range []string{r.StateRoot, r.Profile, r.Project, global} {
+		if _, exists := before[path]; exists {
+			continue
+		}
 		tree, err := geminiCycleTree(c.f.ctx, path)
 		if err != nil {
 			t.Fatal(err)
@@ -92,11 +100,25 @@ func (c *geminiProjectCycle) proof(t *testing.T, r *geminiCycleRecipe, stage str
 			t.Fatal(err)
 		}
 	}
-	if err := geminiCycleStateClosure(c.frozen[r.StateRoot], before[r.StateRoot], r); err != nil {
+	cache, err := geminiCycleAssessmentClosure(c.f.ctx, c.frozen[global], before[global], c.assessments, assessment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateBefore, stateAfter := c.frozen[r.StateRoot], before[r.StateRoot]
+	if global == r.StateRoot {
+		stateBefore, stateAfter = cache.Before, cache.After
+	} else if err := cache.globalUnchanged(assessment != nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := geminiCycleStateClosure(stateBefore, stateAfter, r); err != nil {
 		t.Fatal(err)
 	}
 	if err := geminiCycleCWDClosure(c.frozen[r.Project], before[r.Project], r.Scope != "user"); err != nil {
 		t.Fatal(err)
+	}
+	lock, hasLock := before[r.Profile]["settings.json.agentplugins.lock"]
+	if hasLock && (lock.Mode != 0100000|0600 || lock.Size != 0 || lock.SHA256 != geminiCycleSHA(nil)) {
+		t.Fatal("Gemini exact native writer lock")
 	}
 	for path, want := range before {
 		after, err := geminiCycleTree(c.f.ctx, path)
@@ -107,10 +129,11 @@ func (c *geminiProjectCycle) proof(t *testing.T, r *geminiCycleRecipe, stage str
 	if before[r.StateRoot]["state-v2.json"].SHA256 != geminiCycleSHA(raw) {
 		t.Fatal("Gemini raw state and held state file differ")
 	}
-	for _, path := range []string{r.StateRoot, r.Project} {
+	for _, path := range []string{r.StateRoot, r.Project, global} {
 		c.frozen[path] = before[path]
 		delete(c.open, path)
 	}
+	c.assessments = cache.Ledger
 	skills := filepath.Join(r.Profile, "skills")
 	skillTree := map[string]geminiCycleRecord{}
 	for name, record := range before[r.Profile] {
@@ -126,10 +149,7 @@ func (c *geminiProjectCycle) proof(t *testing.T, r *geminiCycleRecipe, stage str
 	c.fileFrames[r.Config] = configFrame
 	delete(c.open, r.Config)
 	c.f.protected[filepath.Join(r.StateRoot, "state-v2.json")] = geminiCycleSHA(raw)
-	if lock, ok := before[r.Profile]["settings.json.agentplugins.lock"]; ok {
-		if lock.Mode != 0100000|0600 || lock.Size != 0 || lock.SHA256 != geminiCycleSHA(nil) {
-			t.Fatal("Gemini exact native writer lock")
-		}
+	if hasLock {
 		c.f.protected[r.Config+".agentplugins.lock"] = lock.SHA256
 		parents := map[string]geminiCycleRecord{}
 		for path, record := range configFrame.Parents {

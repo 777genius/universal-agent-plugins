@@ -216,5 +216,13 @@ func (c *geminiProjectCycle) apply(t *testing.T, label, scope string, mutated bo
 	if strings.HasPrefix(label, "remove-") {
 		r.Removed = true
 	}
-	c.proof(t, r, label)
+	var assessment *geminiCycleAssessment
+	if geminiCycleSourceOperation(label) {
+		expected, err := geminiCycleAssessmentFor(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assessment = &expected
+	}
+	c.proofWithAssessment(t, r, label, assessment)
 }
