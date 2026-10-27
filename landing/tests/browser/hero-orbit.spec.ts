@@ -430,7 +430,9 @@ test('orbit progressively defocuses near the catalog and sharpens again at the h
   expect(await blur()).toBeLessThan(10);
   await page.mouse.wheel(0, 400);
   await expect(field).toHaveCSS('filter', 'blur(12px)');
+  const deeperScroll = await page.evaluate(() => scrollY) + 500;
   await page.mouse.wheel(0, 500);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(deeperScroll);
   await expect(field).toHaveCSS('filter', 'blur(12px)');
   await page.mouse.wheel(0, -await page.evaluate(() => scrollY));
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
