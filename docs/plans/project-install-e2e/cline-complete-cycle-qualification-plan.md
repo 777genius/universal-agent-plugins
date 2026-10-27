@@ -181,3 +181,39 @@ Then a fresh genuine hosted full cycle must pass and its exact source-bound
 closed raw/frontend/cleanup evidence must be independently audited before
 merge or program completion. The reviewed e5 capture remains historical
 failed evidence and cannot substitute for that fresh success. No release.
+
+## Exact local implementation validation (2026-10-27)
+
+Independent desktop R1 and shell R2 approved the full plan SHA256
+`9bde3ef5800a9b0d0562945d200bc443fd040257ad1527314e2ff17b5bb17734`
+before implementation. Both then reviewed the complete eight-file code delta
+and approved final code tree `b32aeac3cf9c883887cd7dfefee7e3787535c3a5`,
+local code commit `3f9b270f05bb998f5ece14268e167a4ab07bea86`, manifest SHA256
+`35e179ac78ff579bc650adbd7d810467780cedba14eb9ea3e5ca522ac955cf73`.
+Review findings were resolved with consistent rehashed raw negatives: reject
+extra provider response/history calls; bind exact native object IDs, logical
+and source-relative names plus source-frozen skill digests; enforce measured
+modes/models and fully typed config options; reject a fifth duplicate option
+before mapping. Original live ownership, ordinary cleanup and budgets remain.
+
+Actual inert focused Cline/shared Go contracts passed in0.293s, including all
+ten genuine e5 ACP transcript replays. Replay independently checked the exact
+outgoing buffer: five owned stages had one sole allow_once response, five
+empty stages had none, and every new session had empty injected MCP servers.
+The temporary replay test was removed before both lint gates. Canonical
+Go1.26.10 and golangci-lint2.13.2 with the checked-in configuration returned
+zero affected all-enabled issues and zero unfiltered six-linter whole-file
+size/architecture issues; no custom exclusion/configuration was introduced.
+The four reviewed Go source files stayed byte-identical through those gates.
+
+The existing runtime workflow's exact Python selection also loads the new
+semantic contracts: final27 tests passed in7.078s, covering complete authored
+semantics, every missing member, partial flags and rehashed raw hostiles.
+The complete genuine e5 raw archive still admits as failed/allfalse unchanged.
+A separate in-memory synthetic new-mode summary over those same raw bodies
+passes the new semantic joins; it validates parser compatibility only and
+does not reclassify that historical capture. Formatting, Python AST and diff
+checks passed. No local vendor process, account or real model was used.
+
+Publication and the required fresh genuine successful full-cycle audit remain
+root-owned follow-through; these local checks do not claim they occurred.
