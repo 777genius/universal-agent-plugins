@@ -786,7 +786,7 @@ def kimi_call_state(row, expected, workspace, project, *, initial=False, termina
             or ("last_turn_reason" in row and row["last_turn_reason"] != "completed")
             or ("last_prompt" in row and row["last_prompt"] != expected["prompt"])):
         raise ValueError("Kimi complete native failure/additional interaction")
-    if "current_prompt_id" in row and (type(row["current_prompt_id"]) is not str or not 1 <= len(row["current_prompt_id"]) <= 256):
+    if "current_prompt_id" in row and (initial or row["current_prompt_id"] != expected["prompt_id"]):
         raise ValueError("Kimi complete native current prompt differs")
     usage = kimi_call_object(row["usage"], ("input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens", "context_tokens"), ("total_cost_usd", "context_limit", "turn_count"))
     for key, value in usage.items():
@@ -815,6 +815,119 @@ def kimi_call_partial(page, terminal, sentinel):
             raise ValueError("Kimi complete intermediate native message identity differs")
 
 
+def kimi_call_text(value, limit):
+    return type(value) is str and len(value.encode("utf-8")) <= limit and "\x00" not in value
+
+
+def kimi_call_number(value, low, high, integer=False):
+    return type(value) in (int, float) and low <= value <= high and math.isfinite(value) and (not integer or value % 1 == 0)
+
+
+def kimi_call_binding(value):
+    # This fixed Kimi project add has no profile/delivery/pending-intent authority.
+    fields = ("client_binding_id", "client_id", "scope", "target_locator", "physical_artifact_id", "materialization",
+              "activation", "authentication", "policy", "verification", "data_receipt_id", "native_profile_root", "updated_at")
+    binding = kimi_call_object(value, fields, ("package_revision", "affected_surfaces", "native_objects", "receipts"))
+    if any(type(binding[key]) is not str for key in fields):
+        raise ValueError("Kimi complete binding scalar type differs")
+    profile = binding["native_profile_root"]
+    if (not profile.startswith("/") or profile.startswith("//") or os.path.normpath(profile) != profile
+            or Path(profile).name != ".kimi-code"):
+        raise ValueError("Kimi complete canonical native profile/project differs")
+    if "package_revision" in binding:
+        revision = kimi_call_object(binding["package_revision"], ("tree_digest", "manifest_digest"), ("version",))
+        if any(type(value) is not str for value in revision.values()):
+            raise ValueError("Kimi complete binding revision type differs")
+    if "affected_surfaces" in binding and (type(binding["affected_surfaces"]) is not list or any(type(value) is not str for value in binding["affected_surfaces"])):
+        raise ValueError("Kimi complete binding surfaces type differs")
+    for key in ("native_objects", "receipts"):
+        if key not in binding:
+            continue
+        if type(binding[key]) is not list:
+            raise ValueError("Kimi complete binding records type differs")
+        for record in binding[key]:
+            if key == "native_objects":
+                record = kimi_call_object(record, ("object_id", "kind", "protection_class"),
+                           ("logical_name", "path", "source_relative", "before_digest", "managed_digest", "user_modified"))
+                if "user_modified" in record and type(record["user_modified"]) is not bool:
+                    raise ValueError("Kimi complete binding native object type differs")
+                scalars = set(record) - {"user_modified"}
+            else:
+                record = kimi_call_object(record, ("operation_id", "sequence", "mutation_type", "client_binding_id", "phase"),
+                           ("data_receipt_id", "operation_group_id", "active_path", "staging_path", "backup_path", "before_digest", "after_digest"))
+                if type(record["sequence"]) is not int or not -(1 << 63) <= record["sequence"] < 1 << 63:
+                    raise ValueError("Kimi complete binding receipt sequence differs")
+                scalars = set(record) - {"sequence"}
+            if any(type(record[key]) is not str for key in scalars):
+                raise ValueError("Kimi complete binding record scalar type differs")
+    return binding
+
+
+def kimi_call_request(body):
+    # Pure parity with unchanged Go kimiAttemptRequest; no requester is invoked.
+    request = kimi_call_object(kimi_call_json(body), ("model", "messages", "tools", "stream", "stream_options"),
+                  ("max_tokens", "max_completion_tokens", "temperature", "top_p", "parallel_tool_calls", "prompt_cache_key"))
+    if (request["model"] != "uap-kimi-native-model" or request["stream"] is not True
+            or request["stream_options"] != {"include_usage": True}
+            or request["stream_options"]["include_usage"] is not True):
+        raise ValueError("Kimi complete provider envelope differs")
+    if "prompt_cache_key" in request and (type(request["prompt_cache_key"]) is not str
+            or not re.fullmatch(r"session_[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", request["prompt_cache_key"])):
+        raise ValueError("Kimi complete provider cache metadata differs")
+    for key in ("max_tokens", "max_completion_tokens"):
+        if key in request and not kimi_call_number(request[key], 1, 1 << 20, True):
+            raise ValueError("Kimi complete provider token bound differs")
+    for key, high in (("temperature", 2), ("top_p", 1)):
+        if key in request and not kimi_call_number(request[key], 0, high):
+            raise ValueError("Kimi complete provider sampling bound differs")
+    if "parallel_tool_calls" in request and type(request["parallel_tool_calls"]) is not bool:
+        raise ValueError("Kimi complete provider parallel flag differs")
+    tools = request["tools"]
+    if type(tools) is not list or len(tools) != 1:
+        raise ValueError("Kimi complete provider sole installed declaration absent")
+    declaration = kimi_call_object(tools[0], ("type", "function"))
+    function = kimi_call_object(declaration["function"], ("name", "description", "parameters"))
+    parameters = {"type": "object", "properties": {key: {"type": "string"} for key in ("nonce", "operation", "marker")}, "required": ["nonce"], "additionalProperties": False}
+    if (declaration["type"] != "function" or function["name"] != "mcp__uap-kimi-native-a__inspect_runtime"
+            or function["description"] != "Inspect only disposable fixture runtime facts."
+            or function["parameters"] != parameters or function["parameters"]["additionalProperties"] is not False):
+        raise ValueError("Kimi complete provider installed declaration differs")
+    messages = request["messages"]
+    if type(messages) is not list or not 1 <= len(messages) <= 256:
+        raise ValueError("Kimi complete provider message inventory differs")
+    for message in messages:
+        kimi_call_object(message, ("role", "content"), ("tool_call_id", "tool_calls"))
+        role, content = message["role"], message["content"]
+        if role not in ("system", "user", "assistant", "tool"):
+            raise ValueError("Kimi complete provider message role differs")
+        if content is None:
+            if role != "assistant" or message.get("tool_calls") is None:
+                raise ValueError("Kimi complete provider null content differs")
+        elif not kimi_call_text(content, 1 << 20):
+            if type(content) is not list or not 1 <= len(content) <= 128:
+                raise ValueError("Kimi complete provider content inventory differs")
+            for part in content:
+                kimi_call_object(part, ("type", "text"))
+                if part["type"] != "text" or not kimi_call_text(part["text"], 1 << 20):
+                    raise ValueError("Kimi complete provider content text differs")
+        if "tool_call_id" in message and (role != "tool" or not kimi_call_text(message["tool_call_id"], 256)):
+            raise ValueError("Kimi complete provider result identity differs")
+        if role == "tool" and message.get("tool_call_id") is None:
+            raise ValueError("Kimi complete provider result identity absent")
+        if "tool_calls" in message:
+            calls = message["tool_calls"]
+            if role != "assistant" or type(calls) is not list or len(calls) != 1:
+                raise ValueError("Kimi complete provider assistant call inventory differs")
+            call = kimi_call_object(calls[0], ("id", "type", "function"))
+            function = kimi_call_object(call["function"], ("name", "arguments"))
+            if (call["type"] != "function" or not kimi_call_text(call["id"], 256)
+                    or function["name"] != "mcp__uap-kimi-native-a__inspect_runtime"
+                    or not kimi_call_text(function["arguments"], 4096)):
+                raise ValueError("Kimi complete provider assistant function differs")
+            kimi_call_json(function["arguments"].encode())
+    return request
+
+
 def kimi_call_complete(bodies, result):
     """Pure success admission recomputes raw joins; proof/flags are not authority."""
     required = {"runtime-attempt.json", "probe-events.jsonl", "python-api.json", "native-data-proof.json",
@@ -838,7 +951,7 @@ def kimi_call_complete(bodies, result):
         "prompt_id", "terminal_reason", "message_count", "snapshot_count", "history_sha256", "terminal_snapshot_sha256",
         "probe_pid", "probe_session", "started_at", "ended_at", "data_proof_sha256"))
     started, ended = kimi_call_instant(proof["started_at"]), kimi_call_instant(proof["ended_at"])
-    if (not 0 <= (ended - started).total_seconds() <= 180
+    if (not 0 <= result["elapsed_ms"] <= 180000 or not 0 <= (ended - started).total_seconds() <= 180
             or (ended - started).total_seconds() * 1000 > result["elapsed_ms"]
             or type(proof["native_turn_id"]) is not int or proof["native_turn_id"] != 0
             or type(result.get("native_turn_id")) is not int or result["native_turn_id"] != 0
@@ -853,12 +966,28 @@ def kimi_call_complete(bodies, result):
             or type(proof["approval_id"]) is not str or not proof["approval_id"]):
         raise ValueError("Kimi complete session/call ownership differs")
     nonce = owned[1]
-    binding = result.get("binding")
-    if (type(binding) is not dict or binding.get("client_id") != "kimi" or binding.get("scope") != "project"
+    public = kimi_call_object(kimi_call_json(bodies["add-a.stdout.log"]), ("schema_version", "command", "result", "data"))
+    if type(public["schema_version"]) is not int or public["schema_version"] != 1 or public["command"] != "add" or public["result"] != "success" or type(public["data"]) is not dict:
+        raise ValueError("Kimi complete public add result differs")
+    targets = public["data"].get("targets")
+    if type(targets) is not list or len(targets) != 1 or type(targets[0]) is not dict or targets[0].get("target") != "kimi" or type(targets[0].get("output")) is not dict:
+        raise ValueError("Kimi complete public selected target differs")
+    installation = targets[0]["output"].get("result")
+    if (type(installation) is not dict or installation.get("mutated") is not True
+            or not kimi_call_text(installation.get("installation_id"), 64) or not installation["installation_id"]):
+        raise ValueError("Kimi complete public installation result differs")
+    installation_id = installation["installation_id"]
+    physical_id = "uap-kimi-native-a-" + hashlib.sha256(installation_id.encode()).hexdigest()[:12]
+    binding = kimi_call_binding(result.get("binding"))
+    if (binding.get("client_id") != "kimi" or binding.get("scope") != "project"
             or binding.get("activation") != "prepared" or binding.get("authentication") != "not_checked"
             or binding.get("verification") != "installation_verified" or binding.get("materialization") != "materialized"):
         raise ValueError("Kimi complete selected project binding absent")
     active, data = binding.get("target_locator"), result.get("data_locator")
+    if (type(active) is not str or binding.get("physical_artifact_id") != physical_id
+            or binding.get("client_binding_id") != "client_" + hashlib.sha256("\x00".join((installation_id, "kimi", "project", active)).encode()).hexdigest()[:24]
+            or binding.get("data_receipt_id") != "data_" + hashlib.sha256("\x00".join((installation_id, physical_id, "project")).encode()).hexdigest()[:24]):
+        raise ValueError("Kimi complete public installation/binding/data identity differs")
     facts = kimi_call_object(result.get("probe_facts"), ("nonce", "revision", "cwd", "argv", "plugin_root", "plugin_data", "literal", "once", "marker", "pid", "session"))
     expected_facts = {"nonce": nonce + "-a", "revision": "a-one", "cwd": active, "argv": ["Kimi owned a", str(active) + "/argument"],
                       "plugin_root": active, "plugin_data": data, "literal": "", "once": "", "marker": "retained-" + nonce,
@@ -880,23 +1009,9 @@ def kimi_call_complete(bodies, result):
                 or event["facts"] != (facts if method == "tools/call" else None)):
             raise ValueError("Kimi complete fresh probe/result join differs")
         previous = kimi_call_instant(event["timestamp"], previous, ended)
-    requests = [kimi_call_json(bodies[f"provider-request-{number}.json"]) for number in (1, 2)]
-    declaration = [{"type": "function", "function": {"name": "mcp__uap-kimi-native-a__inspect_runtime", "description": "Inspect only disposable fixture runtime facts.", "parameters": {"type": "object", "properties": {key: {"type": "string"} for key in ("nonce", "operation", "marker")}, "required": ["nonce"], "additionalProperties": False}}}]
-    for request in requests:
-        kimi_call_object(request, ("model", "messages", "tools", "stream", "stream_options"), ("prompt_cache_key", "max_tokens", "max_completion_tokens", "temperature", "top_p", "parallel_tool_calls"))
-        if (request.get("tools") != declaration or request.get("stream_options") != {"include_usage": True} or type(request) is not dict or request.get("model") != "uap-kimi-native-model" or request.get("stream") is not True
-                or request.get("prompt_cache_key") != session or type(request.get("messages")) is not list):
-            raise ValueError("Kimi complete provider request identity differs")
-        if request["stream_options"].get("include_usage") is not True or request["tools"][0]["function"]["parameters"].get("additionalProperties") is not False:
-            raise ValueError("Kimi complete provider declaration boolean differs")
-        for key in ("max_tokens", "max_completion_tokens"):
-            if key in request and (type(request[key]) is not int or not 1 <= request[key] <= 1 << 20):
-                raise ValueError("Kimi complete provider token bound differs")
-        for key, high in (("temperature", 2), ("top_p", 1)):
-            if key in request and (type(request[key]) not in (int, float) or not 0 <= request[key] <= high):
-                raise ValueError("Kimi complete provider sampling bound differs")
-        if "parallel_tool_calls" in request and type(request["parallel_tool_calls"]) is not bool:
-            raise ValueError("Kimi complete provider parallel flag differs")
+    requests = [kimi_call_request(bodies[f"provider-request-{number}.json"]) for number in (1, 2)]
+    if any(request.get("prompt_cache_key") != session for request in requests):
+        raise ValueError("Kimi complete provider session metadata changed")
     first, second = requests[0]["messages"], requests[1]["messages"]
     if (len(second) != len(first) + 2 or first != second[:-2] or any(row.get("role") == "tool" or "tool_calls" in row for row in first)
             or second[-2].get("role") != "assistant" or second[-1].get("role") != "tool" or second[-1].get("tool_call_id") != call):
@@ -940,20 +1055,28 @@ def kimi_call_complete(bodies, result):
         raise ValueError("Kimi complete closed raw envelope differs")
     raw_files = {name: value.encode() for name, value in raw_files.items()}
     research = kimi_call_object(kimi_call_json(raw_files["research.json"]), ("schema_version", "client", "phase", "commands", "http_requests", "observations", "qualification"))
-    if research["client"] != "kimi" or research["phase"] != "installed-single-tool-attempt" or research["qualification"] != dict.fromkeys(shared.QUALIFICATION_CASES, False):
+    if (type(research["schema_version"]) is not int or research["schema_version"] != 1
+            or research["client"] != "kimi" or research["phase"] != "installed-single-tool-attempt"
+            or type(research["qualification"]) is not dict or set(research["qualification"]) != set(shared.QUALIFICATION_CASES)
+            or any(value is not False for value in research["qualification"].values())):
         raise ValueError("Kimi complete observer capture boundary differs")
     observation = kimi_call_object(research["observations"], ("native_capture_complete", "native_history_grammar_frozen", "native_session_id", "native_turn_id", "provider_call_id", "approval_id", "snapshot_count", "api_request_count", "boundary"))
     if (type(observation) is not dict or observation.get("native_capture_complete") is not False or observation.get("native_history_grammar_frozen") is not False
             or observation.get("native_session_id") != session or observation.get("provider_call_id") != call
-            or observation.get("approval_id") != proof["approval_id"] or observation.get("native_turn_id") != 0
-            or observation.get("snapshot_count") != proof["snapshot_count"]
+            or observation.get("approval_id") != proof["approval_id"] or type(observation.get("native_turn_id")) is not int or observation["native_turn_id"] != 0
+            or type(observation.get("snapshot_count")) is not int or observation["snapshot_count"] != proof["snapshot_count"]
             or observation["boundary"] != "Bounded initial capture; no native history or qualification inferred from provider/probe success"):
         raise ValueError("Kimi complete observer owned session differs")
     commands = research["commands"]
     native_cleanup = {"forced_kill": False, "group_reaped": True, "port_closed": True, "shutdown_acknowledged": True, "sigterm_sent": False}
-    if (type(commands) is not list or len(commands) != 1 or commands[0].get("exit") != 0 or commands[0].get("error") is not None
-            or commands[0].get("cleanup") != native_cleanup or any(type(value) is not bool for value in commands[0]["cleanup"].values())):
-        raise ValueError("Kimi complete ordinary native closure absent")
+    if type(commands) is not list or len(commands) != 1:
+        raise ValueError("Kimi complete native command inventory differs")
+    command = kimi_call_object(commands[0], ("argv", "cwd", "probe", "elapsed_seconds", "error", "exit", "cleanup",
+                               "stdout_file", "stdout_bytes", "stdout_sha256", "stderr_file", "stderr_bytes", "stderr_sha256"))
+    if (type(command["exit"]) is not int or command["exit"] != 0 or command["error"] is not None or command["probe"] != "kimi-single-tool"
+            or not kimi_call_number(command["elapsed_seconds"], 0, 60) or command["cleanup"] != native_cleanup
+            or any(type(value) is not bool for value in command["cleanup"].values())):
+        raise ValueError("Kimi complete native command schema/ordinary closure differs")
     used = {"research.json"}
     for channel in ("stdout", "stderr"):
         command = commands[0]
@@ -965,7 +1088,8 @@ def kimi_call_complete(bodies, result):
             raise ValueError("Kimi complete native stream receipt differs")
         used.add(name)
     http_rows = research["http_requests"]
-    if type(http_rows) is not list or not 1 <= len(http_rows) <= 60 or observation.get("api_request_count") != len(http_rows):
+    if (type(http_rows) is not list or not 1 <= len(http_rows) <= 60 or type(observation.get("api_request_count")) is not int
+            or observation["api_request_count"] != len(http_rows)):
         raise ValueError("Kimi complete native HTTP budget differs")
     responses, response_bodies, labels, http_receipts = {}, {}, [], {}
     for row in http_rows:
@@ -982,11 +1106,24 @@ def kimi_call_complete(bodies, result):
         response = kimi_call_object(kimi_call_json(stream), ("code", "msg", "data", "request_id"), ("details", "stack"))
         if type(response["code"]) is not int or response["code"] != (40101 if label == "unauthorized" else 0):
             raise ValueError("Kimi complete native HTTP envelope differs")
+        if (not kimi_call_text(response["request_id"], 256) or not response["request_id"]
+                or not kimi_call_text(response["msg"], 1024) or label == "unauthorized" and response["data"] is not None):
+            raise ValueError("Kimi complete native HTTP response identity/data differs")
+        if "stack" in response and response["stack"] is not None and not kimi_call_text(response["stack"], 32768):
+            raise ValueError("Kimi complete native negative stack differs")
         if label != "unauthorized" and (response["msg"] != "success" or response.get("details") is not None or response.get("stack") is not None):
             raise ValueError("Kimi complete native HTTP success differs")
         responses[label] = response["data"]
     if set(raw_files) != used:
         raise ValueError("Kimi complete unrecorded raw member")
+    for label in ("health", "shutdown"):
+        value = kimi_call_object(responses.get(label), ("ok",))
+        if value["ok"] is not True:
+            raise ValueError("Kimi complete native health/shutdown acknowledgement differs")
+    meta = kimi_call_object(responses.get("meta"), ("server_version", "capabilities", "server_id", "started_at", "open_in_apps", "dangerous_bypass_auth", "backend"),
+                            ("experimental_flags", "features", "web_title"))
+    if meta["server_version"] != "2.3.2" or meta["backend"] != "v2" or meta["dangerous_bypass_auth"] is not False:
+        raise ValueError("Kimi complete pinned native metadata differs")
     expected = {"facts": facts, "session": session, "call": call, "prompt_id": proof["prompt_id"], "started": started, "ended": ended,
                 "prompt": "Call the one installed fixture tool once with the exact nonce and marker; then report completion. " + nonce + "-a", "sentinel": "UAP_KIMI_DONE_" + nonce}
     project = str(Path(binding["native_profile_root"]).parent)
@@ -1008,26 +1145,46 @@ def kimi_call_complete(bodies, result):
         raise ValueError("Kimi complete installed authored skill differs")
     workspaces = {}
     for scope in ("a", "b", "c"):
+        trust = kimi_call_object(responses.get("trust-before-" + scope), ("trusted",))
+        if trust["trusted"] is not False:
+            raise ValueError("Kimi complete native workspace/trust differs")
+    for label in ("trust-set-a", "trust-after-a", "trust-set-b", "trust-after-b", "trust-untrusted-c"):
+        trust = kimi_call_object(responses.get(label), ("trusted",))
+        if trust["trusted"] is not (label != "trust-untrusted-c"):
+            raise ValueError("Kimi complete owned native trust differs")
+    for scope in ("a", "b", "c"):
         workspace = kimi_call_object(responses.get("workspace-" + scope), ("id", "root", "name", "created_at", "last_opened_at", "session_count"))
         if (type(workspace["id"]) is not str or not re.fullmatch(r"wd_[a-z0-9._-]+_[0-9a-f]{12}", workspace["id"])
                 or workspace["root"] != projects[scope] or workspace["name"] != "uap-kimi-native-" + scope
-                or type(workspace["session_count"]) is not int or workspace["session_count"] != 0
-                or responses.get("trust-before-" + scope) != {"trusted": False}):
+                or type(workspace["session_count"]) is not int or workspace["session_count"] != 0):
             raise ValueError("Kimi complete native workspace/trust differs")
         workspaces[scope] = workspace["id"]
         for key in ("created_at", "last_opened_at"): kimi_call_instant(workspace[key], started, ended)
-    if len(set(workspaces.values())) != 3 or responses.get("trust-untrusted-c") != {"trusted": False}:
+    if len(set(workspaces.values())) != 3:
         raise ValueError("Kimi complete distinct native workspace/trust differs")
-    for scope in ("a", "b"):
-        if responses.get("trust-set-" + scope) != {"trusted": True} or responses.get("trust-after-" + scope) != {"trusted": True}:
-            raise ValueError("Kimi complete owned native trust differs")
     projected = {key: value for key, value in server.items() if key != "env"}
     projected["envKeys"] = sorted(server["env"])
     expected_catalog = [{"name": "uap-kimi-native-a", "config": projected, "source": "global",
                          "origin": project + "/.kimi-code/mcp.json", "mutable": False}]
-    if responses.get("catalog-a") != expected_catalog or any(responses.get("catalog-" + scope) != [] for scope in ("b", "c", "user")):
+    if (responses.get("catalog-a") != expected_catalog or responses["catalog-a"][0]["mutable"] is not False
+            or any(responses.get("catalog-" + scope) != [] for scope in ("b", "c", "user"))):
         raise ValueError("Kimi complete receipt-selected native catalog differs")
-    prompt = kimi_call_object(responses.get("prompt"), ("prompt_id", "user_message_id", "status", "content", "created_at"), ("metadata",))
+    skills = kimi_call_object(responses.get("skills-a"), ("skills",))["skills"]
+    if type(skills) is not list or len(skills) > 512:
+        raise ValueError("Kimi complete native skill inventory differs")
+    selected = []
+    for skill in skills:
+        kimi_call_object(skill, ("name", "description", "path", "source"), ("type", "disable_model_invocation", "scopes"))
+        if not kimi_call_text(skill["name"], 4096):
+            raise ValueError("Kimi complete native skill name differs")
+        if skill["name"].startswith("uap-kimi-native-"):
+            selected.append(skill)
+    if (len(selected) != 1 or selected[0]["name"] != "uap-kimi-native-a" or selected[0]["description"] != "Kimi installed a-one"
+            or selected[0]["path"] != project + "/.kimi-code/skills/uap-kimi-native-a/SKILL.md" or selected[0]["source"] != "project"):
+        raise ValueError("Kimi complete selected native skill identity differs")
+    # Pinned prompts.ts projects only clientMetadata[0]. The fixed request has
+    # no metadata, so even an origin wrapper/null would be unrequested here.
+    prompt = kimi_call_object(responses.get("prompt"), ("prompt_id", "user_message_id", "status", "content", "created_at"))
     if (prompt["prompt_id"] != proof["prompt_id"] or prompt["user_message_id"] != proof["prompt_id"]
             or prompt["status"] not in ("running", "queued", "blocked") or prompt["content"] != [{"type": "text", "text": expected["prompt"]}]):
         raise ValueError("Kimi complete accepted native prompt differs")
@@ -1081,7 +1238,8 @@ def kimi_call_complete(bodies, result):
     for index in range(proof["snapshot_count"]):
         snapshot = kimi_call_object(responses.get("snapshot-" + str(index)), ("as_of_seq", "epoch", "session", "messages", "in_flight_turn", "pending_approvals", "pending_questions", "subagents"))
         state = snapshot["session"]
-        if (type(snapshot["as_of_seq"]) is not int or snapshot["as_of_seq"] < previous_seq or type(snapshot["epoch"]) is not str
+        if (type(snapshot["as_of_seq"]) is not int or not 0 <= snapshot["as_of_seq"] <= 1 << 40
+                or snapshot["as_of_seq"] < previous_seq or type(snapshot["epoch"]) is not str
                 or not 1 <= len(snapshot["epoch"]) <= 256 or epoch is not None and snapshot["epoch"] != epoch
                 or snapshot["pending_approvals"] != [] or snapshot["pending_questions"] != [] or snapshot["subagents"] != []
                 or type(state) is not dict or state.get("id") != session or state.get("last_turn_reason") in ("failed", "cancelled")

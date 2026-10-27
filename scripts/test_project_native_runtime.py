@@ -465,7 +465,7 @@ class RuntimeTests(unittest.TestCase):
         encode = lambda value: json.dumps(value, separators=(",", ":")).encode()
         digest = lambda body: hashlib.sha256(body).hexdigest()
         nonce, root = "c" * 32, "/inert/kimi-python-contract"
-        project, physical = root + "/project", "uap-kimi-native-a-" + "d" * 12
+        project, physical = root + "/project", "uap-kimi-native-a-20242674556d"
         profile = project + "/.kimi-code"
         active, data = project + "/.uap/managed/clients/kimi/" + physical, project + "/.uap/plugin-data/" + physical
         client, session = "/inert/never-executed/kimi", "session_11111111-2222-4333-8444-555555555555"
@@ -496,6 +496,7 @@ class RuntimeTests(unittest.TestCase):
             command = json.loads(bodies[label + ".command.json"])
             command.update({"argv": argv, "cwd": project if label == "add-a" else projects_for_commands["user"]})
             bodies[label + ".command.json"] = encode(command)
+        bodies["add-a.stdout.log"] = encode({"schema_version": 1, "command": "add", "result": "success", "data": {"targets": [{"target": "kimi", "output": {"result": {"installation_id": "inert-python-installation", "mutated": True}}}]}})
         bodies["version.stdout.log"] = b"2.3.2\n"
         bodies["probe-events.jsonl"] = b"".join(encode({"method": method, "pid": 17, "session": facts["session"], "nonce": nonce + "-a",
              "timestamp": f"2026-01-02T03:04:08.00{index}Z", "facts": facts if method == "tools/call" else None}) + b"\n"
@@ -528,7 +529,7 @@ class RuntimeTests(unittest.TestCase):
             receipts.append({"authenticated": auth, "error": None, "label": label, "method": method, "path": path, "response_bytes": len(body), "response_file": name, "response_sha256": digest(body), "status": status})
         response("health", "GET", "/api/v1/healthz", {"ok": True}, False)
         response("unauthorized", "GET", "/api/v1/meta", None, False, 401, 40101)
-        response("meta", "GET", "/api/v1/meta", {"server_version": "2.3.2", "backend": "v2", "dangerous_bypass_auth": False})
+        response("meta", "GET", "/api/v1/meta", {"server_version": "2.3.2", "backend": "v2", "dangerous_bypass_auth": False, "capabilities": {key: True for key in ("websocket", "file_upload", "fs_query", "mcp", "tasks", "terminal")}, "server_id": "inert-server", "started_at": stamp, "open_in_apps": []})
         projects = {"a": project, "b": root + "/project-b", "c": root + "/project-c", "user": root + "/outside"}
         workspaces = {"a": "wd_project_111111111111", "b": "wd_project-b_222222222222", "c": "wd_project-c_333333333333"}
         for scope in ("a", "b", "c"):
@@ -542,7 +543,7 @@ class RuntimeTests(unittest.TestCase):
         for scope in ("a", "b", "c", "user"):
             catalog = [{"name": "uap-kimi-native-a", "config": projected, "source": "global", "origin": profile + "/mcp.json", "mutable": False}] if scope == "a" else []
             response("catalog-" + scope, "GET", "/api/v2/mcp/servers?" + runtime.urlencode({"cwd": projects[scope]}), catalog)
-        response("skills-a", "GET", "/api/v1/workspaces/" + workspaces["a"] + "/skills", {"skills": []})
+        response("skills-a", "GET", "/api/v1/workspaces/" + workspaces["a"] + "/skills", {"skills": [{"name": "uap-kimi-native-a", "description": "Kimi installed a-one", "path": profile + "/skills/uap-kimi-native-a/SKILL.md", "source": "project"}]})
         response("create-session", "POST", "/api/v1/sessions", {**{key: value for key, value in state.items() if key != "last_turn_reason"}, "agent_config": {"model": ""}, "title": ""})
         base = "/api/v1/sessions/" + session
         response("prompt", "POST", base + "/prompts", {"prompt_id": prompt_id, "user_message_id": prompt_id, "status": "running", "content": [{"type": "text", "text": prompt}], "created_at": stamp})
@@ -564,11 +565,42 @@ class RuntimeTests(unittest.TestCase):
         result = {**self.cli_result("qoder"), "client": "kimi", "version": "2.3.2", "phase": "installed-single-tool-attempt", "provider_kind": "scripted-openai-chat-completions", "elapsed_ms": 8000,
                   "runtime_attempt_complete": True, "test_failed": False, "native_capture_complete": True, "native_history_grammar_frozen": True, "provider_returned": True,
                   "provider_call_id": call, "native_session_id": session, "native_turn_id": 0, "probe_facts": facts, "native_history": proof,
-                  "binding": {"client_id": "kimi", "scope": "project", "activation": "prepared", "authentication": "not_checked", "verification": "installation_verified", "materialization": "materialized", "target_locator": active, "native_profile_root": profile, "physical_artifact_id": physical},
+                  "binding": {"client_binding_id": "client_6e8a61a9620b87be9881f1ef", "data_receipt_id": "data_9797d862dba4e5336eb02e08", "client_id": "kimi", "scope": "project", "activation": "prepared", "authentication": "not_checked", "verification": "installation_verified", "materialization": "materialized", "target_locator": active, "native_profile_root": profile, "physical_artifact_id": physical, "policy": "allowed", "updated_at": stamp,
+                              "package_revision": {"version": "1.0.0", "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64}, "affected_surfaces": ["kimi"],
+                              "native_objects": [{"object_id": "package:kimi:" + physical, "kind": "managed_package_directory", "path": active, "protection_class": "managed"}],
+                              "receipts": [{"operation_id": "inert-operation", "sequence": 1, "mutation_type": "directory_swap", "client_binding_id": "client_6e8a61a9620b87be9881f1ef", "phase": "committed"}]},
                   "data_locator": data, "provider_cleanup": {"shutdown_complete": True, "forced_close": False, "error": False, "requests": 2, "issued": True, "returned": True},
                   "qualification": {key: key in ("mcp-initialize", "mcp-tools-list", "mcp-tools-call") for key in runtime.shared.QUALIFICATION_CASES}}
         bodies["runtime-attempt.json"] = encode(result)
         return bodies
+
+    def kimi_mutate_raw_coherently(self, bodies, mutate):
+        envelope = json.loads(bodies["python-api.json"])
+        raw = envelope["files"]
+        mutate(raw)
+        research = json.loads(raw["research.json"])
+        for receipt in research["http_requests"]:
+            name = receipt["response_file"]
+            if name in raw:
+                body = raw[name].encode()
+                receipt["response_bytes"] = len(body)
+                receipt["response_sha256"] = hashlib.sha256(body).hexdigest()
+        raw["research.json"] = json.dumps(research)
+        bodies["python-api.json"] = bodies["native-attempt.stdout.log"] = json.dumps(envelope).encode()
+        result = json.loads(bodies["runtime-attempt.json"])
+        proof = result["native_history"]
+        proof["history_sha256"] = hashlib.sha256(raw["kimi-single-tool-history.http.json"].encode()).hexdigest()
+        name = "kimi-single-tool-snapshot-" + str(proof["snapshot_count"] - 1) + ".http.json"
+        proof["terminal_snapshot_sha256"] = hashlib.sha256(raw[name].encode()).hexdigest()
+        bodies["runtime-attempt.json"] = json.dumps(result).encode()
+
+    def kimi_mutate_http_coherently(self, bodies, label, mutate):
+        def update(raw):
+            name = "kimi-single-tool-" + label + ".http.json"
+            response = json.loads(raw[name])
+            mutate(response)
+            raw[name] = json.dumps(response)
+        self.kimi_mutate_raw_coherently(bodies, update)
 
     def test_kimi_synthetic_complete_reader_recomputes_raw_proof(self):
         bodies = self.kimi_synthetic_completed_capture()
@@ -580,6 +612,172 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(missing=name), self.assertRaises(ValueError):
                 runtime.kimi_call_members({key: value for key, value in bodies.items() if key != name}, self.source)
 
+    def test_kimi_public_receipt_and_derived_ids_are_independent_authority(self):
+        cases = ("empty", "failed", "schema", "target", "missing-result", "not-mutated", "installation", "physical", "client", "data")
+        for kind in cases:
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "public|JSON byte bound"):
+                bodies = self.kimi_synthetic_completed_capture()
+                result = json.loads(bodies["runtime-attempt.json"])
+                public = json.loads(bodies["add-a.stdout.log"])
+                target = public["data"]["targets"][0]
+                if kind == "empty": bodies["add-a.stdout.log"] = b""
+                elif kind == "failed": public["result"] = "failure"
+                elif kind == "schema": public["schema_version"] = True
+                elif kind == "target": target["target"] = "foreign"
+                elif kind == "missing-result": del target["output"]["result"]
+                elif kind == "not-mutated": target["output"]["result"]["mutated"] = False
+                elif kind == "installation": target["output"]["result"]["installation_id"] = "foreign-installation"
+                elif kind == "physical": result["binding"]["physical_artifact_id"] = "uap-kimi-native-a-" + "f" * 12
+                elif kind == "client": result["binding"]["client_binding_id"] = "client_" + "f" * 24
+                elif kind == "data": result["binding"]["data_receipt_id"] = "data_" + "f" * 24
+                if kind != "empty": bodies["add-a.stdout.log"] = json.dumps(public).encode()
+                bodies["runtime-attempt.json"] = json.dumps(result).encode()
+                runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_native_mandatory_data_semantics_survive_recomputed_hashes(self):
+        cases = (("health", "ok", "health/shutdown"), ("shutdown", "ok", "health/shutdown"),
+                 ("meta", "version", "pinned native metadata"), ("meta", "backend", "pinned native metadata"),
+                 ("meta", "auth", "pinned native metadata"), ("meta", "missing", "raw object"),
+                 ("meta", "unknown", "raw object"), ("skills-a", "empty", "selected native skill"),
+                 ("skills-a", "foreign", "selected native skill"), ("skills-a", "path", "selected native skill"),
+                 ("skills-a", "source", "selected native skill"), ("skills-a", "duplicate", "selected native skill"))
+        for label, kind, reason in cases:
+            with self.subTest(label=label, kind=kind), self.assertRaisesRegex(ValueError, reason):
+                bodies = self.kimi_synthetic_completed_capture()
+                def mutate(response):
+                    data = response["data"]
+                    if kind == "ok": data["ok"] = False
+                    elif kind == "version": data["server_version"] = "future"
+                    elif kind == "backend": data["backend"] = "foreign"
+                    elif kind == "auth": data["dangerous_bypass_auth"] = True
+                    elif kind == "missing": del data["server_id"]
+                    elif kind == "unknown": data["unknown"] = True
+                    elif kind == "empty": data["skills"] = []
+                    elif kind == "foreign": data["skills"][0]["name"] = "uap-kimi-native-foreign"
+                    elif kind == "path": data["skills"][0]["path"] = "/foreign/SKILL.md"
+                    elif kind == "source": data["skills"][0]["source"] = "extra"
+                    elif kind == "duplicate": data["skills"].append(data["skills"][0])
+                self.kimi_mutate_http_coherently(bodies, label, mutate)
+                runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_native_command_and_http_schemas_are_closed_typed_and_bounded(self):
+        for kind in ("research-version", "research-bool", "command-extra", "command-missing", "probe", "elapsed-bool", "elapsed-high", "elapsed-negative"):
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "capture boundary|raw object|command schema"):
+                bodies = self.kimi_synthetic_completed_capture()
+                def mutate(raw):
+                    research = json.loads(raw["research.json"])
+                    command = research["commands"][0]
+                    if kind == "research-version": research["schema_version"] = 2
+                    elif kind == "research-bool": research["schema_version"] = True
+                    elif kind == "command-extra": command["unknown"] = True
+                    elif kind == "command-missing": del command["elapsed_seconds"]
+                    elif kind == "probe": command["probe"] = "foreign"
+                    elif kind == "elapsed-bool": command["elapsed_seconds"] = True
+                    elif kind == "elapsed-high": command["elapsed_seconds"] = 60.001
+                    elif kind == "elapsed-negative": command["elapsed_seconds"] = -0.001
+                    raw["research.json"] = json.dumps(research)
+                self.kimi_mutate_raw_coherently(bodies, mutate)
+                runtime.kimi_call_members(bodies, self.source)
+        for label, kind in (("health", "request-empty"), ("health", "request-type"), ("health", "unknown"),
+                            ("unauthorized", "data"), ("unauthorized", "msg"), ("unauthorized", "stack")):
+            with self.subTest(label=label, kind=kind), self.assertRaisesRegex(ValueError, "response identity/data|raw object|negative stack"):
+                bodies = self.kimi_synthetic_completed_capture()
+                def mutate(response):
+                    if kind == "request-empty": response["request_id"] = ""
+                    elif kind == "request-type": response["request_id"] = True
+                    elif kind == "unknown": response["unknown"] = True
+                    elif kind == "data": response["data"] = {"unobserved": True}
+                    elif kind == "msg": response["msg"] = {"unobserved": True}
+                    elif kind == "stack": response["stack"] = ["unobserved"]
+                self.kimi_mutate_http_coherently(bodies, label, mutate)
+                runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_provider_nested_grammar_is_closed_before_prefix_comparison(self):
+        kinds = ("message-extra", "message-missing", "role", "content-null", "content-empty", "content-count", "content-part-extra",
+                 "content-nul", "message-count", "call-extra", "function-extra", "function-missing", "tool-result-id")
+        for kind in kinds:
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, "raw object|provider message|provider null|provider content|provider result"):
+                bodies = self.kimi_synthetic_completed_capture()
+                first, second = (json.loads(bodies[f"provider-request-{number}.json"]) for number in (1, 2))
+                if kind.startswith("call-") or kind.startswith("function-"):
+                    call = second["messages"][-2]["tool_calls"][0]
+                    if kind == "call-extra": call["unknown"] = True
+                    elif kind == "function-extra": call["function"]["unknown"] = True
+                    elif kind == "function-missing": del call["function"]["arguments"]
+                elif kind == "tool-result-id": del second["messages"][-1]["tool_call_id"]
+                else:
+                    if kind == "message-extra": first["messages"][0]["unknown"] = True
+                    elif kind == "message-missing": del first["messages"][0]["content"]
+                    elif kind == "role": first["messages"][0]["role"] = "foreign"
+                    elif kind == "content-null": first["messages"][0]["content"] = None
+                    elif kind == "content-empty": first["messages"][0]["content"] = []
+                    elif kind == "content-count": first["messages"][0]["content"] = [{"type": "text", "text": "inert"}] * 129
+                    elif kind == "content-part-extra": first["messages"][0]["content"] = [{"type": "text", "text": "inert", "unknown": True}]
+                    elif kind == "content-nul": first["messages"][0]["content"] = "inert\x00"
+                    elif kind == "message-count": first["messages"] *= 257
+                    # Preserve the same malformed prefix in request2. Rejection
+                    # must come from closed grammar, not an easy unequal prefix.
+                    second["messages"] = first["messages"] + second["messages"][-2:]
+                bodies["provider-request-1.json"], bodies["provider-request-2.json"] = json.dumps(first).encode(), json.dumps(second).encode()
+                runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_prompt_identity_and_absent_response_metadata_are_source_bound(self):
+        bodies = self.kimi_synthetic_completed_capture()
+        prompt = json.loads(bodies["runtime-attempt.json"])["native_history"]["prompt_id"]
+        self.kimi_mutate_http_coherently(bodies, "snapshot-0", lambda response: response["data"]["session"].update(current_prompt_id=prompt))
+        self.assertTrue(runtime.kimi_call_members(bodies, self.source)["runtime_attempt_complete"])
+        for label, value in (("snapshot-0", "foreign"), ("snapshot-0", None), ("create-session", prompt), ("create-session", None)):
+            with self.subTest(label=label, value=value), self.assertRaisesRegex(ValueError, "current prompt"):
+                bodies = self.kimi_synthetic_completed_capture()
+                self.kimi_mutate_http_coherently(bodies, label, lambda response: response["data"].update(current_prompt_id=value) if label == "create-session" else response["data"]["session"].update(current_prompt_id=value))
+                runtime.kimi_call_members(bodies, self.source)
+        for metadata in (None, {}, {"origin": {"kind": "user"}}, {"origin": {"kind": "injection"}}):
+            with self.subTest(metadata=metadata), self.assertRaisesRegex(ValueError, "raw object"):
+                bodies = self.kimi_synthetic_completed_capture()
+                self.kimi_mutate_http_coherently(bodies, "prompt", lambda response: response["data"].update(metadata=metadata))
+                runtime.kimi_call_members(bodies, self.source)
+
+    def test_kimi_success_bounds_binding_and_boolean_types_are_semantic(self):
+        for kind in ("elapsed-high", "sequence-high", "sequence-negative", "profile-leaf", "profile-relative", "profile-parent", "profile-double-root",
+                     "binding-unknown", "binding-authority", "binding-missing", "binding-scalar", "revision-extra", "revision-type", "surfaces-type",
+                     "object-extra", "object-type", "object-modified", "receipt-extra", "receipt-type", "receipt-sequence"):
+            reason = "native turn/time|snapshot authority|canonical native profile|raw object|binding"
+            with self.subTest(kind=kind), self.assertRaisesRegex(ValueError, reason):
+                bodies = self.kimi_synthetic_completed_capture()
+                if kind.startswith("sequence-"):
+                    self.kimi_mutate_http_coherently(bodies, "snapshot-0", lambda response: response["data"].update(as_of_seq=(1 << 40) + 1 if kind == "sequence-high" else -1))
+                else:
+                    result = json.loads(bodies["runtime-attempt.json"])
+                    binding = result["binding"]
+                    if kind == "elapsed-high": result["elapsed_ms"] = 180001
+                    elif kind == "profile-leaf": binding["native_profile_root"] = "/inert/kimi-python-contract/project/.foreign"
+                    elif kind == "profile-relative": binding["native_profile_root"] = "relative/.kimi-code"
+                    elif kind == "profile-parent": binding["native_profile_root"] = "/inert/kimi-python-contract/project/../project/.kimi-code"
+                    elif kind == "profile-double-root": binding["native_profile_root"] = "/" + binding["native_profile_root"]
+                    elif kind == "binding-unknown": binding["unknown"] = True
+                    elif kind == "binding-authority": binding["profile_authority"] = {}
+                    elif kind == "binding-missing": del binding["policy"]
+                    elif kind == "binding-scalar": binding["updated_at"] = None
+                    elif kind == "revision-extra": binding["package_revision"]["unknown"] = True
+                    elif kind == "revision-type": binding["package_revision"]["version"] = 1
+                    elif kind == "surfaces-type": binding["affected_surfaces"] = [False]
+                    elif kind == "object-extra": binding["native_objects"][0]["unknown"] = True
+                    elif kind == "object-type": binding["native_objects"][0]["path"] = None
+                    elif kind == "object-modified": binding["native_objects"][0]["user_modified"] = 0
+                    elif kind == "receipt-extra": binding["receipts"][0]["unknown"] = True
+                    elif kind == "receipt-type": binding["receipts"][0]["phase"] = False
+                    elif kind == "receipt-sequence": binding["receipts"][0]["sequence"] = True
+                    bodies["runtime-attempt.json"] = json.dumps(result).encode()
+                runtime.kimi_call_members(bodies, self.source)
+        labels = ("trust-before-a", "trust-before-b", "trust-before-c", "trust-set-a", "trust-after-a", "trust-set-b", "trust-after-b", "trust-untrusted-c", "catalog-a")
+        for label in labels:
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError, "trust differs|catalog differs"):
+                bodies = self.kimi_synthetic_completed_capture()
+                def mutate(response):
+                    if label == "catalog-a": response["data"][0]["mutable"] = 0
+                    else: response["data"]["trusted"] = int(response["data"]["trusted"])
+                self.kimi_mutate_http_coherently(bodies, label, mutate)
+                runtime.kimi_call_members(bodies, self.source)
     def test_kimi_synthetic_success_cannot_cover_failed_or_foreign_raw(self):
         for kind in ("terminal-failed", "empty-sentinel", "wrong-call", "extra-message", "history-more", "forced", "changed-data", "wrong-marker", "wrong-proof", "foreign-source", "lifecycle-flag", "wrong-cache", "unknown-file"):
             with self.subTest(kind=kind), self.assertRaises(ValueError):

@@ -105,3 +105,59 @@ scratch replay with unchanged original raw outcomes, and two independent exact
 code reviews. Root alone commits/pushes. A fresh genuine current-source hosted
 pass plus independent raw audit is required before any tools/call qualification
 claim. No release is authorized by this work.
+
+## Independent code-review corrections
+
+The first exact implementation19f64f9c0cace7906333f589227f9d711f3b45b5 received
+NO-GO from two full independent critics. Its focused Go and86 Python contracts
+passed, while actual affected lint reported eight style issues and whole six
+lint passed. These receipts do not supersede the review findings or qualify a
+native outcome.
+
+The amended readers explicitly parse the public successful selected add result
+and recompute the existing fixed-name physical artifact, client binding and data
+receipt IDs. Python now mirrors the Go provider's closed message/content/call/
+function grammar, native research/command/HTTP types and closure, and mandatory
+health, pinned metadata, selected skill and shutdown data predicates. Positive
+fixtures carry coherent public IDs, selected skill and complete metadata.
+Mutation controls update raw receipts and proof digests so semantic refusals
+cannot be accidental stale-hash failures.
+
+Both success readers keep session `current_prompt_id` optional. It is absent at
+new session creation; any later present value must equal the one accepted own
+prompt. Null and foreign values are refused. Response metadata for the fixed
+prompt is absent: pinned `routes/prompts.ts`, blob
+e820ef142320ab3349f3bf0b4984c98fb0a847cd, projects only
+`origin.clientMetadata?.[0]`; the unchanged fixture request supplies no metadata.
+`rest-prompt.ts` blob20cc84b5da623069a3934cc26601cadf2e1b6f5f and the pinned session
+schema support these distinctions. No user-origin wrapper or null allowance is
+invented. History's already observed user-origin record remains a separate
+unchanged predicate. The source files were read and Git-blob/SHA256 verified,
+without executing vendor code.
+
+The exact upstream wire spelling of the canceled terminal reason is preserved
+in one documented protocol constant. Human prose/test labels use American
+spelling; the original misspell gate is retained.
+
+Both success readers also enforce the same finite Kimi binding authority.
+The thirteen required scalar fields are `client_binding_id`, `client_id`, `scope`,
+`target_locator`, `physical_artifact_id`, `materialization`, `activation`,
+`authentication`, `policy`, `verification`, `data_receipt_id`,
+`native_profile_root` and `updated_at`; each is a string. The only optional
+carriers are the observed `package_revision`, `affected_surfaces`,
+`native_objects` and `receipts`. Their nested keys and scalar/list/Boolean/integer
+types are closed too. The package revision has only tree/manifest digests and an
+optional version; native ownership and mutation records admit only the fields
+emitted by this Kimi fixture. Other profile, delivery, pending-intent or receipt
+authority is refused. This is a finite evidence reader, not another general
+domain-state decoder. The native profile is canonical and absolute, with the
+exact `.kimi-code` leaf, and joins the canonical project, managed and data paths.
+Historical failed archive admission does not invoke this success grammar.
+
+Python independently caps a successful attempt at180000milliseconds and each
+snapshot sequence at2^40, matching Go. Trust and catalog mutability require
+actual JSON Booleans; numeric zero/one cannot stand in for false/true. Additional
+synthetic controls mutate each of these predicates, including nested binding
+types and authority keys, while updating affected HTTP receipts and terminal
+proof digests. Original measured9e failures retain all false single-call flags;
+none of these source corrections establishes a fresh native observation.

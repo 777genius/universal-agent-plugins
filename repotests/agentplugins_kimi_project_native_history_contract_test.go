@@ -16,6 +16,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// Exact Kimi2.3.2 wire enum; prose/test labels use American spelling.
+const kimiAttemptCanceledWireReason = "cancelled" //nolint:misspell // Exact pinned upstream protocol spelling.
+
 func kimiHistoryEncode(t *testing.T, value any) []byte {
 	t.Helper()
 	body, err := json.Marshal(value)
@@ -181,7 +184,7 @@ func kimiSyntheticFailedHistoryFiles(t *testing.T) map[string][]byte {
 	http("prompt", "POST", base+"/prompts", true, 200, 0, map[string]any{"prompt_id": "msg_inert_prompt", "user_message_id": "msg_inert_prompt", "status": "running", "content": []any{map[string]any{"type": "text", "text": prompt}}, "created_at": stamp})
 	http("approvals-0", "GET", base+"/approvals?status=pending", true, 200, 0, map[string]any{"items": []any{map[string]any{"approval_id": approvalID, "session_id": nativeSession, "agent_id": "main", "turn_id": 0, "tool_call_id": callID, "tool_name": kimiAttemptTool, "action": "Approve " + kimiAttemptTool, "tool_input_display": map[string]any{"kind": "generic", "summary": "Approve " + kimiAttemptTool, "detail": args}, "created_at": stamp, "expires_at": "2026-01-03T03:04:07Z"}}})
 	http("approve-once", "POST", base+"/approvals/"+approvalID, true, 200, 0, map[string]any{"resolved": true, "resolved_at": stamp})
-	for index := 0; index < 2; index++ {
+	for index := range 2 {
 		var inFlight any
 		if index == 0 {
 			inFlight = map[string]any{"turn_id": 0, "assistant_text": "", "thinking_text": "", "running_tools": []any{}}
@@ -361,7 +364,7 @@ func TestKimiSingleToolSyntheticCompletedHistoryHasOnlyThreeMCPFlags(t *testing.
 }
 
 func TestKimiSingleToolFiniteHistoryRejectsForeignOrIncompleteNativeData(t *testing.T) {
-	kinds := []string{"failed", "cancelled", "active", "in-flight", "pending-approval", "pending-question", "subagent", "session", "workspace", "cwd", "model", "permission", "epoch", "sequence", "history-order", "history-more", "snapshot-more", "extra-message", "duplicate-id", "stale-time", "future-time", "unknown-message", "unknown-part", "wrong-call", "wrong-tool", "wrong-args", "error-result", "wrong-facts", "missing-sentinel", "wrong-sentinel", "extra-sentinel", "date-metadata", "date-text", "unknown-file", "missing-file", "response-hash", "receipt-path", "receipt-method", "receipt-auth", "unknown-response", "capture-complete"}
+	kinds := []string{"failed", "canceled", "active", "in-flight", "pending-approval", "pending-question", "subagent", "session", "workspace", "cwd", "model", "permission", "epoch", "sequence", "history-order", "history-more", "snapshot-more", "extra-message", "duplicate-id", "stale-time", "future-time", "unknown-message", "unknown-part", "wrong-call", "wrong-tool", "wrong-args", "error-result", "wrong-facts", "missing-sentinel", "wrong-sentinel", "extra-sentinel", "date-metadata", "date-text", "unknown-file", "missing-file", "response-hash", "receipt-path", "receipt-method", "receipt-auth", "unknown-response", "capture-complete"}
 	for _, kind := range kinds {
 		t.Run(kind, func(t *testing.T) {
 			files, expected := kimiSyntheticCompletedHistory(t)
@@ -370,8 +373,12 @@ func TestKimiSingleToolFiniteHistoryRejectsForeignOrIncompleteNativeData(t *test
 				page := data["messages"].(map[string]any)
 				rows := page["items"].([]any)
 				switch kind {
-				case "failed", "cancelled":
-					session["last_turn_reason"] = kind
+				case "failed", "canceled":
+					reason := kind
+					if kind == "canceled" {
+						reason = kimiAttemptCanceledWireReason
+					}
+					session["last_turn_reason"] = reason
 				case "active":
 					session["busy"] = true
 				case "in-flight":
@@ -471,6 +478,133 @@ func TestKimiSingleToolFiniteHistoryRejectsForeignOrIncompleteNativeData(t *test
 			}
 			if _, err := kimiAttemptHistory(files["python-api.json"], expected); err == nil {
 				t.Fatal("foreign/incomplete native history admitted")
+			}
+		})
+	}
+}
+
+func TestKimiSingleToolPromptIdentityAndAbsentResponseMetadata(t *testing.T) {
+	files, expected := kimiSyntheticCompletedHistory(t)
+	for _, label := range []string{"snapshot-0", "snapshot-1"} {
+		kimiMutateHTTP(t, files, label, func(data map[string]any) {
+			data["session"].(map[string]any)["current_prompt_id"] = "msg_inert_prompt"
+		})
+	}
+	proof, err := kimiAttemptHistory(files["python-api.json"], expected)
+	if err != nil {
+		t.Fatal("optional own session prompt identity refused", err)
+	}
+	proof["data_proof_sha256"] = kimiProjectProofSHA(files["native-data-proof.json"])
+	result := kimiHistoryDecode(t, files["runtime-attempt.json"])
+	result["native_history"] = proof
+	files["runtime-attempt.json"] = kimiHistoryEncode(t, result)
+	if err := kimiAttemptAdmit(files); err != nil {
+		t.Fatal("coherent own-prompt successful archive refused", err)
+	}
+	for _, kind := range []string{"session-foreign", "session-null", "create-own", "create-null", "in-flight-null", "metadata-user", "metadata-null", "metadata-foreign"} {
+		t.Run(kind, func(t *testing.T) {
+			files, expected := kimiSyntheticCompletedHistory(t)
+			switch kind {
+			case "session-foreign", "session-null":
+				kimiMutateHTTP(t, files, "snapshot-1", func(data map[string]any) {
+					var value any = "foreign"
+					if kind == "session-null" {
+						value = nil
+					}
+					data["session"].(map[string]any)["current_prompt_id"] = value
+				})
+			case "create-own", "create-null":
+				kimiMutateHTTP(t, files, "create-session", func(data map[string]any) {
+					var value any = "msg_inert_prompt"
+					if kind == "create-null" {
+						value = nil
+					}
+					data["current_prompt_id"] = value
+				})
+			case "in-flight-null":
+				kimiMutateHTTP(t, files, "snapshot-0", func(data map[string]any) {
+					data["in_flight_turn"].(map[string]any)["current_prompt_id"] = nil
+				})
+			default:
+				kimiMutateHTTP(t, files, "prompt", func(data map[string]any) {
+					var metadata any = map[string]any{"origin": map[string]any{"kind": "user"}}
+					if kind == "metadata-null" {
+						metadata = nil
+					} else if kind == "metadata-foreign" {
+						metadata = map[string]any{"origin": map[string]any{"kind": "injection"}}
+					}
+					data["metadata"] = metadata
+				})
+			}
+			// The envelope helper recalculates every HTTP digest and stream alias.
+			// Direct semantic validation cannot fail merely on an old proof hash.
+			if _, err := kimiAttemptHistory(files["python-api.json"], expected); err == nil {
+				t.Fatal("unjoined prompt identity/metadata admitted")
+			}
+		})
+	}
+}
+
+func kimiSyntheticBindingRecords(binding map[string]any) {
+	binding["package_revision"] = map[string]any{"version": "1.0.0", "tree_digest": "sha256:" + strings.Repeat("a", 64), "manifest_digest": "sha256:" + strings.Repeat("b", 64)}
+	binding["affected_surfaces"] = []any{"kimi"}
+	binding["native_objects"] = []any{map[string]any{"object_id": "package:kimi:inert", "kind": "managed_package_directory", "path": binding["target_locator"], "protection_class": "managed"}}
+	binding["receipts"] = []any{map[string]any{"operation_id": "inert-operation", "sequence": 1, "mutation_type": "directory_swap", "client_binding_id": binding["client_binding_id"], "phase": "committed"}}
+}
+
+func TestKimiSingleToolBindingAuthorityIsClosedAndTyped(t *testing.T) {
+	files, _ := kimiSyntheticCompletedHistory(t)
+	result := kimiHistoryDecode(t, files["runtime-attempt.json"])
+	kimiSyntheticBindingRecords(result["binding"].(map[string]any))
+	files["runtime-attempt.json"] = kimiHistoryEncode(t, result)
+	if err := kimiAttemptAdmit(files); err != nil {
+		t.Fatal("independent typed Kimi binding refused", err)
+	}
+	for _, kind := range []string{"unknown", "authority", "missing", "scalar", "profile-leaf", "profile-parent", "profile-relative", "profile-double-root", "revision-extra", "revision-type", "surface-type", "object-extra", "object-type", "object-modified", "receipt-extra", "receipt-type", "receipt-sequence"} {
+		t.Run(kind, func(t *testing.T) {
+			files, _ := kimiSyntheticCompletedHistory(t)
+			result := kimiHistoryDecode(t, files["runtime-attempt.json"])
+			binding := result["binding"].(map[string]any)
+			kimiSyntheticBindingRecords(binding)
+			switch kind {
+			case "unknown":
+				binding["unknown"] = true
+			case "authority":
+				binding["profile_authority"] = map[string]any{}
+			case "missing":
+				delete(binding, "policy")
+			case "scalar":
+				binding["updated_at"] = nil
+			case "profile-leaf":
+				binding["native_profile_root"] = "/inert/project/.foreign"
+			case "profile-parent":
+				binding["native_profile_root"] = "/inert/project/../project/.kimi-code"
+			case "profile-relative":
+				binding["native_profile_root"] = "relative/.kimi-code"
+			case "profile-double-root":
+				binding["native_profile_root"] = "/" + binding["native_profile_root"].(string)
+			case "revision-extra":
+				binding["package_revision"].(map[string]any)["unknown"] = true
+			case "revision-type":
+				binding["package_revision"].(map[string]any)["version"] = 1
+			case "surface-type":
+				binding["affected_surfaces"] = []any{false}
+			case "object-extra":
+				binding["native_objects"].([]any)[0].(map[string]any)["unknown"] = true
+			case "object-type":
+				binding["native_objects"].([]any)[0].(map[string]any)["path"] = nil
+			case "object-modified":
+				binding["native_objects"].([]any)[0].(map[string]any)["user_modified"] = 0
+			case "receipt-extra":
+				binding["receipts"].([]any)[0].(map[string]any)["unknown"] = true
+			case "receipt-type":
+				binding["receipts"].([]any)[0].(map[string]any)["phase"] = false
+			case "receipt-sequence":
+				binding["receipts"].([]any)[0].(map[string]any)["sequence"] = true
+			}
+			files["runtime-attempt.json"] = kimiHistoryEncode(t, result)
+			if err := kimiAttemptAdmit(files); err == nil {
+				t.Fatal("untyped or broadened Kimi binding admitted")
 			}
 		})
 	}

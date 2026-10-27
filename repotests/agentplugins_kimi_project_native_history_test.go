@@ -20,14 +20,14 @@ import (
 // Source b8dd3a1, toolResultRender.ts blob2bf13ed32a098c16c9b8a4094c49f93e569f58d0.
 // Only model-visible MCP text carries this header. Native history/probe output
 // remains a whole unframed JSON document and must not use this decoder.
-var kimiAttemptWallTime = regexp.MustCompile(`^Wall time: (0|[1-9][0-9]?)\.[0-9]{3} seconds$`)
+var kimiAttemptWallTime = regexp.MustCompile(`^Wall time: (0|[1-9]\d?)\.\d{3} seconds$`)
 var kimiAttemptWorkspaceID = regexp.MustCompile(`^wd_[a-z0-9._-]+_[0-9a-f]{12}$`)
 var kimiAttemptCallID = regexp.MustCompile(`^uap_([0-9a-f]{32})_attempt$`)
 var kimiAttemptPhysicalID = regexp.MustCompile(`^uap-kimi-native-a-[0-9a-f]{12}$`)
 var kimiAttemptInventoryValue = regexp.MustCompile(`^0[0-7]{1,12}:(directory|[0-9a-f]{64})$`)
 
 func kimiAttemptModelFacts(body string) ([]byte, error) {
-	if len(body) == 0 || len(body) > projectNativeRuntimeBodyLimit {
+	if body == "" || len(body) > projectNativeRuntimeBodyLimit {
 		return nil, fmt.Errorf("Kimi model tool result bound differs")
 	}
 	header, raw, ok := strings.Cut(body, "\n")
@@ -45,10 +45,10 @@ func kimiAttemptModelFacts(body string) ([]byte, error) {
 }
 
 type kimiAttemptHistoryExpectation struct {
-	Client, Session, Call, Approval, Prompt, Sentinel, Skill string
-	Projects                                                 map[string]string
-	Server, Facts                                            map[string]any
-	Started, Ended                                           time.Time
+	Client, Session, Call, Approval, Prompt, PromptID, Sentinel, Skill string
+	Projects                                                           map[string]string
+	Server, Facts                                                      map[string]any
+	Started, Ended                                                     time.Time
 }
 
 func kimiHistoryObject(value any, required, optional string) (map[string]any, error) {
@@ -57,6 +57,80 @@ func kimiHistoryObject(value any, required, optional string) (map[string]any, er
 		return nil, fmt.Errorf("Kimi finite history object differs")
 	}
 	return row, nil
+}
+
+func kimiHistoryStringObject(value any, required, optional, except string) (map[string]any, error) {
+	row, err := kimiHistoryObject(value, required, optional)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range row {
+		if key == except {
+			continue
+		}
+		if _, ok := value.(string); !ok {
+			return nil, fmt.Errorf("Kimi finite binding string differs")
+		}
+	}
+	return row, nil
+}
+
+func kimiHistoryBindingRecord(value any, native bool) error {
+	if native {
+		row, err := kimiHistoryStringObject(value, "object_id kind protection_class", "logical_name path source_relative before_digest managed_digest user_modified", "user_modified")
+		if err != nil {
+			return err
+		}
+		if value, exists := row["user_modified"]; exists {
+			if _, ok := value.(bool); !ok {
+				return fmt.Errorf("Kimi finite binding modified type differs")
+			}
+		}
+		return nil
+	}
+	row, err := kimiHistoryStringObject(value, "operation_id sequence mutation_type client_binding_id phase", "data_receipt_id operation_group_id active_path staging_path backup_path before_digest after_digest", "sequence")
+	if err != nil {
+		return err
+	}
+	if _, err := kimiHistoryInteger(row["sequence"], -1<<63, 1<<63-1); err != nil {
+		return err
+	}
+	return nil
+}
+
+func kimiHistoryBinding(value any) error {
+	// Only the fixed Kimi add's observed authority carriers are admitted.
+	row, err := kimiHistoryObject(value, "client_binding_id client_id scope target_locator physical_artifact_id materialization activation authentication policy verification data_receipt_id native_profile_root updated_at", "package_revision affected_surfaces native_objects receipts")
+	if err != nil {
+		return err
+	}
+	for key, value := range row {
+		switch key {
+		case "package_revision":
+			if _, err := kimiHistoryStringObject(value, "tree_digest manifest_digest", "version", ""); err != nil {
+				return err
+			}
+		case "affected_surfaces", "native_objects", "receipts":
+			values, ok := value.([]any)
+			if !ok {
+				return fmt.Errorf("Kimi finite binding list differs")
+			}
+			for _, value := range values {
+				if key == "affected_surfaces" {
+					if _, ok := value.(string); !ok {
+						return fmt.Errorf("Kimi finite binding surface differs")
+					}
+				} else if err := kimiHistoryBindingRecord(value, key == "native_objects"); err != nil {
+					return err
+				}
+			}
+		default:
+			if _, ok := value.(string); !ok {
+				return fmt.Errorf("Kimi finite binding scalar differs")
+			}
+		}
+	}
+	return nil
 }
 
 func kimiHistoryInteger(value any, low, high int64) (int64, error) {
@@ -138,7 +212,7 @@ func kimiHistorySession(value any, expected kimiAttemptHistoryExpectation, works
 		return fmt.Errorf("Kimi finite history additional interaction")
 	}
 	if value, exists := row["last_turn_reason"]; exists && value != "completed" {
-		return fmt.Errorf("Kimi finite history failed or cancelled native turn")
+		return fmt.Errorf("Kimi finite history failed or canceled native turn")
 	}
 	if value, exists := row["last_prompt"]; exists && value != expected.Prompt {
 		return fmt.Errorf("Kimi finite history last prompt differs")
@@ -146,7 +220,7 @@ func kimiHistorySession(value any, expected kimiAttemptHistoryExpectation, works
 	if _, exists := row["archived_at"]; exists {
 		return fmt.Errorf("Kimi finite history archived session")
 	}
-	if value, exists := row["current_prompt_id"]; exists && (!projectNativeRuntimeText(value, 256) || value == "") {
+	if value, exists := row["current_prompt_id"]; exists && (initial || expected.PromptID == "" || value != expected.PromptID) {
 		return fmt.Errorf("Kimi finite history current prompt identity differs")
 	}
 	usage, err := kimiHistoryObject(row["usage"], "input_tokens output_tokens cache_read_tokens cache_creation_tokens context_tokens", "total_cost_usd context_limit turn_count")
@@ -246,13 +320,18 @@ func kimiHistoryMessages(value any, expected kimiAttemptHistoryExpectation, prom
 	return rows, nil
 }
 
+func kimiHistoryPresentPromptDiffers(row map[string]any, promptID string) bool {
+	value, exists := row["current_prompt_id"]
+	return exists && value != promptID
+}
+
 func kimiHistoryInFlight(value any, expected kimiAttemptHistoryExpectation, promptID string) error {
 	if value == nil {
 		return nil
 	}
 	row, err := kimiHistoryObject(value, "turn_id assistant_text thinking_text running_tools", "current_prompt_id")
 	text, textOK := row["assistant_text"].(string)
-	if err != nil || row["turn_id"] != json.Number("0") || !textOK || !strings.HasPrefix(expected.Sentinel, text) || row["thinking_text"] != "" || row["current_prompt_id"] != nil && row["current_prompt_id"] != promptID {
+	if err != nil || row["turn_id"] != json.Number("0") || !textOK || !strings.HasPrefix(expected.Sentinel, text) || row["thinking_text"] != "" || kimiHistoryPresentPromptDiffers(row, promptID) {
 		return fmt.Errorf("Kimi finite native history in-flight turn differs")
 	}
 	tools, ok := row["running_tools"].([]any)
@@ -510,7 +589,7 @@ func kimiAttemptHistoryResponses(httpRows []any, labels []string, responses map[
 	if err := kimiHistorySession(responses["create-session"], expected, workspaces["a"], false, true); err != nil {
 		return nil, err
 	}
-	prompt, err := kimiHistoryObject(responses["prompt"], "prompt_id user_message_id status content created_at", "metadata")
+	prompt, err := kimiHistoryObject(responses["prompt"], "prompt_id user_message_id status content created_at", "")
 	promptID, ok := prompt["prompt_id"].(string)
 	if err != nil || !ok || promptID == "" || len(promptID) > 256 || prompt["user_message_id"] != promptID || prompt["status"] != "running" && prompt["status"] != "queued" && prompt["status"] != "blocked" || !reflect.DeepEqual(prompt["content"], []any{map[string]any{"type": "text", "text": expected.Prompt}}) {
 		return refused()
@@ -518,8 +597,12 @@ func kimiAttemptHistoryResponses(httpRows []any, labels []string, responses map[
 	if _, err := kimiHistoryInstant(prompt["created_at"], expected.Started, expected.Ended); err != nil {
 		return nil, err
 	}
+	// Fixed request supplies no client metadata; pinned prompts.ts projection
+	// therefore omits response metadata. Session prompt identity is optional,
+	// but any later present string must name this exact accepted prompt.
+	expected.PromptID = promptID
 	approvalCount := 0
-	for index := 0; index < 20; index++ {
+	for index := range 20 {
 		label := "approvals-" + strconv.Itoa(index)
 		value, exists := responses[label]
 		if !exists {
@@ -567,7 +650,7 @@ func kimiAttemptHistoryResponses(httpRows []any, labels []string, responses map[
 	capturedSnapshots := []map[string]any{}
 	epoch := ""
 	lastSeq := int64(-1)
-	for index := int64(0); index < snapshotCount; index++ {
+	for index := range snapshotCount {
 		label := "snapshot-" + strconv.FormatInt(index, 10)
 		endpoints[label] = endpoint{"GET", base + "/snapshot", true, 200}
 		order = append(order, label)
@@ -798,6 +881,9 @@ func kimiAttemptSuccessfulFiles(files map[string][]byte, result map[string]any) 
 	if !callOK || len(parts) != 2 || !sessionOK || !approvalOK || approval == "" || proof["native_session_id"] != session || proof["provider_call_id"] != call || result["native_turn_id"] != json.Number("0") {
 		return refused()
 	}
+	if err := kimiHistoryBinding(result["binding"]); err != nil {
+		return err
+	}
 	bindingBody, err := json.Marshal(result["binding"])
 	if err != nil {
 		return err
@@ -805,7 +891,7 @@ func kimiAttemptSuccessfulFiles(files map[string][]byte, result map[string]any) 
 	var binding domain.ClientBinding
 	decoder := json.NewDecoder(bytes.NewReader(bindingBody))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&binding) != nil || binding.ClientID != "kimi" || binding.Scope != "project" || binding.Activation != domain.ActivationPrepared || binding.Authentication != domain.AuthenticationNotChecked || binding.Verification != domain.VerificationInstalled || binding.Materialization != domain.MaterializationMaterialized || !kimiAttemptPhysicalID.MatchString(binding.PhysicalArtifact) || filepath.Base(binding.NativeProfileRoot) != ".kimi-code" {
+	if decoder.Decode(&binding) != nil || binding.ClientID != "kimi" || binding.Scope != "project" || binding.Activation != domain.ActivationPrepared || binding.Authentication != domain.AuthenticationNotChecked || binding.Verification != domain.VerificationInstalled || binding.Materialization != domain.MaterializationMaterialized || !kimiAttemptPhysicalID.MatchString(binding.PhysicalArtifact) || filepath.Base(binding.NativeProfileRoot) != ".kimi-code" || filepath.Clean(binding.NativeProfileRoot) != binding.NativeProfileRoot {
 		return refused()
 	}
 	project := filepath.Dir(binding.NativeProfileRoot)
