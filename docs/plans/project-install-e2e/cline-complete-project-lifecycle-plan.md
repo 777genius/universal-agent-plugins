@@ -108,10 +108,17 @@ Keep exact whole-JSON success/mutation semantics and expected progress output.
    Repeat the identical public A removal as repeat-remove-a before removing B
    or user. The current public explicit-target path is runRemoveMany;
    removeManySession.buildInputs rejects the retained installation's absent
-   binding before rendering success JSON. Require exactly exit1, an unwrapped
-   *exec.ExitError (no context/capture/cleanup error), empty stdout and the
+   binding before rendering success JSON. Require exactly exit1 with no
+   process/context/capture/cleanup error, empty stdout and the
    exact stderr line `agentplugins: plugin is not installed for target "cline" in project scope; no target was changed\n`.
    This is the sole expected refusal, not a successful no_change JSON result.
+   Keep the existing strict process.OS supervisor: osrunner.go's
+   splitCommandWaitError/commandResultFromWait normalizes its exact natural
+   *exec.ExitError to that nonzero result with err=nil only after clean
+   containment; a wrapped cleanup, context or capture error remains fatal. Do
+   not replace the supervisor to expose the raw Wait error. The recorded
+   error=false/error_kind=none is truthful about that API, while exit1 and the
+   exact refusal bytes describe the public command outcome.
    Capture its full triple and finite error-kind receipt. Require byte-identical
    retained state/DataReceipt/data/ownership/marker, foreign files, user and B
    before/after; never accept arbitrary not-found errors or synthesize flags.
