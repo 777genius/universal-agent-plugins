@@ -528,9 +528,10 @@ func TestKimiSingleToolPromptIdentityAndAbsentResponseMetadata(t *testing.T) {
 			default:
 				kimiMutateHTTP(t, files, "prompt", func(data map[string]any) {
 					var metadata any = map[string]any{"origin": map[string]any{"kind": "user"}}
-					if kind == "metadata-null" {
+					switch kind {
+					case "metadata-null":
 						metadata = nil
-					} else if kind == "metadata-foreign" {
+					case "metadata-foreign":
 						metadata = map[string]any{"origin": map[string]any{"kind": "injection"}}
 					}
 					data["metadata"] = metadata
