@@ -1,10 +1,14 @@
 {
   "registryUi": {
     "skillSpector": {
+      "loading": "Chargement du rapport",
+      "unavailable": "Rapport indisponible",
+      "loadingDetails": "Chargement de l’évaluation publiée…",
+      "unavailableDetails": "L’évaluation publiée n’a pas pu être chargée. L’état de vérification de cette entrée est inconnu.",
       "notChecked": "Non vérifié",
       "noFindings": "Aucun constat",
       "findingsCount": "Constats : {count}",
-      "partial": "Vérification partielle",
+      "partial": "Vérifié avec des limites",
       "error": "Échec de la vérification",
       "detailsFor": "Détails SkillSpector pour {name}",
       "pluginScope": "Skills sélectionnées de ce plugin",
@@ -15,7 +19,7 @@
       "scanner": "Vérifications statiques uniquement · SkillSpector {version}",
       "disclaimer": "Ce rapport historique couvre uniquement les fichiers de Skills indiqués à la révision enregistrée. Il n’exécute pas de code et ne garantit pas la sécurité.",
       "unverified": "La révision actuelle de cette fiche n’a pas été vérifiée.",
-      "incomplete": "Certaines vérifications de Skills n’ont pas abouti. Consultez les constats et les erreurs disponibles.",
+      "incomplete": "La vérification statique n’a pas couvert tout le contenu. Consultez les résultats et les limites de couverture ci-dessous.",
       "source": "Fichiers sources",
       "findings": "Constats",
       "errors": "Erreurs de vérification",
@@ -24,7 +28,10 @@
       "truncated": "Affichage de {shown} constats sur {total}.",
       "selectedSkills": "Skills sélectionnées",
       "historical": "Rapport historique",
-      "older": "Ce rapport date de plus de sept jours ou décrit une autre révision. Il n’établit pas l’état actuel."
+      "older": "Ce rapport date de plus de sept jours ou décrit une autre révision. Il n’établit pas l’état actuel.",
+      "staticParseLimit": "Certaines expressions ont dépassé les limites de l’analyseur statique.",
+      "referenceMissing": "Certains fichiers locaux référencés sont absents des fichiers de compétence analysés ; ils peuvent être créés à l’exécution.",
+      "analyzerIncomplete": "Un analyseur n’a pas terminé toutes les vérifications prévues."
     }
   }
 }

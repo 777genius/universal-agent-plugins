@@ -229,7 +229,7 @@ async function syncCatalogQuery() {
       const failure = await router.replace({
         path: canonicalPath(route.path),
         query: catalogQuery(values, route.query) as LocationQueryRaw,
-        hash: route.hash,
+        hash: '',
       });
       if (failure) {
         pendingFilterValues = undefined;

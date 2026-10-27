@@ -3,6 +3,7 @@ import type { SkillSpectorSubject } from '~/types/skillSpector';
 import {
   skillSpectorAssessment,
   skillSpectorFindingLocation,
+  skillSpectorFindingUrl,
   skillSpectorSourceUrl,
 } from '~/utils/skillSpector';
 import { formatSecurityDate } from '~/utils/securityPresentation';
@@ -13,22 +14,44 @@ const props = defineProps<{
   scope: 'plugin' | 'skill';
 }>();
 const { t, n, locale } = useI18n({ useScope: 'local' });
-const report = useSkillSpector();
+const { report, status: reportStatus } = useSkillSpector();
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
+const displayStatus = computed(() =>
+  reportStatus.value === 'ready' ? assessment.value.status : reportStatus.value,
+);
 const visualStatus = computed(() =>
-  props.scope === 'skill' && assessment.value.status === 'noFindings'
+  props.scope === 'skill' && displayStatus.value === 'noFindings'
     ? 'historical'
-    : assessment.value.status,
+    : displayStatus.value,
 );
 const label = computed(() => {
-  const status = t(`registryUi.skillSpector.${assessment.value.status}`, {
+  let status = t(`registryUi.skillSpector.${displayStatus.value}`, {
     count: n(assessment.value.findingCount),
   });
+  if (['partial', 'error'].includes(displayStatus.value) && assessment.value.findingCount) {
+    status += ` · ${t('registryUi.skillSpector.findingsCount', { count: n(assessment.value.findingCount) })}`;
+  }
   return props.scope === 'skill' &&
     assessment.value.records.length &&
     assessment.value.status !== 'historical'
     ? `${t('registryUi.skillSpector.historical')}: ${status}`
     : status;
+});
+const coverageLimits = computed(() => {
+  const messages: Record<string, string> = {
+    static_parse_limit: 'staticParseLimit',
+    reference_missing: 'referenceMissing',
+    analyzer_incomplete: 'analyzerIncomplete',
+  };
+  return [
+    ...new Set(
+      assessment.value.records.flatMap((record) =>
+        record.errors.flatMap((error) =>
+          Object.hasOwn(messages, error.code) ? [messages[error.code]!] : [],
+        ),
+      ),
+    ),
+  ];
 });
 </script>
 
@@ -46,17 +69,25 @@ const label = computed(() => {
       >
       <span class="skillspector__arrow" aria-hidden="true">⌄</span>
     </summary>
-    <div class="skillspector__details">
+    <div class="skillspector__details" :aria-busy="reportStatus === 'loading'">
       <strong>{{
         t(`registryUi.skillSpector.${scope === 'plugin' ? 'pluginScope' : 'skillScope'}`)
       }}</strong>
-      <p v-if="!assessment.records.length">{{ t('registryUi.skillSpector.absent') }}</p>
+      <p v-if="reportStatus !== 'ready'">
+        {{ t(`registryUi.skillSpector.${reportStatus}Details`) }}
+      </p>
+      <p v-else-if="!assessment.records.length">{{ t('registryUi.skillSpector.absent') }}</p>
       <template v-else>
         <p>{{ t('registryUi.skillSpector.scanner', { version: report!.scanner.version }) }}</p>
         <p v-if="assessment.status === 'partial' || assessment.status === 'error'">
           {{ t('registryUi.skillSpector.incomplete') }}
         </p>
-        <p v-if="assessment.status === 'historical'">{{ t('registryUi.skillSpector.older') }}</p>
+        <ul v-if="coverageLimits.length" class="skillspector__coverage">
+          <li v-for="limit in coverageLimits" :key="limit">
+            {{ t(`registryUi.skillSpector.${limit}`) }}
+          </li>
+        </ul>
+        <p v-if="assessment.outOfDate">{{ t('registryUi.skillSpector.older') }}</p>
         <p v-if="scope === 'skill'">{{ t('registryUi.skillSpector.unverified') }}</p>
         <ul class="skillspector__records">
           <li v-for="record in assessment.records" :key="record.id">
@@ -81,17 +112,6 @@ const label = computed(() => {
                 )
               }}
             </p>
-            <ul
-              v-if="record.findings.length"
-              class="skillspector__findings"
-              :aria-label="t('registryUi.skillSpector.findings')"
-            >
-              <li v-for="(finding, index) in record.findings" :key="index">
-                <code>{{ finding.rule }} · {{ finding.severity }}</code>
-                <p>{{ finding.message }}</p>
-                <code>{{ skillSpectorFindingLocation(finding) }}</code>
-              </li>
-            </ul>
             <p v-if="record.findings_truncated">
               {{
                 t('registryUi.skillSpector.truncated', {
@@ -100,6 +120,24 @@ const label = computed(() => {
                 })
               }}
             </p>
+            <ul
+              v-if="record.findings.length"
+              class="skillspector__findings"
+              :aria-label="t('registryUi.skillSpector.findings')"
+            >
+              <li v-for="(finding, index) in record.findings" :key="index">
+                <code>{{ finding.rule }} · {{ finding.severity }}</code>
+                <p>{{ finding.message }}</p>
+                <a
+                  v-if="skillSpectorFindingUrl(record, finding)"
+                  :href="skillSpectorFindingUrl(record, finding)"
+                  target="_blank"
+                  rel="noreferrer"
+                  ><code>{{ skillSpectorFindingLocation(finding) }}</code> ↗</a
+                >
+                <code v-else>{{ skillSpectorFindingLocation(finding) }}</code>
+              </li>
+            </ul>
             <ul v-if="record.errors.length" :aria-label="t('registryUi.skillSpector.errors')">
               <li v-for="(error, index) in record.errors" :key="index">
                 <code>{{ error.code }}</code
@@ -110,7 +148,9 @@ const label = computed(() => {
         </ul>
       </template>
       <p>{{ t('registryUi.skillSpector.selected') }}</p>
-      <p class="skillspector__disclaimer">{{ t('registryUi.skillSpector.disclaimer') }}</p>
+      <p v-if="assessment.records.length" class="skillspector__disclaimer">
+        {{ t('registryUi.skillSpector.disclaimer') }}
+      </p>
     </div>
   </details>
 </template>
@@ -128,9 +168,10 @@ const label = computed(() => {
 <style scoped lang="scss">
 .skillspector {
   margin-top: 8px;
+  margin-bottom: 8px;
   min-width: 0;
   color: var(--subtle);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   line-height: 1.5;
 }
 .skillspector > summary {
@@ -139,6 +180,7 @@ const label = computed(() => {
   gap: 6px;
   width: fit-content;
   max-width: 100%;
+  min-height: 32px;
   cursor: pointer;
   font-weight: 750;
   list-style: none;
@@ -158,9 +200,10 @@ const label = computed(() => {
   height: 16px;
   border: 1px solid currentcolor;
   border-radius: 50%;
-  font-size: 0.55rem;
+  font-size: 0.6875rem;
 }
 .skillspector__arrow {
+  flex-shrink: 0;
   margin-inline-start: 2px;
 }
 .skillspector[open] .skillspector__arrow {
@@ -180,7 +223,7 @@ const label = computed(() => {
   border-radius: 8px;
   background: var(--surface);
   color: var(--text);
-  font-size: 0.68rem;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
   max-height: 28rem;
   overflow-y: auto;
@@ -192,7 +235,7 @@ const label = computed(() => {
   color: var(--cyan);
 }
 .skillspector__details code {
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   white-space: normal;
 }
 .skillspector__records {
@@ -205,6 +248,7 @@ const label = computed(() => {
   margin-top: 12px;
   padding-top: 12px;
 }
+.skillspector__coverage,
 .skillspector__findings {
   padding-inline-start: 16px;
 }
@@ -213,5 +257,10 @@ const label = computed(() => {
 }
 .skillspector__disclaimer {
   color: var(--subtle);
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .skillspector > summary {
+    min-height: 44px;
+  }
 }
 </style>

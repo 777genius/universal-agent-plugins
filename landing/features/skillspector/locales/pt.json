@@ -1,10 +1,14 @@
 {
   "registryUi": {
     "skillSpector": {
+      "loading": "Carregando relatório",
+      "unavailable": "Relatório indisponível",
+      "loadingDetails": "Carregando a avaliação publicada…",
+      "unavailableDetails": "Não foi possível carregar a avaliação publicada. O estado da verificação deste item é desconhecido.",
       "notChecked": "Não verificado",
       "noFindings": "Nenhum resultado",
       "findingsCount": "Resultados: {count}",
-      "partial": "Verificação parcial",
+      "partial": "Verificado com limitações",
       "error": "Falha na verificação",
       "detailsFor": "Detalhes do SkillSpector para {name}",
       "pluginScope": "Skills selecionadas deste plugin",
@@ -15,7 +19,7 @@
       "scanner": "Apenas verificações estáticas · SkillSpector {version}",
       "disclaimer": "Este relatório histórico abrange apenas os arquivos de Skills indicados na revisão registrada. Ele não executa código nem garante segurança.",
       "unverified": "A revisão atual deste item não foi verificada.",
-      "incomplete": "Algumas verificações de Skills não foram concluídas. Consulte os resultados e erros disponíveis.",
+      "incomplete": "A verificação estática não cobriu todo o conteúdo. Consulte as constatações e as limitações de cobertura abaixo.",
       "source": "Arquivos de origem",
       "findings": "Resultados",
       "errors": "Erros de verificação",
@@ -24,7 +28,10 @@
       "truncated": "Exibindo {shown} de {total} resultados.",
       "selectedSkills": "Skills selecionadas",
       "historical": "Relatório histórico",
-      "older": "Este relatório tem mais de sete dias ou descreve outra revisão. Ele não comprova o estado atual."
+      "older": "Este relatório tem mais de sete dias ou descreve outra revisão. Ele não comprova o estado atual.",
+      "staticParseLimit": "Algumas expressões excederam os limites do analisador estático.",
+      "referenceMissing": "Alguns arquivos locais referenciados não foram encontrados entre os arquivos da habilidade analisados; eles podem ser criados durante a execução.",
+      "analyzerIncomplete": "Um analisador não concluiu todas as verificações planejadas."
     }
   }
 }

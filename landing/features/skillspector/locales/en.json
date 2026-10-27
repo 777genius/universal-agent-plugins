@@ -1,10 +1,14 @@
 {
   "registryUi": {
     "skillSpector": {
+      "loading": "Loading report",
+      "unavailable": "Report unavailable",
+      "loadingDetails": "Loading the published assessment…",
+      "unavailableDetails": "The published assessment could not be loaded. This listing’s check status is unknown.",
       "notChecked": "Not checked",
       "noFindings": "No findings",
       "findingsCount": "Findings: {count}",
-      "partial": "Partial check",
+      "partial": "Checked with limitations",
       "error": "Check failed",
       "detailsFor": "SkillSpector details for {name}",
       "pluginScope": "Selected skills in this plugin",
@@ -15,7 +19,7 @@
       "scanner": "Static checks only · SkillSpector {version}",
       "disclaimer": "This historical report covers only the listed Skill files at the recorded revision. It does not run code or guarantee safety.",
       "unverified": "The current revision of this listing has not been verified.",
-      "incomplete": "Some Skill checks did not finish. Review the available findings and errors.",
+      "incomplete": "The static check did not cover all content. Review the findings and coverage limits below.",
       "source": "Source files",
       "findings": "Findings",
       "errors": "Check errors",
@@ -24,7 +28,10 @@
       "truncated": "Showing {shown} of {total} findings.",
       "selectedSkills": "Selected skills",
       "historical": "Historical report",
-      "older": "This report is older than seven days or describes a different revision. It does not establish the current state."
+      "older": "This report is older than seven days or describes a different revision. It does not establish the current state.",
+      "staticParseLimit": "Some expressions exceeded the static parser’s limits.",
+      "referenceMissing": "Some local file references were not found in the scanned Skill files; they may be created at runtime.",
+      "analyzerIncomplete": "An analyzer did not complete all planned checks."
     }
   }
 }

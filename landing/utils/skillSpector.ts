@@ -183,7 +183,7 @@ export function skillSpectorAssessment(
           : record.kind === 'standalone_skill' && record.skill_name === subject.name;
       });
   const findingCount = records.reduce((sum, record) => sum + record.finding_count, 0);
-  if (!records.length) return { status: 'notChecked', findingCount, records };
+  if (!records.length) return { status: 'notChecked', findingCount, outOfDate: false, records };
   const outOfDate = records.some(
     (record) =>
       (record.scanned_at !== null &&
@@ -199,12 +199,34 @@ export function skillSpectorAssessment(
         : findingCount
           ? 'findingsCount'
           : 'noFindings';
-  return { status, findingCount, records };
+  return { status, findingCount, outOfDate, records };
 }
 
 export function skillSpectorSourceUrl(record: SkillSpectorRecord): string {
   const suffix = record.source.path.split('/').map(encodeURIComponent).join('/');
   return `https://github.com/${record.source.repository}/tree/${record.source.revision}${suffix ? `/${suffix}` : ''}`;
+}
+
+/** Link only in-root relative artifacts at the exact scanned revision. */
+export function skillSpectorFindingUrl(
+  record: SkillSpectorRecord,
+  finding: SkillSpectorFinding,
+): string | undefined {
+  const parts = finding.path.split('/');
+  if (
+    !repository(record.source.repository) ||
+    !revision(record.source.revision) ||
+    !path(record.source.path, true) ||
+    !text(finding.path, 1000) ||
+    /[%\\:\p{C}]/u.test(finding.path) ||
+    parts.some((part) => !part || part === '.' || part === '..') ||
+    (finding.line !== undefined && (!count(finding.line) || finding.line === 0))
+  )
+    return undefined;
+  const suffix = [...(record.source.path ? record.source.path.split('/') : []), ...parts]
+    .map(encodeURIComponent)
+    .join('/');
+  return `https://github.com/${record.source.repository}/blob/${record.source.revision}/${suffix}${finding.line ? `#L${finding.line}` : ''}`;
 }
 
 export function skillSpectorFindingLocation(finding: SkillSpectorFinding): string {
