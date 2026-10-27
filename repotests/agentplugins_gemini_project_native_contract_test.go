@@ -8,11 +8,87 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 )
+
+func geminiProjectFactFixture(t *testing.T) (*geminiProjectAttempt, nativeFacts) {
+	t.Helper()
+	root := t.TempDir()
+	f := &geminiProjectAttempt{base: &nativeFixture{Root: root, Home: filepath.Join(root, "home"), Events: filepath.Join(root, "events.jsonl"), Nonce: "inert-nonce"}, data: filepath.Join(root, "owned-data")}
+	f.binding.TargetLocator = filepath.Join(root, "owned-native")
+	facts := nativeFacts{Nonce: "inert-nonce", Revision: "A-one", CWD: f.binding.TargetLocator,
+		Argv: []string{"argument with spaces", f.binding.TargetLocator + "/argument", "${UNKNOWN}"},
+		Root: f.binding.TargetLocator, Data: f.data, Literal: "literal  " + f.base.Home,
+		Once: f.binding.TargetLocator + "/", Marker: "retained-inert-nonce", PID: 1234, Session: "inert-process-session"}
+	return f, facts
+}
+
+func geminiProjectFactEvents(t *testing.T, f *geminiProjectAttempt, facts nativeFacts, fault string) {
+	t.Helper()
+	var body bytes.Buffer
+	for index, method := range []string{"initialize", "tools/list", "tools/call"} {
+		row := map[string]any{"method": method, "pid": facts.PID, "session": facts.Session, "nonce": facts.Nonce,
+			"timestamp": time.Date(2026, 10, 27, 0, 0, index, 0, time.UTC).Format(time.RFC3339Nano), "facts": nil}
+		if method == "tools/call" {
+			observed := facts
+			if fault == "event-facts" {
+				observed.Marker = "foreign-event-marker"
+			}
+			row["facts"] = observed
+		}
+		if fault == "event-pid" {
+			row["pid"] = facts.PID + 1
+		}
+		encoded, err := json.Marshal(row)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body.Write(encoded)
+		body.WriteByte('\n')
+	}
+	projectNativeRuntimeWrite(t, f.base.Events, body.Bytes(), 0600)
+}
+
+func TestGeminiProjectNativeFactsRequireExactHeldNativeEnvExpansionAndEventJoin(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*nativeFacts)
+	}{
+		{"exact", func(*nativeFacts) {}},
+		{"old-literal", func(f *nativeFacts) { f.Literal = "literal ${UNKNOWN} $HOME" }},
+		{"old-once", func(f *nativeFacts) { f.Once = f.Root + "/${UNKNOWN}" }},
+		{"wrong-home", func(f *nativeFacts) { f.Literal = "literal  /foreign/home" }},
+		{"literal-spacing", func(f *nativeFacts) { f.Literal = strings.Replace(f.Literal, "literal  ", "literal ", 1) }},
+		{"sibling-once", func(f *nativeFacts) { f.Once = f.Root + "-sibling/" }},
+		{"argv-expanded", func(f *nativeFacts) { f.Argv[2] = "" }},
+		{"root", func(f *nativeFacts) { f.Root += "-foreign" }},
+		{"data", func(f *nativeFacts) { f.Data += "-foreign" }},
+		{"cwd", func(f *nativeFacts) { f.CWD += "-foreign" }},
+		{"nonce", func(f *nativeFacts) { f.Nonce = "foreign" }},
+		{"marker", func(f *nativeFacts) { f.Marker = "foreign" }},
+		{"revision", func(f *nativeFacts) { f.Revision = "B-one" }},
+		{"pid", func(f *nativeFacts) { f.PID = 0 }},
+		{"session", func(f *nativeFacts) { f.Session = "" }},
+		{"event-pid", func(*nativeFacts) {}}, {"event-facts", func(*nativeFacts) {}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, facts := geminiProjectFactFixture(t)
+			tc.mutate(&facts)
+			geminiProjectFactEvents(t, f, facts, tc.name)
+			body, err := json.Marshal(facts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := f.validateFacts(string(body)); (err == nil) != (tc.name == "exact") {
+				t.Fatal("native env expectation or independent fact/event authority differs", err)
+			}
+		})
+	}
+}
 
 func geminiProjectNativeStderrAllowed(body []byte) bool {
 	const ripgrep = "Ripgrep is not available. Falling back to GrepTool.\n"

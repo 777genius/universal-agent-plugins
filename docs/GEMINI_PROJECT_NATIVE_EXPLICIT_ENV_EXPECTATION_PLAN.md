@@ -93,3 +93,24 @@ Keep any temporary raw replay fixture out of the committed tree. Root alone
 publishes to existing PR526 with a fresh ref/lease; no release/new PR/VS work.
 Require fresh genuine source-bound success through provider/native/probe and
 cleanup, and the complete separate lifecycle proof before qualification.
+
+## Implemented validation
+
+Both independent plan and complete two-file code reviews approved the exact
+held-HOME/target expectation correction. The reviewed attempt SHA256 is
+35e24166a72d3aaae56d686d2db38a6bdc6c15c4c062f862e15040c584490aa6;
+contract SHA256 is
+f29810c3b43f29ddc053d9aea59daa80ca4047ddc970c9b013e6649bb61b5eac.
+
+Focused existing/new TestGeminiProjectNative contracts and the temporary
+retained request2/three-event replay passed in 0.022s. The replay independently
+held the five captured member hashes, original installed unexpanded literals,
+receipt target and original HOME from git-A cwd. The temporary replay file was
+removed before lint and is absent from the committed tree. Actual all-enabled
+affected lint against plan52593ecc and the unfiltered whole-file
+revive/funlen/gocyclo/gocognit/dupl/depguard gate each reported zero issues.
+The latter gate was repeated solely to recover its completion after session
+output loss and completed exit0 with zero issues. Gofmt and diff checks pass.
+No vendor/native process or hosted eligibility guard ran locally. This changes
+no recorded failed capture or qualification; fresh genuine native evidence is
+still required.
