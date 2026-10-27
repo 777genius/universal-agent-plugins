@@ -244,6 +244,29 @@ class KimiAttemptContracts(unittest.TestCase):
                     self.assertNotIn("shutdown", labels)
                     self.assertEqual(ctx.summary["http_requests"], [])
 
+    def test_approval_facts_survive_the_real_callback_and_supervisor_error_replacement(self):
+        for fault in ("permission", "permission-outer", "later-turn"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as root:
+                ctx = CaptureContext(root, fault=fault)
+                diagnostic = attempt.kimi._KimiFailureDiagnostic("single-tool")
+                with self.assertRaisesRegex(ValueError, "common service refused") as caught:
+                    self.observe_capture(ctx, diagnostic=diagnostic)
+                self.assertNotIsInstance(caught.exception, attempt.kimi_approval_facts.Refusal)
+                line = diagnostic.line(caught.exception)
+                value = json.loads(line.removeprefix("Kimi collector failure: "))
+                facts = value["approval_refusal"]
+                self.assertEqual((facts["topic"], facts["status"]), ("single-approval", "captured"))
+                self.assertEqual(facts["turn"], "positive" if fault == "later-turn" else "zero")
+                self.assertEqual(facts["equals"]["tool"], fault == "later-turn")
+                self.assertEqual(value["cleanup"], ctx.summary["commands"][0]["cleanup"])
+                self.assertEqual(ctx.services[0].calls[-1][0], "approvals-0")
+                self.assertNotIn("approve-once", [row[0] for row in ctx.services[0].calls])
+                self.assertEqual(ctx.summary["http_requests"], [])
+                self.assertFalse(any(name.endswith(".http.json") for name in ctx.captures))
+                self.assertLessEqual(len(line.encode()), 2048)
+                for private in (TOKEN, KEY, root, "session_owned", "provider_owned", "approval_owned", "owned-nonce"):
+                    self.assertNotIn(private, line)
+
     def test_both_real_entrypoint_failure_branches_emit_only_finite_diagnostic_then_fail(self):
         for module, argument, collector, reason in (
                 (attempt.kimi, "--installed-request", "installed", "Kimi installed API observation failed; private capture quarantined"),
@@ -372,6 +395,156 @@ class KimiAttemptContracts(unittest.TestCase):
             marker.write_bytes(b"")
             with self.assertRaises(ValueError):
                 attempt.no_call(ctx, event, marker)
+
+
+class KimiApprovalFactsContracts(unittest.TestCase):
+    def fixture(self):
+        args = {"nonce": "PRIVATE-NONCE", "operation": "write", "marker": "PRIVATE-MARKER"}
+        action = "Approve " + attempt.TOOL
+        return {"approval_id": "approval_private", "session_id": "session_private", "agent_id": "main", "turn_id": 0,
+                "tool_call_id": "call_private", "tool_name": attempt.TOOL, "action": action,
+                "tool_input_display": {"kind": "generic", "summary": action, "detail": dict(args)},
+                "created_at": STAMP, "expires_at": "2026-10-27T12:00:00Z"}, args
+
+    def project(self, value, args):
+        return attempt.kimi_approval_facts.project(value, "session_private", "call_private", args,
+                                                 attempt.TOOL, attempt.kimi._instant)
+
+    def test_success_and_schema_refusal_keep_their_exact_original_boundary(self):
+        value, args = self.fixture()
+        with patch.object(attempt.kimi_approval_facts, "project", side_effect=AssertionError("must not project")):
+            self.assertEqual(attempt.approval(value, "session_private", "call_private", args), ("approval_private", 0))
+            value["unknown"] = "PRIVATE-UNKNOWN"
+            with self.assertRaises(attempt.ResponseSchemaRefusal) as caught:
+                attempt.approval(value, "session_private", "call_private", args)
+            self.assertIs(type(caught.exception), attempt.ResponseSchemaRefusal)
+            self.assertEqual(caught.exception.stage, "approval")
+            sentinel = attempt.ResponseSchemaRefusal("approval")
+            with patch.object(attempt, "_strict_approval", side_effect=sentinel):
+                with self.assertRaises(attempt.ResponseSchemaRefusal) as exact:
+                    attempt.approval(value, "session_private", "call_private", args)
+                self.assertIs(exact.exception, sentinel)
+            for error in (TypeError("PRIVATE-TYPE"), KeyError("PRIVATE-KEY"), OSError("PRIVATE-OS")):
+                with patch.object(attempt, "_strict_approval", side_effect=error):
+                    with self.assertRaises(type(error)) as exact:
+                        attempt.approval(value, "session_private", "call_private", args)
+                    self.assertIs(exact.exception, error)
+
+    def test_each_old_identity_and_type_refusal_stays_refused_with_finite_facts(self):
+        mutations = [(key, wrong) for key, wrong in (
+            ("session_id", "session_foreign"), ("agent_id", "other"), ("tool_call_id", "other"),
+            ("tool_name", "Bash"), ("action", "PRIVATE-ACTION"), ("approval_id", "wrong"),
+            ("tool_input_display", {}), ("created_at", "PRIVATE-TIME"), ("expires_at", False))]
+        mutations.extend(("turn_id", turn) for turn in (-1, 1, 100, True, False, None, "0", [], {}))
+        mutations.extend((key, None) for key in attempt.kimi_approval_facts.FIELDS)
+        for key, wrong in mutations:
+            with self.subTest(key=key, wrong=wrong):
+                value, args = self.fixture()
+                value[key] = wrong
+                with self.assertRaises(ValueError) as original:
+                    attempt._strict_approval(value, "session_private", "call_private", args)
+                with self.assertRaises(ValueError) as wrapped:
+                    attempt.approval(value, "session_private", "call_private", args)
+                if type(original.exception) is attempt.ResponseSchemaRefusal:
+                    self.assertIs(type(wrapped.exception), attempt.ResponseSchemaRefusal)
+                else:
+                    self.assertIs(type(wrapped.exception), attempt.kimi_approval_facts.Refusal)
+                    facts = wrapped.exception.public()
+                    self.assertEqual(facts["fields"][key]["type"], attempt.kimi_approval_facts._type(wrong))
+                    self.assertTrue(facts["fields"][key]["present"])
+                    self.assertEqual(attempt.kimi_approval_facts.validate(facts), facts)
+                    self.assertNotIn("PRIVATE", json.dumps(facts))
+        value, args = self.fixture()
+        value.update(unknown="PRIVATE-UNKNOWN", tool_name="Bash")
+        with self.assertRaises(attempt.kimi_approval_facts.Refusal) as caught:
+            attempt.approval(value, "session_private", "call_private", args)
+        self.assertFalse(caught.exception.public()["exact_keys"])
+        self.assertFalse(caught.exception.public()["equals"]["tool"])
+        del value["turn_id"]
+        with self.assertRaises(attempt.kimi_approval_facts.Refusal) as caught:
+            attempt.approval(value, "session_private", "call_private", args)
+        self.assertEqual(caught.exception.public()["fields"]["turn_id"], {"present": False, "type": "absent"})
+
+    def test_projection_only_exports_fixed_booleans_and_categories_not_candidate_values(self):
+        value, args = self.fixture()
+        for key in attempt.kimi_approval_facts.FIELDS:
+            value[key] = "/PRIVATE-PATH bearer-secret\nPRIVATE-CONTROL PRIVATE-ID"
+        value["PRIVATE-DYNAMIC-KEY"] = "PRIVATE-VALUE"
+        facts = self.project(value, args)
+        serialized = json.dumps(facts)
+        for canary in ("PRIVATE", "bearer-secret", "session_private", "call_private", attempt.TOOL, STAMP):
+            self.assertNotIn(canary, serialized)
+        self.assertFalse(facts["exact_keys"])
+        self.assertEqual(facts["turn"], "noninteger")
+        self.assertFalse(facts["display_object"])
+        self.assertTrue(all(result is False for result in facts["equals"].values()))
+        for row, kind in ((None, "null"), (True, "boolean"), (0, "integer"), (0.5, "number"),
+                          ("PRIVATE", "string"), ([], "array")):
+            projected = self.project(row, args)
+            self.assertEqual(projected["row_type"], kind)
+            self.assertTrue(all(field == {"present": False, "type": "absent"} for field in projected["fields"].values()))
+
+    def test_projection_rejects_excessive_nonbuiltin_and_hostile_objects_before_comparison(self):
+        class Hostile:
+            def __eq__(self, _):
+                raise AssertionError("hostile equality called")
+
+            def __repr__(self):
+                raise AssertionError("hostile rendering called")
+
+        class HostileDict(dict):
+            def items(self):
+                raise AssertionError("hostile iteration called")
+
+        _, args = self.fixture()
+        deep = None
+        for _ in range(34):
+            deep = [deep]
+        cycle = []
+        cycle.append(cycle)
+        for value in (Hostile(), HostileDict(), {"tool_input_display": Hostile()},
+                      [0] * 16385, deep, cycle, "PRIVATE" * (1 << 18), float("nan"), {1: "PRIVATE"}):
+            self.assertEqual(self.project(value, args), {"topic": "single-approval", "status": "projection-refused"})
+
+    def test_projection_failure_and_malformed_facts_do_not_change_the_original_failure(self):
+        value, args = self.fixture()
+        value["turn_id"] = 1
+        for failure in (ValueError("PRIVATE-EXCEPTION"), {"topic": "PRIVATE-TOPIC"}, ["PRIVATE-FIELD"]):
+            patching = {"side_effect": failure} if isinstance(failure, Exception) else {"return_value": failure}
+            with patch.object(attempt.kimi_approval_facts, "project", **patching):
+                with self.assertRaises(attempt.kimi_approval_facts.Refusal) as caught:
+                    attempt.approval(value, "session_private", "call_private", args)
+                self.assertEqual(caught.exception.public(), {"topic": "single-approval", "status": "projection-refused"})
+        valid = self.project(value, args)
+        for path, wrong in ((["topic"], "PRIVATE"), (["row_type"], []), (["turn"], "PRIVATE"),
+                            (["exact_keys"], 1), (["fields", "turn_id", "type"], "PRIVATE"),
+                            (["fields", "turn_id", "present"], False), (["equals", "call"], "PRIVATE")):
+            changed = copy.deepcopy(valid)
+            parent = changed
+            for key in path[:-1]:
+                parent = parent[key]
+            parent[path[-1]] = wrong
+            with self.assertRaises(ValueError):
+                attempt.kimi_approval_facts.validate(changed)
+            diagnostic = attempt.kimi._KimiFailureDiagnostic("single-tool")
+            diagnostic.approval_refusal = changed
+            diagnostic.step("approvals", "validate")
+            line = diagnostic.line(ValueError("PRIVATE-ORIGINAL"))
+            self.assertNotIn("PRIVATE", line)
+            self.assertNotIn("approval_refusal", json.loads(line.removeprefix("Kimi collector failure: ")))
+        diagnostic = attempt.kimi._KimiFailureDiagnostic("single-tool")
+        diagnostic.step("approvals", "validate")
+        first = attempt.kimi_approval_facts.Refusal(valid)
+
+        def refuse(_):
+            raise first
+
+        with self.assertRaises(attempt.kimi_approval_facts.Refusal) as caught:
+            diagnostic.observer(refuse)(None)
+        self.assertIs(caught.exception, first)
+        first.facts["unknown"] = "PRIVATE-MUTATION"
+        self.assertNotIn("unknown", diagnostic.approval_refusal)
+        self.assertLessEqual(len(diagnostic.line(ValueError("PRIVATE-REPLACEMENT")).encode()), 2048)
 
 
 if __name__ == "__main__":

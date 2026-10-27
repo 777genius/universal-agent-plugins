@@ -16,6 +16,7 @@ from urllib.parse import urlencode
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import project_native_research as shared
 from project_native_collectors import kimi
+from project_native_collectors import kimi_approval_facts
 
 TOOL = "mcp__uap-kimi-native-a__inspect_runtime"
 MODEL = "uap-kimi-native-model"
@@ -85,7 +86,7 @@ def session(value, workspace, cwd):
     return value["id"]
 
 
-def approval(value, session_id, call_id, args):
+def _strict_approval(value, session_id, call_id, args):
     # Exact source fallback: toolApprovalService blob96f36f15ec9fcaf00f4ec373e935004ed14857e2.
     action = "Approve " + TOOL
     if isinstance(value, dict):
@@ -104,6 +105,21 @@ def approval(value, session_id, call_id, args):
     kimi._instant(value["created_at"])
     kimi._instant(value["expires_at"])
     return value["approval_id"], value["turn_id"]
+
+
+def approval(value, session_id, call_id, args):
+    try:
+        return _strict_approval(value, session_id, call_id, args)
+    except ResponseSchemaRefusal:
+        # Preserve the exact existing class and graceful failed-capture branch.
+        raise
+    except ValueError:
+        try:
+            facts = kimi_approval_facts.project(value, session_id, call_id, args, TOOL, kimi._instant)
+            refusal = kimi_approval_facts.Refusal(facts)
+        except Exception:
+            refusal = kimi_approval_facts.Refusal(kimi_approval_facts.REFUSED)
+        raise refusal from None
 
 
 def no_call(ctx, event_path, marker_path):
