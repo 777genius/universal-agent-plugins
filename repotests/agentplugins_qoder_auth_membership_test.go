@@ -16,8 +16,8 @@ func qoderMetadataAuthNames(directory *os.File) error {
 	if (err != nil && !errors.Is(err, io.EOF)) || len(names) != 2 {
 		return qoderMetadataRefused()
 	}
-	if !((names[0] == "machine_id" && names[1] == ".credential-transaction") ||
-		(names[1] == "machine_id" && names[0] == ".credential-transaction")) {
+	if (names[0] != "machine_id" || names[1] != ".credential-transaction") &&
+		(names[1] != "machine_id" || names[0] != ".credential-transaction") {
 		return qoderMetadataRefused()
 	}
 	extra, err := directory.Readdirnames(1)
