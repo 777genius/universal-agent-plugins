@@ -1,5 +1,21 @@
 # Remaining native project qualification
 
+## Owner reprioritization, 2026-10-27
+
+The owner explicitly deferred VS Code: it is not a priority and is skipped in
+this continuation. Complete the nine remaining client leaves in PR521-529 and
+their applicable end-to-end verification, independent review and merge gates.
+Keep PR530 as a deferred draft; preserve its existing source, recorded evidence
+and unpublished work. Do not run new VS Code qualification, change its dedicated
+implementation or merge that leaf as part of this continuation. Its incomplete
+qualification does not block the active nine-client program. Preserve existing
+baseline regression coverage for previously supported behavior.
+
+This latest scope decision supersedes earlier instructions below that require
+VS Code follow-through or count it among the active remaining targets. It does
+not change the evidence requirements for any active client, promote a blocked
+native case to passed, or authorize a release.
+
 2026-10-25. Work in progress; source-only, not release qualification.
 Baseline: `d5c16856cef67a1457704971d46765739141ab08` (project implementation
 #499 and evidence cleanup #519). The owner requests completion of the remaining
