@@ -3,6 +3,8 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -70,10 +72,16 @@ func (detector *projectVersionDetector) DetectTargetsWithVersionProbe(_ context.
 	return append([]domain.DetectedClient(nil), detector.probed...), detector.err
 }
 
+// Native paths must be absolute on Windows as well as Unix. No fixture
+// executable is created or launched by these inert version-probe tests.
+func projectVersionFixturePath(elements ...string) string {
+	return filepath.Join(append([]string{os.TempDir(), "uap-project-version-fixture"}, elements...)...)
+}
+
 func projectVersionClient() domain.DetectedClient {
 	return domain.DetectedClient{
 		ClientID: domain.ClientKimi, DisplayName: "original Kimi", Status: domain.DetectionDetected,
-		ExecutablePath: "/fixture/bin/kimi", ConfigRoot: "/fixture/user/.kimi", ProfileNamespace: "original-user",
+		ExecutablePath: projectVersionFixturePath("bin", "kimi"), ConfigRoot: projectVersionFixturePath("user", ".kimi"), ProfileNamespace: "original-user",
 		Surfaces: []domain.ClientSurface{{ID: "cli", Detected: true, Evidence: "original discovery"}},
 	}
 }
