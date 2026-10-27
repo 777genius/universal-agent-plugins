@@ -32,6 +32,7 @@ HELP = (
     ("mcp-status-help", ("mcp", "status", "--help"), "--name"),
     ("acp-help", ("acp", "--help"), "--agent-engine"),
     ("chat-help", ("chat", "--help"), "Usage:"),
+    ("agent-help", ("agent", "--help"), "Usage:"),
 )
 NAMES = {scope: "uap-kiro-research-" + scope for scope in ("a", "b", "user")}
 _ALL_HELP_STDERR = b"\nUSAGE:\n    kiro-cli [OPTIONS] [SUBCOMMAND]\n\n"
@@ -81,6 +82,9 @@ def _runtime_bin(ctx):
 
 
 def _probe(ctx, owned, label, arguments, project="a"):
+    if label == "agent-help" and (
+            tuple(arguments) != ("agent", "--help") or project != "a"):
+        raise ValueError("Kiro agent-help requires exact argv/project")
     if label == "all-help" and tuple(arguments) != ("--help-all",):
         raise ValueError("Kiro all-help stderr exception requires exact argv")
     if label == "a-workspace-raw-list" and (
