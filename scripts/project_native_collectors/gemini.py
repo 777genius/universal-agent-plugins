@@ -42,6 +42,9 @@ _UNTRUSTED = (
 _RIPGREP_FALLBACK = b"Ripgrep is not available. Falling back to GrepTool.\n"
 _SKILLS_REFRESH_DIAGNOSTIC = (_RIPGREP_FALLBACK + b"Scheduling MCP context refresh...\n"
                               b"Executing MCP context refresh...\nMCP context refresh complete.\n")
+_UNTRUSTED_SKILLS_DIAGNOSTIC = (
+    b"Skipping project agents due to untrusted folder. To enable, ensure that the project root is trusted.\n"
+    + _RIPGREP_FALLBACK + b"Project hooks disabled because the folder is not trusted.\n")
 _EMPTY_MCP = b"No MCP servers configured.\n"
 _CONFIG_COMMANDS = (("skills", "list", "--all"), ("mcp", "list"))
 
@@ -139,6 +142,10 @@ def _probe(ctx, owned, label, arguments, project="a"):
     # Genuine research run 40405537349 captured this exact 149-byte successful
     # skills-list tuple; it does not admit another command or any other bytes.
     refresh_stderr = tuple(arguments) == ("skills", "list", "--all") and stderr == _SKILLS_REFRESH_DIAGNOSTIC
+    # Genuine research run 40465927279 measured this whole tuple only at the
+    # deliberately untrusted A skills control. Keep its user-only scope checks.
+    untrusted_skills = (label == "untrusted-a-skills" and tuple(arguments) == ("skills", "list", "--all")
+                        and stderr == _UNTRUSTED_SKILLS_DIAGNOSTIC)
     # Actual hosted run 40240850774 emitted the empty-list sentinel on stderr,
     # with zero stdout bytes and exit zero. Preserve both raw capture channels;
     # only this whole measured response supplies the existing empty-list parser.
@@ -152,7 +159,7 @@ def _probe(ctx, owned, label, arguments, project="a"):
             listed_mcp = bool(rows)
         except (ValueError, UnicodeError):
             pass
-    if stderr and not known_stderr and not refresh_stderr and not empty_mcp and not listed_mcp:
+    if stderr and not known_stderr and not refresh_stderr and not untrusted_skills and not empty_mcp and not listed_mcp:
         raise ValueError("Gemini probe did not finish cleanly: " + label)
     for path, body in owned.items():
         _unchanged(path, body)

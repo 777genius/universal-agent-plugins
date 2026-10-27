@@ -92,6 +92,86 @@ class GeminiCollectorTests(unittest.TestCase):
                          "13b38cbfb721679de46a7ab935acc81b597c8a34c10ea57fa21b77d45c6ea595")
         return body
 
+    def observed_untrusted_skills_stderr(self):
+        # Independent literal from source-bound artifact12716448810.
+        body = (b"Skipping project agents due to untrusted folder. To enable, ensure that the project root is trusted.\n"
+                b"Ripgrep is not available. Falling back to GrepTool.\n"
+                b"Project hooks disabled because the folder is not trusted.\n")
+        self.assertEqual(len(body), 211)
+        self.assertEqual(hashlib.sha256(body).hexdigest(),
+                         "90f97337101f629e2177832ecdca61c30015861ed2358dffeceb640a894d917b")
+        return body
+
+    def test_exact_untrusted_skills_diagnostic_keeps_complete_user_only_selection(self):
+        ctx, captured = self.context(), self.observed_untrusted_skills_stderr()
+        original = ctx.probe
+        def untrusted_diagnostic(label, arguments, **kwargs):
+            record, stdout, stderr = original(label, arguments, **kwargs)
+            return record, stdout, captured if label == "untrusted-a-skills" else stderr
+        ctx.probe = untrusted_diagnostic
+        result = gemini.collect(ctx)
+        self.assertEqual(len(ctx.calls), 18)
+        self.assertEqual(set(result["observations"]["untrusted_a"]["skills"]), {gemini.NAMES["user"]})
+        self.assertTrue(all(row["status"] == "passed" for row in result["cases"]))
+        self.assertFalse(any(value for key, value in result["observations"].items() if key.endswith("_qualified")))
+        trust = json.loads((ctx.home / ".gemini/trustedFolders.json").read_text())
+        self.assertEqual(trust[str(ctx.projects["a"])], "DO_NOT_TRUST")
+
+    def test_untrusted_skills_diagnostic_rejects_other_stage_command_and_bytes(self):
+        captured = self.observed_untrusted_skills_stderr()
+        lines = captured.splitlines(keepends=True)
+        variants = [captured[:-1], captured.replace(b"\n", b"\r\n"), b"".join(reversed(lines)),
+                    captured + lines[-1], b"".join(lines[1:]), b"unknown warning\n" + captured,
+                    captured + b"API error\n", captured + b"Authentication required\n",
+                    captured + b"\x00", captured.replace(b"disabled", b"enabled"), b"\xff" + captured]
+        for stderr in variants:
+            ctx = self.context()
+            ctx.replace["untrusted-a-skills"] = ({"exit": 0, "error": None}, b"output", stderr)
+            with self.subTest(stderr=stderr), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "untrusted-a-skills", ("skills", "list", "--all"))
+        for label, arguments in [("configured-a-skills", ("skills", "list", "--all")),
+                                 ("untrusted-b-skills", ("skills", "list", "--all")),
+                                 ("untrusted-a-mcp", ("mcp", "list")),
+                                 ("untrusted-a-skills", ("skills", "list")),
+                                 ("untrusted-a-skills", ("skills", "list", "--all", "extra")),
+                                 ("version", ("--version",))]:
+            ctx = self.context()
+            ctx.replace[label] = ({"exit": 0, "error": None}, b"output", captured)
+            with self.subTest(label=label, arguments=arguments), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, label, arguments)
+        for record, stdout, stderr in [({"exit": 1, "error": None}, b"output", captured),
+                                      ({"exit": False, "error": None}, b"output", captured),
+                                      ({"exit": 0}, b"output", captured),
+                                      ({"exit": 0, "error": "timeout"}, b"output", captured),
+                                      ({"exit": 0, "error": False}, b"output", captured),
+                                      ({"exit": 0, "error": None}, "output", captured),
+                                      ({"exit": 0, "error": None}, b"output", bytearray(captured))]:
+            ctx = self.context()
+            ctx.replace["untrusted-a-skills"] = (record, stdout, stderr)
+            with self.subTest(record=record), self.assertRaises(ValueError):
+                gemini._probe(ctx, {}, "untrusted-a-skills", ("skills", "list", "--all"))
+
+    def test_untrusted_skills_diagnostic_cannot_mask_scope_or_authored_mutation(self):
+        for fault in ("project-a", "sibling-b", "foreign-path", "missing-user", "disabled-user", "authored-mutation"):
+            ctx, captured = self.context(), self.observed_untrusted_skills_stderr()
+            user_path = ctx.home / ".gemini/skills" / gemini.NAMES["user"] / "SKILL.md"
+            rows = [(gemini.NAMES["user"], user_path, fault != "disabled-user")]
+            if fault in ("project-a", "sibling-b"):
+                scope = "a" if fault == "project-a" else "b"
+                rows.append((gemini.NAMES[scope], ctx.projects[scope] / ".gemini/skills" /
+                             gemini.NAMES[scope] / "SKILL.md", True))
+            elif fault == "foreign-path":
+                rows = [(gemini.NAMES["user"], ctx.projects["b"] / "foreign-skill.md", True)]
+            elif fault == "missing-user":
+                rows = []
+            def observed():
+                if fault == "authored-mutation":
+                    (ctx.home / ".gemini/settings.json").write_text("{}\n")
+                return {"exit": 0, "error": None}, skill_text(rows), captured
+            ctx.replace["untrusted-a-skills"] = observed
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                gemini.collect(ctx)
+
     def test_measured_nonempty_mcp_stderr_uses_existing_scope_parser(self):
         ctx, body = self.context(), self.observed_mcp_stderr()
         ctx.replace["observed"] = ({"exit": 0, "error": None}, b"", body)

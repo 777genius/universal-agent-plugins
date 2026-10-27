@@ -89,3 +89,23 @@ locally. Root alone publishes to existing PR526 on a fresh non-forced ref.
 Fresh genuine evidence must complete remaining research stages before any
 complete source observation; native/full lifecycle/protocol/cleanup proof is
 still separate. No release/new PR or VS Code work.
+
+## Implemented validation
+
+Both independent plan and full two-file code reviews approved the finite
+allowance. Reviewed collector SHA256 is
+dca1042274b97c2fc12a651bc7561a7f6c4cab0041eb246a413afcd5ff58d1b2;
+tests SHA256 is
+c6e3de8462455145e45ca4d46075b614ddd98832188a6d242bc7d6ec43ef8c17.
+The complete Gemini collector module passes28 tests in0.166s (root independent
+rerun28 in0.220s), including the full18-call all-false/trust control and exact
+literal/hash, hostile bytes/stages/records, scope and authored-mutation cases.
+
+Offline replay independently checked actual211-byte stderr and1029-byte stdout
+against the held research command byte/hash metadata, typed successful record,
+original user path from the configured-user command cwd, and existing strict
+parse_skills/_require_skills through the actual _probe selection. It returned
+the unchanged raw stdout and selected only the original user fixture skill.
+The genuine d942 incomplete/all-false record remains unchanged. AST/diff checks
+pass; no Go, vendor process, hosted guard or additional command ran locally.
+Fresh genuine research must still reach and complete its remaining stages.
