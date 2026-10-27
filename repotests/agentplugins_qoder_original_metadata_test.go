@@ -173,6 +173,9 @@ func (r *qoderOriginalMetadata) capture(profile, auth *os.File) error {
 	if err != nil || !qoderLogOwned(r.auth, true) || r.auth.Mode() != os.ModeDir|0700 {
 		return qoderMetadataRefused()
 	}
+	if err := qoderMetadataAuthMembers(profile, auth, r.auth); err != nil {
+		return err
+	}
 	for i, item := range qoderMetadataRecipe {
 		parent := auth
 		if i == 0 {
@@ -236,7 +239,7 @@ func (r *qoderOriginalMetadata) linked(profile, auth *os.File) (err error) {
 			return qoderMetadataRefused()
 		}
 	}
-	return nil
+	return qoderMetadataAuthMembers(profile, auth, r.auth)
 }
 
 func qoderMetadataDirectoryLinked(info os.FileInfo, linked *unix.Stat_t) bool {
