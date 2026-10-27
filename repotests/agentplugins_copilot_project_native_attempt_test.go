@@ -403,7 +403,7 @@ func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T) {
 	defer f.finish(t)
 	f.setup(t)
 	p := newCopilotProjectProvider("uapcopilota-inspect_runtime", f.base.Nonce, f.validateFacts)
-	if err := p.start(); err != nil {
+	if err := p.start(f.ctx); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {

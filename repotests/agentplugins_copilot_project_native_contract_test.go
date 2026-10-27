@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -211,7 +212,7 @@ func TestCopilotProjectNativeReturnedFactsRequireExactInstalledAuthorityAndEvent
 func TestCopilotProjectNativeHeldReadsRejectAliasesAndHardlinks(t *testing.T) {
 	root := t.TempDir()
 	leaf := filepath.Join(root, "ordinary")
-	projectNativeRuntimeWrite(t, leaf, []byte("safe"), 0600)
+	projectNativeRuntimeWrite(t, leaf, []byte("safe"), 0700)
 	if got, err := projectNativeRuntimeDigest(leaf); err != nil || len(got) != 64 {
 		t.Fatalf("ordinary digest: %v", err)
 	}
@@ -225,7 +226,7 @@ func TestCopilotProjectNativeHeldReadsRejectAliasesAndHardlinks(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := projectNativeRuntimeDigest(leaf); err == nil {
-		t.Fatal("hardlinked immutable file accepted")
+		t.Fatal("immutable file with multiple links accepted")
 	}
 }
 func copilotProjectContractBody(t *testing.T, v any) []byte {
@@ -238,7 +239,7 @@ func copilotProjectContractBody(t *testing.T, v any) []byte {
 }
 
 func TestCopilotProjectNativeJSONClosedContract(t *testing.T) {
-	for _, body := range [][]byte{[]byte(`{"a":1,"a":2}`), []byte(`{"a":{"x":1,"x":2}}`), []byte(`{"a":NaN}`), []byte(`{} {}`), []byte{0xff}, bytes.Repeat([]byte(" "), copilotProjectBodyLimit+1), []byte(strings.Repeat("[", 34) + strings.Repeat("]", 34))} {
+	for _, body := range [][]byte{[]byte(`{"a":1,"a":2}`), []byte(`{"a":{"x":1,"x":2}}`), []byte(`{"a":NaN}`), []byte(`{} {}`), {0xff}, bytes.Repeat([]byte(" "), copilotProjectBodyLimit+1), []byte(strings.Repeat("[", 34) + strings.Repeat("]", 34))} {
 		if _, err := projectNativeRuntimeJSON(body); err == nil {
 			t.Fatalf("unsafe JSON admitted: %.80s", body)
 		}
@@ -287,7 +288,12 @@ func TestCopilotProjectNativeProviderRequiresReturnedCallAndFactsBeforeSentinel(
 			})
 			p.server = &httptest.Server{URL: "http://127.0.0.1:12345"}
 			send := func(m any, route string) *httptest.ResponseRecorder {
-				r := httptest.NewRequest("POST", p.server.URL+route, bytes.NewReader(copilotProjectContractBody(t, m)))
+				target := p.server.URL + route
+				r, err := http.NewRequestWithContext(context.Background(), "POST", target, bytes.NewReader(copilotProjectContractBody(t, m)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.RequestURI = target
 				r.Header.Set("Content-Type", "application/json")
 				if kind == "wrong-host" {
 					r.Host = "other.invalid"

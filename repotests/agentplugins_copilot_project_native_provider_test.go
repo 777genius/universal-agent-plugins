@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,12 +25,13 @@ func copilotProjectMessage(v any) error {
 		return fmt.Errorf("message object")
 	}
 	role, ok := m["role"].(string)
-	if !ok || !strings.Contains("|system|developer|user|assistant|tool|", "|"+role+"|") {
+	const roles = "|system|developer|user|assistant|tool|"
+	if !ok || !strings.Contains(roles, "|"+role+"|") {
 		return fmt.Errorf("message role")
 	}
 	content, has := m["content"]
 	_, hasCalls := m["tool_calls"]
-	if (!has || content == nil) && !(role == "assistant" && hasCalls) {
+	if (!has || content == nil) && (role != "assistant" || !hasCalls) {
 		return fmt.Errorf("missing message content")
 	}
 	if role == "tool" {
@@ -202,8 +204,8 @@ func newCopilotProjectProvider(tool, nonce string, validate func(string) error) 
 	p := &copilotProjectProvider{tool: tool, id: "uap_" + nonce + "_attempt", nonce: nonce, marker: "retained-" + nonce, sentinel: "UAP_DONE_" + nonce + "_attempt", validate: validate}
 	return p
 }
-func (p *copilotProjectProvider) start() error {
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+func (p *copilotProjectProvider) start(ctx context.Context) error {
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp4", "127.0.0.1:0")
 	if err != nil {
 		return err
 	}
