@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,9 @@ import (
 
 const kimiAttemptTool = "mcp__uap-kimi-native-a__inspect_runtime"
 const kimiAttemptModel = "uap-kimi-native-model"
+
+// Pinned profileService passes its generated session ID as cache metadata.
+var kimiAttemptCacheKey = regexp.MustCompile(`^session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 // Source b8dd3a134060c6e80ba4a1659335cd63b68483f2, OpenAI format
 // d074e9c1fb310d78f3dd1f497f28bb4481e2ed75. This is a source-guided
@@ -29,8 +33,14 @@ func kimiAttemptRequest(body []byte) (map[string]any, error) {
 		return nil, err
 	}
 	m, ok := v.(map[string]any)
-	if !ok || projectNativeRuntimeKeys(m, "model messages tools stream stream_options", "max_tokens max_completion_tokens temperature top_p parallel_tool_calls") != nil || m["model"] != kimiAttemptModel || m["stream"] != true || !reflect.DeepEqual(m["stream_options"], map[string]any{"include_usage": true}) {
+	if !ok || projectNativeRuntimeKeys(m, "model messages tools stream stream_options", "max_tokens max_completion_tokens temperature top_p parallel_tool_calls prompt_cache_key") != nil || m["model"] != kimiAttemptModel || m["stream"] != true || !reflect.DeepEqual(m["stream_options"], map[string]any{"include_usage": true}) {
 		return nil, fmt.Errorf("Kimi completion envelope differs")
+	}
+	if value, exists := m["prompt_cache_key"]; exists {
+		key, ok := value.(string)
+		if !ok || len(key) != 44 || !kimiAttemptCacheKey.MatchString(key) {
+			return nil, fmt.Errorf("Kimi session cache metadata differs")
+		}
 	}
 	for _, key := range []string{"max_tokens", "max_completion_tokens"} {
 		if value, exists := m[key]; exists && !projectNativeRuntimeNumber(value, 1, 1<<20, true) {
@@ -127,6 +137,7 @@ type kimiAttemptProvider struct {
 	mu                               sync.Mutex
 	server                           *httptest.Server
 	key, id, nonce, marker, sentinel string
+	cacheKey                         string
 	requests                         [][]byte
 	requestCount                     int
 	err                              error
@@ -170,6 +181,7 @@ func (p *kimiAttemptProvider) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	messages := m["messages"].([]any)
+	cacheKey, _ := m["prompt_cache_key"].(string)
 	args := map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}
 	if len(p.requests) == 1 {
 		for _, raw := range messages {
@@ -180,10 +192,15 @@ func (p *kimiAttemptProvider) serve(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		encoded, _ := json.Marshal(args)
+		p.cacheKey = cacheKey
 		p.issued = true // Establish ownership before a byte can reach the native client.
 		p.chunk(w, map[string]any{"role": "assistant", "tool_calls": []any{map[string]any{"index": 0, "id": p.id, "type": "function", "function": map[string]any{"name": kimiAttemptTool, "arguments": string(encoded)}}}}, nil)
 		p.chunk(w, map[string]any{}, "tool_calls")
 	} else if len(p.requests) == 2 {
+		if cacheKey != p.cacheKey {
+			fail(fmt.Errorf("Kimi session cache metadata changed between turns"))
+			return
+		}
 		calls, results := 0, 0
 		for _, raw := range messages {
 			message := raw.(map[string]any)
