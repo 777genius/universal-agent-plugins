@@ -77,7 +77,7 @@ class RuntimeTests(unittest.TestCase):
             test.write_text("func Other(t *testing.T) {}")
             with self.assertRaises(ValueError):
                 runtime.selected_cases()
-            test.write_text("func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T) {\n}")
+            test.write_text("func " + runtime.CASES["copilot"]["test"] + "(t *testing.T) {\n}")
             self.assertEqual(runtime.selected_cases(), {"include": [{"client": "copilot", "phase": "runtime-attempt"}]})
 
     def test_host_guard_runs_before_creating_output_or_native_child(self):

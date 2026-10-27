@@ -98,6 +98,11 @@ func (f *copilotProjectAttempt) check(t *testing.T) {
 }
 func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, argv []string, timeout time.Duration) ports.CommandResult {
 	t.Helper()
+	if f.evidence["mode"] == copilotUserRegistrationMode {
+		if err := f.userRegistrationCommand(label, cwd, argv, timeout); err != nil {
+			t.Fatal(err)
+		}
+	}
 	f.check(t)
 	ctx, cancel := context.WithTimeout(f.ctx, timeout)
 	defer cancel()
@@ -116,6 +121,9 @@ func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, ar
 	record := map[string]any{"argv": argv, "cwd": cwd, "exit": result.ExitCode, "elapsed_ms": time.Since(began).Milliseconds(), "error": err != nil, "context_error": ctx.Err() != nil, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"}
 	body, _ := json.Marshal(record)
 	f.keep(t, label+".command.json", body)
+	if f.evidence["mode"] == copilotUserRegistrationMode {
+		f.evidence["commands"] = append(f.evidence["commands"].([]string), label)
+	}
 	f.check(t)
 	if err != nil || ctx.Err() != nil || result.ExitCode != 0 || len(result.Stdout) > copilotProjectBodyLimit || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
 		t.Fatalf("%s process/capture/cleanup failed; see bounded evidence", label)
@@ -214,7 +222,7 @@ func (f *copilotProjectAttempt) authorOriginalConfig(t *testing.T) error {
 	f.protected[trust] = copilotProjectConfigHash(body)
 	return nil
 }
-func (f *copilotProjectAttempt) setup(t *testing.T) {
+func (f *copilotProjectAttempt) preparePackage(t *testing.T) {
 	t.Helper()
 	for _, project := range []struct{ name, path string }{{"A", f.base.Project}, {"B", f.other}} {
 		r := f.command(t, "git-"+project.name, project.path, f.env(), []string{f.git, "-c", "core.hooksPath=/dev/null", "init", "--quiet"}, 30*time.Second)
@@ -240,7 +248,11 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 	server := map[string]any{"type": "stdio", "command": "./bin/probe", "args": []string{"argument with spaces", "${PLUGIN_ROOT}/argument", "${UNKNOWN}"}, "cwd": "${PLUGIN_ROOT}", "env": map[string]string{"UAP_TEST_ROOT": f.base.Root, "UAP_TEST_EVENTS": f.base.Events, "UAP_TEST_NONCE": f.base.Nonce, "UAP_TEST_REVISION": "A-one", "UAP_TEST_LITERAL": "literal ${UNKNOWN} $HOME", "UAP_TEST_ONCE": "${PLUGIN_ROOT}/${UNKNOWN}"}}
 	nativeJSON(t, filepath.Join(f.base.Package, "mcp.json"), map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{"uapcopilota": server}})
 	f.immutable[filepath.Join(f.base.Package, "bin", "probe")] = nativeSHA(t, filepath.Join(f.base.Package, "bin", "probe"))
-	r = f.command(t, "add-A", f.base.Project, f.env(), []string{f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json"}, 30*time.Second)
+}
+func (f *copilotProjectAttempt) setup(t *testing.T) {
+	t.Helper()
+	f.preparePackage(t)
+	r := f.command(t, "add-A", f.base.Project, f.env(), []string{f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json"}, 30*time.Second)
 	if string(r.Stderr) != "Resolving and validating one Agent Plugin package for every selected target...\nInstalling native-proof for 1 selected clients...\n" {
 		t.Fatal("unexpected public installer diagnostic")
 	}
@@ -390,7 +402,11 @@ func (f *copilotProjectAttempt) finish(t *testing.T) {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
-	f.finalizeReadiness(t)
+	if f.evidence["mode"] == copilotUserRegistrationMode {
+		f.finalizeUserRegistration(t)
+	} else {
+		f.finalizeReadiness(t)
+	}
 	f.evidence["test_failed"] = t.Failed()
 	f.evidence["elapsed_ms"] = time.Since(f.started).Milliseconds()
 	body, _ := json.MarshalIndent(f.evidence, "", "  ")

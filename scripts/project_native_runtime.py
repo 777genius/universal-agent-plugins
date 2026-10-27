@@ -28,9 +28,9 @@ CASES = {
               "file": "repotests/agentplugins_cline_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
               "phase": "runtime-attempt"},
-    "copilot": {"test": "TestAgentpluginsCopilotNativeProjectRuntimeAttempt",
-                "file": "repotests/agentplugins_copilot_project_native_attempt_test.go",
-                "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
+    "copilot": {"test": "TestAgentpluginsCopilotNativeUserRegistrationFirstObservation",
+                "file": "repotests/agentplugins_copilot_user_registration_attempt_test.go",
+                "optin": "AGENTPLUGINS_COPILOT_USER_REGISTRY_FIRST_CAPTURE", "seconds": 180,
                 "phase": "runtime-attempt"},
     "gemini": {"test": "TestAgentpluginsGeminiNativeProjectRuntimeAttempt",
                "file": "repotests/agentplugins_gemini_project_native_attempt_test.go",
@@ -130,6 +130,9 @@ def attempt_members(bodies, source, client="copilot"):
         result = strict_json(bodies["runtime-attempt.json"])
         if isinstance(result, dict) and result.get("mode") == "copilot-installed-tool-readiness":
             from project_native_copilot_readiness import members
+            return members(bodies, source)
+        if isinstance(result, dict) and result.get("mode") == "copilot-user-registry-first-capture":
+            from project_native_copilot_user import members
             return members(bodies, source)
     required = {"runtime-attempt.json"}
     installed = {"copilot": {"mcp.json.installed", "uapcopilota-SKILL.md.installed"},
