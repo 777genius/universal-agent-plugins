@@ -86,3 +86,28 @@ entries or to attribute hashed names; no preservation-policy change follows
 from this selection amendment. The original fatal profile comparison and all
 qualification/authentication/model flags remain unchanged. No release, new PR
 or VS Code work.
+
+## Validation record (2026-10-27)
+
+Root and CLI independently approved the exact plan before implementation.
+CLI and shell independently reviewed the complete two-file change and gave
+code GO for SHA256
+`beffe0727d8a9285c5b4df22150d6ea83c6c6400a024285a0bf15eab8ed5700c`
+(existing formatter) and
+`149291846c252ff44c633b02e28ef473f9c02a992118e33d9700e85872c425fb`
+(new pure comparator/contracts). No source changes followed those reviews.
+The old formatter remains400 lines; the new helper/contracts file is107 lines.
+
+Actual focused existing/new Qoder, log-link and shared argv/scope contracts
+passed in0.053s with Go1.26.10, `-p=1`, `-count=1` and a90-second timeout.
+The all-enabled affected-line lint from plan commit `104cc6c9` and unfiltered
+whole-file `revive,funlen,gocyclo,gocognit,dupl,depguard` gate each reported zero
+issues. Gofmt and whitespace checks are clean. The actual-file seven-other
+case reproduces10 additions/one change/three details/eight omissions; this is
+an inert shape control, not identification of the seven genuine unknown paths.
+
+The recovered source-bound94e sixteen-member failure and all24 frontend
+stream joins were reverified with unchanged failed/unqualified Python admission.
+No vendor or positive hosted guard ran locally. A new genuine capture must
+still identify the newly prioritized metadata before any preservation-policy
+or native/lifecycle qualification amendment.

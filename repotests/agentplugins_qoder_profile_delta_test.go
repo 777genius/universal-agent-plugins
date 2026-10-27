@@ -85,7 +85,7 @@ func qoderOriginalProfileDelta(before, after map[string]string) qoderProfileDelt
 func qoderDeltaBound(delta qoderProfileDelta) qoderProfileDelta {
 	sort.Slice(delta.Entries, func(i, j int) bool {
 		a, b := delta.Entries[i], delta.Entries[j]
-		return a.rank < b.rank || (a.rank == b.rank && a.KeySHA256 < b.KeySHA256)
+		return qoderDeltaPriorityLess(a, b, delta.Areas["other"] > 0)
 	})
 	delta.Status = "captured"
 	if len(delta.Entries) > 3 {
