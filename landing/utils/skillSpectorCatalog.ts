@@ -119,7 +119,8 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
     invalid();
   const plugins = new Set<string>();
   let pluginSelected = 0,
-    pluginReported = 0;
+    pluginReported = 0,
+    pluginPending = 0;
   for (const item of manifest.plugin_coverage) {
     const plugin = object(item);
     keys(plugin, ['repository', 'plugin_path', 'selected', 'reported', 'pending']);
@@ -141,8 +142,14 @@ export function decodeSkillSpectorManifest(value: unknown, now = new Date()): Sk
     plugins.add(key);
     pluginSelected += plugin.selected;
     pluginReported += plugin.reported;
+    pluginPending += plugin.pending;
   }
-  if (pluginSelected > coverage.selected || pluginReported > coverage.reported) invalid();
+  if (
+    pluginSelected > coverage.selected ||
+    pluginReported > coverage.reported ||
+    pluginPending > coverage.pending
+  )
+    invalid();
   return value as SkillSpectorManifest;
 }
 

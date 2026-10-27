@@ -121,6 +121,11 @@ describe('bounded SkillSpector repository catalog', () => {
         ];
       },
       (value: SkillSpectorManifest) => {
+        value.plugin_coverage = [
+          { repository: 'owner/one', plugin_path: '', selected: 6, reported: 0, pending: 6 },
+        ];
+      },
+      (value: SkillSpectorManifest) => {
         value.coverage.pending++;
       },
       (value: SkillSpectorManifest) => {
