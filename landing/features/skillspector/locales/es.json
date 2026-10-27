@@ -1,10 +1,14 @@
 {
   "registryUi": {
     "skillSpector": {
+      "loading": "Cargando informe",
+      "unavailable": "Informe no disponible",
+      "loadingDetails": "Cargando la evaluación publicada…",
+      "unavailableDetails": "No se pudo cargar la evaluación publicada. Se desconoce el estado de la comprobación de esta entrada.",
       "notChecked": "Sin comprobar",
       "noFindings": "Sin hallazgos",
       "findingsCount": "Hallazgos: {count}",
-      "partial": "Comprobación parcial",
+      "partial": "Comprobado con limitaciones",
       "error": "Error de comprobación",
       "detailsFor": "Detalles de SkillSpector para {name}",
       "pluginScope": "Skills seleccionadas de este plugin",
@@ -15,7 +19,7 @@
       "scanner": "Solo comprobaciones estáticas · SkillSpector {version}",
       "disclaimer": "Este informe histórico abarca solo los archivos de Skills indicados en la revisión registrada. No ejecuta código ni garantiza la seguridad.",
       "unverified": "No se ha verificado la revisión actual de esta ficha.",
-      "incomplete": "Algunas comprobaciones de Skills no finalizaron. Revisa los hallazgos y errores disponibles.",
+      "incomplete": "La comprobación estática no cubrió todo el contenido. Revisa los hallazgos y las limitaciones de cobertura a continuación.",
       "source": "Archivos fuente",
       "findings": "Hallazgos",
       "errors": "Errores de comprobación",
@@ -24,7 +28,10 @@
       "truncated": "Se muestran {shown} de {total} hallazgos.",
       "selectedSkills": "Skills seleccionadas",
       "historical": "Informe histórico",
-      "older": "Este informe tiene más de siete días o describe otra revisión. No acredita el estado actual."
+      "older": "Este informe tiene más de siete días o describe otra revisión. No acredita el estado actual.",
+      "staticParseLimit": "Algunas expresiones superaron los límites del analizador estático.",
+      "referenceMissing": "Algunos archivos locales referenciados no se encontraron entre los archivos de la habilidad analizados; podrían crearse durante la ejecución.",
+      "analyzerIncomplete": "Un analizador no completó todas las comprobaciones previstas."
     }
   }
 }

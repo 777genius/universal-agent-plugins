@@ -8,6 +8,7 @@ import {
   decodeSkillSpectorReport,
   loadSkillSpectorReport,
   skillSpectorAssessment,
+  skillSpectorFindingUrl,
   skillSpectorSourceUrl,
 } from '../utils/skillSpector.ts';
 
@@ -211,6 +212,65 @@ describe('SkillSpector historical display reports', () => {
       ],
     });
     assert.equal(skillSpectorAssessment(report([finding]), subject, now).status, 'findingsCount');
+  });
+
+  it('links findings only to in-root artifacts at the exact scanned revision', () => {
+    const finding = {
+      rule: 'AE1',
+      severity: 'HIGH',
+      message: 'Review',
+      path: 'SKILL.md',
+      line: 50,
+    };
+    const base = `https://github.com/owner/repository/blob/${revision}/plugins/example/skills/example/`;
+    assert.equal(skillSpectorFindingUrl(record(), finding), `${base}SKILL.md#L50`);
+    assert.equal(
+      skillSpectorFindingUrl(record(), {
+        ...finding,
+        path: 'references/example file#1.md',
+        line: undefined,
+      }),
+      `${base}references/example%20file%231.md`,
+    );
+    for (const path of [
+      '',
+      '/etc/passwd',
+      '//evil.example/file',
+      '../outside.md',
+      'refs/../../outside',
+      'refs/./file',
+      'refs//file',
+      'C:/file',
+      'C:\\file',
+      'https://evil.example/file',
+      '%2e%2e/file',
+      'file\u0000.md',
+    ]) {
+      assert.equal(skillSpectorFindingUrl(record(), { ...finding, path }), undefined, path);
+    }
+    assert.equal(skillSpectorFindingUrl(record(), { ...finding, line: 0 }), undefined);
+    assert.equal(
+      skillSpectorFindingUrl(record({ source: { ...record().source, revision: 'main' } }), finding),
+      undefined,
+    );
+  });
+
+  it('keeps revision and age warnings independent from partial or failed checks', () => {
+    for (const status of ['partial', 'error'] as const) {
+      for (const stale of [
+        record({ status, scanned_at: '2026-10-01T00:00:00Z' }),
+        record({ status, source: { ...record().source, revision: 'b'.repeat(40) } }),
+      ]) {
+        const assessment = skillSpectorAssessment(report([stale]), subject, now);
+        assert.equal(assessment.status, status);
+        assert.equal(assessment.outOfDate, true);
+      }
+      assert.equal(
+        skillSpectorAssessment(report([record({ status })]), subject, now).outOfDate,
+        false,
+      );
+    }
+    assert.equal(skillSpectorAssessment(undefined, subject, now).outOfDate, false);
   });
 
   it('joins standalone historical evidence by repository and declared name, never the provider title', () => {

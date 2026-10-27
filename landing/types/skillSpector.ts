@@ -46,5 +46,6 @@ export type SkillSpectorStatus =
 export interface SkillSpectorAssessment {
   status: SkillSpectorStatus;
   findingCount: number;
+  outOfDate: boolean;
   records: SkillSpectorRecord[];
 }

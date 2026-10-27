@@ -5,6 +5,10 @@ import { loadSkillSpectorReport } from '~/utils/skillSpector';
 export function useSkillSpector() {
   const config = useRuntimeConfig();
   const report = useState<SkillSpectorReport | undefined>('skillspector-report');
+  const status = useState<'loading' | 'ready' | 'unavailable'>(
+    'skillspector-load-status',
+    () => 'loading',
+  );
   const requested = useState('skillspector-requested', () => false);
   onMounted(() => {
     if (requested.value) return;
@@ -12,10 +16,11 @@ export function useSkillSpector() {
     void (async () => {
       try {
         report.value = await loadSkillSpectorReport(String(config.public.skillspectorReportsUrl));
+        status.value = 'ready';
       } catch {
-        // Unavailable and invalid assessments remain "not checked", never clean.
+        status.value = 'unavailable';
       }
     })();
   });
-  return report;
+  return { report, status };
 }

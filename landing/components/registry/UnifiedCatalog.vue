@@ -38,7 +38,7 @@ const headingLabel = computed(
 const modeLink = (skills: boolean) => ({
   path: route.path,
   query: catalogModeQuery(route.query, skills),
-  hash: route.hash,
+  hash: '',
 });
 </script>
 
