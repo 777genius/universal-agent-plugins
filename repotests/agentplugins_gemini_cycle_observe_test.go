@@ -129,7 +129,7 @@ func (c *geminiProjectCycle) listing(t *testing.T, stage, scope string) {
 		t.Fatal(err)
 	}
 	result, start, end := c.execute(t, "listing", stage, scope, []string{c.f.node, c.f.client, "skills", "list", "--all"}, c.f.env(), 10*time.Second)
-	if !geminiCycleListingStderr(result.Stderr) {
+	if !geminiCycleListingStderr(result.Stderr, scope, c.advertised(scope)) {
 		t.Fatal("Gemini cycle unknown skill catalog diagnostic")
 	}
 	if err := c.skills(result.Stdout, scope); err != nil {
@@ -140,8 +140,34 @@ func (c *geminiProjectCycle) listing(t *testing.T, stage, scope string) {
 	c.listings = append(c.listings, stage)
 	c.check(t)
 }
-func geminiCycleListingStderr(body []byte) bool {
-	return len(body) == 0 || string(body) == "Ripgrep is not available. Falling back to GrepTool.\n" || string(body) == "Ripgrep is not available. Falling back to GrepTool.\nScheduling MCP context refresh...\nExecuting MCP context refresh...\nMCP context refresh complete.\n"
+func geminiCycleListingStderr(body []byte, scope string, advertised []*geminiCycleRecipe) bool {
+	names := map[string]string{"user": "uapgeminiu", "a": "uapgeminia", "b": "uapgeminib"}
+	if len(body) > 1024 || len(advertised) > 2 || names[scope] == "" {
+		return false
+	}
+	seen := map[string]bool{}
+	pairs := []string{}
+	for _, recipe := range advertised {
+		if recipe == nil || recipe.Name == "" || recipe.Name != names[recipe.Scope] || recipe.Scope != "user" && recipe.Scope != scope || seen[recipe.Name] || recipe.Removed || recipe.Binding.ClientBindingID == "" {
+			return false
+		}
+		seen[recipe.Name] = true
+		pairs = append(pairs, "Registering notification handlers for server '"+recipe.Name+"'. Capabilities: { tools: {} }\n"+
+			"Server '"+recipe.Name+"' has tools but did not declare 'listChanged' capability. Listening anyway for robustness...\n")
+	}
+	const ripgrep = "Ripgrep is not available. Falling back to GrepTool.\n"
+	const refresh = "Scheduling MCP context refresh...\nExecuting MCP context refresh...\nMCP context refresh complete.\n"
+	switch string(body) {
+	case "", ripgrep, ripgrep + refresh:
+		return true
+	}
+	if len(pairs) == 1 {
+		return string(body) == ripgrep+pairs[0]+refresh
+	}
+	if len(pairs) == 2 {
+		return string(body) == ripgrep+pairs[0]+pairs[1]+refresh || string(body) == ripgrep+pairs[1]+pairs[0]+refresh
+	}
+	return false
 }
 func (c *geminiProjectCycle) git(t *testing.T, scope string) {
 	t.Helper()

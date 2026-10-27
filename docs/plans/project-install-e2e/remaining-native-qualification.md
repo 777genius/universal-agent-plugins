@@ -1321,3 +1321,67 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+## Gemini owned-MCP listing diagnostic amendment
+
+Accepted plan SHA256 `6c696cd8309f6da3ee9059ef887b14bb8358ed5e4fd57afe199a69b2655b3d5d`
+received independent root R1 and Kimi-owner R2 before implementation. Exact
+starting source is ef8c42bc5012f68d042b696edbf2801730246e9d/tree462634b2,
+which retains the previously reviewed source-bound assessment-cache closure.
+
+Genuine run40583616867/job122469600501 now retains the completed add-user
+ownership proof, then fails only its listing-stderr guard at installed-user.
+Native12770589174 outer SHA256
+`ece142caacab9c75bec59e590717ea41818c84bccb76a754fd95505d446c3c9b`,
+frontend12770514390 outer SHA256
+`6706bf1185f132eb27cfa98bae98e23cb0e67023c005465e7bbf8e510da824c6`
+retain closed24/25 members,24 frontend and34 nested stream joins. The next
+listing exits0 in2263ms with exactly four expected skill rows. Its347-byte
+stderr SHA256 is
+`76222dc470d4288bb95b6a1c18044afad792af771c28d2018ecaa43b2d64e5a0`: two
+own-server notification messages precede the existing MCP refresh tuple. Two
+separate retained initialize/tools-list probe records share the held user nonce,
+fresh PID/session and command interval; no call occurs. All qualifications stay
+false and the incomplete provider-stage cleanup remains failed. No log text
+becomes a qualification or complete discovery/RPC proof.
+
+At pinned Gemini source6006c14a, mcp-client blob3d2c7beb synchronously logs the
+exact contiguous registration/tools:{} missing-listChanged pair. Manager
+blob04563803 awaits configured discoveries then emits the exact refresh suffix.
+The unchanged probe declares only tools:{} and sends no dynamic notifications.
+The listing helper now accepts only finite whole tuples for currently held
+advertised user/selected-project recipes, at most two pairs in either pair order,
+and the exact old prefix/suffix. Invalid/nil/duplicate/unknown/removed/unproved
+recipes, other-project and impossible A+B sets refuse before candidate creation;
+a nil/empty slice remains a legitimate baseline. Entire stderr is bounded1024B.
+Legacy three tuples remain accepted, with no normalization/prefix/regex warning
+allowance. A pinned actual347-byte/SHA golden and hostile scope/set/framing/error
+controls verify this private parser.
+
+Only listing diagnostics and inert contracts change. Existing complete skill
+catalog equality, pinned builtin hashes, event nonce/PID/session/time/method
+checks, no-call listing contract, live ownership/config/state/cache closure,
+original native stderr, provider, permission/trust/authentication, process,
+cleanup, acquisition and deadline gates remain mandatory. Existing Python mode,
+raw schemas and deliberate final failed-only capture barrier remain unchanged.
+No vendor/client/scanner/public installer executes locally. Independent exact
+implementation review and coordinated meaningful gates precede root publication;
+only a fresh genuine capture can establish progress through later stages.
+
+Implementation review: root and Kimi-owner independently returned CODE GO for
+exact staged treea66b0191, reading all three changed paths and the original
+listing/advertised/event call chain. The actual all-enabled affected root gate
+then identified one prealloc suggestion in the new invalid-recipe test setup.
+The test now allocates capacity four and keeps the identical input sets and
+cases; the runtime diagnostic helper is unchanged. Final reviewed source will
+retain this mechanical test-only delta with its separate preservation review.
+
+Final local validation: focused Gemini/shared runtime Go contracts PASS1.424s;
+existing Gemini/current-runtime Python admission contracts62PASS9.998s. Actual
+all-enabled full-root affected lint versus a412ba5e and unfiltered whole-root
+revive/funlen/gocyclo/gocognit/dupl/depguard both report0issues. Gofmt and full-base
+diffcheck are clean. The unchanged current ef8 24-member ZIP still admits only
+its genuine failed/allfalse capture, and its retained347-byte stderr joins the
+independent primary contract's exact SHA. No vendor/native/scanner/public
+installer executes locally, and no complete lifecycle or qualification is
+promoted. Root publication and a new genuine capture remain required.
