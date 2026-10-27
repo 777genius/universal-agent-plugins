@@ -1,9 +1,22 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
+test.beforeEach(async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  // Keep the catalog independent of optional report publication and remote availability.
+  // Dedicated SkillSpector tests exercise checked, partial and unavailable reports.
+  const fixture = JSON.parse(
+    readFileSync(new URL('../fixtures/skillspector-report.json', import.meta.url), 'utf8'),
+  );
+  await page.route('**/reports/skillspector/v1/index.json', (route) =>
+    route.fulfill({
+      json: { ...fixture, generated_at: '2026-01-01T00:00:00Z', records: [] },
+    }),
+  );
+});
 
 async function waitForFullDirectory(page: import('@playwright/test').Page) {
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {

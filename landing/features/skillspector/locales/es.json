@@ -1,0 +1,30 @@
+{
+  "registryUi": {
+    "skillSpector": {
+      "notChecked": "Sin comprobar",
+      "noFindings": "Sin hallazgos",
+      "findingsCount": "Hallazgos: {count}",
+      "partial": "Comprobación parcial",
+      "error": "Error de comprobación",
+      "detailsFor": "Detalles de SkillSpector para {name}",
+      "pluginScope": "Skills seleccionadas de este plugin",
+      "skillScope": "Informe histórico de la Skill",
+      "absent": "No hay una evaluación publicada que coincida con esta ficha.",
+      "checked": "Comprobado el {date}",
+      "revision": "Revisión",
+      "scanner": "Solo comprobaciones estáticas · SkillSpector {version}",
+      "disclaimer": "Este informe histórico abarca solo los archivos de Skills indicados en la revisión registrada. No ejecuta código ni garantiza la seguridad.",
+      "unverified": "No se ha verificado la revisión actual de esta ficha.",
+      "incomplete": "Algunas comprobaciones de Skills no finalizaron. Revisa los hallazgos y errores disponibles.",
+      "source": "Archivos fuente",
+      "findings": "Hallazgos",
+      "errors": "Errores de comprobación",
+      "empty": "Las comprobaciones estáticas completadas no detectaron hallazgos.",
+      "selected": "Solo se comprueba una selección de fuentes del catálogo.",
+      "truncated": "Se muestran {shown} de {total} hallazgos.",
+      "selectedSkills": "Skills seleccionadas",
+      "historical": "Informe histórico",
+      "older": "Este informe tiene más de siete días o describe otra revisión. No acredita el estado actual."
+    }
+  }
+}

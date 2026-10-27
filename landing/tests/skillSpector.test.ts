@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
+import { publishedLocales } from '../data/i18n.ts';
+import { loadI18nMessages } from '../scripts/load-i18n-messages.ts';
 import type { SkillSpectorRecord, SkillSpectorReport } from '../types/skillSpector.ts';
 import {
   decodeSkillSpectorReport,
@@ -57,6 +59,35 @@ const subject = {
 } as const;
 
 describe('SkillSpector historical display reports', () => {
+  it('keeps assessment translations in component-owned resources outside global page payloads', () => {
+    const component = readFileSync(
+      new URL('../components/registry/SkillSpectorAssessment.vue', import.meta.url),
+      'utf8',
+    );
+    for (const locale of publishedLocales) {
+      const base = JSON.parse(
+        readFileSync(new URL(`../locales/${locale}.json`, import.meta.url), 'utf8'),
+      );
+      assert.equal(base.registryUi.skillSpector, undefined);
+      const resource = JSON.parse(
+        readFileSync(
+          new URL(`../features/skillspector/locales/${locale}.json`, import.meta.url),
+          'utf8',
+        ),
+      );
+      assert.deepEqual(
+        loadI18nMessages(locale).registryUi.skillSpector,
+        resource.registryUi.skillSpector,
+      );
+      assert.ok(
+        component.includes(
+          `locale="${locale}" lang="json" src="../../features/skillspector/locales/${locale}.json"`,
+        ),
+      );
+    }
+    assert.ok(component.includes("useScope: 'local'"));
+  });
+
   it('accepts the normalized output of real pinned scanner runs and preserves partial findings', () => {
     const value = JSON.parse(
       readFileSync(new URL('./fixtures/skillspector-report.json', import.meta.url), 'utf8'),

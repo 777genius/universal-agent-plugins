@@ -12,7 +12,7 @@ const props = defineProps<{
   name: string;
   scope: 'plugin' | 'skill';
 }>();
-const { t, n, locale } = useI18n({ useScope: 'global' });
+const { t, n, locale } = useI18n({ useScope: 'local' });
 const report = useSkillSpector();
 const assessment = computed(() => skillSpectorAssessment(report.value, props.subject));
 const visualStatus = computed(() =>
@@ -114,6 +114,16 @@ const label = computed(() => {
     </div>
   </details>
 </template>
+
+<i18n locale="en" lang="json" src="../../features/skillspector/locales/en.json" />
+<i18n locale="ru" lang="json" src="../../features/skillspector/locales/ru.json" />
+<i18n locale="uk" lang="json" src="../../features/skillspector/locales/uk.json" />
+<i18n locale="zh" lang="json" src="../../features/skillspector/locales/zh.json" />
+<i18n locale="es" lang="json" src="../../features/skillspector/locales/es.json" />
+<i18n locale="hi" lang="json" src="../../features/skillspector/locales/hi.json" />
+<i18n locale="ar" lang="json" src="../../features/skillspector/locales/ar.json" />
+<i18n locale="pt" lang="json" src="../../features/skillspector/locales/pt.json" />
+<i18n locale="fr" lang="json" src="../../features/skillspector/locales/fr.json" />
 
 <style scoped lang="scss">
 .skillspector {

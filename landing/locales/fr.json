@@ -969,32 +969,6 @@
       "requiredDetail": "Le paquet peut nécessiter un compte, un jeton ou une connexion ; cela ne précise pas OAuth et ne confirme pas votre connexion.",
       "not_requiredDetail": "Aucune authentification n’est déclarée pour ces agents. Des limites de service et d’autres exigences peuvent s’appliquer.",
       "unknownDetail": "Vérifiez les exigences du paquet avant la connexion."
-    },
-    "skillSpector": {
-      "notChecked": "Non vérifié",
-      "noFindings": "Aucun constat",
-      "findingsCount": "Constats : {count}",
-      "partial": "Vérification partielle",
-      "error": "Échec de la vérification",
-      "detailsFor": "Détails SkillSpector pour {name}",
-      "pluginScope": "Skills sélectionnées de ce plugin",
-      "skillScope": "Rapport historique de la Skill",
-      "absent": "Aucune évaluation publiée ne correspond à cette fiche.",
-      "checked": "Vérifié le {date}",
-      "revision": "Révision",
-      "scanner": "Vérifications statiques uniquement · SkillSpector {version}",
-      "disclaimer": "Ce rapport historique couvre uniquement les fichiers de Skills indiqués à la révision enregistrée. Il n’exécute pas de code et ne garantit pas la sécurité.",
-      "unverified": "La révision actuelle de cette fiche n’a pas été vérifiée.",
-      "incomplete": "Certaines vérifications de Skills n’ont pas abouti. Consultez les constats et les erreurs disponibles.",
-      "source": "Fichiers sources",
-      "findings": "Constats",
-      "errors": "Erreurs de vérification",
-      "empty": "Les vérifications statiques terminées n’ont signalé aucun constat.",
-      "selected": "Seule une sélection de sources du catalogue est vérifiée.",
-      "truncated": "Affichage de {shown} constats sur {total}.",
-      "selectedSkills": "Skills sélectionnées",
-      "historical": "Rapport historique",
-      "older": "Ce rapport date de plus de sept jours ou décrit une autre révision. Il n’établit pas l’état actuel."
     }
   }
 }
