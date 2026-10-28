@@ -20,6 +20,9 @@ type codexProjectMCPInventory struct {
 func codexProjectMCPReady(ctx context.Context, request func(context.Context) (json.RawMessage, error), present bool) (codexProjectMCPInventory, error) {
 	var inventory codexProjectMCPInventory
 	for {
+		if err := ctx.Err(); err != nil {
+			return inventory, fmt.Errorf("native project MCP startup did not connect: %w; inventory: %+v", err, inventory)
+		}
 		body, err := request(ctx)
 		if err != nil {
 			return inventory, err
@@ -123,5 +126,18 @@ func TestCodexProjectMCPReadinessKeepsOriginalDeadline(t *testing.T) {
 	}, true)
 	if !errors.Is(err, context.DeadlineExceeded) || calls != 1 || inventory.Data[1].RuntimeStatus != "starting" {
 		t.Fatalf("starting must not qualify at the deadline: calls=%d inventory=%+v err=%v", calls, inventory, err)
+	}
+}
+
+func TestCodexProjectMCPReadinessExpiredContextDoesNotRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	calls := 0
+	inventory, err := codexProjectMCPReady(ctx, func(context.Context) (json.RawMessage, error) {
+		calls++
+		return codexProjectMCPTestInventory("connected"), nil
+	}, true)
+	if !errors.Is(err, context.Canceled) || calls != 0 || len(inventory.Data) != 0 {
+		t.Fatalf("expired context must not request inventory: calls=%d inventory=%+v err=%v", calls, inventory, err)
 	}
 }
