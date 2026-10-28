@@ -145,7 +145,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		CheckNamespace: e.CheckProjectNamespace,
 		StateStore:     e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager, ProjectRoot: e.cfg.ProjectRoot,
 		Detected:          detected,
-		Activator:         seamActivator{profileCheck: profileCheck, inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
+		Activator:         seamActivator{independent: e.cfg.IndependentActivations, profileCheck: profileCheck, inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
 		PluginData:        providers.PluginDataManager{Base: e.cfg.PluginDataBase},
 		Lock:              processlock.Lock{Path: e.cfg.LockFile},
 		Kernel:            transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: plan, NativeRecovery: transitions, StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}},

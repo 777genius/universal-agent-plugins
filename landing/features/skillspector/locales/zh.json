@@ -1,0 +1,38 @@
+{
+  "registryUi": {
+    "skillSpector": {
+      "loading": "正在加载报告",
+      "unavailable": "报告不可用",
+      "loadingDetails": "正在加载已发布的评估…",
+      "unavailableDetails": "无法加载已发布的评估。此条目的检查状态未知。",
+      "notChecked": "未检查",
+      "noFindings": "未发现问题",
+      "findingsCount": "发现问题：{count}",
+      "partial": "已检查，但存在限制",
+      "error": "检查失败",
+      "detailsFor": "{name} 的 SkillSpector 详情",
+      "pluginScope": "此插件中选定的技能",
+      "skillScope": "技能历史报告",
+      "absent": "没有与此条目匹配的已发布评估。",
+      "checked": "检查日期：{date}",
+      "revision": "修订版本",
+      "scanner": "仅静态检查 · SkillSpector {version}",
+      "disclaimer": "此历史报告仅涵盖所记录修订版本中的指定技能文件。它不会运行代码，也不保证安全。",
+      "unverified": "此条目的当前修订版本尚未验证。",
+      "incomplete": "静态检查未覆盖所有内容。请查看下方的发现和覆盖范围限制。",
+      "source": "源文件",
+      "findings": "发现的问题",
+      "errors": "检查错误",
+      "empty": "已完成的静态检查未报告问题。",
+      "selected": "仅检查目录中部分选定来源。",
+      "truncated": "显示 {total} 个问题中的 {shown} 个。",
+      "selectedSkills": "选定技能",
+      "historical": "历史报告",
+      "older": "此报告已超过七天，或描述的是其他修订版本。它不能证明当前状态。",
+      "staticParseLimit": "部分表达式超出了静态解析器的限制。",
+      "referenceMissing": "在已扫描的技能文件中未找到部分引用的本地文件；这些文件可能在运行时创建。",
+      "analyzerIncomplete": "某个分析器未完成所有计划的检查。",
+      "pendingCoverage": "已检查 {total} 个所选技能中的 {checked} 个。其余技能正在等待后台检查。"
+    }
+  }
+}

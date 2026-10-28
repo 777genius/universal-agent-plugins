@@ -126,6 +126,9 @@ func (observer NativeIdentityObserver) discoverNativeFinding(ctx context.Context
 		timeout := observer.DiscoveryTimeout
 		if timeout <= 0 {
 			timeout = defaultNativeDiscoveryTimeout
+			if policy, ok := clients.As[clients.NativeDiscoveryPolicy](observer.Registry, client.ClientID); ok {
+				timeout = policy.NativeDiscoveryTimeout()
+			}
 		}
 		nativeCtx, cancelNative = context.WithTimeout(ctx, timeout)
 	}

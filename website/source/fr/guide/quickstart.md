@@ -34,9 +34,8 @@ La compatibilité dépend du paquet. La validation du schéma ne prouve ni l’e
 
 ### Sauvegarder et restaurer vos plugins
 
-**Code source actuel, pas encore publié :** ces commandes de transfert nécessitent
-un CLI compilé à partir du code actuel ; elles ne sont pas encore qualifiées
-comme version publiée. Dans le dossier à emporter sur un autre ordinateur, lancez :
+Ces commandes de transfert sont incluses dans le CLI publié. Dans le dossier
+à emporter sur un autre ordinateur, lancez :
 
 ```bash
 npx -y universal-agent-plugins@latest deps export

@@ -366,7 +366,9 @@ class WorkflowControls(unittest.TestCase):
         runner = (ROOT / 'scripts/run-packed-ci.py').read_text()
         w.check(text, runner)
         mutations = [('  packed:\n', '  omitted:\n'), ('needs: [native, packed]', 'needs: [native]'),
-            ('    if: always()\n', '    if: success()\n'), ('  packed:\n', '  packed:\n    if: false\n'),
+            ('\n    if: always() && !cancelled()\n', '\n    if: success()\n'),
+            ('\n    if: always() && !cancelled()\n', '\n    if: always()\n'),
+            ('  packed:\n', '  packed:\n    if: false\n'),
             ('  native:\n', '  native:\n    if: false\n'), ('arch: arm64}', 'arch: amd64}'),
             ('  pull_request:\n', '  pull_request:\n    paths: [scripts/**]\n'),
             ('    timeout-minutes: 45', '    continue-on-error: true\n    timeout-minutes: 45'),

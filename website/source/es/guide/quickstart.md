@@ -34,9 +34,8 @@ La compatibilidad depende del paquete. Validar el esquema no demuestra ejecució
 
 ### Guardar y restaurar tus plugins
 
-**Código fuente actual, aún sin publicar:** estos comandos de transferencia
-requieren un CLI compilado desde el código actual; todavía no están cualificados
-como versión publicada. En la carpeta que quieras llevar a otro equipo, ejecuta:
+Estos comandos de transferencia están incluidos en el CLI publicado. En la carpeta
+que quieras llevar a otro equipo, ejecuta:
 
 ```bash
 npx -y universal-agent-plugins@latest deps export

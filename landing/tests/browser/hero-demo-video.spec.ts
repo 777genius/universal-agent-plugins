@@ -73,7 +73,9 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
     await page.goto('./');
     const demo = page.locator('.hero-demo-video');
     await demo.scrollIntoViewIfNeeded();
-    await expect(page.getByRole('link', { name: /^Explore [1-9]/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('link', { name: /^Explore [1-9]/ })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect
       .poll(
         () =>
@@ -101,7 +103,7 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
       error: element.error?.code ?? null,
       paused: element.paused,
     }));
-    expect(Math.abs(media.duration - 2030 / 30)).toBeLessThan(0.25);
+    expect(Math.abs(media.duration - 2484 / 30)).toBeLessThan(0.25);
     expect(media.error).toBeNull();
     expect(media.paused).toBe(false);
     if (directory)

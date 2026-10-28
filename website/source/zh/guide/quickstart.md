@@ -34,8 +34,7 @@ Agent Plugins 创作已在 `universal-agent-plugins` 中发布；GitHub 版本�
 
 ### 保存和恢复插件
 
-**当前源码，尚未发布：**以下传输命令需要从当前源码构建的 CLI，尚未完成公开
-CLI 版本的发布资格验证。在要带到另一台电脑的文件夹中运行：
+以下传输命令已包含在公开发布的 CLI 中。在要带到另一台电脑的文件夹中运行：
 
 ```bash
 npx -y universal-agent-plugins@latest deps export

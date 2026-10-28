@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -52,8 +53,12 @@ if a[:2] == ['attestation', 'verify']:
     assert hashlib.sha256(path.read_bytes()).hexdigest() == state['subjects'][path.name]
     print('verified synthetic attestation')
 elif a[:1] == ['api']:
-    endpoint = a[1]
-    assert a[2:] == state['options'][endpoint]
+    if a[1:3] in (['-H', 'Accept: application/vnd.github+json'], ['--paginate', '--slurp']):
+        assert len(a) == 4
+        endpoint, options = a[3], a[1:3]
+    else:
+        endpoint, options = a[1], a[2:]
+    assert options == state['options'][endpoint]
     if endpoint in state['bytes']:
         sys.stdout.buffer.write(pathlib.Path(state['bytes'][endpoint]).read_bytes())
     else:
@@ -322,6 +327,89 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
                                   check=False)
         self.assertEqual(result.returncode, 1)
         self.assertFalse(Path(self.env['GH_LOG']).exists())
+
+    def test_cancelled_main_checks_use_merged_pr_and_build_frozen_source(self):
+        # Exercise the unchanged executable gate, not a second implementation.
+        names = ['dependency-review', 'skills-picker', 'test', 'docs-check',
+                 'polyglot-smoke (ubuntu-latest)', 'polyglot-smoke (windows-latest)',
+                 'analyze (go)', 'analyze (javascript-typescript)',
+                 *(f'govulncheck ({module})' for module in
+                   ('root', 'cli', 'integrationctl', 'agentplugins', 'plugininstall', 'sdk'))]
+        pr_head = 'b' * 40
+        pulls_endpoint = self.prefix + '/commits/' + self.commit + '/pulls'
+        merge_endpoint = self.prefix + '/commits/' + self.commit + '/check-runs?filter=latest&per_page=100'
+        pr_endpoint = self.prefix + '/commits/' + pr_head + '/check-runs?filter=latest&per_page=100'
+        pulls = [{'merged_at': '2026-10-26T00:00:00Z', 'base': {'ref': 'main'},
+                  'head': {'sha': pr_head}}]
+        success = [{'name': name, 'status': 'completed', 'conclusion': 'success'} for name in names]
+        self.add(pulls_endpoint, pulls, ['-H', 'Accept: application/vnd.github+json'])
+        self.add(pr_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
+        gate = shell_step('agentplugins-release.yml', 'Verify merged PR and required commit evidence')
+        env = {**self.env, 'COMMIT': self.commit, 'GITHUB_REPOSITORY': REPOSITORY}
+        for merge_checks in ([], [{**check, 'conclusion': 'cancelled'} for check in success]):
+            with self.subTest(merge_checks='absent' if not merge_checks else 'cancelled'):
+                self.add(merge_endpoint, [{'check_runs': merge_checks}], ['--paginate', '--slurp'])
+                self.save()
+                self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env)
+        for mode in ('missing', 'failure'):
+            broken = copy.deepcopy(success)
+            if mode == 'missing': broken.pop()
+            else: broken[-1]['conclusion'] = 'failure'
+            self.add(pr_endpoint, [{'check_runs': broken}], ['--paginate', '--slurp'])
+            self.save()
+            result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('required successful check is missing on merge commit and PR head: govulncheck (sdk)',
+                          result.stderr.decode())
+        self.add(pr_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
+        for invalid in ([], [{**pulls[0], 'merged_at': None}],
+                        [{**pulls[0], 'base': {'ref': 'feature'}}]):
+            self.add(pulls_endpoint, invalid, ['-H', 'Accept: application/vnd.github+json'])
+            self.save()
+            result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('release commit must come from a merged pull request into main', result.stderr.decode())
+        self.add(pulls_endpoint, pulls, ['-H', 'Accept: application/vnd.github+json'])
+        self.save()
+
+        # main advances; the identity guard must keep the old tagged source.
+        notice = self.source / 'npm/agentplugins/THIRD_PARTY_NOTICES.txt'
+        frozen_bytes = notice.read_bytes()
+        notice.write_text('different descendant main bytes\n')
+        self.git('add', '.')
+        self.git('commit', '-m', 'test: advance main after frozen candidate')
+        self.git('push', 'origin', 'main')
+        self.git('checkout', '--detach', self.commit)
+        output = self.root / 'identity-output'
+        identity_env = {**env, 'TAG': TAG, 'WORKFLOW_REF': 'refs/tags/' + TAG,
+                        'WORKFLOW_COMMIT': self.commit, 'GITHUB_OUTPUT': str(output)}
+        self.run_command(['bash', '-e', '-o', 'pipefail', '-c', shell_step(
+            'agentplugins-release.yml', 'Verify frozen stable tag and main ancestry')], env=identity_env)
+        self.assertEqual(output.read_text(), 'commit=' + self.commit + '\n')
+        self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate], env=env)
+        workflow = (SOURCE / WORKFLOW).read_text()
+        for job in ('qualify-go', 'qualify-npm', 'build'):
+            body = re.split(r'\n  [\w-]+:\n', workflow.split('\n  ' + job + ':\n', 1)[1], maxsplit=1)[0]
+            self.assertIn('          ref: ${{ needs.validate.outputs.commit }}\n', body)
+        (self.bin / 'go').write_text('''#!/usr/bin/env python3
+import json, os, pathlib, subprocess, sys
+assert os.environ['CGO_ENABLED'] == '0'
+assert subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() == os.environ['EXPECTED_COMMIT']
+a = sys.argv[1:]
+assert a == ['build', '-trimpath', '-ldflags=-s -w -X main.version=1.2.3', '-o', os.environ['EXPECTED_ASSET'], './cmd/agentplugins']
+repo = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+pathlib.Path(a[a.index('-o') + 1]).write_bytes((repo / 'npm/agentplugins/THIRD_PARTY_NOTICES.txt').read_bytes())
+''')
+        (self.bin / 'go').chmod(0o755)
+        cli = self.source / 'cli'
+        cli.mkdir()
+        asset = self.root / 'agentplugins_1.2.3_linux_amd64'
+        self.run_command(['bash', '-e', '-o', 'pipefail', '-c', shell_step(
+            'agentplugins-release.yml', 'Build exact-version binary')], cwd=cli,
+            env={**env, 'TAG': TAG, 'GOOS': 'linux', 'GOARCH': 'amd64', 'SUFFIX': '',
+                 'RUNNER_TEMP': str(self.root), 'GITHUB_WORKSPACE': str(self.source),
+                 'EXPECTED_COMMIT': self.commit, 'EXPECTED_ASSET': str(asset)})
+        self.assertEqual(asset.read_bytes(), frozen_bytes)
 
 
 if __name__ == '__main__':

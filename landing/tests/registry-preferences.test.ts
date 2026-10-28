@@ -219,8 +219,8 @@ test('catalog Show more survives language remount and filter changes replace its
   const store = useCatalogUiStore();
   const route = reactive({
     path: '/plugins/',
-    query: {} as Record<string, string>,
-    hash: '#plugins',
+    query: { ref: 'launch' } as Record<string, string>,
+    hash: '#plugin-dependencies',
   });
   const navigations: any[] = [];
   const mount = () =>
@@ -234,6 +234,7 @@ test('catalog Show more survives language remount and filter changes replace its
           replace: (target: any) => {
             navigations.push(target);
             route.query = target.query;
+            route.hash = target.hash;
           },
         }),
         useDiscoveryStatus: () => ref({ state: 'idle' }),
@@ -254,19 +255,29 @@ test('catalog Show more survives language remount and filter changes replace its
   await nextTick();
   assert.equal(remount.state.displayLimit.value, 48);
   assert.equal(route.query.q, 'gitlab');
-  assert.equal(navigations[0].hash, '#plugins');
+  assert.equal(route.query.ref, 'launch');
+  assert.equal(navigations.length, 1);
+  assert.equal(navigations[0].path, '/uk/plugins/');
+  assert.equal(navigations[0].hash, '');
+  assert.equal(route.hash, '');
   remount.stop();
   const again = mount();
   assert.equal(again.state.query.value, 'gitlab');
   assert.equal(again.state.displayLimit.value, 48);
   again.state.showMore();
   again.stop();
-  route.query = { q: 'different' };
+  route.query = { q: 'different', ref: 'launch' };
+  route.hash = '#plugins';
   const changedInitial = mount();
   assert.equal(changedInitial.state.displayLimit.value, 48);
   changedInitial.state.query.value = 'gitlab';
   await nextTick();
   assert.equal(changedInitial.state.displayLimit.value, 48);
+  assert.equal(navigations.length, 2);
+  assert.equal(navigations[1].hash, '');
+  assert.equal(route.hash, '');
+  assert.equal(route.query.q, 'gitlab');
+  assert.equal(route.query.ref, 'launch');
   changedInitial.stop();
 });
 
