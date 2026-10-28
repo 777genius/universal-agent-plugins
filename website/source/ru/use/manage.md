@@ -88,7 +88,7 @@ agentplugins deps tree
 
 Для нового окружения выполните `agentplugins deps init`, осознанно отредактируйте
 манифест, разрешите зависимости через `agentplugins deps lock` и примените lock
-через `agentplugins install --locked`. Изучайте подтверждения; для просмотра
+через `agentplugins install --locked --scope user`. Изучайте подтверждения; для просмотра
 есть `--dry-run`. [Руководство по зависимостям](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md)
 объясняет синтаксис, обязательные зависимости пакетов, диапазоны и обновления.
 

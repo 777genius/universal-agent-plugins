@@ -11,8 +11,14 @@ Module: `github.com/777genius/plugin-kit-ai/sdk`
 Normal consumption path:
 
 ```bash
-go get github.com/777genius/plugin-kit-ai/sdk@v1.1.0
+go get github.com/777genius/plugin-kit-ai/sdk@v1.3.0
 ```
+
+This guide uses the published [v1.3.0 module](https://pkg.go.dev/github.com/777genius/plugin-kit-ai/sdk@v1.3.0),
+which includes `App.Qoder()`, `App.Cursor()` and `RunCursorObserver`.
+Cursor's observer remains `public-beta`; choosing this version does not promote
+it to a stable or natively qualified runtime. Source-tree support matrices can
+include later changes, so retain the module version with integration evidence.
 
 The canonical release contract for this subdirectory module is:
 

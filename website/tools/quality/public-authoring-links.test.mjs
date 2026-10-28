@@ -37,6 +37,25 @@ test('published source never claims it is on a non-deploying branch', () => {
   }
 });
 
+test('user dependency management never lets install infer a project from the working directory', async () => {
+  for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
+    const source = read(`website/source/${locale}/use/manage.md`);
+    const boundary = '<a id="restore-project-dependencies"></a>';
+    assert.ok(source.includes(boundary), `${locale}: project section boundary`);
+    const userJourney = source.split(boundary, 1)[0];
+    const html = await md.renderAsync(userJourney);
+    const installs = [...html.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/g)]
+      .flatMap((match) => match[1].replace(/<[^>]*>/g, '').replace(/\\\n\s*/g, ' ').split('\n'))
+      .map((line) => line.trim())
+      .filter((line) => /^(?:(?:agentplugins|npx(?: -y)? universal-agent-plugins(?:@[^ ]+)?) )?install(?: |$)/.test(line));
+    assert.ok(installs.length >= 2, `${locale}: user initialization and restoration commands`);
+    for (const command of installs) {
+      assert.match(command, /--scope(?:=| +)user(?: |$)/,
+        `${locale}: user-environment installation must not infer a current project: ${command}`);
+    }
+  }
+});
+
 test('current Build journey uses Agent Plugins as its single documented command surface', () => {
   const buildRoot = fileURLToPath(new URL('website/source/en/build/', root));
   const command = /\bplugin-kit-ai (?:init|validate|inspect|test|compat|doctor|capabilities|skills)\b/;

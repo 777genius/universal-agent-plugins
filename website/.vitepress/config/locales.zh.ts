@@ -28,7 +28,7 @@ export const zhLocaleConfig = {
     },
     footer: {
       message: "面向插件作者和集成者的公共文档。",
-      copyright: "MIT 许可"
+      copyright: "采用 Apache 2.0 许可证"
     },
     nav: [
       ...journeyNav("zh"),

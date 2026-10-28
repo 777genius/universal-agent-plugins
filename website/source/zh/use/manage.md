@@ -70,7 +70,7 @@ agentplugins deps status
 agentplugins deps tree
 ```
 
-新环境先执行 `agentplugins deps init`，有意编辑清单，再用 `agentplugins deps lock` 解析，并以 `agentplugins install --locked` 应用。
+新环境先执行 `agentplugins deps init`，有意编辑清单，再用 `agentplugins deps lock` 解析，并以 `agentplugins install --locked --scope user` 应用。
 检查确认提示；可用 `--dry-run` 预览。[依赖指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md)说明清单、传递依赖、版本范围和更新规则。
 
 不要假设旧的单次安装已经进入可移植清单。转移前检查 `deps status` 和实际文件。

@@ -28,7 +28,7 @@ export const ruLocaleConfig = {
     },
     footer: {
       message: "Публичная документация для авторов плагинов и интеграторов.",
-      copyright: "Лицензия MIT"
+      copyright: "Лицензия Apache 2.0"
     },
     nav: [
       ...journeyNav("ru"),

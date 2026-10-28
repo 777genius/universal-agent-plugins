@@ -28,7 +28,7 @@ export const frLocaleConfig = {
     },
     footer: {
       message: "Documentation publique pour les auteurs de plugins et les intégrateurs.",
-      copyright: "Sous licence MIT"
+      copyright: "Sous licence Apache 2.0"
     },
     nav: [
       ...journeyNav("fr"),

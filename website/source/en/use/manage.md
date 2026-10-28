@@ -87,7 +87,7 @@ agentplugins deps tree
 ```
 
 For a new environment, use `agentplugins deps init`, edit the manifest deliberately,
-then `agentplugins deps lock` to resolve it and `agentplugins install --locked`
+then `agentplugins deps lock` to resolve it and `agentplugins install --locked --scope user`
 to apply that lock. Review confirmations and use `--dry-run` for a preview.
 The [dependency guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md)
 explains manifest syntax, mandatory package dependencies, version ranges and

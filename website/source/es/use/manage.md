@@ -72,7 +72,7 @@ agentplugins deps status
 agentplugins deps tree
 ```
 
-Para un entorno nuevo, ejecuta `agentplugins deps init`, edita el manifiesto deliberadamente, resuélvelo con `agentplugins deps lock` y aplica el bloqueo con `agentplugins install --locked`. Revisa las confirmaciones y usa `--dry-run` para previsualizar. La [guía de dependencias](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md) explica la sintaxis del manifiesto, las dependencias obligatorias, los rangos de versiones y las actualizaciones.
+Para un entorno nuevo, ejecuta `agentplugins deps init`, edita el manifiesto deliberadamente, resuélvelo con `agentplugins deps lock` y aplica el bloqueo con `agentplugins install --locked --scope user`. Revisa las confirmaciones y usa `--dry-run` para previsualizar. La [guía de dependencias](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md) explica la sintaxis del manifiesto, las dependencias obligatorias, los rangos de versiones y las actualizaciones.
 
 Desde CLI 0.1.93, las instalaciones remotas elegibles guardan las dependencias por defecto. `--no-save`, los orígenes locales, los selectores literales `discovery:` y la preparación de ChatGPT quedan fuera de ese guardado portable. Si una selección combina ChatGPT con otros destinos, sepárala o usa `--no-save`. No des por hecho que una instalación imperativa anterior forme parte del acuerdo: consulta `deps status` y los archivos reales antes de transferirlos.
 
