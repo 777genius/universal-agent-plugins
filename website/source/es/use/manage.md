@@ -16,7 +16,7 @@ translationRequired: true
 
 ## Mantener un proyecto en el código actual
 
-**Solo en el código fuente; aún no publicado.** La instalación sin argumento
+**Disponible en CLI 0.1.94 y posteriores.** La instalación sin argumento
 identifica el proyecto por su archivo de dependencias en el directorio actual,
 sin buscar en los directorios superiores. El archivo de bloqueo existente se
 valida estrictamente antes de modificar nada. La selección explícita del ámbito

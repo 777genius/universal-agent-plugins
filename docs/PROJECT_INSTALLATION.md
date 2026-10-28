@@ -1,9 +1,9 @@
 # Install plugins for one project
 
 **Released:** explicit project scope is available in CLI 0.1.93 and later.
-Automatic project selection and the stricter default install behavior described
-below are **current source only / unreleased**. Until that convenience is released,
-restore with `install --locked --scope project`.
+Automatic project selection and strict existing-lock installation are available
+in CLI 0.1.94 and later. From the project folder, run `agentplugins install`.
+Use `--locked` to additionally require an existing lock, for example in CI.
 
 Use `--scope project` to keep a project's plugin declarations, installed
 ownership and native client configuration separate from your user environment.
@@ -36,10 +36,7 @@ the final feature-source native run; each client's activation limits still apply
 
 ## Select the environment on every command
 
-The released CLI defaults to user scope; select project scope explicitly on each
-command. A manifest in the working directory does not change that released default.
-
-**Current source only / unreleased:** argumentless `agentplugins install` selects
+In CLI 0.1.94 and later, argumentless `agentplugins install` selects
 project scope when the exact current directory contains a regular `uap.toml`
 file. It never searches parent folders.
 A directory or symlink named `uap.toml` is refused during automatic selection;
@@ -53,7 +50,7 @@ directory. `--project-root` requires `--scope project` and an existing directory
 The install preview shows the selected scope, project root where applicable,
 and manifest and lock paths.
 
-For that unreleased convenience, an existing `uap.lock` makes argumentless install
+An existing `uap.lock` makes argumentless install
 strictly validate the manifest and locked pins before installation or repair.
 A mismatch fails without changing
 the environment; use the explicit `update` path to advance pins, or `deps lock`
@@ -159,12 +156,13 @@ Copy the project's `uap.toml` and `uap.lock` into the new existing project
 directory, install the required clients, and run:
 
 ```sh
-agentplugins install --locked --scope project --project-root /path/to/new-project
+cd /path/to/new-project
+agentplugins install
 ```
 
-**Current source only / unreleased:** from the new project directory,
-`agentplugins install` infers project scope and strictly uses an existing lock.
-For that future convenience, `--locked` additionally requires the lock's presence.
+From another directory, use
+`agentplugins install --scope project --project-root /path/to/new-project`.
+`--locked` additionally requires the lock's presence.
 
 The explicit transfer commands support project scope too:
 

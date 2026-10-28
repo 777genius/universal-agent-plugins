@@ -64,6 +64,32 @@ for (const mobile of [false, true]) {
           await expect(dialog).toBeFocused();
         }
         await expect(dialog).toContainText('Select agents in Install');
+        const groups = await dialog.locator('.authentication-indicator__groups li').evaluateAll(
+          (rows) => rows.map((row) => {
+            const policy = row
+              .querySelector('.authentication-indicator__policy')!
+              .getBoundingClientRect();
+            const clients = row
+              .querySelector('.authentication-indicator__clients')!
+              .getBoundingClientRect();
+            const icon = row.querySelector('svg')!.getBoundingClientRect();
+            return {
+              policyLeft: policy.left,
+              policyBottom: policy.bottom,
+              clientsLeft: clients.left,
+              clientsTop: clients.top,
+              iconTop: icon.top,
+              policyTop: policy.top,
+            };
+          }),
+        );
+        expect(groups.length).toBeGreaterThan(1);
+        for (const group of groups) {
+          expect(group.policyLeft).toBeCloseTo(groups[0]!.policyLeft, 0);
+          expect(group.clientsLeft).toBeCloseTo(group.policyLeft, 0);
+          expect(group.clientsTop).toBeGreaterThanOrEqual(group.policyBottom);
+          expect(Math.abs(group.iconTop - group.policyTop)).toBeLessThan(4);
+        }
         const style = await dialog.evaluate((element) => {
           const computed = getComputedStyle(element);
           return {

@@ -1,9 +1,9 @@
 # UAP dependency environments
 
 **Released:** user dependency environments ship in CLI 0.1.90 and later;
-explicit project scope ships in CLI 0.1.93 and later. The source-only install
-conveniences below are not part of those releases. The restore guide is on the
-docs site:
+explicit project scope ships in CLI 0.1.93 and later. Automatic project selection
+and strict existing-lock installation ship in CLI 0.1.94 and later. The restore
+guide is on the docs site:
 [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine).
 
 `agentplugins deps` manages the selected dependency environment. By default it
@@ -156,11 +156,7 @@ independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
 `agentplugins install` is the everyday converge verb over the same machinery.
-In the released CLI, omitting `--scope` selects the user environment, even when
-the current folder contains an agreement. Use `--locked` for strict restoration
-and explicitly select project scope when restoring a project.
-
-**Current source only / unreleased:** without a source argument, install selects
+**Released in CLI 0.1.94:** without a source argument, install selects
 project scope when a regular `uap.toml` exists in the exact current directory;
 it never searches parent directories.
 Explicit `--scope` wins. An existing `uap.lock` is strictly validated before

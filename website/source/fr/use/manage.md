@@ -16,7 +16,7 @@ translationRequired: true
 
 ## Maintenir un projet dans le code actuel
 
-**Code source uniquement ; pas encore publié.** L’installation sans argument
+**Disponible dans CLI 0.1.94 et versions ultérieures.** L’installation sans argument
 identifie le projet par son fichier de dépendances dans le répertoire courant,
 sans chercher dans les répertoires parents. Le fichier de verrouillage existant
 est validé strictement avant toute modification. Le choix explicite de la portée
