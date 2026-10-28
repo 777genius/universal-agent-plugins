@@ -1537,3 +1537,80 @@ issues. The original 1050 archive's 16 members and complete failed/all-false
 result replay unchanged. Timestamp and unsafe-leaf refusal controls were corrected
 without weakening admission. No vendor ran locally; fresh hosted observation is
 required before any supported log-ownership allowance or lifecycle claim.
+
+## Qoder complete supported skills catalog cycle — accepted precode amendment (2026-10-28)
+
+Root and an independent Sol reviewer read/rehashed and approved complete draft
+SHA256 `16483ff2c375042cdfb39b813e35c2fffb26220b8dc366971ff1b231bb2412a1`
+(17,922 bytes) before implementation; a third independent source review also
+approved the same complete draft. Source is published `25ea0f0d708504a914aeaf864206e98fdcfa1cc8`,
+tree `61331bbd744f447cc4cd86aabf742a2273d47e2a`. Two independent complete raw
+audits of run `40731229834` joined API native artifact `12836830994` and frontend
+`12836825965`, all16/25 members,24 stream receipts, source/tree/clean builds,
+exact supported flag catalog and the finite log-run projection. The catalog
+succeeded; the original profile guard correctly refused its four log changes.
+All qualifications/auth/model remain false. This receipt grants no qualification.
+
+The next single bounded full loop has14 public/system commands and20 fresh
+`qoder plugins list --json` catalogs in four closed members: summary,
+`qoder-cycle-public.jsonl`, `qoder-cycle-catalog.jsonl`, `qoder-cycle-proof.jsonl`.
+Only supported project lifecycle/restart-removal flags may qualify. Bindings
+remain Prepared/installation_verified; MCP/auth/model/skill execution, automatic
+cwd discovery and native import/cache replacement stay unclaimed. Preserve the
+separate old authenticated-startup test/reader. No production adapter, native
+mutation command, pin, workflow, runner API, provider or model change.
+
+Original source-authored schema2 User/foreignA/foreignB plugin records and their
+manifests/skills are disabled once before children and immutable. Publisher
+`getInstalledPluginRows` lists all three from every cwd with explicit projectPath
+for A/B. The owned row is only the exact supported `--plugin-dir` receipt view;
+never infer cwd hiding. After whole owned-package damage/removal, fresh queries
+retain the SAME old view argument and require absence of its flag row plus the
+complete original catalog. No empty replacement view or ignored stderr.
+
+Retain the original pre-native full profile map, held identities and logs-absent
+precondition separately from a derived admitted telemetry ledger. Git/UAP calls
+must preserve the full expected profile. Only explicit native version/catalog
+calls may create one exact fresh source-defined run and its manifest/log plus
+owned latest pointer; the first run may create only logs/runs parents as well.
+No other new path, old-record change, alias/hardlink/foreign leaf or baseline
+adoption is authorized. Reuse existing no-follow held root/link/manifest guards;
+join exact modes/owners/membership/hashes, fresh runID, millisecond command-time
+window, fixed version/role/platform and expected cwd. Manifest/argv/log/env stay
+private; safe finite run projection, lengths/hashes/deltas and ledger joins only.
+PID/PPID remain explicitly manifest-only, without runner/PID provenance claims.
+
+Exact publisher bundle1.1.78 SHA256
+`ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38`
+(34,562,870 bytes) defines logger39612–41200, Bun normalization `f9a`8516 and
+`PGA/SJ`3529. Accept only exact held argv, or exactly one canonical bounded Linux
+`/$bunfs/…` entrypoint at index1 with held executable and exact held argument
+suffix; emit finite form without raw entrypoint. This is source guidance:
+the full genuine run must confirm the shipping form or fail all-false. Registry
+schema24599k, Boolean enabled-map24728830, resource collector24704176,
+missing-directory loader24604992 and JSON renderer27075013 support the exact
+catalog/control recipe; omit displayName in registry/manifest to avoid refresh.
+
+A/B have independent same-name local sources and stable derived identities.
+A-two changes skill metadata/body at the same version; keep its applied source
+frozen during whole exact-owned-package repair. Public grouped intact repair
+restages/mutates, unlike the single SDK Repair route. Repeat add/unchanged update
+are byte-stable no-ops. Preserve original User/B/foreign/caller authority. Verify
+installed zero DataReceipts and actual default-remove retained owner-only data;
+never invent native markers, adopt caller siblings or purge. Source/native view
+and installed payload are text-only and their framing is independently recomputed.
+
+Keep original150/180 deadlines,30s per command plus existing5s exit grace,
+1MiB stream/aggregate,16MiB total and80-member limits. Strict raw privacy before
+base64 and after decoding, exact finite DTO/stage closure, old capture replay,
+meaningful inert source/ownership/public API contracts and ordinary descendant
+cleanup remain required. No review fatal/step barrier. Root plus independent
+CODE reviews and focused Go/Python/affected/all-six gates precede root publication,
+then one genuine hosted full-cycle run and two independent complete raw audits.
+
+The actual inert public CLI contract confirms the stage-specific DTOs: repeated
+add is a singleton no-op with no operation/group ID; other successful lifecycle
+commands are grouped. Repair/removal report source `local`; add/update report
+`direct local source`. Repeat-add progress includes the transactional-apply line.
+Go and the independent reader close those measured forms without accepting a
+cross-stage union. Original profile and lifecycle authority remain unchanged.

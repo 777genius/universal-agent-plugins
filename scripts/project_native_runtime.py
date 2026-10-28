@@ -44,8 +44,8 @@ CASES = {
                   "file": "repotests/agentplugins_kimi_project_native_attempt_test.go",
                   "optin": "AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                   "phase": "installed-single-tool-attempt"},
-    "qoder": {"test": "TestAgentpluginsQoderNativeProjectRuntimeAttempt",
-              "file": "repotests/agentplugins_qoder_project_native_attempt_test.go",
+    "qoder": {"test": "TestAgentpluginsQoderNativeProjectCompleteSkillsCycle",
+              "file": "repotests/agentplugins_qoder_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_QODER_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
     "grok": {"test": "TestAgentpluginsGrokNativeProjectRuntimeAttempt",
              "file": "repotests/agentplugins_grok_project_native_attempt_test.go",
@@ -278,6 +278,12 @@ def qoder_log_run_observation(result, client):
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
+    summary = strict_json(bodies.get("runtime-attempt.json", b"{}"))
+    if isinstance(summary, dict) and "capture_mode" in summary:
+        if client != "qoder" or summary["capture_mode"] != "qoder-complete-skills-cycle":
+            raise ValueError("unknown fixed native CLI capture mode")
+        from project_native_qoder_cycle import members
+        return members(bodies, source)
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
     for label in commands:
@@ -345,8 +351,8 @@ def cline_cycle_complete_numeric_json(raw, budget):
     return True
 
 
-def cline_cycle_private(body):
-    if len(body) > 1 << 20 or b"uap-cline-private-" in body:
+def cline_cycle_private(body, marker=b"uap-cline-private-"):
+    if len(body) > 1 << 20 or marker in body:
         return True
     budget = [4 * len(body), 16384]
     def encoded(raw, depth):
@@ -397,7 +403,7 @@ def cline_cycle_private(body):
                 raw = value.encode("utf-8", errors="strict")
             except UnicodeError:
                 return True
-            if b"uap-cline-private-" in raw:
+            if marker in raw:
                 return True
             return encoded(raw, depth + 1)
         if type(value) is dict:

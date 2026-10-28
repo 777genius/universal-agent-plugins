@@ -675,11 +675,12 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 		t.Error("original CLI attempt total deadline exceeded")
 	}
 	f.evidence["test_failed"], f.evidence["elapsed_ms"] = t.Failed(), time.Since(f.started).Milliseconds()
-	if f.base != nil {
+	if f.base != nil && f.evidence["capture_mode"] != qoderCycleMode {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 1<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
+	qoderCycleFinalizeEvidence(f.evidence)
 	raw, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(raw, '\n'))
 	file, err := os.OpenFile(filepath.Join(f.output, "research.zip"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
