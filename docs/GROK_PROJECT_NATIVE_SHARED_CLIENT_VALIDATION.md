@@ -195,3 +195,38 @@ controls require its exact finite refusal, separately verify TOML/map changes,
 and prove that observed bytes and protected authority are not adopted. These
 are owned inert loopback/configuration checks, without a native client, public
 installer or scanner. Final committed-source gates remain pending.
+
+## Exact suppression candidate final gates
+
+Implementation `a922e32f2004e81cfba2f55bf21219a2fbbe3ffe`, tree
+`4cb264cd986280dd70eb3701ab4914ddafc04ca3`, received root CODE R1 GO
+(receipt SHA256 `c8a911ba3838b4da5146d903ec4c13bbc0eea2ee15219982c20a7628b52577d0`)
+and independent Native CODE R2 GO
+(`91a82de3d74bf584f9f73b93a2def5e50fc2a817975a75243406998f04aaa8a5`).
+Both reviewed all four frozen files, eighteen unchanged whole-file anchors
+and the exact two literal exceptions before publication.
+
+The actual final focused Go selection ran59 top-level tests and243 case events:
+242 passed, with only the unchanged child-only protected-fatal helper skipped
+outside its child environment. Its actual format-only and migration-flag parent
+fatal/guard controls passed; no new feature check was skipped. The package
+completed in7.278s. Affected all-enabled lint and whole unfiltered six-linter
+checks both exited0 with zero issues. Initial absent-Go-PATH setup failure and
+its controlled pinned-PATH retry remain recorded; no source changed.
+
+Whole original/current b40 and348 raw replays preserved every closed member,
+full returned result, original source identity and failed/all-false tuple.
+The previous58 passing Python tests transfer through byte identity of the
+entire scripts tree `91ae9d8eb2b8f0790fed890da556b6e66597a0cc`; they are not
+represented as new executions. Final gate/review receipt SHA256:
+`6982f66f2774fb0ec9f0217980c5b2df4453aad84e84a081e379cd7b7f966cdd`.
+Whole-reader replay and Python transfer receipt SHA256:
+`eea7a4d3a5e9f75e007d72699853e93f74abff604d831dea8a0e8aec8520f54d`.
+
+This publication adds only this validation record after the reviewed code.
+A fresh genuine hosted capture must determine whether the pinned shipping
+binary honors the supported setting. Two independent raw audits remain
+required. Original initial-title/main/duplicate handling, source/config/pin
+and ordinary cleanup guards, time budgets and the intentional all-false
+review barrier are unchanged. No runtime, lifecycle, MCP, vendor-authentication
+or real-model qualification follows from these inert gates.
