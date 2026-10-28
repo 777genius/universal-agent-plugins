@@ -109,3 +109,29 @@ escaped slash/quotes and ordinary literal backslash-u text remain data. Retained
 raw bytes are never normalized. Coherent refusal and raw-preserving positive
 controls are authored in both languages; exact-source execution and fresh
 independent CODE review remain required.
+
+
+## Final refused-duplicate source checks, 2026-10-28
+
+Exact code `221f4a60b8d179f5e8b2ac007fa57ce010957b3b`, tree
+`0a1839161a76dd50acf03301d081d0d3bd793a36`, received independent root
+and Gemini CODE GOs after the Unicode correction and a one-file equivalent
+contract-style correction. All diagnostic helpers, Python and original guards
+are unchanged by that final style-only commit.
+
+The actual focused Go selection completed 56 top-level entries: 233 passed
+cases and the unchanged child-only fatal-helper skip outside its child
+environment. Its actual parent fatal-guard controls passed. All seven new
+duplicate contract groups, including actual partial-body and concurrent HTTP
+cleanup, passed. The 46 runtime and 12 Grok Python tests passed on the identical
+Python scripts tree. Affected all-enabled lint and unfiltered whole six-linter
+gates each reported zero issues. The first style-lint failure is retained.
+
+Complete original and current Python modules replayed the original 348
+25-member and 611 21-member archives under their exact original source trees;
+all bytes and failed/all-false results remain unchanged. The inherited 348
+Cline capture remains independently audited. No vendor client, public installer
+or scanner ran locally. This publication only adds validation documentation to
+the exact reviewed code. A fresh hosted capture and two independent raw reviews
+remain required to observe the refused second body. No second response or
+runtime, lifecycle, MCP, authentication or model qualification is introduced.
