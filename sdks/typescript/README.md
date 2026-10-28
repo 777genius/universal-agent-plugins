@@ -76,7 +76,9 @@ helper verifies the authenticated session before returning. Optional
 
 `close()` is idempotent. It closes stdin to request graceful shutdown, waits up to
 `shutdownTimeoutMs` (10 seconds by default), then terminates only its owned process
-if necessary. Interrupted accepted work requires subsequent inspection/recovery.
+if necessary. A denied signal is not proof of exit: cleanup continues to SIGKILL
+and rejects with `SHUTDOWN_TIMEOUT` if termination remains unconfirmed.
+Interrupted accepted work requires subsequent inspection/recovery.
 Closing a view or aborting a wait must not close a shared host instance.
 
 The read-only `hasExited` property reports confirmed termination of that exact
@@ -222,6 +224,8 @@ Go toolchain. These tests prove SDK protocol/lifetime behavior, **not installati
 Separate integration/Electron tests run the real Go engine and inspect native output.
 The clean packed-consumer check installs the actual `.tgz`, checks browser-safe
 public types, both export entry points and runtime imports without monorepo aliases.
+Required CI runs the build, typecheck, lifecycle tests and packed-consumer check on
+Linux, macOS and Windows. Generated-contract drift is checked on Linux.
 
 Regenerate wire types from the repository root:
 
@@ -235,6 +239,11 @@ engine digest belong in the consuming app's build evidence; public npm or binary
 release publication is a separate authorized action.
 
 ## Real engine qualification
+
+The Native Client Runtime workflow runs this example in its macOS OpenCode job,
+using the exact engine and pinned native client from that checkout's native proof.
+Its artifact includes the SDK receipt and bounded process logs; both the receipt
+and successful process termination are required.
 
 After building, run the example with explicitly provisioned UAP and OpenCode
 executables and the public fixture at an immutable source commit:

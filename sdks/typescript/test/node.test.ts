@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { ChildProcess, spawnSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -83,6 +83,63 @@ test('shutdown is bounded when the owned process ignores EOF and SIGTERM', async
   await host.close();
   assert.ok(Date.now() - started < 3_000);
 });
+
+for (const denyBoth of [false, true]) {
+  test(denyBoth
+    ? 'denied shutdown signals refuse cleanup without claiming child exit'
+    : 'a denied SIGTERM still escalates to owned SIGKILL and observes exit',
+  async (t) => {
+    const host = await startUap(options('stubborn'));
+    const originalKill = ChildProcess.prototype.kill;
+    const owned: { child?: ChildProcess } = {};
+    const attempts: Array<NodeJS.Signals | number | undefined> = [];
+    const denied = t.mock.method(
+      ChildProcess.prototype,
+      'kill',
+      function (this: ChildProcess, signal?: NodeJS.Signals | number): boolean {
+        if (this.pid !== host.pid) return originalKill.call(this, signal);
+        owned.child = this;
+        attempts.push(signal);
+        if (signal === 'SIGTERM' || (denyBoth && signal === 'SIGKILL')) {
+          this.emit(
+            'error',
+            Object.assign(new Error('kill EPERM'), { code: 'EPERM' }),
+          );
+          return false;
+        }
+        return originalKill.call(this, signal);
+      },
+    );
+    try {
+      if (denyBoth) {
+        await assert.rejects(
+          host.close(),
+          (error: unknown) =>
+            error instanceof ManagementError && error.code === 'SHUTDOWN_TIMEOUT',
+        );
+        assert.equal(host.hasExited, false);
+        assert.equal(
+          (await host.client.session({ signal: AbortSignal.timeout(1_000) })).apiVersion,
+          1,
+        );
+      } else {
+        await host.close();
+        assert.equal(host.hasExited, true);
+      }
+      assert.deepEqual(attempts, ['SIGTERM', 'SIGKILL']);
+    } finally {
+      denied.mock.restore();
+      if (!host.hasExited) {
+        const child = owned.child;
+        if (child) originalKill.call(child, 'SIGKILL');
+        else process.kill(host.pid, 'SIGKILL');
+      }
+      const deadline = Date.now() + 2_000;
+      while (!host.hasExited && Date.now() < deadline) await delay(10);
+      assert.equal(host.hasExited, true, 'Owned fixture cleanup did not observe exit');
+    }
+  });
+}
 
 test('invalid executable paths fail without invoking a shell or PATH lookup', async () => {
   await assert.rejects(startUap({ ...options(), executable: 'agentplugins' }), (error: unknown) => error instanceof ManagementError && error.code === 'INVALID_EXECUTABLE');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { ChildProcess, spawnSync } from 'node:child_process';
 import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,6 +140,93 @@ test('abort after child start waits for owned-process cleanup', async () => {
     () => process.kill(pid, 0),
     (error: unknown) => (error as NodeJS.ErrnoException).code === 'ESRCH',
   );
+});
+
+test('repeated denied discovery signals stay handled until bounded cleanup refusal', async (t) => {
+  const input = await options('hang');
+  await rm(join(directory, 'pid'), { force: true });
+  const controller = new AbortController();
+  const originalKill = ChildProcess.prototype.kill;
+  const owned: { child?: ChildProcess } = {};
+  const attempts: Array<NodeJS.Signals | number | undefined> = [];
+  const unhandled: unknown[] = [];
+  let pid = 0;
+  const denied = t.mock.method(
+    ChildProcess.prototype,
+    'kill',
+    function (this: ChildProcess, signal?: NodeJS.Signals | number): boolean {
+      if (
+        pid === 0 ||
+        this.pid !== pid ||
+        (signal !== 'SIGTERM' && signal !== 'SIGKILL')
+      ) {
+        return originalKill.call(this, signal);
+      }
+      owned.child = this;
+      attempts.push(signal);
+      try {
+        this.emit(
+          'error',
+          Object.assign(new Error('kill EPERM'), { code: 'EPERM' }),
+        );
+      } catch (error) {
+        // Record an otherwise uncaught event without crashing the test worker.
+        unhandled.push(error);
+      }
+      return false;
+    },
+  );
+  const outcome = discoverTargets({
+    ...input,
+    timeoutMs: 5_000,
+    signal: controller.signal,
+  }).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+  try {
+    const startupDeadline = Date.now() + 2_000;
+    while (pid === 0 && Date.now() < startupDeadline) {
+      try {
+        pid = Number(await readFile(join(directory, 'pid'), 'utf8'));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+      if (pid === 0) await delay(10);
+    }
+    assert.ok(Number.isInteger(pid) && pid > 0, 'Owned discovery child did not start');
+    controller.abort();
+    const error = await outcome;
+    assert.ok(error instanceof ManagementError);
+    assert.equal(error.code, 'SHUTDOWN_TIMEOUT');
+    assert.deepEqual(attempts, ['SIGTERM', 'SIGKILL']);
+    assert.deepEqual(unhandled, []);
+    assert.ok(owned.child);
+    assert.equal(owned.child.exitCode, null);
+    assert.equal(owned.child.signalCode, null);
+  } finally {
+    denied.mock.restore();
+    controller.abort();
+    const child = owned.child;
+    if (child && child.exitCode === null && child.signalCode === null) {
+      originalKill.call(child, 'SIGKILL');
+    }
+    await outcome;
+    if (child) {
+      const deadline = Date.now() + 2_000;
+      while (
+        child.exitCode === null &&
+        child.signalCode === null &&
+        Date.now() < deadline
+      ) {
+        await delay(10);
+      }
+      assert.ok(
+        child.exitCode !== null || child.signalCode !== null,
+        'Owned discovery cleanup did not observe exit',
+      );
+    }
+  }
 });
 
 test('rejects relative or missing engine paths without shell or PATH fallback', async () => {

@@ -191,7 +191,8 @@ export async function discoverTargets(options: DiscoverTargetsOptions): Promise<
       bytes = Buffer.concat([bytes, chunk]);
     };
     child.stdout.on('data', data);
-    child.once('error', () =>
+    // Signal errors can recur during cleanup; keep them handled until close.
+    child.on('error', () =>
       stop(
         new ManagementError(
           'PROCESS_START_FAILED',

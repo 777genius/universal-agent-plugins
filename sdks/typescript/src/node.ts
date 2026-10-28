@@ -91,7 +91,10 @@ export async function startUap(options: StartOptions) {
   let exitCode: number | null = null;
   const exited = new Promise<void>((resolve) => {
     child.once('exit', (code) => { processExited = true; exitCode = code; resolve(); });
-    child.once('error', () => { processExited = true; resolve(); });
+    child.on('error', () => {
+      // A failed signal is not exit. No PID means spawning failed.
+      if (child.pid === undefined) { processExited = true; resolve(); }
+    });
   });
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => {
