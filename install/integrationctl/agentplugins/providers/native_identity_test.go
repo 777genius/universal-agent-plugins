@@ -610,7 +610,7 @@ func TestClaudeNativeDiscoveryUsesListingBudget(t *testing.T) {
 			plan := identityPlan(filepath.Join(config, "skills"))
 			plan.TargetAnchor = config
 			plan.NativeRegistryExecutable = "/TEST/bin/claude"
-			budget := 30 * time.Second
+			budget := 60 * time.Second
 			if explicit > 0 {
 				budget = explicit
 			}
