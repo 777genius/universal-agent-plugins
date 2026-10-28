@@ -2957,3 +2957,63 @@ run40624054507 verified both API-bound archives, 18 native and 25 frontend
 members, all 24 frontend stream joins and the original failed-only reader.
 They confirm the user repair result above, while every lifecycle/MCP flag
 remains false. Full core, lint and fresh hosted checks remain required.
+
+## Accepted Copilot complete User/A/B lifecycle plan (2026-10-28)
+
+Final precode draft:24,324bytes, SHA256
+`7f80f6896eece51b58c84b90b4f76535ce665b1784c648c3c9960a73a6b58438`.
+Independent other_clients and Grok reviewers rehashed/read this exact revision
+and returned renewed GO. It supersedes the earlier4a draft: source inspection
+found Copilot user projection preserves portable MCP/data semantics, while only
+project scope binds UAP managed-stdio/data. Do not assume native User PLUGIN_DATA
+equals a UAP receipt or survives native uninstall. The goal-correct User fixture
+is skill-only, matching the existing Cline control. A/B retain actual MCP/data
+qualification; no User-MCP claim, production change or artificial second server.
+
+Implement one complete bounded cycle with original HOME, separate A/B Git roots,
+immutable Copilot1.0.103/scanner/build pins and original150/180-second origins.
+17 public commands cover Git/version, user/A/B add, repeat add A, unchanged
+update A, intact repair A, A-two update, exact missing-component repair A and
+remove/repeat-remove A/B/User. Intact repair truthfully mutates; repeated removal
+retains exact supported exit1/unchanged state. Keep direct-local A-two source
+frozen: repair joins its recorded digest and restored bytes, without a moving
+source/store-fallback claim. Installed skill-only User has no active DataReceipt;
+default removal's real retained-owner allocation is verified from prior absence.
+
+15 direct native lists preserve the exact measured managed User tuple until its
+removal, then the exact empty/disabled-builtin tuple.14 fresh native sessions
+include6 project one-call/two-turn sessions (2 writes/4 reads) and8 no-call
+catalog sessions, with20 provider exchanges and6 initialize/list/call triples
+(18 probe events). User plugin skill is visible until its removal; User supplies
+no MCP tool. A/B independently join source, installation/binding/native/data
+receipt identities, fresh sessions, retained markers, update/repair and removal.
+
+Preserve two exact original native skills: HOME
+`.copilot/skills/uap-foreign-user/SKILL.md` and B
+`.github/skills/uap-foreign-b/SKILL.md`, with declared descriptions/frontmatter/
+nonce bodies and exact source/path/enabled/userInvocable/commandName catalog
+rows plus ordinary inode/owner/mode/byte checks. User foreign is always visible;
+B foreign only in B, including final absence. Neither may be invoked. Use
+supported `--excluded-tools` for19 observed builtin tools and omit
+`--available-tools`; unknown MCP tools remain visible. Require whole catalogs
+of2 measured builtin skills, applicable original foreign/phase-owned skills and
+5 disabled builtin servers plus the phase-owned A/B connected server. No-call
+phases have zero fixture MCP entries/declarations/probe activity, with exact
+phase-owned User skill presence before User removal and none finally.
+
+Reuse finite known event families/one-server call graph and their no-call
+one-turn projection, not a new event framework. SDKRPC blob
+`d269c4626b83c444a06bd14bf4c6ea77fe734a5a` supports array/provenance
+semantics; shipping equivalence is unclaimed and unknown actual output fails.
+Complete evidence has60 ordinary members:17 public triples, eight closed
+stage/value JSONL aggregates for native events/commands/registry/provider
+requests/responses/receipts/probe/proof and one runtime summary. Raw streams
+retain exact bytes/SHA256/base64 joins. Preserve1MiB aggregate/16MiB total and
+old ZIP bounds/modes. Go/Python independently validate every phase/source/
+receipt/catalog/call/result/data/absence join. Only full ordinary descendant/
+provider closure, original-authority checks and complete capture can set all
+five project/MCP flags. Project Prepared wording, vendor-authentication=false
+and real-model=false remain truthful. Two exact CODE reviews, inert gates,
+original/current RAW replay and fresh actual hosted whole-evidence review remain
+mandatory. No artificial review barrier, local vendor run, production/VS Code/
+pin/workflow change or unchanged-source retry is introduced.

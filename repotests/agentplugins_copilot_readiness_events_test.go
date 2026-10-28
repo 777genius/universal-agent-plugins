@@ -72,6 +72,10 @@ func copilotReadinessID(value any) bool {
 	return ok && copilotReadinessUUID.MatchString(s)
 }
 func copilotReadinessDecode(body []byte, start, end time.Time) (*copilotReadinessStream, error) {
+	return copilotReadinessDecodeOrder(body, start, end, false)
+}
+
+func copilotReadinessDecodeOrder(body []byte, start, end time.Time, interleaved bool) (*copilotReadinessStream, error) {
 	if len(body) > copilotProjectBodyLimit || !bytes.HasSuffix(body, []byte{'\n'}) || start.IsZero() || end.Before(start) || end.Sub(start) > 60*time.Second {
 		return nil, fmt.Errorf("Copilot readiness stream/command interval")
 	}
@@ -82,8 +86,18 @@ func copilotReadinessDecode(body []byte, start, end time.Time) (*copilotReadines
 	s := &copilotReadinessStream{}
 	seen := map[any]bool{}
 	last := start
+	var startup [7]int
 	for i, line := range lines {
 		v, err := projectNativeRuntimeJSON(line)
+		grammarIndex := i
+		if interleaved && i < 7 {
+			var kindErr error
+			grammarIndex, kindErr = copilotCycleStartupIndex(v)
+			if kindErr != nil {
+				return nil, kindErr
+			}
+			startup[i] = grammarIndex
+		}
 		keys := "type data id timestamp parentId"
 		ephemeral := i < 7 || i == 9 || i == 10 || i == 11 || i == 14 || (i >= 18 && i <= 21) || i == 23 || i == 25
 		if ephemeral {
@@ -110,15 +124,20 @@ func copilotReadinessDecode(body []byte, start, end time.Time) (*copilotReadines
 			s.session = row["sessionId"].(string)
 			continue
 		}
-		if row["type"] != copilotReadinessGrammar[i][0] || !copilotReadinessID(row["id"]) || seen[row["id"]] || !copilotReadinessID(row["parentId"]) || ephemeral && row["ephemeral"] != true {
+		if row["type"] != copilotReadinessGrammar[grammarIndex][0] || !copilotReadinessID(row["id"]) || seen[row["id"]] || !copilotReadinessID(row["parentId"]) || ephemeral && row["ephemeral"] != true {
 			return nil, fmt.Errorf("Copilot readiness event identity/order")
 		}
 		seen[row["id"]] = true
-		data, err := copilotReadinessObject(row["data"], copilotReadinessGrammar[i][1])
+		data, err := copilotReadinessObject(row["data"], copilotReadinessGrammar[grammarIndex][1])
 		if err != nil {
 			return nil, err
 		}
 		s.data = append(s.data, data)
+	}
+	if interleaved {
+		if err := s.cycleStartup(startup); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.parents(seen); err != nil {
 		return nil, err

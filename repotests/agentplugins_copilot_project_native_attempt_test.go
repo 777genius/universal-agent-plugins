@@ -52,6 +52,7 @@ type copilotProjectAttemptArchive struct {
 	} `json:"members"`
 }
 type copilotProjectAttempt struct {
+	cycle                                          *copilotProjectCycle
 	base                                           *nativeFixture
 	client, installer, git, other, outside, output string
 	ctx                                            context.Context
@@ -406,12 +407,14 @@ func (f *copilotProjectAttempt) finish(t *testing.T) {
 	if time.Since(f.started) > 180*time.Second {
 		t.Error("attempt total budget exceeded")
 	}
-	if f.base != nil {
+	if f.base != nil && f.evidence["mode"] != copilotCycleMode {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 2<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
 		}
 	}
 	switch f.evidence["mode"] {
+	case copilotCycleMode:
+		f.cycle.finalize(t)
 	case copilotUserRegistrationMode:
 		f.finalizeUserRegistration(t)
 	case copilotEmptyRegistryMode:

@@ -12,13 +12,16 @@ import (
 )
 
 func (s *copilotReadinessStream) messages(p *copilotProjectProvider, start, end time.Time) error {
+	return s.messagesFor(copilotReadinessPrompt, p, start, end)
+}
+func (s *copilotReadinessStream) messagesFor(prompt string, p *copilotProjectProvider, start, end time.Time) error {
 	user := s.data[7]
-	if user["content"] != copilotReadinessPrompt || user["delivery"] != "idle" || !reflect.DeepEqual(user["supportedNativeDocumentMimeTypes"], []any{}) || !copilotReadinessID(user["parentAgentTaskId"]) {
+	if user["content"] != prompt || user["delivery"] != "idle" || !reflect.DeepEqual(user["supportedNativeDocumentMimeTypes"], []any{}) || !copilotReadinessID(user["parentAgentTaskId"]) {
 		return fmt.Errorf("Copilot readiness original user message")
 	}
 	transformed, ok := user["transformedContent"].(string)
 	const prefix = "<current_datetime>"
-	suffix := "</current_datetime>\n\n" + copilotReadinessPrompt
+	suffix := "</current_datetime>\n\n" + prompt
 	if !ok || !strings.HasPrefix(transformed, prefix) || !strings.HasSuffix(transformed, suffix) {
 		return fmt.Errorf("Copilot readiness transformed user message")
 	}
@@ -64,18 +67,20 @@ func (s *copilotReadinessStream) messages(p *copilotProjectProvider, start, end 
 	return nil
 }
 func (s *copilotReadinessStream) tool(p *copilotProjectProvider, validate func(string) error) (string, error) {
-	args := map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}
+	return s.toolFor("uapcopilota", map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker}, p, validate)
+}
+func (s *copilotReadinessStream) toolFor(server string, args map[string]any, p *copilotProjectProvider, validate func(string) error) (string, error) {
 	delta := s.data[10]
 	input, ok := delta["inputDelta"].(string)
 	parsed, err := projectNativeRuntimeJSON([]byte(input))
 	if !ok || err != nil || !reflect.DeepEqual(parsed, args) || !copilotReadinessValues(delta, map[string]any{"toolCallId": p.id, "toolName": p.tool, "toolType": "function"}) {
 		return "", fmt.Errorf("Copilot readiness sole call delta")
 	}
-	want := map[string]any{"toolCallId": p.id, "name": p.tool, "arguments": args, "type": "function", "toolTitle": "inspect_runtime", "mcpServerName": "uapcopilota", "mcpToolName": "inspect_runtime"}
+	want := map[string]any{"toolCallId": p.id, "name": p.tool, "arguments": args, "type": "function", "toolTitle": "inspect_runtime", "mcpServerName": server, "mcpToolName": "inspect_runtime"}
 	if !reflect.DeepEqual(s.data[12]["toolRequests"], []any{want}) {
 		return "", fmt.Errorf("Copilot readiness sole assistant tool request")
 	}
-	if !copilotReadinessValues(s.data[13], map[string]any{"toolCallId": p.id, "toolName": p.tool, "arguments": args, "toolTitle": "inspect_runtime", "mcpServerName": "uapcopilota", "mcpConfigServerName": "uapcopilota", "mcpTransport": "stdio", "mcpConfigSource": "workspace", "mcpToolName": "inspect_runtime"}) || !copilotReadinessValues(s.data[15], map[string]any{"toolCallId": p.id, "rte": false, "success": true}) {
+	if !copilotReadinessValues(s.data[13], map[string]any{"toolCallId": p.id, "toolName": p.tool, "arguments": args, "toolTitle": "inspect_runtime", "mcpServerName": server, "mcpConfigServerName": server, "mcpTransport": "stdio", "mcpConfigSource": "workspace", "mcpToolName": "inspect_runtime"}) || !copilotReadinessValues(s.data[15], map[string]any{"toolCallId": p.id, "rte": false, "success": true}) {
 		return "", fmt.Errorf("Copilot readiness execution authority")
 	}
 	result, err := copilotReadinessObject(s.data[15]["result"], "content detailedContent contents")
@@ -93,6 +98,9 @@ func (s *copilotReadinessStream) tool(p *copilotProjectProvider, validate func(s
 	return body, nil
 }
 func (s *copilotReadinessStream) history(p *copilotProjectProvider, facts string) error {
+	return s.historyFor("write", p, facts)
+}
+func (s *copilotReadinessStream) historyFor(operation string, p *copilotProjectProvider, facts string) error {
 	if len(p.requests) != 2 || !p.returned || p.err != nil {
 		return fmt.Errorf("Copilot readiness ordinary two-request provider exchange")
 	}
@@ -119,7 +127,7 @@ func (s *copilotReadinessStream) history(p *copilotProjectProvider, facts string
 	if !reflect.DeepEqual(first, second) || !reflect.DeepEqual(first, expected) {
 		return fmt.Errorf("Copilot readiness provider parameter/declaration drift")
 	}
-	args, _ := json.Marshal(map[string]any{"nonce": p.nonce, "operation": "write", "marker": p.marker})
+	args, _ := json.Marshal(map[string]any{"nonce": p.nonce, "operation": operation, "marker": p.marker})
 	assistant := map[string]any{"role": "assistant", "content": nil, "refusal": nil, "tool_calls": []any{map[string]any{"id": p.id, "type": "function", "function": map[string]any{"name": p.tool, "arguments": string(args)}}}}
 	if !reflect.DeepEqual(b[2], assistant) || !reflect.DeepEqual(b[3], map[string]any{"role": "tool", "tool_call_id": p.id, "content": facts}) {
 		return fmt.Errorf("Copilot readiness exact call/result history delta")

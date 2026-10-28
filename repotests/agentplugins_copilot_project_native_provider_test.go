@@ -86,7 +86,7 @@ func copilotProjectMessage(v any) error {
 	return nil
 }
 
-func copilotProjectRequest(body []byte, tool string) (map[string]any, error) {
+func copilotProjectEnvelope(body []byte, tool string) (map[string]any, error) {
 	v, err := projectNativeRuntimeJSON(body)
 	if err != nil {
 		return nil, err
@@ -170,6 +170,14 @@ func copilotProjectRequest(body []byte, tool string) (map[string]any, error) {
 		if !ok || projectNativeRuntimeKeys(row, "type", "") != nil || (row["type"] != "text" && row["type"] != "json_object") {
 			return nil, fmt.Errorf("response format")
 		}
+	}
+	return m, nil
+}
+
+func copilotProjectRequest(body []byte, tool string) (map[string]any, error) {
+	m, err := copilotProjectEnvelope(body, tool)
+	if err != nil {
+		return nil, err
 	}
 	tools, ok := m["tools"].([]any)
 	if !ok || len(tools) != 1 {

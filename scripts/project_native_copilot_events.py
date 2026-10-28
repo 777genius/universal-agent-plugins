@@ -73,13 +73,13 @@ def instant(value):
     return calendar.timegm(parsed.utctimetuple()) * 10**9 + int((match[2] or "").ljust(9, "0"))
 
 
-def decode(body, start, end):
+def decode(body, start, end, startup=False):
     from project_native_runtime import strict_json
     require(type(body) is bytes and len(body) <= 2 << 20 and body.endswith(b"\n")
             and 0 <= end - start <= 60 * 10**9)
     lines = body[:-1].split(b"\n")
     require(len(lines) == 27)
-    rows, data, ids, last = [], [], set(), start
+    rows, data, ids, last, order = [], [], set(), start, []
     for i, line in enumerate(lines):
         ephemeral = i < 7 or i in (9, 10, 11, 14, 18, 19, 20, 21, 23, 25)
         keys = "type data id timestamp parentId" + (" ephemeral" if ephemeral else "")
@@ -94,12 +94,30 @@ def decode(body, start, end):
             values(row, {"type": "result", "exitCode": 0})
             require(uuid(row["sessionId"]) not in ids)
             continue
-        require(row["type"] == GRAMMAR[i][0] and uuid(row["id"]) not in ids)
+        grammar = i
+        if startup and i < 7:
+            if row["type"] == "session.mcp_server_status_changed":
+                require(type(row["data"]) is dict and row["data"].get("status") in ("pending", "connected"))
+                grammar = 0 if row["data"]["status"] == "pending" else 1
+            else:
+                matches = [j for j in range(2, 7) if GRAMMAR[j][0] == row["type"]]
+                require(len(matches) == 1)
+                grammar = matches[0]
+            order.append(grammar)
+        require(row["type"] == GRAMMAR[grammar][0] and uuid(row["id"]) not in ids)
         ids.add(row["id"])
         uuid(row["parentId"])
         if ephemeral:
             require(row["ephemeral"] is True)
-        data.append(obj(row["data"], GRAMMAR[i][1]))
+        data.append(obj(row["data"], GRAMMAR[grammar][1]))
+    if startup:
+        require(set(order) == set(range(7)) and len(order) == 7
+                and order.index(0) < order.index(1) and order.index(0) < order.index(2)
+                and order.index(5) > order.index(1) and order.index(5) > order.index(2))
+        canonical = [None] * 7
+        for index, kind in enumerate(order):
+            canonical[kind] = data[index]
+        data[:7] = canonical
     session, external = rows[26]["sessionId"], set()
     for i in (0, 8, 11, 21):
         parent = rows[i]["parentId"]

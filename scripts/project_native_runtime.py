@@ -30,9 +30,9 @@ CASES = {
               "file": "repotests/agentplugins_cline_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
               "phase": "runtime-attempt"},
-    "copilot": {"test": "TestAgentpluginsCopilotNativePostAddRegistryFirstObservation",
-                "file": "repotests/agentplugins_copilot_post_add_registry_attempt_test.go",
-                "optin": "AGENTPLUGINS_COPILOT_POST_ADD_REGISTRY_FIRST_CAPTURE", "seconds": 180,
+    "copilot": {"test": "TestAgentpluginsCopilotNativeProjectCompleteCycle",
+                "file": "repotests/agentplugins_copilot_cycle_lifecycle_test.go",
+                "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                 "phase": "runtime-attempt"},
     "gemini": {"test": "TestAgentpluginsGeminiNativeProjectCompleteCycle",
                "file": "repotests/agentplugins_gemini_cycle_lifecycle_test.go",
@@ -141,6 +141,9 @@ def attempt_members(bodies, source, client="copilot"):
         raise ValueError("unregistered native attempt capture mode")
     if client == "copilot" and "runtime-attempt.json" in bodies:
         result = strict_json(bodies["runtime-attempt.json"])
+        if isinstance(result, dict) and result.get("mode") == "copilot-project-complete-cycle":
+            from project_native_copilot_cycle import members
+            return members(bodies, source)
         if isinstance(result, dict) and result.get("mode") == "copilot-installed-tool-readiness":
             from project_native_copilot_readiness import members
             return members(bodies, source)
@@ -319,8 +322,8 @@ def cline_cycle_complete_numeric_json(raw, budget):
     return True
 
 
-def cline_cycle_private(body):
-    if len(body) > 1 << 20 or b"uap-cline-private-" in body:
+def cline_cycle_private(body, marker=b"uap-cline-private-"):
+    if len(body) > 1 << 20 or marker in body:
         return True
     budget = [4 * len(body), 16384]
     def encoded(raw, depth):
@@ -371,7 +374,7 @@ def cline_cycle_private(body):
                 raw = value.encode("utf-8", errors="strict")
             except UnicodeError:
                 return True
-            if b"uap-cline-private-" in raw:
+            if marker in raw:
                 return True
             return encoded(raw, depth + 1)
         if type(value) is dict:
