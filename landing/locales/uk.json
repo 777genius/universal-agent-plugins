@@ -643,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Недоступно в індексованому джерелі; команду встановлення не створено.",
       "unavailableAtItsIndexedSource": "Недоступно в індексованому джерелі",
       "checkedAgainBeforeInstallation": "Перевіряється повторно перед встановленням",
-      "reviewedListing": "Перевірено",
+      "reviewedListing": "Картку перевірено",
       "notAvailableForChatgpt": "Недоступно для ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Перевірене підключення; завершіть налаштування в ChatGPT",
       "allInstalledAgents": "Вибрати агентів у терміналі",
@@ -674,7 +674,8 @@
       "publisher": "Видавець: {publisher}",
       "upstream": "вихідне джерело",
       "installable": "можна встановити",
-      "unavailable": "недоступно"
+      "unavailable": "недоступно",
+      "reviewedListingTooltip": "Перевірено картку та метадані. Це не підтверджує безпеку коду чи поведінки плагіна."
     },
     "install": {
       "allInstalledAgentsRecommended": "Вибрати агентів у терміналі",
@@ -878,7 +879,7 @@
       "components": "Компоненти",
       "package": "Пакет",
       "pluginNotFound": "Плагін не знайдено",
-      "reviewedListing": "Перевірено",
+      "reviewedListing": "Картку перевірено",
       "licenseNotSpecified": "Ліцензію не вказано",
       "managedByCli": "Керується CLI",
       "requiresAFinalStepInTheApp": "Потребує завершального кроку в застосунку",
@@ -887,7 +888,8 @@
       "title": "{name} Agent Plugin {'|'} Universal Agent Plugins",
       "schemaName": "{name} Agent Plugin",
       "directory": "Каталог плагінів",
-      "version": "Версія {version}"
+      "version": "Версія {version}",
+      "reviewedListingTooltip": "Перевірено картку та метадані. Це не підтверджує безпеку коду чи поведінки плагіна."
     },
     "community": {
       "breadcrumb": "Навігаційний ланцюжок",

@@ -643,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Недоступен в проиндексированном источнике; команда установки не создаётся.",
       "unavailableAtItsIndexedSource": "Недоступно в проиндексированном источнике",
       "checkedAgainBeforeInstallation": "Проверяется снова перед установкой",
-      "reviewedListing": "Проверено",
+      "reviewedListing": "Карточка проверена",
       "notAvailableForChatgpt": "Недоступно для ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Проверенное подключение; завершите настройку в ChatGPT",
       "allInstalledAgents": "Выбрать агентов в терминале",
@@ -674,7 +674,8 @@
       "publisher": "От {publisher}",
       "upstream": "исходный",
       "installable": "доступен для установки",
-      "unavailable": "недоступен"
+      "unavailable": "недоступен",
+      "reviewedListingTooltip": "Проверены карточка и метаданные. Это не подтверждает безопасность кода или поведения плагина."
     },
     "install": {
       "allInstalledAgentsRecommended": "Выбрать агентов в терминале",
@@ -878,7 +879,7 @@
       "components": "Компоненты",
       "package": "Пакет",
       "pluginNotFound": "Плагин не найден",
-      "reviewedListing": "Проверено",
+      "reviewedListing": "Карточка проверена",
       "licenseNotSpecified": "Лицензия не указана",
       "managedByCli": "Управляется CLI",
       "requiresAFinalStepInTheApp": "Требуется завершающий шаг в приложении",
@@ -887,7 +888,8 @@
       "title": "Agent Plugin {name} {'|'} Universal Agent Plugins",
       "schemaName": "Agent Plugin {name}",
       "directory": "Каталог плагинов",
-      "version": "Версия {version}"
+      "version": "Версия {version}",
+      "reviewedListingTooltip": "Проверены карточка и метаданные. Это не подтверждает безопасность кода или поведения плагина."
     },
     "community": {
       "breadcrumb": "Навигационная цепочка",

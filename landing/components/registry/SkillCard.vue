@@ -75,6 +75,7 @@ function updateTerminal(value: boolean) {
           ? { kind: 'skill', repository: skill.source.repository, name: skill.skillNameHint }
           : undefined
       "
+      :applicable="skill.source.kind === 'github' && Boolean(skill.source.repository)"
       :name="skill.title"
       scope="skill"
     />

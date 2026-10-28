@@ -67,6 +67,11 @@ const sitemapRoutes = localizedRoutes.filter((route) => route.indexable);
 export default defineNuxtConfig({
   compatibilityDate: '2026-01-19',
   ssr: true,
+  features: {
+    // Keep the shared assessment stylesheet cacheable without repeating it in detail HTML.
+    inlineStyles: (id) =>
+      !id?.replaceAll('\\', '/').includes('/components/registry/SkillSpectorAssessment.vue'),
+  },
   experimental: {
     // Work around the current Nuxt dev-time #app-manifest regression.
     appManifest: false,
@@ -191,6 +196,9 @@ export default defineNuxtConfig({
       discoveryKeyID,
       discoveryPublicKey,
       muxPlaybackId,
+      skillspectorV3ManifestUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_V3_MANIFEST_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v3/index.json',
       skillspectorManifestUrl:
         process.env.NUXT_PUBLIC_SKILLSPECTOR_MANIFEST_URL ||
         'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v2/index.json',

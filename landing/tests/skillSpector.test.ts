@@ -6,6 +6,7 @@ import { loadI18nMessages } from '../scripts/load-i18n-messages.ts';
 import type { SkillSpectorRecord, SkillSpectorReport } from '../types/skillSpector.ts';
 import {
   decodeSkillSpectorReport,
+  groupSkillSpectorReasons,
   loadSkillSpectorReport,
   skillSpectorAssessment,
   skillSpectorFindingUrl,
@@ -342,4 +343,37 @@ describe('SkillSpector historical display reports', () => {
     );
     assert.equal(cancelled, true);
   });
+});
+
+it('groups only exact coverage code/message pairs and retains every original context', () => {
+  const rows = [
+    {
+      code: 'runtime_limit',
+      message: 'Inspection limit.',
+      path: 'one.md',
+      analyzer_id: 'static_a',
+      start_line: 4,
+    },
+    {
+      code: 'runtime_limit',
+      message: 'Inspection limit.',
+      path: 'two.md',
+      analyzer_id: 'static_b',
+      start_line: 8,
+    },
+    { code: 'runtime_limit', message: 'Inspection limit. ', path: 'similar.md' },
+    { code: 'other_limit', message: 'Inspection limit.', retryable: false },
+  ];
+  const groups = groupSkillSpectorReasons(rows);
+  assert.equal(groups.length, 3);
+  assert.deepEqual(
+    groups.map((group) => group.contexts.length),
+    [2, 1, 1],
+  );
+  assert.deepEqual(groups[0]!.contexts, rows.slice(0, 2));
+  assert.equal(groups[0]!.contexts[0], rows[0]);
+  assert.deepEqual(
+    rows.map((row) => row.path),
+    ['one.md', 'two.md', 'similar.md', undefined],
+  );
 });
