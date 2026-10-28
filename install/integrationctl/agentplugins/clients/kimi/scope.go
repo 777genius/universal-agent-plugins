@@ -55,8 +55,8 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 
 func currentKimi(client domain.DetectedClient) error {
 	name := filepath.Base(client.ExecutablePath)
-	if (name != "kimi" && name != "kimi.exe") || !filepath.IsAbs(client.ExecutablePath) || filepath.Clean(client.ExecutablePath) != client.ExecutablePath || client.Version != "2.3.1" {
-		return fmt.Errorf("kimi project components require the explicitly selected current Kimi Code 2.3.1 executable/version; archived or unknown harnesses are unqualified")
+	if (name != "kimi" && name != "kimi.exe") || !filepath.IsAbs(client.ExecutablePath) || filepath.Clean(client.ExecutablePath) != client.ExecutablePath || (client.Version != "2.3.1" && client.Version != "2.3.2") {
+		return fmt.Errorf("kimi project components require the explicitly selected current Kimi Code 2.3.1 or 2.3.2 executable/version; archived or unknown harnesses are unqualified")
 	}
 	return nil
 }
