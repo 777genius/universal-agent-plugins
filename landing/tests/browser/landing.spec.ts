@@ -100,9 +100,25 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await securityBadge.scrollIntoViewIfNeeded();
   await securityBadge.focus();
   const securityTooltip = page.locator('.app-tooltip');
-  await expect(securityTooltip).toBeVisible();
-  // Snapshot once: the tooltip can dismiss between per-pattern re-queries.
-  const tooltipText = await securityTooltip.innerText();
+  // Capture visibility and text in one browser turn: tooltip dismissal
+  // can unmount the tooltip between separate visibility and text queries.
+  let tooltipText: string | undefined;
+  await expect
+    .poll(
+      async () => {
+        tooltipText = await securityTooltip.evaluateAll((elements) => {
+          if (elements.length !== 1) return;
+          const element = elements[0] as HTMLElement;
+          const rect = element.getBoundingClientRect();
+          if (!rect.width || !rect.height || getComputedStyle(element).visibility !== 'visible')
+            return;
+          return element.innerText;
+        });
+        return tooltipText !== undefined;
+      },
+      { timeout: 5_000 },
+    )
+    .toBe(true);
   expect(tooltipText).toMatch(/exact indexed revision [0-9a-f]{12}/);
   expect(tooltipText).toMatch(/does not run the plugin or guarantee safety/i);
   await expect(page.getByText(/guarantee of safety/i)).toHaveCount(0);
