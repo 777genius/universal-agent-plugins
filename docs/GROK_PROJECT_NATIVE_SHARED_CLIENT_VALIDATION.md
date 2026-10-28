@@ -135,3 +135,63 @@ or scanner ran locally. This publication only adds validation documentation to
 the exact reviewed code. A fresh hosted capture and two independent raw reviews
 remain required to observe the refused second body. No second response or
 runtime, lifecycle, MCP, authentication or model qualification is introduced.
+
+## Supported turn-summary suppression before original config freeze
+
+The fresh diagnostic run `40610932429` on source
+`b40da640c388d807cc3dc1fbb36c38e0d1b411ef`, tree
+`71b98e819bdd555154096c9c75850b9b40d3f54c`, retained the refused second
+main-route request: 1,424 bytes, SHA256
+`303ad4817a23b68aa02717ecedb70404362cf1397324da5a4d25d12f60a86bb5`.
+Two independent raw audits admitted only failed, all-false diagnostic evidence.
+The system message and wrapper around the actual prompt and fixed reply exactly
+match the pinned public source's per-turn dashboard-summary helper. This is a
+specific measured side call; it supplies no plugin activation or runtime proof.
+
+The accepted plan SHA256 is
+`3bc56715f4b326634f99210fc7bde69a711c2edbe7c2880fece74ec950c4593e`,
+committed before implementation as
+`15a2ca3b8b0396a917121d94b4e991737f4a0aec`, tree
+`7962f86b94c8749ce57b5bb4776bad6596b2a207`. Root and an independent reviewer
+accepted its narrow supported-setting candidate before code.
+
+The complete two-model TOML recipe now appends the native boolean
+`[features] turn_summary = false` before the existing original HOME config's
+sole write, authored-byte clone and protected digest freeze. The original HOME,
+both model routes and credentials, source/config/permission/process guards and
+all deadlines remain unchanged. No environment override, request allowance,
+additional response, retry, profile adoption or qualification flag is added.
+The independent complete-map contract adds only the expected boolean subtree;
+new inert controls exercise the complete frozen recipe, changed/invalid feature
+data without authority adoption, and ambient feature/model isolation.
+The existing config diagnostic compares its original single-model recipe;
+the two-model title recipe therefore retains its finite `recipe-mismatch`
+refusal after a config mutation. No semantic diagnostic allowance is added.
+
+Public source tree `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8` defines the
+boolean feature, config precedence, actor spawn-time snapshot and early return
+before dashboard-summary work. Unset later title refresh defaults to this same
+feature, so the recipe also disables that later display-only refresh. The
+separate initial-title model, request validator, fixed response and counter are
+preserved. The public tree is not proven equivalent to the shipping
+1.0.70/f50904eaee6c binary; the fresh genuine run must establish effectiveness.
+
+All main/title handlers, refused-duplicate capture and privacy/export controls,
+readers, collectors, workflow, pins, production and other client source remain
+preserved. Any unexpected additional request still receives the same refusal
+and original cancellation. Even a clean native exit reaches the unchanged
+intentional failed raw-review barrier with runtime and every qualification flag
+false. Exact code reviews and measured gates are pending for this amendment;
+publication and a fresh hosted observation require those checks, followed by
+two independent raw audits. This record conveys no new native qualification.
+
+The author's bounded development selection ran the new configuration controls
+and existing complete-map test: four top-level tests and ten cases passed,
+with no skips (package JSON elapsed0.019seconds). The raw JSON log SHA256 is
+`a3267a561a123b587f25dc8ae3015f2a883edd779c4293ab675f06e3046da66a`.
+An initial new-test expectation incorrectly required semantic projection after
+the unchanged single-model recipe guard; that failure is retained. Corrected
+controls require its exact finite refusal, separately verify TOML/map changes,
+and prove that observed bytes and protected authority are not adopted. These
+are owned inert loopback/configuration checks, without a native client, public
+installer or scanner. Final committed-source gates remain pending.

@@ -62,7 +62,7 @@ func (f *projectNativeCLIAttempt) configureGrokTitleProvider(t *testing.T) {
 		t.Fatal("Grok title fixture listener could not start")
 	}
 	// Both held endpoints are authored before the original config's only freeze.
-	configuration := f.grok.title.configuration(f.grok.configuration())
+	configuration := append(f.grok.title.configuration(f.grok.configuration()), []byte("\n[features]\nturn_summary = false\n")...)
 	path := filepath.Join(f.base.Home, ".grok", "config.toml")
 	projectNativeRuntimeWrite(t, path, configuration, 0600)
 	f.grok.authoredConfig = bytes.Clone(configuration)

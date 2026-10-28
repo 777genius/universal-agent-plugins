@@ -49,6 +49,7 @@ func TestGrokProjectTitleConfigurationFreezesBothHeldRoutesInOriginalHome(t *tes
 			"uap-grok-title-fixture": model("uap-grok-title-fixture", title.listener.Addr().String(), "UAP_GROK_TITLE_PROVIDER_KEY"),
 		},
 		"marketplace": map[string]any{"default_skills_installs_purged": true},
+		"features":    map[string]any{"turn_summary": false},
 	}
 	parsed, status := grokConfigParse(main.authoredConfig)
 	if status != "captured" || !reflect.DeepEqual(parsed, want) {
