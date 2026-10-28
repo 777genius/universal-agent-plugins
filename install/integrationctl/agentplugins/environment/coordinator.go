@@ -39,6 +39,16 @@ func (coordinator Coordinator) environmentID() string {
 }
 
 func (coordinator Coordinator) Resolve(ctx context.Context, requirements Requirements, previous Lock, updateAlias string) (Lock, error) {
+	var selected []string
+	if updateAlias != "" {
+		selected = []string{updateAlias}
+	}
+	return coordinator.ResolveSelected(ctx, requirements, previous, selected)
+}
+
+// ResolveSelected refreshes one set of moving declarations in a single graph.
+// Unselected roots retain their authoritative pins; exact intent is never changed.
+func (coordinator Coordinator) ResolveSelected(ctx context.Context, requirements Requirements, previous Lock, updateAliases []string) (Lock, error) {
 	if err := requirements.Validate(); err != nil {
 		return Lock{}, err
 	}
@@ -47,25 +57,30 @@ func (coordinator Coordinator) Resolve(ctx context.Context, requirements Require
 			return Lock{}, fmt.Errorf("compatible pins required: %w", err)
 		}
 	}
-	if updateAlias != "" {
-		selected, ok := requirements.Dependencies[updateAlias]
+	selected := map[string]bool{}
+	for _, alias := range updateAliases {
+		requirement, ok := requirements.Dependencies[alias]
 		if !ok {
-			return Lock{}, fmt.Errorf("unknown update alias %q", updateAlias)
+			return Lock{}, fmt.Errorf("unknown update alias %q", alias)
 		}
-		moving := selected.Git != nil && selected.Git.Selector.Kind != SelectorCommit
-		moving = moving || selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange
-		moving = moving || selected.Archive != nil && selected.Archive.SHA256 == ""
-		moving = moving || selected.Web != nil
-		if !moving {
+		if !MovingRequirement(requirement) {
 			return Lock{}, errors.New("exact commit/release/version pins must be changed in the manifest")
 		}
+		selected[alias] = true
 	}
 	if len(requirements.Dependencies) > 0 {
 		if _, ok := coordinator.Resolver.(GraphResolver); !ok {
 			return Lock{}, ErrDependencyFactsUnavailable
 		}
 	}
-	return newGraphSolver(coordinator.Resolver, requirements, previous, updateAlias).resolve(ctx)
+	return newGraphSolver(coordinator.Resolver, requirements, previous, selected).resolve(ctx)
+}
+
+// MovingRequirement distinguishes declared update intent from an immutable lock pin.
+func MovingRequirement(selected Requirement) bool {
+	return selected.Git != nil && selected.Git.Selector.Kind != SelectorCommit ||
+		selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange ||
+		selected.Archive != nil && selected.Archive.SHA256 == "" || selected.Web != nil
 }
 
 func pinOrNil(pkg LockedPackage, exists bool) *LockedPackage {

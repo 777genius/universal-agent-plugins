@@ -141,7 +141,7 @@ func verifyAbsent(ctx context.Context, env clients.Env, root, executable, name s
 	return nil
 }
 
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	if request.TargetContext.Scope == domain.ScopeProject || request.TargetContext.ProjectRoot != "" {
 		return deactivateProject(ctx, request)
 	}
@@ -156,7 +156,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
 		return outcome, err
 	}
-	if !shared.HasClientCLI(env, request.BackendExecutable) {
+	if adapter.RequiresExternalUninstalled(env, request) {
 		return shared.RequireExternalUninstall(outcome, false, "uninstall the managed plugin in Qoder, then rerun remove with --external-uninstalled"), nil
 	}
 	if !request.Confirmed {
