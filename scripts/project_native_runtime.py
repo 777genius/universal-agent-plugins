@@ -34,8 +34,8 @@ CASES = {
                 "file": "repotests/agentplugins_copilot_project_native_attempt_test.go",
                 "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                 "phase": "runtime-attempt"},
-    "gemini": {"test": "TestAgentpluginsGeminiNativeProjectRuntimeAttempt",
-               "file": "repotests/agentplugins_gemini_project_native_attempt_test.go",
+    "gemini": {"test": "TestAgentpluginsGeminiNativeProjectCompleteCycle",
+               "file": "repotests/agentplugins_gemini_cycle_lifecycle_test.go",
                "optin": "AGENTPLUGINS_GEMINI_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                "phase": "runtime-attempt"},
     "kimi": {"test": "TestAgentpluginsKimiNativeProjectComponentsLifecycle",
@@ -128,6 +128,17 @@ def write_new(path, body, mode=0o600):
 
 
 def attempt_members(bodies, source, client="copilot"):
+    envelope = strict_json(bodies.get("runtime-attempt.json", b"{}"))
+    if type(envelope) is dict and "capture_mode" in envelope:
+        if client != "gemini":
+            raise ValueError("unregistered native attempt capture mode")
+        from project_native_gemini_cycle import MODE, members
+        if envelope["capture_mode"] == MODE:
+            return members(bodies, source, envelope)
+        from project_native_gemini_complete import MODE as complete_mode, members as complete_members
+        if envelope["capture_mode"] == complete_mode:
+            return complete_members(bodies, source, envelope)
+        raise ValueError("unregistered native attempt capture mode")
     required = {"runtime-attempt.json"}
     installed = {"copilot": {"mcp.json.installed", "uapcopilota-SKILL.md.installed"},
                  "gemini": {".gemini-settings.json.installed", "uapgeminia-SKILL.md.installed"}}

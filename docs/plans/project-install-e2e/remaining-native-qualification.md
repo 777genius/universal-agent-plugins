@@ -646,17 +646,36 @@ body/path; no assumed provider prompt format or LLM skill activation is claimed.
 Fixed native argv is exact Node, exact `gemini.js`, `--prompt <fixed-stage-prompt>
 --approval-mode default --output-format stream-json --model gemini-2.5-flash`.
 No resume, fake-response file, injected MCP definition or extra extension.
-Original-home settings set `privacy.usageStatisticsEnabled=false`,
+Original-home settings set `security.auth.selectedType='gemini-api-key'`,
+`privacy.usageStatisticsEnabled=false`,
 `telemetry.enabled=false` and
 `experimental.adk.agentSessionNoninteractiveEnabled=false`, selecting the pinned
 legacy headless loop. Set `GOOGLE_GEMINI_BASE_URL` to the fresh literal loopback
 origin and `GOOGLE_GENAI_API_VERSION=v1beta`. Supply a fresh fixture-owned
 `GEMINI_API_KEY` required only by this loopback provider; compare its exact
 `x-goog-api-key` header privately and redact the key from all admitted artifacts.
-The pinned GATEWAY mode supports this custom endpoint. Its config code otherwise
-evaluates `loadApiKey()` before reaching the GATEWAY branch, so an explicit
-fixture key avoids accidental keychain probing. This is test-provider
+The explicit API-key type passes the pinned native auth validator and still
+uses the configured custom endpoint. The explicit fixture key also avoids
+`loadApiKey()` and accidental keychain probing. This is test-provider
 authentication, never vendor Google authentication/OAuth or an inherited account.
+
+Genuine [runtime run 40349097306](https://github.com/777genius/universal-agent-plugins/actions/runs/40349097306),
+native artifact `12668685097` (ZIP SHA256
+`311209db69ad0ebb6f59f64bcd3c918019a5e1167aad2f8cb4dc8d5e95f8e870`),
+failed before any provider request with `Invalid auth method selected.` The exact
+source commit `6006c14a4decfe4b891c6263ad6ad5992e404b5b` selects GATEWAY from
+`GOOGLE_GEMINI_BASE_URL`, but its CLI auth validator does not admit that type.
+This amendment selects the existing API-key type in original-home settings;
+the fixture key, loopback endpoint, native argv, normal auth validation, trust,
+tool policy, acquisition and budgets remain the reviewed contract. It does not
+enable external authentication or qualify the unexecuted provider/tool stages.
+Pinned source blobs are `packages/core/src/core/contentGenerator.ts`
+`f44ec6d2458473360db05f3150589cbd192c4a0e`,
+`packages/cli/src/validateNonInterActiveAuth.ts`
+`a15f4f83a20b515e98e69eee3786a22b48441408`, `config/auth.ts`
+`1ca07f98eb4c588b2b0bef0d627bc9b373bd6e7f` and `config/settingsSchema.ts`
+`f85279cdc3d78b2033a6e48f92eaf02febf1eaa0` (the last two under
+`packages/cli/src`). Implement only after two independent plan reviews.
 
 Admit only POST
 `/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse` and optional POST
@@ -1617,6 +1636,65 @@ not qualify the observed macOS race; the original hosted macOS contract remains
 required. Two independent plan rounds precede implementation, followed by
 independent code review and exact-source validation.
 
+## Observed Gemini wait-for-previous description correction
+
+Genuine [runtime run 40367376528](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376528),
+job `121754582361`, ran source
+`6f8ea1173b8b1d343688299b5864ee7c1e1a86d7`, tree
+`017dd9814de77e1e7e7dd7b1e750c38b37282b02`. Closed frontend artifact
+`12678257392` has ZIP SHA256
+`46c65a8622da53758498c28e301a2223941abb4c901c0ae37ff6afbf58c813bb`;
+native artifact `12677916698` has ZIP SHA256
+`d558be3ebc28741af8e91011e8435cf5a286a2f105b73e0d8608275b9cf99d1f`.
+The admitted native attempt reached the scripted loopback provider and retained
+MCP `initialize` and `tools/list` records. The provider rejected the first
+request with `Gemini native wait_for_previous schema differs`, returning HTTP
+400; native exited 144 with no process/context error. No provider response or
+tool call completed. Every qualification flag, vendor authentication and
+real-model qualification remains false.
+
+The mismatch is the fixture's exact description literal, not the schema's
+boolean type or an observed external authentication failure. The current
+`geminiProjectWaitDescription` in
+`repotests/agentplugins_gemini_project_native_provider_test.go` is truncated to
+153 characters, ending `Use true whe.`. Actual `provider-request-1.json` has a
+204-character description. It exactly matches the already pinned publisher
+source `google-gemini/gemini-cli@6006c14a4decfe4b891c6263ad6ad5992e404b5b`,
+`packages/core/src/tools/tools.ts`, Git blob
+`ab2870984aba77e77fc5bacb25009cd47698582e`, lines 566–570. The cached primary
+source was independently rehashed to that exact Git blob. The full description
+bytes, excluding a trailing newline, have SHA256
+`7561a43ccbc741215d416fe9298b73e43dc6bddfebdd261af855156fe0994bc9`.
+
+After root R1 and independent capture R2 approval, change only that fixture
+constant to the full exact pinned description and add focused strict schema
+regressions. Use the observed description bytes as an independently specified
+test input rather than deriving every positive fixture from the implementation
+constant. Accept this exact native/source description and reject the previous
+truncated literal, changed or missing description, wrong property type and
+unknown/missing schema fields under the existing exact-key validators. Retain
+the current strict `wait_for_previous` object equality; do not allow arbitrary
+descriptions, partial/prefix matching or alternate schema shapes. Existing
+nonce/operation/marker, required/additionalProperties, tool-name/declaration and
+request/response validations remain unchanged.
+
+Start in isolated Gemini source based on local
+`8ad5ad06327f0c72b973c2a6a6180e7b11c32b82`, tree
+`603d7248054bafbb778a33edf849aa1d48e265d5`, corresponding to current published
+head `1df80efe4a988fec76c29a9d73017d3a588b3b38`. Do not alter the root-owned
+publishing worktree. This is a fixture literal/contract correction only: no
+product adapter, native argv/environment, model, permission, auth, trust,
+original-profile baseline, source/digest identity, provider sequence,
+process/deadline/cleanup or artifact allowlist changes. The full native request
+and private profile stay in closed artifacts; commit no raw profile or full
+provider request.
+
+Run the focused inert provider/schema contracts and relevant changed-line lint
+without any local vendor execution. Preserve the genuine hosted runtime gate;
+this correction does not establish that later response/tool/session/lifecycle
+stages pass. Review fresh actual hosted output before any further amendment or
+qualification claim.
+
 ## Kimi independent source and installed-authority proof before qualification
 
 Independent inspection found a fixture proof gap in Kimi source
@@ -1715,6 +1793,70 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+## Gemini owned-MCP listing diagnostic amendment
+
+Accepted plan SHA256 `6c696cd8309f6da3ee9059ef887b14bb8358ed5e4fd57afe199a69b2655b3d5d`
+received independent root R1 and Kimi-owner R2 before implementation. Exact
+starting source is ef8c42bc5012f68d042b696edbf2801730246e9d/tree462634b2,
+which retains the previously reviewed source-bound assessment-cache closure.
+
+Genuine run40583616867/job122469600501 now retains the completed add-user
+ownership proof, then fails only its listing-stderr guard at installed-user.
+Native12770589174 outer SHA256
+`ece142caacab9c75bec59e590717ea41818c84bccb76a754fd95505d446c3c9b`,
+frontend12770514390 outer SHA256
+`6706bf1185f132eb27cfa98bae98e23cb0e67023c005465e7bbf8e510da824c6`
+retain closed24/25 members,24 frontend and34 nested stream joins. The next
+listing exits0 in2263ms with exactly four expected skill rows. Its347-byte
+stderr SHA256 is
+`76222dc470d4288bb95b6a1c18044afad792af771c28d2018ecaa43b2d64e5a0`: two
+own-server notification messages precede the existing MCP refresh tuple. Two
+separate retained initialize/tools-list probe records share the held user nonce,
+fresh PID/session and command interval; no call occurs. All qualifications stay
+false and the incomplete provider-stage cleanup remains failed. No log text
+becomes a qualification or complete discovery/RPC proof.
+
+At pinned Gemini source6006c14a, mcp-client blob3d2c7beb synchronously logs the
+exact contiguous registration/tools:{} missing-listChanged pair. Manager
+blob04563803 awaits configured discoveries then emits the exact refresh suffix.
+The unchanged probe declares only tools:{} and sends no dynamic notifications.
+The listing helper now accepts only finite whole tuples for currently held
+advertised user/selected-project recipes, at most two pairs in either pair order,
+and the exact old prefix/suffix. Invalid/nil/duplicate/unknown/removed/unproved
+recipes, other-project and impossible A+B sets refuse before candidate creation;
+a nil/empty slice remains a legitimate baseline. Entire stderr is bounded1024B.
+Legacy three tuples remain accepted, with no normalization/prefix/regex warning
+allowance. A pinned actual347-byte/SHA golden and hostile scope/set/framing/error
+controls verify this private parser.
+
+Only listing diagnostics and inert contracts change. Existing complete skill
+catalog equality, pinned builtin hashes, event nonce/PID/session/time/method
+checks, no-call listing contract, live ownership/config/state/cache closure,
+original native stderr, provider, permission/trust/authentication, process,
+cleanup, acquisition and deadline gates remain mandatory. Existing Python mode,
+raw schemas and deliberate final failed-only capture barrier remain unchanged.
+No vendor/client/scanner/public installer executes locally. Independent exact
+implementation review and coordinated meaningful gates precede root publication;
+only a fresh genuine capture can establish progress through later stages.
+
+Implementation review: root and Kimi-owner independently returned CODE GO for
+exact staged treea66b0191, reading all three changed paths and the original
+listing/advertised/event call chain. The actual all-enabled affected root gate
+then identified one prealloc suggestion in the new invalid-recipe test setup.
+The test now allocates capacity four and keeps the identical input sets and
+cases; the runtime diagnostic helper is unchanged. Final reviewed source will
+retain this mechanical test-only delta with its separate preservation review.
+
+Final local validation: focused Gemini/shared runtime Go contracts PASS1.424s;
+existing Gemini/current-runtime Python admission contracts62PASS9.998s. Actual
+all-enabled full-root affected lint versus a412ba5e and unfiltered whole-root
+revive/funlen/gocyclo/gocognit/dupl/depguard both report0issues. Gofmt and full-base
+diffcheck are clean. The unchanged current ef8 24-member ZIP still admits only
+its genuine failed/allfalse capture, and its retained347-byte stderr joins the
+independent primary contract's exact SHA. No vendor/native/scanner/public
+installer executes locally, and no complete lifecycle or qualification is
+promoted. Root publication and a new genuine capture remain required.
 
 
 # Kimi: exact model tool-result framing and finite native single-call completion
