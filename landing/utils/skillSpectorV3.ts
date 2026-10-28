@@ -22,6 +22,166 @@ const count = (value: unknown, max = 10_000_000) =>
   Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= max;
 const text = (value: unknown, max = 4000) =>
   typeof value === 'string' && value.length > 0 && value.length <= max;
+const positivePosition = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0;
+const containedReferencePath = (value: unknown) =>
+  text(value, 1000) &&
+  !String(value).startsWith('/') &&
+  !/[\\\p{C}]/u.test(String(value)) &&
+  String(value)
+    .replace(/\/$/, '')
+    .split('/')
+    .every((part) => part && part !== '.' && part !== '..');
+function shape(value: unknown, required: string[], optional: string[] = []) {
+  const result = obj(value);
+  if (
+    !required.every((key) => Object.hasOwn(result, key)) ||
+    Object.keys(result).some((key) => !required.includes(key) && !optional.includes(key))
+  )
+    fail();
+  return result;
+}
+function lineRange(value: unknown) {
+  const position = obj(value);
+  for (const key of ['start_line', 'end_line'])
+    if (position[key] !== undefined && position[key] !== null && !positivePosition(position[key]))
+      fail();
+  if (
+    position.start_line !== undefined &&
+    position.start_line !== null &&
+    position.end_line !== undefined &&
+    position.end_line !== null &&
+    position.end_line < position.start_line
+  )
+    fail();
+}
+function referenceContext(value: unknown, status: string, legacy: boolean) {
+  const c = obj(value);
+  const fields = [
+    'references',
+    'ledger_exceptions',
+    'references_total',
+    'ledger_exceptions_total',
+    'reference_evidence_truncated',
+  ];
+  if (!fields.some((key) => Object.hasOwn(c, key))) return;
+  if (
+    !fields.every((key) => Object.hasOwn(c, key)) ||
+    !Array.isArray(c.references) ||
+    c.references.length > 1024 ||
+    !Array.isArray(c.ledger_exceptions) ||
+    c.ledger_exceptions.length > 100_000 ||
+    !count(c.references_total) ||
+    !count(c.ledger_exceptions_total) ||
+    c.references_total < c.references.length ||
+    c.ledger_exceptions_total < c.ledger_exceptions.length ||
+    typeof c.reference_evidence_truncated !== 'boolean'
+  )
+    fail();
+  const omitted =
+    c.references_total > c.references.length ||
+    c.ledger_exceptions_total > c.ledger_exceptions.length;
+  if (
+    c.reference_evidence_truncated !== omitted ||
+    (omitted &&
+      (status === 'complete' ||
+        c.status !== 'partial' ||
+        !c.reasons.some(
+          (reason: Record<string, unknown>) => reason.code === 'normalization_truncated',
+        )))
+  )
+    fail();
+  if (
+    new TextEncoder().encode(JSON.stringify(c.references)).byteLength +
+      new TextEncoder().encode(JSON.stringify(c.ledger_exceptions)).byteLength -
+      4 >
+    1 << 20
+  )
+    fail();
+  for (const item of c.references) {
+    const reference = shape(
+      item,
+      [
+        'source_path',
+        'line',
+        'column',
+        'evidence',
+        'target_path',
+        'status',
+        'disposition',
+        'reference_kind',
+      ],
+      ['source_sha256'],
+    );
+    if (
+      !containedReferencePath(reference.source_path) ||
+      !positivePosition(reference.line) ||
+      !positivePosition(reference.column) ||
+      typeof reference.evidence !== 'string' ||
+      reference.evidence.length > 8 << 20 ||
+      !(reference.target_path === null || containedReferencePath(reference.target_path)) ||
+      !['resolved', 'missing', 'ambiguous', 'rejected'].includes(reference.status) ||
+      !['analyzed', 'partial', 'failed', 'out_of_scope'].includes(reference.disposition) ||
+      ![
+        'markdown_image',
+        'documentation_image',
+        'markdown_link',
+        'inline_command',
+        'quoted_or_code',
+        'plain_path',
+      ].includes(reference.reference_kind) ||
+      (reference.source_sha256 !== undefined &&
+        (typeof reference.source_sha256 !== 'string' ||
+          !/^[0-9a-f]{64}$/.test(reference.source_sha256)))
+    )
+      fail();
+    if ((reference.target_path !== null) !== (reference.status === 'resolved')) fail();
+    if (
+      (['missing', 'ambiguous'].includes(reference.status) ||
+        (reference.status === 'resolved' && reference.disposition !== 'analyzed')) &&
+      (status === 'complete' || c.status === 'complete')
+    )
+      fail();
+  }
+  for (const item of c.ledger_exceptions) {
+    const diagnostic = shape(
+      item,
+      ['reason_code', 'message'],
+      [
+        'path',
+        'start_line',
+        'end_line',
+        'outcome',
+        'phase',
+        'error_class',
+        'analyzers',
+        'fatal',
+        'scope',
+      ],
+    );
+    if (
+      !text(diagnostic.reason_code, 120) ||
+      !text(diagnostic.message, 8 << 20) ||
+      (diagnostic.path !== undefined && !containedReferencePath(diagnostic.path)) ||
+      (diagnostic.outcome !== undefined &&
+        !['completed', 'partial', 'failed', 'skipped', 'out_of_scope'].includes(
+          diagnostic.outcome,
+        )) ||
+      (diagnostic.fatal !== undefined && typeof diagnostic.fatal !== 'boolean')
+    )
+      fail();
+    for (const key of ['phase', 'error_class', 'scope'])
+      if (diagnostic[key] !== undefined && !text(diagnostic[key], 200)) fail();
+    if (
+      diagnostic.analyzers !== undefined &&
+      (!Array.isArray(diagnostic.analyzers) ||
+        diagnostic.analyzers.length > 1000 ||
+        !diagnostic.analyzers.every((analyzer: unknown) => text(analyzer, 200)))
+    )
+      fail();
+    lineRange(diagnostic);
+  }
+  if (status === 'complete' && !legacy && c.ledger_exceptions.length) fail();
+}
 const safePath = (value: unknown, empty = false) =>
   typeof value === 'string' &&
   value.length <= 1000 &&
@@ -310,8 +470,11 @@ export function decodeSkillSpectorShardV3(
       !Array.isArray(c.original_findings)
     )
       fail();
-    for (const reason of c.reasons)
+    for (const reason of c.reasons) {
       if (!text(obj(reason).code, 120) || !text(reason.message)) fail();
+      lineRange(reason);
+    }
+    referenceContext(c, r.status, Boolean(r.legacy_format));
     if (c.grouping_complete !== undefined && typeof c.grouping_complete !== 'boolean') fail();
     if (
       !r.legacy_format &&

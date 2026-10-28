@@ -9,7 +9,7 @@
       "noFindings": "未发现问题",
       "findingsCount": "发现问题：{count}",
       "partial": "已检查，但存在限制",
-      "error": "检查失败",
+      "error": "无法检查",
       "detailsFor": "{name} 的 SkillSpector 详情",
       "pluginScope": "此插件中选定的技能",
       "skillScope": "技能历史报告",
@@ -69,7 +69,18 @@
       "classificationExplanation": "此分类基于严格匹配的注册表规则，并非人工安全审计。",
       "limitedGroups": "已发布的报告仅包含显示的分组。不同发现项的总数未知。",
       "selectedFullyChecked": "已完整检查 {checked} / {total} 个所选技能",
-      "skillRemoved": "先前检查的技能文件已在新检查的源代码版本中删除。旧报告作为历史记录保留；尚未检查当前内容。"
+      "skillRemoved": "先前检查的技能文件已在新检查的源代码版本中删除。旧报告作为历史记录保留；尚未检查当前内容。",
+      "acquisitionTransferLimit": "获取源文件时已达到此扫描配置的传输限制。未获取的文件未被检查。",
+      "loadingAdvice": "SkillSpector 正在加载。检查覆盖范围未知；安装前请审查源代码。",
+      "referenceContext": "引用上下文",
+      "referenceScope": "检查范围之外的引用和运行时生成的文件仍未经检查。缺失引用表示覆盖范围限制，并非已确认的安全问题。",
+      "referenceResolution": "解析 / 检查",
+      "referenceTarget": "已解析的目标",
+      "referenceUnresolved": "未解析；请参阅原文",
+      "coverageDiagnostics": "覆盖范围诊断（{count}）",
+      "contextTruncated": "上下文受限：显示 {references}/{referencesTotal} 条引用和 {diagnostics}/{diagnosticsTotal} 条诊断。",
+      "unsupportedSourceDetails": "静态 SkillSpector 检查不支持此来源类型。其文件尚未检查。",
+      "checkUnavailableDetails": "无法检查来源。覆盖范围未知；安装前请查看报告原因。"
     }
   }
 }

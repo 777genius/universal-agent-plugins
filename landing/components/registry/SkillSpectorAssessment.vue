@@ -49,7 +49,11 @@ const displayStatus = computed(() => {
   }
   return status;
 });
-const label = computed(() => t(`registryUi.skillSpector.${displayStatus.value}`));
+const label = computed(() =>
+  t(
+    `registryUi.skillSpector.${reportStatus.value === 'ready' && displayStatus.value === 'unavailable' ? 'error' : displayStatus.value}`,
+  ),
+);
 const fullyChecked = computed(() => assessment.value.fullyChecked);
 const advice = computed(() => {
   if (displayStatus.value === 'confirmedMaterialIssue') return 'adviceConfirmed';
@@ -66,6 +70,20 @@ const reasons = computed(
     assessment.value.reasons ??
     assessment.value.records.flatMap((record) => record.coverage?.reasons ?? record.errors),
 );
+const contextRecords = computed(() =>
+  assessment.value.records.filter(
+    (record) =>
+      record.coverage?.references?.length ||
+      record.coverage?.ledger_exceptions?.length ||
+      record.coverage?.reference_evidence_truncated,
+  ),
+);
+const reasonPosition = (reason: { path?: unknown; start_line?: unknown; end_line?: unknown }) => {
+  const path = typeof reason.path === 'string' ? reason.path : '';
+  const start = typeof reason.start_line === 'number' ? reason.start_line : null;
+  const end = typeof reason.end_line === 'number' ? reason.end_line : null;
+  return `${path}${start ? `:${start}${end && end !== start ? `–${end}` : ''}` : ''}`;
+};
 const groups = (record: SkillSpectorRecord) => record.findings;
 const recordStatus = (record: SkillSpectorRecord) =>
   record.status === 'error'
@@ -84,12 +102,25 @@ const occurrence = (
   value: SkillSpectorOccurrence,
 ): SkillSpectorFinding => ({ ...finding, ...value });
 const reasonMessage = (reason: { code: string; message: string }) =>
-  reason.code === 'skill_removed' ? t('registryUi.skillSpector.skillRemoved') : reason.message;
+  reason.code === 'skill_removed'
+    ? t('registryUi.skillSpector.skillRemoved')
+    : reason.code === 'acquisition_transfer_limit'
+      ? t('registryUi.skillSpector.acquisitionTransferLimit')
+      : reason.message;
 const json = (value: unknown) => JSON.stringify(value, null, 2);
 </script>
 
 <template>
+  <p
+    v-if="expanded && reportStatus === 'loading'"
+    class="skillspector skillspector--loading"
+    role="status"
+    aria-busy="true"
+  >
+    {{ t('registryUi.skillSpector.loadingAdvice') }}
+  </p>
   <details
+    v-else
     class="skillspector"
     :class="`skillspector--${displayStatus}`"
     :open="expanded || undefined"
@@ -126,7 +157,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         <p v-else-if="!assessment.records.length">
           {{
             t(
-              `registryUi.skillSpector.${displayStatus === 'unsupported' ? 'unsupportedDetails' : displayStatus === 'pending' ? 'pendingDetails' : displayStatus === 'unavailable' ? 'unavailableDetails' : 'absent'}`,
+              `registryUi.skillSpector.${displayStatus === 'unsupported' ? (scope === 'skill' ? 'unsupportedSourceDetails' : 'unsupportedDetails') : displayStatus === 'pending' ? 'pendingDetails' : displayStatus === 'unavailable' ? 'checkUnavailableDetails' : 'absent'}`,
             )
           }}
         </p>
@@ -302,6 +333,9 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
                   >
                     <code>{{ reason.code }}</code
                     >: {{ reasonMessage(reason) }}
+                    <code v-if="'path' in reason && reason.path">
+                      · {{ reasonPosition(reason) }}</code
+                    >
                   </li>
                 </ul>
               </div>
@@ -310,7 +344,12 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         </ul>
       </section>
       <section
-        v-if="reasons.length || assessment.status === 'incomplete' || assessment.coverage?.pending"
+        v-if="
+          reasons.length ||
+          contextRecords.length ||
+          assessment.status === 'incomplete' ||
+          assessment.coverage?.pending
+        "
         class="skillspector__coverage"
       >
         <strong>{{ t('registryUi.skillSpector.uninspected') }}</strong>
@@ -318,14 +357,102 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         <ul>
           <li v-for="(reason, index) in reasons" :key="index">
             <code>{{ reason.code }}</code
-            >: {{ reason.message
+            >: {{ reasonMessage(reason)
             }}<template v-if="'path' in reason && reason.path">
-              · <code>{{ reason.path }}</code></template
+              · <code>{{ reasonPosition(reason) }}</code></template
             ><template v-if="'analyzer_id' in reason && reason.analyzer_id">
               · <code>{{ reason.analyzer_id }}</code></template
             >
           </li>
         </ul>
+        <template v-if="contextRecords.length">
+          <p>{{ t('registryUi.skillSpector.referenceScope') }}</p>
+          <details
+            v-for="record in contextRecords"
+            :key="record.id"
+            class="skillspector__context-record"
+          >
+            <summary>
+              {{ record.skill_name || record.source.path }} ·
+              {{ t('registryUi.skillSpector.referenceContext') }}
+            </summary>
+            <p v-if="record.coverage?.reference_evidence_truncated">
+              {{
+                t('registryUi.skillSpector.contextTruncated', {
+                  references: record.coverage.references?.length,
+                  referencesTotal: record.coverage.references_total,
+                  diagnostics: record.coverage.ledger_exceptions?.length,
+                  diagnosticsTotal: record.coverage.ledger_exceptions_total,
+                })
+              }}
+            </p>
+            <ul class="skillspector__references">
+              <li
+                v-for="(reference, referenceIndex) in record.coverage?.references"
+                :key="referenceIndex"
+              >
+                <a
+                  :href="
+                    skillSpectorFindingUrl(record, {
+                      path: reference.source_path,
+                      line: reference.line,
+                    })
+                  "
+                  target="_blank"
+                  rel="noreferrer"
+                  ><code
+                    >{{ reference.source_path }}:{{ reference.line }}:{{ reference.column }}</code
+                  >
+                  ↗</a
+                >
+                <p>
+                  {{ t('registryUi.skillSpector.referenceResolution') }}:
+                  <code
+                    >{{ reference.status }} · {{ reference.disposition }} ·
+                    {{ reference.reference_kind }}</code
+                  >
+                </p>
+                <p>
+                  {{ t('registryUi.skillSpector.referenceTarget') }}:
+                  <code>{{
+                    reference.target_path ?? t('registryUi.skillSpector.referenceUnresolved')
+                  }}</code>
+                </p>
+                <pre>{{ reference.evidence }}</pre>
+              </li>
+            </ul>
+            <details
+              v-if="record.coverage?.ledger_exceptions?.length"
+              class="skillspector__diagnostics"
+            >
+              <summary>
+                {{
+                  t('registryUi.skillSpector.coverageDiagnostics', {
+                    count: record.coverage.ledger_exceptions.length,
+                  })
+                }}
+              </summary>
+              <ul>
+                <li
+                  v-for="(diagnostic, diagnosticIndex) in record.coverage.ledger_exceptions"
+                  :key="diagnosticIndex"
+                >
+                  <code
+                    >{{ diagnostic.reason_code
+                    }}<template v-if="diagnostic.path">
+                      · {{ reasonPosition(diagnostic) }}</template
+                    ></code
+                  >
+                  <pre>{{ diagnostic.message }}</pre>
+                  <details>
+                    <summary>{{ t('registryUi.skillSpector.technicalReport') }}</summary>
+                    <pre>{{ json(diagnostic) }}</pre>
+                  </details>
+                </li>
+              </ul>
+            </details>
+          </details>
+        </template>
         <p v-if="assessment.coverage?.pending">{{ t('registryUi.skillSpector.pendingDetails') }}</p>
       </section>
       <details v-if="assessment.records.length" class="skillspector__technical">

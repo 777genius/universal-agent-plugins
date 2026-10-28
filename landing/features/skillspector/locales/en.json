@@ -9,7 +9,7 @@
       "noFindings": "No findings",
       "findingsCount": "Findings: {count}",
       "partial": "Checked with limitations",
-      "error": "Check failed",
+      "error": "Could not check",
       "detailsFor": "SkillSpector details for {name}",
       "pluginScope": "Selected skills in this plugin",
       "skillScope": "Historical Skill report",
@@ -69,7 +69,18 @@
       "classificationExplanation": "This classification is a narrowly matched registry rule, not a human security audit.",
       "limitedGroups": "The published report contains only the displayed groups. The total number of distinct findings is unknown.",
       "selectedFullyChecked": "{checked} of {total} selected skills fully checked",
-      "skillRemoved": "The previously checked Skill file was removed at the newly examined source revision. The old report remains available as history; no current content was checked."
+      "skillRemoved": "The previously checked Skill file was removed at the newly examined source revision. The old report remains available as history; no current content was checked.",
+      "acquisitionTransferLimit": "Source retrieval reached this scan profile’s transfer limit. Files that were not retrieved were not inspected.",
+      "loadingAdvice": "SkillSpector is loading. Coverage is unknown; review the source before installing.",
+      "referenceContext": "Reference context",
+      "referenceScope": "References and runtime-created files outside the inspected source remain unverified. Missing references describe coverage limitations, not confirmed security findings.",
+      "referenceResolution": "Resolution / inspection",
+      "referenceTarget": "Resolved target",
+      "referenceUnresolved": "Unresolved; see original text",
+      "coverageDiagnostics": "Coverage diagnostics ({count})",
+      "contextTruncated": "Context is limited: {references} of {referencesTotal} references and {diagnostics} of {diagnosticsTotal} diagnostics are shown.",
+      "unsupportedSourceDetails": "This source type is not supported by static SkillSpector checks. Its files have not been checked.",
+      "checkUnavailableDetails": "The source could not be checked. Coverage is unknown; review the reported reason before installing."
     }
   }
 }

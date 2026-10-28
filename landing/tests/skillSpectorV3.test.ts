@@ -26,7 +26,121 @@ const display = () => ({
   records: structuredClone(shard.records) as SkillSpectorRecord[],
 });
 
+const referenceFixture = JSON.parse(
+  readFileSync(
+    new URL('./fixtures/skillspector-v3-reference-context.json', import.meta.url),
+    'utf8',
+  ),
+);
+function referenceRecord(key = 'cloudflare') {
+  const record = structuredClone(referenceFixture[key]);
+  return {
+    ...record,
+    freshness: 'current',
+    target_revision: record.source.revision,
+    retry: {
+      attempt_count: 1,
+      disposition: 'scheduled',
+      latest_status: record.status,
+      next_attempt_at: null,
+      next_profile: 'static-extended-v3',
+      reason: 'extended_profile_required',
+    },
+    attempt_history: [],
+  };
+}
+function decodeReference(record = referenceRecord()) {
+  const part = { ...descriptor, repository: record.source.repository, record_count: 1 };
+  return decodeSkillSpectorShardV3(
+    { ...shard, repository: part.repository, records: [record] },
+    manifest,
+    part,
+  )[0]!;
+}
 describe('SkillSpector v3 exact producer contract', () => {
+  it('accepts all three real normalized reference/ledger records without dropping original positions or evidence', () => {
+    for (const [key, references, diagnostics] of [
+      ['cloudflare', 6, 664],
+      ['web_perf', 15, 11],
+      ['asc_workflow', 8, 9],
+    ] as const) {
+      const record = decodeReference(referenceRecord(key));
+      assert.equal(record.coverage!.references!.length, references);
+      assert.equal(record.coverage!.ledger_exceptions!.length, diagnostics);
+      assert.deepEqual(record.coverage!.references, referenceFixture[key].coverage.references);
+      assert.deepEqual(
+        record.coverage!.ledger_exceptions,
+        referenceFixture[key].coverage.ledger_exceptions,
+      );
+    }
+    const main = decodeReference();
+    const missing = main.coverage!.references!.find((reference) =>
+      reference.evidence.includes('node_modules/wrangler/config-schema.json'),
+    )!;
+    assert.equal(missing.source_path, 'SKILL.md');
+    assert.equal(missing.line, 32);
+    assert.equal(missing.target_path, null);
+    assert.equal(main.status, 'partial');
+  });
+  it('rejects malformed, falsely complete and silently omitted reference context', () => {
+    const changes = [
+      (r: any) => {
+        delete r.coverage.references_total;
+      },
+      (r: any) => {
+        r.coverage.references[0].source_path = '../escape';
+      },
+      (r: any) => {
+        r.coverage.references[0].line = 0;
+      },
+      (r: any) => {
+        r.coverage.references[0].source_sha256 = ['a'.repeat(64)];
+      },
+      (r: any) => {
+        r.coverage.references[0].extra = true;
+      },
+      (r: any) => {
+        r.coverage.ledger_exceptions[0].start_line = 10;
+        r.coverage.ledger_exceptions[0].end_line = 2;
+      },
+      (r: any) => {
+        r.coverage.references_total += 1;
+      },
+      (r: any) => {
+        r.coverage.reference_evidence_truncated = true;
+      },
+      (r: any) => {
+        r.status = 'complete';
+      },
+      (r: any) => {
+        r.coverage.status = 'complete';
+      },
+    ];
+    for (const change of changes) {
+      const record = referenceRecord();
+      change(record);
+      assert.throws(() => decodeReference(record));
+    }
+  });
+  it('retains explicit reference context omissions without changing finding grouping counts', () => {
+    const record = referenceRecord();
+    record.coverage.references.pop();
+    record.coverage.reference_evidence_truncated = true;
+    record.coverage.reasons.push({
+      code: 'normalization_truncated',
+      message: 'Reference evidence publication limit.',
+    });
+    const decoded = decodeReference(record);
+    assert.equal(decoded.coverage!.references_total, 6);
+    assert.equal(decoded.coverage!.references!.length, 5);
+    assert.equal(decoded.finding_count, referenceFixture.cloudflare.finding_count);
+    assert.equal(decoded.finding_group_count, referenceFixture.cloudflare.finding_group_count);
+    assert.equal(
+      decoded.coverage!.grouping_complete,
+      referenceFixture.cloudflare.coverage.grouping_complete,
+    );
+  });
+
   it('accepts actual registry producer bytes and keeps coverage separate from severity', async () => {
     assert.equal(decodeSkillSpectorManifestV3(manifest).coverage.complete, 3);
     assert.equal(decodeSkillSpectorShardV3(shard, manifest, descriptor).length, 13);
@@ -171,6 +285,20 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.equal(result.records[0], old);
     assert.equal(result.fullyChecked, 0);
     assert.equal(result.reasons!.at(-1)!.code, 'skill_removed');
+  });
+  it('accepts the bounded acquisition transfer-limit reason without treating it as a content finding', () => {
+    const value = structuredClone(shard);
+    const partial = value.records.find((record: SkillSpectorRecord) => record.status === 'partial');
+    partial.coverage.reasons.push({
+      code: 'acquisition_transfer_limit',
+      message: 'Transfer budget exhausted.',
+      retryable: true,
+    });
+    const decoded = decodeSkillSpectorShardV3(value, manifest, descriptor);
+    const result = skillSpectorAssessment({ ...manifest, records: decoded }, subject);
+    assert.equal(result.status, 'incomplete');
+    assert.equal(result.findingCount, skillSpectorAssessment(display(), subject).findingCount);
+    assert.ok(result.reasons!.some((reason) => reason.code === 'acquisition_transfer_limit'));
   });
   it('shows unavailable when every acquisition failed without inspecting any content', () => {
     const report = display();

@@ -67,6 +67,11 @@ const sitemapRoutes = localizedRoutes.filter((route) => route.indexable);
 export default defineNuxtConfig({
   compatibilityDate: '2026-01-19',
   ssr: true,
+  features: {
+    // Keep the shared assessment stylesheet cacheable without repeating it in detail HTML.
+    inlineStyles: (id) =>
+      !id?.replaceAll('\\', '/').includes('/components/registry/SkillSpectorAssessment.vue'),
+  },
   experimental: {
     // Work around the current Nuxt dev-time #app-manifest regression.
     appManifest: false,

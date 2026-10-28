@@ -358,7 +358,7 @@ export function skillSpectorSourceUrl(record: SkillSpectorRecord): string {
 /** Link only in-root relative artifacts at the exact scanned revision. */
 export function skillSpectorFindingUrl(
   record: SkillSpectorRecord,
-  finding: SkillSpectorFinding,
+  finding: Pick<SkillSpectorFinding, 'path' | 'line'>,
 ): string | undefined {
   const parts = finding.path.split('/');
   if (

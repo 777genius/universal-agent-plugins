@@ -9,7 +9,7 @@
       "noFindings": "Nenhum resultado",
       "findingsCount": "Resultados: {count}",
       "partial": "Verificado com limitações",
-      "error": "Falha na verificação",
+      "error": "Não foi possível verificar",
       "detailsFor": "Detalhes do SkillSpector para {name}",
       "pluginScope": "Skills selecionadas deste plugin",
       "skillScope": "Relatório histórico da Skill",
@@ -69,7 +69,18 @@
       "classificationExplanation": "Esta classificação segue uma regra específica do registro e não constitui uma auditoria de segurança humana.",
       "limitedGroups": "O relatório publicado contém apenas os grupos exibidos. O total de achados distintos é desconhecido.",
       "selectedFullyChecked": "{checked} de {total} habilidades selecionadas totalmente verificadas",
-      "skillRemoved": "O arquivo de habilidade verificado anteriormente foi removido na nova revisão examinada. O relatório anterior permanece como histórico; nenhum conteúdo atual foi verificado."
+      "skillRemoved": "O arquivo de habilidade verificado anteriormente foi removido na nova revisão examinada. O relatório anterior permanece como histórico; nenhum conteúdo atual foi verificado.",
+      "acquisitionTransferLimit": "A obtenção do código atingiu o limite de transferência deste perfil. Os arquivos não obtidos não foram inspecionados.",
+      "loadingAdvice": "SkillSpector está carregando. A cobertura é desconhecida; revise o código antes de instalar.",
+      "referenceContext": "Contexto das referências",
+      "referenceScope": "Referências e arquivos criados durante a execução fora do código inspecionado continuam sem verificação. Referências ausentes indicam limites de cobertura, não problemas de segurança confirmados.",
+      "referenceResolution": "Resolução / inspeção",
+      "referenceTarget": "Destino resolvido",
+      "referenceUnresolved": "Não resolvido; consulte o texto original",
+      "coverageDiagnostics": "Diagnósticos de cobertura ({count})",
+      "contextTruncated": "Contexto limitado: exibindo {references} de {referencesTotal} referências e {diagnostics} de {diagnosticsTotal} diagnósticos.",
+      "unsupportedSourceDetails": "As verificações estáticas do SkillSpector não suportam este tipo de fonte. Seus arquivos não foram verificados.",
+      "checkUnavailableDetails": "Não foi possível verificar a fonte. A cobertura é desconhecida; reveja o motivo informado antes de instalar."
     }
   }
 }

@@ -41,6 +41,38 @@ export interface SkillSpectorReason {
   analyzer_id?: string;
   path?: string;
   retryable?: boolean;
+  start_line?: number | null;
+  end_line?: number | null;
+}
+export interface SkillSpectorReference {
+  source_path: string;
+  line: number;
+  column: number;
+  evidence: string;
+  target_path: string | null;
+  status: 'resolved' | 'missing' | 'ambiguous' | 'rejected';
+  disposition: 'analyzed' | 'partial' | 'failed' | 'out_of_scope';
+  reference_kind:
+    | 'markdown_image'
+    | 'documentation_image'
+    | 'markdown_link'
+    | 'inline_command'
+    | 'quoted_or_code'
+    | 'plain_path';
+  source_sha256?: string;
+}
+export interface SkillSpectorLedgerException {
+  reason_code: string;
+  message: string;
+  path?: string;
+  start_line?: number | null;
+  end_line?: number | null;
+  outcome?: 'completed' | 'partial' | 'failed' | 'skipped' | 'out_of_scope';
+  phase?: string;
+  error_class?: string;
+  analyzers?: string[];
+  fatal?: boolean;
+  scope?: string;
 }
 export interface SkillSpectorInspection {
   status: 'complete' | 'partial' | 'not_started';
@@ -51,6 +83,11 @@ export interface SkillSpectorInspection {
   analyzers: Record<string, unknown>[];
   original_findings: Record<string, unknown>[];
   grouping_complete?: boolean;
+  references?: SkillSpectorReference[];
+  ledger_exceptions?: SkillSpectorLedgerException[];
+  references_total?: number;
+  ledger_exceptions_total?: number;
+  reference_evidence_truncated?: boolean;
 }
 
 export interface SkillSpectorRecord {

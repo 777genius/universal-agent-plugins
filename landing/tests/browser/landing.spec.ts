@@ -7,6 +7,9 @@ test.beforeEach(async ({ page }) => {
   await setSignedMirrorTestTime(page);
   // Keep the catalog independent of optional report publication and remote availability.
   // Dedicated SkillSpector tests exercise checked, partial and unavailable reports.
+  await page.route('**/reports/skillspector/v3/index.json', (route) =>
+    route.fulfill({ status: 404 }),
+  );
   await page.route('**/reports/skillspector/v2/index.json', (route) =>
     route.fulfill({ json: emptySkillSpectorManifest() }),
   );
@@ -31,6 +34,8 @@ async function waitForFullDirectory(page: import('@playwright/test').Page) {
     .toBe(true);
 }
 
+const optionalManifest = (url: string) => url.endsWith('/reports/skillspector/v3/index.json');
+
 const parseJsonLd = async (page: import('@playwright/test').Page) => {
   const values = await page.locator('script[type="application/ld+json"]').allTextContents();
   return values.flatMap((value) => {
@@ -50,10 +55,14 @@ test('homepage installs with auto-detection and exposes the full directory', asy
     await route.continue();
   });
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
+    const expectedFallback =
+      optionalManifest(message.location().url) && /status of 404/.test(message.text());
+    if (message.type() === 'error' && !expectedFallback) errors.push(message.text());
   });
   page.on('response', (response) => {
-    if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
+    const expectedFallback = response.status() === 404 && optionalManifest(response.url());
+    if (response.status() >= 400 && !expectedFallback)
+      errors.push(`${response.status()} ${response.url()}`);
   });
 
   await page.goto('./');

@@ -1,18 +1,34 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
+import { deferred, navigate, offline, projections, registryFixture } from './i18n-state.helpers';
 import type { SkillSpectorManifestV3 } from '../../types/skillSpector';
 const fixtureRoot = new URL('../fixtures/skillspector-v3/', import.meta.url);
 const fixture = JSON.parse(
   readFileSync(new URL('index.json', fixtureRoot), 'utf8'),
 ) as SkillSpectorManifestV3;
+const referenceFixture = JSON.parse(
+  readFileSync(
+    new URL('../fixtures/skillspector-v3-reference-context.json', import.meta.url),
+    'utf8',
+  ),
+);
 const producerShard = JSON.parse(
   readFileSync(new URL(fixture.shards[0]!.path, fixtureRoot), 'utf8'),
 );
 async function setup(
   page: Page,
-  mode: 'mixed' | 'stale' | 'unavailable' | 'invalid' | 'unsupported' | 'selected' = 'mixed',
+  mode:
+    | 'mixed'
+    | 'stale'
+    | 'unavailable'
+    | 'invalid'
+    | 'unsupported'
+    | 'selected'
+    | 'acquisition'
+    | 'references'
+    | 'failed' = 'mixed',
+  reportGate?: Promise<void>,
 ) {
   const errors = await offline(page);
   const index = registryFixture();
@@ -31,6 +47,66 @@ async function setup(
     for (const release of distribution.releases) Object.assign(release.source, plugin.source);
   }
   shard.repository = plugin.source.repository;
+  if (mode === 'acquisition')
+    shard.records[0].coverage.reasons.push({
+      code: 'acquisition_transfer_limit',
+      message: 'Transfer budget exhausted.',
+      retryable: true,
+    });
+  if (mode === 'references') {
+    const position = shard.records.findIndex(
+      (record: { source: { path: string } }) =>
+        record.source.path === referenceFixture.cloudflare.source.path,
+    );
+    const scheduled = shard.records[position];
+    shard.records[position] = {
+      ...referenceFixture.cloudflare,
+      freshness: scheduled.freshness,
+      target_revision: scheduled.target_revision,
+      retry: {
+        attempt_count: 1,
+        disposition: 'scheduled',
+        latest_status: 'partial',
+        next_attempt_at: null,
+        next_profile: 'static-extended-v3',
+        reason: 'extended_profile_required',
+      },
+      attempt_history: [],
+    };
+  }
+  if (mode === 'failed') {
+    for (const record of shard.records) {
+      record.status = 'error';
+      record.execution.state = 'failed';
+      record.execution.exit_code = 2;
+      record.coverage = {
+        status: 'not_started',
+        fully_inspected_files: 0,
+        partially_inspected_files: 0,
+        entirely_uninspected_files: 0,
+        reasons: [{ code: 'acquisition_failed', message: 'Pinned source retrieval failed.' }],
+        analyzers: [],
+        original_findings: [],
+        grouping_complete: true,
+      };
+      record.findings = [];
+      record.finding_count = 0;
+      record.raw_finding_count = 0;
+      record.finding_group_count = 0;
+      record.findings_truncated = false;
+      record.errors = [{ code: 'acquisition_failed', message: 'Pinned source retrieval failed.' }];
+    }
+    manifest.coverage = {
+      selected: 13,
+      reported: 13,
+      pending: 0,
+      complete: 0,
+      partial: 0,
+      error: 13,
+      stale: 0,
+    };
+    manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+  }
   const body = JSON.stringify(shard);
   const hash = createHash('sha256').update(body).digest('hex');
   manifest.shards = [
@@ -68,7 +144,8 @@ async function setup(
       },
     ];
   }
-  await page.route('**/reports/skillspector/v3/**', (route) => {
+  await page.route('**/reports/skillspector/v3/**', async (route) => {
+    if (reportGate) await reportGate;
     if (mode === 'unavailable') return route.fulfill({ status: 503 });
     if (mode === 'invalid')
       return route.fulfill({
@@ -98,6 +175,7 @@ for (const width of [1280, 390]) {
     );
     await expect(assessment.locator(':scope > summary')).not.toContainText('Findings:');
     await assessment.locator(':scope > summary').click();
+    await expect(assessment.locator('.skillspector__details')).toHaveCSS('font-size', '13px');
     await expect(assessment.locator('.skillspector__advice')).toContainText('before installing');
     const order = await assessment
       .locator('.skillspector__details > section, .skillspector__details > details')
@@ -259,5 +337,89 @@ test('known MCP-only metadata shows not applicable on card and detail without re
     'No supported Skill files',
   );
   expect(requests).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('source acquisition transfer limits are explained as incomplete coverage', async ({
+  page,
+}) => {
+  const { assessment, errors } = await setup(page, 'acquisition');
+  await expect(assessment).toHaveClass(/skillspector--incomplete/);
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__coverage')).toContainText(
+    'Source retrieval reached this scan profile’s transfer limit.',
+  );
+  await expect(assessment.locator('.skillspector__coverage')).toContainText(
+    'Files that were not retrieved were not inspected.',
+  );
+  expect(errors).toEqual([]);
+});
+
+for (const outcome of ['mixed', 'unavailable'] as const) {
+  test(`detail loading keeps coverage unknown before ${outcome === 'mixed' ? 'ready' : 'unavailable'} report`, async ({
+    page,
+  }) => {
+    const gate = deferred();
+    const { plugin, errors } = await setup(page, outcome, gate.promise);
+    await navigate(page, `/plugins/${plugin.name}/`, 'en');
+    const loading = page.locator('.plugin-detail .skillspector');
+    await expect(loading).toHaveAttribute('aria-busy', 'true');
+    await expect(loading).toContainText(
+      'Coverage is unknown; review the source before installing.',
+    );
+    gate.release();
+    const report = page.locator('.plugin-detail details.skillspector');
+    await expect(report).toHaveClass(
+      outcome === 'mixed' ? /skillspector--incomplete/ : /skillspector--unavailable/,
+    );
+    await expect(report).toHaveAttribute('open', '');
+    await expect(report.locator('.skillspector__advice')).toContainText('Before installing');
+    if (outcome === 'unavailable') await expect(report).toContainText('could not be loaded');
+    expect(errors).toEqual([]);
+  });
+}
+
+test('real producer missing references and ledger positions remain coverage context', async ({
+  page,
+}) => {
+  const { assessment, errors } = await setup(page, 'references');
+  await assessment.locator(':scope > summary').click();
+  const coverage = assessment.locator('.skillspector__coverage');
+  await expect(coverage).toContainText('node_modules/wrangler/config-schema.json');
+  const context = coverage.locator('.skillspector__context-record');
+  await context.locator(':scope > summary').click();
+  const reference = context
+    .locator('.skillspector__references > li')
+    .filter({ hasText: 'node_modules/wrangler/config-schema.json' });
+  await expect(reference).toContainText('SKILL.md:32:');
+  await expect(reference.locator('a')).toHaveAttribute(
+    'href',
+    /blob\/4d7d8e075e1b0d899965496bacf2811be5d94091\/plugins\/cloudflare\/skills\/cloudflare\/SKILL.md#L32/,
+  );
+  await expect(reference).toContainText('Unresolved; see original text');
+  await expect(reference).toContainText('missing');
+  await expect(coverage).toContainText('not confirmed security findings');
+  if (process.env.UAP_LANDING_SCREENSHOT_DIR)
+    await context.screenshot({
+      path: `${process.env.UAP_LANDING_SCREENSHOT_DIR}/coverage-references.png`,
+    });
+  await context.locator('.skillspector__diagnostics > summary').click();
+  await expect(context.locator('.skillspector__diagnostics > summary')).toContainText('664');
+  await expect(context.locator('.skillspector__diagnostics')).toContainText('reference_missing');
+  expect(errors).toEqual([]);
+});
+
+test('published acquisition failure says could not check while keeping its report available', async ({
+  page,
+}) => {
+  const { assessment, errors } = await setup(page, 'failed');
+  await expect(assessment).toHaveClass(/skillspector--unavailable/);
+  await expect(assessment.locator(':scope > summary')).toContainText('Could not check');
+  await expect(assessment.locator(':scope > summary')).not.toContainText('Report unavailable');
+  await assessment.locator(':scope > summary').click();
+  await expect(assessment.locator('.skillspector__coverage')).toContainText(
+    'Pinned source retrieval failed.',
+  );
+  await expect(assessment.locator('.skillspector__technical')).toBeVisible();
   expect(errors).toEqual([]);
 });
