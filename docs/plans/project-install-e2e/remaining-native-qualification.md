@@ -1989,3 +1989,64 @@ The Grok-only reader branch also has explicit unchanged-result coverage for
 Qoder, Kiro and Windsurf. No vendor executable ran locally. These are source
 and inert-contract results; fresh genuine hosted evidence remains required for
 selected-skill observation and subsequent complete lifecycle qualification.
+
+### Grok complete supported skills lifecycle (2026-10-28)
+
+Real hosted run40717447621 at f794d6d1 now confirms the exact selected loaded
+skill/source/description/userInvocable serialization and canonical path; native
+inspect/startup exit0, main/title each1request/response and ordinary shutdown.
+Its only test failure is the existing independent-raw-review barrier; all
+qualification flags remain false. Native artifact12834025060 outerSHA256
+bfdef920511b1c1c6200a349b2c4d86cbca85c053ccdbf203400b2010150e658 and inner
+49fee32d67edd1f59297025f96a0bcfc6928abc3a03660ce775adbda2fd48b00 retain
+the exact source/pins and25closed members. Root independently audits the raw.
+
+Root and two independent Sol/xhigh reviewers accepted one bounded skills-only
+cycle: qualify only project-lifecycle/native-restart-removal; project MCP,
+vendor authentication, real models and skill execution stay unsupported or
+unclaimed. Persisted Grok bindings stay Prepared/package_validated. Reuse the
+existing hosted admission, original HOME, pins/scanner/process supervision,
+150s work/180s total origins,30s commands and closed archive bounds.
+
+Before any child, author/freeze original HOME config with supported exact
+A/B/user enabled names and disabled foreign A/B names; trust only canonical
+owned A+B. Hold independent original-user and foreign A/B native plugin/skill
+bytes, inode/owner/mode/membership and caller data through every operation.
+Distinct local A/B skills carry nonce/revisions; A-one updates to A-two at the
+same version. Direct local repair keeps A-two frozen and requires its recorded
+digest (repair_multi.go and installer/package.go), never invented remote pins.
+
+Exactly14 public commands cover3Git roots/version, addA/B, repeatadd,
+unchangedupdate, intactrepair, same-versionupdate, missingpackagerepair, removeA,
+repeatremoveA and removeB. The public CLI repair_many/RepairGroup route restages intact repair
+(mutated=true: lifecycle.go75-105, repair_multi.go321-328 and group_plan.go162);
+missing exact owned-package repair restores the recorded bytes (mutated=true).
+Actual public inert execution confirms partial-leaf absence refuses unchanged,
+while whole package absence repairs. Validate the sole managed_package_directory
+receipt and derived A/.grok/plugins/<physicalID> plus closed source/native bytes.
+Nonrecursively remove only plugin.json, skills/<name>/SKILL.md,
+.grok-plugin/plugin.json and their known empty directories, ending at that exact
+active root; refuse any extra entry, never RemoveAll. Keep state/source and
+parent/foreign/User/config/data authority, then require exact active-path absence.
+Installed skill-only packages have zero data receipts; default final-binding
+removal creates real retained owned data/marker/receipt, validated from
+remove_prepare.go and PluginDataManager and preserved afterward.
+
+Exactly20 fresh `inspect --json` processes cover outside/A/B initial, installed,
+stable, updated, damaged, repaired and removed/repeated/final states. Require
+whole exact plugin/skill catalogs, authored description plus exact source path,
+invocable/disabled semantics and unchanged User/foreign controls. Plugin.enabled
+means trust only. Damaged A lacks its selected plugin and skill; final A/B/outside lack both
+managed sources. No provider or extra native activation command is needed.
+
+Exactly4members contain summary/public/inspect/proof JSONL with bounded raw
+bytes/hash/base64 records and source/state/binding/ownership/removal joins.
+Apply the existing Grok privacy scanner before encoding and after strict
+decoding (no provider exists to trigger the old conditional keep scanner).
+Failed actual prefixes and every late failure keep all flagsfalse; only full
+closure plus ordinary cleanup/preservation and actual test exit0 can qualify
+the two applicable flags. Retain old diagnostic evidence/readers unchanged;
+no artificial transition review fatal, new framework, workflow or client pin.
+Obtain exact independent CODE reviews and focused inert Go/Python plus affected
+and complete six-linter gates, then one genuine hosted full-cycle capture and
+independent raw audit. No vendor executable runs locally.

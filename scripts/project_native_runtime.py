@@ -47,8 +47,8 @@ CASES = {
     "qoder": {"test": "TestAgentpluginsQoderNativeProjectRuntimeAttempt",
               "file": "repotests/agentplugins_qoder_project_native_attempt_test.go",
               "optin": "AGENTPLUGINS_QODER_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
-    "grok": {"test": "TestAgentpluginsGrokNativeProjectRuntimeAttempt",
-             "file": "repotests/agentplugins_grok_project_native_attempt_test.go",
+    "grok": {"test": "TestAgentpluginsGrokNativeProjectCompleteCycle",
+             "file": "repotests/agentplugins_grok_cycle_lifecycle_test.go",
              "optin": "AGENTPLUGINS_GROK_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
     "kiro": {"test": "TestAgentpluginsKiroNativeProjectRuntimeAttempt",
              "file": "repotests/agentplugins_kiro_project_native_attempt_test.go",
@@ -623,6 +623,12 @@ def grok_selected_inspection(bodies, result, client):
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
+    result = strict_json(bodies.get("runtime-attempt.json", b"null"))
+    if type(result) is dict and result.get("capture_mode") == "grok-complete-skills-cycle":
+        if client != "grok":
+            raise ValueError("Grok complete skills cycle cannot apply to another client")
+        from project_native_grok_cycle import members
+        return members(bodies, source)
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     allowed |= grok_provider_members(bodies, client)
     allowed |= grok_title_provider_members(bodies, client)

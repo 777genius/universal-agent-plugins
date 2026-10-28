@@ -671,6 +671,11 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 		t.Error("original CLI attempt total deadline exceeded")
 	}
 	f.evidence["test_failed"], f.evidence["elapsed_ms"] = t.Failed(), time.Since(f.started).Milliseconds()
+	if f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {
+		complete := !t.Failed() && f.ctx.Err() == nil && f.evidence["cycle_observed_complete"] == true
+		f.evidence["runtime_attempt_complete"] = complete
+		f.evidence["qualification"] = map[string]bool{"project-lifecycle": complete, "native-restart-removal": complete, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}
+	}
 	if f.base != nil {
 		if body, err := projectNativeRuntimeRead(f.base.Events, 1<<20); err == nil {
 			f.keep(t, "probe-events.jsonl", body)
@@ -678,7 +683,7 @@ func (f *projectNativeCLIAttempt) finish(t *testing.T) {
 	}
 	raw, _ := json.MarshalIndent(f.evidence, "", "  ")
 	f.keep(t, "runtime-attempt.json", append(raw, '\n'))
-	if f.grok != nil {
+	if f.grok != nil || f.spec.client == "grok" && f.evidence["capture_mode"] == "grok-complete-skills-cycle" {
 		for _, body := range f.files {
 			if grokProjectPrivateCredential(body) {
 				t.Error("unredacted Grok fixture credential refused")

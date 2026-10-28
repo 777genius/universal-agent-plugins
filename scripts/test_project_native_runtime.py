@@ -961,6 +961,7 @@ def load_tests(loader, tests, pattern):
     # Broad research discovery already selects the new client-specific module.
     if pattern in (None, "test_project_native_runtime.py"):
         tests.addTests(loader.loadTestsFromName("test_project_native_cline_cycle.CompleteCycleTests"))
+        tests.addTests(loader.loadTestsFromName("test_project_native_grok_cycle.GrokCycleContracts"))
     return tests
 
 
