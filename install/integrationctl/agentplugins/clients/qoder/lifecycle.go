@@ -73,14 +73,14 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return unprovenVersion(outcome, request)
 	}
 	if found {
-		if _, err := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "uninstall", request.DeclaredName, "--scope", "user"); err != nil {
+		if err := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "uninstall", request.DeclaredName, "--scope", "user"); err != nil {
 			return activationError(outcome, request, fmt.Errorf("uninstall previous Qoder plugin: %w", err))
 		}
 		if err := verifyAbsent(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, request.DeclaredName); err != nil {
 			return activationError(outcome, request, fmt.Errorf("verify previous Qoder plugin removal: %w", err))
 		}
 	}
-	_, installErr := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "install", request.Delivery.ActivePath, "--scope", "user")
+	installErr := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "install", request.Delivery.ActivePath, "--scope", "user")
 	verified, verifyErr := verifyActivation(ctx, env, request, outcome)
 	if installErr != nil {
 		// A same-version update may change package content, so a stale listing
@@ -182,7 +182,7 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if findForeign(entries, request.DeclaredName) {
 		return outcome, fmt.Errorf("qoder plugin %q is registered from a different source; refusing to uninstall it", request.DeclaredName)
 	}
-	_, uninstallErr := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "uninstall", request.DeclaredName, "--scope", "user")
+	uninstallErr := runQoder(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugins", "uninstall", request.DeclaredName, "--scope", "user")
 	if err := verifyAbsent(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, request.DeclaredName); err != nil {
 		if uninstallErr != nil {
 			return outcome, errors.Join(fmt.Errorf("uninstall qoder plugin: %w", uninstallErr), fmt.Errorf("verification: %w", err))

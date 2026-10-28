@@ -26,20 +26,20 @@ func qoderCommand(root, executable string, args ...string) (legacyports.Command,
 	return legacyports.Command{Argv: append([]string{executable, "--config-dir", root}, args...), Env: environment}, nil
 }
 
-func runQoder(ctx context.Context, env clients.Env, root, executable string, args ...string) (legacyports.CommandResult, error) {
+func runQoder(ctx context.Context, env clients.Env, root, executable string, args ...string) error {
 	command, err := qoderCommand(root, executable, args...)
 	if err != nil {
-		return legacyports.CommandResult{}, err
+		return err
 	}
 	if env.Runner == nil {
-		return legacyports.CommandResult{}, fmt.Errorf("Qoder CLI runner is unavailable")
+		return fmt.Errorf("qoder CLI runner is unavailable")
 	}
 	result, err := env.Runner.Run(ctx, command)
 	if err != nil {
-		return result, fmt.Errorf("start Qoder CLI: %w", err)
+		return fmt.Errorf("start Qoder CLI: %w", err)
 	}
 	if result.ExitCode != 0 {
-		return result, fmt.Errorf("Qoder CLI command failed with exit code %d", result.ExitCode)
+		return fmt.Errorf("qoder CLI command failed with exit code %d", result.ExitCode)
 	}
-	return result, nil
+	return nil
 }

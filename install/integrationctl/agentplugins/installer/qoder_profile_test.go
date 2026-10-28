@@ -89,7 +89,7 @@ func TestQoderUserProfilePersistsAcrossLifecycleAndRefusesOtherProfile(t *testin
 			}
 			e := newEngine()
 			req := installer.Request{Scope: domain.ScopeUser, Operation: installer.OpInstall, PackageRoot: pkg, ClientID: "qoder", ClientConfigRoot: selected, ClientExecutable: helper, InstallationID: "00000000-0000-4000-8000-000000000078", RequiredComponents: []string{"skills"}}
-			apply := func(req installer.Request) installer.Result {
+			apply := func(req installer.Request) {
 				h, err := e.Prepare(t.Context(), req)
 				if err != nil {
 					t.Fatalf("prepare %s: %v", req.Operation, err)
@@ -99,7 +99,6 @@ func TestQoderUserProfilePersistsAcrossLifecycleAndRefusesOtherProfile(t *testin
 				if err != nil || out.Outcome != installer.OutcomeCompleted {
 					t.Fatalf("apply %s: %+v, %v", req.Operation, out, err)
 				}
-				return out
 			}
 			statePath := filepath.Join(stateRoot, "state-v2.json")
 			assertBindingProfile := func() {
