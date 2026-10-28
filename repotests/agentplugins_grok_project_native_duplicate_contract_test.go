@@ -93,7 +93,8 @@ func TestGrokProjectDuplicateStructureAndPrivacyRefuseBeforeRetention(t *testing
 	for _, kind := range []string{"empty", "oversized", "array", "null", "scalar", "invalid", "duplicate", "trailing", "nonfinite", "depth", "nodes", "key", "utf8", "unicode-high", "unicode-low", "unicode-invalid-pair", "unicode-key", "unicode-nested-string", "unicode-nested-key", "unicode-nested-scalar", "unicode-nested-lines", "main-key", "title-key", "escaped-main", "escaped-title", "nested-main", "nested-title"} {
 		t.Run(kind, func(t *testing.T) {
 			p := grokDuplicateContractProvider(t)
-			raw, expected := []byte(`{"inert":true}`), "json-refused"
+			var raw []byte
+			expected := "json-refused"
 			switch kind {
 			case "empty":
 				raw, expected = nil, "body-refused"
@@ -122,9 +123,10 @@ func TestGrokProjectDuplicateStructureAndPrivacyRefuseBeforeRetention(t *testing
 					"unicode-invalid-pair": `{"opaque":"\ud800\u0041"}`, "unicode-key": `{"\ud800":"ordinary"}`}[kind])
 			case "unicode-nested-string", "unicode-nested-key", "unicode-nested-scalar", "unicode-nested-lines":
 				inner := `{"opaque":"\ud800"}`
-				if kind == "unicode-nested-scalar" {
+				switch kind {
+				case "unicode-nested-scalar":
 					inner = `"\ud800"`
-				} else if kind == "unicode-nested-lines" {
+				case "unicode-nested-lines":
 					inner = "{}\n" + inner
 				}
 				value := map[string]string{"opaque": inner}
@@ -240,21 +242,23 @@ func TestGrokProjectDuplicateRequiresOriginalEligibility(t *testing.T) {
 	for _, kind := range []string{"query", "method", "host", "credential", "duplicate-credential", "content-type", "duplicate-content-type", "late", "earlier", "missing-title", "incomplete-first"} {
 		t.Run(kind, func(t *testing.T) {
 			var p *grokProjectProvider
-			if kind == "incomplete-first" {
+			switch kind {
+			case "incomplete-first":
 				p, _ = grokTitleContractProvider(t)
 				grokDuplicateContractPartial(t, p, false)
-			} else if kind == "missing-title" {
+			case "missing-title":
 				p = grokProjectContractProvider(t)
 				body := []byte(`{"model":"uap-grok-fixture","stream":true,"messages":[{}]}`)
 				if status, _ := grokProjectContractSend(t, grokProjectContractRequest(t, p, body)); status != http.StatusOK {
 					t.Fatal("first inert main-only request failed")
 				}
-			} else {
+			default:
 				p = grokDuplicateContractProvider(t)
 			}
-			if kind == "late" {
+			switch kind {
+			case "late":
 				p.cancel()
-			} else if kind == "earlier" {
+			case "earlier":
 				p.fail("serve")
 			}
 			r := grokProjectContractRequest(t, p, []byte(`{"ordinary":"refused"}`))
@@ -343,17 +347,18 @@ func TestGrokProjectDuplicateArtifactJoinsRefuseCoherentForgery(t *testing.T) {
 				files["runtime-attempt.json"] = grokDuplicateContractEncode(t, result)
 			case "private", "nested-private", "invalid-json", "unicode-high", "unicode-low", "unicode-invalid-pair", "unicode-nested-key":
 				raw := []byte(`{"opaque":"uap-grok-private-inert"}`)
-				if kind == "nested-private" {
+				switch kind {
+				case "nested-private":
 					raw = grokDuplicateContractEncode(t, map[string]string{"opaque": `{"\u0075ap-grok-private-inert":"ordinary"}`})
-				} else if kind == "invalid-json" {
+				case "invalid-json":
 					raw = []byte(`{"unclosed":`)
-				} else if kind == "unicode-high" {
+				case "unicode-high":
 					raw = []byte(`{"opaque":"\ud800"}`)
-				} else if kind == "unicode-low" {
+				case "unicode-low":
 					raw = []byte(`{"opaque":"\udc00"}`)
-				} else if kind == "unicode-invalid-pair" {
+				case "unicode-invalid-pair":
 					raw = []byte(`{"opaque":"\ud800\u0041"}`)
-				} else if kind == "unicode-nested-key" {
+				case "unicode-nested-key":
 					raw = grokDuplicateContractEncode(t, map[string]string{`{"opaque":"\ud800"}`: "ordinary"})
 				}
 				files[grokDuplicateRequestName] = raw
