@@ -49,7 +49,11 @@ func TestPiPublicDirectoryLifecycle(t *testing.T) {
 		if err != nil {
 			t.Fatalf("prepare %s: %v", req.Operation, err)
 		}
-		defer prepared.Close()
+		defer func() {
+			if err := prepared.Close(); err != nil {
+				t.Errorf("close prepared operation: %v", err)
+			}
+		}()
 		result, err := engine.Apply(context.Background(), prepared, Decision{Confirmed: true})
 		if err != nil || result.Outcome != OutcomeCompleted {
 			t.Fatalf("apply %s: %+v %v", req.Operation, result, err)
@@ -79,7 +83,11 @@ func TestPiPublicDirectoryLifecycle(t *testing.T) {
 	write(filepath.Join(active, "native", "index.ts"), "user edit\n")
 	prepared, err := engine.Prepare(context.Background(), req)
 	if err == nil {
-		defer prepared.Close()
+		defer func() {
+			if err := prepared.Close(); err != nil {
+				t.Errorf("close prepared operation: %v", err)
+			}
+		}()
 		_, err = engine.Apply(context.Background(), prepared, Decision{Confirmed: true})
 	}
 	if err == nil {

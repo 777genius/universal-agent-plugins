@@ -43,7 +43,7 @@ func decodeExtension(raw json.RawMessage) (extension, error) {
 		return value, err
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return value, fmt.Errorf("Pi extension must contain one object")
+		return value, fmt.Errorf("pi extension must contain one object")
 	}
 	if value.Version != 1 || value.Source == "" || strings.ContainsAny(value.Source, `\:`) {
 		return value, fmt.Errorf("unsupported Pi extension schema")
@@ -80,7 +80,7 @@ func selectedSource(root string, envelope domain.PackageEnvelope) (string, error
 		return "", err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("Pi extension source is not a real directory")
+		return "", fmt.Errorf("pi extension source is not a real directory")
 	}
 	if err := rejectPiManifest(source); err != nil {
 		return "", err
@@ -96,12 +96,12 @@ func selectedSource(root string, envelope domain.PackageEnvelope) (string, error
 			return "", err
 		}
 		if !meta.Mode().IsRegular() || entry != "" {
-			return "", fmt.Errorf("Pi extension requires one real index entrypoint")
+			return "", fmt.Errorf("pi extension requires one real index entrypoint")
 		}
 		entry = value.Source + "/" + name
 	}
 	if entry == "" {
-		return "", fmt.Errorf("Pi extension source has no entrypoint")
+		return "", fmt.Errorf("pi extension source has no entrypoint")
 	}
 	return entry, nil
 }
@@ -111,10 +111,10 @@ func descriptorFor(plan domain.DeliveryPlan, canonical, data string) (Descriptor
 		return Descriptor{}, err
 	}
 	if err := cleanRoot(data); err != nil {
-		return Descriptor{}, fmt.Errorf("Pi requires owned plugin data: %w", err)
+		return Descriptor{}, fmt.Errorf("pi requires owned plugin data: %w", err)
 	}
 	if !strings.HasPrefix(canonical, "sha256:") {
-		return Descriptor{}, fmt.Errorf("Pi canonical package digest is missing")
+		return Descriptor{}, fmt.Errorf("pi canonical package digest is missing")
 	}
 	return Descriptor{1, BootstrapVersion, plan.ActivePath, plan.ActivePath, data, canonical}, nil
 }
@@ -165,7 +165,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return nil, err
 	}
 	if root != plan.ActivePath {
-		return nil, fmt.Errorf("Pi active package differs from selected root")
+		return nil, fmt.Errorf("pi active package differs from selected root")
 	}
 	body, err := os.ReadFile(filepath.Join(root, DescriptorName))
 	if err != nil {
@@ -189,7 +189,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return nil, err
 	}
 	if descriptor != expected {
-		return nil, fmt.Errorf("Pi projection descriptor differs from bound package/data roots")
+		return nil, fmt.Errorf("pi projection descriptor differs from bound package/data roots")
 	}
 	if len(envelope.Manifest.Extensions) == 0 {
 		manifest, err := os.ReadFile(filepath.Join(root, "plugin.json"))
@@ -213,7 +213,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		return nil, err
 	}
 	if !bytes.Equal(actual, wanted) {
-		return nil, fmt.Errorf("Pi guarded entrypoint differs from bound projection")
+		return nil, fmt.Errorf("pi guarded entrypoint differs from bound projection")
 	}
 	return nil, rejectPiManifest(root)
 }

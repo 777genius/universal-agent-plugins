@@ -49,7 +49,7 @@ var (
 
 func cleanRoot(root string) error {
 	if root == "" || !utf8.ValidString(root) || strings.TrimSpace(root) != root || strings.IndexFunc(root, unicode.IsControl) >= 0 || !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Dir(root) == root {
-		return fmt.Errorf("Pi agent directory must be a clean absolute directory")
+		return fmt.Errorf("pi agent directory must be a clean absolute directory")
 	}
 	return nil
 }
@@ -101,7 +101,7 @@ func validateProfile(root string) error {
 		return err
 	}
 	if actual != root {
-		return fmt.Errorf("Pi profile must be canonical before mutation")
+		return fmt.Errorf("pi profile must be canonical before mutation")
 	}
 	return nil
 }
@@ -123,7 +123,7 @@ func (*Adapter) ValidateTargetLayout(plan domain.DeliveryPlan) error { return va
 
 func validatePlan(plan domain.DeliveryPlan) error {
 	if plan.ClientID != domain.ClientPi || plan.Scope != domain.ScopeUser || plan.TargetRoot != filepath.Join(plan.TargetAnchor, "extensions") || plan.NativeRegistryRoot != plan.TargetAnchor || plan.ActivePath != filepath.Join(plan.TargetRoot, plan.PhysicalArtifactID) {
-		return fmt.Errorf("Pi package layout differs from selected user profile")
+		return fmt.Errorf("pi package layout differs from selected user profile")
 	}
 	if err := validateProfile(plan.TargetAnchor); err != nil {
 		return err
@@ -149,7 +149,7 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 		return err
 	}
 	if binding.ClientID != string(domain.ClientPi) || binding.Scope != string(domain.ScopeUser) || binding.NativeProfileRoot != root || filepath.Dir(binding.TargetLocator) != filepath.Join(root, "extensions") {
-		return fmt.Errorf("Pi binding differs from recorded physical profile")
+		return fmt.Errorf("pi binding differs from recorded physical profile")
 	}
 	return pathpolicy.RequireContainedChild(root, binding.TargetLocator)
 }
@@ -198,7 +198,7 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 		return err
 	}
 	if request.Client.ClientID != domain.ClientPi || request.Client.ConfigRoot != request.Plan.TargetAnchor {
-		return fmt.Errorf("Pi activation profile differs")
+		return fmt.Errorf("pi activation profile differs")
 	}
 	return checkDiscoveryRoot(request.Plan.TargetRoot)
 }
@@ -225,7 +225,7 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 		return out, err
 	}
 	if request.Client.ClientID != domain.ClientPi || validateProfile(request.NativeRegistryRoot) != nil || filepath.Dir(request.ManagedArtifactPath) != filepath.Join(request.NativeRegistryRoot, "extensions") {
-		return out, fmt.Errorf("Pi removal profile differs")
+		return out, fmt.Errorf("pi removal profile differs")
 	}
 	out.ExternalRemovalComplete = true // The common directory transaction performs removal.
 	return out, nil
@@ -234,7 +234,7 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 func checkDiscoveryRoot(root string) error {
 	for _, name := range []string{"index.ts", "index.js"} {
 		if _, err := os.Lstat(filepath.Join(root, name)); err == nil {
-			return fmt.Errorf("Pi extensions root contains a foreign entrypoint masking child discovery")
+			return fmt.Errorf("pi extensions root contains a foreign entrypoint masking child discovery")
 		} else if !os.IsNotExist(err) {
 			return err
 		}
@@ -252,7 +252,7 @@ func rejectPiManifest(root string) error {
 		return err
 	}
 	if !info.Mode().IsRegular() || info.Size() > 65536 {
-		return fmt.Errorf("Pi package manifest is not a bounded regular file")
+		return fmt.Errorf("pi package manifest is not a bounded regular file")
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -260,10 +260,10 @@ func rejectPiManifest(root string) error {
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(body, &fields); err != nil {
-		return fmt.Errorf("Pi package manifest is unreadable: %w", err)
+		return fmt.Errorf("pi package manifest is unreadable: %w", err)
 	}
 	if _, exists := fields["pi"]; exists {
-		return fmt.Errorf("Pi package manifest overrides selected extension discovery")
+		return fmt.Errorf("pi package manifest overrides selected extension discovery")
 	}
 	return nil
 }
