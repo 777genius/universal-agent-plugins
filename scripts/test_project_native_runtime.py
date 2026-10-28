@@ -375,6 +375,25 @@ class RuntimeTests(unittest.TestCase):
         bodies["grok-provider.duplicate.json"], bodies["grok-provider.duplicate-request.json"] = json.dumps(row).encode(), raw
         self.assertTrue(runtime.cli_attempt_members(bodies, self.source, "grok")["test_failed"])
 
+    def test_grok_duplicate_unicode_scalar_policy_is_new_and_raw_preserving(self):
+        refused = (b'{"opaque":"\\ud800"}', b'{"opaque":"\\udc00"}', b'{"opaque":"\\ud800\\u0041"}', b'{"\\ud800":"ordinary"}',
+                   json.dumps({"opaque": '{"opaque":"\\ud800"}'}).encode(), json.dumps({'{"opaque":"\\ud800"}': "ordinary"}).encode(),
+                   json.dumps({"opaque": '"\\ud800"'}).encode(), json.dumps({"opaque": '{}\n{"opaque":"\\ud800"}'}).encode())
+        accepted = (b'{"opaque":"\\ud83d\\ude00"}', b'{"opaque":"\\ufffd"}', '{"opaque":"�"}'.encode(), '{"opaque":"é😀"}'.encode(),
+                    b'{"opaque":"\\\\ud800"}', b'{"opaque":"\\/path"}', b'{"opaque":"\\\"\\\\ud800"}', b'{"\\ud83d\\ude00":"ordinary"}')
+        for raw, valid in [(raw, False) for raw in refused] + [(raw, True) for raw in accepted]:
+            with self.subTest(raw=raw, valid=valid):
+                bodies = self.grok_duplicate_bodies()
+                row = json.loads(bodies["grok-provider.duplicate.json"])
+                row.update(captured_bytes=len(raw), captured_sha256=hashlib.sha256(raw).hexdigest())
+                bodies["grok-provider.duplicate.json"], bodies["grok-provider.duplicate-request.json"] = json.dumps(row).encode(), raw
+                if valid:
+                    self.assertTrue(runtime.cli_attempt_members(bodies, self.source, "grok")["test_failed"])
+                    self.assertEqual(bodies["grok-provider.duplicate-request.json"], raw)
+                else:
+                    with self.assertRaises(ValueError):
+                        runtime.cli_attempt_members(bodies, self.source, "grok")
+
     def grok_route_bodies(self):
         bodies = self.grok_provider_bodies()
         row = json.loads(bodies["grok-provider.json"])

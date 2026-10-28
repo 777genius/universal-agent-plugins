@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"testing"
 )
 
@@ -99,7 +100,114 @@ func grokProjectDuplicateObject(raw []byte, keys ...string) string {
 			return "privacy-refused"
 		}
 	}
+	budget := grokProjectPrivacyBudget{text: 4 * len(raw), nodes: 16384}
+	if !budget.scalarJSON(raw, 0) {
+		return "json-refused"
+	}
 	return "captured"
+}
+
+// encoding/json replaces lone UTF16 escapes. This new diagnostic retains the
+// original bytes, so refuse such scalars instead of normalizing its raw input.
+// Whole strict JSON parsing always precedes this lexical string preflight.
+func grokProjectDuplicateScalars(raw []byte) bool {
+	quoted := false
+	for index := 0; index < len(raw); index++ {
+		if raw[index] == '"' {
+			quoted = !quoted
+			continue
+		}
+		if !quoted || raw[index] != '\\' {
+			continue
+		}
+		index++
+		if index >= len(raw) {
+			return false
+		}
+		if raw[index] != 'u' {
+			continue
+		}
+		if index+4 >= len(raw) {
+			return false
+		}
+		unit, err := strconv.ParseUint(string(raw[index+1:index+5]), 16, 16)
+		if err != nil {
+			return false
+		}
+		index += 4
+		if unit >= 0xdc00 && unit <= 0xdfff {
+			return false
+		}
+		if unit < 0xd800 || unit > 0xdbff {
+			continue
+		}
+		if index+6 >= len(raw) || raw[index+1] != '\\' || raw[index+2] != 'u' {
+			return false
+		}
+		low, err := strconv.ParseUint(string(raw[index+3:index+7]), 16, 16)
+		if err != nil || low < 0xdc00 || low > 0xdfff {
+			return false
+		}
+		index += 6
+	}
+	return !quoted
+}
+
+// Match only complete nested JSON values/lines already traversed by the
+// existing privacy scanner, with its unchanged shared text/node/depth bounds.
+// Ordinary backslash-u text that is not complete JSON stays ordinary data.
+func (b *grokProjectPrivacyBudget) scalarJSON(body []byte, depth int) bool {
+	if depth > 64 || len(body) > b.text {
+		return false
+	}
+	b.text -= len(body)
+	value, err := projectNativeRuntimeJSON(body)
+	if err == nil {
+		return grokProjectDuplicateScalars(body) && b.scalarValue(value, depth)
+	}
+	if b.parseRefusal(body, err) {
+		return false
+	}
+	if !bytes.ContainsRune(body, '\n') {
+		return true
+	}
+	for len(body) != 0 {
+		line, rest, _ := bytes.Cut(body, []byte{'\n'})
+		if len(line) > b.text {
+			return false
+		}
+		b.text -= len(line)
+		value, err := projectNativeRuntimeJSON(line)
+		if b.parseRefusal(line, err) || err == nil && (!grokProjectDuplicateScalars(line) || !b.scalarValue(value, depth)) {
+			return false
+		}
+		body = rest
+	}
+	return true
+}
+
+func (b *grokProjectPrivacyBudget) scalarValue(value any, depth int) bool {
+	b.nodes--
+	if depth > 64 || b.nodes < 0 {
+		return false
+	}
+	switch node := value.(type) {
+	case string:
+		return b.scalarJSON([]byte(node), depth+1)
+	case map[string]any:
+		for key, item := range node {
+			if !b.scalarValue(key, depth+1) || !b.scalarValue(item, depth+1) {
+				return false
+			}
+		}
+	case []any:
+		for _, item := range node {
+			if !b.scalarValue(item, depth+1) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // Runs after the original finish unlocks. Snapshot only while holding p.mu;

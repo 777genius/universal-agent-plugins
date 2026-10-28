@@ -90,7 +90,7 @@ func TestGrokProjectDuplicateOpaqueCaptureNeverRespondsOrQualifies(t *testing.T)
 }
 
 func TestGrokProjectDuplicateStructureAndPrivacyRefuseBeforeRetention(t *testing.T) {
-	for _, kind := range []string{"empty", "oversized", "array", "null", "scalar", "invalid", "duplicate", "trailing", "nonfinite", "depth", "nodes", "key", "utf8", "main-key", "title-key", "escaped-main", "escaped-title", "nested-main", "nested-title"} {
+	for _, kind := range []string{"empty", "oversized", "array", "null", "scalar", "invalid", "duplicate", "trailing", "nonfinite", "depth", "nodes", "key", "utf8", "unicode-high", "unicode-low", "unicode-invalid-pair", "unicode-key", "unicode-nested-string", "unicode-nested-key", "unicode-nested-scalar", "unicode-nested-lines", "main-key", "title-key", "escaped-main", "escaped-title", "nested-main", "nested-title"} {
 		t.Run(kind, func(t *testing.T) {
 			p := grokDuplicateContractProvider(t)
 			raw, expected := []byte(`{"inert":true}`), "json-refused"
@@ -117,6 +117,21 @@ func TestGrokProjectDuplicateStructureAndPrivacyRefuseBeforeRetention(t *testing
 				raw = grokDuplicateContractEncode(t, map[string]bool{strings.Repeat("é", 2049): true})
 			case "utf8":
 				raw = []byte{255}
+			case "unicode-high", "unicode-low", "unicode-invalid-pair", "unicode-key":
+				raw = []byte(map[string]string{"unicode-high": `{"opaque":"\ud800"}`, "unicode-low": `{"opaque":"\udc00"}`,
+					"unicode-invalid-pair": `{"opaque":"\ud800\u0041"}`, "unicode-key": `{"\ud800":"ordinary"}`}[kind])
+			case "unicode-nested-string", "unicode-nested-key", "unicode-nested-scalar", "unicode-nested-lines":
+				inner := `{"opaque":"\ud800"}`
+				if kind == "unicode-nested-scalar" {
+					inner = `"\ud800"`
+				} else if kind == "unicode-nested-lines" {
+					inner = "{}\n" + inner
+				}
+				value := map[string]string{"opaque": inner}
+				if kind == "unicode-nested-key" {
+					value = map[string]string{inner: "ordinary"}
+				}
+				raw = grokDuplicateContractEncode(t, value)
 			default:
 				key := p.key
 				if strings.Contains(kind, "title") {
@@ -140,6 +155,21 @@ func TestGrokProjectDuplicateStructureAndPrivacyRefuseBeforeRetention(t *testing
 				t.Fatal("truthful finite refusal failed artifact admission", err)
 			}
 		})
+	}
+}
+
+func TestGrokProjectDuplicateUnicodeScalarsPreserveRawOrdinaryData(t *testing.T) {
+	for _, raw := range []string{`{"opaque":"\ud83d\ude00"}`, `{"opaque":"\ufffd"}`, `{"opaque":"�"}`, `{"opaque":"é😀"}`,
+		`{"opaque":"\\ud800"}`, `{"opaque":"\/path"}`, `{"opaque":"\"\\ud800"}`, `{"\ud83d\ude00":"ordinary"}`} {
+		p := grokDuplicateContractProvider(t)
+		status, _ := grokProjectContractSend(t, grokProjectContractRequest(t, p, []byte(raw)))
+		files := grokDuplicateContractFiles(t, p)
+		if status != http.StatusBadRequest || p.duplicate.receipt.Status != "captured" || !bytes.Equal(files[grokDuplicateRequestName], []byte(raw)) {
+			t.Fatal("valid Unicode data was normalized, refused or answered")
+		}
+		if err := grokProjectDuplicateMembers(files, "grok"); err != nil {
+			t.Fatal("valid scalar failed artifact admission", err)
+		}
 	}
 }
 
@@ -252,7 +282,7 @@ func TestGrokProjectDuplicateArtifactJoinsRefuseCoherentForgery(t *testing.T) {
 	p := grokDuplicateContractProvider(t)
 	grokProjectContractSend(t, grokProjectContractRequest(t, p, []byte(`{"independent":"ordinary refused data"}`)))
 	original := grokDuplicateContractFiles(t, p)
-	for _, kind := range []string{"client", "missing-receipt", "missing-raw", "missing-title", "missing-first", "unknown-file", "role", "index", "status", "extra", "response", "bytes", "hash", "refused-body", "main-count", "main-failure", "success", "qualification", "private", "nested-private", "invalid-json"} {
+	for _, kind := range []string{"client", "missing-receipt", "missing-raw", "missing-title", "missing-first", "unknown-file", "role", "index", "status", "extra", "response", "bytes", "hash", "refused-body", "main-count", "main-failure", "success", "qualification", "private", "nested-private", "invalid-json", "unicode-high", "unicode-low", "unicode-invalid-pair", "unicode-nested-key"} {
 		t.Run(kind, func(t *testing.T) {
 			files := map[string][]byte{}
 			for name, body := range original {
@@ -311,12 +341,20 @@ func TestGrokProjectDuplicateArtifactJoinsRefuseCoherentForgery(t *testing.T) {
 					result["qualification"].(map[string]any)["mcp-tools-call"] = true
 				}
 				files["runtime-attempt.json"] = grokDuplicateContractEncode(t, result)
-			case "private", "nested-private", "invalid-json":
+			case "private", "nested-private", "invalid-json", "unicode-high", "unicode-low", "unicode-invalid-pair", "unicode-nested-key":
 				raw := []byte(`{"opaque":"uap-grok-private-inert"}`)
 				if kind == "nested-private" {
 					raw = grokDuplicateContractEncode(t, map[string]string{"opaque": `{"\u0075ap-grok-private-inert":"ordinary"}`})
 				} else if kind == "invalid-json" {
 					raw = []byte(`{"unclosed":`)
+				} else if kind == "unicode-high" {
+					raw = []byte(`{"opaque":"\ud800"}`)
+				} else if kind == "unicode-low" {
+					raw = []byte(`{"opaque":"\udc00"}`)
+				} else if kind == "unicode-invalid-pair" {
+					raw = []byte(`{"opaque":"\ud800\u0041"}`)
+				} else if kind == "unicode-nested-key" {
+					raw = grokDuplicateContractEncode(t, map[string]string{`{"opaque":"\ud800"}`: "ordinary"})
 				}
 				files[grokDuplicateRequestName] = raw
 				row["captured_bytes"], row["captured_sha256"] = len(raw), grokProjectDuplicateSHA(raw)

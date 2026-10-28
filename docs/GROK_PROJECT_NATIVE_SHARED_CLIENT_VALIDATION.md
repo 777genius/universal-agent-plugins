@@ -98,3 +98,14 @@ candidate still requires exact-source executed Go/Python/lint gates, original
 capture replay and two independent CODE critics. A fresh genuine hosted capture
 and independent raw audit are required to observe any new refused body; even a
 safe captured body remains failed, unqualified diagnostic evidence.
+
+The first code review found a Unicode-scalar mismatch: Go's existing JSON
+decoder replaces escaped lone UTF16 surrogates, while Python refuses their UTF8
+encoding. The new diagnostic now refuses unpaired high/low escapes and invalid
+pairs, including complete nested JSON values/lines in strings or keys, under
+the existing 4x text, 16384 node and 64 depth privacy envelope. Old decoders and
+privacy scanners remain unchanged. Valid pairs, literal U+FFFD, raw UTF8,
+escaped slash/quotes and ordinary literal backslash-u text remain data. Retained
+raw bytes are never normalized. Coherent refusal and raw-preserving positive
+controls are authored in both languages; exact-source execution and fresh
+independent CODE review remain required.
