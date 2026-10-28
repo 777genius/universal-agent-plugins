@@ -1878,3 +1878,101 @@ This draft author performed pure source/ZIP/hash/JSON reads and wrote scratch re
 Root R1 GO receipt SHA256 `a71549915420aa61f90a7ab05586e1e2280a516fa0b78eb3a0cfb2f48d45fd69` and independent Native R2 GO receipt SHA256 `a29a83c1a3b8fdf2ea5d70bc3e9e009ef88e58e974cc170d89b40ef07e90332d` approve the exact draft above, SHA256 `3bc56715f4b326634f99210fc7bde69a711c2edbe7c2880fece74ec950c4593e`, before implementation. Both independently reconstructed the captured summary messages from pinned primary source and verified all historical baseline anchors.
 
 This pre-code commit retains original published b40 as its code base; parent composition is separate. Only the fixed supported TOML feature suffix before the original configuration freeze, one complete-map expected literal, inert contracts and validation documentation are authorized. Original initial-title/main/duplicate handlers, environment, deadlines, config/pin guards, readers, privacy, workflow and failed-only review barrier remain unchanged. Fresh hosted evidence must establish behavior of the pinned shipping binary. Root alone commits and publishes after exact CODE reviews and measured gates.
+
+
+## Accepted Grok exact project trust and selected skill diagnostic
+
+Pre-code base: `91402cd32f39342aaac9175c9e76bddbd360f2df`, tree
+`c2f198f3ccf2bd8abfc4675c01cb2f153c1ad444`. Root and independent
+other_clients PLAN GO were received before implementation, with the conditions
+below. Publication still requires independent CODE reviews and actual gates.
+
+The genuine run40615904857 observed clean native exit with one strict main and
+one initial-title fixture exchange, while the project remained untrusted and
+the selected skill absent. This amendment only captures the next boundary.
+All five qualifications, runtime completion, vendor authentication and real
+model qualification remain false; the intentional raw-review failure remains.
+Grok project MCP is unsupported. Full installed lifecycle is separate work.
+
+### Exact supported fixture setup
+
+Before any child, append `[plugins] enabled = ["uap-grok-attempt"]` to the
+complete existing original-HOME two-model recipe, before its existing final
+`[features] turn_summary = false` table and sole config write/clone/hash.
+This is a supported name selector, not path-specific activation. The selected
+physical ID depends on the subsequently generated installation UUID. The
+existing manifest, binding, source and delivered-byte checks must still join
+the single selected ordinary project package.
+
+Author original-HOME `.grok/trusted_folders.toml` once, exclusively, mode0600,
+with only `[folders."<exact canonical owned project A>"] trusted = true`.
+Check the ordinary canonical project and original HOME, refuse HOME/root/B,
+overlap and aliases, and freeze the complete trust bytes under the existing
+protected digest before any child. Refuse existing trust/config entries rather
+than replacing or adopting them. No timestamp is needed; the publisher makes
+`decided_at` optional. No `--trust`, trust feature optout, environment override,
+`plugin-dir`, `[plugins].paths`, registry mutation or native tool is added.
+
+### Measured selection and failed-only admission
+
+Preserve the old disabled/untrusted Prepared checker and its negative tests.
+Share its identity checks through an explicit expected-selection boolean; the
+new selected branch requires exact canonical project/plugin identity and both
+trust booleans true. It additionally requires exactly one selected skill with
+the authored name/description, `userInvocable=true`, disabled absent or literal
+false, and exact source `{type: "plugin", plugin_name: <name>, path:
+<receipt-selected installed SKILL.md>}`. Reject folded identity aliases,
+duplicates, foreign paths and a trust-only plugin entry without that skill.
+
+Use the same real `native-inspect` command, cwd, deadline and held source
+authority, with an explicit selected-mode call. Add one finite Grok-only
+`fixture_selection` marker before inspection. Record completed selected
+`native_inspection` only after the exact raw check passes. The existing Python
+reader gains only a strict optional marker branch: join completed observation
+to raw inspection, successful exact inspect command/cwd, binding/profile/target
+and installed skill. Preserve failure-before-inspection capture and old
+unmarked archives, the closed members and every failed/all-false predicate.
+Do not add an artifact slot or infer load from plugin `enabled` alone.
+
+The strict provider is unchanged. Loaded skills may change its next request;
+an unrecognized shape is refused and captured under existing failed-only
+diagnostics. No success shape, extra response, retry or protocol allowance is
+introduced before genuine fresh raw review.
+
+### Bounded code and validation surface
+
+Change only Grok title recipe/whole-map expectation, Grok inspection helpers,
+the shared attempt's Grok-only call, new focused Grok selection contracts,
+the runtime reader and focused reader contracts. Existing turn-summary
+contracts need only the complete raw recipe and protected count2 expectations,
+plus creation of the now-required ordinary project in their inert constructors.
+Putting `[plugins]` before `[features]` preserves their duplicate-key and
+extra-feature negative controls. Preserve provider/title handlers, duplicate,
+privacy, environment, production adapters, workflow, pins and all deadlines.
+
+Run meaningful inert Grok/shared Go and Python runtime contracts, gofmt,
+affected all-enabled and complete six-linter gates. Replay actual old archives
+through complete old/current readers with original source identities. Obtain
+two independent exact CODE reviews before root publication and the next genuine
+disposable hosted run. No vendor, public installer or scanner runs locally.
+
+### Pinned primary source guidance
+
+All publisher paths below are under `xai-org/grok-build` tree
+`2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`, prefix `crates/codegen/`.
+The snapshot is not proven equivalent to shipping1.0.70/f50904eaee6c.
+
+| Path | Git blob | Relevant contract |
+| --- | --- | --- |
+| `xai-grok-permission-rules/src/trust.rs` | `9411e22ab04953bee3d9d68558e6b1bf0d896ab5` | Original-HOME exact folder TOML; optional timestamp; broad-root refusal |
+| `xai-grok-workspace/src/plugins.rs` | `9cd0d8aef4b2336635db5627b3e77431b5378c45` | User config enabled names or IDs |
+| `xai-grok-agent/src/plugins/discovery.rs` | `96b8caae336c6ae7a210141922e1454dacec7817` | Project trust; unlisted plugins disabled |
+| `xai-grok-agent/src/plugins/registry.rs` | `31112af7aac163927f63e6c61f2e21268e5359f8` | Active requires enabled and trusted |
+| `xai-grok-shell/src/inspect/mod.rs` | `bbbe3da44a5c73046ac0b514e3c124283f865afa` | Plugin enabled means trust; separate loaded skill source; camelCase userInvocable; false disabled omitted |
+| `xai-grok-agent/src/prompt/skills.rs` | `d70dcb18f5845ced0d1129d490773703bcf0eac1` | Only active plugin skills get exact source stamp |
+| `xai-grok-tools/src/types/config_source.rs` | `11f16ad8aee5243aa71c1697ac9c0f2a1645463a` | Plugin source serializes plugin_name and path |
+
+The separate native `plugin enable` command is unsuitable for this prepared
+directory: `xai-grok-pager/src/plugin_cmd.rs` blob
+`36b53be9bc0e22eed45bc437573595072289548a`, lines610-622, requires native
+install-registry membership. No such registration is invented.
