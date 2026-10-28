@@ -383,6 +383,86 @@ try {
       const page = await context.newPage();
       const responseChecks = [];
       const seen = new Map();
+      // Cache headers as they arrive, so a small envelope cannot race the
+      // pointer-body callback. No requests are intercepted or synthesized.
+      const signedResponses = new Map();
+      page.on('response', (response) => {
+        if (/\/(discovery|security)\//.test(new URL(response.url()).pathname))
+          signedResponses.set(response.url(), response);
+      });
+      const signedReceived = Promise.all(
+        ['discovery', 'security'].map(async (kind) => {
+          const pointerResponse = await page.waitForResponse(
+            (response) =>
+              new URL(response.url()).pathname.endsWith(`/${kind}/latest.json`) &&
+              response.status() === 200,
+          );
+          const pointer = parse(await pointerResponse.body());
+          const fields =
+            kind === 'discovery' ? ['snapshot', 'envelope', 'search'] : ['snapshot', 'envelope'];
+          const artifacts = await Promise.all(
+            fields.map(async (field) => {
+              const url = new URL(pointer[`${field}_path`], pointerResponse.url()).href;
+              const response =
+                signedResponses.get(url) ||
+                (await page.waitForResponse((response) => response.url() === url));
+              assert.equal(response.status(), 200, url);
+              const body = await response.body();
+              assert.ok(
+                body.length <= pointer.fetch_contract[`${field}_max_bytes`],
+                `Oversized signed feed: ${url}`,
+              );
+              return { url, bytes: body.length, sha256: digest(body) };
+            }),
+          );
+          return {
+            kind,
+            pointer_url: pointerResponse.url(),
+            sequence: pointer.sequence,
+            artifacts,
+          };
+        }),
+      ).then(
+        (feeds) => ({ feeds }),
+        (error) => ({ error }),
+      );
+      await page.addInitScript(() => {
+        window.__UAP_LIVE_DISCLOSURE_EVENTS__ = [];
+        const describe = (element) =>
+          element instanceof Element
+            ? {
+                tag: element.tagName,
+                class: element.className,
+                label: element.getAttribute('aria-label'),
+              }
+            : null;
+        for (const type of ['focusin', 'focusout', 'toggle'])
+          document.addEventListener(
+            type,
+            (event) => {
+              if (
+                !(event.target instanceof Element) ||
+                !event.target.closest('.plugin-card[data-install-source="cloudflare"]')
+              )
+                return;
+              const panel = document.querySelector(
+                '.plugin-card[data-install-source="cloudflare"] .skillspector',
+              );
+              window.__UAP_LIVE_DISCLOSURE_EVENTS__.push({
+                at_ms: performance.now(),
+                type,
+                target: describe(event.target),
+                active: describe(document.activeElement),
+                open: panel?.open,
+                bodies: panel?.querySelectorAll('.skillspector__details').length,
+                records: panel?.querySelectorAll('.skillspector__record').length,
+              });
+              if (window.__UAP_LIVE_DISCLOSURE_EVENTS__.length > 100)
+                window.__UAP_LIVE_DISCLOSURE_EVENTS__.shift();
+            },
+            true,
+          );
+      });
       page.on('pageerror', (error) =>
         evidence.page_errors.push({ locale, width, message: error.message }),
       );
@@ -462,6 +542,15 @@ try {
       await hydrated(page);
       const pluginReceiptError = await pluginReceived;
       if (pluginReceiptError) throw pluginReceiptError;
+      const signedReceipt = await signedReceived;
+      if (signedReceipt.error) throw signedReceipt.error;
+      evidence.signed_feeds ||= [];
+      evidence.signed_feeds.push({ locale, width, feeds: signedReceipt.feeds });
+      // Native actions require the verified final Directory, after actual signed-feed receipt.
+      await expect(page.locator('.catalog')).toHaveAttribute(
+        'data-discovery-state',
+        /current|cached/,
+      );
       const panel = page.locator('.plugin-card[data-install-source="cloudflare"] .skillspector');
       // Keep assertions at Playwright's ordinary 5-second budget.
       await expect(panel).toHaveClass(new RegExp(`skillspector--${assessment.status}(?:\\s|$)`));
@@ -646,6 +735,40 @@ try {
   evidence.success = true;
 } catch (error) {
   evidence.error = error.stack || String(error);
+  evidence.browser_state = [];
+  for (const page of browser?.contexts().flatMap((context) => context.pages()) || []) {
+    try {
+      evidence.browser_state.push(
+        await page.evaluate(() => ({
+          url: location.href,
+          discovery: document.querySelector('.catalog')?.getAttribute('data-discovery-state'),
+          active_element:
+            document.activeElement instanceof Element
+              ? {
+                  tag: document.activeElement.tagName,
+                  class: document.activeElement.className,
+                  label: document.activeElement.getAttribute('aria-label'),
+                }
+              : null,
+          disclosure_events: window.__UAP_LIVE_DISCLOSURE_EVENTS__ || [],
+          reports: Array.from(
+            document.querySelectorAll(
+              '.plugin-card[data-install-source="cloudflare"] .skillspector',
+            ),
+          ).map((panel) => ({
+            status: panel.className,
+            open: panel.open,
+            details: panel.querySelectorAll('.skillspector__details').length,
+            records: Array.from(panel.querySelectorAll('.skillspector__record > summary')).map(
+              (summary) => summary.textContent,
+            ),
+          })),
+        })),
+      );
+    } catch {
+      /* A closed/crashed page is already described by the original failure. */
+    }
+  }
   process.exitCode = 1;
 } finally {
   await browser?.close();
