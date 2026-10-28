@@ -113,7 +113,7 @@ test('all current quickstarts expose Agent Plugins without a legacy product jour
     }
     expectedCommands.push(
       'agentplugins deps export',
-      'agentplugins deps import\nagentplugins install --locked',
+      'agentplugins deps import\nagentplugins install --locked --scope user',
     );
     if (locale !== 'en') {
       expectedCommands.push('agentplugins deps import --install');

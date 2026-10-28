@@ -153,7 +153,15 @@ is offline and reports manifest, owner/receipt, store and projection facts
 independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
-`agentplugins install` is the everyday converge verb over the same machinery:
+`agentplugins install` is the everyday converge verb over the same machinery.
+Without a source argument, it selects project scope when a regular `uap.toml`
+exists in the exact current directory; it never searches parent directories.
+Explicit `--scope` wins. An existing `uap.lock` is strictly validated before
+changes, even with `--locked=false`; only an absent lock permits first-install
+resolution. `--locked` additionally requires that lock to exist. The preview
+shows the selected scope and agreement paths. Use `update` to advance pins.
+
+For the selected environment,
 a first run installs everything declared in `uap.toml`, a repeat run leaves
 matching state alone, and missing or drifted environment-owned projections are
 repaired from their recorded `uap.lock` pin before the machine converges to the
@@ -256,7 +264,7 @@ required target clients, then run:
 
 ```sh
 agentplugins deps import
-agentplugins install --locked
+agentplugins install --locked --scope user
 ```
 
 Or import and restore together:
@@ -310,7 +318,7 @@ selectors could resolve differently.
 
 After import successfully saves the agreement, an installation failure keeps it
 as the new desired state and reports any partial installation. Address the error
-and retry `agentplugins install --locked`; if pending recovery is reported, run
+and retry `agentplugins install --locked --scope user`; if pending recovery is reported, run
 `agentplugins deps recover` first. The installer never falls back to unlocked
 resolution.
 

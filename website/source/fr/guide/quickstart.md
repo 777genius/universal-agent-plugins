@@ -47,7 +47,7 @@ Puis lancez :
 
 ```bash
 agentplugins deps import
-agentplugins install --locked
+agentplugins install --locked --scope user
 ```
 
 Ou combinez l’importation et l’installation :

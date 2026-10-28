@@ -45,7 +45,7 @@ agentplugins deps export
 
 ```bash
 agentplugins deps import
-agentplugins install --locked
+agentplugins install --locked --scope user
 ```
 
 也可合并导入和安装：

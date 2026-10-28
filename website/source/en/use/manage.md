@@ -103,7 +103,7 @@ On the destination, install the target clients, then run:
 
 ```bash
 agentplugins deps import
-agentplugins install --locked
+agentplugins install --locked --scope user
 ```
 
 Or import and restore in one step:
@@ -114,7 +114,9 @@ agentplugins deps import --install
 
 - The optional `[directory]` argument overrides the exchange folder, which
   defaults to the current folder. Export reads the global user environment;
-  import writes it. `AGENTPLUGINS_HOME` selects that environment.
+  import writes it. `AGENTPLUGINS_HOME` selects that environment. Explicit
+  `--scope user` also keeps the following install in that user environment when
+  the exchange folder contains a project-style `uap.toml`.
 - Every copy shows a preview and needs a confirmation or `--yes`. `--dry-run`
   previews without writing.
 - Import validates the pair strictly and offline. It refuses missing or
@@ -126,7 +128,7 @@ agentplugins deps import --install
   package and manifest digests. It never selects newer versions. Missing source
   bytes or mismatched digests fail the install.
 - If installation fails after import saved the agreement, fix the error and run
-  `agentplugins install --locked` again. If recovery is pending, run
+  `agentplugins install --locked --scope user` again. If recovery is pending, run
   `agentplugins deps recover` first.
 - Do not run `agentplugins deps lock` to recreate transferred pins. Moving
   selectors could resolve differently.

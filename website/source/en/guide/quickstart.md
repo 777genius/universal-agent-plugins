@@ -63,7 +63,7 @@ target agents. Then run:
 
 ```bash
 agentplugins deps import
-agentplugins install --locked
+agentplugins install --locked --scope user
 ```
 
 Or combine import and locked installation with `agentplugins deps import --install`.
@@ -77,7 +77,7 @@ Each actual copy needs a default-no terminal confirmation or `--yes`;
 File transfer works offline, but installation still needs the exact sources or
 cached packages and must pass current security checks. If copying is interrupted,
 rerun the original transfer from its intact source. If installation fails after
-import saves the files, address the error and retry `agentplugins install --locked`
+import saves the files, address the error and retry `agentplugins install --locked --scope user`
 (use `agentplugins deps recover` first if pending recovery is reported).
 
 The lockfile restores the recorded package revisions. Agent sign-in and any

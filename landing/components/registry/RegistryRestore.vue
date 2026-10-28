@@ -255,7 +255,8 @@ const { restoreGuideUrl } = useDocsLinks();
       overflow: visible;
       overflow-wrap: normal;
       font-family: 'JetBrains Mono', monospace;
-      font-size: clamp(12px, 3.2cqw, 24px);
+      font-size: clamp(12px, 3.3cqw, 24px);
+      letter-spacing: -0.045em;
       line-height: 1.65;
     }
 
