@@ -64,6 +64,13 @@ func Decode(body []byte) (*ObservationInput, error) {
 	if _, err := check.Token(); err != io.EOF {
 		return invalid()
 	}
+	fields, err := canonicalMembers(body, "schema_version event observer_id observation_id session_id cwd mode pi_pid loaded_revision", "settled prompt")
+	if err != nil {
+		return invalid()
+	}
+	if _, err := canonicalMembers(fields["loaded_revision"], "projection_digest canonical_digest bootstrap_version binding_id runtime_root primary_sha256", ""); err != nil {
+		return invalid()
+	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	var value ObservationInput
@@ -84,15 +91,14 @@ func Decode(body []byte) (*ObservationInput, error) {
 	}
 	switch value.Event {
 	case "agent_settled":
-		if value.Settled == nil || value.Prompt != nil {
+		if _, present := fields["prompt"]; present || value.Settled == nil {
 			return invalid()
 		}
-		// Read only the union member; other top-level values are not all objects.
-		var fields map[string]json.RawMessage
-		_ = json.Unmarshal(body, &fields)
-		var settled map[string]json.RawMessage
-		_ = json.Unmarshal(fields["settled"], &settled)
-		if raw, exists := settled["aborted"]; !exists || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		settled, err := canonicalMembers(fields["settled"], "aborted", "boundary_outcome")
+		if err != nil {
+			return invalid()
+		}
+		if _, present := settled["boundary_outcome"]; present && value.Settled.BoundaryOutcome == "" {
 			return invalid()
 		}
 		switch value.Settled.BoundaryOutcome {
@@ -101,7 +107,10 @@ func Decode(body []byte) (*ObservationInput, error) {
 			return invalid()
 		}
 	case "ui_prompt_start":
-		if value.Prompt == nil || value.Settled != nil {
+		if _, present := fields["settled"]; present || value.Prompt == nil {
+			return invalid()
+		}
+		if _, err := canonicalMembers(fields["prompt"], "kind", ""); err != nil {
 			return invalid()
 		}
 		switch value.Prompt.Kind {
@@ -113,6 +122,30 @@ func Decode(body []byte) (*ObservationInput, error) {
 		return invalid()
 	}
 	return &value, nil
+}
+
+// encoding/json folds field-name case and accepts null for some Go scalars.
+// Check canonical names and presence before typed decoding can collapse them.
+func canonicalMembers(body []byte, required, optional string) (map[string]json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil || fields == nil {
+		return nil, fmt.Errorf("expected object")
+	}
+	allowed := map[string]bool{}
+	for _, name := range strings.Fields(required + " " + optional) {
+		allowed[name] = true
+	}
+	for name, raw := range fields {
+		if !allowed[name] || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return nil, fmt.Errorf("noncanonical member")
+		}
+	}
+	for _, name := range strings.Fields(required) {
+		if _, exists := fields[name]; !exists {
+			return nil, fmt.Errorf("required member missing")
+		}
+	}
+	return fields, nil
 }
 
 func bounded(value string, limit int) bool {

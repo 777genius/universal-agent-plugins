@@ -67,3 +67,27 @@ also exposed Codex environment-validation failures in existing sibling tests.
 These are not marked passed; rerun the required suites under the normal CI
 environment and classify any remaining failures before merge. Do not change
 unrelated Claude/Codex or frozen VS Code behavior to hide an environment issue.
+
+## Independent review corrections
+
+The public OS detector now captures `PI_CODING_AGENT_DIR`; regression tests cover
+absolute, relative, tilde and physically canonicalized profile selection. A real
+Stage→Discard test proves cleanup uses the same outside-discovery staging anchor.
+The shared fixture selects native-directory input by declared policy without
+adding client-identity branches or increasing the architecture budget.
+
+The SDK validates canonical object member names and required/optional presence
+before Go's case-folding typed decoder. Tests reject aliased duplicates, null
+outcomes and forbidden union members even when null. Three-OS detection goldens
+add Pi alone; structural comparison preserves every prior client row.
+
+Full architecture, detector, Pi, registry/contract, SDK and historical authoring
+documentation suites pass. The CLI target contract passes. The historical docs
+fixture admits only the exact new Pi target-help suffix and restores that one
+historical fact; its original reviewed fingerprint is unchanged.
+
+The dependency-refusal test passes its updated thirteen-target assertion before
+its later contained Git fixture is refused locally with
+`ErrOrdinaryContainmentUnsupported`, before child launch. The same diagnostic
+occurs outside the sandbox; product containment requirements were not relaxed.
+That remaining test must complete in the normal containment-enabled CI lane.

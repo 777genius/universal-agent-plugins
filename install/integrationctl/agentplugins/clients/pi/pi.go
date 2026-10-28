@@ -112,7 +112,13 @@ func (*Adapter) TargetRoot(client domain.DetectedClient, _ domain.PackageMode, _
 	}
 	return client.ConfigRoot, filepath.Join(client.ConfigRoot, "extensions"), nil
 }
-func (*Adapter) StagingBase(plan domain.DeliveryPlan) string         { return plan.TargetAnchor }
+func (*Adapter) StagingBase(plan domain.DeliveryPlan) string {
+	if plan.TargetAnchor != "" {
+		return plan.TargetAnchor
+	}
+	// Discard reconstructs only TargetRoot, whose parent is the same anchor.
+	return filepath.Dir(plan.TargetRoot)
+}
 func (*Adapter) ValidateTargetLayout(plan domain.DeliveryPlan) error { return validatePlan(plan) }
 
 func validatePlan(plan domain.DeliveryPlan) error {

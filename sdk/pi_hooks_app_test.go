@@ -40,13 +40,18 @@ func TestPiObservationDispatchIsNeutralAndCancellable(t *testing.T) {
 func TestPiObservationRejectsMalformedOrPrivateFrames(t *testing.T) {
 	body := string(piTestFrame(t))
 	for name, invalid := range map[string]string{
-		"duplicate":       strings.Replace(body, `"schema_version":1`, `"schema_version":1,"schema_version":1`, 1),
-		"trailing":        body + `{}`,
-		"private prompt":  strings.Replace(body, `"event":"agent_settled"`, `"event":"agent_settled","prompt_text":"private"`, 1),
-		"missing aborted": strings.Replace(body, `"aborted":false,`, "", 1),
-		"unknown outcome": strings.Replace(body, `"completed"`, `"unknown"`, 1),
-		"cross event":     strings.Replace(body, `"agent_settled"`, `"ui_prompt_start"`, 1),
-		"oversize":        strings.Repeat(" ", 65537),
+		"duplicate":             strings.Replace(body, `"schema_version":1`, `"schema_version":1,"schema_version":1`, 1),
+		"trailing":              body + `{}`,
+		"private prompt":        strings.Replace(body, `"event":"agent_settled"`, `"event":"agent_settled","prompt_text":"private"`, 1),
+		"missing aborted":       strings.Replace(body, `"aborted":false,`, "", 1),
+		"case alias":            strings.Replace(body, `"aborted":false`, `"aborted":true,"ABORTED":false`, 1),
+		"root case alias":       strings.Replace(body, `"schema_version":1`, `"SCHEMA_VERSION":1`, 1),
+		"revision case alias":   strings.Replace(body, `"binding_id":`, `"BINDING_ID":`, 1),
+		"forbidden null member": strings.TrimSuffix(body, "}") + `,"prompt":null}`,
+		"outcome null":          strings.Replace(body, `"boundary_outcome":"completed"`, `"boundary_outcome":null`, 1),
+		"unknown outcome":       strings.Replace(body, `"completed"`, `"unknown"`, 1),
+		"cross event":           strings.Replace(body, `"agent_settled"`, `"ui_prompt_start"`, 1),
+		"oversize":              strings.Repeat(" ", 65537),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := pi.DecodeObservation([]byte(invalid)); err == nil {

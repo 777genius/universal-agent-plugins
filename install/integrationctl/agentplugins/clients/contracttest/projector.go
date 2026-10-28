@@ -44,8 +44,8 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		return []string{fmt.Sprintf("write outside marker: %v", err)}
 	}
 	input := projectorInput(adapter, root, staging)
-	if adapter.ID() == domain.ClientPi {
-		input = piProjectorInput(t, input, root)
+	if domain.ClientTraitsFor(adapter.ID()).VerifiesNativeDirectory {
+		input = directoryProjectorInput(t, input, root)
 	}
 	before := listPaths(root)
 	first, err := projector.Project(context.Background(), input)
@@ -60,8 +60,8 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		return append(violations, fmt.Sprintf("seed reset staging tree: %v", err))
 	}
 	input.StagingPath = reset
-	if adapter.ID() == domain.ClientPi {
-		seedPiEntrypoint(t, reset)
+	if domain.ClientTraitsFor(adapter.ID()).VerifiesNativeDirectory {
+		seedNativeEntrypoint(t, reset)
 	}
 	second, err := projector.Project(context.Background(), input)
 	if err != nil {
@@ -73,7 +73,7 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 	return violations
 }
 
-func piProjectorInput(t *testing.T, input clients.ProjectionInput, root string) clients.ProjectionInput {
+func directoryProjectorInput(t *testing.T, input clients.ProjectionInput, root string) clients.ProjectionInput {
 	t.Helper()
 	profile := filepath.Join(root, "config")
 	input.Plan.TargetAnchor, input.Plan.NativeRegistryRoot = profile, profile
@@ -82,11 +82,11 @@ func piProjectorInput(t *testing.T, input clients.ProjectionInput, root string) 
 	input.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentExtension, Name: "com.universal-agent-plugins.pi", Support: domain.SupportNative}}
 	input.Envelope.Manifest.Extensions = map[string]json.RawMessage{"com.universal-agent-plugins.pi": json.RawMessage(`{"version":1,"source":"native"}`)}
 	input.Envelope.TreeDigest = "sha256:" + strings.Repeat("a", 64)
-	seedPiEntrypoint(t, input.StagingPath)
+	seedNativeEntrypoint(t, input.StagingPath)
 	return input
 }
 
-func seedPiEntrypoint(t *testing.T, staging string) {
+func seedNativeEntrypoint(t *testing.T, staging string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(staging, "native"), 0700); err != nil {
 		t.Fatal(err)
