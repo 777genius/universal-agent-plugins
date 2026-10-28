@@ -825,11 +825,13 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 			f.evidence["qoder_original_log_link"] = map[string]any{"no_follow": true, "contained_ordinary_target": true, "record": record}
 		}
 		f.evidence["attempt_stage"] = "native-installed-catalog"
-		result := f.command(t, "native-catalog", f.base.Project, []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}, 30*time.Second)
+		catalogArgv := []string{f.client, "plugins", "list", "--json", "--plugin-dir", f.view}
+		result := f.command(t, "native-catalog", f.base.Project, catalogArgv, 30*time.Second)
 		after, err := projectNativeCLIQoderProfile(profile)
 		if err != nil || !reflect.DeepEqual(after, before) {
 			if err == nil {
 				f.evidence["qoder_original_profile_change"] = qoderOriginalProfileDelta(before, after)
+				f.evidence["qoder_log_run_observation"] = qoderObserveLogRun(f.ctx, profile, f.base.Project, catalogArgv, before, after)
 			}
 			t.Fatal("Qoder catalog changed the complete original user profile/cache")
 		}

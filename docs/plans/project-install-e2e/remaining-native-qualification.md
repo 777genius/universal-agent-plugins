@@ -1488,3 +1488,52 @@ all five flags false. The native reader SHA256 remains
 No native client, vendor executable, public installer executable or scanner ran
 locally. Fresh genuine hosted output is still required; this change grants no
 log allowance, lifecycle qualification, authentication or model claim.
+
+## Qoder exact run-log projection before any ownership allowance (2026-10-28)
+
+Start at 1050bbbe163abf4c60f1ea13565b72bc864c6e75/tree 5e64b064acc40f52cf362ad43b59589dc829746a.
+Run 40594441986/native 12777840418 measures exactly 3 added log entries and 1 changed latest;
+all 4 details are retained, but added names and the new target/manifest remain unobserved.
+Official npm 1.1.78 archive SHA256 c5b237d2fd84ceb44af5427f281a7f1bcadd8c888fbed49197b5ce2f37dada4f;
+bundle/qodercli.js SHA256 ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38.
+Its bytes36498/39612/40361 define timestamp-random-PID runID, logs/runs/<runID>,
+qodercli.log, manifest.json and latest replacement. This is publisher source guidance,
+not proof of standalone equivalence. No supported off/init-suppression route was found.
+
+Add only a failed-capture projection at the existing unequal-profile diagnostic before
+its unchanged unconditional fatal. Reuse the held no-follow latest/target mechanics;
+require its record to match the already-held after inventory and a source-format
+relative target runs/<runID>. Never export an arbitrary target, path or unknown name.
+Inspect only the exact manifest.json below that held ordinary owned run directory,
+at most 4096 bytes, single-link 0644, stable held/linked identity and exact inventory
+byte-count/hash. Do not read log bodies or enumerate additional profile content.
+Strictly parse the bounded source-defined manifest object; unknown/malformed shape
+returns a fixed refusal status, never raw text. Validate nested argv/env/log-file
+types privately. Emit only checked runID/relative target, manifest size/hash, numeric
+manifest pid/ppid, safe start/version/platform/arch/role, and finite equality/closure
+booleans against held A/selected argv/profile and the original before/after maps.
+No raw argv/env/project_id/full manifest/log body or path outside owned fixtures.
+Keep the complete serialized projection <=2048 bytes; refusal output is status-only.
+Label PID provenance manifest-only: no admitted native/supervisor PID is claimed.
+No runner/API, argv/env, config/auth/trust, acquisition/pin, deadline or cleanup change.
+
+Implement repotests/agentplugins_qoder_log_run_observation_test.go and _contract_test.go,
+one hook in agentplugins_project_native_cli_attempt_test.go, and optional Qoder-only
+complete-shape admission in scripts/project_native_runtime.py with matching contracts
+in scripts/test_project_native_runtime.py. Preserve unmarked archives and other clients.
+All qualification/runtime/auth/model flags stay false; no mutation allowance, adopted
+baseline, new member/command, release or VS Code work. Inert checks cover exact source
+layout/manifest joins, private canaries, unknown/duplicate/malformed/oversized data,
+aliases/hardlinks/foreign authority, unstable/mismatched held identities and unchanged
+maps/files/fatal guard. Two independent plan GOs precede code; exact code review,
+focused Go/Python and affected/full lint gates precede root-only publication and a
+fresh genuine hosted failed capture. Any ownership policy needs separate actual review.
+
+Implemented after root and independent Grok PLAN reviews; independent Grok and
+root CODE reviews found no remaining issue. Focused Qoder/shared inert Go passed
+in 0.379s; all 30 Python contracts passed, including the final valid-Grok baseline
+control. Affected all-enabled lint and unfiltered six-linter gates report zero
+issues. The original 1050 archive's 16 members and complete failed/all-false
+result replay unchanged. Timestamp and unsafe-leaf refusal controls were corrected
+without weakening admission. No vendor ran locally; fresh hosted observation is
+required before any supported log-ownership allowance or lifecycle claim.
