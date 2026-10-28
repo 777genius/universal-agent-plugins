@@ -21,7 +21,7 @@ const props = withDefaults(
     expanded?: boolean;
     applicable?: boolean;
   }>(),
-  { applicable: true },
+  { applicable: true, subject: undefined },
 );
 const { t, n, locale } = useI18n({ useScope: 'local' });
 const { report, status: loadedStatus } = useSkillSpector(() =>
