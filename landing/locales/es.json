@@ -357,13 +357,15 @@
       "graphDescription": "marketing-kit depende de Playwright, HubSpot y Notion. Web Design Kit depende del mismo paquete Playwright, Figma y Context7. Todos los paquetes están instalados; Context7 ya estaba instalado."
     },
     "restore": {
-      "title": "Las mismas versiones de plugins en tu próximo equipo",
+      "title": "Las mismas versiones. Para todo el equipo.",
       "guide": "Guía",
-      "from": "En este equipo",
-      "to": "En tu próximo equipo",
-      "transfer": "Copia {manifest} y {lockfile} al otro equipo entre estos comandos.",
+      "from": "En tu proyecto",
+      "to": "Tu compañero",
+      "transfer": "Guarda {manifest} y {lockfile} en Git con tu proyecto para que el equipo restaure las mismas versiones.",
       "requirements": "La restauración requiere que las fuentes registradas sigan disponibles y que los clientes sean compatibles con la gestión de dependencias.",
-      "excludes": "No se transfieren sesiones, secretos, ajustes ni datos de plugins."
+      "excludes": "No se transfieren sesiones, secretos, ajustes ni datos de plugins.",
+      "subtitle": "Instala en el proyecto. Guarda el archivo de bloqueo en Git. Tu equipo restaurará las mismas versiones.",
+      "commit": "Guarda uap.toml + uap.lock en Git"
     },
     "docs": {
       "englishLabel": "{label} (documentación en inglés)"

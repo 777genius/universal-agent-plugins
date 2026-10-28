@@ -35,16 +35,30 @@ the final feature-source native run; each client's activation limits still apply
 
 ## Select the environment on every command
 
-The default scope remains `user`. An existing `uap.toml` in your current folder
-does not silently change that default. With `--scope project`, omitting
-`--project-root` selects the invocation directory; UAP does not search parent
-folders for a Git repository or another manifest. `--project-root` requires
-`--scope project` and an existing directory.
+Argumentless `agentplugins install` selects project scope when the exact current
+directory contains a regular `uap.toml` file. It never searches parent folders.
+A directory or symlink named `uap.toml` is refused during automatic selection;
+select the scope explicitly to resolve the ambiguity. Without that local
+manifest, install selects the user environment. Explicit `--scope user` or
+`--scope project` always wins. Other commands, including install with a source
+argument, continue to default to user scope.
+
+With `--scope project`, omitting `--project-root` selects the invocation
+directory. `--project-root` requires `--scope project` and an existing directory.
+The install preview shows the selected scope, project root where applicable,
+and manifest and lock paths.
+
+An existing `uap.lock` makes argumentless install strictly validate the manifest
+and locked pins before installation or repair. A mismatch fails without changing
+the environment; use the explicit `update` path to advance pins, or `deps lock`
+after deliberately editing dependency declarations. Only a missing lock permits
+first-install resolution and lock creation. `--locked` additionally requires an
+existing valid lock; `--locked=false` does not relax an existing lock's validation.
 
 ```sh
 cd /path/to/project
 agentplugins deps status --scope project
-agentplugins install --locked --scope project
+agentplugins install
 agentplugins update review --target cursor --scope project
 agentplugins list --scope project
 agentplugins remove review --target cursor --scope project
@@ -139,8 +153,13 @@ Copy the project's `uap.toml` and `uap.lock` into the new existing project
 directory, install the required clients, and run:
 
 ```sh
-agentplugins install --locked --scope project --project-root /path/to/new-project
+cd /path/to/new-project
+agentplugins install
 ```
+
+Use `agentplugins install --scope project --project-root /path/to/new-project`
+when invoking from another directory. Add `--locked` to require the lock's
+presence as well as its strict validation.
 
 The explicit transfer commands support project scope too:
 

@@ -91,6 +91,7 @@ type App struct {
 }
 
 type options struct {
+	installSelection     *installSelection
 	dependencyComponents map[string][]domain.ComponentDecision
 	environmentOutput    map[string]any
 	noSave               bool

@@ -98,7 +98,7 @@ async function copyCommand() {
         {{ copied ? t('registryUi.command.copied') : t('registryUi.command.copy') }}
       </button>
     </div>
-    <pre><code>{{ visibleCommand }}</code></pre>
+    <pre><code><slot>{{ visibleCommand }}</slot></code></pre>
     <span class="sr-only" role="status" aria-live="polite">{{
       copied ? t('registryUi.command.announcement') : ''
     }}</span>

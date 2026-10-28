@@ -16,7 +16,11 @@ translationRequired: true
 
 ## 在当前源码中维护项目
 
-**仅适用于源码构建，尚未发布。** 每条维护命令都应选择相同的范围和项目：
+**仅适用于源码构建，尚未发布。** 不带来源参数的 `agentplugins install` 会在当前目录
+直接包含普通文件 `uap.toml` 时选择项目范围，不会搜索父目录。显式 `--scope` 优先。
+已有 `uap.lock` 会在更改前接受严格验证；只有缺少该文件时才允许首次解析依赖。
+`--locked` 要求锁文件存在。使用 `update` 更新固定版本。预览会显示所选范围及协议文件路径。
+其他维护命令仍需显式选择项目：
 
 [维护命令见英文部分](/en/use/manage#maintain-a-project-in-the-current-source)。
 

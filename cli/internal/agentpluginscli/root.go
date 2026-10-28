@@ -22,7 +22,7 @@ func NewRoot(app App) *cobra.Command {
 	root.SetErr(app.errorOutput())
 	flags := root.PersistentFlags()
 	flags.StringVar(&opts.target, "target", "", "target client(s), comma-separated: "+supportedTargetHelp())
-	flags.StringVar(&opts.scope, "scope", "user", "installation scope: user or project")
+	flags.StringVar(&opts.scope, "scope", "user", "installation scope: user or project (bare install detects current-directory uap.toml)")
 	flags.StringVar(&opts.projectRoot, "project-root", "", "existing project directory (project scope only; default: current directory)")
 	flags.BoolVar(&opts.dryRun, "dry-run", false, "show the exact plan without changes")
 	flags.StringVar(&opts.format, "format", "human", "output format: human or json")

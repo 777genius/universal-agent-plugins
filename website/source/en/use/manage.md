@@ -144,8 +144,13 @@ installers can compare evidence through the [handoff boundary](/en/build/handoff
 
 ## Maintain a project in the current source
 
-**Source only / unreleased.** Select the same scope and project on every
-maintenance command:
+**Source only / unreleased.** Argumentless `agentplugins install` selects project
+scope when a regular `uap.toml` is present in the exact current directory; it
+never searches parents. Explicit `--scope` wins. An existing `uap.lock` is
+validated strictly before changes; only a missing lock allows first-install
+resolution. `--locked` requires that lock to exist. Use `update` to advance pins.
+The install preview shows the selected scope and agreement paths. Other
+maintenance commands require explicit project selection:
 
 ```sh
 agentplugins list --scope project --project-root /path/to/project
