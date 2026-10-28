@@ -216,3 +216,64 @@ This publication changes only this record after the tested code commit. The
 fresh genuine hosted native run and two independent raw audits are pending.
 No historical failed archive is promoted, no native authentication/real-model
 qualification is claimed, and no release is authorized by this record.
+
+## Qualified leaf and preserved Kimi-parent composition
+
+The exact Gemini leaf `0d31b77c190b72c04a606dbc3f3ea28256a1d0c3`, tree
+`3e914e0fdddd60676cda3e0f1d08b1868dab1ea6`, passed all jobs in genuine
+current-source run40612308701, including inherited Cline. Two independent
+whole original RAW audits verified57 native and25 frontend members,
+24 frontend and168 embedded stream joins, source/build/pins,16 public commands,
+14 catalog observations,18 proofs,10 fresh native sessions,30 fresh probe
+PID/session groups,30 initialize/list pairs and6 owned calls. The full cycle
+completed in91.910s with ordinary provider and held-authority closure.
+All five Gemini qualification flags are true; vendor authentication and
+real-model qualification remain false. Root RAW receipt SHA256:
+`ef054ab5b35324d2a777a91c6948395f2f1da833a58051a1a7af3336714d24fd`.
+Independent RAW receipt SHA256:
+`9fb8e1c178facff2ceff32d50fdd96b85ca55bb1d113fe0caebd5f1e8dcccee5`.
+
+Normal merge `752016c98aaa3d338875d663283b925636b02ca1`, tree
+`71955bf998cf4cada2d84ff812ebabf239e08208`, composes that leaf with qualified
+parent `888ef9f5d0f19ef305374bf87b1dd4133e21d578`. All161 nonshared owner
+blobs/modes and5907 complete tree entries match the independently constructed
+proposal. Runtime merge preserves all39 function/class bodies and the complete
+owner ASTs. The two documentation conflicts retain each complete owner block;
+the two earlier Gemini API-key corrections also remain intact. Root and
+independent Native exact composition CODE GOs have receipt SHA256 values
+`9e25bb8ab56c070faeba21fca38cdab07bc74173d3ca938e5d31ac92f8eba53c` and
+`14c2d077378394194ab86dd0e868c44c442e9d86f71e9a37ef44b6bd426058e8`.
+
+New combined-source root contracts passed98 top-level tests/508 case events,
+with only the unchanged local containment-capability skip. The joint seven
+Python suites passed146 tests in37.366s. Root and CLI affected all-enabled
+and whole unfiltered six-linter checks all exited0 with zero issues.
+The local CLI command remains recorded as exit1: three saved-Git cases meet
+the unchanged ordinary_unsupported process boundary, with21 top-level and77
+case passes. This failure was not relabeled or bypassed. Actual unfiltered
+remote CLI core coverage from run40605865956/job122545088401 transfers through
+identical complete CLI/dependency/workspace/Makefile/workflow bytes. Its actual
+PR merge checkout4528916 has the exact eb69 source tree; required CLI packages
+passed123.440s/127.727s. The nonverbose log supplies package results, not
+invented individual event counts. SDK evidence transfers only its original
+recorded intact-repair and lint scopes through complete module/input identity.
+
+Eight historical/successful archives were replayed in sixteen complete
+original/current reader processes. Full results and every raw byte remain
+identical; no source identity is retargeted. Gemini and Cline0d31 each retain
+five true flags. Kimi eb69 component retains lifecycle/restart/initialize/list
+with call false; its single-call lane retains the three MCP flags with
+lifecycle/restart false. Their union covers the five cases, while neither
+individual Kimi archive is described as five-flag complete. All authentication
+and real-model flags remain false.
+
+Combined gate/transfer receipt SHA256:
+`523345f777b0ec4326b49f45625fd720bf52b61bfab6b850f7d5d6d6b2ab88cc`.
+Whole-reader preservation receipt SHA256:
+`168c14f9396777f2ccd01d12f657d03bd7941da89841a03b29d03003935c3031`.
+Verified module gate transfer receipt SHA256:
+`b95c60d8d3652ed9e37c5aa804efe418981fe7d8b3f9641153f9b5dfd29254cd`.
+This publication appends only this validation record after the reviewed merge.
+Fresh combined-source CI/native evidence and applicable merge gates remain
+required. No leaf archive is relabeled as combined-source evidence, and no
+release or VS Code expansion follows from this composition.
