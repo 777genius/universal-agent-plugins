@@ -37,7 +37,7 @@ func (runner *fixtureListingRunner) RunWithTreeExitGrace(ctx context.Context, co
 
 func (runner *fixtureListingRunner) run(ctx context.Context, command legacyports.Command, grace time.Duration) (legacyports.CommandResult, error) {
 	runner.calls++
-	if !reflect.DeepEqual(command.Argv, []string{runner.executable, "plugins", "list", "--json"}) {
+	if len(command.Argv) != 6 || command.Argv[0] != runner.executable || command.Argv[1] != "--config-dir" || !reflect.DeepEqual(command.Argv[3:], []string{"plugins", "list", "--json"}) {
 		return legacyports.CommandResult{}, fmt.Errorf("fixture refuses non-listing command: %v", command.Argv)
 	}
 	command.Argv = []string{runner.executable, "-test.run=^TestQoderListingProcessFixture$", "--", runner.mode, filepath.Join(runner.root, "completed")}
@@ -60,7 +60,11 @@ func newFixtureListingRunner(t *testing.T, mode string) *fixtureListingRunner {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &fixtureListingRunner{executable: executable, root: t.TempDir(), mode: mode}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &fixtureListingRunner{executable: executable, root: root, mode: mode}
 }
 
 func TestQoderListingProcessFixture(t *testing.T) {
@@ -95,7 +99,7 @@ func TestQoderListingProcessFixture(t *testing.T) {
 		if _, err := fmt.Fprint(os.Stdout, "[]"); err != nil {
 			os.Exit(82)
 		}
-		time.Sleep(17 * time.Second)
+		time.Sleep(qoderListTimeout + 2*time.Second)
 	case "valid":
 		if _, err := fmt.Fprint(os.Stdout, `[{"id":"demo@local","version":"2.0.0"}]`); err != nil {
 			os.Exit(82)
@@ -111,7 +115,7 @@ func TestQoderListingProcessFixture(t *testing.T) {
 
 func TestQoderListingOSRunnerPreservesRecognizedOutput(t *testing.T) {
 	runner := newFixtureListingRunner(t, "valid")
-	entries, err := listPlugins(context.Background(), clients.Env{Runner: runner}, runner.executable)
+	entries, err := listPlugins(context.Background(), clients.Env{Runner: runner}, runner.root, runner.executable)
 	if err != nil || len(entries) != 1 || entries[0].ID != "demo@local" || entries[0].Version != "2.0.0" {
 		t.Fatalf("native fixture listing = %+v, %v", entries, err)
 	}
@@ -165,7 +169,7 @@ func TestQoderListingLocalDeadlineStopsOSProcess(t *testing.T) {
 	runner := newFixtureListingRunner(t, "stall")
 	// This background context models the unbounded lifecycle session. The
 	// adapter must supply its own deadline rather than waiting for session exit.
-	entries, err := listPlugins(context.Background(), clients.Env{Runner: runner}, runner.executable)
+	entries, err := listPlugins(context.Background(), clients.Env{Runner: runner}, runner.root, runner.executable)
 	if !errors.Is(err, context.DeadlineExceeded) || entries != nil {
 		body, _ := json.Marshal(entries)
 		t.Fatalf("stalled listing = %s, %v; want deadline failure", body, err)
