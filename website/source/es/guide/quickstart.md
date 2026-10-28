@@ -46,7 +46,7 @@ Después ejecuta:
 
 ```bash
 npx -y universal-agent-plugins@latest deps import
-npx -y universal-agent-plugins@latest install --locked
+npx -y universal-agent-plugins@latest install --locked --scope user
 ```
 
 O combina la importación y la instalación:
