@@ -99,7 +99,7 @@ func TestQoderListingProcessFixture(t *testing.T) {
 		if _, err := fmt.Fprint(os.Stdout, "[]"); err != nil {
 			os.Exit(82)
 		}
-		time.Sleep(17 * time.Second)
+		time.Sleep(qoderListTimeout + 2*time.Second)
 	case "valid":
 		if _, err := fmt.Fprint(os.Stdout, `[{"id":"demo@local","version":"2.0.0"}]`); err != nil {
 			os.Exit(82)
