@@ -15,7 +15,9 @@ Where required, `CI_LINUX_ARM_RUNNER` selects
 `nscloud-ubuntu-22.04-amd64-4x8`. Do not route an ARM matrix leg to x86-64.
 Native research using the explicit `RUNNER_ENVIRONMENT=github-hosted` admission
 contract stays on GitHub-hosted runners; the migration does not spoof or weaken
-that physical-host guarantee. Dedicated private-network runners and deployment
+that physical-host guarantee. Public qualification cells also retain the exact
+runner IDs admitted by their provisioning manifest, including ARM64; generic
+CI routing must not override those identities. Dedicated private-network runners and deployment
 procedures are outside this
 migration. OIDC/attestation signing jobs retain their original GitHub-hosted
 runners. Existing release workflows that already use `CI_LINUX_RUNNER`
