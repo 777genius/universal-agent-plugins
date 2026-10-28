@@ -56,12 +56,21 @@ func TestInstallScopeSelection(t *testing.T) {
 			if tc.projectRoot != "" && opts.projectRoot != tc.projectRoot {
 				t.Fatal("explicit project root replaced")
 			}
-			expectedRoot, err := filepath.EvalSymlinks(tc.cwd)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if tc.explicit == "" && tc.want == "project" && opts.projectRoot != expectedRoot {
-				t.Fatalf("inferred root %s", opts.projectRoot)
+			if tc.explicit == "" && tc.want == "project" {
+				inferred, err := os.Stat(opts.projectRoot)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expected, err := os.Stat(tc.cwd)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Windows may return the 8.3 cwd spelling while EvalSymlinks
+				// expands it. Selection requires the same absolute directory;
+				// app.forOptions canonicalizes the spelling before composition.
+				if !filepath.IsAbs(opts.projectRoot) || !os.SameFile(inferred, expected) {
+					t.Fatalf("inferred root %s does not identify %s", opts.projectRoot, tc.cwd)
+				}
 			}
 		})
 	}
