@@ -164,7 +164,7 @@ func (c *geminiCompleteCapture) replayProvider(stage string, receipt map[string]
 			if err != nil {
 				return nil, err
 			}
-			if !geminiCompleteText(q.facts.Session, 256, true) {
+			if !geminiCompleteText(q.facts.Session, 256) {
 				return nil, geminiCompleteRefusal()
 			}
 		}
@@ -267,7 +267,7 @@ func (c *geminiCompleteCapture) protocol() error {
 			return err
 		}
 		for _, group := range groups {
-			if !geminiCompleteText(group.session, 256, true) {
+			if !geminiCompleteText(group.session, 256) {
 				return geminiCompleteRefusal()
 			}
 			pid, _ := group.pid.Int64()
@@ -288,7 +288,7 @@ func (c *geminiCompleteCapture) nativeStream(command map[string]any, event gemin
 		return geminiCompleteRefusal()
 	}
 	session, err := geminiCycleStream(raw, q, c.Paths["home"], start, end)
-	if err != nil || !geminiCompleteText(session, 256, true) || sessions[session] || event.Value["session"] != session || geminiCompleteStats(raw, q.operation != "none") != nil {
+	if err != nil || !geminiCompleteText(session, 256) || sessions[session] || event.Value["session"] != session || geminiCompleteStats(raw, q.operation != "none") != nil {
 		return geminiCompleteRefusal()
 	}
 	sessions[session] = true

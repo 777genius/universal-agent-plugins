@@ -19,14 +19,14 @@ type geminiCompleteCapture struct {
 }
 
 func geminiCompleteLayout(value any) (map[string]string, error) {
-	row, err := geminiCompleteObject(value, "root home a b outside installer client node git", "")
+	row, err := geminiCompleteObject(value, "root home a b outside installer client node git")
 	paths, seen := map[string]string{}, map[string]bool{}
 	if err != nil {
 		return nil, err
 	}
 	for key, value := range row {
 		path, ok := value.(string)
-		if !ok || !geminiCompleteText(path, 4096, true) || !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.HasPrefix(path, "//") || strings.Contains(path, "\\") || seen[path] {
+		if !ok || !geminiCompleteText(path, 4096) || !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.HasPrefix(path, "//") || strings.Contains(path, "\\") || seen[path] {
 			return nil, geminiCompleteRefusal()
 		}
 		paths[key], seen[path] = path, true
@@ -40,7 +40,7 @@ func geminiCompleteLayout(value any) (map[string]string, error) {
 }
 
 func geminiCompleteClosure(result map[string]any) (time.Time, time.Time, error) {
-	value, err := geminiCompleteObject(result["cycle_completion"], "schema_version started_at work_deadline_at finished_at work_context_error original_checks_error open_authorities open_events provider", "")
+	value, err := geminiCompleteObject(result["cycle_completion"], "schema_version started_at work_deadline_at finished_at work_context_error original_checks_error open_authorities open_events provider")
 	encoded, encodeErr := json.Marshal(value)
 	started, startErr := geminiCompleteTime(value["started_at"])
 	deadline, deadlineErr := geminiCompleteTime(value["work_deadline_at"])
@@ -48,7 +48,7 @@ func geminiCompleteClosure(result map[string]any) (time.Time, time.Time, error) 
 	if err != nil || encodeErr != nil || len(encoded) > 8192 || startErr != nil || deadlineErr != nil || finishErr != nil || !geminiCompleteIntegerIs(value["schema_version"], 1) || value["work_context_error"] != false || value["original_checks_error"] != false || !geminiCompleteIntegerIs(value["open_authorities"], 0) || value["open_events"] != false || !deadline.Equal(started.Add(150*time.Second)) || finished.Before(started) || finished.After(deadline) || !geminiCompleteInteger(result["elapsed_ms"], finished.Sub(started).Milliseconds(), 180000) {
 		return started, finished, geminiCompleteRefusal()
 	}
-	provider, err := geminiCompleteObject(value["provider"], "shutdown_complete forced_close serve_returned error busy current_stage requests completed_stages", "")
+	provider, err := geminiCompleteObject(value["provider"], "shutdown_complete forced_close serve_returned error busy current_stage requests completed_stages")
 	if err != nil || provider["shutdown_complete"] != true || provider["forced_close"] != false || provider["serve_returned"] != true || provider["error"] != false || !geminiCompleteIntegerIs(provider["busy"], 0) || provider["current_stage"] != "" || !geminiCompleteIntegerIs(provider["requests"], 16) || !geminiCompleteStrings(provider["completed_stages"], geminiCycleNative) {
 		return started, finished, geminiCompleteRefusal()
 	}
@@ -59,13 +59,13 @@ func geminiCompleteSummary(result map[string]any, source any) error {
 	if projectNativeRuntimeKeys(result, "acquisition activation attempt_stage capture_mode client client_source cycle_capture_review_required cycle_layout cycle_listing_stages cycle_native_stages cycle_observed_complete cycle_provider_completed cycle_public_stages elapsed_ms gemini_detection_link provider_kind qualification real_model_qualified runtime_attempt_complete scanner source_identity test_failed vendor_authentication_qualified cycle_completion", "") != nil || result["client"] != "gemini" || result["provider_kind"] != "scripted_loopback" || result["capture_mode"] != geminiCycleCompleteMode || result["cycle_capture_review_required"] != false || result["cycle_observed_complete"] != true || result["runtime_attempt_complete"] != true || result["test_failed"] != false || result["activation"] != "prepared" || result["vendor_authentication_qualified"] != false || result["real_model_qualified"] != false || !reflect.DeepEqual(result["source_identity"], source) {
 		return geminiCompleteRefusal()
 	}
-	identity, err := geminiCompleteObject(source, "installer_base_commit installer_tree installer_source_state installer_patch_sha256", "")
+	identity, err := geminiCompleteObject(source, "installer_base_commit installer_tree installer_source_state installer_patch_sha256")
 	commit, cok := identity["installer_base_commit"].(string)
 	tree, tok := identity["installer_tree"].(string)
 	if err != nil || !cok || !tok || !regexpGitIdentity(commit) || !regexpGitIdentity(tree) || identity["installer_source_state"] != "committed" || !reflect.DeepEqual(identity["installer_patch_sha256"], []any{}) {
 		return geminiCompleteRefusal()
 	}
-	flags, err := geminiCompleteObject(result["qualification"], "project-lifecycle native-restart-removal mcp-initialize mcp-tools-list mcp-tools-call", "")
+	flags, err := geminiCompleteObject(result["qualification"], "project-lifecycle native-restart-removal mcp-initialize mcp-tools-list mcp-tools-call")
 	if err != nil {
 		return err
 	}
@@ -199,7 +199,7 @@ func geminiCompletePins(result map[string]any, paths map[string]string) error {
 		return geminiCompleteRefusal()
 	}
 	for _, member := range identity.Acquisition.Members {
-		if !geminiCompleteText(member.Name, 4096, true) || member.Name == "." || filepath.IsAbs(member.Name) || filepath.Clean(member.Name) != member.Name || strings.Contains(member.Name, "\\") || seen[member.Name] || member.Bytes < 0 || member.Bytes > 1<<30 {
+		if !geminiCompleteText(member.Name, 4096) || member.Name == "." || filepath.IsAbs(member.Name) || filepath.Clean(member.Name) != member.Name || strings.Contains(member.Name, "\\") || seen[member.Name] || member.Bytes < 0 || member.Bytes > 1<<30 {
 			return geminiCompleteRefusal()
 		}
 		for _, component := range strings.Split(member.Name, "/") {
@@ -250,11 +250,11 @@ func geminiCompleteSourcePins(result map[string]any, paths map[string]string) er
 }
 
 func geminiCompleteReceipt(value map[string]any, argv []string, cwd string, limit int64, exit int) error {
-	if projectNativeRuntimeKeys(value, "argv cwd exit error context_error elapsed_ms cleanup", "") != nil || !geminiCompleteStrings(value["argv"], argv) || value["cwd"] != cwd || !geminiCompleteIntegerIs(value["exit"], int64(exit)) || value["error"] != false || value["context_error"] != false || value["cleanup"] != "ordinary full-descendant supervision; forced cleanup is a failure" || !geminiCompleteInteger(value["elapsed_ms"], 0, limit) || len(argv) < 1 || len(argv) > 32 || !geminiCompleteText(cwd, 4096, true) {
+	if projectNativeRuntimeKeys(value, "argv cwd exit error context_error elapsed_ms cleanup", "") != nil || !geminiCompleteStrings(value["argv"], argv) || value["cwd"] != cwd || !geminiCompleteIntegerIs(value["exit"], int64(exit)) || value["error"] != false || value["context_error"] != false || value["cleanup"] != "ordinary full-descendant supervision; forced cleanup is a failure" || !geminiCompleteInteger(value["elapsed_ms"], 0, limit) || len(argv) < 1 || len(argv) > 32 || !geminiCompleteText(cwd, 4096) {
 		return geminiCompleteRefusal()
 	}
 	for _, arg := range argv {
-		if !geminiCompleteText(arg, 4096, true) {
+		if !geminiCompleteText(arg, 4096) {
 			return geminiCompleteRefusal()
 		}
 	}

@@ -106,7 +106,8 @@ func (f *geminiCompleteContractFixture) publicRecords() {
 		if r == nil {
 			r = f.views[""][scope]
 		}
-		argv, stdout, stderr, exit := []string{}, []byte{}, []byte{}, 0
+		var argv []string
+		stdout, stderr, exit := []byte{}, []byte{}, 0
 		if strings.HasPrefix(stage, "git-") {
 			argv = []string{f.paths["git"], "-c", "core.hooksPath=/dev/null", "init", "--quiet"}
 		} else if stage == "version" {

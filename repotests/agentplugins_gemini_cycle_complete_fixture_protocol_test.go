@@ -70,7 +70,7 @@ func (f *geminiCompleteContractFixture) declaration(tool string) map[string]any 
 }
 
 func (f *geminiCompleteContractFixture) provider(p geminiCompleteContractPhase) {
-	declarations := []any{}
+	declarations := make([]any, 0, len(p.tools))
 	for _, name := range p.tools {
 		declarations = append(declarations, f.declaration(name))
 	}

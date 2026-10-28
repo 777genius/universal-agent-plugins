@@ -45,9 +45,9 @@ func geminiCompleteIntegerIs(value any, expected int64) bool {
 	return geminiCompleteInteger(value, expected, expected)
 }
 
-func geminiCompleteText(value any, limit int, nonempty bool) bool {
+func geminiCompleteText(value any, limit int) bool {
 	text, ok := value.(string)
-	return ok && len(text) <= limit && utf8.ValidString(text) && !strings.ContainsRune(text, 0) && (!nonempty || text != "")
+	return ok && len(text) <= limit && utf8.ValidString(text) && !strings.ContainsRune(text, 0) && text != ""
 }
 
 func geminiCompleteNormalizeIntegers(value any) any {
@@ -72,9 +72,9 @@ func geminiCompleteNormalizeIntegers(value any) any {
 	return value
 }
 
-func geminiCompleteObject(value any, required, optional string) (map[string]any, error) {
+func geminiCompleteObject(value any, required string) (map[string]any, error) {
 	row, ok := value.(map[string]any)
-	if !ok || projectNativeRuntimeKeys(row, required, optional) != nil {
+	if !ok || projectNativeRuntimeKeys(row, required, "") != nil {
 		return nil, geminiCompleteRefusal()
 	}
 	return row, nil
@@ -182,7 +182,7 @@ func geminiCompleteTyped(value any, target any) error {
 }
 
 func geminiCompleteStream(value any) ([]byte, error) {
-	row, err := geminiCompleteObject(value, "bytes sha256 body", "")
+	row, err := geminiCompleteObject(value, "bytes sha256 body")
 	text, ok := row["body"].(string)
 	if err != nil || !ok || len(text) > (1<<20)*4/3+4 {
 		return nil, geminiCompleteRefusal()

@@ -28,7 +28,7 @@ func TestGeminiCycleCompleteNestedUnicodeScalarsAreLossless(t *testing.T) {
 			case "array":
 				value = []any{control.text}
 			case "recursive":
-				for count := 0; count < 3; count++ {
+				for range 3 {
 					value = map[string]any{"text": string(geminiCompleteContractEncode(t, value))}
 				}
 			}

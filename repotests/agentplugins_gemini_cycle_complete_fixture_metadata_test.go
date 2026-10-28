@@ -16,7 +16,7 @@ func (f *geminiCompleteContractFixture) acquisition() map[string]any {
 		{"name": "builtin/antigravity-support/SKILL.md", "kind": "file", "bytes": 3364, "sha256": "2b866bce962f642be8c0dd74ffc2548fa29f2100bc945518b2f738b7d7d6fd38"},
 		{"name": "builtin/skill-creator/SKILL.md", "kind": "file", "bytes": 20225, "sha256": "aab93935325978cb5a54b4907ae1ca11d7b4a903925ed0cc1739345392280db9"},
 	}
-	runtime := []map[string]any{}
+	runtime := make([]map[string]any, 0, len(members)+1)
 	for _, member := range members {
 		runtime = append(runtime, map[string]any{"path": filepath.Join(filepath.Dir(f.paths["client"]), member["name"].(string)), "sha256": member["sha256"]})
 	}

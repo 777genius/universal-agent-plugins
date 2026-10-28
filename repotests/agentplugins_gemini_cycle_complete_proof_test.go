@@ -30,7 +30,7 @@ func geminiCompleteView(recipes map[string]*geminiCycleRecipe) map[string]*gemin
 }
 
 func geminiCompleteRecipe(value map[string]any, paths map[string]string) (*geminiCycleRecipe, error) {
-	row, err := geminiCompleteObject(value, "scope source name revision nonce digest files skill manifest mcp", "")
+	row, err := geminiCompleteObject(value, "scope source name revision nonce digest files skill manifest mcp")
 	scope, _ := row["scope"].(string)
 	nonce, _ := row["nonce"].(string)
 	revision, _ := row["revision"].(string)
@@ -77,7 +77,7 @@ func geminiCompleteRecipeBytes(r *geminiCycleRecipe, files any, paths map[string
 		return geminiCompleteRefusal()
 	}
 	for path, value := range inventory {
-		row, err := geminiCompleteObject(value, "bytes sha256 executable", "")
+		row, err := geminiCompleteObject(value, "bytes sha256 executable")
 		body, authored := r.Authored[path]
 		hash, _ := row["sha256"].(string)
 		if err != nil || !authored && path != "bin/probe" || !geminiCycleDigest("sha256:"+hash) || row["executable"] != (path == "bin/probe") || !geminiCompleteInteger(row["bytes"], 0, 32<<20) || authored && (!geminiCompleteIntegerIs(row["bytes"], int64(len(body))) || hash != geminiCycleSHA(body)) {
@@ -131,7 +131,7 @@ func geminiCompleteProofs(body []byte, paths map[string]string) (geminiCompleteP
 }
 
 func geminiCompleteStateRow(row geminiCompleteRow, recipes map[string]*geminiCycleRecipe, paths map[string]string, raw map[string][]byte) error {
-	value, err := geminiCompleteObject(row.Value, "scope revision removed source_digest state binding", "")
+	value, err := geminiCompleteObject(row.Value, "scope revision removed source_digest state binding")
 	scope, _ := value["scope"].(string)
 	r := recipes[scope]
 	removed, ok := value["removed"].(bool)

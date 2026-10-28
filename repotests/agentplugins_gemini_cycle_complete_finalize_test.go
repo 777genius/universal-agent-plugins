@@ -55,7 +55,7 @@ func geminiCycleCompletionSource(t *testing.T, source any) any {
 func (c *geminiProjectCycle) admitComplete(t *testing.T, heldSource any) error {
 	t.Helper()
 	c.f.evidence["cycle_completion"] = map[string]any{"schema_version": 1, "started_at": c.f.started.UTC().Format(time.RFC3339Nano), "work_deadline_at": c.f.started.Add(150 * time.Second).UTC().Format(time.RFC3339Nano), "finished_at": time.Now().UTC().Format(time.RFC3339Nano), "work_context_error": c.f.ctx.Err() != nil, "original_checks_error": false, "open_authorities": len(c.open), "open_events": c.openEvents, "provider": c.owner.closure}
-	for pass := 0; pass < 2; pass++ {
+	for pass := range 2 {
 		result := c.completionCandidate(t)
 		raw, err := json.Marshal(result)
 		if err != nil {
