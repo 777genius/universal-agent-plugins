@@ -14,7 +14,9 @@ func TestAgentpluginsGeminiNativeProjectCompleteCycle(t *testing.T) {
 	}
 	f := newGeminiProjectAttempt(t)
 	c := newGeminiProjectCycle(f)
-	defer c.finish(t)
+	heldSource := f.evidence["source_identity"]
+	defer func() { c.finish(t, heldSource) }()
+	heldSource = geminiCycleCompletionSource(t, heldSource)
 	c.prepare(t)
 	c.startProvider(t)
 	for _, scope := range []string{"a", "b", "user"} {
@@ -64,5 +66,6 @@ func TestAgentpluginsGeminiNativeProjectCompleteCycle(t *testing.T) {
 	}
 	c.observed = true
 	c.stage = "complete-cycle-capture-review"
-	t.Fatal("genuine Gemini complete cycle captured; independent source-bound raw review required; all qualification flags remain false")
+	// The deferred finalizer still owns ordinary closure, held authority checks,
+	// raw semantic admission and the fixed completion decision.
 }

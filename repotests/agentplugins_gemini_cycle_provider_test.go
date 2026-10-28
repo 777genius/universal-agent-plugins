@@ -49,6 +49,7 @@ type geminiCycleProvider struct {
 	completed   []string
 	busy, total int
 	failure     bool
+	closure     map[string]any
 }
 
 func (c *geminiProjectCycle) startProvider(t *testing.T) {
@@ -250,16 +251,22 @@ func (p *geminiCycleProvider) close(t *testing.T) bool {
 	remaining := time.Until(p.c.f.started.Add(180 * time.Second))
 	if remaining <= 0 {
 		_ = p.server.Close()
+		p.mu.Lock()
+		p.closedRecord(false, true, false)
+		p.mu.Unlock()
 		return false
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), remaining)
 	defer cancel()
 	clean := p.server.Shutdown(ctx) == nil
+	forced := !clean
 	if !clean {
 		_ = p.server.Close()
 	}
+	returned := false
 	select {
 	case <-p.done:
+		returned = true
 	case <-ctx.Done():
 		clean = false
 	}
@@ -271,5 +278,15 @@ func (p *geminiCycleProvider) close(t *testing.T) bool {
 		p.current.mu.Unlock()
 	}
 	p.c.f.evidence["cycle_provider_completed"] = append([]string{}, p.completed...)
+	p.closedRecord(clean, forced, returned)
 	return clean && !p.failure && p.busy == 0 && p.current == nil && reflect.DeepEqual(p.completed, geminiCycleNative) && p.total == 16
+}
+
+// Called only while holding the original owner's mutex after its actual close.
+func (p *geminiCycleProvider) closedRecord(clean, forced, returned bool) {
+	stage := ""
+	if p.current != nil {
+		stage = p.current.stage
+	}
+	p.closure = map[string]any{"shutdown_complete": clean, "forced_close": forced, "serve_returned": returned, "error": !clean || !returned || p.failure || p.busy != 0 || p.current != nil || !reflect.DeepEqual(p.completed, geminiCycleNative) || p.total != 16, "busy": p.busy, "current_stage": stage, "requests": p.total, "completed_stages": append([]string{}, p.completed...)}
 }

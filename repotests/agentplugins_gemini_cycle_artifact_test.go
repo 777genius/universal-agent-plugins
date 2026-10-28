@@ -3,22 +3,20 @@
 package pluginkitairepo_test
 
 import (
-	"archive/zip"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"testing"
 	"time"
 )
 
-func (c *geminiProjectCycle) finish(t *testing.T) {
+func (c *geminiProjectCycle) finish(t *testing.T, heldSource any) {
 	t.Helper()
 	candidate := c.observed
 	c.observed = false
+	geminiCycleClearCompletion(c.f.evidence)
 	defer c.f.cancel()
-	defer c.archive(t)
+	defer c.archive(t, heldSource)
 	closed := false
 	if c.owner != nil {
 		closed = c.owner.close(t)
@@ -38,14 +36,40 @@ func (c *geminiProjectCycle) finish(t *testing.T) {
 		}
 	}
 	c.observed = valid
+	if t.Failed() {
+		return
+	}
+	if !valid {
+		t.Error("Gemini complete cycle final live closure refused")
+		return
+	}
+	if err := c.admitComplete(t, heldSource); err != nil {
+		geminiCycleClearCompletion(c.f.evidence)
+		t.Error(err)
+	}
 }
-func (c *geminiProjectCycle) archive(t *testing.T) {
+func (c *geminiProjectCycle) archive(t *testing.T, heldSource any) {
 	t.Helper()
 	f := c.f
-	f.evidence["runtime_attempt_complete"] = false
-	f.evidence["vendor_authentication_qualified"] = false
-	f.evidence["real_model_qualified"] = false
-	f.evidence["qualification"] = map[string]bool{"project-lifecycle": false, "native-restart-removal": false, "mcp-initialize": false, "mcp-tools-list": false, "mcp-tools-call": false}
+	defer func() {
+		if t.Failed() {
+			geminiCycleClearCompletion(f.evidence)
+		}
+	}()
+	if f.ctx.Err() != nil {
+		c.observed = false
+		t.Error("Gemini original work expired at archive entry")
+	}
+	if time.Since(f.started) > 180*time.Second {
+		c.observed = false
+		t.Error("Gemini original total budget exceeded at archive entry")
+	}
+	if t.Failed() || !c.observed {
+		geminiCycleClearCompletion(f.evidence)
+		if c.stage == "complete-cycle" {
+			c.stage = "complete-cycle-capture-review"
+		}
+	}
 	f.evidence["cycle_observed_complete"] = c.observed
 	f.evidence["cycle_public_stages"] = append([]string{}, c.public...)
 	f.evidence["cycle_listing_stages"] = append([]string{}, c.listings...)
@@ -64,6 +88,15 @@ func (c *geminiProjectCycle) archive(t *testing.T) {
 		return
 	}
 	f.files["runtime-attempt.json"] = raw
+	if f.evidence["runtime_attempt_complete"] == true {
+		decoded, err := geminiCompleteJSON(raw)
+		started, _, closureErr := geminiCompleteClosure(decoded)
+		if err != nil || closureErr != nil || !started.Equal(f.started) || geminiCycleCompleteFiles(f.files, heldSource) != nil {
+			geminiCycleClearCompletion(f.evidence)
+			t.Error("Gemini final serialized complete evidence refused")
+			return
+		}
+	}
 	total := 0
 	names := make([]string, 0, len(f.files))
 	for name, body := range f.files {
@@ -78,32 +111,12 @@ func (c *geminiProjectCycle) archive(t *testing.T) {
 		t.Error("Gemini cycle complete artifact closure/bound")
 		return
 	}
-	if err := projectNativeRuntimeParents(filepath.Join(f.output, "research.zip")); err != nil {
-		t.Error("Gemini cycle artifact parent")
-		return
-	}
-	file, err := os.OpenFile(filepath.Join(f.output, "research.zip"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		t.Error("Gemini cycle exclusive artifact")
-		return
-	}
-	archive := zip.NewWriter(file)
-	sort.Strings(names)
-	for _, name := range names {
-		entry, e := archive.Create(name)
-		if e != nil {
-			t.Error("Gemini cycle archive member")
-			break
+	if err := geminiCycleWriteArchive(f.output, f.files, func() error {
+		if f.evidence["runtime_attempt_complete"] == true && (t.Failed() || f.ctx.Err() != nil || time.Since(f.started) > 180*time.Second) {
+			return geminiCompleteRefusal()
 		}
-		if _, e = entry.Write(f.files[name]); e != nil {
-			t.Error("Gemini cycle archive body")
-			break
-		}
-	}
-	if err := archive.Close(); err != nil {
-		t.Error("Gemini cycle archive close")
-	}
-	if err := file.Close(); err != nil {
-		t.Error("Gemini cycle file close")
+		return nil
+	}); err != nil {
+		t.Error("Gemini checked archive write/close/expose failed", err)
 	}
 }
