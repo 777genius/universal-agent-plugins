@@ -146,17 +146,19 @@ installers can compare evidence through the [handoff boundary](/en/build/handoff
 
 ## Restore project dependencies
 
-Explicit project installation is available in
-[CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
+Automatic project installation is available in
+[CLI 0.1.94 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94).
 Commit the project's `uap.toml` and `uap.lock` to version control. A teammate can
 check out the project, install the required clients, and run this from that project folder:
 
 ```bash
-npx -y universal-agent-plugins@latest install --locked --scope project
+npx -y universal-agent-plugins@latest install
 ```
 
-When invoking from another directory, also select the existing project directory
-with `--project-root /path/to/project`. Recorded sources and private-source access
+An existing lock is validated strictly; `--locked` additionally requires it to
+exist, which is useful in CI. Without a lock, the first install may create one.
+When invoking from another directory, select the existing project directory
+with `--scope project --project-root /path/to/project`. Recorded sources and private-source access
 must remain available. Client-side trust, authentication or activation may still
 be required; see the [project client boundaries](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
 Credentials, local receipts and plugin data stay local rather than travelling
@@ -164,7 +166,7 @@ with the agreement.
 
 ## Maintain a project in the current source
 
-**Source only / unreleased.** Argumentless `agentplugins install` selects project
+**Released in CLI 0.1.94.** Argumentless `agentplugins install` selects project
 scope when a regular `uap.toml` is present in the exact current directory; it
 never searches parents. Explicit `--scope` wins. An existing `uap.lock` is
 validated strictly before changes; only a missing lock allows first-install

@@ -94,11 +94,8 @@ const { restoreGuideUrl } = useDocsLinks();
               {{ t('shell.restore.to') }}
             </p>
             <div class="registry-restore__screen-body">
-              <CommandSnippet command="agentplugins install --locked --scope project" inline>
-                agentplugins <span class="registry-restore__accent">install --locked</span>{{ ' ' }}
-                <span class="registry-restore__argument"
-                  ><span class="registry-restore__accent">--scope</span> project</span
-                >
+              <CommandSnippet command="agentplugins install" inline>
+                agentplugins <span class="registry-restore__accent">install</span>
               </CommandSnippet>
             </div>
           </div>
