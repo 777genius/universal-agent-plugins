@@ -30,7 +30,7 @@ const { restoreGuideUrl } = useDocsLinks();
               {{ t('shell.restore.from') }}
             </p>
             <div class="registry-restore__screen-body">
-              <CommandSnippet command="agentplugins deps export" inline />
+              <CommandSnippet command="npx -y universal-agent-plugins@latest deps export" inline />
             </div>
           </div>
           <div class="registry-restore__stand" aria-hidden="true" />
@@ -70,7 +70,7 @@ const { restoreGuideUrl } = useDocsLinks();
               {{ t('shell.restore.to') }}
             </p>
             <div class="registry-restore__screen-body">
-              <CommandSnippet command="agentplugins deps import --install" inline />
+              <CommandSnippet command="npx -y universal-agent-plugins@latest deps import --install" inline />
             </div>
           </div>
           <div class="registry-restore__stand" aria-hidden="true" />

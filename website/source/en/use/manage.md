@@ -18,9 +18,9 @@ and any reported installation identity available when diagnosing a problem.
 ## Inspect the situation first
 
 ```bash
-agentplugins list
-agentplugins doctor
-agentplugins outdated --all
+npx -y universal-agent-plugins@latest list
+npx -y universal-agent-plugins@latest doctor
+npx -y universal-agent-plugins@latest outdated --all
 ```
 
 `list` reports installations. Installer `doctor` diagnoses managed state.
@@ -41,23 +41,23 @@ Before changing anything, identify the symptom:
 ## Update deliberately
 
 ```bash
-agentplugins update context7 --target codex,cursor --dry-run
+npx -y universal-agent-plugins@latest update context7 --target codex,cursor --dry-run
 ```
 
 Review the planned source and destinations before applying the update:
 
 ```bash
-agentplugins update context7 --target codex,cursor
+npx -y universal-agent-plugins@latest update context7 --target codex,cursor
 ```
 
-The existing installer also supports `agentplugins update --all`. Use it only
+The existing installer also supports `npx -y universal-agent-plugins@latest update --all`. Use it only
 when the intended scope really is all managed update candidates. A direct
 full-SHA source stays immutable; do not expect an update to follow a branch.
 
 ## Repair recorded state
 
 ```bash
-agentplugins repair context7 --target codex,cursor --dry-run
+npx -y universal-agent-plugins@latest repair context7 --target codex,cursor --dry-run
 ```
 
 Repair reapplies the recorded source. It is useful for managed-file drift,
@@ -65,7 +65,7 @@ not for changing the authored package or selecting a different remote revision.
 After reviewing the plan, the corresponding apply command is:
 
 ```bash
-agentplugins repair context7 --target codex,cursor
+npx -y universal-agent-plugins@latest repair context7 --target codex,cursor
 ```
 
 If an operation reports a partial rollback or recovery instruction, retain that
@@ -75,13 +75,13 @@ configuration file as installer-owned.
 ## Remove the selected installation
 
 ```bash
-agentplugins remove context7 --target codex,cursor --dry-run
+npx -y universal-agent-plugins@latest remove context7 --target codex,cursor --dry-run
 ```
 
 Review what the installer owns before applying removal:
 
 ```bash
-agentplugins remove context7 --target codex,cursor
+npx -y universal-agent-plugins@latest remove context7 --target codex,cursor
 ```
 
 Removal changes files owned by the CLI. It does not revoke a service account,
@@ -96,20 +96,20 @@ destination then fetches the exact pinned packages.
 On the source machine, run this in the folder you want to carry:
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 On the destination, install the target clients, then run:
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked
 ```
 
 Or import and restore in one step:
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 - The optional `[directory]` argument overrides the exchange folder, which
@@ -126,9 +126,9 @@ agentplugins deps import --install
   package and manifest digests. It never selects newer versions. Missing source
   bytes or mismatched digests fail the install.
 - If installation fails after import saved the agreement, fix the error and run
-  `agentplugins install --locked` again. If recovery is pending, run
-  `agentplugins deps recover` first.
-- Do not run `agentplugins deps lock` to recreate transferred pins. Moving
+  `npx -y universal-agent-plugins@latest install --locked` again. If recovery is pending, run
+  `npx -y universal-agent-plugins@latest deps recover` first.
+- Do not run `npx -y universal-agent-plugins@latest deps lock` to recreate transferred pins. Moving
   selectors could resolve differently.
 
 ## Report a problem clearly

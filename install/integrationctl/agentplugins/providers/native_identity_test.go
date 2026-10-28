@@ -25,9 +25,13 @@ type identityRunner struct {
 
 type blockingIdentityRunner struct {
 	returned chan struct{}
+	observe  func(context.Context)
 }
 
 func (runner blockingIdentityRunner) Run(ctx context.Context, _ legacyports.Command) (legacyports.CommandResult, error) {
+	if runner.observe != nil {
+		runner.observe(ctx)
+	}
 	<-ctx.Done()
 	close(runner.returned)
 	return legacyports.CommandResult{}, ctx.Err()
@@ -380,6 +384,54 @@ func TestNativeIdentityBoundsHungAuthoritativeDiscovery(t *testing.T) {
 	}
 }
 
+// Reject the old cold-start budget without waiting tens of seconds: inspect the
+// actual runner deadline, then cancel the caller and require the runner to exit.
+func TestNativeIdentityColdStartBudgetPreservesCallerCancellation(t *testing.T) {
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryExecutable = "/test/bin/copilot"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	returned := make(chan struct{})
+	var remaining time.Duration
+	runner := blockingIdentityRunner{returned: returned, observe: func(ctx context.Context) {
+		deadline, ok := ctx.Deadline()
+		if ok {
+			remaining = time.Until(deadline)
+		}
+		cancel()
+	}}
+	observation, err := testObserver(NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(ctx,
+		domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
+	if remaining < 45*time.Second || remaining > 60*time.Second {
+		t.Fatalf("discovery budget=%s, want cold-start headroom bounded by one minute", remaining)
+	}
+	if !errors.Is(err, context.Canceled) || observation.State != domain.NativeIdentityIndeterminate {
+		t.Fatalf("observation=%+v err=%v, want canceled indeterminate discovery", observation, err)
+	}
+	select {
+	case <-returned:
+	default:
+		t.Fatal("discovery runner remained active after cancellation")
+	}
+}
+
+func TestNativeIdentityPreservesEarlierCallerDeadline(t *testing.T) {
+	plan := identityPlan(filepath.Join(t.TempDir(), "prepared"))
+	plan.NativeRegistryExecutable = "/test/bin/copilot"
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	wantDeadline, _ := ctx.Deadline()
+	var observedDeadline time.Time
+	runner := blockingIdentityRunner{returned: make(chan struct{}), observe: func(ctx context.Context) {
+		observedDeadline, _ = ctx.Deadline()
+	}}
+	_, err := testObserver(NativeIdentityObserver{Runner: runner}).ObserveNativeIdentity(ctx,
+		domain.DetectedClient{ClientID: domain.ClientCopilot}, plan, nil)
+	if !errors.Is(err, context.DeadlineExceeded) || !observedDeadline.Equal(wantDeadline) {
+		t.Fatalf("deadline=%s want=%s err=%v", observedDeadline, wantDeadline, err)
+	}
+}
+
 func TestNativeIdentityPreservesNativeDiscoveryWhenPreparedRegistryBlocksOverallIdentity(t *testing.T) {
 	for _, test := range []struct {
 		name      string
@@ -558,7 +610,7 @@ func TestClaudeNativeDiscoveryUsesListingBudget(t *testing.T) {
 			plan := identityPlan(filepath.Join(config, "skills"))
 			plan.TargetAnchor = config
 			plan.NativeRegistryExecutable = "/TEST/bin/claude"
-			budget := 30 * time.Second
+			budget := 60 * time.Second
 			if explicit > 0 {
 				budget = explicit
 			}

@@ -20,7 +20,8 @@ const (
 	claudeProbeMaxEnvironmentValue = 4096
 	claudeProbeMaxEnvironmentTotal = 32768
 	claudeProbeTreeExitGrace       = 5 * time.Second
-	ClaudeProbeTimeout             = 30 * time.Second
+	// Allow native CLI cold-start initialization while bounding every list probe.
+	ClaudeProbeTimeout = 60 * time.Second
 )
 
 type claudeDescendantGraceRunner interface {
