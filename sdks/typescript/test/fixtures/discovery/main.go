@@ -58,6 +58,21 @@ func main() {
 			}
 		}
 	}
+	targets := fixtureTargets(mode, target)
+	if mode == "duplicate" {
+		targets = append(targets, target)
+	}
+	version := 1
+	if mode == "version" {
+		version = 2
+	}
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"apiVersion": version, "engineVersion": "fixture", "targets": targets})
+	if mode == "trailing" {
+		fmt.Println("private trailing output")
+	}
+}
+
+func fixtureTargets(mode string, target map[string]any) []any {
 	targets := []any{target}
 	if mode == "environment" {
 		for _, profile := range []struct{ client, locator string }{
@@ -72,17 +87,7 @@ func main() {
 			})
 		}
 	}
-	if mode == "duplicate" {
-		targets = append(targets, target)
-	}
-	version := 1
-	if mode == "version" {
-		version = 2
-	}
-	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"apiVersion": version, "engineVersion": "fixture", "targets": targets})
-	if mode == "trailing" {
-		fmt.Println("private trailing output")
-	}
+	return targets
 }
 
 func writePID() error {

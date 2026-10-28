@@ -32,6 +32,11 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # PR checks replace superseded work; each main run retains exact-commit activation evidence.
+  group: skills-resolve-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.pull_request.number || github.ref) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   source-and-runtime:
     runs-on: ubuntu-latest
