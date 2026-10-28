@@ -405,7 +405,7 @@
       "items": {
         "0": {
           "question": "支持哪些人工智能代理？",
-          "answer": "Codex、ChatGPT、Cursor、GitHub Copilot CLI、VS Code、Kiro、Claude Code、Gemini CLI、OpenCode、Cline 和 Windsurf 通过显式的特定于客户端的路径进行支持或准备。 Grok Build 和 Kimi Code 也支持原生技能与 MCP。"
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder：各客户端有自己的安装或准备流程。兼容性取决于包的组件、安装范围和激活要求。"
         },
         "1": {
           "question": "是否将一个命令安装到每个代理中？",
@@ -417,7 +417,7 @@
         },
         "3": {
           "question": "我可以在该目录之外安装插件吗？",
-          "answer": "是的。使用包含有效代理插件 1.0 plugin.json 包的固定 GitHub 源。"
+          "answer": "可以。可从本地文件夹、HTTPS 或 SSH Git、受支持的提供方链接或完整归档安装带有 plugin.json 的完整包。对于可保存的依赖，CLI 会记录精确的源版本。"
         },
         "4": {
           "question": "所有发现的插件都会经过审核吗？",
@@ -781,7 +781,7 @@
         "note": "本机代理插件包",
         "status": "支持",
         "intro": "将 Agent Plugins 1.0 安装到 Cursor 项目中，无需手动翻译每个插件。 CLI 在更改文件之前规划本机包。",
-        "delivery": "CLI 为所选项目编写支持的 Cursor 插件、技能和 MCP 投影。",
+        "delivery": "CLI 按所选范围准备 Cursor 支持的插件、技能和 MCP 组件。默认使用用户范围；项目范围需要显式选择。",
         "activation": "根据请求重新加载光标，然后验证是否已发现该插件。"
       },
       "copilot": {
@@ -937,7 +937,7 @@
       "vendorDocs": "阅读 {name} 文档",
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 已审核的软件包支持此客户端。 | {count} 已审核的软件包支持此客户端。",
-      "tryPlugin": "尝试 Context7，或将 {source} 替换为另一个兼容插件的经过审核的短名称或固定的 GitHub 包源。",
+      "tryPlugin": "可先试用 Context7，或将 {source} 替换为其他兼容插件经过审核的短名称或完整包的源地址。",
       "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。"
     },
     "components": {

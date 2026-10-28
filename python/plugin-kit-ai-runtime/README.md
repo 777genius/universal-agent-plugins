@@ -1,5 +1,12 @@
 # plugin-kit-ai-runtime (PyPI authoring helper)
 
+> **Preserved historical package.** This package belongs to the earlier
+> `plugin-kit-ai` authoring workflow. The current public CLI is
+> `universal-agent-plugins` (`agentplugins`). Start with the
+> [current documentation](https://universal-agent-plugins.com/docs/en/).
+> The examples below describe this package's existing API; they do not add
+> its authoring commands to the current installer release.
+
 Official Python helper package for launcher-based `plugin-kit-ai` plugins.
 
 Use it when you want the supported handler-oriented API as a shared dependency instead of generating a local `plugin/plugin_runtime.py` helper in each repo.

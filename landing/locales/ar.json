@@ -268,7 +268,7 @@
       "items": {
         "0": {
           "question": "ما وكلاء الذكاء الاصطناعي المدعومون؟",
-          "answer": "Codex وChatGPT وCursor وGitHub Copilot CLI وVS Code وKiro وClaude Code وGemini CLI وOpenCode وCline وWindsurf مدعومة أو مُحضّرة عبر مسار صريح خاص بكل عميل. يدعم Grok Build وKimi Code أيضًا المهارات وMCP الأصليين."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: لكل عميل مسار خاص للتثبيت أو الإعداد. يعتمد التوافق على مكونات الحزمة ونطاق التثبيت ومتطلبات التفعيل."
         },
         "1": {
           "question": "هل يثبّت أمر واحد في كل وكيل؟",
@@ -280,7 +280,7 @@
         },
         "3": {
           "question": "هل يمكنني تثبيت مكون إضافي خارج هذا الدليل؟",
-          "answer": "نعم. استخدم مصدر GitHub مثبتًا يحتوي على حزمة Agent Plugins 1.0 plugin.json صالحة."
+          "answer": "نعم. ثبّت حزمة كاملة تحتوي على plugin.json من مجلد محلي أو Git عبر HTTPS أو SSH أو رابط مزوّد مدعوم أو أرشيف جاهز. تسجّل الواجهة إصدارات المصادر الدقيقة للتبعيات القابلة للحفظ."
         },
         "4": {
           "question": "هل تتم مراجعة كل المكونات الإضافية المكتشفة؟",
@@ -781,7 +781,7 @@
         "note": "حزمة Agent Plugin أصلية",
         "status": "مدعوم",
         "intro": "ثبّت Agent Plugins 1.0 في مشاريع Cursor دون تحويل كل إضافة يدويًا. يخطط CLI للحزمة الأصلية قبل تغيير الملفات.",
-        "delivery": "يكتب CLI إسقاطات إضافة Cursor والمهارات وMCP المدعومة للمشروع المحدد.",
+        "delivery": "تجهّز الواجهة مكونات الإضافة والمهارات وMCP التي يدعمها Cursor للنطاق المحدد. نطاق المستخدم هو الافتراضي؛ ويجب اختيار نطاق المشروع صراحةً.",
         "activation": "أعد تحميل Cursor عند الطلب، ثم تحقق من اكتشاف الإضافة."
       },
       "copilot": {
@@ -937,7 +937,7 @@
       "vendorDocs": "اقرأ وثائق {name}",
       "availableFor": "الإضافات المتاحة لـ {name}",
       "count": "تدعم {count} حزمة مراجَعة هذا العميل. | تدعم {count} حزم مراجَعة هذا العميل.",
-      "tryPlugin": "جرّب Context7، أو استبدل {source} بالاسم المختصر المراجَع لإضافة متوافقة أخرى أو بمصدر حزمة GitHub مثبّت.",
+      "tryPlugin": "جرّب Context7 أو استبدل {source} بالاسم المختصر المراجع لإضافة أخرى متوافقة أو بمصدر حزمة كاملة.",
       "localPackageHint": "استبدل ./my-plugin بمسار حزمة Agent Plugins 1.0 صالحة."
     },
     "components": {

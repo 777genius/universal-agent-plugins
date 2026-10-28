@@ -1,9 +1,9 @@
 # Installing Agent Skills
 
-This guide describes the source implementation in this change. It does not claim
-that these commands are available in an already published installer release.
-The existing historical authoring and external Skills wrapper are documented in
-[SKILLS.md](./SKILLS.md); their source and support boundaries remain preserved.
+The released `agentplugins` CLI includes `skills add` for public GitHub sources
+and compatible HTTPS publishers. This guide uses the verified CLI 0.1.93
+baseline; newer source-only behavior is labelled separately. The historical
+`plugin-kit-ai` Skills commands remain documented in [SKILLS.md](./SKILLS.md).
 
 A Skill can be installed from a public GitHub repository, a folder URL, or a
 `SKILL.md` URL. The installer keeps its original document, scripts and resources,
@@ -11,7 +11,7 @@ then uses the existing package installer and ownership/recovery rules.
 Installation does not execute the Skill's scripts.
 
 Compatible HTTPS publishers can also expose complete Skills through a
-`.well-known` discovery index. This source-build workflow requires the exact
+`.well-known` discovery index. Publisher installation requires the exact
 Skill name and uses terminal review:
 
 ```sh
@@ -60,8 +60,8 @@ explicit retry of the same confirmation.
 
 ## Install Skills for one project
 
-In the current source build, the terminal flow and browser picker use the same
-explicit environment selection as complete packages:
+In CLI 0.1.93, the terminal flow and browser picker use the same explicit
+project environment selection as complete packages:
 
 ```sh
 agentplugins skills add owner/repository --ui \

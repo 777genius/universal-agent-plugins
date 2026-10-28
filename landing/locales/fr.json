@@ -405,7 +405,7 @@
       "items": {
         "0": {
           "question": "Quels agents IA sont pris en charge ?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline et Windsurf sont pris en charge ou préparés via un chemin explicite spécifique au client. Grok Build et Kimi Code prennent aussi en charge les skills et MCP natifs."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder : chaque client dispose de son propre parcours d’installation ou de préparation. La compatibilité dépend des composants, de la portée et des conditions d’activation."
         },
         "1": {
           "question": "Une commande est-elle installée sur chaque agent ?",
@@ -417,7 +417,7 @@
         },
         "3": {
           "question": "Puis-je installer un plugin en dehors de ce répertoire ?",
-          "answer": "Oui. Utilisez une source GitHub épinglée qui contient un package plugin.json Agent Plugins 1.0 valide."
+          "answer": "Oui. Installez un paquet complet avec plugin.json depuis un dossier local, Git via HTTPS ou SSH, un lien de fournisseur pris en charge ou une archive prête à installer. La CLI enregistre les sources exactes des dépendances sauvegardées qui le permettent."
         },
         "4": {
           "question": "Tous les plugins découverts sont-ils examinés ?",
@@ -781,7 +781,7 @@
         "note": "Package de plug-in d'agent natif",
         "status": "Pris en charge",
         "intro": "Installez Agent Plugins 1.0 dans les projets Cursor sans traduire chaque plugin à la main. La CLI planifie le package natif avant de modifier les fichiers.",
-        "delivery": "La CLI écrit le plug-in Cursor, la compétence et les projections MCP pris en charge pour le projet sélectionné.",
+        "delivery": "La CLI prépare les composants de plugin, skills et MCP pris en charge par Cursor pour la portée choisie. La portée utilisateur est utilisée par défaut ; la portée projet doit être sélectionnée explicitement.",
         "activation": "Rechargez le curseur lorsque cela vous est demandé, puis vérifiez que le plugin est découvert."
       },
       "copilot": {
@@ -937,7 +937,7 @@
       "vendorDocs": "Lire la documentation {name}",
       "availableFor": "Plugins disponibles pour {name}",
       "count": "Le package examiné {count} prend en charge ce client. | Les packages examinés {count} prennent en charge ce client.",
-      "tryPlugin": "Essayez Context7 ou remplacez {source} par le nom court révisé d'un autre plugin compatible ou la source du package GitHub épinglée.",
+      "tryPlugin": "Essayez Context7 ou remplacez {source} par le nom court vérifié d’un autre plugin compatible ou par la source d’un paquet complet.",
       "localPackageHint": "Remplacez ./my-plugin par le chemin d’un paquet Agent Plugins 1.0 valide."
     },
     "components": {

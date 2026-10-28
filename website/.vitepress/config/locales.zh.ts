@@ -33,7 +33,7 @@ export const zhLocaleConfig = {
     nav: [
       ...journeyNav("zh"),
       { text: "快速开始", link: "/zh/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "0.1.65 API（英语）", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.zh.json"),
     editLink: {

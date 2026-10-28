@@ -88,7 +88,7 @@ for (const locale of ['en', 'ru', 'es', 'fr', 'zh']) {
 
 test('README promotes the canonical quickstart and current build section', () => {
   const source = read('README.md');
-  const canonical = 'https://777genius.github.io/universal-agent-plugins/docs/en/guide/quickstart.html';
+  const canonical = 'https://universal-agent-plugins.com/docs/en/guide/quickstart.html';
   const links = [...source.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)];
   for (const label of ['Use / Build quickstart']) {
     assert.deepEqual(links.filter(m => m[1] === label).map(m => m[2]), [canonical]);

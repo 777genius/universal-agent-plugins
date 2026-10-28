@@ -1,35 +1,133 @@
 ---
-title: "Maintain installed plugins"
-description: "Traduction indisponible ; consultez la page actuelle en anglais"
+title: "Maintenir les plugins installés"
+description: "Inspectez, mettez à jour, réparez et restaurez les installations utilisateur ou projet."
 canonicalId: "page:use:manage"
 section: "use"
 locale: "fr"
 generated: false
 translationRequired: true
+localeDisposition: "current-translation"
 ---
 
-# Maintain installed plugins
+# Maintenir les plugins installés
 
-[Traduction indisponible ; consultez la page actuelle en anglais](/en/use/manage). La création Agent Plugins est disponible via Agent Plugins dans `universal-agent-plugins`.
+Utilisez l’installateur pour inspecter et modifier l’état qu’il gère. Pour examiner un problème, conservez avec le rapport la source du paquet, les clients sélectionnés, la portée et l’identité d’installation. Ces exemples utilisent la portée utilisateur, sauf sélection explicite d’un projet.
 
-[Utiliser des plugins](/fr/use/) · [Créer des plugins](/fr/build/)
+## Examinez d’abord la situation
 
-## Maintenir un projet dans le code actuel
+```bash
+agentplugins list
+agentplugins doctor
+agentplugins outdated --all
+```
 
-**Code source uniquement ; pas encore publié.** L’installation sans argument
-identifie le projet par son fichier de dépendances dans le répertoire courant,
-sans chercher dans les répertoires parents. Le fichier de verrouillage existant
-est validé strictement avant toute modification. Le choix explicite de la portée
-reste prioritaire ; les autres commandes de maintenance demandent de choisir
-explicitement la portée et le projet.
+`list` indique les installations, `doctor` diagnostique l’état géré et `outdated` cherche les mises à jour possibles sans les appliquer. Ces commandes ne prouvent ni la disponibilité d’un service distant ni la réussite de l’authentification d’un client.
 
-[Les commandes de maintenance figurent dans la section anglaise](/en/use/manage#maintain-a-project-in-the-current-source).
+| Symptôme | Étape suivante |
+| --- | --- |
+| Le paquet est absent | Revenez à [la recherche et l’installation](./install). |
+| Des fichiers gérés manquent ou ont changé | Examinez un plan de réparation pour ce paquet et cette portée. |
+| Une source suivie propose une version plus récente | Examinez un plan de mise à jour. |
+| Le client demande confiance, activation ou connexion | Suivez les instructions indiquées pour cette cible. |
+| Un paquet local échoue à la validation | Transmettez à l’auteur le rapport et le [guide des vérifications](../build/checks). |
 
-Versionnez les fichiers portables `uap.toml` et `uap.lock` pour partager les
-dépendances et leurs révisions. Les traces de propriété, la récupération et les
-données de `.uap/` restent locales ; sauvegardez les données séparément.
-La suppression conserve les données et le cache partagé. Repair restaure les
-composants manquants et les paquets gérés endommagés ; les fichiers natifs modifiés
-nécessitent une vérification. La récupération concerne le projet initialement choisi.
+## Mettez à jour délibérément
 
-[Guide d’installation par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Compatibilité et limites actuelles par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+```bash
+agentplugins update context7 --target codex,cursor --dry-run
+```
+
+Examinez la source, la version et les destinations choisies. Omettez `--dry-run` pour appliquer :
+
+```bash
+agentplugins update context7 --target codex,cursor
+```
+
+`update --all` couvre tous les candidats de mise à jour gérés. Utilisez-le lorsque vous souhaitez traiter cet ensemble complet. Une source fixée à un commit exact reste immuable : une mise à jour ne lui fait pas suivre une branche. Les plages de dépendances enregistrées et les références mobiles avancent via l’opération explicite de mise à jour appropriée.
+
+## Réparez l’état enregistré
+
+```bash
+agentplugins repair context7 --target codex,cursor --dry-run
+agentplugins repair context7 --target codex,cursor
+```
+
+La première commande prévisualise ; la seconde applique. La réparation reprend la source enregistrée pour restaurer le contenu géré. Elle ne choisit pas une nouvelle révision distante et n’écrase pas silencieusement des entrées natives modifiées à l’extérieur. Examinez les conflits et les instructions de récupération en attente avant de poursuivre.
+
+## Supprimez l’installation sélectionnée
+
+```bash
+agentplugins remove context7 --target codex,cursor --dry-run
+agentplugins remove context7 --target codex,cursor
+```
+
+Examinez le premier plan avant d’exécuter la seconde commande. La suppression utilise la propriété enregistrée par le CLI. Elle ne révoque pas un compte de service, ne supprime pas un environnement d’exécution sans rapport et n’efface pas les sources de l’auteur. Par défaut, la suppression d’une installation de projet conserve les données du plugin et le magasin partagé de contenu vérifié.
+
+## Utilisez un environnement de dépendances enregistré
+
+`uap.toml` décrit les paquets et les cibles souhaités ; `uap.lock` enregistre les sources résolues exactes et leurs empreintes. Inspectez l’environnement sélectionné :
+
+```bash
+agentplugins deps status
+agentplugins deps tree
+```
+
+Pour un nouvel environnement, lancez `agentplugins deps init`, modifiez le manifeste délibérément, résolvez-le avec `agentplugins deps lock`, puis appliquez ce verrouillage avec `agentplugins install --locked`. Examinez les confirmations et utilisez `--dry-run` pour prévisualiser. Le [guide des dépendances](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md) explique le manifeste, les dépendances obligatoires, les plages de versions et les règles de mise à jour.
+
+Ne supposez pas qu’une ancienne installation impérative figure dans l’accord portable. Vérifiez `deps status` et les fichiers réels avant de les transférer. L’enregistrement par défaut des commandes `add` distantes est décrit séparément dans le guide du code source ; un reçu d’installation ne prouve pas cet enregistrement.
+
+## Restaurez sur une autre machine
+
+Transférez un environnement utilisateur enregistré avec un dossier d’échange. Depuis ce dossier sur la machine source :
+
+```bash
+agentplugins deps export
+```
+
+Copiez le dossier sur la destination, installez les clients cibles, puis exécutez :
+
+```bash
+agentplugins deps import
+agentplugins install --locked --scope user
+```
+
+Vous pouvez aussi combiner importation et restauration :
+
+```bash
+agentplugins deps import --install
+```
+
+L’argument de dossier facultatif choisit un autre dossier d’échange. L’exportation lit l’environnement utilisateur et l’importation l’écrit ; `AGENTPLUGINS_HOME` peut sélectionner un environnement précis. Le dossier transféré ne remplace pas un profil client. `--scope user` explicite maintient la restauration dans l’environnement utilisateur.
+
+Seuls les octets inchangés de `uap.toml` et `uap.lock`, strictement validés, sont transférés. Chaque copie effective affiche un aperçu et demande une confirmation ou `--yes` ; `--dry-run` prévisualise. La validation de l’importation fonctionne hors ligne, mais l’installation nécessite les sources enregistrées ou des paquets vérifiés en cache. Une restauration sans cache télécharge les révisions exactes et vérifie leurs empreintes ; elle ne sélectionne pas de nouvelles versions.
+
+Les profils clients, réglages, identifiants, reçus et `PLUGIN_DATA` ne sont pas transférés. Configurez l’authentification sur la nouvelle machine et sauvegardez les données séparément. Si l’installation échoue après l’enregistrement des deux fichiers, corrigez la cause et répétez `install --locked --scope user`. Lancez d’abord `deps recover --scope user` si une récupération est en attente. Ne recréez pas les révisions transférées avec `deps lock` : un sélecteur mobile pourrait se résoudre autrement.
+
+## Restaurez et maintenez un projet
+
+La portée projet explicite est disponible à partir de [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Versionnez les fichiers `uap.toml` et `uap.lock` du projet. Dans une autre copie existante du dépôt, installez les clients requis, puis lancez :
+
+```bash
+agentplugins install --locked --scope project --project-root /path/to/project
+```
+
+Sélectionnez la même portée et la même racine pour la maintenance :
+
+```bash
+agentplugins list --scope project --project-root /path/to/project
+agentplugins deps status --scope project --project-root /path/to/project
+agentplugins repair review --target cursor --scope project --project-root /path/to/project
+agentplugins deps recover --scope project --project-root /path/to/project
+```
+
+Si un nom est ambigu, utilisez l’identité d’installation renvoyée par `list`. Le CLI publié utilise par défaut la portée utilisateur ; un manifeste dans le dossier courant ne change pas ce comportement. `--scope project` explicite, sans `--project-root`, utilise uniquement le dossier d’invocation.
+
+Gardez les reçus, journaux de récupération et données de `.uap/` en local. Restaurez les composants natifs depuis l’accord portable et suivez les instructions du client pour la confiance ou l’activation. Les sources et l’accès aux sources privées doivent rester disponibles. Consultez [l’installation par projet](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) et les [limites par client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
+
+## Commodité du code source actuel
+
+**Code source uniquement ; fonctionnalité non publiée :** `agentplugins install` sans argument sélectionne la portée projet si un fichier `uap.toml` ordinaire existe dans le dossier courant exact. Il ne recherche pas les dossiers parents. Une portée explicite reste prioritaire. Dans ce comportement source, un verrouillage existant est strictement validé avant tout changement ; seule son absence permet la résolution initiale, et `--locked` exige sa présence. Avec le CLI publié, sélectionnez explicitement le projet et utilisez `--locked`.
+
+## Signalez un problème clairement
+
+Notez la version du CLI, l’opération, la portée, la source du paquet, les clients et l’activation restante. Précisez si l’échec concerne l’acquisition de la source, la planification, l’application des fichiers, la récupération, la découverte client, l’authentification ou l’exécution. Retirez les identifiants avant de partager les diagnostics. `author doctor ./my-plugin` examine un paquet source ; `agentplugins doctor` diagnostique l’état géré par l’installateur.

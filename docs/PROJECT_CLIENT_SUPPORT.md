@@ -1,9 +1,10 @@
-# Current source project support
+# Project installation support
 
-**Source only / unreleased.** This table describes the project-installation
-feature source. It does not change the availability or evidence of published
-releases. Select `--scope project` and an existing project directory; the default
-remains `user`. [Project installation](PROJECT_INSTALLATION.md) explains the
+**Released in CLI 0.1.93:** explicit project scope prepares the client components
+listed below. Select `--scope project` and an existing project directory; the
+released default remains `user`. Native observation records are pinned to their
+recorded client versions and runs; they do not prove arbitrary runtime behavior.
+[Project installation](PROJECT_INSTALLATION.md) explains the
 portable agreement, maintenance and recovery commands.
 
 Every admitted target keeps project state, receipts, locks and retained data

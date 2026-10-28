@@ -33,7 +33,7 @@ export const ruLocaleConfig = {
     nav: [
       ...journeyNav("ru"),
       { text: "Быстрый старт", link: "/ru/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "API 0.1.65 (на английском)", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.ru.json"),
     editLink: {

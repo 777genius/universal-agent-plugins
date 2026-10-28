@@ -10,179 +10,179 @@ translationRequired: true
 
 # Maintain installed plugins
 
-
-These are **existing installer commands**. They operate on managed installation
-state, not on authored package scaffolds. Keep the package name, selected agents,
-and any reported installation identity available when diagnosing a problem.
+Use the installer to inspect and change managed installation state. Keep the
+package source, selected clients, scope and installation identity with the report
+when investigating a problem. The examples below use user scope unless they
+explicitly select a project.
 
 ## Inspect the situation first
 
 ```bash
-npx -y universal-agent-plugins@latest list
-npx -y universal-agent-plugins@latest doctor
-npx -y universal-agent-plugins@latest outdated --all
+agentplugins list
+agentplugins doctor
+agentplugins outdated --all
 ```
 
-`list` reports installations. Installer `doctor` diagnoses managed state.
-`outdated --all` identifies update candidates; it does not perform the update.
-These jobs cannot prove a remote MCP endpoint is healthy or that the client has
-completed authentication.
-
-Before changing anything, identify the symptom:
+`list` reports installations, `doctor` diagnoses managed state, and `outdated`
+finds update candidates without applying them. None of these proves that a
+remote service is healthy or that a client has completed authentication.
 
 | Symptom | Next step |
 | --- | --- |
-| Package was never installed | Return to [find and install](./install). |
-| Managed files drifted | Review a repair plan for the affected package and clients. |
-| A registry package has a newer version | Review an update plan. |
-| Client still needs activation or sign-in | Follow that client's printed instructions. |
-| Local authored package fails validation | Give the report to the author; use [Build checks](/en/build/checks). |
+| Package is absent | Return to [find and install](./install). |
+| Owned files are missing or drifted | Review a repair plan for that package and scope. |
+| A tracked source has a newer version | Review an update plan. |
+| Client needs trust, activation or sign-in | Follow the target's reported client instructions. |
+| Local package fails validation | Give the author the package report and [check guidance](../build/checks). |
 
 ## Update deliberately
 
 ```bash
-npx -y universal-agent-plugins@latest update context7 --target codex,cursor --dry-run
+agentplugins update context7 --target codex,cursor --dry-run
 ```
 
-Review the planned source and destinations before applying the update:
+Review the selected source, version and destinations. Omit `--dry-run` to apply:
 
 ```bash
-npx -y universal-agent-plugins@latest update context7 --target codex,cursor
+agentplugins update context7 --target codex,cursor
 ```
 
-The existing installer also supports `npx -y universal-agent-plugins@latest update --all`. Use it only
-when the intended scope really is all managed update candidates. A direct
-full-SHA source stays immutable; do not expect an update to follow a branch.
+`update --all` covers all managed update candidates. Use it when that whole set
+is your intended scope. An exact commit source stays immutable; an update does
+not make it follow a branch. Saved dependency ranges and moving refs advance
+only through the appropriate explicit update operation.
 
 ## Repair recorded state
 
 ```bash
-npx -y universal-agent-plugins@latest repair context7 --target codex,cursor --dry-run
+agentplugins repair context7 --target codex,cursor --dry-run
+agentplugins repair context7 --target codex,cursor
 ```
 
-Repair reapplies the recorded source. It is useful for managed-file drift,
-not for changing the authored package or selecting a different remote revision.
-After reviewing the plan, the corresponding apply command is:
-
-```bash
-npx -y universal-agent-plugins@latest repair context7 --target codex,cursor
-```
-
-If an operation reports a partial rollback or recovery instruction, retain that
-report and follow it. Avoid deleting user-owned files or treating every client
-configuration file as installer-owned.
+The first command previews; the second applies. Repair replays the recorded
+source to restore owned content. It does not select a new remote revision or
+silently overwrite externally changed native entries. Review conflicts and any
+pending recovery instructions before continuing.
 
 ## Remove the selected installation
 
 ```bash
-npx -y universal-agent-plugins@latest remove context7 --target codex,cursor --dry-run
+agentplugins remove context7 --target codex,cursor --dry-run
+agentplugins remove context7 --target codex,cursor
 ```
 
-Review what the installer owns before applying removal:
+Review the first plan before running the second command. Removal consumes the
+CLI's recorded ownership. It does not revoke a service account, remove unrelated
+runtimes or delete an author's source directory. Project removal retains plugin
+data and the shared verified content store by default.
+
+## Use a saved dependency environment
+
+`uap.toml` records the packages and targets you want; `uap.lock` records their
+exact resolved sources and digests. Inspect the selected environment with:
 
 ```bash
-npx -y universal-agent-plugins@latest remove context7 --target codex,cursor
+agentplugins deps status
+agentplugins deps tree
 ```
 
-Removal changes files owned by the CLI. It does not revoke a service account,
-uninstall an unrelated runtime, or delete an author's source directory.
+For a new environment, use `agentplugins deps init`, edit the manifest deliberately,
+then `agentplugins deps lock` to resolve it and `agentplugins install --locked`
+to apply that lock. Review confirmations and use `--dry-run` for a preview.
+The [dependency guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md)
+explains manifest syntax, mandatory package dependencies, version ranges and
+update rules.
+
+Do not assume an older imperative installation is in the portable agreement.
+Check `deps status` and the actual files before transferring them. Default saving
+for ordinary remote `add` commands is described separately in the source guide
+and must not be inferred from an installed-state receipt.
 
 ## Restore on another machine
 
-Carry your plugin set to another computer with `deps export` and `deps import`.
-The transfer contains only `uap.toml` and `uap.lock`. Installation on the
-destination then fetches the exact pinned packages.
-
-On the source machine, run this in the folder you want to carry:
+Transfer a saved user environment through an exchange folder. From that folder
+on the source machine:
 
 ```bash
-npx -y universal-agent-plugins@latest deps export
+agentplugins deps export
 ```
 
-On the destination, install the target clients, then run:
+Copy the folder to the destination, install the target clients, then run there:
 
 ```bash
-npx -y universal-agent-plugins@latest deps import
-npx -y universal-agent-plugins@latest install --locked --scope user
+agentplugins deps import
+agentplugins install --locked --scope user
 ```
 
-Or import and restore in one step:
+Or combine import and restoration:
 
 ```bash
-npx -y universal-agent-plugins@latest deps import --install
+agentplugins deps import --install
 ```
 
-- The optional `[directory]` argument overrides the exchange folder, which
-  defaults to the current folder. Export reads the global user environment;
-  import writes it. `AGENTPLUGINS_HOME` selects that environment. Explicit
-  `--scope user` also keeps the following install in that user environment when
-  the exchange folder contains a project-style `uap.toml`.
-- Every copy shows a preview and needs a confirmation or `--yes`. `--dry-run`
-  previews without writing.
-- Import validates the pair strictly and offline. It refuses missing or
-  inconsistent files, stale locks, unsafe sources and excluded targets.
-- Store content, receipts, client profiles, settings, secrets and `PLUGIN_DATA`
-  are not transferred. Configure client profiles and authentication on the
-  destination, and back up `PLUGIN_DATA` separately.
-- Installation with an empty store fetches each exact pin and verifies its
-  package and manifest digests. It never selects newer versions. Missing source
-  bytes or mismatched digests fail the install.
-- If installation fails after import saved the agreement, fix the error and run
-  `npx -y universal-agent-plugins@latest install --locked --scope user` again. If recovery is pending, run
-  `npx -y universal-agent-plugins@latest deps recover` first.
-- Do not run `npx -y universal-agent-plugins@latest deps lock` to recreate transferred pins. Moving
-  selectors could resolve differently.
+The optional directory argument selects another exchange folder. Export reads
+the user environment and import writes it; `AGENTPLUGINS_HOME` can select a
+specific environment. The transferred folder is not itself a replacement client
+profile. Explicit `--scope user` keeps restoration in the user environment.
 
-## Report a problem clearly
+Only the unchanged, strictly validated `uap.toml` and `uap.lock` are transferred.
+An actual copy shows a preview and requires confirmation or `--yes`;
+`--dry-run` previews it. Import validation is offline, while installation needs
+the recorded sources or verified cached packages. Cold restoration fetches exact
+pins and checks their digests; it does not choose newer versions.
 
-Record the operation, package source, selected clients, result, and remaining
-activation instruction. Share diagnostics with credentials removed. State
-whether the problem occurred during planning, managed-file application, client
-activation, authentication, or runtime use; these are different failure stages.
+Client profiles, settings, credentials, receipts and `PLUGIN_DATA` are not part
+of the transfer. Configure authentication on the new machine and back up data
+separately. If installation fails after import saved the pair, fix the reported
+cause and repeat `install --locked --scope user`. Run `deps recover --scope user`
+first when pending recovery is reported. Do not recreate transferred pins with
+`deps lock`, because a moving selector can resolve differently.
 
-Authoring `doctor ./my-plugin` supplies project evidence only. It cannot
-replace installer doctor, repair managed state, or complete OAuth. Authors and
-installers can compare evidence through the [handoff boundary](/en/build/handoff).
+## Restore and maintain a project
 
-## Restore project dependencies
-
-Explicit project installation is available in
+Explicit project scope is available in
 [CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
-Commit the project's `uap.toml` and `uap.lock` to version control. A teammate can
-check out the project, install the required clients, and run this from that project folder:
+Commit the project's `uap.toml` and `uap.lock`. In another existing checkout,
+install the required clients and run:
 
 ```bash
-npx -y universal-agent-plugins@latest install --locked --scope project
+agentplugins install --locked --scope project --project-root /path/to/project
 ```
 
-When invoking from another directory, also select the existing project directory
-with `--project-root /path/to/project`. Recorded sources and private-source access
-must remain available. Client-side trust, authentication or activation may still
-be required; see the [project client boundaries](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
-Credentials, local receipts and plugin data stay local rather than travelling
-with the agreement.
+Select the same scope and root for maintenance:
 
-## Maintain a project in the current source
-
-**Source only / unreleased.** Argumentless `agentplugins install` selects project
-scope when a regular `uap.toml` is present in the exact current directory; it
-never searches parents. Explicit `--scope` wins. An existing `uap.lock` is
-validated strictly before changes; only a missing lock allows first-install
-resolution. `--locked` requires that lock to exist. Use `update` to advance pins.
-The install preview shows the selected scope and agreement paths. Other
-maintenance commands require explicit project selection:
-
-```sh
+```bash
 agentplugins list --scope project --project-root /path/to/project
-agentplugins install --locked --scope project --project-root /path/to/project
+agentplugins deps status --scope project --project-root /path/to/project
 agentplugins repair review --target cursor --scope project --project-root /path/to/project
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-Commit the portable `uap.toml` and `uap.lock` when you want to share dependency
-intent and pins. Keep `.uap/` receipts, recovery state and retained data local;
-back up data separately. Removal retains data and the shared content cache.
-Repair restores missing owned components and damaged managed packages; changed
-native files require review. Recovery must use the original selected project.
+Use the installation identity from `list` if a name is ambiguous. The released
+CLI defaults to user scope; a project manifest in the current folder does not
+change that default. Explicit `--scope project` without `--project-root` uses
+only the invocation directory.
 
-[Project installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) · [Current project support and limitations](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+Keep `.uap/` receipts, recovery journals and retained data local. Restore native
+components from the portable agreement and follow the client's trust or
+activation instructions. Sources and private-source access must remain available.
+See [project installation](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
+and [per-client limits](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
+
+## Current source convenience
+
+**Source only / unreleased:** argumentless `agentplugins install` selects project
+scope when a regular `uap.toml` exists in the exact current directory. It does
+not search parents. Explicit scope wins. In that source behavior, an existing
+lock is checked strictly before changes; only a missing lock allows initial
+resolution, and `--locked` requires a lock. Use explicit project selection and
+`--locked` with the released CLI.
+
+## Report a problem clearly
+
+Record the CLI version, operation, scope, package source, target clients and
+remaining activation instruction. State whether failure occurred during source
+acquisition, planning, file application, recovery, client discovery, authentication
+or runtime use. Remove credentials before sharing diagnostics. Authoring
+`doctor ./my-plugin` inspects a source package; installer `doctor` diagnoses
+managed installation state.

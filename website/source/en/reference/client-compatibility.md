@@ -10,9 +10,40 @@ translationRequired: false
 
 # UAP client compatibility evidence
 
-## Draft installer 0.1.55
+## Current release and scope
 
-**0.1.55 is an unpublished draft.** These results qualify the recorded draft snapshots; they are not a release announcement or upgrade instruction. The released 0.1.53 evidence below remains valid and separate.
+[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93),
+published on 26 October 2026, includes explicit project installation and locked
+restoration. Its installer release evidence does not qualify every native agent
+runtime or the standard authoring executable. The current npm/native installer
+excludes `agentplugins author`; see the [Build guide](../build/) for source tools.
+
+Read compatibility as several separate questions:
+
+| Check | Meaning |
+| --- | --- |
+| Package conformance | The package's standard files satisfy the loader/schema contract. |
+| Component delivery | The adapter prepared or installed the components it owns. |
+| Native discovery | A particular client observed the intended component. |
+| MCP runtime | A recorded process or connection initialized and performed the tested calls. |
+| Authentication and model use | Only established when the evidence explicitly exercises them. |
+
+Project delivery commonly remains **Prepared** while trust, reload, explicit
+configuration or session work remains. ChatGPT project installation is explicitly
+unsupported. VS Code project scope prepares files for a single local folder;
+its pinned metadata observation is not MCP startup or model-execution evidence.
+See [project support by client](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)
+and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
+
+The records below preserve exact historical releases, client versions, platform
+identities and observed limitations. They do not automatically apply to 0.1.93,
+a later client version, another scope or an untested package. UAP is independent
+community tooling; these are bounded maintainer observations, not vendor
+certification or a claim of universal production readiness.
+
+## Historical draft installer 0.1.55
+
+**At the recorded September 2026 checkpoint, 0.1.55 was an unpublished draft.** These results qualify those draft snapshots; they are not current release status or an upgrade instruction. The released 0.1.53 evidence below remains valid and separate.
 
 Across two independently qualified scopes, **12 native-client lanes passed all 24 top-level required tests without skips**. Each used the original producer npm tarball, offline npm installation with scripts disabled, cold bootstrap from the frozen native binary, and a warm launch without the proof source. Genuine pinned clients then ran in fresh disposable profiles.
 
@@ -261,11 +292,11 @@ tool call, model, OAuth, or runtime claim for the current candidate. New results
 must identify their own source SHA and client/OS versions before replacing any
 pending cell.
 
-## Current source project scope
+## Project scope evidence
 
-**Source only / unreleased.** The historical release and native observations
-above retain their original scope. Project installation has a separate per-client
-contract: installed ownership, native discovery and MCP/model operation are
+Explicit project delivery is released in CLI 0.1.93. The historical release and
+native observations above retain their original scope. Project installation has
+a separate per-client contract: installed ownership, native discovery and MCP/model operation are
 reported separately. ChatGPT project scope refuses explicitly; other targets
 have their own component, preparation or harness restrictions.
 

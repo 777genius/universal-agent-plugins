@@ -35,6 +35,9 @@ export async function runSiteConsumerSmoke(browser, base, artifactsRoot) {
     await page.goto(`${base}/en/api/cli/prepared-authoring-v2-agentplugins-author`, { waitUntil: "networkidle" });
     const reference = await page.locator(".vp-doc").innerText();
     assert.match(reference, /released Agent Plugins CLI reference/i);
+    assert.match(reference, /Versioned authoring reference: CLI 0\.1\.65/);
+    assert.match(reference, /current published installer, CLI 0\.1\.93, does not include agentplugins author/);
+    assert.ok(await page.locator('.vp-doc a[href$="/en/build/"]').count() > 0);
     assert.doesNotMatch(reference, /not released|not a public release/i);
     await page.screenshot({ path: path.join(artifactsRoot, "d2b-agentplugins-author.png"), fullPage: true });
     const redirects = JSON.parse(await fs.readFile(generatedRegistryPaths.redirects, "utf8"));

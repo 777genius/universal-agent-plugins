@@ -33,7 +33,7 @@ export const frLocaleConfig = {
     nav: [
       ...journeyNav("fr"),
       { text: "Démarrage rapide", link: "/fr/guide/quickstart" },
-      { text: "API", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
+      { text: "API 0.1.65 (anglais)", link: "/en/api/cli/prepared-authoring-v2-agentplugins-author" }
     ],
     sidebar: readSidebar("sidebars.fr.json"),
     editLink: {

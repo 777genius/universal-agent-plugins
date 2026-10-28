@@ -76,7 +76,8 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
       evidence.push({ variant, fiveCounterparts: true, gatewayHomes: true });
       async function inspectSwitcher(label, destination, language, fallback, home = false) {
-        const homeIdentities = { en: "Agent Plugins", ru: "Используйте плагины / Создавайте плагины", es: "Usar plugins / Crear plugins", fr: "Utiliser des plugins / Créer des plugins", zh: "使用插件 / 构建插件" };
+        const homeIdentities = { en: "Agent Plugins", ru: "Agent Plugins", es: "Agent Plugins", fr: "Agent Plugins", zh: "Agent Plugins" };
+        const useIdentities = { en: "Use plugins", ru: "Использовать плагины", es: "Usar plugins", fr: "Utiliser des plugins", zh: "使用插件" };
         for (const [index, code] of locales.entries()) {
           // Every activation starts at its own origin, including same-route
           // English fallbacks; no previous selection supplies the next menu.
@@ -117,7 +118,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
           }
           const expectedPath = new URL(`${base}${destination(code)}`).pathname;
           const actualLanguage = language(code);
-          const identity = home ? homeIdentities[actualLanguage] : "Use plugins";
+          const identity = home ? homeIdentities[actualLanguage] : useIdentities[actualLanguage];
           const selector = ".vp-doc h1";
           await links.nth(index).click();
           await page.waitForURL(url => url.pathname === expectedPath);

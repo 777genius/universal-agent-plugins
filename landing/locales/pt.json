@@ -268,7 +268,7 @@
       "items": {
         "0": {
           "question": "Quais agentes de IA são compatíveis?",
-          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline e Windsurf têm suporte ou estão preparados por um caminho explícito específico do cliente. Grok Build e Kimi Code também aceitam skills e MCP nativos."
+          "answer": "Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code, Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code, Qoder: cada cliente tem seu próprio caminho de instalação ou preparação. A compatibilidade depende dos componentes, do escopo e dos requisitos de ativação."
         },
         "1": {
           "question": "Um comando instala em todos os agentes?",
@@ -280,7 +280,7 @@
         },
         "3": {
           "question": "Posso instalar um plugin fora deste diretório?",
-          "answer": "Sim. Use uma fonte fixa do GitHub que contenha um pacote Agent Plugins 1.0 plugin.json válido."
+          "answer": "Sim. Instale um pacote completo com plugin.json de uma pasta local, Git por HTTPS ou SSH, um link de provedor compatível ou um arquivo pronto para instalar. A CLI registra as fontes exatas das dependências salvas que permitem isso."
         },
         "4": {
           "question": "Todos os plugins descobertos são revisados?",
@@ -781,7 +781,7 @@
         "note": "Pacote nativo de Agent Plugin",
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 em projetos do Cursor sem adaptar cada plugin manualmente. A CLI planeja o pacote nativo antes de alterar arquivos.",
-        "delivery": "A CLI grava o plugin do Cursor, a skill e as projeções MCP compatíveis para o projeto selecionado.",
+        "delivery": "A CLI prepara os componentes de plugin, skills e MCP compatíveis com Cursor no escopo escolhido. O escopo de usuário é o padrão; o escopo de projeto deve ser selecionado explicitamente.",
         "activation": "Recarregue o Cursor quando solicitado e verifique se o plugin foi detectado."
       },
       "copilot": {
@@ -937,7 +937,7 @@
       "vendorDocs": "Leia a documentação de {name}",
       "availableFor": "Plugins disponíveis para {name}",
       "count": "{count} pacote revisado oferece suporte a este cliente. | {count} pacotes revisados oferecem suporte a este cliente.",
-      "tryPlugin": "Experimente o Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela origem fixada de um pacote do GitHub.",
+      "tryPlugin": "Experimente Context7 ou substitua {source} pelo nome curto revisado de outro plugin compatível ou pela fonte de um pacote completo.",
       "localPackageHint": "Substitua ./my-plugin pelo caminho de um pacote Agent Plugins 1.0 válido."
     },
     "components": {
