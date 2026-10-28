@@ -24,9 +24,14 @@ on:
   workflow_dispatch:
     inputs:
       sdk_linux_only:
-        description: Run only the two focused Linux SDK lifecycle jobs
+        description: Run only the two focused SDK lifecycle jobs
         type: boolean
         default: false
+      sdk_target:
+        description: Platform for the focused SDK jobs
+        type: choice
+        default: linux-amd64
+        options: [linux-amd64, darwin-arm64]
 
 permissions:
   contents: read
@@ -176,8 +181,8 @@ jobs:
 
   sdk-linux:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.sdk_linux_only }}
-    name: ${{ matrix.client }} SDK lifecycle (linux-amd64)
-    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    name: ${{ matrix.client }} SDK lifecycle (${{ inputs.sdk_target }})
+    runs-on: ${{ inputs.sdk_target == 'darwin-arm64' && 'macos-15' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -207,6 +212,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SDK_CLIENT: ${{ matrix.client }}
+          SDK_TARGET: ${{ inputs.sdk_target }}
         shell: bash
         run: |
           python - <<'PY'
@@ -217,13 +223,14 @@ jobs:
           spec.loader.exec_module(matrix)
           output = Path(os.environ["RUNNER_TEMP"]) / "sdk-linux-proof"
           selected = os.environ["SDK_CLIENT"]
-          binary, evidence = matrix.provision(matrix.PINS["linux-amd64"][selected], output / "bin", selected)
-          (output / "provision.json").write_text(json.dumps({"client": selected, "path": str(binary), **evidence}, indent=2) + "\n")
+          binary, evidence = matrix.provision(matrix.PINS[os.environ["SDK_TARGET"]][selected], output / "bin", selected)
+          (output / "provision.json").write_text(json.dumps({"client": selected, "target": os.environ["SDK_TARGET"], "path": str(binary), **evidence}, indent=2) + "\n")
           PY
       - name: Verify SDK lifecycle through the real Go engine and native client
         timeout-minutes: 12
         env:
           SDK_CLIENT: ${{ matrix.client }}
+          SDK_TARGET: ${{ inputs.sdk_target }}
           EXPECTED_COMMIT: ${{ github.sha }}
         shell: bash
         run: |
@@ -234,13 +241,14 @@ jobs:
           from native_client_research import run_probe
           output = Path(os.environ["RUNNER_TEMP"]) / "sdk-linux-proof"
           selected = os.environ["SDK_CLIENT"]
+          target = os.environ["SDK_TARGET"]
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           assert commit == os.environ["EXPECTED_COMMIT"]
           source = "777genius/universal-agent-plugins@4555aa53844ee0078e9036cd82638afd67f77c16//repotests/testdata/agentplugins_commands_fixture"
           engine, client = output / "bin/agentplugins", output / "bin" / selected
           hashes = {"engineSHA256": hashlib.sha256(engine.read_bytes()).hexdigest(), "nativeSHA256": hashlib.sha256(client.read_bytes()).hexdigest()}
           assert hashes["nativeSHA256"] == json.loads((output / "provision.json").read_text())["binary_sha256"]
-          (output / "source-identity.json").write_text(json.dumps({"commit": commit, "client": selected, "source": source, **hashes}, indent=2) + "\n")
+          (output / "source-identity.json").write_text(json.dumps({"commit": commit, "client": selected, "target": target, "source": source, **hashes}, indent=2) + "\n")
           temporary = output / "tmp"
           temporary.mkdir()
           env = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR") if key in os.environ}
@@ -253,13 +261,14 @@ jobs:
           receipt = json.loads(receipt_path.read_text())
           assert receipt["status"] == "passed" and receipt["stage"] == "complete"
           assert receipt["error"] == "" and receipt["source"] == source and receipt["client"] == selected
+          assert (receipt["platform"], receipt["architecture"]) == {"linux-amd64": ("linux", "x64"), "darwin-arm64": ("darwin", "arm64")}[target]
           assert all(receipt[key] == value for key, value in hashes.items())
           PY
       - name: Upload focused SDK lifecycle evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: sdk-linux-${{ matrix.client }}-${{ github.sha }}
+          name: sdk-${{ inputs.sdk_target }}-${{ matrix.client }}-${{ github.sha }}
           path: |
             ${{ runner.temp }}/sdk-linux-proof/*.json
             ${{ runner.temp }}/sdk-linux-proof/*.log

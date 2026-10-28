@@ -287,11 +287,15 @@ Linux requires the engine's ordinary-process containment prerequisites, includin
 `/proc/<pid>/task/<tid>/children`. Restricted containers without that interface
 cannot qualify the real installation journey; the production refusal remains.
 The existing Native Client Runtime workflow also has a manual `sdk_linux_only`
-mode that runs just the Claude and Codex SDK journeys on Ubuntu, without running
+mode that runs just the Claude and Codex SDK journeys on the selected platform, without running
 the other native matrix cells:
 
 ```sh
 gh workflow run agentplugins-native-clients.yml \
   --repo 777genius/universal-agent-plugins \
-  --ref <committed-branch> -f sdk_linux_only=true
+  --ref <committed-branch> -f sdk_linux_only=true -f sdk_target=linux-amd64
 ```
+
+If Linux runners are queued, select `-f sdk_target=darwin-arm64` to run the same
+two isolated SDK journeys on macOS 15. The default remains `linux-amd64`; the
+receipt and uploaded source identity record the selected platform.
