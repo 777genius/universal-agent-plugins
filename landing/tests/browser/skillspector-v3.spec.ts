@@ -13,6 +13,12 @@ const referenceFixture = JSON.parse(
     'utf8',
   ),
 );
+const completeContextFixture = JSON.parse(
+  readFileSync(
+    new URL('../fixtures/skillspector-v3-complete-context.json', import.meta.url),
+    'utf8',
+  ),
+);
 const producerShard = JSON.parse(
   readFileSync(new URL(fixture.shards[0]!.path, fixtureRoot), 'utf8'),
 );
@@ -27,7 +33,9 @@ async function setup(
     | 'selected'
     | 'acquisition'
     | 'references'
-    | 'failed' = 'mixed',
+    | 'failed'
+    | 'completeExternal'
+    | 'completeResolved' = 'mixed',
   reportGate?: Promise<void>,
 ) {
   const errors = await offline(page);
@@ -107,11 +115,76 @@ async function setup(
     };
     manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
   }
+  const complete = mode === 'completeExternal' || mode === 'completeResolved';
+  if (complete) {
+    const record = structuredClone(
+      completeContextFixture.records[mode === 'completeExternal' ? 'external' : 'resolved'],
+    );
+    shard.records = [record];
+    shard.repository = record.source.repository;
+    manifest.generated_at = completeContextFixture.generated_at;
+    manifest.coverage = {
+      selected: 1,
+      reported: 1,
+      pending: 0,
+      complete: 1,
+      partial: 0,
+      error: 0,
+      stale: 0,
+    };
+    if (mode === 'completeResolved') {
+      manifest.plugin_coverage = [];
+      manifest.plugin_states = [];
+      manifest.source_states = [
+        {
+          id: `${record.source.repository}/${record.skill_name}`,
+          repository: record.source.repository,
+          state: 'resolved',
+          current: true,
+          reason: null,
+          revision: record.source.revision,
+          path: record.source.path,
+          selected_ids: [record.id],
+          candidates: [],
+        },
+      ];
+      await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+        route.fulfill({
+          json: {
+            items: [
+              {
+                id: 'actual-complete-reference',
+                providerId: 'skills-sh',
+                providerUrl: `https://skills.sh/${record.source.repository}/${record.skill_name}`,
+                title: record.skill_name,
+                skillNameHint: record.skill_name,
+                source: {
+                  kind: 'github',
+                  repository: record.source.repository,
+                  url: `https://github.com/${record.source.repository}`,
+                },
+                metrics: { installs: 1, window: 'all-time' },
+                availability: 'unverified',
+              },
+            ],
+            page: 0,
+            total: 1,
+            hasMore: false,
+            view: 'popular',
+            cache: { status: 'fresh', fetchedAt: manifest.generated_at },
+          },
+        }),
+      );
+    } else {
+      manifest.plugin_coverage[0] = { ...manifest.plugin_coverage[0]!, ...manifest.coverage };
+      Object.assign(manifest.plugin_states[0]!, { skills_total: 1, selected_ids: [record.id] });
+    }
+  }
   const body = JSON.stringify(shard);
   const hash = createHash('sha256').update(body).digest('hex');
   manifest.shards = [
     {
-      repository: plugin.source.repository,
+      repository: shard.repository,
       path: `shards/${hash}.json`,
       digest: `sha256:${hash}`,
       bytes: Buffer.byteLength(body),
@@ -156,9 +229,18 @@ async function setup(
       : route.fulfill({ body, contentType: 'application/json' });
   });
   await projections(page, index);
-  await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
+  await navigate(
+    page,
+    '/plugins/',
+    'en',
+    mode === 'completeResolved' ? '?tab=skills' : '?q=i18n-state-00',
+  );
   return {
-    assessment: page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector'),
+    assessment: page.locator(
+      mode === 'completeResolved'
+        ? '.skill-card .skillspector'
+        : '.plugin-card[data-install-source="i18n-state-00"] .skillspector',
+    ),
     errors,
     plugin,
   };
@@ -193,6 +275,9 @@ for (const width of [1280, 390]) {
     await expect(signal.locator('a').first()).toHaveAttribute(
       'href',
       /github.com\/.*\/blob\/[a-f0-9]{40}\//,
+    );
+    await expect(assessment.locator('.skillspector__coverage > strong')).toHaveText(
+      'Coverage and reference context',
     );
     await expect(assessment.locator('.skillspector__coverage')).toContainText(
       /static_parse_limit|reference_missing|analyzer_incomplete/,
@@ -247,6 +332,14 @@ for (const mode of ['stale', 'unavailable', 'invalid', 'unsupported'] as const) 
         '0 of 13 selected skills fully checked',
       );
     await assessment.locator(':scope > summary').click();
+    if (mode === 'stale' || mode === 'unsupported') {
+      await expect(assessment.locator('.skillspector__coverage')).not.toContainText(
+        'Incomplete check',
+      );
+      await expect(assessment.locator('.skillspector__coverage > strong')).toHaveText(
+        'Coverage and reference context',
+      );
+    } else await expect(assessment.locator('.skillspector__coverage')).toHaveCount(0);
     if (mode === 'unavailable' || mode === 'invalid')
       await expect(assessment).toContainText('could not be loaded');
     expect(errors).toEqual([]);
@@ -420,6 +513,32 @@ test('published acquisition failure says could not check while keeping its repor
   await expect(assessment.locator('.skillspector__coverage')).toContainText(
     'Pinned source retrieval failed.',
   );
+  await expect(assessment.locator('.skillspector__coverage')).not.toContainText('Incomplete check');
+  await expect(assessment.locator('.skillspector__coverage > strong')).toHaveText(
+    'Coverage and reference context',
+  );
   await expect(assessment.locator('.skillspector__technical')).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+for (const mode of ['completeExternal', 'completeResolved'] as const) {
+  test(`complete actual ${mode} context does not imply an incomplete check`, async ({ page }) => {
+    const { assessment, errors } = await setup(page, mode);
+    await expect(assessment).not.toHaveClass(/skillspector--(?:loading|unavailable|incomplete)/);
+    await expect(assessment.locator(':scope > summary')).toContainText('1 of 1');
+    await assessment.locator(':scope > summary').click();
+    const coverage = assessment.locator('.skillspector__coverage');
+    await expect(coverage.locator(':scope > strong')).toHaveText('Coverage and reference context');
+    await expect(coverage).not.toContainText('Incomplete check');
+    await expect(coverage).not.toContainText('What was not inspected');
+    await coverage.locator('.skillspector__context-record > summary').click();
+    if (mode === 'completeResolved') {
+      await expect(coverage).toContainText('resolved · analyzed');
+      await expect(coverage.locator('.skillspector__references > li')).toHaveCount(2);
+    } else {
+      await expect(coverage).toContainText('rejected · out_of_scope');
+      await expect(coverage.locator('.skillspector__references > li')).toHaveCount(17);
+    }
+    expect(errors).toEqual([]);
+  });
+}

@@ -58,7 +58,7 @@
       "position": "End line {end}; columns {startColumn}–{endColumn}",
       "evidence": "Evidence",
       "findingIds": "Original finding IDs",
-      "uninspected": "What was not inspected",
+      "coverageContext": "Coverage and reference context",
       "provenance": "Provenance and technical report",
       "profile": "Scan profile",
       "retry": "Retry state",

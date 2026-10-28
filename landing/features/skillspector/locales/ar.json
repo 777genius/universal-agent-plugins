@@ -58,7 +58,7 @@
       "position": "السطر الأخير {end}؛ الأعمدة {startColumn}–{endColumn}",
       "evidence": "الأدلة",
       "findingIds": "معرفات النتائج الأصلية",
-      "uninspected": "ما لم يتم فحصه",
+      "coverageContext": "التغطية وسياق المراجع",
       "provenance": "المصدر والتقرير التقني",
       "profile": "ملف الفحص",
       "retry": "حالة إعادة المحاولة",

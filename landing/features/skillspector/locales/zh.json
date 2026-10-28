@@ -58,7 +58,7 @@
       "position": "结束行 {end}；列 {startColumn}–{endColumn}",
       "evidence": "证据",
       "findingIds": "原始发现项标识",
-      "uninspected": "未检查的内容",
+      "coverageContext": "检查覆盖范围与引用上下文",
       "provenance": "来源及技术报告",
       "profile": "扫描配置",
       "retry": "重试状态",

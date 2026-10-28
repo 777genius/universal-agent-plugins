@@ -58,7 +58,7 @@
       "position": "Linha final {end}; colunas {startColumn}–{endColumn}",
       "evidence": "Evidências",
       "findingIds": "Identificadores originais dos achados",
-      "uninspected": "O que não foi inspecionado",
+      "coverageContext": "Cobertura e contexto das referências",
       "provenance": "Procedência e relatório técnico",
       "profile": "Perfil de análise",
       "retry": "Estado da nova tentativa",

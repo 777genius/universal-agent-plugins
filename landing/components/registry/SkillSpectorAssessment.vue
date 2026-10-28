@@ -352,8 +352,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         "
         class="skillspector__coverage"
       >
-        <strong>{{ t('registryUi.skillSpector.uninspected') }}</strong>
-        <p>{{ t('registryUi.skillSpector.incomplete') }}</p>
+        <strong>{{ t('registryUi.skillSpector.coverageContext') }}</strong>
         <ul>
           <li v-for="(reason, index) in reasons" :key="index">
             <code>{{ reason.code }}</code

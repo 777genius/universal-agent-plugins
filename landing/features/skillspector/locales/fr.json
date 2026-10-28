@@ -58,7 +58,7 @@
       "position": "Ligne finale {end} ; colonnes {startColumn}–{endColumn}",
       "evidence": "Éléments probants",
       "findingIds": "Identifiants des constats d’origine",
-      "uninspected": "Éléments non inspectés",
+      "coverageContext": "Couverture et contexte des références",
       "provenance": "Provenance et rapport technique",
       "profile": "Profil d’analyse",
       "retry": "État de la nouvelle tentative",

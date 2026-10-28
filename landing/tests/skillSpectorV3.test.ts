@@ -58,6 +58,29 @@ function decodeReference(record = referenceRecord()) {
   )[0]!;
 }
 describe('SkillSpector v3 exact producer contract', () => {
+  it('accepts actual complete reports with resolved and external reference context', () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-complete-context.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    for (const record of Object.values(fixture.records) as SkillSpectorRecord[]) {
+      const index = { ...manifest, generated_at: fixture.generated_at };
+      const part = { ...descriptor, repository: record.source.repository, record_count: 1 };
+      const [decoded] = decodeSkillSpectorShardV3(
+        { ...shard, repository: part.repository, records: [record] },
+        index,
+        part,
+      );
+      assert.equal(decoded!.status, 'complete');
+      assert.equal(decoded!.coverage!.status, 'complete');
+      assert.ok(decoded!.coverage!.references!.length > 0);
+      assert.equal(decoded!.coverage!.ledger_exceptions!.length, 0);
+      assert.deepEqual(decoded, record);
+    }
+  });
+
   it('accepts all three real normalized reference/ledger records without dropping original positions or evidence', () => {
     for (const [key, references, diagnostics] of [
       ['cloudflare', 6, 664],

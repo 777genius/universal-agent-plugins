@@ -58,7 +58,7 @@
       "position": "अंतिम पंक्ति {end}; स्तंभ {startColumn}–{endColumn}",
       "evidence": "प्रमाण",
       "findingIds": "मूल निष्कर्ष पहचानकर्ता",
-      "uninspected": "क्या नहीं जाँचा गया",
+      "coverageContext": "जाँच का दायरा और संदर्भ का प्रसंग",
       "provenance": "उत्पत्ति और तकनीकी रिपोर्ट",
       "profile": "स्कैन प्रोफ़ाइल",
       "retry": "पुनः प्रयास की स्थिति",
