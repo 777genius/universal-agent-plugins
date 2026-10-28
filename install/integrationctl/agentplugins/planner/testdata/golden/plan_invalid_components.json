@@ -560,6 +560,57 @@
       ]
     }
   },
+  "pi": {
+    "Error": "",
+    "Plan": {
+      "Activation": "failed",
+      "ActivePath": "\u003croot\u003e/clients/pi/extensions/demo-0123456789ab",
+      "Authentication": "not_checked",
+      "ClientID": "pi",
+      "Components": [],
+      "DeclaredName": "broken",
+      "DeclaredVersion": "1.0.0",
+      "Diagnostics": [
+        {
+          "Boundary": "skill",
+          "Code": "skill_invalid",
+          "Item": "",
+          "Message": "all skills are invalid",
+          "Path": "",
+          "Severity": "error"
+        }
+      ],
+      "InstallIntent": "",
+      "LocalActions": null,
+      "LocalEntryObservation": null,
+      "LocalPreparationAuthorized": false,
+      "NativeRegistryExecutable": "\u003croot\u003e/bin/pi",
+      "NativeRegistryRoot": "\u003croot\u003e/clients/pi",
+      "OpenCodeHost": null,
+      "PackageMode": "native",
+      "PersonalChatGPTPreparation": false,
+      "PhysicalArtifactID": "demo-0123456789ab",
+      "Policy": "allowed",
+      "PreviousNativeObjects": null,
+      "Scope": "user",
+      "SelectedDelivery": {},
+      "Status": "unsupported",
+      "TargetAnchor": "\u003croot\u003e/clients/pi",
+      "TargetContext": {
+        "ProjectRoot": "",
+        "Scope": "user",
+        "UserConfigRoot": "\u003croot\u003e/clients/pi"
+      },
+      "TargetRoot": "\u003croot\u003e/clients/pi/extensions",
+      "UserActions": null,
+      "Verification": "package_validated",
+      "Warnings": [
+        "authentication_not_catalog_verified",
+        "skill_invalid",
+        "no_valid_components"
+      ]
+    }
+  },
   "qoder": {
     "Error": "",
     "Plan": {

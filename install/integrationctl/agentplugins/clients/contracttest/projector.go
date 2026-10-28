@@ -2,6 +2,7 @@ package contracttest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,6 +44,9 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		return []string{fmt.Sprintf("write outside marker: %v", err)}
 	}
 	input := projectorInput(adapter, root, staging)
+	if adapter.ID() == domain.ClientPi {
+		input = piProjectorInput(t, input, root)
+	}
 	before := listPaths(root)
 	first, err := projector.Project(context.Background(), input)
 	if err != nil {
@@ -56,6 +60,9 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		return append(violations, fmt.Sprintf("seed reset staging tree: %v", err))
 	}
 	input.StagingPath = reset
+	if adapter.ID() == domain.ClientPi {
+		seedPiEntrypoint(t, reset)
+	}
 	second, err := projector.Project(context.Background(), input)
 	if err != nil {
 		return append(violations, fmt.Sprintf("project on a clean staging tree: %v", err))
@@ -64,6 +71,29 @@ func projectorViolations(t *testing.T, adapter clients.Adapter) []string {
 		violations = append(violations, "projecting twice on a clean staging tree returned different objects")
 	}
 	return violations
+}
+
+func piProjectorInput(t *testing.T, input clients.ProjectionInput, root string) clients.ProjectionInput {
+	t.Helper()
+	profile := filepath.Join(root, "config")
+	input.Plan.TargetAnchor, input.Plan.NativeRegistryRoot = profile, profile
+	input.Plan.TargetRoot = filepath.Join(profile, "extensions")
+	input.Plan.ActivePath = filepath.Join(input.Plan.TargetRoot, input.Plan.PhysicalArtifactID)
+	input.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentExtension, Name: "com.universal-agent-plugins.pi", Support: domain.SupportNative}}
+	input.Envelope.Manifest.Extensions = map[string]json.RawMessage{"com.universal-agent-plugins.pi": json.RawMessage(`{"version":1,"source":"native"}`)}
+	input.Envelope.TreeDigest = "sha256:" + strings.Repeat("a", 64)
+	seedPiEntrypoint(t, input.StagingPath)
+	return input
+}
+
+func seedPiEntrypoint(t *testing.T, staging string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(staging, "native"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "native", "index.ts"), []byte("export default function(pi) {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func projectorObjectViolations(objects []domain.NativeObjectOwnership) []string {

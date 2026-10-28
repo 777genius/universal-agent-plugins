@@ -10,5 +10,6 @@ func AllSupportEntries() []runtime.SupportEntry {
 	entries = append(entries, cursorSupportEntries()...)
 	entries = append(entries, vscodeLocalSupportEntries()...)
 	entries = append(entries, qoderSupportEntries()...)
+	entries = append(entries, piSupportEntries()...)
 	return entries
 }

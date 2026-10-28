@@ -121,6 +121,8 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	}
 	plan.TargetAnchor, plan.TargetRoot, plan.ActivePath = target.TargetAnchor, target.TargetRoot, target.ActivePath
 	plan.Components = componentDecisions(request.Envelope, definition.Capabilities)
+	interpreter, _ := clients.As[clients.ExtensionInterpreter](planner.Registry, plan.ClientID)
+	interpretExtensionDecisions(request.Envelope, plan.Components, interpreter)
 	commandsWithheld := applyCommandDecisions(&plan, request.Envelope, definition)
 	if err := planner.qualify(input, definition.Capabilities, commandsWithheld, &plan); err != nil {
 		return plan, err
@@ -480,6 +482,21 @@ func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.Cli
 		decisions = append(decisions, decision(domain.ComponentExtension, name, capabilities.ExtensionSupport))
 	}
 	return decisions
+}
+
+func interpretExtensionDecisions(envelope domain.PackageEnvelope, decisions []domain.ComponentDecision, interpreter clients.ExtensionInterpreter) {
+	if interpreter == nil {
+		return
+	}
+	for i := range decisions {
+		if decisions[i].Kind != domain.ComponentExtension {
+			continue
+		}
+		decisions[i].Support, decisions[i].Reason = domain.SupportUnsupported, "extension_semantics_not_established"
+		if interpreter != nil {
+			decisions[i].Support, decisions[i].Reason = interpreter.InterpretExtension(decisions[i].Name, envelope.Manifest.Extensions[decisions[i].Name])
+		}
+	}
 }
 
 func mcpDecision(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities, name string) domain.ComponentDecision {
