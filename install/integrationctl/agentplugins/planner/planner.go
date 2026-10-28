@@ -484,21 +484,6 @@ func componentDecisions(envelope domain.PackageEnvelope, capabilities domain.Cli
 	return decisions
 }
 
-func interpretExtensionDecisions(envelope domain.PackageEnvelope, decisions []domain.ComponentDecision, interpreter clients.ExtensionInterpreter) {
-	if interpreter == nil {
-		return
-	}
-	for i := range decisions {
-		if decisions[i].Kind != domain.ComponentExtension {
-			continue
-		}
-		decisions[i].Support, decisions[i].Reason = domain.SupportUnsupported, "extension_semantics_not_established"
-		if interpreter != nil {
-			decisions[i].Support, decisions[i].Reason = interpreter.InterpretExtension(decisions[i].Name, envelope.Manifest.Extensions[decisions[i].Name])
-		}
-	}
-}
-
 func mcpDecision(envelope domain.PackageEnvelope, capabilities domain.ClientCapabilities, name string) domain.ComponentDecision {
 	server := envelope.MCP.Servers[name]
 	support, ok := capabilities.MCPTransports[server.Type]
