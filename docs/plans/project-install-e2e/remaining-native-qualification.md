@@ -646,17 +646,36 @@ body/path; no assumed provider prompt format or LLM skill activation is claimed.
 Fixed native argv is exact Node, exact `gemini.js`, `--prompt <fixed-stage-prompt>
 --approval-mode default --output-format stream-json --model gemini-2.5-flash`.
 No resume, fake-response file, injected MCP definition or extra extension.
-Original-home settings set `privacy.usageStatisticsEnabled=false`,
+Original-home settings set `security.auth.selectedType='gemini-api-key'`,
+`privacy.usageStatisticsEnabled=false`,
 `telemetry.enabled=false` and
 `experimental.adk.agentSessionNoninteractiveEnabled=false`, selecting the pinned
 legacy headless loop. Set `GOOGLE_GEMINI_BASE_URL` to the fresh literal loopback
 origin and `GOOGLE_GENAI_API_VERSION=v1beta`. Supply a fresh fixture-owned
 `GEMINI_API_KEY` required only by this loopback provider; compare its exact
 `x-goog-api-key` header privately and redact the key from all admitted artifacts.
-The pinned GATEWAY mode supports this custom endpoint. Its config code otherwise
-evaluates `loadApiKey()` before reaching the GATEWAY branch, so an explicit
-fixture key avoids accidental keychain probing. This is test-provider
+The explicit API-key type passes the pinned native auth validator and still
+uses the configured custom endpoint. The explicit fixture key also avoids
+`loadApiKey()` and accidental keychain probing. This is test-provider
 authentication, never vendor Google authentication/OAuth or an inherited account.
+
+Genuine [runtime run 40349097306](https://github.com/777genius/universal-agent-plugins/actions/runs/40349097306),
+native artifact `12668685097` (ZIP SHA256
+`311209db69ad0ebb6f59f64bcd3c918019a5e1167aad2f8cb4dc8d5e95f8e870`),
+failed before any provider request with `Invalid auth method selected.` The exact
+source commit `6006c14a4decfe4b891c6263ad6ad5992e404b5b` selects GATEWAY from
+`GOOGLE_GEMINI_BASE_URL`, but its CLI auth validator does not admit that type.
+This amendment selects the existing API-key type in original-home settings;
+the fixture key, loopback endpoint, native argv, normal auth validation, trust,
+tool policy, acquisition and budgets remain the reviewed contract. It does not
+enable external authentication or qualify the unexecuted provider/tool stages.
+Pinned source blobs are `packages/core/src/core/contentGenerator.ts`
+`f44ec6d2458473360db05f3150589cbd192c4a0e`,
+`packages/cli/src/validateNonInterActiveAuth.ts`
+`a15f4f83a20b515e98e69eee3786a22b48441408`, `config/auth.ts`
+`1ca07f98eb4c588b2b0bef0d627bc9b373bd6e7f` and `config/settingsSchema.ts`
+`f85279cdc3d78b2033a6e48f92eaf02febf1eaa0` (the last two under
+`packages/cli/src`). Implement only after two independent plan reviews.
 
 Admit only POST
 `/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse` and optional POST
@@ -857,6 +876,46 @@ the documented suppression control in the official
 claim network isolation or supply vendor authentication. Immutable runtime
 identities remain checked before and after every child. Inert contracts assert
 the exact supplied environment on every help/catalog call.
+
+## Kimi installed local lifecycle amendment
+
+Genuine Kimi API run 40238495966 at `ac3a7e5da565590fd85c4ff9795cae6b312ed6b1`,
+artifact 12615878095 (ZIP SHA256
+`cb14eec0bd7fc5040a43d4314255055a59ad1729a24dacb56ffcc894607381ef`),
+confirmed the pinned 2.3.2 native bearer, A/B trust and separate A/B/C/user
+catalogs with named initialize/tools-list and untrusted C refusal. Its
+tools-call count was zero. Admit only exact product versions `{2.3.1, 2.3.2}`;
+all existing executable, original-user and nearest-Git checks remain intact.
+
+Select `TestAgentpluginsKimiNativeProjectComponentsLifecycle`, opt-in
+`AGENTPLUGINS_KIMI_PROJECT_NATIVE_E2E=1`. Public UAP installs independent local
+user/A/B/C packages. Seven fresh authenticated native web processes observe the
+empty, installed, unchanged, updated, missing-repaired, restarted and removed
+stages. Native API trust authorizes only A/B during the empty baseline; C stays
+untrusted. Receipt-selected skills and independently reconstructed exact
+stdio command/argv/environment/package/data/cwd authority must match the
+unchanged installed native files before the API reads them. B/C/user managed
+package inventories and their original receipts/native bytes remain exact.
+
+This is the supported imperative local-directory route, with `--no-save` and
+no saved dependency agreement. Missing local repair keeps its selected source
+at A-two: it proves reconstruction from unchanged selected local input. Moving
+Git/ZIP sources and repair from their recorded immutable pin remain separate
+required gates, `TestProjectComposedSourceLifecycleSeparatesUserAndProjects`,
+`TestProjectKimiComposedSavedLifecycle` and
+`TestProjectKimiColdSavedImportPreservesPinnedAgreement`. Do not attribute those
+source-resolution results to the native local-directory test or change product
+repair semantics to fit a stronger local-source claim.
+
+The native test may satisfy project-lifecycle, native-restart-removal,
+mcp-initialize and mcp-tools-list only after the complete sequence and cleanup.
+It keeps mcp-tools-call false, activation Prepared, vendor authentication false
+and real-model use false. Provider-driven tool calls require their own observed
+and independently reviewed amendment. Reuse existing private service capture,
+token quarantine/redaction and closed artifact admission; never upload a native
+profile or token file. The original total/work/cleanup budgets are 900/840/60
+seconds, with no native children across UAP mutations.
+
 ## Current-source runtime CI handoff
 
 The October 26 continuation uses a separate `project-native-runtime.yml` job
@@ -1128,6 +1187,354 @@ complete. Actual raw approval/session/provider/probe grammar must be reviewed
 before a later separately reviewed integration into the full lifecycle. This
 attempt cannot inherit component-lifecycle success or claim vendor OAuth or
 real-model qualification.
+
+## Observed Kimi local-source version discovery correction
+
+Genuine Kimi runtime [40352260675](https://github.com/777genius/universal-agent-plugins/actions/runs/40352260675)
+and native artifact `12667319096` reached the public local-source `add-a`, then
+refused the supported pinned Kimi 2.3.2 executable because the installer passed
+an empty client version. Read-only discovery intentionally does not execute
+clients; the CLI currently requests version probes only for Directory sources.
+The existing Kimi project precondition therefore also rejects direct packages.
+
+Add one narrow CLI helper that requests the existing targeted version probe
+only for an explicitly selected, detected Kimi project client whose version is
+missing, and only during an actual add/update/repair or dependency mutation.
+Reuse the existing detector, its timeout and original-user environment. Never
+fall back to probing every discovered client, invent a version, relocate HOME,
+change the Kimi supported-version guard or promote Prepared to Active. Preserve
+already supplied selected-client evidence. Require exactly one successful Kimi
+result with the same executable and original-user config/profile authority;
+copy only its version, preserving all other original facts and unrelated rows.
+Missing, duplicate, failed or changed-host results leave the operation closed.
+The baseline retains its 2.3.1 guard; genuine 2.3.2 reruns combine this helper
+with the already reviewed version admission in the existing Kimi leaf.
+
+Wire the helper after complete target validation in direct add, update and
+repair preflight. For dependencies, allow only selected install/update/repair
+actions, validate the complete action target set before the first new probe,
+and share the refreshed detected map between preview and actual preparation.
+The prompted add path may probe only after selection. This helper introduces
+no dry-run or read-only execution; preserve existing explicit `info --target`
+version reconciliation. Removal must remain possible from recorded ownership
+without the new probe; unchanged/removed dependency actions do not trigger it.
+Absent targeted capability leaves the version precondition closed, before
+installation mutation; there is no broad-probing fallback.
+
+Use the existing CLI E2E fixtures with a detector that genuinely starts with no
+version and records targeted calls. Cover direct and saved install/update/repair,
+original-user and sibling-project preservation, removal without a client probe,
+dry-run/read-only/unselected-client controls, and failed/mismatched probes with
+no target mutation. These are installer/detection tests, not native discovery
+qualification. Then rerun the existing genuine Kimi lifecycle and separate
+tool-attempt jobs. Two independent plan reviews precede product changes.
+## Kimi version startup profile and update environment amendment
+
+Pinned Kimi 2.3.2 source `b8dd3a134060c6e80ba4a1659335cd63b68483f2`
+performs staged-update handling, native worker installation and cache cleanup
+before Commander prints `--version`. A PATH-only detector probe therefore
+cannot establish the selected original-user profile/cache authority. Preserve
+the existing targeted detector and its timeouts; do not add a broad probe,
+version override or a second process primitive.
+
+Implement Kimi's existing `VersionProbeEnvironment(configRoot)` port with only
+`KIMI_CODE_HOME=<selected original-user ConfigRoot>`,
+`KIMI_CODE_CACHE_DIR=<that exact ConfigRoot>/cache` and literal
+`KIMI_CODE_NO_AUTO_UPDATE=1`. The existing detector may append its normal PATH.
+Neither the project root nor a derived parent becomes HOME or USERPROFILE.
+Do not inherit loader, proxy, authentication, account or shell variables.
+Require an absolute, clean original-user root, canonical ordinary directory
+ancestors and an absent or ordinary directory leaf; aliases, non-directories
+or otherwise unrepresentable roots fail before a child. A fresh missing native
+profile remains admissible when its canonical parent is valid. The cache path
+is a fixed child of that exact selected user profile, never the project registry
+or an ambient cache. Apply the same checks to the fixed cache child; an existing
+alias or special leaf fails and an absent cache is allowed. Reuse the existing
+path-policy checks.
+
+Apply the same literal automatic-update opt-out before the first Kimi vendor
+child in the owned Python collectors and Go lifecycle/tool-attempt environments.
+Keep their already controlled original HOME, selected profile, acquisition,
+runtime-file identities, private-token quarantine, capture and total deadlines.
+The profile/cache variables above bind the detector's otherwise isolated version
+probe; they do not relocate the collectors' independently controlled user home.
+Do not expand any inherited environment allowlist beyond these exact supported
+Kimi controls or copy a provider credential into version/help children.
+
+Native startup may write its selected cache. Keep that activity distinct from
+installer ownership and preserve native configuration, foreign settings/skills,
+other projects and retained plugin data. Continue the hosted fixture's immutable
+CLI checks before/after observation. `KIMI_CODE_NO_AUTO_UPDATE` suppresses
+automatic checks/install/swap; it does not suppress native-cache bootstrap,
+executable-sibling staging cleanup or a previously manually requested stage.
+Do not claim manual-stage suppression or qualify changed executable bytes.
+
+The exact source blobs are `apps/kimi-code/src/main.ts`
+`f95d57c2a2867f0163c75c4559ad29b555f4c498`, `cli/commands.ts`
+`3ec65112fca524d109618433aced6bc7a1f1ce75`, `native/native-assets.ts`
+`51db1af9fc00e3b177cfbebd310d58a0c0504232`, `utils/paths.ts`
+`70ce8f427706cde5413cd8df44623eb80d12d50d`, `cli/update/preflight.ts`
+`9d6d1f17249bc3f4b1293f5eb8f9782c1691fe0d` and `cli/update/native-swap.ts`
+`9b477efababa0137f614801a7c2b2c27059c05e6` (all under
+`apps/kimi-code/src` after the first path), together with
+`packages/agent-core-v2/src/app/bootstrap/bootstrap.ts`
+`3e969174f868af9d13aff1077927d87fdcd7e62d`. Inert contracts require exact
+profile/cache values, literal updater opt-out, rejection of unsafe roots and
+absence of inherited canaries; do not execute a vendor locally. Two independent
+plan reviews precede this adapter and leaf implementation. Genuine hosted
+lifecycle/tool evidence remains required, with all unobserved claims false.
+
+### Kimi bounded response-schema refusal capture
+
+The initial single-tool leaf currently loses the native API response when an
+unmeasured response shape raises inside the observer: the existing service
+correctly quarantines every failed observation. Preserve that common service
+and its quarantine contract. Add only a leaf-local, finite response-schema
+refusal boundary after successful readiness and native bearer registration.
+
+Only the key/object and nonidentity container-type checks for the new session,
+accepted prompt, pending approval, snapshot and history responses may raise a
+dedicated schema-refusal sentinel. Invalid JSON, identity or permission mismatch,
+readiness, token, transport, limit, unchanged-file or cleanup errors never enter
+this boundary. On the first schema refusal, stop all further session, prompt,
+approval and tool actions. Record only a fixed failed-stage code and validated
+IDs, never exception text or inferred success. Reserve one of the original
+60 HTTP requests for the same exact authenticated `POST /api/v1/shutdown`;
+require its existing acknowledgement and mark shutdown within the original
+service work deadline. Do not issue an alternate request or reset a budget.
+
+Only the unchanged common service's normal-exit, full-group-reap, closed-port,
+complete-capture and deadline checks may admit the failed observation's recorded
+HTTP bytes. Failure of any such gate retains quarantine. After that admission,
+use the existing closed envelope, token/provider redaction, byte limits and
+`native-attempt` stdout member, then exit nonzero so the Go test retains the
+bounded evidence and fails. No shared-service, Go success, artifact inventory or
+frontend success contract changes. Native capture/history completion and all
+qualification, vendor-authentication and model flags remain false.
+
+Inert tests inject extra session, approval and history fields and verify the
+first refusal stops later actions, permits only exact shutdown, retains the
+bounded response after successful cleanup and exits nonzero. Identity mismatch,
+failed shutdown/cleanup and bearer/provider canaries remain quarantined. Two
+independent plan-review rounds precede implementation.
+
+## Observed Windsurf / Devin selected-version correction
+
+Genuine [run 40353474164](https://github.com/777genius/universal-agent-plugins/actions/runs/40353474164),
+job `121701552623`, native artifact `12670367419`, at source
+`8412fdd9ea5947d981caf5106451836246834bcf` / tree
+`b1dfbd9c293740005bee8c2c77c801b072192fd3`, printed the pinned
+`devin 3000.11.205 (6dea39440ae3)` from the actual executable in 24 ms,
+exit zero, under the controlled original HOME/XDG fixture. Public local-source
+`add-a` then refused its empty detected version before target mutation. All five
+qualification flags, runtime completion, vendor authentication and real-model
+qualification remained false. This is an observed selected-version gap, not a
+native session or supported authentication boundary.
+
+Retain the exact `3000.11.205` project guard and the canonical selected
+`devin`/`devin.exe` executable requirement. A new missing-version mutation probe
+may select public `ClientWindsurf` only when that explicit target's primary
+executable has that basename, using the same case treatment as the existing
+adapter guard. Preserve legacy Windsurf-first detection/channel ordering.
+Do not choose a secondary Devin surface or reinterpret a legacy Windsurf/editor
+primary. `ConfigRoot` remains the selected legacy Cascade authority, including
+its intentional empty value for a current-Devin-only installation.
+
+Port the already reviewed Kimi selected-mutation helper and its existing
+add/update/repair/dependency wiring into aligned Windsurf source
+`5a9f620c9b0b720b16fbb4da8ac0dab367d30762`; extend only the finite eligible
+client set to Kimi and the primary-Devin Windsurf case above. Before the first
+new probe validate the complete selected/action set. Request only eligible
+selected clients with missing versions through the existing targeted detector;
+never fall back to broad execution. Require exactly one successful result for
+each requested client ID, with unchanged executable, ConfigRoot, profile
+namespace and authority. Validate every result before copying only Version into
+the original detected map; a failed/missing/duplicate/mismatched result changes
+no original row. Preserve unrelated rows and already supplied versions.
+
+Keep the same user-scope, dry-run, unselected-client, unchanged/removed
+dependency-action and removal exclusions. Preserve existing explicit
+`info --target` reconciliation and the Skills preview/Check boundary. An absent
+targeted capability leaves the existing adapter version guard closed. The SDK
+continues accepting only already observed host metadata; its Discover/Prepare
+paths do not gain native execution.
+
+Windsurf's legacy/empty ConfigRoot cannot represent Devin's user profile through
+`VersionProbeEnvironment(configRoot)`. Add one narrowly scoped environment case
+inside the existing detector's version path for a selected primary Devin
+executable, using its existing original `Detector.HomeDir`, `Environment`, GOOS
+and filesystem probes. Do not add another public probe interface or alter
+Windsurf's detected ConfigRoot/profile/selection facts. The exact allowed values
+are `HOME=<original HomeDir>`; on Windows additionally
+`USERPROFILE=<that same original HomeDir>`, plus explicit original `APPDATA`
+and `LOCALAPPDATA` when present; on Linux/macOS additionally only nonempty
+explicit original `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME` and
+`XDG_CACHE_HOME` when present. Omitted/empty optional roots stay absent so the
+vendor retains its normal defaults. Require Windows APPDATA to be representable
+before probing, since the pinned docs identify it as user configuration
+authority. The existing OS probe may append its ordinary PATH.
+
+HomeDir must be an existing ordinary directory with clean absolute UTF-8
+spelling, no aliases and no NUL/CR/LF. Every forwarded optional root must
+also be clean, absolute and canonical, with ordinary existing ancestors and an
+ordinary or absent final directory leaf whose immediate parent exists. Validate
+through the detector's existing injected filesystem probes; create no profile,
+cache or config. Invalid original facts fail before the child rather than
+falling back to another home. Never derive HOME/XDG from ConfigRoot, the project,
+its registry or a temporary fake profile. Forward no other ambient values,
+including credentials, provider/model/permission settings, proxies, loader or
+shell configuration. Kimi retains its already reviewed exact profile/cache
+environment port unchanged.
+
+Keep the native argv exactly `--version`, existing output limit and timeout,
+private version-probe cwd and synchronous process cleanup. Do not invent a
+Devin updater environment variable, add `--config`, rewrite native user config
+or grant permissions. The genuine fixture's existing user-authored
+`auto_update:false` config remains at its original selected HOME/XDG path;
+its deny-only permission config and runtime hashes/deadlines remain required.
+Version startup/cache behavior is not inferred from fast exit, and a changed
+native runtime cannot retain the old qualification pin.
+
+The reviewed archive SHA256 is
+`2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4`,
+73,679,375 bytes, from the already pinned official 3000.11.205 URL. Its bundled
+`share/devin/docs/reference/commands.mdx` SHA256
+`996f969ba371f4dae62d70b63f7a6d5473ed48c3633abf9b120d9214cf0c8b75`
+documents the version/config flags; `reference/configuration/config-file.mdx`
+SHA256 `c43f1a70135662c6124ae794928a4719bcd0bcb2d198573c2bf39c76935acd91`
+and `global-vs-local.mdx` SHA256
+`8fc899cd33ea4185525efb120c8c13736419622ea3cf4b6cae9608b2d2daf1e1`
+document original-user config locations, user-only updater preference and
+independent project layers. No source-proven profile-inert version fast path or
+updater environment opt-out is claimed.
+
+The common product helper/wiring and necessary Kimi profile port must remain
+byte-compatible when #524 and #528 combine. Carry only those reviewed product
+files/meaningful inert tests, preserving the Kimi profile amendment's exact
+contract; do not merge Kimi native collectors, tests, version admissions or
+qualification claims into this Windsurf slice. Root aligns shared union code
+between client PRs before the combined merge. Inert tests require exact
+requested IDs, atomic failed-result preservation, coexistence/legacy-primary
+refusal, empty ConfigRoot retention, original HOME/XDG binding and no credential
+canaries, plus direct and saved public lifecycle/no-probe controls. Both
+independent plan reviews precede implementation. Genuine hosted startup and
+later full lifecycle/MCP proof remain separate required gates.
+
+## Observed selected-version architecture and lint correction
+
+Genuine Windsurf run [40375582347](https://github.com/777genius/universal-agent-plugins/actions/runs/40375582347),
+`test-core` job `121757629831`, fails the existing architecture ratchet before
+native execution: `cli/internal/agentpluginscli` newly names two client identity
+constants, and `adapters/clientdetect` names one. The reviewed Kimi/Devin runtime
+scope is unchanged, but the dispatch belongs behind the repository's injected
+client capability contract. Start from integrated source
+`f047ae1162d5320c03eb80fa7f11167ad3e81616`, tree
+`c39c6fd3a31f890566eb7b00a912768cf4004f1f`, in isolated
+`/tmp/uap-completion-cli-arch`. No product code is changed under this plan until
+root R1 and an independent shell/capture R2 approve it.
+
+### Adapter-owned project version requirement
+
+Add one small optional interface to the existing `clients` contract:
+`ProjectVersionRequirement`, with pure method
+`RequiresProjectVersion(client domain.DetectedClient) bool`. It expresses only
+whether that adapter's already selected detected host needs a version before a
+project mutation. It performs no filesystem observation or execution and does
+not declare a version supported. Kimi implements it with its existing requirement;
+Windsurf implements it only for an absolute clean selected primary executable
+whose case-normalized basename is `devin` or `devin.exe`. Factor that same pure
+primary-executable predicate inside `clients/windsurf` for its existing exact
+version admission guard, without changing its accepted version or identity
+checks. Legacy Windsurf/editor primaries and secondary Devin surfaces stay
+ineligible. No other shipped adapter implements this new capability.
+
+The generic CLI helper looks up this capability through
+`clients.As[clients.ProjectVersionRequirement](app.ClientRegistry, id)`, using
+the registry already injected by the composition root. Remove the two client-ID
+branches and their basename policy from generic CLI production code. Preserve
+status/error/executable/missing-version filtering, ordered ID deduplication,
+complete target/action validation, one existing targeted detector batch, exact
+one-result-per-requested-ID identity checks, validation of all results before
+copying only Version, and every already reviewed exclusion. The current default
+registry still yields exactly the Kimi + primary-Devin union; this membership
+lives in adapter implementations rather than another generic identity table.
+
+Do not construct/import `clients/all` in the library or replace constants with
+strings, aliases, hidden callbacks or AST tricks. A missing injected registry
+returns the existing `clients.ErrRegistryRequired` before any new child, rather
+than assembling a default. A registered adapter without the capability requests
+no new version; missing targeted detector capability retains the existing
+unknown-version refusal. Known versions remain original facts. The user,
+dry-run, read-only, unchanged/removal and Skills preview/Check boundaries remain
+as reviewed, and SDK Discover/Prepare gains no process execution.
+
+### Adapter-owned original-host version environment
+
+Preserve the existing `VersionProbeEnvironment(configRoot string)` interface and
+all Kimi/Codex/Gemini implementations and semantics. Add a separate narrowly
+optional adapter interface `HostVersionProbeEnvironment`, with method
+`VersionProbeEnvironmentForHost(host clients.Host, client domain.DetectedClient)
+([]string, error)`. This is an adapter environment-policy hook, not another
+native execution/probing interface. The existing generic detector already has
+the original `clients.Host` used for surface discovery and retains exclusive
+ownership of whether/when to probe, argv, process primitive, isolated cwd,
+timeouts, output bounds and synchronous cleanup.
+
+After its existing profile-based environment hook, the generic detector may
+dispatch the host-based hook by interface. Remove its Windsurf identity branch.
+Only `clients/windsurf` implements this new hook. Move the existing Devin
+environment builder/validation into that client package and express filesystem
+validation through existing `Host.CanonicalDirectory` and `Host.Lstat`, with
+HomeDir/GOOS/Env from that same Host. This relocates useful implementation; it
+does not retire its capability or replace injected probes with direct OS reads.
+
+For a non-Devin primary this hook returns no custom environment, retaining the
+pre-existing legacy version path. For the selected primary Devin it returns
+exactly the already reviewed original HOME and finite explicit XDG or Windows
+values, including required Windows APPDATA. Preserve canonical spelling,
+ordinary existing HOME, no aliases, optional absent final leaf only with an
+existing ordinary immediate parent, no creation and no ambient credential,
+proxy, loader or shell values. ConfigRoot remains the legacy Cascade authority,
+including empty, and never supplies HOME/XDG. Invalid original facts fail before
+the child. Retain the legacy callback's refusal when it cannot carry a required
+environment; there is no PATH-only fallback. Kimi's exact three-variable
+profile/cache/updater environment and its path checks remain unchanged.
+
+### Mechanical lint corrections
+
+Keep both public fixture broad-probe traps counted and deliberately failing.
+Have `DetectWithVersionProbe` return their ordinary inert discovery rows alongside
+the intentional refusal error instead of an unconditionally nil first result;
+no vendor executes and no caller may accept the failed result. Add explicit
+compile-time detector-port assertions where useful to bind the required method
+signatures. Convert the existing Kimi alias test's value comparisons into an
+equivalent tagged switch. Lowercase moved Devin error-message prefixes. No
+lint suppressions, fake success, skipped cases or removed safety assertions.
+
+### Files and bounded verification
+
+Expected production changes are the two optional interfaces in
+`clients/detection.go`; adapter-owned requirement methods in `clients/kimi` and
+`clients/windsurf`; relocated Wind host-environment implementation and shared
+primary predicate; generic interface dispatch in
+`adapters/clientdetect/detector.go`; and capability lookup in
+`cli/internal/agentpluginscli/project_version_preflight.go`. Preserve existing
+mutation wiring. Update the meaningful adapter/detector/helper/public fixtures
+for the injected registry and moved policy, plus the specified lint-only test
+lines. No native collector/workflow or unrelated client behavior changes.
+
+Require the unchanged `TestClientIDBudgetDoesNotGrow`, baseline-current, layer
+boundaries and contract dependency closure to pass without editing their code,
+baseline or allowlists. Add pure adapter tests and a default-registry contract
+that only the two intended adapters request a new project version, with primary
+and legacy selection cases. Keep cross-client coexistence, empty ConfigRoot,
+atomic failed-result and no-capability/no-registry controls. Preserve original
+HOME/XDG/Windows environment and unsafe-path/canary tests through the real
+adapter/detector seam. Run the focused helper/preview tests, direct and saved TLS
+ZIP public lifecycle controls, and affected-package lint. Existing saved Git
+tests remain required and unmodified; an unavailable OSRunner `/proc` capability
+is reported without a waiver or full-suite pass claim. All native runtime
+qualification continues to require genuine hosted evidence.
 
 ## Observed Cline standalone CLI presence correction
 
@@ -1407,6 +1814,150 @@ public installer ran locally. Independent exact-code review precedes root
 publication. A fresh genuine run must establish preservation;
 the existing rejected GET remains `uri=other`, and this amendment accepts no
 new HTTP route or final capture/qualification boundary.
+
+## Observed Gemini wait-for-previous description correction
+
+Genuine [runtime run 40367376528](https://github.com/777genius/universal-agent-plugins/actions/runs/40367376528),
+job `121754582361`, ran source
+`6f8ea1173b8b1d343688299b5864ee7c1e1a86d7`, tree
+`017dd9814de77e1e7e7dd7b1e750c38b37282b02`. Closed frontend artifact
+`12678257392` has ZIP SHA256
+`46c65a8622da53758498c28e301a2223941abb4c901c0ae37ff6afbf58c813bb`;
+native artifact `12677916698` has ZIP SHA256
+`d558be3ebc28741af8e91011e8435cf5a286a2f105b73e0d8608275b9cf99d1f`.
+The admitted native attempt reached the scripted loopback provider and retained
+MCP `initialize` and `tools/list` records. The provider rejected the first
+request with `Gemini native wait_for_previous schema differs`, returning HTTP
+400; native exited 144 with no process/context error. No provider response or
+tool call completed. Every qualification flag, vendor authentication and
+real-model qualification remains false.
+
+The mismatch is the fixture's exact description literal, not the schema's
+boolean type or an observed external authentication failure. The current
+`geminiProjectWaitDescription` in
+`repotests/agentplugins_gemini_project_native_provider_test.go` is truncated to
+153 characters, ending `Use true whe.`. Actual `provider-request-1.json` has a
+204-character description. It exactly matches the already pinned publisher
+source `google-gemini/gemini-cli@6006c14a4decfe4b891c6263ad6ad5992e404b5b`,
+`packages/core/src/tools/tools.ts`, Git blob
+`ab2870984aba77e77fc5bacb25009cd47698582e`, lines 566–570. The cached primary
+source was independently rehashed to that exact Git blob. The full description
+bytes, excluding a trailing newline, have SHA256
+`7561a43ccbc741215d416fe9298b73e43dc6bddfebdd261af855156fe0994bc9`.
+
+After root R1 and independent capture R2 approval, change only that fixture
+constant to the full exact pinned description and add focused strict schema
+regressions. Use the observed description bytes as an independently specified
+test input rather than deriving every positive fixture from the implementation
+constant. Accept this exact native/source description and reject the previous
+truncated literal, changed or missing description, wrong property type and
+unknown/missing schema fields under the existing exact-key validators. Retain
+the current strict `wait_for_previous` object equality; do not allow arbitrary
+descriptions, partial/prefix matching or alternate schema shapes. Existing
+nonce/operation/marker, required/additionalProperties, tool-name/declaration and
+request/response validations remain unchanged.
+
+Start in isolated Gemini source based on local
+`8ad5ad06327f0c72b973c2a6a6180e7b11c32b82`, tree
+`603d7248054bafbb778a33edf849aa1d48e265d5`, corresponding to current published
+head `1df80efe4a988fec76c29a9d73017d3a588b3b38`. Do not alter the root-owned
+publishing worktree. This is a fixture literal/contract correction only: no
+product adapter, native argv/environment, model, permission, auth, trust,
+original-profile baseline, source/digest identity, provider sequence,
+process/deadline/cleanup or artifact allowlist changes. The full native request
+and private profile stay in closed artifacts; commit no raw profile or full
+provider request.
+
+Run the focused inert provider/schema contracts and relevant changed-line lint
+without any local vendor execution. Preserve the genuine hosted runtime gate;
+this correction does not establish that later response/tool/session/lifecycle
+stages pass. Review fresh actual hosted output before any further amendment or
+qualification claim.
+
+## Kimi independent source and installed-authority proof before qualification
+
+Independent inspection found a fixture proof gap in Kimi source
+`361bd69930f7f641e232a6c60f6a215ddee8e9d4`, tree
+`eddbcb5ce8b39bd945dad23c24b449a7468eb948`. Its lifecycle file blob
+`740c6f01c0fb7d9261fccd58cd5b6794a52e0c7d` is byte-identical in combined
+commits `6dab49e2` and `d0fc5852`. `receipt` currently accepts merely nonempty
+source-binding/tree/manifest fields, partially checks only skill/MCP ownership
+and ignores the managed-package object. `observe` then admits installed probe
+and launcher hashes directly into the observer identity map. The final test can
+promote lifecycle/restart/initialize/list flags after those incomplete checks.
+This is a static proof gap; it is not evidence that a captured installed binary
+was corrupt, and no prior run gains or loses qualification by assertion here.
+
+Strengthen only the Kimi lifecycle fixture and its inert identity contracts.
+Retain, for each authored scope/revision before public CLI mutation, immutable
+copies of the complete finite source payload, executable bits and directory
+membership. User source is the authored manifest and skill; project source also
+contains the exact existing trusted probe and authored MCP document. Require a
+fresh bounded held-file capture to equal that authored tree, including exact
+manifest bytes. Compute expected acquired source identity using the existing
+versioned `packagedigest.DigestCaptured` framing and the direct-local source
+binding contract; derive full package metadata, version, inventory and manifest
+SHA-256 from the frozen authored recipe. Compare the full recorded Source and
+Package values, not nonempty fields. Do not derive expected identity from state,
+installed content or a later mutable source reread.
+
+Validate each binding against its known scope/original user context. Derive the
+physical artifact from its installation identity and fixed authored name, the
+client binding from that identity/client/scope/expected locator, and the exact
+managed/native paths from the fixture's existing selected roots. Preserve the
+first validated installation/binding/artifact/data authority across repeat,
+update and repair; changing revision must not reset that authority baseline.
+Require precisely the known managed-package object for the user skill package,
+and precisely managed package, Kimi project skill and Kimi project MCP objects
+for each mixed project package. Compare complete objects: kind, ID, logical
+name, exact path, source-relative field, protection class and independently
+computed digest. Missing, duplicate, extra or unknown objects refuse.
+
+Before computing an installed-package expectation or preserving any installed
+baseline, validate its complete bounded ordinary-file tree against the frozen
+source and fixed known projection. Require every unchanged source member's
+exact bytes/executable bit and every expected directory; permit only the known
+Kimi user manifest or project MCP rewrite, plus the existing managed launcher
+and metadata in mixed project packages. Derive those JSON/metadata expectations
+from the authored recipe, selected package/data paths and already frozen
+installer identity/version. Refuse extra files, directories, aliases, links,
+changed source/probe/helper bytes, executable-mode drift or unknown projection
+fields. The installed probe must equal the already frozen source probe; the
+launcher must equal the already frozen public installer, never its own observed
+hash. Reuse the reviewed strict held-entry installed-digest helper from
+`829d6a86` with the Go1.22-compatible contract correction `c98c4303` as needed;
+it computes the selected `providers.Stager` / `packagesnapshot` framing while
+source identity retains its separate versioned framing. Derive skill ownership
+from the authored skill tree and MCP ownership through the existing neutral
+receipt codec using the independently expected server. Exact receipt equality
+remains required; no alternate digest or returned-receipt adoption is allowed.
+
+Only after these proofs may `observe` construct installed probe/launcher
+identities, using their already trusted expected hashes. Recheck before every
+native stage and before taking unrelated-package immutable baselines. Keep the
+existing exact skill comparison, `kimiProjectValidateServer`, original-user/B/C
+preservation, fixed native requests, fresh PID/session/nonce/probe events,
+shutdown/reap/port gates and final genuine-observation predicates. The four
+existing qualification flags may become true only after all these added proofs
+and the existing full lifecycle succeed. tools/call, vendor authentication and
+real-model flags stay false; no flag is arbitrarily flipped to hide the gap.
+No collector argv, environment, trust/approval, process primitive, deadline,
+artifact member, envelope or qualification schema changes are authorized.
+
+Use cohesive Kimi-only source/receipt/payload proof seams and the existing
+neutral capture/digest APIs. Inert positive parity must stage the fixed user
+and mixed project recipes through the actual Kimi planner/Stager and prove the
+distinct source/installed framing contracts without executing any vendor or
+probe. Negative contracts must refuse nonempty forged source/tree/manifest or
+binding facts; unknown/duplicate/missing ownership and wrong paths/digests;
+source closure drift; installed probe/launcher/metadata substitution, extra
+members, modes and aliases, including corruption before the first baseline.
+Tests must prove rejection happens before observer identities or qualification
+can be constructed. Existing genuine hosted lifecycle proof remains required.
+Gemini and Copilot initial capture flags already remain false; this amendment
+does not change them, and the same independent-authority requirement must be
+reviewed before any later promotion there. Both independent plan rounds precede
+implementation of this Kimi correction.
 
 ## Completion gate
 
@@ -1999,9 +2550,10 @@ Its only test failure is the existing independent-raw-review barrier; all
 qualification flags remain false. Native artifact12834025060 outerSHA256
 bfdef920511b1c1c6200a349b2c4d86cbca85c053ccdbf203400b2010150e658 and inner
 49fee32d67edd1f59297025f96a0bcfc6928abc3a03660ce775adbda2fd48b00 retain
-the exact source/pins and25closed members. Root independently audits the raw.
+the exact source/pins and25closed members. Two independent full raw audits
+confirm this failed capture and its unchanged all-false result.
 
-Root and two independent Sol/xhigh reviewers accepted one bounded skills-only
+Two independent pre-code reviews accepted one bounded skills-only
 cycle: qualify only project-lifecycle/native-restart-removal; project MCP,
 vendor authentication, real models and skill execution stay unsupported or
 unclaimed. Persisted Grok bindings stay Prepared/package_validated. Reuse the
@@ -2050,3 +2602,183 @@ no artificial transition review fatal, new framework, workflow or client pin.
 Obtain exact independent CODE reviews and focused inert Go/Python plus affected
 and complete six-linter gates, then one genuine hosted full-cycle capture and
 independent raw audit. No vendor executable runs locally.
+
+The implemented leaf24dcb5f0 has two independent exact-source CODE GOs and
+preserves every existing failure/ownership gate. Its composition with qualified
+program parent73208da2 has two independent reviews: all owned Go bytes remain
+identical, and the two shared Python files retain each reviewed client branch.
+On the composed source,64 focused top-level Go contracts pass (274 pass events;
+one unchanged child-only helper skip), the real inert public CLI repair contract
+passes,82 Python contracts pass, and affected all-enabled plus complete six-linter
+gates for both Go modules report zero issues. The original f794 native25-member
+and frontend25-member captures still replay to the identical failed/all-false
+result. These local gates do not qualify native behavior; the published complete
+cycle requires one fresh genuine hosted capture and two independent raw audits.
+
+## Gemini owned-MCP listing diagnostic amendment
+
+Accepted plan SHA256 `6c696cd8309f6da3ee9059ef887b14bb8358ed5e4fd57afe199a69b2655b3d5d`
+received independent root R1 and Kimi-owner R2 before implementation. Exact
+starting source is ef8c42bc5012f68d042b696edbf2801730246e9d/tree462634b2,
+which retains the previously reviewed source-bound assessment-cache closure.
+
+Genuine run40583616867/job122469600501 now retains the completed add-user
+ownership proof, then fails only its listing-stderr guard at installed-user.
+Native12770589174 outer SHA256
+`ece142caacab9c75bec59e590717ea41818c84bccb76a754fd95505d446c3c9b`,
+frontend12770514390 outer SHA256
+`6706bf1185f132eb27cfa98bae98e23cb0e67023c005465e7bbf8e510da824c6`
+retain closed24/25 members,24 frontend and34 nested stream joins. The next
+listing exits0 in2263ms with exactly four expected skill rows. Its347-byte
+stderr SHA256 is
+`76222dc470d4288bb95b6a1c18044afad792af771c28d2018ecaa43b2d64e5a0`: two
+own-server notification messages precede the existing MCP refresh tuple. Two
+separate retained initialize/tools-list probe records share the held user nonce,
+fresh PID/session and command interval; no call occurs. All qualifications stay
+false and the incomplete provider-stage cleanup remains failed. No log text
+becomes a qualification or complete discovery/RPC proof.
+
+At pinned Gemini source6006c14a, mcp-client blob3d2c7beb synchronously logs the
+exact contiguous registration/tools:{} missing-listChanged pair. Manager
+blob04563803 awaits configured discoveries then emits the exact refresh suffix.
+The unchanged probe declares only tools:{} and sends no dynamic notifications.
+The listing helper now accepts only finite whole tuples for currently held
+advertised user/selected-project recipes, at most two pairs in either pair order,
+and the exact old prefix/suffix. Invalid/nil/duplicate/unknown/removed/unproved
+recipes, other-project and impossible A+B sets refuse before candidate creation;
+a nil/empty slice remains a legitimate baseline. Entire stderr is bounded1024B.
+Legacy three tuples remain accepted, with no normalization/prefix/regex warning
+allowance. A pinned actual347-byte/SHA golden and hostile scope/set/framing/error
+controls verify this private parser.
+
+Only listing diagnostics and inert contracts change. Existing complete skill
+catalog equality, pinned builtin hashes, event nonce/PID/session/time/method
+checks, no-call listing contract, live ownership/config/state/cache closure,
+original native stderr, provider, permission/trust/authentication, process,
+cleanup, acquisition and deadline gates remain mandatory. Existing Python mode,
+raw schemas and deliberate final failed-only capture barrier remain unchanged.
+No vendor/client/scanner/public installer executes locally. Independent exact
+implementation review and coordinated meaningful gates precede root publication;
+only a fresh genuine capture can establish progress through later stages.
+
+Implementation review: root and Kimi-owner independently returned CODE GO for
+exact staged treea66b0191, reading all three changed paths and the original
+listing/advertised/event call chain. The actual all-enabled affected root gate
+then identified one prealloc suggestion in the new invalid-recipe test setup.
+The test now allocates capacity four and keeps the identical input sets and
+cases; the runtime diagnostic helper is unchanged. Final reviewed source will
+retain this mechanical test-only delta with its separate preservation review.
+
+Final local validation: focused Gemini/shared runtime Go contracts PASS1.424s;
+existing Gemini/current-runtime Python admission contracts62PASS9.998s. Actual
+all-enabled full-root affected lint versus a412ba5e and unfiltered whole-root
+revive/funlen/gocyclo/gocognit/dupl/depguard both report0issues. Gofmt and full-base
+diffcheck are clean. The unchanged current ef8 24-member ZIP still admits only
+its genuine failed/allfalse capture, and its retained347-byte stderr joins the
+independent primary contract's exact SHA. No vendor/native/scanner/public
+installer executes locally, and no complete lifecycle or qualification is
+promoted. Root publication and a new genuine capture remain required.
+
+
+# Kimi: exact model tool-result framing and finite native single-call completion
+
+PRE-CODE plan. No source implementation before root and a second independent reviewer accept this exact plan. Root owns Git/GitHub mutations and publication. All genuine native/client/public-installer/scanner execution remains exclusively on an actual current-source GitHub-hosted runner. Local work consists of inert contracts and pure byte readers. Preserve the unpublished alternative26fdd4279d30cebc74811e84cfe9c9ba6e96ade1. No VS Code, other client, release, profile substitution, plugin authority expansion or native pin change.
+
+## 1. Actual source-bound evidence and remaining failure
+
+Current PR524 head is9e9779f2352101e8002070ac64ac30d24e2f9be5, treea77b1de54dfbc16522f603265a74954615be2bc4. Exact hosted run40586437481 is completed: component job122491615607 succeeds; single-call job122491615779 fails; inherited Cline job122491615841 succeeds. No pending run is cancelled, retried or superseded.
+
+Component native12775170868:34578bytes, outerSHA256 fdd801ded762604e8c4bf6525c8c6d29619f29d4007479fb096e3fbcd341d3e0, inner7a8bd821a88209192b9fb7ca7123c54d3c0cda6a2afcafa1d6b635ee60f2ab06,67members. Component frontend12775275513:3417bytes, outerea310853ef8f10cdab4992c922d58c1baf38ca7f3262740b3c236a890bcec1de, inner339fe3375ce709b0bf54785854e051150518231c3801f53648e38876484d10ff,25members. The independent audit is `/tmp/uap-kimi-9e-current/component-raw-audit.json`, SHA256 ed3dce6833e381d5555e58ae696da7ce60aefd1604818cece4aefef51aa8e6e2. It verifies24frontend stream,14nested service stream and126HTTP response joins;22public commands;7fresh native server IDs;11distinct probe sessions with11initialize+11tools/list and0tools/call; all seven native services acknowledge shutdown, reap groups, close ports, with no SIGTERM/forced kill. Actual runtime36.951seconds. The component legitimately reports project-lifecycle/native-restart-removal/mcp-initialize/mcp-tools-list true; tools-call/auth/model false. Preserve this evidence and unchanged component behavior.
+
+Single-call native12775780239:21365bytes, outerb1a896e2c0f47d4ff8351544c542f65f6dc02be0a74ae9fa8a58a7ab59a3c0c9, innerb50e9656245696306a6ba8352e7de8ec99ed6c76e7a2b47a05a84f7fde66649d,25members. Frontend12775087398:3546bytes, outer7a93803301bff7ad71b9260d23878dc89f0a61f858fabfe181ffcfc094ec7311, inner8ac7d7ce9932ea76293d57f285360aedf9983b5d5f9c6d797089e55daf1625a3,25members. Independent audit `/tmp/uap-kimi-9e-current/single-raw-audit.json`, SHA256 ee193ed9cdf2983a32508fcca75a9211bfa82ddf0ae6f7e7323992cae9aa01e1, verifies24frontend+2nested service+27HTTP joins and all30closed nested files. Public commands and native collector all exit0, no process/deadline error. Native service closes ordinarily as above.
+
+Actual approval poll0 contains exactly one matching session/main-agent/turn0/provider call/tool/action/input, then one approval resolves true. The three raw probe events now are initialize, tools/list, tools/call, correlated to one PID/session/nonce and exact selected managed root/data/runtime facts. Provider requests1 and2 retain a stable cache key equal to the actual native session. Request2 has exactly the issued assistant call and the matching tool result. Its tool-message content is exactly one line `Wall time: 0.004 seconds`, LF, then the probe facts JSON. Current `kimiSingleToolAttempt.validateFacts` directly calls whole-document `projectNativeRuntimeJSON` on this content; that fails before facts/returned are recorded. An independent pure JSON replay reproduces the refusal.
+
+Native history independently contains matching tool_use and raw unframed tool_result JSON, then an empty assistant message. The two snapshots report `last_turn_reason=failed`, and the last has no in-flight turn. This actual capture remains failed and unqualified after every correction in this plan. It does not contain the final success sentinel or an independently reached persistent-marker/unrelated-data check. Current code also intentionally calls t.Error after provider success pending native-history review. Both barriers need a strict reviewed success contract, not removal without replacement.
+
+## 2. Authoritative pinned source, independently read without execution
+
+The native2.3.2 archive/executable pins remain4715ccd1a591b64683929a14b26b3d07ac4c484e4da3881b22a2ccca56304042 /1cc5979fca0ea8c01c0a4d53806df8e65573cfbe7daf17ccff86db392807e4fa. GitHub tag `@moonshot-ai/kimi-code@2.3.2` resolves to annotated tag7aa8fa1eab3557ffac521a2139e4dd6583f70f58, which points to source commitb8dd3a134060c6e80ba4a1659335cd63b68483f2. Both API records are preserved under `/tmp/uap-kimi-9e-current/`. The complete nontruncated5346-entry primary Git tree and individually fetched blobs were verified using Git blob SHA1 plus byte length/SHA256. No vendor code or release payload was run locally.
+
+Primary source files are under `/tmp/uap-kimi-9e-current/native-source/`; full21-file manifest SHA256 b82f252f58f2949485583fb428e8e819a5621ad7771cb751ff735cc8b242e288. Relevant frozen blobs:
+
+| Primary path under source commitb8dd | Git blob | Specific contract |
+| --- | --- | --- |
+| packages/agent-core-v2/src/agent/contextMemory/toolResultRender.ts |2bf13ed32a098c16c9b8a4094c49f93e569f58d0 | MCP tools render wall time; header is `Wall time: ${(durationMs / 1000).toFixed(3)} seconds`, then LF and single text output. Notes/errors are separate rendering and are not accepted as successful facts. |
+| packages/agent-core-v2/src/agent/contextMemory/loopEventFold.ts |f05f9a438ca699e4a0a43e2f3bc85c11895a67fa | Raw tool output is retained with toolCallId and duration; wall time applies to MCP names. |
+| packages/agent-core-v2/src/human/llm/requester/bases/openai/format.ts |d074e9c1fb310d78f3dd1f497f28bb4481e2ed75 | OpenAI tool messages and existing request metadata grammar. |
+| packages/kap-server/src/protocol/message.ts |7bd4b36116fd5c2202032171a40f2f99068cb62c | Message identity, session, role, timestamp and discriminated text/tool_use/tool_result content shapes. |
+| packages/kap-server/src/protocol/session.ts |f408383451b5a5e4c3df563853ff89e4352cb278 | Session/workspace/config/usage; last_turn_reason enumerates completed/cancelled/failed. |
+| packages/kap-server/src/protocol/rest-snapshot.ts |f8d5df7561f0462aabef890f0dd17b3be6042134 | Snapshot watermark/epoch/session/messages/in-flight turn/pending approvals/questions/subagents. |
+| packages/kap-server/src/services/messages/messageProjection.ts |86e1f20a027194dd9d652c589373f9dd19625240 | Native tool_result carries raw output, call ID and optional is_error; assistant tool_use carries exact call ID/name/input. |
+| packages/kap-server/src/services/messages/messageHistory.ts |0e99d0ffe5f000abfe352f07bd01173243468a22 | REST list is newest-first; bounded pagination has_more. |
+| packages/kap-server/src/routes/snapshot.ts |26ce5a746e44e1c762bdd04f38c039b533d2ca91 | Snapshot messages are original oldest-first; in-flight null is a separate terminal condition. |
+| packages/kap-server/src/routes/sessions.ts |8126c532406a62354c0fdc4eb278083824dcd3f9 | Session metadata.cwd and live busy/main-turn/pending/reason projection. |
+| packages/agent-core-v2/src/features/dateChange/dateChangeService.ts |d52e17741c0ec2d563f995527d4a5481a113ca75 | Only the observed first-session date injection text and finite disclosure metadata. |
+| packages/agent-core-v2/src/features/reminder/systemReminder.ts |2272a9962c883e62ec869dd8c63bdee0eb6d1f31 | Exact `<system-reminder>`, LF, content, LF, closing tag. |
+
+Source is supporting evidence for a narrowly predicted success shape. It does not make the unsuccessful current runtime complete. Any future new shape remains refused with truthful failed evidence; do not broaden based on an error alone.
+
+## 3. Exact correction: model-only wall-time framing
+
+Introduce a pure Go helper for the model-visible returned tool text. It receives the already request/call-owned second-turn tool content and validates the existing whole1MiB bound before parsing. Require exactly one anchored header `Wall time: D.DDD seconds` followed by LF, where the integer portion is canonical unsigned decimal (no signs/leading zeroes except0), exactly three fractional digits, and numeric seconds is finite in[0,60]. The60second maximum is the unchanged native service's original total bound, not a new timeout.
+
+Remove exactly that one header and pass the remaining whole body to the existing duplicate-rejecting, finite, UTF8, depth/node/size-bounded JSON reader. Do not search for a brace, trim arbitrary native prefixes, split on a last line, accept a suffix/note/error block, ignore unknown fields or fall back to another protocol. An unframed model tool response is refused by this new model-text helper. Existing raw-facts validation remains unframed for the independent probe/native-history JSON path; this separates two source-defined serializations of one owned result.
+
+After framing, retain every current exact facts field, nonce/revision/marker/argv/cwd/managed-root/data check and the full fresh probe PID/session/nonce/time/order/count join. Keep the provider's issued-before-write ownership, exact route/host/single credential header, fixed model/tool declaration, request limit, stable canonical cache key, single call/result counts and two-turn sequencing. The actual current second-turn facts payload should pass this pure framing/facts portion, while the overall failed history still refuses completion.
+
+## 4. Exact correction: independent native-history verification in Go
+
+Keep `kimi_attempt.py` as the bounded capture-only observer: no additional native HTTP command, model request, approval, tool authority, profile change or polling budget. Its inner observations remain explicitly `native_capture_complete=false` and `native_history_grammar_frozen=false`; they describe capture without qualification. Add a pure Go history verifier over the emitted raw envelope in the source-selected test. Do not trust a new Python boolean or a caller-supplied expected native output.
+
+The verifier takes expectations from the already independently validated fixture/binding/provider/probe: project A cwd/workspace, actual selected session/prompt/approval IDs, turn0, own provider call/tool/arguments, exact prompt text, expected final sentinel, exact unframed probe facts and original time window. It must:
+
+1. Strictly decode the whole version1 envelope with exactly schema_version/files. Admit only canonical single ordinary member names. Require research.json, one exact native command stdout/stderr pair and every recorded HTTP response; reject missing/extra names, duplicate labels/filenames, unsafe names, oversized bodies and aggregate/nodes/depth excess. Verify UTF8 byte length and SHA256 of all2service streams and allHTTP bodies against research receipts. Preserve the1MiB whole outer envelope cap and current fixed maximum60HTTP requests. Approvals are a sequential prefix0..19 and snapshots0..9; no gaps or renewed budgets. Other labels/methods/paths/auth/status use the exact fixed source inventory. The successful native command argv/cwd/version and all five ordinary service cleanup booleans must match existing contracts.
+2. Bind authenticated session-specific raw create-session/prompt/approval/snapshot/history receipts to the selected actual native session, workspace A cwd, own provider call and turn0. Keep prior workspace/trust/catalog checks unchanged. Require exactly one owned pending approval, one once-resolution, no remembered/blanket permission, no extra native prompt or approval action. Verify endpoint methods/paths/status/auth and exact success/error envelopes; ordinary unauthenticated health and the existing401negative case remain distinct.
+3. Validate finite known session/snapshot fields rather than arbitrary maps: bounded IDs/timestamps, selected workspace/cwd/model, empty permission rules, archived=false; typed finite nonnegative usage/message-count/sequence data; known optional fields only. In all snapshots require no pending approvals/questions or subagents. Bound in-flight turn to selected turn0 and the source's finite tool/assistant/thinking shapes. Any nonempty running tool must be the single owned tool/call/args; no additional tool, thinking, free assistant text or delegated activity. Preserve and reject failed/cancelled terminal reasons. The final snapshot must exist within the original10poll bound, have in_flight_turn=null, busy=false, main_turn_active=false, pending_interaction=none and last_turn_reason=completed. Its epoch is nonempty/stable and sequence watermark is nondecreasing across snapshots.
+4. Require bounded complete history with has_more=false and exactly four or five messages. Normalize only the documented newest-first history order, then require exact message identity/content equality with the oldest-first terminal snapshot's complete messages, also has_more=false. All IDs unique/bounded, same actual session; timestamps finite/nondecreasing within the original run window. No loose scan for a matching substring or arbitrary extra messages.
+5. The chronological grammar is: exactly the accepted user prompt; optionally exactly one first-session date injection; exactly one assistant tool_use; exactly one successful tool_result; exactly one final assistant text sentinel. The optional injected date row has the observed user role, one exact system-reminder text part, origin.kind=injection/variant=date_change and closed disclosure(kind=date,renderGeneration=1,valid localDate, timeZone=UTC). Bind date text to the disclosure and UTC message timestamp; other date templates/metadata/messages are refused. The prompt has only the observed user origin metadata; tool/final assistant rows do not acquire arbitrary optional metadata. Other source protocol optional fields are rejected when not part of this exact fixture grammar.
+6. The assistant tool_use must have only the owned call ID/name and exact nonce/write/marker arguments. The tool_result must have that same call ID, no error (is_error absent or false), and a string containing only one whole strict raw facts JSON object. Compare it structurally with the already independently validated unframed provider/probe facts, including PID/session/nonce and runtime authority. No tools/call count beyond one. The final assistant must contain exactly one text part equal to the own fixed final sentinel; empty/extra/partial assistant, wrong sentinel or a tool result alone fails.
+
+Return a closed typed proof containing selected session/prompt/call/approval/turn, terminal reason, message/snapshot counts, exact final snapshot/history digests and matching probe identity. Preserve raw evidence; do not serialize private bearer/provider secrets. The current9e raw history MUST fail because its reason is failed and final assistant empty, even though framing/probe/result joins now pass. The verifier may admit a clearly labeled synthetic success contract; that is not native qualification.
+
+## 5. Completion, cleanup and truthful artifact admission
+
+Run native-history verification only after the native collector returns ordinarily and the provider has issued and validated exactly two owned completion requests with the full probe facts. Require the persistent native marker to equal the expected marker and unchanged remainder of the original data inventory, plus the existing immutable/original/foreign authority checks. Those later current checks remain essential; do not infer marker state from returned facts.
+
+Replace the unconditional initial-history t.Error only with all of these completed checks. Add bounded ordinary provider shutdown inside the original deadline, with a finite exported cleanup receipt. Use graceful HTTP server shutdown, no forced connection close on the success path; only a failure path may force disposal, and that records failure, clears every qualification and cannot admit success. Reserve cleanup inside the constructor's original150second work/180second total origin; never start another origin or extend any native/HTTP/probe budget. A failed original work context or forced/errored/unfinished provider shutdown prevents completion. Require native acknowledged API shutdown, group reaped and port closed with no forced kill/SIGTERM, as already supplied and checked in raw.
+
+After final source/data/cleanup/capture checks, and only then, set single-call top-level native_capture_complete/native_history_grammar_frozen/runtime_attempt_complete=true and test_failed=false, with the typed proof and ordinary cleanup receipt. This branch sets only mcp-initialize/mcp-tools-list/mcp-tools-call true. Project-lifecycle/native-restart-removal stay false in this single-call lane; vendor_authentication/real_model remain false and activation remains Prepared. It cannot inherit the component lane's lifecycle flags. Root may combine independently audited current-source component and single-call evidence later.
+
+Update both Go archive admission and Python pure `kimi_call_members` to recognize an exact closed success pair alongside the preserved failed-only pair. Success requires every selected command triple, two provider requests, installed native projection/skill, probe stream and complete raw Python envelope, correct source/tree, three MCP flags only, own proof and ordinary native/provider cleanup. Reject partial/mixed-success flags, missing proof, failed commands, absent/mismatched source and any forced cleanup. Existing failure paths retain every original allowed prefix/raw diagnostic, false completion and all five false flags. Clear any staged success fields/flags whenever a late original authority/deadline/cleanup/capture check fails before serialization. Frontend actual test success remains required independently; admitting bytes never turns a failed test green.
+
+The historical9e andb2bb raw captures remain byte-identical and failed-only when replayed with their ORIGINAL source identities. No old raw is retargeted to a new source or promoted to success. Component raw admission and stage flags remain unchanged.
+
+## 6. Implementation surface and meaningful verification
+
+Keep changes narrow to Kimi repotest helpers/contracts, the existing runtime pure-reader success branch/contracts and evidence documentation. Expected paths: existing `repotests/agentplugins_kimi_project_native_attempt_test.go`, provider helper if needed, one new finite history helper plus focused contract file, existing Kimi attempt/provider contracts where expectations need precise updates, `scripts/project_native_runtime.py`, `scripts/test_project_native_runtime.py`, and a concise Kimi validation record. Existing Python native collector, shared service/supervisor/acquisition, production client/provider/installer selection, component lifecycle, workflow routing, versions/pins and other clients stay byte-identical. If implementation requires wider behavior, stop for amended plan review.
+
+Before code, two independent plan GOs. Implement in a new isolated exact-current-source checkout after root confirms the observed remote head; preserve concurrently advanced work and the unpublished alternative. Root alone commits/pushes. Before publishing obtain two exact-tree code critics and execute these meaningful local gates under root-owned serialized Go/lint slots:
+
+- Pure model framing: actual0.004header+facts succeeds; malformed prefix, sign/leading zero, wrong fractional width/unit/CRLF/multiple headers, >60/nonfinite, error/note/trailing payload, duplicate/unknown facts fields and oversized/deep/invalidUTF8 refuse. Keep existing source-bound facts/probe event mutation tests.
+- Pure raw envelope/history: actual9e current terminalfailed+emptyassistant remains rejected; its raw bytes/digests/flags remain unchanged and failed admission remains exact. A synthetic finite completed fixture alone exercises the positive grammar, explicitly labeled non-native. Mutations cover wrong session/workspace/cwd/model/prompt/call/tool/nonce/marker/root/data/PID/probe session, wrong ordering/reverse snapshot mismatch, duplicate ID, count/pagination excess, extra/missing/error tool result, missing/extra/wrong/partial sentinel, unknown fields/content/metadata, nonfinite/deep/oversized/invalidUTF8, stale/out-of-window timestamps, injected-date mismatch, unstable epoch/regressing sequence, absent terminal snapshot, active/failed/cancelled terminal, extra questions/approvals/subagents and receipt/hash/member closure errors.
+- Provider/source/data/cleanup: preserve one-call authority and two-turn request checks; ordinary graceful provider shutdown passes inertly, forced/error/expired closure cannot qualify; missing/wrong marker and unrelated data changes still refuse; late failures clear staged completion/flags. No fake native binaries or skipped-host marker impersonation.
+- Pure archive readers: failed pair unchanged, exact successful three-MCP-only pair, reject mixed flags/false-green/missing raw or proof/extra files/gapped provider sequence/failed command/forced cleanup/source mismatch. Actual current component67/25 and single25/25 archives replay as their original outcomes. Add no vendored executable fixture.
+- Focused Kimi inert Go/contracts plus affected Python contracts, gofmt/whitespace, actual affected all-enabled lint and whole unfiltered six-linter gates. Do not run any native/vendor/public-installer/scanner path locally. Scope broader tests only to concrete shared-reader risks.
+
+After accepted code and executed gates, root normal expected-head fast-forward publication triggers fresh genuine hosted CI. Do not manually retry unchanged source or declare completion from inert fixtures. Audit fresh exact source/tree/pins/raw source-to-output receipts, approval, provider/probe/native-history, persistent marker/data and whole ordinary cleanup. Component must remain independently green and audited on the same published source. Only an actual fresh native pass with independent raw review can qualify the tools/call slice. Any still-unfamiliar native history remains failed with its original raw capture for a new evidence-based review.
+
+## Accepted Kimi framing/history amendment before implementation
+
+Exact draft SHA256 `fb44cab8565ed9023f43ce45a0e2d1c8d5f06ea03cd9c0118b092003c151aaa7`
+received independent PLAN GOs from root and GPT-6.1 Sol xhigh `native_e2e_finish`
+before any source edit. Receipt SHA256s:
+`7850e5f2a948b5074bf300deb1e0c67a860da921003ca65abc9b44d2fb4c4a21` and
+`a5306ed37e714e594cfc6b61198dbdf9c871d3482afcf6481e85671023debf5f`.
+Both rehashed all21 primary blobs and inspected the actual framing/native/probe
+failed boundary. Closed typed proof must join full raw/HTTP/session/history
+identities, marker/data and ordinary shutdown; success booleans alone cannot
+qualify. Current9e failed native history remains refused. A reader mutation that
+places success flags/proof over failed raw must fail; late failures clear staged
+flags. Only future same-source actual component and single-call success may be
+combined. Root freshly checked PR524 remains9e before this isolated checkout.
