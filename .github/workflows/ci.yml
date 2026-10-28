@@ -29,6 +29,49 @@ jobs:
       # pushes are scored the same way as the WIP PR into main.
       lint-base: origin/${{ github.base_ref || 'main' }}
 
+  management-sdk:
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
+          - macos-15
+          - windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.10"
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22.21.1"
+          package-manager-cache: false
+      - name: Install locked management SDK tooling
+        run: npm ci --prefix sdks/typescript --ignore-scripts --no-audit --no-fund
+      - name: Check management contract and generated Go/TypeScript DTOs
+        if: runner.os == 'Linux'
+        run: node contracts/management/generate.ts --check
+      - name: Build and typecheck management SDK
+        run: |
+          npm --prefix sdks/typescript run build
+          npm --prefix sdks/typescript run typecheck
+      # These fixtures qualify HTTP/process behavior, not native installation.
+      - name: Verify SDK protocol and owned-process lifecycle
+        run: npm --prefix sdks/typescript test
+      - name: Verify the actual packed SDK in an isolated consumer
+        run: npm --prefix sdks/typescript run test:consumer
+
   test:
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45

@@ -643,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Indisponível na fonte indexada; nenhum comando de instalação foi gerado.",
       "unavailableAtItsIndexedSource": "Indisponível na fonte indexada",
       "checkedAgainBeforeInstallation": "Verificado novamente antes da instalação",
-      "reviewedListing": "Revisado",
+      "reviewedListing": "Ficha revisada",
       "notAvailableForChatgpt": "Não disponível para ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Conexão verificada; conclua a configuração no ChatGPT",
       "allInstalledAgents": "Escolher agentes no terminal",
@@ -674,7 +674,8 @@
       "publisher": "Por {publisher}",
       "upstream": "origem upstream",
       "installable": "instalável",
-      "unavailable": "indisponível"
+      "unavailable": "indisponível",
+      "reviewedListingTooltip": "A ficha e os metadados foram revisados. Isso não certifica o código, o comportamento ou a segurança do plugin."
     },
     "install": {
       "allInstalledAgentsRecommended": "Escolher agentes no terminal",
@@ -878,7 +879,7 @@
       "components": "Componentes",
       "package": "Pacote",
       "pluginNotFound": "Plugin não encontrado",
-      "reviewedListing": "Revisado",
+      "reviewedListing": "Ficha revisada",
       "licenseNotSpecified": "Licença não especificada",
       "managedByCli": "Gerenciado pela CLI",
       "requiresAFinalStepInTheApp": "Requer uma etapa final no app",
@@ -887,7 +888,8 @@
       "title": "Agent Plugin {name} {'|'} Universal Agent Plugins",
       "schemaName": "Agent Plugin {name}",
       "directory": "Diretório de plugins",
-      "version": "Versão {version}"
+      "version": "Versão {version}",
+      "reviewedListingTooltip": "A ficha e os metadados foram revisados. Isso não certifica o código, o comportamento ou a segurança do plugin."
     },
     "community": {
       "breadcrumb": "Trilha de navegação",

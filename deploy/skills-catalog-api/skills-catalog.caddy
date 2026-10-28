@@ -1,12 +1,24 @@
 # Imported by /etc/caddy/Caddyfile through /etc/caddy/projects/*.caddy.
 # The apex and www website continue to use their existing GitHub Pages hosting.
 api.universal-agent-plugins.com {
-	reverse_proxy 127.0.0.1:13120 {
-		header_up -Authorization
-		header_up -Cookie
-		transport http {
-			dial_timeout 2s
-			response_header_timeout 12s
+	@resolver path /v1/skills/resolve
+	handle @resolver {
+		reverse_proxy 127.0.0.1:13120 {
+			header_up -Cookie
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 40s
+			}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:13120 {
+			header_up -Authorization
+			header_up -Cookie
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 12s
+			}
 		}
 	}
 }

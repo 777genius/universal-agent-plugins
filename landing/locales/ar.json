@@ -643,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "غير متاح في مصدره المفهرس؛ لن يتم إنشاء أمر تثبيت.",
       "unavailableAtItsIndexedSource": "غير متاح في مصدره المفهرس",
       "checkedAgainBeforeInstallation": "تم التحقق مرة أخرى قبل التثبيت",
-      "reviewedListing": "مراجَع",
+      "reviewedListing": "تمت مراجعة البطاقة",
       "notAvailableForChatgpt": "غير متاح لـ ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "اتصال موثق؛ أكمل الإعداد في ChatGPT",
       "allInstalledAgents": "اختيار الوكلاء في الطرفية",
@@ -674,7 +674,8 @@
       "publisher": "بواسطة {publisher}",
       "upstream": "المصدر الأصلي",
       "installable": "قابل للتثبيت",
-      "unavailable": "غير متاح"
+      "unavailable": "غير متاح",
+      "reviewedListingTooltip": "تمت مراجعة البطاقة والبيانات الوصفية. هذا لا يشهد على أمان كود الإضافة أو سلوكها."
     },
     "install": {
       "allInstalledAgentsRecommended": "اختيار الوكلاء في الطرفية",
@@ -878,7 +879,7 @@
       "components": "المكوّنات",
       "package": "الحزمة",
       "pluginNotFound": "لم يتم العثور على الإضافة",
-      "reviewedListing": "مراجَع",
+      "reviewedListing": "تمت مراجعة البطاقة",
       "licenseNotSpecified": "لم يتم تحديد الترخيص",
       "managedByCli": "تُدار عبر CLI",
       "requiresAFinalStepInTheApp": "تتطلب خطوة نهائية في التطبيق",
@@ -887,7 +888,8 @@
       "title": "إضافة Agent Plugin باسم {name} {'|'} Universal Agent Plugins",
       "schemaName": "إضافة Agent Plugin باسم {name}",
       "directory": "دليل الإضافات",
-      "version": "الإصدار {version}"
+      "version": "الإصدار {version}",
+      "reviewedListingTooltip": "تمت مراجعة البطاقة والبيانات الوصفية. هذا لا يشهد على أمان كود الإضافة أو سلوكها."
     },
     "community": {
       "breadcrumb": "مسار التنقل",

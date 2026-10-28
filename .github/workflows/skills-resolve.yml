@@ -32,9 +32,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # PR checks replace superseded work; each main run retains exact-commit activation evidence.
+  group: skills-resolve-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.pull_request.number || github.ref) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   source-and-runtime:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || vars.CI_LINUX_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,3 +73,35 @@ jobs:
             --memory=512m --memory-swap=512m --pids-limit=64 --cpus=1 \
             --tmpfs /tmp:rw,nosuid,nodev,noexec,size=256m,mode=1777 \
             -e UAP_RESOLVE_RUNTIME_PROBE=1 uap-resolve-runtime-probe
+      - name: Verify deployment unit with real systemd and bounded scratch
+        run: |
+          set -eu
+          SYSTEMD_PROBE_NAME="uap-rp-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          SYSTEMD_PROBE_DIR="/opt/$SYSTEMD_PROBE_NAME"
+          SYSTEMD_PROBE_UNIT="/run/systemd/system/$SYSTEMD_PROBE_NAME.service"
+          cleanup() {
+            sudo systemctl stop "$SYSTEMD_PROBE_NAME.service" || true
+            sudo rm -f "$SYSTEMD_PROBE_UNIT"
+            sudo rm -rf "$SYSTEMD_PROBE_DIR"
+            sudo systemctl daemon-reload
+          }
+          trap cleanup EXIT
+          CGO_ENABLED=0 go test -c -o "$RUNNER_TEMP/systemd-resolver-probe" ./internal/skillsresolve/gitsource
+          sudo install -d -m 0755 "$SYSTEMD_PROBE_DIR"
+          sudo install -m 0755 "$RUNNER_TEMP/systemd-resolver-probe" "$SYSTEMD_PROBE_DIR/probe"
+          sed \
+            -e "s|^WorkingDirectory=.*|WorkingDirectory=$SYSTEMD_PROBE_DIR|" \
+            -e "s|^ExecStart=.*|ExecStart=$SYSTEMD_PROBE_DIR/probe -test.v -test.run=^TestHostedRuntimeEnvelopeAndDiskExhaustion$|" \
+            -e "s|^User=.*|User=$SYSTEMD_PROBE_NAME|" \
+            -e '/^StateDirectory=/d' \
+            -e '/^EnvironmentFile=/d' \
+            -e 's/^Restart=.*/Restart=no/' \
+            deploy/skills-catalog-api/uap-skills-catalog.service > "$RUNNER_TEMP/systemd-resolver-probe.service"
+          printf '\n[Service]\nEnvironment=UAP_RESOLVE_RUNTIME_PROBE=1\n' >> "$RUNNER_TEMP/systemd-resolver-probe.service"
+          sudo install -m 0644 "$RUNNER_TEMP/systemd-resolver-probe.service" "$SYSTEMD_PROBE_UNIT"
+          sudo systemctl daemon-reload
+          if ! sudo systemctl start --wait "$SYSTEMD_PROBE_NAME.service"; then
+            sudo journalctl -u "$SYSTEMD_PROBE_NAME.service" --no-pager
+            exit 1
+          fi
+          sudo journalctl -u "$SYSTEMD_PROBE_NAME.service" --no-pager

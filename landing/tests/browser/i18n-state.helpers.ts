@@ -37,6 +37,12 @@ export async function hydrated(page: Page) {
     };
     return root?.__vue_app__?.config.globalProperties.$nuxt?.isHydrating === false;
   });
+  // Nuxt onNuxtReady callbacks (including theme/locale setup) run in a native
+  // idle turn after this flag flips. Hydration alone is not app readiness.
+  // Preserve the actual scheduler and all existing test/assertion timeouts.
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestIdleCallback(() => queueMicrotask(resolve));
+  }));
 }
 
 export async function navigate(page: Page, family: string, locale: PublishedLocale = 'en', suffix = '') {
@@ -90,6 +96,7 @@ export async function offline(page: Page) {
   // Same release schema as migration-copy; every other non-local request is blocked.
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/reports/skillspector/v3/index.json')) return route.fulfill({ status: 404 });
     if (url.pathname.endsWith('/reports/skillspector/v2/index.json')) return route.fulfill({ json: emptySkillSpectorManifest() });
     if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return route.fallback();
     if (url.hostname === 'api.github.com' && url.pathname.endsWith('/releases/latest'))

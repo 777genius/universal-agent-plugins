@@ -172,51 +172,67 @@ test('larger breathing background never changes layout or blocks the foreground'
   for (const width of [1440, 1280, 1024, 800, 390, 280]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-    const windowBefore = (await page.locator('.hero__window').boundingBox())!;
-    const heroBefore = (await page.locator('.hero').boundingBox())!;
-    const planeWidth = await field.locator('.hero-agent-field__plane')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width));
-    const fieldWidth = (await field.boundingBox())!.width;
-    expect(await field.locator('.hero-agent-field__plane')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).left))).toBeCloseTo(fieldWidth * 0.62 - 100, 1);
-    expect(planeWidth).toBeCloseTo(Math.min(width <= 720 ? 492 : 720, fieldWidth * 1.5), 1);
-    expect(await field.locator('.hero-agent-field__node').first()
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width))).toBe(width <= 720 ? 30 : 38);
-    expect(await field.locator('.hero-agent-field__hub')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width))).toBe(width <= 720 ? 96 : 116);
-    expect(await field.locator('.hero-agent-field__hub img')
-      .evaluate((node) => Number.parseFloat(getComputedStyle(node).width))).toBe(width <= 720 ? 64 : 76);
-    await field.evaluate((node: HTMLElement) => { node.style.display = 'none'; });
-    expect(await page.locator('.hero__window').boundingBox()).toEqual(windowBefore);
-    expect(await page.locator('.hero').boundingBox()).toEqual(heroBefore);
-    await field.evaluate((node: HTMLElement) => { node.style.removeProperty('display'); });
-    for (const time of [0, 5000, 10000, 36000, 54000]) {
-      await field.evaluate((node, elapsed) => {
+    // Read one viewport atomically, retaining every geometry check while avoiding
+    // repeated protocol/snapshot work between these read-only measurements.
+    const geometry = await field.evaluate((node: HTMLElement) => {
+      const box = (selector: string) => {
+        const { x, y, width, height } = document.querySelector(selector)!.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      const plane = getComputedStyle(node.querySelector('.hero-agent-field__plane')!);
+      const result = {
+        windowBefore: box('.hero__window'), heroBefore: box('.hero'),
+        fieldWidth: node.getBoundingClientRect().width,
+        planeWidth: Number.parseFloat(plane.width), planeLeft: Number.parseFloat(plane.left),
+        nodeWidth: Number.parseFloat(getComputedStyle(node.querySelector('.hero-agent-field__node')!).width),
+        hubWidth: Number.parseFloat(getComputedStyle(node.querySelector('.hero-agent-field__hub')!).width),
+        hubImageWidth: Number.parseFloat(getComputedStyle(node.querySelector('.hero-agent-field__hub img')!).width),
+      };
+      node.style.display = 'none';
+      const hidden = { window: box('.hero__window'), hero: box('.hero') };
+      node.style.removeProperty('display');
+      return { ...result, hidden };
+    });
+    const { windowBefore, heroBefore } = geometry;
+    expect(geometry.planeLeft).toBeCloseTo(geometry.fieldWidth * 0.62 - 100, 1);
+    expect(geometry.planeWidth).toBeCloseTo(Math.min(width <= 720 ? 492 : 720, geometry.fieldWidth * 1.5), 1);
+    expect(geometry.nodeWidth).toBe(width <= 720 ? 30 : 38);
+    expect(geometry.hubWidth).toBe(width <= 720 ? 96 : 116);
+    expect(geometry.hubImageWidth).toBe(width <= 720 ? 64 : 76);
+    expect(geometry.hidden.window).toEqual(windowBefore);
+    expect(geometry.hidden.hero).toEqual(heroBefore);
+    const samples = await field.evaluate(async (node, times) => {
+      const result = [];
+      for (const elapsed of times) {
         for (const animation of node.getAnimations({ subtree: true })) {
-          animation.pause();
-          animation.currentTime = elapsed;
+          animation.pause(); animation.currentTime = elapsed;
         }
-      }, time);
-      await page.evaluate(() => new Promise(requestAnimationFrame));
-      const installation = (await page.locator('.hero__window').boundingBox())!;
-      expect(installation).toEqual(windowBefore);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const { x, y, width, height } = document.querySelector('.hero__window')!.getBoundingClientRect();
+        result.push({ installation: { x, y, width, height }, fits: document.documentElement.scrollWidth <= innerWidth });
+      }
+      return result;
+    }, [0, 5000, 10000, 36000, 54000]);
+    for (const sample of samples) {
+      expect(sample.installation).toEqual(windowBefore);
+      expect(sample.fits).toBe(true);
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  const sizes: number[] = [];
-  for (const progress of [0, 0.5, 1]) {
-    await field.evaluate((node, fraction) => {
+  const sizes = await field.evaluate(async (node, fractions) => {
+    const result = [];
+    for (const fraction of fractions) {
       for (const animation of node.getAnimations({ subtree: true })) {
         animation.pause();
         animation.currentTime = (animation as CSSAnimation).animationName === 'agent-orbit-breathe'
           ? Number(animation.effect!.getTiming().duration) * fraction : 0;
       }
-    }, progress);
-    await page.evaluate(() => new Promise(requestAnimationFrame));
-    sizes.push((await field.locator('.hero-agent-field__track').boundingBox())!.width);
-  }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      result.push(node.querySelector('.hero-agent-field__track')!.getBoundingClientRect().width);
+    }
+    return result;
+  }, [0, 0.5, 1]);
   expect(sizes[1]!).toBeGreaterThan(sizes[0]! * 1.05);
   expect(sizes[1]!).toBeLessThan(sizes[0]! * 1.25);
   expect(sizes[2]!).toBeCloseTo(sizes[0]!, 1);

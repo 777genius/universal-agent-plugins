@@ -7,6 +7,23 @@ import type {
   SkillSpectorSubject,
 } from '../types/skillSpector.ts';
 
+/** Presentation-only exact message grouping; every original context remains intact. */
+export function groupSkillSpectorReasons<T extends { code: string; message: string }>(
+  reasons: readonly T[],
+) {
+  const groups = new Map<string, { key: string; code: string; message: string; contexts: T[] }>();
+  for (const reason of reasons) {
+    const key = JSON.stringify([reason.code, reason.message]);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, code: reason.code, message: reason.message, contexts: [] };
+      groups.set(key, group);
+    }
+    group.contexts.push(reason);
+  }
+  return [...groups.values()];
+}
+
 const revisionPattern = /^[0-9a-f]{40}$/;
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -191,24 +208,144 @@ export function skillSpectorAssessment(
   subject: SkillSpectorSubject | undefined,
   now = new Date(),
 ): SkillSpectorAssessment {
+  const canonical =
+    report?.schema_version === 3
+      ? String(
+          report.repository_aliases.find(
+            (alias) => String(alias.repository).toLowerCase() === subject?.repository.toLowerCase(),
+          )?.canonical_repository ?? subject?.repository,
+        ).toLowerCase()
+      : subject?.repository.toLowerCase();
   const records = !subject
     ? []
     : (report?.records ?? []).filter((record) => {
-        if (record.source.repository.toLowerCase() !== subject.repository.toLowerCase())
-          return false;
+        const repositoryMatches =
+          record.source.repository.toLowerCase() === canonical ||
+          (report?.schema_version === 3 &&
+            record.freshness === 'historical' &&
+            report.repository_aliases.some(
+              (alias) =>
+                String(alias.repository).toLowerCase() === record.source.repository.toLowerCase() &&
+                String(alias.canonical_repository).toLowerCase() === canonical &&
+                alias.revision === record.target_revision,
+            ));
+        if (!repositoryMatches) return false;
         return subject.kind === 'plugin'
           ? record.kind === 'plugin_skill' && record.plugin_path === subject.path
           : record.kind === 'standalone_skill' && record.skill_name === subject.name;
       });
   const coverage =
-    report?.schema_version === 2 && subject?.kind === 'plugin'
+    (report?.schema_version === 2 || report?.schema_version === 3) && subject?.kind === 'plugin'
       ? report.plugin_coverage.find(
           (item) =>
-            item.repository.toLowerCase() === subject.repository.toLowerCase() &&
-            item.plugin_path === subject.path,
+            item.repository.toLowerCase() === canonical && item.plugin_path === subject.path,
         )
       : undefined;
   const findingCount = records.reduce((sum, record) => sum + record.finding_count, 0);
+  if (report?.schema_version === 3) {
+    const states = subject?.kind === 'plugin' ? report.plugin_states : report.source_states;
+    const state = states.find(
+      (item) =>
+        (String(item.repository).toLowerCase() === canonical ||
+          (subject?.kind === 'skill' &&
+            String(item.repository).toLowerCase() === subject.repository.toLowerCase())) &&
+        (subject?.kind === 'plugin'
+          ? item.plugin_path === subject.path &&
+            (item.revision === null || item.revision === subject.revision)
+          : item.id === `${canonical}/${subject?.name}` ||
+            String(item.id).toLowerCase() ===
+              `${subject?.repository.toLowerCase()}/${subject?.name}`),
+    );
+    const fullyChecked = records.filter(
+      (record) =>
+        record.freshness === 'current' &&
+        record.coverage?.status === 'complete' &&
+        record.execution?.state === 'completed' &&
+        (subject?.kind !== 'plugin' || record.source.revision === subject.revision),
+    ).length;
+    const selected = Math.max(
+      coverage?.selected ?? records.length,
+      typeof state?.skills_total === 'number' ? state.skills_total : 0,
+      subject?.kind === 'skill' && Array.isArray(state?.selected_ids)
+        ? state.selected_ids.length
+        : 0,
+    );
+    const outOfDate = records.some(
+      (record) =>
+        record.freshness === 'historical' ||
+        (subject?.kind === 'plugin' && record.source.revision !== subject.revision),
+    );
+    const reasons = records.flatMap((record) => record.coverage?.reasons ?? []);
+    if (state?.reason) reasons.push({ code: String(state.reason), message: String(state.reason) });
+    if (Array.isArray(state?.candidates) && state.candidates.length)
+      reasons.push({ code: 'source_candidates', message: state.candidates.join(', ') });
+    const unreviewedCount = records.reduce(
+      (sum, record) =>
+        sum +
+        record.findings
+          .filter((finding) => finding.review_status === 'unreviewed')
+          .reduce((count, finding) => count + (finding.raw_count ?? 1), 0),
+      0,
+    );
+    const confirmed = records.some((record) =>
+      record.findings.some(
+        (finding) =>
+          finding.review_status === 'confirmed' && ['HIGH', 'CRITICAL'].includes(finding.severity),
+      ),
+    );
+    const status = !records.length
+      ? ['unavailable', 'unresolved'].includes(String(state?.state))
+        ? 'unavailable'
+        : ['unsupported', 'not_applicable'].includes(String(state?.state))
+          ? 'unsupported'
+          : coverage?.pending || state?.state === 'resolved'
+            ? 'pending'
+            : 'notChecked'
+      : confirmed
+        ? 'confirmedMaterialIssue'
+        : records.every(
+              (record) =>
+                record.execution?.state === 'failed' && record.coverage?.status === 'not_started',
+            )
+          ? 'unavailable'
+          : outOfDate
+            ? 'stale'
+            : fullyChecked < selected ||
+                records.some(
+                  (record) =>
+                    record.coverage?.status !== 'complete' ||
+                    record.execution?.state !== 'completed',
+                )
+              ? 'incomplete'
+              : unreviewedCount
+                ? 'unreviewedFindings'
+                : findingCount
+                  ? 'reviewedFindings'
+                  : 'noStaticFindings';
+    return {
+      status,
+      findingCount,
+      unreviewedCount,
+      outOfDate,
+      records,
+      coverage,
+      fullyChecked,
+      inventoryKnown: subject?.kind === 'plugin' && typeof state?.skills_total === 'number',
+      selected,
+      reasons,
+      groupCount: records.some((record) => record.coverage?.grouping_complete === false)
+        ? undefined
+        : records.reduce(
+            (sum, record) => sum + (record.finding_group_count ?? record.findings.length),
+            0,
+          ),
+      rawCount: records.reduce(
+        (sum, record) => sum + (record.raw_finding_count ?? record.finding_count),
+        0,
+      ),
+      legacy: false,
+    };
+  }
   if (!records.length)
     return { status: 'notChecked', findingCount, outOfDate: false, records, coverage };
   const outOfDate = records.some(
@@ -238,7 +375,7 @@ export function skillSpectorSourceUrl(record: SkillSpectorRecord): string {
 /** Link only in-root relative artifacts at the exact scanned revision. */
 export function skillSpectorFindingUrl(
   record: SkillSpectorRecord,
-  finding: SkillSpectorFinding,
+  finding: Pick<SkillSpectorFinding, 'path' | 'line'>,
 ): string | undefined {
   const parts = finding.path.split('/');
   if (
@@ -257,7 +394,9 @@ export function skillSpectorFindingUrl(
   return `https://github.com/${record.source.repository}/blob/${record.source.revision}/${suffix}${finding.line ? `#L${finding.line}` : ''}`;
 }
 
-export function skillSpectorFindingLocation(finding: SkillSpectorFinding): string {
+export function skillSpectorFindingLocation(
+  finding: Pick<SkillSpectorFinding, 'path' | 'line'>,
+): string {
   return finding.line ? `${finding.path}:${finding.line}` : finding.path;
 }
 

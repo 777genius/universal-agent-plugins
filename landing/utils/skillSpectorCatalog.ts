@@ -1,10 +1,12 @@
 import type {
   SkillSpectorDisplayReport,
   SkillSpectorManifest,
+  SkillSpectorManifestV3,
   SkillSpectorRecord,
   SkillSpectorShardDescriptor,
 } from '../types/skillSpector.ts';
 import { decodeSkillSpectorRecords, loadSkillSpectorReport } from './skillSpector.ts';
+import { decodeSkillSpectorManifestV3, decodeSkillSpectorShardV3 } from './skillSpectorV3.ts';
 
 const revision = /^[0-9a-f]{40}$/;
 const digest = /^sha256:[0-9a-f]{64}$/;
@@ -233,14 +235,24 @@ export function createSkillSpectorClient(
   manifestUrl: string,
   legacyUrl: string,
   fetcher: typeof fetch = fetch,
+  v3ManifestUrl?: string,
 ) {
-  const manifests = readBytes(manifestUrl, 4 << 20, fetcher)
-    .then((bytes) => decodeSkillSpectorManifest(parse(bytes)))
-    .catch(async (error) => {
-      if (error instanceof HttpError && error.status === 404)
-        return loadSkillSpectorReport(legacyUrl, fetcher);
-      throw error;
-    });
+  const legacyManifest = () =>
+    readBytes(manifestUrl, 4 << 20, fetcher)
+      .then((bytes) => decodeSkillSpectorManifest(parse(bytes)))
+      .catch(async (error) => {
+        if (error instanceof HttpError && error.status === 404)
+          return loadSkillSpectorReport(legacyUrl, fetcher);
+        throw error;
+      });
+  const manifests = v3ManifestUrl
+    ? readBytes(v3ManifestUrl, 16 << 20, fetcher)
+        .then((bytes) => decodeSkillSpectorManifestV3(parse(bytes)))
+        .catch((error) => {
+          if (error instanceof HttpError && error.status === 404) return legacyManifest();
+          throw error;
+        })
+    : legacyManifest();
   const repositories = new Map<string, Promise<SkillSpectorDisplayReport>>();
   const shards = new Map<string, Promise<SkillSpectorRecord[]>>();
   let active = 0;
@@ -256,12 +268,16 @@ export function createSkillSpectorClient(
       else active--;
     }
   }
-  function loadShard(manifest: SkillSpectorManifest, descriptor: SkillSpectorShardDescriptor) {
+  function loadShard(
+    manifest: SkillSpectorManifest | SkillSpectorManifestV3,
+    descriptor: SkillSpectorShardDescriptor,
+  ) {
     let pending = shards.get(descriptor.path);
     if (!pending) {
       pending = limited(async () => {
         const bytes = await readBytes(
-          new URL(descriptor.path, manifestUrl).href,
+          new URL(descriptor.path, manifest.schema_version === 3 ? v3ManifestUrl! : manifestUrl)
+            .href,
           descriptor.bytes,
           fetcher,
         );
@@ -271,7 +287,9 @@ export function createSkillSpectorClient(
           (byte) => byte.toString(16).padStart(2, '0'),
         ).join('');
         if (`sha256:${hash}` !== descriptor.digest) invalid();
-        return decodeSkillSpectorShard(parse(bytes), manifest, descriptor);
+        return manifest.schema_version === 3
+          ? decodeSkillSpectorShardV3(parse(bytes), manifest, descriptor)
+          : decodeSkillSpectorShard(parse(bytes), manifest, descriptor);
       });
       shards.set(descriptor.path, pending);
     }
@@ -285,8 +303,16 @@ export function createSkillSpectorClient(
         pending = (async () => {
           const manifest = await manifests;
           if (manifest.schema_version === 1) return manifest;
+          const canonical =
+            manifest.schema_version === 3
+              ? String(
+                  manifest.repository_aliases.find(
+                    (alias) => String(alias.repository).toLowerCase() === key,
+                  )?.canonical_repository ?? key,
+                ).toLowerCase()
+              : key;
           const descriptors = manifest.shards.filter(
-            (shard) => shard.repository.toLowerCase() === key,
+            (shard) => shard.repository.toLowerCase() === canonical,
           );
           const records = (
             await Promise.all(descriptors.map((descriptor) => loadShard(manifest, descriptor)))
@@ -314,7 +340,7 @@ export function createSkillSpectorClient(
               );
           }
           for (const plugin of manifest.plugin_coverage.filter(
-            (item) => item.repository.toLowerCase() === key,
+            (item) => item.repository.toLowerCase() === canonical,
           )) {
             if ((pluginCounts.get(plugin.plugin_path) ?? 0) !== plugin.reported) invalid();
             pluginCounts.delete(plugin.plugin_path);

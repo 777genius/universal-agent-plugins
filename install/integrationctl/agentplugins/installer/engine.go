@@ -101,6 +101,12 @@ func (e *Engine) SupportsClient(clientID string) bool {
 	return registered
 }
 
+// RequiresClientExecutable exposes the same explicit executable authority policy
+// used by install preparation, including native host-profile consumers.
+func (e *Engine) RequiresClientExecutable(clientID string) bool {
+	return e.SupportsClient(clientID) && requiresExecutable(e.cfg.Registry, domain.ClientID(clientID), e.scope())
+}
+
 func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, detected map[domain.ClientID]domain.DetectedClient) usecase.Service {
 	paths := pathpolicy.Policy{}
 	plan := e.planner()

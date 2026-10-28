@@ -643,7 +643,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "No disponible en su fuente indexada; no se genera ningún comando de instalación.",
       "unavailableAtItsIndexedSource": "No disponible en su fuente indexada",
       "checkedAgainBeforeInstallation": "Comprobado nuevamente antes de la instalación.",
-      "reviewedListing": "Revisado",
+      "reviewedListing": "Ficha revisada",
       "notAvailableForChatgpt": "No disponible para ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Conexión verificada; finalizar la configuración en ChatGPT",
       "allInstalledAgents": "Elegir agentes en la terminal",
@@ -674,7 +674,8 @@
       "publisher": "Por {publisher}",
       "upstream": "aguas arriba",
       "installable": "instalable",
-      "unavailable": "no disponible"
+      "unavailable": "no disponible",
+      "reviewedListingTooltip": "Se revisaron la ficha y los metadatos. Esto no certifica el código, el comportamiento ni la seguridad del complemento."
     },
     "install": {
       "allInstalledAgentsRecommended": "Elegir agentes en la terminal",
@@ -878,7 +879,7 @@
       "components": "Componentes",
       "package": "Paquete",
       "pluginNotFound": "Complemento no encontrado",
-      "reviewedListing": "Revisado",
+      "reviewedListing": "Ficha revisada",
       "licenseNotSpecified": "Licencia no especificada",
       "managedByCli": "Gestionado por CLI",
       "requiresAFinalStepInTheApp": "Requiere un paso final en la aplicación.",
@@ -887,7 +888,8 @@
       "title": "{name} Complemento de agente {'|'} Complementos de agente universal",
       "schemaName": "{name} Complemento de agente",
       "directory": "Directorio de complementos",
-      "version": "Versión {version}"
+      "version": "Versión {version}",
+      "reviewedListingTooltip": "Se revisaron la ficha y los metadatos. Esto no certifica el código, el comportamiento ni la seguridad del complemento."
     },
     "community": {
       "breadcrumb": "Miga de pan",

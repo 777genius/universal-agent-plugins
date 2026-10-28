@@ -31,7 +31,16 @@ def child_limits():
 
 def kill_group(process):
     try:
-        os.killpg(process.pid, signal.SIGKILL)
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except PermissionError:
+            # macOS can report EPERM for a group containing only an unreaped
+            # zombie. Reap our own exited child, then still signal the group:
+            # its descendants may survive. A live child or persistent denial
+            # remains an error.
+            if process.poll() is None:
+                raise
+            os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
 

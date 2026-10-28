@@ -123,7 +123,7 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if err = reserveSkillBindingIDs(prepared.Bindings, prior); err != nil {
+	if err = reserveSkillBindingIDs(view, prepared.Bindings, prior); err != nil {
 		return nil, nil, nil, err
 	}
 	detected, err := detectDependencyClients(ctx, app)
@@ -139,7 +139,7 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	return actions, detected, paths, err
 }
 
-func reserveSkillBindingIDs(bindings, prior []dependencyAction) error {
+func reserveSkillBindingIDs(view installer.Inspection, bindings, prior []dependencyAction) error {
 	ids := map[string]string{}
 	for _, action := range prior {
 		if action.InstallationID != "" {
@@ -152,18 +152,49 @@ func reserveSkillBindingIDs(bindings, prior []dependencyAction) error {
 			continue
 		}
 		id := ids[action.Alias]
+		retainedID, err := retainedSkillInstallationID(view, *action)
+		if err != nil {
+			return err
+		}
+		if retainedID != "" {
+			if id != "" && id != retainedID {
+				return installer.ErrPlanChanged
+			}
+			id = retainedID
+		}
 		if id == "" {
 			var err error
 			id, err = domain.NewInstallationID()
 			if err != nil {
 				return err
 			}
-			ids[action.Alias] = id
 		}
+		ids[action.Alias] = id
 		// Authority stays unbound until the installer commits its first receipt.
 		action.InstallationID = id
 	}
 	return nil
+}
+
+// Last-binding removal retains installation identity and PLUGIN_DATA, but drops
+// the live environment receipt. Reuse only an exact source with no bindings;
+// name matches and foreign bindings never grant installation authority. The
+// ordinary installer still validates the package and retained-data ownership.
+func retainedSkillInstallationID(view installer.Inspection, action dependencyAction) (string, error) {
+	if action.Package == nil || action.Package.SourceKey == "" {
+		return "", nil
+	}
+	id := ""
+	for _, installation := range view.Installations {
+		if installation.SourceKey != action.Package.SourceKey || len(installation.Bindings) != 0 {
+			continue
+		}
+		if id != "" && id != installation.InstallationID {
+			return "", installer.ErrPlanChanged
+		}
+		id = installation.InstallationID
+	}
+	return id, nil
 }
 
 func skillBindingPaths(view installer.Inspection, actions []dependencyAction) map[string]string {

@@ -41,10 +41,14 @@ func TestHostedRuntimeEnvelopeAndDiskExhaustion(t *testing.T) {
 	if os.Getenv("UAP_RESOLVE_RUNTIME_PROBE") != "1" {
 		t.Skip("executed by the dedicated bounded-runtime CI job")
 	}
-	if _, err := NewHosted("/tmp"); err != nil {
+	scratch := os.Getenv("SKILLS_RESOLVER_TEMP_DIR")
+	if scratch == "" {
+		scratch = "/tmp"
+	}
+	if _, err := NewHosted(scratch); err != nil {
 		t.Fatal("actual runtime envelope rejected", err)
 	}
-	file, err := os.CreateTemp("/tmp", "resolver-disk-probe-*")
+	file, err := os.CreateTemp(scratch, "resolver-disk-probe-*")
 	if err != nil {
 		t.Fatal(err)
 	}

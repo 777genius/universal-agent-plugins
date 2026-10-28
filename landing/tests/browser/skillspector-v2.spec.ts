@@ -121,7 +121,7 @@ for (const width of [1280, 390]) {
     await navigate(page, '/plugins/', 'en', '?tab=skills&q=pending');
     await expect(assessment).toHaveClass(/skillspector--notChecked/);
     await navigate(page, '/plugins/', 'en', '?tab=skills&q=alpha');
-    await expect(assessment).toHaveClass(/skillspector--historical/);
+    await expect(assessment).toHaveClass(/skillspector--stale/);
     await assessment.locator(':scope > summary').click();
     await expect(assessment).toContainText(
       'The current revision of this listing has not been verified.',
@@ -178,12 +178,12 @@ for (const width of [1280, 390]) {
         '.plugin-card[data-install-source="i18n-state-00"] .skillspector',
       );
       await expect(assessment).toHaveClass(
-        reported ? /skillspector--partial/ : /skillspector--notChecked/,
+        reported ? /skillspector--incomplete/ : /skillspector--notChecked/,
       );
       await expect(assessment.locator(':scope > summary')).not.toContainText('No findings');
       await assessment.locator(':scope > summary').click();
       await expect(assessment).toContainText(
-        `${reported} of 13 selected skills checked. Remaining skills are waiting for a background check.`,
+        'Legacy report: complete plugin coverage and current policy checks are not established.',
       );
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,

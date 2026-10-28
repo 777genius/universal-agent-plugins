@@ -1,0 +1,11 @@
+These are three actual upstream SkillSpector reports normalized by registry commit
+8b74488a on 2026-10-28, with newly retained reference and ledger context. This is a
+normalization of retained raw reports, not a new scan. Original source revisions,
+scanner/profile descriptors, execution timings and scanned_at values are preserved.
+Cloudflare has 6 references / 664 ledger entries; web-perf 15 / 11; ASC workflow 8 / 9.
+The raw normalized records have no queue scheduling projection. Contract tests add
+only current freshness, their existing source revision as target_revision, an empty
+attempt history and an illustrative scheduled standard-to-extended retry. Browser
+tests embed the actual Cloudflare record into the existing matching repository
+fixture and regenerate the descriptor byte length and hash. Other measurements
+remain exactly as normalized. Coverage context is never treated as a content signal.

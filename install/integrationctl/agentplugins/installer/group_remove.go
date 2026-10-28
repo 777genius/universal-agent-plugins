@@ -126,6 +126,8 @@ func (e *Engine) planRemoveGroup(ctx context.Context, handle *PreparedOperation,
 			}
 			item.TargetPath = binding.TargetLocator
 			item.BindingID = binding.ClientBindingID
+			item.RequiresExternalUninstalled = e.removalRequiresExternalUninstalled(client, installation, binding, firstNonEmpty(target.ClientExecutable, req.ClientExecutable))
+			handle.plan.RequiresExternalUninstalled = handle.plan.RequiresExternalUninstalled || item.RequiresExternalUninstalled
 			live++
 			if handle.plan.TargetPath == "" {
 				setRemoveGroupPrimary(handle, client, item, binding, receipt)
