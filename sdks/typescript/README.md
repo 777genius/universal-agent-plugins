@@ -264,10 +264,13 @@ OpenCode's `debug skill`. It checks exact fixture bytes, portable command discov
 and withheld explicit-only commands. It also checks targeted pinned update, repair, removal, local
 create/edit/delete and restart-visible undo. No model or account login is used.
 
-It separately edits one disposable owned Skill or managed plugin artifact and
-requires preservation with unchanged edited bytes and pending observation. The example then
-explicitly moves that conflicting tree aside as **manual remediation** before
-preparing fresh recovery; the SDK never performs this step automatically.
+For Claude/Codex, it changes the disposable managed package and requires reviewed
+repair to replace that drift, restore exact native fixture bytes and leave no
+pending operation. For OpenCode, it edits one separately owned native Skill and
+requires the typed preservation refusal, unchanged edited bytes and pending
+observation. It explicitly moves that conflicting tree aside as **manual
+remediation** before preparing fresh recovery; the SDK never performs this step
+automatically.
 
 Codex removal first verifies the SDK's external-uninstall refusal, invokes the
 real native `plugin remove` for the exact installed identity, and independently

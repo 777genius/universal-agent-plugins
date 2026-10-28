@@ -119,7 +119,7 @@ async function verifyNativeGuide() {
   assert.deepEqual(await readFile(guide), fixture, 'Native consumer location must contain the pinned fixture bytes');
 }
 async function ownedArtifact(paths: string[]): Promise<string> {
-  const prefix = join(root, 'state', 'managed', 'clients', nativeClient) + sep;
+  const prefix = (nativeClient === 'claude' ? skillsRoot : join(root, 'state', 'managed', 'clients', nativeClient)) + sep;
   const candidates = [...new Set(paths.filter((path) => resolve(path).startsWith(prefix)))];
   assert.equal(candidates.length, 1, `Expected one owned managed plugin artifact: ${JSON.stringify(paths)}`);
   const artifact = await realpath(candidates[0]!);
@@ -129,20 +129,16 @@ async function ownedArtifact(paths: string[]): Promise<string> {
   return artifact;
 }
 async function preserveEditedNativeSkill() {
-  const guideDirectory = nativeClient === 'opencode' ? join(skillsRoot, 'fixture-guide') : managedArtifact!;
-  assert.ok(guideDirectory);
-  const guidePath = nativeClient === 'opencode' ? join(guideDirectory, 'SKILL.md') : join(guideDirectory, 'skills', 'fixture-guide', 'SKILL.md');
+  assert.equal(nativeClient, 'opencode');
+  const guideDirectory = join(skillsRoot, 'fixture-guide');
+  const guidePath = join(guideDirectory, 'SKILL.md');
   const original = await readFile(guidePath);
   const edited = Buffer.concat([original, Buffer.from('\nUnreviewed local fixture edit.\n')]);
   await writeFile(guidePath, edited);
   const refused = await apply({ action: 'repair', aliases: ['sdk-fixture'] }, false, 'partial');
   assert.deepEqual(await readFile(guidePath), edited, 'Refused repair must preserve the edited native bytes');
-  if (nativeClient === 'opencode') {
-    assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.code === 'OWNED_SKILL_CHANGED'));
-    assert.ok(refused.operation.result?.nextActions.some((action) => action.kind === 'preserve_changes'));
-  } else {
-    assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.severity === 'error'), 'Changed owned artifact must report an error');
-  }
+  assert.ok(refused.operation.diagnostics.some((diagnostic) => diagnostic.code === 'OWNED_SKILL_CHANGED'));
+  assert.ok(refused.operation.result?.nextActions.some((action) => action.kind === 'preserve_changes'));
   assert.ok((await client().environment()).pendingOperations?.some((operation) => operation.operationId === refused.operation.operationId));
   assert.equal((await client().operation(refused.operation.operationId)).resolvedBy, undefined);
   // Explicit manual remediation belongs to this disposable test, not automatic
@@ -158,6 +154,18 @@ async function preserveEditedNativeSkill() {
   assert.equal((await client().operation(refused.operation.operationId)).resolvedBy, recovered.operation.operationId);
   assert.equal((await client().environment()).pendingOperations?.length ?? 0, 0);
   await checkpoint('fresh recovery after explicit manual preservation', 'after manual preservation, a fresh review restores exact native fixture bytes and settles only proved recovery');
+}
+async function repairModifiedArtifact() {
+  assert.ok(managedArtifact);
+  // Claude/Codex managed packages support reviewed replacement of a changed
+  // artifact. OpenCode's separately owned Skill preservation policy is different.
+  const driftPath = join(managedArtifact, 'sdk-fixture-drift.txt');
+  await writeFile(driftPath, 'Disposable managed package drift.\n');
+  await apply({ action: 'repair', aliases: ['sdk-fixture'] });
+  await assert.rejects(stat(driftPath), { code: 'ENOENT' });
+  await verifyNativeGuide();
+  assert.equal((await client().environment()).pendingOperations?.length ?? 0, 0);
+  await checkpoint('modified package repair verified', 'reviewed repair replaces managed package drift and native discovery retains exact pinned fixture bytes');
 }
 async function interruptedRepair() {
   // A wholly absent owned directory can be safely reconstructed. An existing
@@ -219,7 +227,8 @@ try {
   assert.deepEqual(await readFile(lockPath), lockBefore);
   await checkpoint('pinned update verified', 'targeted exact-commit update preserves the lock');
   await apply({ action: 'repair', aliases: ['sdk-fixture'] });
-  await preserveEditedNativeSkill();
+  if (nativeClient === 'opencode') await preserveEditedNativeSkill();
+  else await repairModifiedArtifact();
   await interruptedRepair();
   await host.close();
   host = await launch();
