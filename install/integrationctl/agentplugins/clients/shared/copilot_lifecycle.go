@@ -130,6 +130,12 @@ func VerifyCopilotPlugin(ctx context.Context, env clients.Env, request domain.Ac
 	if err != nil {
 		return fmt.Errorf("verify Copilot plugin listing: %w", err)
 	}
+	if copilotUserLiveActivation(listed.Stdout, listed.Stderr, request) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		return nil
+	}
 	switch CopilotPluginStatus(listed.Stdout, pluginSpec, MarketplaceVersion(request.Plan.DeclaredVersion), request.Delivery.ActivePath) {
 	case CopilotStatusInstalled:
 		return nil

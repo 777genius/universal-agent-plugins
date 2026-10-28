@@ -60,6 +60,12 @@ func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.Deliver
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
 	}
+	if copilotUserLiveManaged(plan, managed) && copilotUserLiveWithDisabledBuiltin(result.Stdout, result.Stderr, plan, expectedPath, plan.NativeRegistryExecutable) {
+		if err := ctx.Err(); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		return copilotLiveFinding(CopilotStatusInstalled, managed != nil), nil
+	}
 	return CopilotRegistryFindingAt(result.Stdout, plan.DeclaredName, ManagedMarketplaceName(plan.PhysicalArtifactID), MarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
 }
 
