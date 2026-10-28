@@ -107,6 +107,10 @@ func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, ar
 		if err := f.emptyRegistryCommand(label, cwd, argv, timeout); err != nil {
 			t.Fatal(err)
 		}
+	case copilotPostAddRegistryMode:
+		if err := f.postAddRegistryCommand(label, cwd, argv, timeout); err != nil {
+			t.Fatal(err)
+		}
 	}
 	f.check(t)
 	ctx, cancel := context.WithTimeout(f.ctx, timeout)
@@ -126,7 +130,7 @@ func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, ar
 	record := map[string]any{"argv": argv, "cwd": cwd, "exit": result.ExitCode, "elapsed_ms": time.Since(began).Milliseconds(), "error": err != nil, "context_error": ctx.Err() != nil, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"}
 	body, _ := json.Marshal(record)
 	f.keep(t, label+".command.json", body)
-	if f.evidence["mode"] == copilotUserRegistrationMode || f.evidence["mode"] == copilotEmptyRegistryMode {
+	if f.evidence["mode"] == copilotUserRegistrationMode || f.evidence["mode"] == copilotEmptyRegistryMode || f.evidence["mode"] == copilotPostAddRegistryMode {
 		f.evidence["commands"] = append(f.evidence["commands"].([]string), label)
 	}
 	f.check(t)
@@ -412,6 +416,8 @@ func (f *copilotProjectAttempt) finish(t *testing.T) {
 		f.finalizeUserRegistration(t)
 	case copilotEmptyRegistryMode:
 		f.finalizeEmptyRegistry(t)
+	case copilotPostAddRegistryMode:
+		f.finalizePostAddRegistry(t)
 	default:
 		f.finalizeReadiness(t)
 	}
