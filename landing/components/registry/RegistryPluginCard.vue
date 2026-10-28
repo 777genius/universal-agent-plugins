@@ -222,20 +222,25 @@ function updateAutoDetect(value: boolean) {
     :data-trust="isDiscovered ? 'community' : 'reviewed'"
     :data-install-source="plugin.install_source"
   >
-    <span
-      v-if="!isDiscovered"
-      class="plugin-card__ribbon"
-      :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
-      >{{
-        canInstall || vendorAvailable
-          ? t('registryUi.card.reviewedListing')
-          : expired
-            ? t('registryUi.card.temporarilyPaused')
-            : !published
-              ? t('registryUi.card.previewOnly')
-              : t('registryUi.card.notAvailable')
-      }}</span
-    >
+    <AppTooltip v-if="!isDiscovered" above-header>
+      <template #trigger>
+        <span
+          class="plugin-card__ribbon"
+          tabindex="0"
+          :class="{ 'plugin-card__ribbon--muted': !canInstall && !vendorAvailable }"
+          >{{
+            canInstall || vendorAvailable
+              ? t('registryUi.card.reviewedListing')
+              : expired
+                ? t('registryUi.card.temporarilyPaused')
+                : !published
+                  ? t('registryUi.card.previewOnly')
+                  : t('registryUi.card.notAvailable')
+          }}</span
+        >
+      </template>
+      <p class="app-tooltip__compact">{{ t('registryUi.card.reviewedListingTooltip') }}</p>
+    </AppTooltip>
     <div
       class="plugin-card__identity"
       :class="{
@@ -293,7 +298,7 @@ function updateAutoDetect(value: boolean) {
         :details-to="securityDetailURL"
       />
       <SkillSpectorAssessment
-        v-if="plugin.components.includes('skills')"
+        :applicable="plugin.components.includes('skills')"
         :subject="{
           kind: 'plugin',
           repository: plugin.source.repository,

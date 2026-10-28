@@ -134,9 +134,9 @@ for (const mobile of [false, true]) {
       await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
       const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
       const details = card.locator('.skillspector');
-      await expect(details).toHaveClass(/skillspector--partial/);
+      await expect(details).toHaveClass(/skillspector--incomplete/);
       await expect(details.locator(':scope > summary')).toContainText(
-        'Selected skills: Checked with limitations',
+        'Incomplete check',
       );
       await details.locator(':scope > summary').focus();
       await page.keyboard.press('Enter');
@@ -145,7 +145,7 @@ for (const mobile of [false, true]) {
       await expect(details).toContainText(source.revision!);
       await expect(details).toContainText('A selected child check failed.');
       await expect(details).toContainText(
-        'This report is older than seven days or describes a different revision.',
+        'This report is historical or describes a different source revision or analysis policy.',
       );
       const sizes = await details.evaluate((element) => {
         const summary = element.querySelector('summary')!;
@@ -166,25 +166,25 @@ for (const mobile of [false, true]) {
       await page.keyboard.press('Space');
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
-      await expect(card.locator('pre')).toContainText(
+      await expect(card.locator('.plugin-card__install-panel pre')).toContainText(
         'npx -y universal-agent-plugins add i18n-state-00',
       );
       await navigate(page, '/plugins/', 'en', '?tab=skills');
       const skill = page.locator('.skill-card').first();
-      await expect(skill.locator('.skillspector')).toHaveClass(/skillspector--historical/);
-      await skill.locator('.skillspector summary').click();
+      await expect(skill.locator('.skillspector')).toHaveClass(/skillspector--stale/);
+      await skill.locator('.skillspector > summary').click();
       await expect(skill).toContainText('Historical Skill report');
       await expect(skill).toContainText(
         'The current revision of this listing has not been verified.',
       );
       await expect(skill).toContainText('a'.repeat(40));
       await skill.getByRole('button', { name: 'Install frontend-design', exact: true }).click();
-      await expect(skill.locator('pre')).toContainText(
+      await expect(skill.locator('.plugin-card__install-panel pre')).toContainText(
         'skills add https://github.com/anthropics/skills --skill frontend-design',
       );
       await navigate(page, '/plugins/', 'ru', '?tab=skills');
-      await expect(page.locator('.skill-card .skillspector summary')).toContainText(
-        wording('ru')('registryUi.skillSpector.noFindings'),
+      await expect(page.locator('.skill-card .skillspector > summary')).toContainText(
+        wording('ru')('registryUi.skillSpector.stale'),
       );
       expect(requests).toBe(1);
       expect(
@@ -271,12 +271,12 @@ test('partial reports explain coverage and link the visible finding count to sca
   await navigate(page, '/plugins/', 'en', '?q=i18n-state-00');
   const details = page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector');
   await expect(details.locator(':scope > summary')).toContainText(
-    'Checked with limitations · Findings: 50',
+    'Incomplete check',
   );
   await details.locator(':scope > summary').click();
-  await expect(details).toContainText('Some expressions exceeded the static parser’s limits.');
-  await expect(details).toContainText('Some local file references were not found');
-  await expect(details).toContainText('An analyzer did not complete all planned checks.');
+  await expect(details).toContainText('static_parse_limit');
+  await expect(details).toContainText('reference_missing');
+  await expect(details).toContainText('analyzer_incomplete');
   await expect(details.locator('.skillspector__record')).toHaveCount(0);
   const firstFinding = details.locator('.skillspector__findings a').first();
   await expect(firstFinding).toHaveText('SKILL.md:50 ↗');
@@ -289,7 +289,7 @@ test('partial reports explain coverage and link the visible finding count to sca
       const findings = element.querySelector('.skillspector__findings')!;
       return (
         [...element.querySelectorAll('p')]
-          .find((p) => p.textContent?.includes('Showing 32 of 50 findings.'))!
+          .find((p) => p.textContent?.includes('The published report contains only the displayed groups.'))!
           .compareDocumentPosition(findings) & Node.DOCUMENT_POSITION_FOLLOWING
       );
     }),
@@ -334,7 +334,7 @@ test('real Directory metadata limits SkillSpector to listings with Skill files',
   await navigate(page, '/plugins/', 'en', `?q=${mcpOnly.name}`);
   const mcpCard = page.locator(`.plugin-card[data-install-source="${mcpOnly.install_source}"]`);
   await expect(mcpCard).toBeVisible();
-  await expect(mcpCard.locator('.skillspector')).toHaveCount(0);
+  await expect(mcpCard.locator('.skillspector')).toHaveClass(/skillspector--unsupported/);
   expect(errors).toEqual([]);
 });
 
@@ -387,7 +387,7 @@ test('multiple selected skills stay collapsed and let users open a later skill d
   await expect(children).toHaveCount(13);
   await expect(assessment.locator('.skillspector__record[open]')).toHaveCount(0);
   const later = children.nth(11);
-  await expect(later.locator('summary')).toContainText('cloudflare-wrangler · Findings: 1');
+  await expect(later.locator('summary')).toContainText('cloudflare-wrangler · Findings need review');
   await later.locator('summary').focus();
   await page.keyboard.press('Enter');
   await expect(later).toHaveAttribute('open', '');
@@ -397,7 +397,7 @@ test('multiple selected skills stay collapsed and let users open a later skill d
     `https://github.com/${source.repository}/blob/${source.revision}/${records[11]!.source.path}/SKILL.md#L50`,
   );
   const failed = children.last();
-  await expect(failed.locator('summary')).toContainText('Check failed');
+  await expect(failed.locator('summary')).toContainText('Report unavailable');
   await failed.locator('summary').click();
   await expect(failed).toContainText('This selected skill could not be checked.');
   expect(

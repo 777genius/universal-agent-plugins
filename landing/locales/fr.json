@@ -641,7 +641,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "Indisponible à sa source indexée ; aucune commande d'installation n'est générée.",
       "unavailableAtItsIndexedSource": "Indisponible à sa source indexée",
       "checkedAgainBeforeInstallation": "Vérifié à nouveau avant l'installation",
-      "reviewedListing": "Vérifié",
+      "reviewedListing": "Fiche vérifiée",
       "notAvailableForChatgpt": "Non disponible pour ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "Connexion vérifiée ; terminer la configuration dans ChatGPT",
       "allInstalledAgents": "Choisir les agents dans le terminal",
@@ -672,7 +672,8 @@
       "publisher": "Par {publisher}",
       "upstream": "en amont",
       "installable": "installable",
-      "unavailable": "indisponible"
+      "unavailable": "indisponible",
+      "reviewedListingTooltip": "La fiche et les métadonnées ont été vérifiées. Cela ne certifie pas le code, le comportement ou la sécurité du plugin."
     },
     "install": {
       "allInstalledAgentsRecommended": "Choisir les agents dans le terminal",
@@ -876,7 +877,7 @@
       "components": "Composants",
       "package": "Forfait",
       "pluginNotFound": "Plugin introuvable",
-      "reviewedListing": "Vérifié",
+      "reviewedListing": "Fiche vérifiée",
       "licenseNotSpecified": "Licence non précisée",
       "managedByCli": "Géré par CLI",
       "requiresAFinalStepInTheApp": "Nécessite une dernière étape dans l'application",
@@ -885,7 +886,8 @@
       "title": "{name} Plugin d'agent {'|'} Plugins d'agent universels",
       "schemaName": "{name} Plugin d'agent",
       "directory": "Répertoire des plugins",
-      "version": "Version {version}"
+      "version": "Version {version}",
+      "reviewedListingTooltip": "La fiche et les métadonnées ont été vérifiées. Cela ne certifie pas le code, le comportement ou la sécurité du plugin."
     },
     "community": {
       "breadcrumb": "Fil d'Ariane",

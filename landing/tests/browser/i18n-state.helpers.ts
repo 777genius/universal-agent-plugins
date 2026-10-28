@@ -90,6 +90,7 @@ export async function offline(page: Page) {
   // Same release schema as migration-copy; every other non-local request is blocked.
   await page.route('**/*', (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/reports/skillspector/v3/index.json')) return route.fulfill({ status: 404 });
     if (url.pathname.endsWith('/reports/skillspector/v2/index.json')) return route.fulfill({ json: emptySkillSpectorManifest() });
     if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return route.fallback();
     if (url.hostname === 'api.github.com' && url.pathname.endsWith('/releases/latest'))

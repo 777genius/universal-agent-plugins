@@ -31,6 +31,8 @@ export function useSkillSpector(subject: MaybeRefOrGetter<SkillSpectorSubject | 
         client = createSkillSpectorClient(
           String(config.public.skillspectorManifestUrl),
           String(config.public.skillspectorReportsUrl),
+          fetch,
+          String(config.public.skillspectorV3ManifestUrl),
         );
         clients.set(app, client);
       }

@@ -1,0 +1,342 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { describe, it } from 'node:test';
+import {
+  decodeSkillSpectorManifestV3,
+  decodeSkillSpectorShardV3,
+} from '../utils/skillSpectorV3.ts';
+import { createSkillSpectorClient } from '../utils/skillSpectorCatalog.ts';
+import { skillSpectorAssessment } from '../utils/skillSpector.ts';
+import type { SkillSpectorManifestV3, SkillSpectorRecord } from '../types/skillSpector.ts';
+const root = new URL('./fixtures/skillspector-v3/', import.meta.url);
+const manifest = JSON.parse(
+  readFileSync(new URL('index.json', root), 'utf8'),
+) as SkillSpectorManifestV3;
+const descriptor = manifest.shards[0]!;
+const body = readFileSync(new URL(descriptor.path, root), 'utf8');
+const shard = JSON.parse(body);
+const subject = {
+  kind: 'plugin' as const,
+  repository: descriptor.repository,
+  path: 'plugins/cloudflare',
+  revision: shard.records[0].source.revision,
+};
+const display = () => ({
+  ...structuredClone(manifest),
+  records: structuredClone(shard.records) as SkillSpectorRecord[],
+});
+
+describe('SkillSpector v3 exact producer contract', () => {
+  it('accepts actual registry producer bytes and keeps coverage separate from severity', async () => {
+    assert.equal(decodeSkillSpectorManifestV3(manifest).coverage.complete, 3);
+    assert.equal(decodeSkillSpectorShardV3(shard, manifest, descriptor).length, 13);
+    const fetcher = (async (url: string | URL | Request) =>
+      new Response(
+        String(url).endsWith('index.json') ? JSON.stringify(manifest) : body,
+      )) as typeof fetch;
+    const report = await createSkillSpectorClient(
+      'https://fixture/v2/index.json',
+      'https://fixture/v1/index.json',
+      fetcher,
+      'https://fixture/v3/index.json',
+    ).reportFor(descriptor.repository);
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.status, 'incomplete');
+    assert.equal(result.fullyChecked, 3);
+    assert.equal(result.selected, 13);
+    assert.equal(result.inventoryKnown, true);
+    const selectedOnly = { ...report, plugin_states: [] };
+    assert.equal(skillSpectorAssessment(selectedOnly, subject).inventoryKnown, false);
+    assert.ok(result.findingCount > 0);
+    assert.ok(result.reasons!.length > 0);
+    assert.ok(result.records.some((record) => record.coverage!.analyzers.length > 0));
+  });
+  it('preserves producer grouping of duplicates and distinct full evidence without regrouping in the UI', () => {
+    const identityRoot = new URL('./fixtures/skillspector-v3-identity/', import.meta.url);
+    const index = decodeSkillSpectorManifestV3(
+      JSON.parse(readFileSync(new URL('index.json', identityRoot), 'utf8')),
+    );
+    const part = index.shards[0]!;
+    const value = JSON.parse(readFileSync(new URL(part.path, identityRoot), 'utf8'));
+    const [record] = decodeSkillSpectorShardV3(value, index, part);
+    assert.equal(record!.raw_finding_count, 5);
+    assert.equal(record!.finding_count, 5);
+    assert.equal(record!.finding_group_count, 3);
+    const repeated = record!.findings.find((finding) => finding.raw_count === 3)!;
+    assert.deepEqual(repeated.finding_ids, ['finding-first', 'duplicate', 'second-place']);
+    assert.equal(repeated.occurrences!.length, 2);
+    assert.equal(repeated.occurrences![0]!.start_column, 1);
+    assert.equal(repeated.confidence, 0.85);
+    assert.deepEqual(
+      record!.findings
+        .filter((finding) => finding.raw_count === 1)
+        .map((finding) => String(finding.evidence!.payload).slice(-3))
+        .sort(),
+      ['one', 'two'],
+    );
+  });
+  it('does not count a different source revision as fully checked', () => {
+    const result = skillSpectorAssessment(display(), { ...subject, revision: 'f'.repeat(40) });
+    assert.equal(result.status, 'stale');
+    assert.equal(result.fullyChecked, 0);
+  });
+  it('keeps pending, unsupported and unavailable sources distinct', () => {
+    const report = display();
+    report.records = [];
+    report.plugin_coverage = [];
+    for (const [state, status] of [
+      ['resolved', 'pending'],
+      ['not_applicable', 'unsupported'],
+      ['unavailable', 'unavailable'],
+      ['unresolved', 'unavailable'],
+    ]) {
+      report.plugin_states = [
+        {
+          repository: subject.repository,
+          plugin_path: subject.path,
+          state,
+          revision: subject.revision,
+          skills_total: state === 'not_applicable' ? 0 : 13,
+        },
+      ];
+      assert.equal(skillSpectorAssessment(report, subject).status, status);
+    }
+  });
+  it('keeps standalone source states specific and exposes discovery reasons after aliases', () => {
+    const report = display();
+    report.records = [];
+    report.plugin_coverage = [];
+    report.repository_aliases = [
+      { repository: 'old/repo', canonical_repository: 'new/repo', revision: 'a'.repeat(40) },
+    ];
+    report.source_states = [
+      {
+        id: 'old/repo/alpha',
+        repository: 'old/repo',
+        state: 'resolved',
+        selected_ids: ['alpha'],
+        reason: null,
+      },
+      {
+        id: 'old/repo/beta',
+        repository: 'old/repo',
+        state: 'unresolved',
+        selected_ids: [],
+        reason: 'ambiguous_skill_path',
+        candidates: ['skills/one', 'skills/two'],
+      },
+    ];
+    assert.equal(
+      skillSpectorAssessment(report, { kind: 'skill', repository: 'old/repo', name: 'alpha' })
+        .status,
+      'pending',
+    );
+    const beta = skillSpectorAssessment(report, {
+      kind: 'skill',
+      repository: 'old/repo',
+      name: 'beta',
+    });
+    assert.equal(beta.status, 'unavailable');
+    assert.ok(beta.reasons!.some((reason) => reason.code === 'ambiguous_skill_path'));
+    assert.ok(beta.reasons!.some((reason) => reason.message.includes('skills/two')));
+  });
+  it('retains a removed Skill report as history with no current fully checked content', () => {
+    const report = display();
+    const old = report.records[0]!;
+    old.kind = 'standalone_skill';
+    old.plugin_path = null;
+    old.skill_name = 'removed-skill';
+    old.freshness = 'historical';
+    report.records = [old];
+    report.plugin_coverage = [];
+    report.source_states = [
+      {
+        id: `${subject.repository}/removed-skill`,
+        repository: subject.repository,
+        state: 'historical',
+        current: false,
+        revision: 'f'.repeat(40),
+        path: old.source.path,
+        reason: 'skill_removed',
+        selected_ids: [old.id],
+        candidates: [],
+      },
+    ];
+    const result = skillSpectorAssessment(report, {
+      kind: 'skill',
+      repository: subject.repository,
+      name: 'removed-skill',
+    });
+    assert.equal(result.status, 'stale');
+    assert.equal(result.records[0], old);
+    assert.equal(result.fullyChecked, 0);
+    assert.equal(result.reasons!.at(-1)!.code, 'skill_removed');
+  });
+  it('shows unavailable when every acquisition failed without inspecting any content', () => {
+    const report = display();
+    for (const record of report.records) {
+      record.execution!.state = 'failed';
+      record.coverage!.status = 'not_started';
+    }
+    assert.equal(skillSpectorAssessment(report, subject).status, 'unavailable');
+  });
+  it('rejects forged review confirmation and legacy bypass of complete analysis', () => {
+    const forged = structuredClone(shard);
+    forged.records.flatMap((record: any) => record.findings)[0].review_status = 'confirmed';
+    assert.throws(() => decodeSkillSpectorShardV3(forged, manifest, descriptor), /invalid/);
+    const bypass = structuredClone(shard);
+    const complete = bypass.records.find((record: any) => record.status === 'complete');
+    complete.legacy_format = 2;
+    complete.coverage.analyzers = [];
+    complete.execution.exit_code = 2;
+    assert.throws(() => decodeSkillSpectorShardV3(bypass, manifest, descriptor), /invalid/);
+  });
+  it('matches verified repository aliases without changing source links or revisions', () => {
+    const report = display();
+    report.repository_aliases = [
+      {
+        repository: 'old-owner/repo',
+        canonical_repository: descriptor.repository,
+        revision: subject.revision,
+      },
+    ];
+    assert.equal(
+      skillSpectorAssessment(report, { ...subject, repository: 'old-owner/repo' }).records.length,
+      13,
+    );
+  });
+  it('accepts historical repository aliases only at the verified target revision', () => {
+    const report = display();
+    const renamed = structuredClone(shard);
+    const moved = { ...descriptor, repository: 'new-owner/repo' };
+    report.repository_aliases = [
+      {
+        repository: descriptor.repository,
+        canonical_repository: moved.repository,
+        revision: subject.revision,
+      },
+    ];
+    report.plugin_coverage[0]!.repository = moved.repository;
+    renamed.repository = moved.repository;
+    for (const record of renamed.records) record.freshness = 'historical';
+    const decoded = decodeSkillSpectorShardV3(renamed, report, moved);
+    assert.equal(
+      skillSpectorAssessment(
+        { ...report, records: decoded },
+        { ...subject, repository: moved.repository },
+      ).records.length,
+      13,
+    );
+    report.repository_aliases[0]!.revision = 'f'.repeat(40);
+    assert.throws(() => decodeSkillSpectorShardV3(renamed, report, moved), /invalid/);
+  });
+  it('preserves and verifies the two content-bound registry false-positive annotations', () => {
+    const decoded = decodeSkillSpectorShardV3(shard, manifest, descriptor);
+    const annotations = decoded
+      .flatMap((record) => record.findings)
+      .filter((finding) => finding.review_status === 'false_positive');
+    assert.equal(annotations.length, 2);
+    assert.ok(
+      annotations.every(
+        (finding) =>
+          finding.severity === 'HIGH' &&
+          finding.exception!.reason.includes('static asset upload session'),
+      ),
+    );
+    const result = skillSpectorAssessment({ ...manifest, records: decoded }, subject);
+    assert.equal(
+      result.unreviewedCount,
+      result.findingCount - annotations.reduce((sum, finding) => sum + finding.raw_count!, 0),
+    );
+    const forged = structuredClone(shard);
+    const finding = forged.records
+      .flatMap((record: any) => record.findings)
+      .find((finding: any) => finding.review_status === 'false_positive');
+    finding.code_snippet += ' changed';
+    assert.throws(() => decodeSkillSpectorShardV3(forged, manifest, descriptor), /invalid/);
+  });
+  it('retains output-limited findings as lower bounds with explicit coverage reasons', () => {
+    const limitedShard = structuredClone(shard);
+    const partial = limitedShard.records.find(
+      (record: SkillSpectorRecord) => record.status === 'partial',
+    );
+    partial.coverage.grouping_complete = false;
+    partial.findings_truncated = true;
+    partial.coverage.reasons.push({
+      code: 'output_limit',
+      message: 'Only emitted signals are available.',
+      retryable: true,
+    });
+    const decoded = decodeSkillSpectorShardV3(limitedShard, manifest, descriptor);
+    const limited = decoded.find((record) => record.coverage!.grouping_complete === false)!;
+    assert.ok(limited);
+    assert.equal(limited.status, 'partial');
+    assert.equal(limited.findings_truncated, true);
+    assert.ok(
+      limited.coverage!.reasons.some((reason) =>
+        ['output_limit', 'normalization_truncated'].includes(reason.code),
+      ),
+    );
+    assert.equal(
+      skillSpectorAssessment({ ...manifest, records: decoded }, subject).groupCount,
+      undefined,
+    );
+  });
+  it('rejects ambiguous repository aliases and incomplete publication disguised as complete', () => {
+    const aliases = structuredClone(manifest);
+    aliases.repository_aliases = [
+      { repository: 'old/repo', canonical_repository: 'one/repo', revision: subject.revision },
+      { repository: 'OLD/repo', canonical_repository: 'two/repo', revision: subject.revision },
+    ];
+    assert.throws(() => decodeSkillSpectorManifestV3(aliases), /invalid/);
+    const output = structuredClone(shard);
+    const record = output.records.find((record: any) => record.status === 'complete');
+    record.coverage.grouping_complete = false;
+    record.findings_truncated = true;
+    assert.throws(() => decodeSkillSpectorShardV3(output, manifest, descriptor), /invalid/);
+  });
+  it('never turns legacy partial evidence into a complete result', () => {
+    const report = display();
+    const record = report.records[0]!;
+    record.freshness = 'historical';
+    record.coverage!.status = 'partial';
+    record.coverage!.grouping_complete = false;
+    record.finding_count = 603;
+    record.findings_truncated = true;
+    const result = skillSpectorAssessment(report, subject);
+    assert.equal(result.status, 'stale');
+    assert.equal(result.groupCount, undefined);
+    assert.ok(result.fullyChecked! < 13);
+  });
+  it('rejects misleading full coverage, invalid confidence and stale counter arithmetic', () => {
+    const malformed = structuredClone(shard);
+    malformed.records[0].coverage.status = 'complete';
+    malformed.records[0].coverage.entirely_uninspected_files = 1;
+    assert.throws(() => decodeSkillSpectorShardV3(malformed, manifest, descriptor), /invalid/);
+    const confidence = structuredClone(shard);
+    const finding = confidence.records.flatMap((record: any) => record.findings)[0];
+    finding.confidence = 1.1;
+    assert.throws(() => decodeSkillSpectorShardV3(confidence, manifest, descriptor), /invalid/);
+    const counters = structuredClone(manifest);
+    counters.coverage.complete++;
+    assert.throws(() => decodeSkillSpectorManifestV3(counters), /invalid/);
+  });
+  it('does not fall back after v3 validation or transport errors', async () => {
+    for (const response of [new Response('', { status: 503 }), new Response('{}')]) {
+      const requests: string[] = [];
+      const fetcher = (async (url: string | URL | Request) => {
+        requests.push(String(url));
+        return response;
+      }) as typeof fetch;
+      await assert.rejects(
+        createSkillSpectorClient(
+          'https://fixture/v2/index.json',
+          'https://fixture/v1/index.json',
+          fetcher,
+          'https://fixture/v3/index.json',
+        ).reportFor(subject.repository),
+      );
+      assert.deepEqual(requests, ['https://fixture/v3/index.json']);
+    }
+  });
+});

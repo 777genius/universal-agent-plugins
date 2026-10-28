@@ -641,7 +641,7 @@
       "unavailableAtItsIndexedSourceNoInstallCommandIsGenerated": "在其索引源中不可用；没有生成安装命令。",
       "unavailableAtItsIndexedSource": "在其索引源中不可用",
       "checkedAgainBeforeInstallation": "安装前再次检查",
-      "reviewedListing": "已审核",
+      "reviewedListing": "条目信息已审核",
       "notAvailableForChatgpt": "不适用于 ChatGPT",
       "verifiedConnectionFinishSetupInChatgpt": "已验证连接；在 ChatGPT 中完成设置",
       "allInstalledAgents": "在终端中选择代理",
@@ -672,7 +672,8 @@
       "publisher": "通过 {publisher}",
       "upstream": "上游",
       "installable": "可安装的",
-      "unavailable": "不可用"
+      "unavailable": "不可用",
+      "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。"
     },
     "install": {
       "allInstalledAgentsRecommended": "在终端中选择代理",
@@ -876,7 +877,7 @@
       "components": "组件",
       "package": "套餐",
       "pluginNotFound": "找不到插件",
-      "reviewedListing": "已审核",
+      "reviewedListing": "条目信息已审核",
       "licenseNotSpecified": "未指定许可证",
       "managedByCli": "由 CLI 管理",
       "requiresAFinalStepInTheApp": "需要在应用程序中执行最后一步",
@@ -885,7 +886,8 @@
       "title": "{name} 代理插件 {'|'} 通用代理插件",
       "schemaName": "{name} 代理插件",
       "directory": "插件目录",
-      "version": "版本 {version}"
+      "version": "版本 {version}",
+      "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。"
     },
     "community": {
       "breadcrumb": "面包屑",
