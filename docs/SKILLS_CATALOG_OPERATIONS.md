@@ -207,6 +207,14 @@ production activation are separate operator actions, not performed by this
 source change. Missing/invalid configuration leaves source preview unavailable
 while existing anonymous search and health continue to work.
 
+Deploy the maintained Caddy route together with this capability. Only the exact
+`/v1/skills/resolve` path forwards its service `Authorization` header; cookies are
+still removed. Its upstream response timeout is 40 seconds, allowing the bounded
+resolver to finish within its 35-second server write deadline. All anonymous
+catalog routes continue to strip both Authorization and Cookie and keep the
+12-second response timeout. A local resolver success followed by public 401 can
+mean that an older proxy route is still stripping the service capability.
+
 Use the reviewed unit on a Linux cgroup-v2 host, with Git and CA certificates
 installed. It mounts a **private 256 MiB tmpfs** at
 `/run/uap-skills-resolver`, selected by `SKILLS_RESOLVER_TEMP_DIR`; it does not
