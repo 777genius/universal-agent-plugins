@@ -3,7 +3,7 @@
     ".agentplugins-pi.json": "c7d453e7283db32684fdd3a6f0664071cd110511b99c67271011fafa58fdef96",
     "bin/": "dir",
     "bin/run": "a8076d3d28d21e02012b20eaf7dbf75409a6277134439025f282e368e3305abf",
-    "index.ts": "571740e2abb531d222f96397d26f878a0f0ea1b4b456737fd4c410ed48802dc7",
+    "index.ts": "8182d8d7f944e8d0dd7c2ace20bfedd30fa520c16107467424b43c28eaac985a",
     "native/": "dir",
     "native/index.ts": "166bb7bb49e9e1721f586470ba2aeeaf80f7d9d43fe9025515af97ae70610179",
     "plugin.json": "020cd4772c3dc55648dd96a02d0fcc81617aa9eb0b4c7ffd205eb730f0240317",
