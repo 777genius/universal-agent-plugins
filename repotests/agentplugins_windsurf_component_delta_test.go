@@ -73,6 +73,18 @@ func windProjectRecord(record windProfileRecord, present bool) (windDeltaValue, 
 	return v, true
 }
 func windProfileDifference(before, after map[string]windProfileRecord) windProfileDelta {
+	return windProfileDifferenceAt(before, after, 0)
+}
+
+func windProfileDifferencePages(before, after map[string]windProfileRecord) [5]windProfileDelta {
+	var pages [5]windProfileDelta
+	for i, offset := range [5]int{0, 3, 6, 9, 12} {
+		pages[i] = windProfileDifferenceAt(before, after, offset)
+	}
+	return pages
+}
+
+func windProfileDifferenceAt(before, after map[string]windProfileRecord, offset int) windProfileDelta {
 	d := windProfileDelta{Status: "captured", Before: len(before), After: len(after), Roots: map[string]windDeltaCount{}, Details: []windDeltaDetail{}}
 	for _, role := range windProfileRoles {
 		d.Roots[role] = windDeltaCount{}
@@ -125,7 +137,7 @@ func windProfileDifference(before, after map[string]windProfileRecord) windProfi
 		}
 		return windsurfConfigDigest([]byte(changed[i])) < windsurfConfigDigest([]byte(changed[j]))
 	})
-	for _, key := range changed {
+	for _, key := range changed[min(offset, len(changed)):] {
 		if len(d.Details) == 3 {
 			break
 		}

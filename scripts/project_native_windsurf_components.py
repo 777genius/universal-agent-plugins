@@ -15,6 +15,8 @@ QUAL = {key: False for key in ("project-lifecycle", "native-restart-removal", "m
                               "mcp-tools-list", "mcp-tools-call")}
 SUFFIXES = (".command.json", ".stdout.log", ".stderr.log")
 SHA = re.compile(r"[0-9a-f]{64}\Z")
+DELTA_ROLES = ("home", "tmp", "xdg-config", "xdg-cache", "xdg-data", "xdg-state")
+DELTA_RANK = ("xdg-config", "home", "xdg-data", "xdg-state", "xdg-cache", "tmp")
 
 
 def _sha(body):
@@ -69,6 +71,113 @@ def _command(label, layout):
     if label.endswith("-get"):
         args = ["mcp", "get", NAME]
     return cwd, [layout["client"], *args]
+
+
+def _delta_number(value, maximum):
+    if type(value) is not int or not 0 <= value <= maximum:
+        raise ValueError("Windsurf delta integer bound differs")
+
+
+def _delta_counts(value):
+    _object(value, ("added", "removed", "changed"))
+    for count in value.values():
+        _delta_number(count, 8192)
+    return sum(value.values())
+
+
+def _delta_value(value):
+    if type(value) is not dict or value.get("kind") not in ("absent", "directory", "file"):
+        raise ValueError("Windsurf delta ordinary kind differs")
+    kind = value["kind"]
+    fields = ("kind",) if kind == "absent" else ("kind", "mode", "record_sha256")
+    if kind == "file":
+        fields += ("bytes", "content_sha256")
+    _object(value, fields)
+    if kind != "absent":
+        _delta_number(value["mode"], 0o177777)
+        if value["mode"] & 0o170000 != (0o040000 if kind == "directory" else 0o100000):
+            raise ValueError("Windsurf delta mode differs from ordinary kind")
+        if type(value["record_sha256"]) is not str or not SHA.fullmatch(value["record_sha256"]):
+            raise ValueError("Windsurf delta held record hash differs")
+    if kind == "file":
+        _delta_number(value["bytes"], 64 << 20)
+        if type(value["content_sha256"]) is not str or not SHA.fullmatch(value["content_sha256"]):
+            raise ValueError("Windsurf delta content hash differs")
+    return kind
+
+
+def _delta_detail(value):
+    _object(value, ("root", "key_sha256", "operation", "before", "after"))
+    if (value["root"] not in DELTA_ROLES or type(value["key_sha256"]) is not str
+            or not SHA.fullmatch(value["key_sha256"]) or value["operation"] not in ("added", "removed", "changed")):
+        raise ValueError("Windsurf delta role/key/operation differs")
+    before, after = _delta_value(value["before"]), _delta_value(value["after"])
+    operation = value["operation"]
+    if ((operation == "added" and (before != "absent" or after == "absent"))
+            or (operation == "removed" and (before == "absent" or after != "absent"))
+            or (operation == "changed" and (before == "absent" or after == "absent"
+                or value["before"]["record_sha256"] == value["after"]["record_sha256"]))):
+        raise ValueError("Windsurf delta operation/presence differs")
+    special = value["root"] == "xdg-config" and value["key_sha256"] == _sha(b"xdg-config\0devin/config.json")
+    return (0 if special else DELTA_RANK.index(value["root"]) + 1, value["key_sha256"])
+
+
+def _delta_page(value, offset):
+    _object(value, ("status", "before", "after", "total", "roots", "omitted_count", "details"))
+    if len(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()) > 2 << 10:
+        raise ValueError("Windsurf delta page serialization bound differs")
+    if value["status"] not in ("captured", "details-bound"):
+        raise ValueError("Windsurf paged delta must describe a complete unequal frame")
+    for field in ("before", "after"):
+        _delta_number(value[field], 4096)
+        if value[field] < len(DELTA_ROLES):
+            raise ValueError("Windsurf delta lacks complete root frame")
+    total = _delta_counts(value["total"])
+    _object(value["roots"], DELTA_ROLES)
+    for counts in value["roots"].values():
+        _delta_counts(counts)
+    if (not 0 < total <= 8192 or value["after"] != value["before"] + value["total"]["added"] - value["total"]["removed"]
+            or value["total"]["changed"] + value["total"]["removed"] > value["before"]
+            or value["total"]["changed"] + value["total"]["added"] > value["after"]
+            or any(sum(row[field] for row in value["roots"].values()) != value["total"][field] for field in ("added", "removed", "changed"))):
+        raise ValueError("Windsurf delta complete counts differ")
+    expected = 0 if value["status"] == "details-bound" else min(3, max(0, total - offset))
+    if type(value["details"]) is not list or len(value["details"]) != expected:
+        raise ValueError("Windsurf fixed delta page cardinality differs")
+    _delta_number(value["omitted_count"], 8192)
+    if value["omitted_count"] != total - len(value["details"]):
+        raise ValueError("Windsurf delta per-page omission differs")
+    for detail in value["details"]:
+        _delta_detail(detail)
+
+
+def _delta_pages(result):
+    if "profile_delta_pages" not in result:
+        return
+    completed, stage = result["completed_labels"], result["attempt_stage"]
+    if (not completed or stage != completed[-1] or stage in ("git-a", "git-b", "add-user", "add-a", "add-b")
+            or "profile_delta" not in result):
+        raise ValueError("Windsurf delta pages lack their actual failed native triple")
+    pages = result["profile_delta_pages"]
+    if type(pages) is not list or len(pages) != 5:
+        raise ValueError("Windsurf delta requires five fixed pages")
+    original = result["profile_delta"]
+    _delta_page(original, 0)
+    keys, ranks = set(), []
+    observed = {role: {field: 0 for field in ("added", "removed", "changed")} for role in DELTA_ROLES}
+    for index, page in enumerate(pages):
+        _delta_page(page, index * 3)
+        if (index == 0 and page != original) or any(page[field] != original[field] for field in ("before", "after", "total", "roots")):
+            raise ValueError("Windsurf delta pages do not join the unchanged original projection")
+        for detail in page["details"]:
+            key = detail["key_sha256"]
+            if key in keys:
+                raise ValueError("Windsurf duplicate paged delta key")
+            keys.add(key)
+            ranks.append(_delta_detail(detail))
+            observed[detail["root"]][detail["operation"]] += 1
+    if ranks != sorted(ranks) or any(observed[role][field] > original["roots"][role][field] for role in DELTA_ROLES for field in observed[role]):
+        raise ValueError("Windsurf paged delta rank/root counts differ")
 
 
 def _proof(row, scope, layout, decode):
@@ -250,6 +359,7 @@ def _members(bodies, source, result, decode):
         raise ValueError("Windsurf component same-name authority overlaps")
     if stage == "capture-review" and (len(completed) != 23 or len(rows) != 3):
         raise ValueError("Windsurf complete capture lacks required stages")
+    _delta_pages(result)
     return result
 
 

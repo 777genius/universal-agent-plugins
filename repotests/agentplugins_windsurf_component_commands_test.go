@@ -119,6 +119,7 @@ func (w *windComponentFixture) command(t *testing.T, label string) {
 		after := w.profile(t)
 		if !reflect.DeepEqual(before, after) {
 			f.evidence["profile_delta"] = windProfileDifference(before, after)
+			f.evidence["profile_delta_pages"] = windProfileDifferencePages(before, after)
 			w.configDiagnostic(after)
 			// Preserve the original immutable/protected fatal as well as the
 			// stronger complete-frame refusal; diagnostics authorize nothing.

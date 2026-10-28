@@ -1395,3 +1395,34 @@ then review and validate the combined source before merging the base PR.
 
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
+
+
+### Windsurf complete bounded profile-delta projection (2026-10-28)
+
+The genuine090b failed component capture observes15 profile changes after the
+account-free empty skills catalog. Its original three-entry projection remains
+byte-for-byte unchanged. Five fixed pages at offsets0/3/6/9/12 now expose at most
+15 independently bounded hashed details from those same held frames, each
+within the original2KiB limit. Complete counts, explicit omissions and the
+existing serialization fallback remain truthful. No extra filesystem read,
+raw private path/body, native command, artifact member or profile exception is
+introduced; the original protected/immutable and unequal-profile fatal remain.
+
+Plan0227ee9609b5efbd1232f0e11a2465e79fbbbd0b7e8538eaa081501abdeea6b6
+received root and Grok pre-code GOs. Root and the independent Qoder owner
+reviewed all five frozen files under manifest
+ba2760d3debbdd443ad4fadb427a2d5cea782a5dd00711f9447bbdeb45e81910.
+Executed exact focused Go contracts:46pass/0skip/0fail, package2.662s; Python
+contracts30pass. Affected all-enabled lint and complete root six-linter each
+report0issues. A separately recorded accidental unfiltered all-enabled lint
+invocation found existing unrelated diagnostics; it caused no source change or
+suppression and is not substituted for either required gate. The genuine090b
+14-member archive SHA60ee39861c3292730d39770c00f811158925fc8cb3743073257c102682da3185
+replays with byte-identical failed result and all qualification flagsfalse.
+
+The pure reader admits this optional field only at the actual completed failed
+native stage, with exact five-page schema, original page0, strict scalar types,
+counts/omissions, global uniqueness/order and ordinary record bounds. This
+publication remains a failed-observation diagnostic. A new genuine hosted
+capture and whole raw review must establish all actually observed profile
+changes before any narrow initialization policy or full lifecycle claim.
