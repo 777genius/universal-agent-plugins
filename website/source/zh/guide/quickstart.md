@@ -34,24 +34,23 @@ Agent Plugins 创作已在 `universal-agent-plugins` 中发布；GitHub 版本�
 
 ### 保存和恢复插件
 
-**当前源码，尚未发布：**以下传输命令需要从当前源码构建的 CLI，尚未完成公开
-CLI 版本的发布资格验证。在要带到另一台电脑的文件夹中运行：
+以下传输命令已包含在公开发布的 CLI 中。在要带到另一台电脑的文件夹中运行：
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 将文件夹复制到另一台电脑，打开该文件夹并安装目标客户端，然后运行：
 
 ```bash
-agentplugins deps import
-agentplugins install --locked --scope user
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked --scope user
 ```
 
 也可合并导入和安装：
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 路径可省略，默认使用当前文件夹。导出始终读取用户的全局环境，导入始终写入目标

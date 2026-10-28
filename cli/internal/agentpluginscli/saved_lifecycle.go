@@ -189,7 +189,11 @@ func runSavedLifecycle(cmd *cobra.Command, app App, opts *options, selector, ope
 	if err != nil {
 		return true, err
 	}
-	if err := runSavedEnvironment(cmd, preview, opts, snapshot, requirements, locked, manifest, []string{selection.alias}, nil); err != nil {
+	var syncTargets []string
+	if strings.TrimSpace(opts.target) != "" {
+		syncTargets = selection.targets
+	}
+	if err := runSavedEnvironment(cmd, preview, opts, snapshot, requirements, locked, manifest, []string{selection.alias}, nil, syncTargets); err != nil {
 		return true, err
 	}
 	return true, selection.renderNextAction(cmd, app, opts, requirements, locked, operation)

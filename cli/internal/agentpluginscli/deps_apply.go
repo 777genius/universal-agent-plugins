@@ -27,6 +27,7 @@ type dependencySyncRequest struct {
 	consent                          map[string]bool
 	candidateManifest, candidateLock []byte
 	aliases                          []string
+	targets                          []string
 	attestation                      *environment.Attestation
 }
 
@@ -380,7 +381,7 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 		observed, err = environment.ObserveForEnvironment(state, app.environmentID())
 		if err == nil {
 			var selected environment.PreparedSync
-			selected, err = (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, lock, observed, request.aliases, request.attestation)
+			selected, err = (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, lock, observed, request.aliases, request.attestation, request.targets)
 			actions = selected.Bindings
 		}
 	} else {

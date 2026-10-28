@@ -38,26 +38,25 @@ npx universal-agent-plugins add context7
 
 ### Сохранение и восстановление плагинов
 
-**Текущий исходный код, ещё не выпущено:** эти команды переноса требуют CLI,
-собранного из текущего исходного кода; опубликованный выпуск ещё не квалифицирован.
-В папке, которую хотите перенести на другой компьютер, выполните:
+Эти команды переноса доступны в опубликованном CLI. В папке, которую хотите
+перенести на другой компьютер, выполните:
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 Скопируйте папку на другой компьютер, откройте её и установите нужные клиентские
 агенты. Затем выполните:
 
 ```bash
-agentplugins deps import
-agentplugins install --locked --scope user
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked --scope user
 ```
 
 Или объедините импорт и установку:
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 Путь необязателен: по умолчанию используется текущая папка. Экспорт читает

@@ -33,7 +33,10 @@ func (s *skillsCatalogSession) reviewRefusal(err error) error {
 		refusal.Message = "The environment changed during review. Refresh the selection and prepare a new review."
 	case errors.Is(err, context.DeadlineExceeded):
 		refusal.Code = "REVIEW_TIMEOUT"
-		refusal.Message = "Review exceeded its time limit. Select fewer Skills or targets and prepare a new review."
+		// Preparation has no aggregate review deadline: a bounded source or
+		// client check can expire even for one Skill. Do not imply that reducing
+		// the selection fixes a slow or unavailable check.
+		refusal.Message = "A source or client check timed out while preparing the review. Check network access and the selected clients' configuration, then prepare a new review."
 		refusal.Retryable = true
 	}
 	var selection *SkillsSelectionError
