@@ -34,16 +34,8 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	if projectRequested(request.Plan) {
 		return activateProject(ctx, env, request)
 	}
-	if err := shared.ActivationIdentityMismatch(request); err != nil {
+	if err := validateUserActivation(request); err != nil {
 		return domain.ActivationOutcome{}, err
-	}
-	if err := validateProfile(request.Client.ConfigRoot, request.Plan.NativeRegistryRoot); err != nil {
-		return domain.ActivationOutcome{}, err
-	}
-	// Stored bindings predate every plan gate, so refuse rather than address
-	// an id that could belong to a different plugin.
-	if !qualifiedPluginName(request.DeclaredName) {
-		return domain.ActivationOutcome{}, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
 	}
 	outcome := shared.StartedActivation(request)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
@@ -191,4 +183,19 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
+}
+
+func validateUserActivation(request domain.ActivationRequest) error {
+	if err := shared.ActivationIdentityMismatch(request); err != nil {
+		return err
+	}
+	if err := validateProfile(request.Client.ConfigRoot, request.Plan.NativeRegistryRoot); err != nil {
+		return err
+	}
+	// Stored bindings predate every plan gate, so refuse rather than address
+	// an id that could belong to a different plugin.
+	if !qualifiedPluginName(request.DeclaredName) {
+		return fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", request.DeclaredName)
+	}
+	return nil
 }
