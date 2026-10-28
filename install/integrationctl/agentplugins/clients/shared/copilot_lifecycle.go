@@ -17,11 +17,17 @@ const copilotCLIName = "GitHub Copilot CLI"
 // Callers handle the no-CLI manual path themselves because Copilot and VS Code
 // differ only in those operator messages.
 func CompleteCopilotActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+	return CompleteCopilotActivationWithListingRecognition(ctx, env, request, outcome, nil)
+}
+
+// CompleteCopilotActivationWithListingRecognition uses the same install and
+// verification commands with an optional adapter-owned exact listing recognizer.
+func CompleteCopilotActivationWithListingRecognition(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, recognize func(legacyports.CommandResult, domain.ActivationRequest) bool) (domain.ActivationOutcome, error) {
 	var err error
 	if request.VerifyOnly {
-		err = VerifyCopilotPlugin(ctx, env, request)
+		err = VerifyCopilotPluginWithListingRecognition(ctx, env, request, recognize)
 	} else {
-		err = ActivateCopilotPlugin(ctx, env, request)
+		err = activateCopilotPlugin(ctx, env, request, recognize)
 	}
 	if err == nil {
 		outcome.Activation = domain.ActivationActive
@@ -80,6 +86,10 @@ func CopilotVerifierAvailable(backendExecutable string) bool {
 // ActivateCopilotPlugin registers the managed marketplace and installs the
 // plugin through the Copilot CLI, then verifies the listing.
 func ActivateCopilotPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
+	return activateCopilotPlugin(ctx, env, request, nil)
+}
+
+func activateCopilotPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest, recognize func(legacyports.CommandResult, domain.ActivationRequest) bool) error {
 	marketplace := ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	updated, err := registerCopilotMarketplace(ctx, env, request, marketplace)
 	if err != nil {
@@ -88,7 +98,7 @@ func ActivateCopilotPlugin(ctx context.Context, env clients.Env, request domain.
 	if err := installCopilotPlugin(ctx, env, request, marketplace, updated); err != nil {
 		return err
 	}
-	return VerifyCopilotPlugin(ctx, env, request)
+	return VerifyCopilotPluginWithListingRecognition(ctx, env, request, recognize)
 }
 
 func registerCopilotMarketplace(ctx context.Context, env clients.Env, request domain.ActivationRequest, marketplace string) (bool, error) {
@@ -125,12 +135,18 @@ func installCopilotPlugin(ctx context.Context, env clients.Env, request domain.A
 // VerifyCopilotPlugin reads the Copilot listing and requires an exact enabled
 // identity at the managed path.
 func VerifyCopilotPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
+	return VerifyCopilotPluginWithListingRecognition(ctx, env, request, nil)
+}
+
+// VerifyCopilotPluginWithListingRecognition allows an adapter's exact positive
+// observation before the unchanged shared status fallback.
+func VerifyCopilotPluginWithListingRecognition(ctx context.Context, env clients.Env, request domain.ActivationRequest, recognize func(legacyports.CommandResult, domain.ActivationRequest) bool) error {
 	pluginSpec := request.DeclaredName + "@" + ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	listed, err := runCopilotResult(ctx, env, request.BackendExecutable, "plugin", "list")
 	if err != nil {
 		return fmt.Errorf("verify Copilot plugin listing: %w", err)
 	}
-	if copilotUserLiveActivation(listed.Stdout, listed.Stderr, request) {
+	if recognize != nil && recognize(listed, request) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

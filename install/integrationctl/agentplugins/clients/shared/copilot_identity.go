@@ -15,11 +15,17 @@ import (
 // share a backend, so this helper is the one place that knows the listing
 // contract.
 func InspectCopilotRegistry(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+	return InspectCopilotRegistryWithListingRecognition(ctx, env, plan, managed, nil)
+}
+
+// InspectCopilotRegistryWithListingRecognition preserves the shared command and
+// fallback while allowing an adapter to recognize its own exact native listing.
+func InspectCopilotRegistryWithListingRecognition(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding, recognize func(legacyports.CommandResult, domain.DeliveryPlan, *domain.ClientBinding) (clients.RegistryFinding, bool)) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
 	if strings.TrimSpace(plan.NativeRegistryExecutable) != "" {
-		return inspectCopilotCLI(ctx, env, plan, managed)
+		return inspectCopilotCLI(ctx, env, plan, managed, recognize)
 	}
 	root := strings.TrimSpace(plan.NativeRegistryRoot)
 	if root == "" {
@@ -36,7 +42,7 @@ func InspectCopilotRegistry(ctx context.Context, env clients.Env, plan domain.De
 	return clients.RegistryIndeterminate, nil
 }
 
-func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
+func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.DeliveryPlan, managed *domain.ClientBinding, recognize func(legacyports.CommandResult, domain.DeliveryPlan, *domain.ClientBinding) (clients.RegistryFinding, bool)) (clients.RegistryFinding, error) {
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
@@ -50,35 +56,19 @@ func inspectCopilotCLI(ctx context.Context, env clients.Env, plan domain.Deliver
 	if result.ExitCode != 0 {
 		return clients.RegistryIndeterminate, fmt.Errorf("the Copilot plugin registry command failed with exit code %d", result.ExitCode)
 	}
-	if copilotUserEmptyWithDisabledBuiltin(result.Stdout, plan) {
-		if err := ctx.Err(); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		return clients.RegistryClear, nil
-	}
 	expectedPath := plan.ActivePath
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
 	}
-	if copilotUserLiveManaged(plan, managed) && copilotUserLiveWithDisabledBuiltin(result.Stdout, result.Stderr, plan, expectedPath, plan.NativeRegistryExecutable) {
-		if err := ctx.Err(); err != nil {
-			return clients.RegistryIndeterminate, err
+	if recognize != nil {
+		if finding, recognized := recognize(result, plan, managed); recognized {
+			if err := ctx.Err(); err != nil {
+				return clients.RegistryIndeterminate, err
+			}
+			return finding, nil
 		}
-		return copilotLiveFinding(CopilotStatusInstalled, managed != nil), nil
 	}
 	return CopilotRegistryFindingAt(result.Stdout, plan.DeclaredName, ManagedMarketplaceName(plan.PhysicalArtifactID), MarketplaceVersion(plan.DeclaredVersion), expectedPath, managed != nil), nil
-}
-
-// Copilot 1.0.103 appends this exact disabled builtin to an empty user registry.
-// Its presence proves neither ownership nor absence for a same-name request.
-// Keep this observed tuple separate from the generic Copilot/VS Code grammars.
-func copilotUserEmptyWithDisabledBuiltin(stdout []byte, plan domain.DeliveryPlan) bool {
-	const empty = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n" +
-		"Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
-	name := plan.DeclaredName
-	return plan.ClientID == domain.ClientCopilot && plan.Scope == domain.ScopeUser &&
-		plan.TargetContext.Scope != domain.ScopeProject && name != "" && name == strings.TrimSpace(name) &&
-		!strings.EqualFold(name, "browser-use") && string(stdout) == empty
 }
 
 // CopilotRegistryFinding classifies a Copilot/VS Code `plugin list` document

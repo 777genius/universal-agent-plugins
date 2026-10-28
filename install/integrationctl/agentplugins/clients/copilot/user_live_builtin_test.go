@@ -1,4 +1,4 @@
-package shared
+package copilot
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -113,7 +114,7 @@ func TestCopilotUserLiveBuiltinExactObservationAndOwnership(t *testing.T) {
 			managed = &domain.ClientBinding{ClientID: "copilot", Scope: "user", PhysicalArtifact: r.Plan.PhysicalArtifactID, TargetLocator: r.Plan.ActivePath}
 			want = clients.RegistryExpected
 		}
-		got, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: runner}, r.Plan, managed)
+		got, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r.Plan, managed, recognizeCopilotUserRegistry)
 		if err != nil || got != want || runner.calls != 1 {
 			t.Fatalf("owned=%v finding=%v err=%v calls=%d", owned, got, err, runner.calls)
 		}
@@ -131,7 +132,7 @@ func TestCopilotUserLiveBuiltinInitialAndReadOnlyActivation(t *testing.T) {
 		}
 		steps = append(steps, copilotUserLiveListStep(r, copilotUserLiveDocument(r), false))
 		runner := &copilotUserLiveRunner{t: t, steps: steps}
-		got, err := CompleteCopilotActivation(context.Background(), clients.Env{Runner: runner}, r, StartedActivation(r))
+		got, err := shared.CompleteCopilotActivationWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r, shared.StartedActivation(r), recognizeCopilotUserActivation)
 		if err != nil || got.Activation != domain.ActivationActive || got.Verification != domain.VerificationInstalled || got.Authentication != domain.AuthenticationNotChecked || got.Policy != domain.PolicyAllowed || got.ActivationAttested || runner.calls != len(steps) {
 			t.Fatalf("verifyOnly=%v outcome=%+v err=%v calls=%d", verifyOnly, got, err, runner.calls)
 		}
@@ -148,7 +149,7 @@ func TestCopilotUserLiveBuiltinKeepsCoherentVSCodeAndExplicitAttestationSeparate
 			t.Fatal("coherent VS Code request reached new Copilot-only recognition")
 		}
 		runner := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{copilotUserLiveListStep(r, body, false)}}
-		outcome, err := CompleteCopilotActivation(context.Background(), clients.Env{Runner: runner}, r, StartedActivation(r))
+		outcome, err := shared.CompleteCopilotActivationWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r, shared.StartedActivation(r), recognizeCopilotUserActivation)
 		want := domain.ActivationManual
 		if attested {
 			want = domain.ActivationActive
@@ -213,12 +214,12 @@ func TestCopilotUserLiveBuiltinWholeByteRefusalsKeepManualAndIndeterminate(t *te
 				t.Fatal("altered whole observation admitted")
 			}
 			inspect := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{copilotUserLiveListStep(r, body, true)}}
-			finding, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: inspect}, r.Plan, nil)
+			finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: inspect}, r.Plan, nil, recognizeCopilotUserRegistry)
 			if err != nil || finding != clients.RegistryIndeterminate || inspect.calls != 1 {
 				t.Fatal("altered prefixed observation grants registry authority", finding, err)
 			}
 			verify := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{copilotUserLiveListStep(r, body, false)}}
-			outcome, err := CompleteCopilotActivation(context.Background(), clients.Env{Runner: verify}, r, StartedActivation(r))
+			outcome, err := shared.CompleteCopilotActivationWithListingRecognition(context.Background(), clients.Env{Runner: verify}, r, shared.StartedActivation(r), recognizeCopilotUserActivation)
 			if err != nil || outcome.Activation != domain.ActivationManual || outcome.Verification != domain.VerificationPackageValid || verify.calls != 1 {
 				t.Fatal("unknown observation lost manual fallback", outcome, err)
 			}
@@ -274,7 +275,7 @@ func TestCopilotUserLiveBuiltinRequiresHeldActivationContext(t *testing.T) {
 				t.Fatal("unheld activation context admitted")
 			}
 			runner := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{copilotUserLiveListStep(r, body, false)}}
-			if err := VerifyCopilotPlugin(context.Background(), clients.Env{Runner: runner}, r); !errors.Is(err, ErrCopilotListContractUnknown) || runner.calls != 1 {
+			if err := shared.VerifyCopilotPluginWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r, recognizeCopilotUserActivation); !errors.Is(err, shared.ErrCopilotListContractUnknown) || runner.calls != 1 {
 				t.Fatal("unheld prefixed listing unexpectedly verified", err)
 			}
 		})
@@ -295,7 +296,7 @@ func TestCopilotUserLiveBuiltinRejectsWrongOwnedBinding(t *testing.T) {
 		binding := domain.ClientBinding{ClientID: "copilot", Scope: "user", PhysicalArtifact: r.Plan.PhysicalArtifactID, TargetLocator: r.Plan.ActivePath}
 		mutate(&binding)
 		runner := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{copilotUserLiveListStep(r, copilotUserLiveDocument(r), true)}}
-		finding, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: runner}, r.Plan, &binding)
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r.Plan, &binding, recognizeCopilotUserRegistry)
 		if err != nil || finding != clients.RegistryIndeterminate || runner.calls != 1 {
 			t.Fatalf("wrong owned binding %d grants finding=%v err=%v", index, finding, err)
 		}
@@ -394,17 +395,17 @@ func TestCopilotUserLiveBuiltinLegacyFallbackResultsRemainExact(t *testing.T) {
 	r := copilotUserLiveRequest(t)
 	identity := r.DeclaredName + "@" + copilotUserLiveExpectedMarketplace(r.Plan.PhysicalArtifactID)
 	measured := copilotUserLiveDocument(r)
-	if status, recognized := CopilotLivePluginStatus(measured, identity, r.Plan.DeclaredVersion, r.Plan.ActivePath); recognized || status != CopilotStatusUnknown {
+	if status, recognized := shared.CopilotLivePluginStatus(measured, identity, r.Plan.DeclaredVersion, r.Plan.ActivePath); recognized || status != shared.CopilotStatusUnknown {
 		t.Fatal("generic live grammar broadened")
 	}
-	if CopilotPluginStatus(measured, identity, r.Plan.DeclaredVersion, r.Plan.ActivePath) != CopilotStatusUnknown {
+	if shared.CopilotPluginStatus(measured, identity, r.Plan.DeclaredVersion, r.Plan.ActivePath) != shared.CopilotStatusUnknown {
 		t.Fatal("generic measured-document status changed")
 	}
 	legacy := "Installed plugins:\n  • " + identity + " (v1.2.3)\n"
 	for _, body := range [][]byte{[]byte(legacy), append(append([]byte{}, measured...), []byte(legacy)...), []byte(string(measured) + strings.Repeat("x", 8<<10) + "\n" + legacy)} {
 		copilotUserLiveLegacyVerify(t, r, body)
 	}
-	if CopilotRegistryFindingAt(append(measured, []byte(legacy)...), r.DeclaredName, copilotUserLiveExpectedMarketplace(r.Plan.PhysicalArtifactID), r.Plan.DeclaredVersion, r.Plan.ActivePath, true) != clients.RegistryIndeterminate {
+	if shared.CopilotRegistryFindingAt(append(measured, []byte(legacy)...), r.DeclaredName, copilotUserLiveExpectedMarketplace(r.Plan.PhysicalArtifactID), r.Plan.DeclaredVersion, r.Plan.ActivePath, true) != clients.RegistryIndeterminate {
 		t.Fatal("old registry preamble refusal changed")
 	}
 }
@@ -415,7 +416,7 @@ func copilotUserLiveLegacyVerify(t *testing.T, request domain.ActivationRequest,
 		t.Fatal("new branch accepted independent legacy grammar")
 	}
 	identity := request.DeclaredName + "@" + copilotUserLiveExpectedMarketplace(request.Plan.PhysicalArtifactID)
-	if CopilotPluginStatus(body, identity, request.Plan.DeclaredVersion, request.Plan.ActivePath) != CopilotStatusInstalled {
+	if shared.CopilotPluginStatus(body, identity, request.Plan.DeclaredVersion, request.Plan.ActivePath) != shared.CopilotStatusInstalled {
 		t.Fatal("old Installed grammar no longer skips its preamble")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -423,7 +424,7 @@ func copilotUserLiveLegacyVerify(t *testing.T, request domain.ActivationRequest,
 	step := copilotUserLiveListStep(request, body, false)
 	step.result.Stderr, step.cancel = []byte("old diagnostic"), cancel
 	runner := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{step}}
-	if err := VerifyCopilotPlugin(ctx, clients.Env{Runner: runner}, request); err != nil || runner.calls != 1 {
+	if err := shared.VerifyCopilotPluginWithListingRecognition(ctx, clients.Env{Runner: runner}, request, recognizeCopilotUserActivation); err != nil || runner.calls != 1 {
 		t.Fatal("preserved legacy verification stream/context behavior changed", err)
 	}
 }
@@ -435,11 +436,11 @@ func TestCopilotUserLiveBuiltinUnexpectedStderrDoesNotGrantNewAuthority(t *testi
 		step.result.Stderr = []byte("unexpected")
 		runner := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{step}}
 		if tree {
-			finding, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: runner}, r.Plan, nil)
+			finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r.Plan, nil, recognizeCopilotUserRegistry)
 			if err != nil || finding != clients.RegistryIndeterminate {
 				t.Fatal("diagnostic stream granted registry authority", finding, err)
 			}
-		} else if err := VerifyCopilotPlugin(context.Background(), clients.Env{Runner: runner}, r); !errors.Is(err, ErrCopilotListContractUnknown) {
+		} else if err := shared.VerifyCopilotPluginWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r, recognizeCopilotUserActivation); !errors.Is(err, shared.ErrCopilotListContractUnknown) {
 			t.Fatal("new prefixed verification accepted diagnostic stream", err)
 		}
 		if runner.calls != 1 {
@@ -481,12 +482,12 @@ func copilotUserLiveFailure(t *testing.T, tree bool, kind string) {
 	var err error
 	if tree {
 		var finding clients.RegistryFinding
-		finding, err = InspectCopilotRegistry(ctx, clients.Env{Runner: runner}, r.Plan, nil)
+		finding, err = shared.InspectCopilotRegistryWithListingRecognition(ctx, clients.Env{Runner: runner}, r.Plan, nil, recognizeCopilotUserRegistry)
 		if finding != clients.RegistryIndeterminate {
 			t.Fatal("failed command/context granted a registry finding", finding)
 		}
 	} else {
-		err = VerifyCopilotPlugin(ctx, clients.Env{Runner: runner}, r)
+		err = shared.VerifyCopilotPluginWithListingRecognition(ctx, clients.Env{Runner: runner}, r, recognizeCopilotUserActivation)
 	}
 	if err == nil || runner.calls != wantCalls {
 		t.Fatalf("tree=%v kind=%s err=%v calls=%d", tree, kind, err, runner.calls)

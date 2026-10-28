@@ -2916,3 +2916,44 @@ qualify. Current9e failed native history remains refused. A reader mutation that
 places success flags/proof over failed raw must fail; late failures clear staged
 flags. Only future same-source actual component and single-call success may be
 combined. Root freshly checked PR524 remains9e before this isolated checkout.
+
+## Copilot architecture ratchet amendment before project lifecycle (2026-10-28)
+
+Genuine current-source run40624054507 at838c3e19/tree0aa6dadd reaches only
+the existing post-add review barrier. Public user add now reports Active and
+installation_verified without attestation/manual fallback; its later direct
+listing retains the exact disabled builtin and enabled managed entry. This is
+user repair evidence, not project lifecycle qualification. All five/runtime/
+account/model flags remain false. Independent whole RAW review remains required.
+
+Core40624054521 exposed TestClientIDBudgetDoesNotGrow: five ClientCopilot
+references in clients/shared violate the unchanged architecture ratchet. Root and
+independent other_clients reviewed and approved this narrow amendment before
+implementation. Move the two exact user builtin recognizers and their complete
+strict contracts into clients/copilot, where client identity policy belongs.
+Shared orchestration receives explicit optional recognition callbacks after its
+original successful command admission. Existing exported APIs pass nil, and the
+Copilot adapter alone supplies its own recognizers on the existing user path.
+Keep the same single registry/final verification command and unchanged generic
+fallback. Positive recognition retains its original postrecognition context
+check; preserve the older generic fallback's existing cancellation behavior.
+Reuse the shared live grammar only after whole-byte exact tuple equality.
+No budget increase, VS Code source change, new native command, evidence/schema/
+reader/workflow/fixture change or broader lifecycle implementation is authorized
+by this amendment.
+
+Candidate validation must cover the moved strict scope/identity/ownership/path/
+version/byte/context suites, nil callback legacy behavior, refusal to invoke
+recognition after command error/nonzero exit and the original one-list install/
+VerifyOnly sequence. Run the architecture package and full test-core plus
+affected package/lint gates when execution is available. Remote-object preparation
+does not execute these tests and must not be represented as passing them.
+
+The implemented callback/matcher move received independent GPT-6.1 Sol/xhigh
+CODE GOs from both client reviewers and a separate root source review. The
+unchanged focused shared/Copilot/VS Code and architecture selection passed
+157 cases with no skips or failures. Two independent original-byte audits of
+run40624054507 verified both API-bound archives, 18 native and 25 frontend
+members, all 24 frontend stream joins and the original failed-only reader.
+They confirm the user repair result above, while every lifecycle/MCP flag
+remains false. Full core, lint and fresh hosted checks remain required.

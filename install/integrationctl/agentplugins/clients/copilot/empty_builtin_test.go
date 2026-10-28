@@ -1,4 +1,4 @@
-package shared
+package copilot
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -62,12 +63,12 @@ func TestCopilotEmptyDisabledBuiltinExactUserRegistry(t *testing.T) {
 		if owned {
 			managed = &domain.ClientBinding{TargetLocator: "/inert/managed/previous"}
 		}
-		finding, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: runner}, plan, managed)
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, plan, managed, recognizeCopilotUserRegistry)
 		if err != nil || finding != clients.RegistryClear || runner.calls != 1 {
 			t.Fatalf("owned=%v finding=%v calls=%d err=%v", owned, finding, runner.calls, err)
 		}
 	}
-	if got := CopilotRegistryFindingAt([]byte(copilotInertDisabledBuiltin), "unrelated", "marketplace", "1.0.0", "/inert/managed", false); got != clients.RegistryIndeterminate {
+	if got := shared.CopilotRegistryFindingAt([]byte(copilotInertDisabledBuiltin), "unrelated", "marketplace", "1.0.0", "/inert/managed", false); got != clients.RegistryIndeterminate {
 		t.Fatal("generic shared classifier changed")
 	}
 }
@@ -95,7 +96,7 @@ func TestCopilotEmptyDisabledBuiltinRejectsAlteredWholeDocument(t *testing.T) {
 	}
 	for index, text := range cases {
 		runner := &copilotEmptyRegistryRunner{t: t, result: legacyports.CommandResult{Stdout: []byte(text)}}
-		finding, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: runner}, copilotInertUserPlan(), nil)
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, copilotInertUserPlan(), nil, recognizeCopilotUserRegistry)
 		if err != nil || finding != clients.RegistryIndeterminate || runner.calls != 1 {
 			t.Fatalf("case=%d finding=%v calls=%d err=%v", index, finding, runner.calls, err)
 		}
@@ -123,7 +124,7 @@ func TestCopilotEmptyDisabledBuiltinRequiresHeldClientScopeAndName(t *testing.T)
 		plan := copilotInertUserPlan()
 		mutate(&plan)
 		runner := &copilotEmptyRegistryRunner{t: t, result: legacyports.CommandResult{Stdout: []byte(copilotInertDisabledBuiltin)}}
-		finding, err := InspectCopilotRegistry(context.Background(), clients.Env{Runner: runner}, plan, nil)
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, plan, nil, recognizeCopilotUserRegistry)
 		if err != nil || finding != clients.RegistryIndeterminate || runner.calls != 1 {
 			t.Fatalf("case=%d finding=%v calls=%d err=%v", index, finding, runner.calls, err)
 		}
@@ -148,7 +149,7 @@ func TestCopilotEmptyDisabledBuiltinPreservesRunnerAndContextRefusal(t *testing.
 		case "cancel-after":
 			runner.cancel = cancel
 		}
-		finding, err := InspectCopilotRegistry(ctx, clients.Env{Runner: runner}, copilotInertUserPlan(), nil)
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(ctx, clients.Env{Runner: runner}, copilotInertUserPlan(), nil, recognizeCopilotUserRegistry)
 		if err == nil || finding != clients.RegistryIndeterminate || runner.calls != wantCalls {
 			t.Fatalf("case=%s finding=%v calls=%d err=%v", failure, finding, runner.calls, err)
 		}
