@@ -57,7 +57,7 @@ func newTransferGraph(t *testing.T) transferGraph {
 	dependencyRun(t, original.cliFixture, "deps", "lock", "--format", "json")
 	locked := freshRestoreReadLock(t, original.cliFixture)
 	freshRestoreCheckGraph(t, locked, map[string]domain.DirectoryRelease{"a": a, "b": b, "c": c})
-	dependencyRun(t, original.cliFixture, "install", "--locked", "--yes", "--format", "json")
+	dependencyRun(t, original.cliFixture, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	manifest, lock := dependencyRead(t, mp), dependencyRead(t, lp)
 	freshRestorePackage(t, original, repo, "b", "1.1.0", "b", "^1.2", 2, false)
 	freshRestorePackage(t, original, repo, "a", "1.4.0", "a-1.4.0", "^1.2", 2, true)
@@ -109,14 +109,14 @@ func (graph transferGraph) restore(t *testing.T) {
 	if dependencyRead(t, freshMP) != manifest || dependencyRead(t, freshLP) != lock || !reflect.DeepEqual(locked, freshRestoreReadLock(t, fresh.cliFixture)) {
 		t.Fatal("import changed raw agreement or immutable graph pins")
 	}
-	dependencyRun(t, fresh.cliFixture, "install", "--locked", "--yes", "--format", "json")
+	dependencyRun(t, fresh.cliFixture, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	freshRestoreCheckFetches(t, fresh.source, locked)
 	freshRestoreCheckInstalled(t, fresh, locked)
 	freshRestoreAssertStagingClean(t, fresh.source)
 	beforeRepeat := freshRestoreFiles(t, fresh.root, fresh.client.ConfigRoot)
 	mutations := fresh.runner.mutations
 	transferJSON(t, dependencyRun(t, fresh.cliFixture, "deps", "import", "--format", "json"))
-	dependencyRun(t, fresh.cliFixture, "install", "--locked", "--yes", "--format", "json")
+	dependencyRun(t, fresh.cliFixture, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	if fresh.source.downloads != 3 || fresh.source.lookups != 0 || fresh.runner.mutations != mutations || !reflect.DeepEqual(beforeRepeat, freshRestoreFiles(t, fresh.root, fresh.client.ConfigRoot)) {
 		t.Fatal("repeated transfer and locked restore rewrote files, resolved refs or repeated effects")
 	}
@@ -238,7 +238,7 @@ func (graph transferGraph) applyFailure(t *testing.T) {
 	if dependencyRead(t, failedMP) != manifest || dependencyRead(t, failedLP) != lock || !reflect.DeepEqual(locked, freshRestoreReadLock(t, failed.cliFixture)) {
 		t.Fatal("installer failure rolled back or rewrote imported desired state")
 	}
-	dependencyRun(t, failed.cliFixture, "install", "--locked", "--yes", "--format", "json")
+	dependencyRun(t, failed.cliFixture, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	freshRestoreCheckInstalled(t, failed, locked)
 	if failed.source.lookups != 0 {
 		t.Fatal("retry resolved moving selectors")

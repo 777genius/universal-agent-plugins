@@ -1,8 +1,9 @@
 # Install plugins for one project
 
-**Source only / unreleased:** project scope requires a compatible CLI built
-from this feature's source. These instructions do not describe a newly
-published CLI release.
+**Released:** explicit project scope is available in CLI 0.1.93 and later.
+Automatic project selection and the stricter default install behavior described
+below are **current source only / unreleased**. Until that convenience is released,
+restore with `install --locked --scope project`.
 
 Use `--scope project` to keep a project's plugin declarations, installed
 ownership and native client configuration separate from your user environment.
@@ -35,11 +36,30 @@ the final feature-source native run; each client's activation limits still apply
 
 ## Select the environment on every command
 
-The default scope remains `user`. An existing `uap.toml` in your current folder
-does not silently change that default. With `--scope project`, omitting
-`--project-root` selects the invocation directory; UAP does not search parent
-folders for a Git repository or another manifest. `--project-root` requires
-`--scope project` and an existing directory.
+The released CLI defaults to user scope; select project scope explicitly on each
+command. A manifest in the working directory does not change that released default.
+
+**Current source only / unreleased:** argumentless `agentplugins install` selects
+project scope when the exact current directory contains a regular `uap.toml`
+file. It never searches parent folders.
+A directory or symlink named `uap.toml` is refused during automatic selection;
+select the scope explicitly to resolve the ambiguity. Without that local
+manifest, install selects the user environment. Explicit `--scope user` or
+`--scope project` always wins. Other commands, including install with a source
+argument, continue to default to user scope.
+
+With `--scope project`, omitting `--project-root` selects the invocation
+directory. `--project-root` requires `--scope project` and an existing directory.
+The install preview shows the selected scope, project root where applicable,
+and manifest and lock paths.
+
+For that unreleased convenience, an existing `uap.lock` makes argumentless install
+strictly validate the manifest and locked pins before installation or repair.
+A mismatch fails without changing
+the environment; use the explicit `update` path to advance pins, or `deps lock`
+after deliberately editing dependency declarations. Only a missing lock permits
+first-install resolution and lock creation. `--locked` additionally requires an
+existing valid lock; `--locked=false` does not relax an existing lock's validation.
 
 ```sh
 cd /path/to/project
@@ -141,6 +161,10 @@ directory, install the required clients, and run:
 ```sh
 agentplugins install --locked --scope project --project-root /path/to/new-project
 ```
+
+**Current source only / unreleased:** from the new project directory,
+`agentplugins install` infers project scope and strictly uses an existing lock.
+For that future convenience, `--locked` additionally requires the lock's presence.
 
 The explicit transfer commands support project scope too:
 
