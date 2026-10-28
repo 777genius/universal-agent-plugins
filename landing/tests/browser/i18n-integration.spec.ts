@@ -38,8 +38,8 @@ for (const locale of publishedLocales) {
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
         await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
         await expect(restore.locator('.command-snippet pre code')).toHaveText([
-          'agentplugins deps export',
-          'agentplugins deps import --install',
+          'npx -y universal-agent-plugins@latest deps export',
+          'npx -y universal-agent-plugins@latest deps import --install',
         ]);
         await expect(restore.getByRole('link', { name: copy.guide! })).toHaveAttribute(
           'href',

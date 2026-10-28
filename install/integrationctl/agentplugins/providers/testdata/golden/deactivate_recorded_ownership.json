@@ -173,18 +173,26 @@
     "Commands": [
       [
         "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
         "plugins",
         "list",
         "--json"
       ],
       [
         "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
         "plugins",
         "uninstall",
-        "demo"
+        "demo",
+        "--scope",
+        "user"
       ],
       [
         "\u003croot\u003e/bin/qoder",
+        "--config-dir",
+        "\u003croot\u003e/qoder/config",
         "plugins",
         "list",
         "--json"

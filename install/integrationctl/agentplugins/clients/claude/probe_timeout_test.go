@@ -20,10 +20,10 @@ func (r timeoutProbeRunner) Run(ctx context.Context, _ legacyports.Command) (leg
 }
 
 func TestClaudeProbeBudgetAndSafeTimeout(t *testing.T) {
-	t.Run("slow startup has thirty seconds", func(t *testing.T) {
+	t.Run("slow startup has sixty seconds", func(t *testing.T) {
 		runner := timeoutProbeRunner{run: func(ctx context.Context) (legacyports.CommandResult, error) {
 			deadline, ok := ctx.Deadline()
-			if !ok || time.Until(deadline) < 29*time.Second || time.Until(deadline) > 30*time.Second {
+			if !ok || time.Until(deadline) < 59*time.Second || time.Until(deadline) > 60*time.Second {
 				t.Fatalf("listing deadline = %v", deadline)
 			}
 			return legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}, nil
