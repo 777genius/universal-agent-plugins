@@ -44,7 +44,7 @@ func copilotUserLivePath(path string) bool {
 }
 
 func copilotUserLiveName(name string) bool {
-	if len(name) == 0 || len(name) > 256 {
+	if name == "" || len(name) > 256 {
 		return false
 	}
 	for index, ch := range name {

@@ -159,8 +159,13 @@ func TestCopilotUserLiveBuiltinKeepsCoherentVSCodeAndExplicitAttestationSeparate
 	}
 }
 
-func copilotUserLiveAlteredDocuments(request domain.ActivationRequest) map[string]string {
+func copilotUserLiveAlteredDocuments(t *testing.T, request domain.ActivationRequest) map[string]string {
+	t.Helper()
 	body := string(copilotUserLiveDocument(request))
+	_, entry, found := strings.Cut(body, "Live Plugins (loaded from a local marketplace directory, never copied):\n")
+	if !found || entry == "" {
+		t.Fatal("independent positive fixture has no live entry to duplicate")
+	}
 	parent, leaf := filepath.Dir(request.Plan.ActivePath), filepath.Base(request.Plan.ActivePath)
 	pathLine := "      from " + request.Plan.ActivePath + "\n"
 	foreign := filepath.Join(parent, "foreign", leaf)
@@ -181,7 +186,7 @@ func copilotUserLiveAlteredDocuments(request domain.ActivationRequest) map[strin
 		"extra-heading":         "Built-in plugins:\n" + body,
 		"extra-builtin":         strings.ReplaceAll(body, "Live Plugins", "  • browser-use (v0.0.4) [disabled]\nLive Plugins"),
 		"extra-entry":           body + "  • other@foreign (v1.0.0) (enabled)\n      from " + foreign + "\n",
-		"duplicate-entry":       body + body[strings.Index(body, "  • demo@"):],
+		"duplicate-entry":       body + entry,
 		"wrong-heading":         strings.ReplaceAll(body, "Live Plugins", "Live Plugin"),
 		"leading-junk":          "unexpected\n" + body,
 		"trailing-junk":         body + "unexpected\n",
@@ -198,7 +203,7 @@ func copilotUserLiveAlteredDocuments(request domain.ActivationRequest) map[strin
 
 func TestCopilotUserLiveBuiltinWholeByteRefusalsKeepManualAndIndeterminate(t *testing.T) {
 	r := copilotUserLiveRequest(t)
-	for name, altered := range copilotUserLiveAlteredDocuments(r) {
+	for name, altered := range copilotUserLiveAlteredDocuments(t, r) {
 		t.Run(name, func(t *testing.T) {
 			body := []byte(altered)
 			if altered == string(copilotUserLiveDocument(r)) {
