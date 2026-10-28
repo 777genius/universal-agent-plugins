@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: agentplugins-npm-drift
+  # Manual audits are independent; scheduled latest-state audits retain their queue.
+  group: agentplugins-npm-drift-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
   cancel-in-progress: false
 
 jobs:
