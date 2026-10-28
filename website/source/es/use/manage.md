@@ -16,14 +16,12 @@ translationRequired: true
 
 ## Mantener un proyecto en el código actual
 
-**Solo código fuente; aún no publicado.** `agentplugins install` sin argumento
-selecciona el proyecto si hay un archivo regular `uap.toml` en el directorio
-actual; no busca en directorios superiores. `--scope` explícito tiene prioridad.
-Un `uap.lock` existente se valida estrictamente antes de cambiar nada; solo su
-ausencia permite resolver las dependencias iniciales. `--locked` exige ese
-archivo. Usa `update` para cambiar las revisiones fijadas. La vista previa muestra
-el ámbito y las rutas del acuerdo. Los demás comandos de mantenimiento requieren
-seleccionar explícitamente el proyecto:
+**Solo en el código fuente; aún no publicado.** La instalación sin argumento
+identifica el proyecto por su archivo de dependencias en el directorio actual,
+sin buscar en los directorios superiores. El archivo de bloqueo existente se
+valida estrictamente antes de modificar nada. La selección explícita del ámbito
+tiene prioridad; los demás comandos de mantenimiento requieren elegir el ámbito
+y el proyecto de forma explícita.
 
 [Los comandos de mantenimiento están en la sección inglesa](/en/use/manage#maintain-a-project-in-the-current-source).
 
