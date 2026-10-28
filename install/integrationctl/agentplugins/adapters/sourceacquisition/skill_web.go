@@ -44,36 +44,17 @@ func (acquirer Acquirer) ResolveHTTPSkill(ctx context.Context, endpoint, exactNa
 	defer cancel()
 	client := acquirer.webSkillClient()
 	defer client.CloseIdleConnections()
-	indexURL := base + "/.well-known/agent-skills/index.json"
-	body, status, contentType, err := webSkillGET(ctx, client, indexURL, webSkillIndexBytes)
-	if err == nil && (status == http.StatusNotFound || status == http.StatusOK && webSkillHTML(body, contentType)) {
-		indexURL = base + "/.well-known/skills/index.json"
-		body, status, _, err = webSkillGET(ctx, client, indexURL, webSkillIndexBytes)
-	}
+	indexURL, body, err := loadWebSkillIndex(ctx, client, base)
 	if err != nil {
 		return domain.PackageSnapshot{}, facts, err
-	}
-	if status != http.StatusOK {
-		return domain.PackageSnapshot{}, facts, fmt.Errorf("skill index returned HTTP %d", status)
 	}
 	selected, err := webSkillIndexFiles(body, exactName)
 	if err != nil {
 		return domain.PackageSnapshot{}, facts, err
 	}
-	facts = domain.WebSkillSourceFacts{URL: base, Skill: exactName, IndexURL: indexURL, IndexSHA256: webSkillSHA256(body), Normalizer: "agent-skill-package/v1", RawTreeDigest: "sha256:" + strings.Repeat("0", 64)}
-	indexCoordinate, _ := url.Parse(indexURL)
-	for _, relative := range selected {
-		fileURL := *indexCoordinate
-		fileURL.Path = path.Dir(indexCoordinate.Path) + "/" + exactName + "/" + relative
-		fileURL.RawPath = ""
-		facts.Files = append(facts.Files, domain.WebSkillFile{Path: relative, URL: fileURL.String(), SHA256: strings.Repeat("0", 64)})
-	}
-	sort.Slice(facts.Files, func(i, j int) bool { return facts.Files[i].Path < facts.Files[j].Path })
-	if err := domain.ValidateWebSkillSourceFacts(facts); err != nil {
-		return domain.PackageSnapshot{}, domain.WebSkillSourceFacts{}, err
-	}
-	if err := validateWebSkillTreePaths(facts.Files); err != nil {
-		return domain.PackageSnapshot{}, domain.WebSkillSourceFacts{}, err
+	facts, err = webSkillFacts(base, indexURL, body, exactName, selected)
+	if err != nil {
+		return domain.PackageSnapshot{}, facts, err
 	}
 	snapshot, err := acquirer.webSkillRetain(ctx, client, &facts, false)
 	if err != nil {
@@ -231,4 +212,23 @@ func webSkillHTML(body []byte, contentType string) bool {
 	mediaType := strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0])
 	prefix := strings.ToLower(strings.TrimSpace(string(body)))
 	return strings.EqualFold(mediaType, "text/html") || strings.HasPrefix(prefix, "<!doctype html") || strings.HasPrefix(prefix, "<html")
+}
+
+func webSkillFacts(base, indexURL string, body []byte, exactName string, selected []string) (domain.WebSkillSourceFacts, error) {
+	facts := domain.WebSkillSourceFacts{URL: base, Skill: exactName, IndexURL: indexURL, IndexSHA256: webSkillSHA256(body), Normalizer: "agent-skill-package/v1", RawTreeDigest: "sha256:" + strings.Repeat("0", 64)}
+	indexCoordinate, _ := url.Parse(indexURL)
+	for _, relative := range selected {
+		fileURL := *indexCoordinate
+		fileURL.Path = path.Dir(indexCoordinate.Path) + "/" + exactName + "/" + relative
+		fileURL.RawPath = ""
+		facts.Files = append(facts.Files, domain.WebSkillFile{Path: relative, URL: fileURL.String(), SHA256: strings.Repeat("0", 64)})
+	}
+	sort.Slice(facts.Files, func(i, j int) bool { return facts.Files[i].Path < facts.Files[j].Path })
+	if err := domain.ValidateWebSkillSourceFacts(facts); err != nil {
+		return domain.WebSkillSourceFacts{}, err
+	}
+	if err := validateWebSkillTreePaths(facts.Files); err != nil {
+		return domain.WebSkillSourceFacts{}, err
+	}
+	return facts, nil
 }

@@ -34,6 +34,9 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 			if !engine.SupportsClient(test.id) || !ClientSupported(all.Default(), test.id) {
 				t.Fatal("local adapter excluded")
 			}
+			if engine.RequiresClientExecutable(test.id) != test.executable {
+				t.Fatal("public executable requirement differs from install authority")
+			}
 			request := Request{Operation: OpInstall, ClientID: test.id, ClientConfigRoot: filepath.Join(root, test.id)}
 			_, err := engine.detectedClient(request)
 			if test.executable && !errors.Is(err, ErrInvalidRequest) || !test.executable && err != nil {
