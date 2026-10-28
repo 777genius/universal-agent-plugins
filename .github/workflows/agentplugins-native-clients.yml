@@ -177,7 +177,7 @@ jobs:
   sdk-linux:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.sdk_linux_only }}
     name: ${{ matrix.client }} SDK lifecycle (linux-amd64)
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false

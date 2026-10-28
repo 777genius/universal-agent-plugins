@@ -35,7 +35,7 @@ if (nativeClient === 'opencode') Object.assign(smokeEnvironment, { OPENCODE_PURE
 if (nativeClient === 'claude') Object.assign(smokeEnvironment, { CLAUDE_CONFIG_DIR: nativeRoot, DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' });
 if (nativeClient === 'codex') {
   smokeEnvironment.CODEX_HOME = nativeRoot;
-  await assert.rejects(stat('/etc/codex'), { code: 'ENOENT' });
+  await assert.rejects(stat('/etc/codex'), { code: 'ENOENT' }, 'Codex native qualification requires an isolated host without /etc/codex configuration');
   await writeFile(join(nativeRoot, 'config.toml'), 'cli_auth_credentials_store = "file"\nmcp_oauth_credentials_store = "file"\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n');
 }
 const inherited = new Set<string>();
