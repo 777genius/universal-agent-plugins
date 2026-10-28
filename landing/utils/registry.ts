@@ -39,6 +39,7 @@ const CLIENTS = new Set<ClientID>([
   'grok',
   'kimi',
   'qoder',
+  'pi',
 ]);
 const KINDS = new Set<DistributionKind>(['upstream', 'community_bridge', 'community']);
 const RFC3339_INSTANT =

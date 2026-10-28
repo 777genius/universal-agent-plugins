@@ -860,6 +860,13 @@
         "intro": "Instale skills e servidores MCP para Qoder.",
         "delivery": "O CLI escreve um manifesto .qoder-plugin nativo e registra o pacote pelo Qoder CLI.",
         "activation": "Recarregue os plugins do Qoder ou reinicie o Qoder; confira MCP e autenticação no Qoder."
+      },
+      "pi": {
+        "note": "Apenas extensões nativas do Pi gerenciadas",
+        "status": "Compatível",
+        "intro": "Instale pacotes Agent Plugins 1.0 que declarem uma extensão nativa do Pi. Habilidades portáveis e projeção MCP estão fora do escopo atual deste adaptador.",
+        "delivery": "O CLI instala a extensão do Pi declarada no diretório do agente Pi e acompanha o pacote gerenciado para atualização, reparo e remoção.",
+        "activation": "Após a instalação, recarregue os recursos ou reinicie o Pi para carregar a extensão gerenciada."
       }
     },
     "directoryPage": {

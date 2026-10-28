@@ -860,6 +860,13 @@
         "intro": "为 Qoder 安装技能和 MCP 服务器。",
         "delivery": "CLI 写入原生 .qoder-plugin 清单，并通过 Qoder CLI 注册插件。",
         "activation": "重新加载 Qoder 插件或重启 Qoder；在 Qoder 中确认 MCP 和身份验证。"
+      },
+      "pi": {
+        "note": "仅支持受管理的 Pi 原生扩展",
+        "status": "已支持",
+        "intro": "安装声明了 Pi 原生扩展的 Agent Plugins 1.0 软件包。此适配器目前不支持可移植技能和 MCP 映射。",
+        "delivery": "CLI 将声明的 Pi 扩展安装到你的 Pi 代理目录，并跟踪受管理的软件包，以便更新、修复和删除。",
+        "activation": "安装后重新加载资源或重启 Pi，以加载受管理的扩展。"
       }
     },
     "directoryPage": {
