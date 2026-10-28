@@ -60,3 +60,35 @@ Go1.26.10 Copilot process gate remain required. Publication must label the
 fresh hosted gate pending until actual logs prove it ran and passed. Only a
 new genuine capture and two independent raw reviews can support analysis of
 its native registry bytes; no future parser or activation allowance is granted.
+
+## Exact candidate gates and publication boundary
+
+Final implementation commit `b05262fab01a1c5b56e557b63360e16a0b9d9ba8`,
+tree `b7a3d11814ff80eacf6a02bd3506ac21c0678db9`, received independent
+root CODE R1 GO (receipt SHA256
+`2f97b8986ff6a5d0b5c9b217a3708b3944e539206accd7172be17bb2857b8d66`)
+and Native CODE R2 GO (receipt SHA256
+`65c658f333b78fe8bdfee3e99e71d0f6d2cda2b7ece8e8e263dd420897cffa92`).
+Both reviewed the nine frozen paths and all 24 whole-file preservation anchors.
+The gate receipt's earlier R2-pending note is superseded by that completed review.
+
+Measured final local gates on that exact code were four pure Go contracts
+(4 RUN / 4 PASS / 0 SKIP / 0 FAIL, package 0.045s), complete repotest package
+compilation, 67 affected Python tests (6.306s), affected all-enabled lint
+and the whole unfiltered six-linter set (both exit0, zero issues).
+The full current reader replayed original source-bound 189e, 922, 2c2 and
+5781 archives without changing any member or result. Historical189e remains
+readiness-complete with test_failed=false and all five qualification flags false;
+the other three retain failed/incomplete tuples and all five flags false.
+Final gate receipt SHA256:
+`6b0015feb8fcfeebaa105eea96068df57888f50983273bd04926470dedff58a8`.
+Historical replay receipt SHA256:
+`75d48e512b2f483ccf38b3d9e05b01c699351c0c336a8558a5b6707ab727666b`.
+
+This publication appends only this validation record after the reviewed code.
+The unchanged genuine hosted full, unexcluded Copilot/shared Go process gate
+remains pending until its actual logs are checked. The local pure selection is
+not a full process gate. Native execution remains solely in the supported
+disposable hosted workflow. A successful raw observation still deliberately
+fails at the review barrier; no activation, registry interpretation, runtime,
+MCP, lifecycle, vendor-authentication or real-model qualification follows.
