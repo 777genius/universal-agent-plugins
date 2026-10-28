@@ -1736,3 +1736,145 @@ Root R1 GO receipt SHA256 `089275e9328eff1c195bbc1915d56391868c0de6c7c4c7ba48c95
 The draft-time pending root RAW review is now complete: root receipt SHA256 `32168fb35ff64fedba411599187159a3090a4556ccc4ce101a937549019ee423`, alongside independent peer receipt `95a89455a84656cac9b6122258a54579ea8d1a45e3e780888cf2ca8934313fb1`. Both preserve actual348 failed-only source-bound evidence; no qualification follows. Current native and inherited Cline jobs are complete and retained.
 
 Both critics require the one eligible duplicate/first-failure decision to be atomic with no earlier failure overwrite, with no provider mutex held during bounded body/privacy work. Every path must execute original HTTP400 and duplicate cancellation, keep accepted counters1/1 and original read/work/total origins, and export only a settled finite receipt with no partial or private body. Independent Python finite byte/number validation and concurrent/partial-read controls are required by the accepted plan. Root alone owns commits/publication after two CODE GOs and measured gates.
+
+
+# Grok: supported suppression of the measured post-turn dashboard summary
+
+PRE-CODE PLAN DRAFT. Root and Native must independently approve this exact plan SHA256, and root must commit the accepted plan before implementation. This author performed source/raw reads and wrote scratch research/this proposal only. No implementation, test, native/acquired executable, public installer or scanner runs locally for this plan. Root alone owns Git/GitHub mutations and publication.
+
+## 1. Exact source and measured reason
+
+Plan base is published Grok source `b40da640c388d807cc3dc1fbb36c38e0d1b411ef`, tree `71b98e819bdd555154096c9c75850b9b40d3f54c`. Run `40610932429`, native job `122562097571`, has completed. Its actual evidence received two independent RAW GOs for failed diagnostic evidence only:
+
+- Root `/tmp/uap-grok-b40-current-40610932429/root-raw-audit.json`, SHA256 `6fb432088fa50f3093c7240911be9695186fb3c077f3bdb96c1b28fcf464785c`.
+- Peer `/tmp/uap-grok-b40-independent-40610932429/independent-raw-audit.json`, SHA256 `88c920ace4af34d476cdf133ea769751c136503e9149673718dfa48e3075fd9e`.
+
+| Artifact | ID | Outer SHA256 | Inner SHA256 | Members |
+| --- | --- | --- | --- | --- |
+| Grok native | 12782438155 | 9cf3260936143bed9bf9bc53fe29fe67db8fe4ffa01ae720e45ecbfe691141a2 | 86ed0632dd8345b0a224d77563ca5f44708e69a35829524076d668ffd7946f16 | 27 |
+| Grok frontend | 12782527675 | 8d331a482694e89814f8e6e7ff875d3f836ce86ad95ac98a5a9eac7c41e5deb0 | ee229372d55c8e33c1aec9379734ec695e26d5d106f62acde0a8566ce59a1ce8 | 25 |
+
+The diagnostic retained the complete second main-route body: 1,424 bytes, SHA256 `303ad4817a23b68aa02717ecedb70404362cf1397324da5a4d25d12f60a86bb5`. Its receipt is index2, role main-duplicate-diagnostic, captured, original_failure duplicate, response_issued false. Original first main and separate title counters/responses remain untouched. This is a measured dashboard summary request over the completed reply, rather than an assumed retry.
+
+Its system message is exactly the pinned `TURN_SUMMARY_SYSTEM`: 1,022 UTF8 bytes, SHA256 `9411e91b009d5f6672caa80f5aa9fa2eadbf4d1aa12d0b1488238afa64f58103`. Its user message exactly equals the source wrapper around the actual first main request's final user content and the fixed `UAP_GROK_PROVIDER_CAPTURE` reply. The model is the original main fixture, with streaming and include_usage true. The provider correctly refused this additional request and kept original cancellation.
+
+Public add and Prepared ownership checks do not establish native activation. The measured project remains untrusted; the selected plugin is disabled and skills/MCP inventories are empty. Runtime and all five qualification flags, authentication and real-model qualification remain false. No old capture is upgraded by this proposal.
+
+## 2. Pinned primary source and lineage limits
+
+All cited files belong to public `xai-org/grok-build` tree `2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8`. Its complete 5,102-entry tree is non-truncated. This author independently recomputed Git blob SHA1, SHA256 and lengths for all eighteen previously retained title/source files and thirteen additional turn-summary files, and verified their paths/blob identities against that exact tree. Both actual ZIPs above were independently rehashed and every closed member's size/SHA/CRC checked.
+
+Primary research receipt: `/tmp/uap-grok-turn-summary-kimi-primary-research.json`, SHA256 `3de4e360348bd3188ea35f584fb48538f3dba89245f78801d0ed3e0d8daae930`. Native independently researched the same source: `/tmp/uap-grok-turn-summary-native-research/independent-source-research.json`, SHA256 `5e72513507b8d734cd87aade73afc448dec03c2b2f88cc99f5fb0feea9d6ca74`.
+
+| Source path under `crates/codegen/` | Exact Git blob | Source fact |
+| --- | --- | --- |
+| xai-grok-config-types/src/registry.rs | 645a34036de2a83981f8f90ba0e2cf0d7a334a40 | Lines229-236 define TurnSummary, key turn_summary, path features.turn_summary, env GROK_TURN_SUMMARY, default true. Feature::resolve uses requirements/environment/config/remote/default. |
+| xai-grok-config/src/resolved.rs | 7ee2b55aa5d44dd399579b8eac7250173f28b35e | BoolFlag resolve around95-134 chooses requirement, CLI, environment, configuration, managed, remote, default in order, preserving explicit false. |
+| xai-grok-shell/src/agent/config.rs | a430462ad3b8e0611368ad2051f093827d7babee | FeatureEntries around4224-4271 reads native TOML booleans;1492 maps them into feature_values. is_turn_summary_enabled1846 resolves Feature::TurnSummary; feature_sources2033 supplies the actual config tier. |
+| xai-grok-shell/src/session/acp_session_impl/spawn.rs | 323fe32f305231bfac22aa60d43f3123efd1c38e | Actor captures effective_config.is_turn_summary_enabled() at2077; title_refresh is resolved separately around1778. |
+| xai-grok-shell/src/session/acp_session_impl/turn_summary.rs | 84915ba9062b6fd394382e334cd35340133ad08e | restart_turn_summary returns before work if its gate is false or subagent. The helper is display-only and builds a tool-free request from the exact system/user source below. |
+| xai-grok-shell/src/session/helpers/turn_summary.rs | 382718b80599b54c0bd985eb819a044ced13b8b3 | TURN_SUMMARY_SYSTEM and turn_summary_user_message match the measured second request byte-for-byte. last_turn keeps the actual last prompt and visible reply, excluding reasoning/tools/results. |
+| xai-grok-shell/src/session/acp_session_impl/title_refresh.rs | e67a787a99e94cdc448276beba6018409158f45a | Later whole-conversation title refresh checks its own resolved title_refresh_enabled before starting. |
+| xai-grok-shell/src/session/helpers/session_summary.rs | 0f2af81e78701043b8446a8bffb2272921f3802c | Initial session-title fast path starts around188 and is distinct from per-turn dashboard summary and later title refresh. |
+| xai-grok-pager/docs/user-guide/26-config-reference.md | f5aa92e8599e821d81ca73b39049513bab4be2c0 | Row233 documents features.turn_summary boolean, default true, and GROK_TURN_SUMMARY. |
+
+The public tree is not proven equivalent to shipping Grok1.0.70/f50904eaee6c. Existing source research explicitly retains that limit. Exact prompt correspondence establishes the observed request's specific source match; it does not prove every config path in the binary. The setting below is a supported-source candidate requiring a fresh genuine hosted observation. Unsupported/ignored/overridden settings must remain a truthful failed observation; do not add a fallback or reinterpret the response.
+
+## 3. One fixed configuration change before original freeze
+
+Append exactly this native TOML suffix to the existing complete two-model configuration during `configureGrokTitleProvider`, before its only original HOME config write, authoredConfig clone and protected digest freeze:
+
+```toml
+[features]
+turn_summary = false
+```
+
+The exact appended bytes are one separating LF, `[features]`, LF, `turn_summary = false`, LF. The existing recipe already ends in LF. No dynamically discovered section/key, parser rewrite, config migration or file adoption is involved. This is a real TOML boolean, not the string false and not a `[turn_summary]` sampling-settings table.
+
+Keep the same `f.base.Home/.grok/config.toml`, ordinary0600 write, original parents, original HOME/CWD and both fixed model endpoint/key references. Author the complete recipe once; only then write, clone and hash it. Do not edit config after the native client starts, renew a baseline from native output, change originalConfig/protected/immutable maps after execution or introduce another HOME/profile.
+
+The existing child environment is constructed from a closed fixture environment and contains no GROK_TURN_SUMMARY or GROK_TITLE_REFRESH. Leave it byte-for-byte unchanged; do not add environment overrides as a second mechanism. Test that ambient true values remain excluded. No requirement/managed config override, remote fetch, credentials, trust, plugin enablement, tools or permission setting is introduced.
+
+### Acknowledge the later-title-refresh effect
+
+`Config::resolve_title_refresh` around2055 defaults to the current TurnSummary result when title_refresh is unset. Therefore false also makes later whole-conversation title refresh default false in this recipe. This incidental suppression is explicitly intended and bounded to optional post-turn display work. Do not claim that turn_summary exclusively controls one request.
+
+Keep the existing initial session-title route/model (`models.session_summary = uap-grok-title-fixture`) and all its request validation/response/counter/cleanup unchanged. Its independently observed first-title request remains expected; the setting must not be used to remove that fixture or admit a different title shape. Do not add features.title_refresh as a separate setting. Shipping behavior is measured by the next raw capture, including truthful partial/failure outcomes if it differs.
+
+## 4. Preserve every existing native/protocol authority
+
+There is no new native/public command, argument, retry, model, endpoint, request grammar, response, counter or artifact slot. Preserve all original main/title route/auth/type/body bounds and exact fixed first SSE bytes. Preserve the new refused-duplicate one-shot claim, original first-failure reservation, unlocked bounded read/privacy, done handoff/export race checks, HTTP400 and unconditional original cancellation. If any second main request still arrives, the existing diagnostic must refuse it and retain only its already-admitted bounded opaque evidence; no successful summary response is added.
+
+Keep original work origin150seconds, final origin180seconds, provider read/write5seconds, command contexts and ordinary full-descendant process supervision, original config/pin checks, raw privacy/resource bounds, no-follow filesystem/Prepared ownership checks, source/version/scanner pins, inspect command, no-probe/no-provider-qualification semantics and final all-false barrier. In particular, native exit0 still leads to the unchanged intentional raw-review fatal barrier; a clean startup does not activate or qualify anything.
+
+The current 27-member capture reflects a reached duplicate. The existing reader already permits its actual finite optional duplicate presence/absence. Do not require a fabricated duplicate when suppression works, or remove a real duplicate when it fails. Keep exact existing allowed member unions, summary and failed-only modes. No Python reader or contract is changed by this configuration amendment.
+
+## 5. Exact implementation surface and preservation exceptions
+
+After two exact-plan GOs and root's accepted pre-code commit, implementation is limited to:
+
+1. `repotests/agentplugins_grok_project_native_title_test.go`: append the fixed suffix to the complete original recipe at the existing configureGrokTitleProvider construction point, before the existing sole write/clone/hash. Preserve every other function in the file whole-byte, including title.configuration, all title request/response/serve/stop handlers and credential/listener setup. The minimal implementation can append the suffix directly to the existing returned recipe; no generalized configuration framework is warranted.
+2. `repotests/agentplugins_grok_project_native_title_configuration_test.go`: add only `features: {turn_summary: false}` to the existing independently stated expected TOML map. This explicit one-literal expectation exception is necessary because the fixture recipe changes. Preserve the remainder of that test and every existing assertion; do not rename, skip or weaken it.
+3. A new `repotests/agentplugins_grok_project_native_turn_summary_contract_test.go`: narrowly focused inert contracts for the fixed supported suffix, original freeze and ambient isolation described below. It may use the existing owned in-process fixture providers; it must not run acquired/native/public installer/scanner executables or impersonate a hosted environment.
+4. Append concise factual plan/validation to the existing Grok validation record and accepted plan to `docs/plans/project-install-e2e/remaining-native-qualification.md`. Distinguish old failed evidence, local inert checks and future hosted results accurately. No raw capture/log/source vendor payload is committed.
+
+Everything else is whole-byte preserved: all main provider, title handlers/configuration helper, duplicate/privacy/route diagnostics and existing contracts, selected project/Prepared authority, shared command/environment/process functions, collectors, Python runtime/Grok readers/contracts, production adapters/shared/VSCode, workflow/selection/pins and all other client files. New feature data is authored before the old guard's original freeze; no guard predicate or exception changes.
+
+## 6. Meaningful inert controls and exact-source gates
+
+The existing independent whole-map configuration contract must pass with its one extra boolean subtree. New inert contracts should demonstrate these concrete boundaries:
+
+- Raw authored TOML equals the unchanged complete two-model recipe plus the one fixed suffix, and parses to the complete independently stated map with exactly one features table containing only boolean turn_summary=false. Preserve every original models/model/marketplace field, both distinct held listeners/keys, max_retries0 and env-key names. Reject accidental string false, true, duplicate section/key, extra feature or sampling-table substitution through the expected-recipe contract; do not make a new native parser.
+- The same original HOME config is written and captured once with ordinary0600 metadata and protected digest covering the complete bytes; no project config is created. Keep every prior original-route/config-freeze assertion. Existing actual protected-config fatal-child controls remain unchanged and run in the focused gate; do not add a redundant new guard implementation or weaken fatal behavior.
+- With ambient GROK_TURN_SUMMARY=true, GROK_TITLE_REFRESH=true and foreign HOME/model settings, the constructed child env still contains neither flag and keeps the original held HOME, both keys and existing shared-client optout. Parent process environment remains unchanged; other clients receive no Grok feature/env authority. Add these controls in the new file rather than changing old environment contracts.
+- Existing strict first-main/title and refused-duplicate positive, malformed/privacy/Unicode/resource, partial/concurrent/third-request and closure tests run unchanged. A feature setting is not authority to alter provider behavior. No synthetic test claims that the vendor binary actually consumes the setting.
+
+Root owns the serialized gate slot. Execute meaningful focused `TestGrok`/`TestProjectNativeCLI`/`TestProjectNativeRuntime` contracts and affected Go package checks with no vendor/native/public installer/scanner, plus affected Python runtime/Grok contracts or precisely recorded whole-tree transfer if every relevant Python byte is unchanged. Run gofmt/diff, affected all-enabled lint against `a412ba5e137fdcb7e004393229b323211ed746e1`, and whole unfiltered revive/funlen/gocyclo/gocognit/dupl/depguard. Record actual exact source/tree/commands/exits/log SHAs and real test counts/skips; do not predict them or transfer an old pass as a new run.
+
+Verify whole-file/function preservation against the actual accepted pre-code base, including all Python modules/contracts and every protected handler/duplicate file. Replay actual b40/348 failed archives through original and candidate full readers with original source identities; raw ZIP/member/result hashes and all-false outcomes must remain identical. If root transfers a prior replay on a byte-identical complete Python tree, document that exact tree and receipt explicitly. No AST-extracted substitute reader or relabeled capture is allowed.
+
+Freeze the exact source manifest and get two independent full/delta CODE reviews before root publication. The author does not approve their own implementation.
+
+## 7. Composition, hosted observation and remaining qualification
+
+This plan's evidence/recipe base is exact b40. Root separately owns program-parent composition. The read-only composition receipt `/tmp/uap-grok-parent888-readonly-composition-kimi.json`, SHA256 `eae34e2d1eb5d25c4b3e0286226fcb4380ee5caf291de33229090e214758bff7`, identifies three documentation insertion conflicts and clean disjoint Python composition. If root composes qualified Kimi parent before this amendment, preserve both full leaf readers/tests and record the actual new pre-code base/tree; these b40 hashes remain historical anchors, not permission to replace combined files with the Grok side. No unpublished stale083b or named1109 baseline path is changed or discarded. Other clients' completed/in-flight evidence remains preserved.
+
+After reviews and measured gates, root alone publishes by the normal reviewed route and dispatches the unchanged genuine hosted workflow on the exact published source. Do not retry unchanged, supersede/cancel another pending capture, run the vendor locally or forge hosted eligibility. The next run must retain source/build/pin/API/closedZIP, public add and inspect raw, exact first main/title exchanges and ordinary cleanup. Independently audit whether a second main request exists and its truthful receipt/status. Absence after this supported setting is a new measured fact only on that fresh source; old b40/348 remain failed duplicate observations.
+
+If the setting is consumed and native exits cleanly, the existing intentional barrier still fails with every flag/runtime/auth/model false. If summary or any other unexpected request persists, existing refusal/cancellation/diagnostic applies and no fallback is authorized. If config or original process/authority guards fail, stop and retain that failure. No new request shape, title response, trust/enable transition, registry admission or runtime qualification follows from this amendment. Any later activation/tool/lifecycle success path requires its own actual evidence and two pre-code reviews.
+
+## Baseline preservation anchors
+
+Hashes below are from exact b40. The first two files have only the narrow recipe/expected-map exceptions above; remaining files are whole-byte anchors. A separately reviewed parent composition must establish its own complete combined pre-code anchors before implementation.
+
+| Path | SHA256 |
+| --- | --- |
+| `repotests/agentplugins_grok_project_native_title_test.go` | 76d595042a2fc2d3639cb4dad0568b8691485f342101689a76a97d844cf27658 |
+| `repotests/agentplugins_grok_project_native_title_configuration_test.go` | 788c9ecd7c818f5477eff713960f3710d8d435d3e53b89e01af74ef1c16b0f87 |
+| `repotests/agentplugins_grok_project_native_provider_test.go` | 90012dcf96cdfb882470e31a3feb52688d570ae64d9f356410ad7910c944e950 |
+| `repotests/agentplugins_grok_project_native_provider_contract_test.go` | 6aeaf8af3953324b28075e042835b4875e3e66e2c780b831c4fb30bc93bba801 |
+| `repotests/agentplugins_grok_project_native_privacy_test.go` | 4df4765a0caec14e4aa55963cb3000e1204ed0a9c1d1afe122d46cf6210c5164 |
+| `repotests/agentplugins_grok_project_native_duplicate_test.go` | 53a29267624dd1e308f7a3fce50499c87308fec08581c9b1f7bbe807f7b91be3 |
+| `repotests/agentplugins_grok_project_native_duplicate_evidence_test.go` | b2bcab1adcb962055232a72884505add1e8effdc32aaaf729cc0d3a608f91ea6 |
+| `repotests/agentplugins_grok_project_native_duplicate_contract_test.go` | c81bc20643000614d26ef0c021b75bee56b4a7e6648325c9c91068f0420a98ff |
+| `repotests/agentplugins_grok_project_native_title_contract_test.go` | f86600f85c5c24b7c7c08b10d6694d163b71aad092c3f3860c951a859a229b83 |
+| `repotests/agentplugins_grok_project_native_environment_test.go` | dbbae16a28cfe9e893c30475ba8bfac343b41b06c3c264ad7dc0d2965b69cdb4 |
+| `repotests/agentplugins_project_native_cli_attempt_test.go` | 07f40ed4e0def62f58698cd6d8ce839d407e6bc751e952680460affe39670791 |
+| `repotests/agentplugins_grok_project_native_attempt_test.go` | ee4f42b4574190e5350a1dde9f0bc4f90517bd5d1da70d27d78916e317f1aea4 |
+| `repotests/agentplugins_grok_config_contract_test.go` | 3153076a942ec8baf01c9b9d6e9ce328594e6dcbaa9f88f8e7eb25a2fd20ad47 |
+| `repotests/agentplugins_grok_config_diagnostic_test.go` | 8c23fe40cf5fcddad742ae325f8c3cca5032dc00a88d2deaf278944e03fa5fc8 |
+| `repotests/agentplugins_grok_config_refusal_test.go` | f32c416faeb9027bbed958317b563a23aff32a570e4170e2eea5dd24668139d4 |
+| `scripts/project_native_runtime.py` | b8ab281512d562903f90a44fca1765a5d05b55bc977e9f0e71fd6c53de4f2d19 |
+| `scripts/test_project_native_runtime.py` | d0ee55f930ed8ff790beb1b8a67baca894c7ee422f7b646949559a6c5136f82f |
+| `scripts/project_native_collectors/grok.py` | 95ef4b4f3bad0c4dfbb82c652f834660ee0d994899ab0059a772d848517af56c |
+| `scripts/test_project_native_grok.py` | 8e1d3c3267b55cfa29446a9d0509799fc9ff84d24256d1879d449e86b9d31fea |
+| `.github/workflows/project-native-runtime.yml` | 11140878d0b2ca882a76b0a5830b25a1c5763247d76fec2c3dea9b22ba8096a1 |
+
+This draft author performed pure source/ZIP/hash/JSON reads and wrote scratch research/plan files only. No source implementation, Go/unittest/lint/vendor/native/public installer/scanner execution, Git/GitHub mutation or publication occurred for this proposal.
+
+
+## Accepted measured turn-summary suppression plan before implementation
+
+Root R1 GO receipt SHA256 `a71549915420aa61f90a7ab05586e1e2280a516fa0b78eb3a0cfb2f48d45fd69` and independent Native R2 GO receipt SHA256 `a29a83c1a3b8fdf2ea5d70bc3e9e009ef88e58e974cc170d89b40ef07e90332d` approve the exact draft above, SHA256 `3bc56715f4b326634f99210fc7bde69a711c2edbe7c2880fece74ec950c4593e`, before implementation. Both independently reconstructed the captured summary messages from pinned primary source and verified all historical baseline anchors.
+
+This pre-code commit retains original published b40 as its code base; parent composition is separate. Only the fixed supported TOML feature suffix before the original configuration freeze, one complete-map expected literal, inert contracts and validation documentation are authorized. Original initial-title/main/duplicate handlers, environment, deadlines, config/pin guards, readers, privacy, workflow and failed-only review barrier remain unchanged. Fresh hosted evidence must establish behavior of the pinned shipping binary. Root alone commits and publishes after exact CODE reviews and measured gates.
