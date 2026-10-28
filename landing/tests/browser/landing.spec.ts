@@ -394,6 +394,7 @@ test('security badges explain the exact checked revision and open full findings'
   page,
 }) => {
   await page.goto('./');
+  await hydrated(page);
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
@@ -401,8 +402,22 @@ test('security badges explain the exact checked revision and open full findings'
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await expect(badge).not.toHaveAttribute('title');
   await badge.scrollIntoViewIfNeeded();
+  // Smooth scrolling can dismiss a focused tooltip. Wait for the badge's actual
+  // position to settle before opening it, rather than accepting its exit animation.
+  await badge.evaluate(async (element) => {
+    let previous = element.getBoundingClientRect().top;
+    let stableFrames = 0;
+    while (stableFrames < 3) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const current = element.getBoundingClientRect().top;
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      previous = current;
+    }
+  });
   await badge.focus();
-  const tooltip = page.locator('.app-tooltip');
+  const tooltip = page.locator(
+    '.app-tooltip[data-state="instant-open"], .app-tooltip[data-state="delayed-open"]',
+  );
   await expect(tooltip).toBeVisible();
   // Read once while visible: the tooltip's exit transition can finish between
   // separate browser queries, even though both strings are already present.
