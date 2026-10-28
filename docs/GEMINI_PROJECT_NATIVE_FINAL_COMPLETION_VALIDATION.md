@@ -187,3 +187,32 @@ After publication, a fresh genuine hosted pass and independent raw audit of
 source/pins, all semantic joins, ordinary closure and preserved guards are
 required before a five-flag completion claim. Synthetic success or a green
 status alone is insufficient.
+
+## Final immutable CODE and local gates — 2026-10-28
+
+Final code is `e57e7fd291a9ba7c6ee5d4852de9a0ba6c933d3f`, tree
+`26325284be19c0ed633f2bdb755234c66eac34f0`. Root CODE R1 and independent
+Kimi CODE R2 both approve this exact source. Their retained receipt SHA256s are
+`d67f3e96d601086e3c594f95a98091bb43b52e3223871d757b541e89d1bb1252` and
+`f7a7e6037a5f99ebdbd4cbb79b9f9b356116931ce88c3d717bcab568b49f02af`.
+The source freeze is `b582aa2e36f7b58037c07274e506baaf332c6464d29e6dca43de71e8efe84ceb`;
+the reviewed mechanical lint correction is
+`44dc6799435618a7f9fbfae5c7c4b4636731f5ceaaeb16096d79a84effec4842`.
+
+The final focused Go selection passed 61 top-level tests and 346 cases, retaining
+only the unchanged old local containment-capability skip. Both actual affected
+all-enabled lint (from `a412ba5e137fdcb7e004393229b323211ed746e1`) and unfiltered
+whole six-linter gates report zero issues. All 76 old/new Gemini and runtime
+Python tests pass. The Python and original/current historical 7b5/239 raw replays
+transfer from `81d94fb4ee763689682d80e0e20f5431e998ff63` through the identical whole
+`scripts` tree `bbcef77782fd25a36fe6c916aff68a7f4e94c688`. Both full original reader
+snapshots contain all 105 script files; no AST extraction was used. Original
+57-member and 27-member results remain identical, failed and all-false; relabeling
+them without genuine completion is refused. Initial failed lint results remain
+retained. Final gate receipt SHA256 is
+`1eb2d30dc74a8d47fb53c2e782ffcbf45d345d711437f16d3f95104a31ec4fe6`.
+
+This publication changes only this record after the tested code commit. The
+fresh genuine hosted native run and two independent raw audits are pending.
+No historical failed archive is promoted, no native authentication/real-model
+qualification is claimed, and no release is authorized by this record.
