@@ -1749,3 +1749,452 @@ The following table is generated from the exact5781 source. Existing mode files/
 | `.github/workflows/project-native-runtime.yml` | 6d50637892ee2a387052b42d5d9a53a8db68e7a54aa2d04272f49425cb17e3df |
 
 Draft work performed source and already-audited raw reads only. No implementation, tests/lint/native execution, Git/GitHub mutation or publication has occurred for this proposal.
+
+
+## Accepted pre-code plan: Copilot exact user mixed live listing (2026-10-28)
+
+The following frozen proposal is accepted for its four code paths and two existing documentation paths. Its retained draft label records the original reviewable proposal; this acceptance authorizes implementation only after this root-owned pre-code commit.
+
+Base source: `85dfdaeaa217cf74f5c5a6464426cd1b67c2f069`; frozen draft SHA256 `061e3db491efc478921c130f22ae1888638d6936ba61b3095ce5c7aa41c760df`. Independent PLAN GOs: root `790e496e8d7ad30f862ae60fa627308c900cb40a19def7664ec811afae44ea90`, Kimi `16d1a95b203da5210edb53873e77896fd118d7ef77af9b7b93b64e4dc83413f3`. Both critics verified all 27 source files, 206 declaration anchors and five evidence receipts. The new-only strict recognition, exact old fallback semantics, and internal-verification observability limit are required. No qualification or release is authorized.
+
+# Copilot: exact disabled-builtin plus managed live-entry recognition
+
+Status: **PRE-CODE DRAFT ONLY**. No implementation, parser change, native retry,
+test or lint execution is authorized by this document. Root and a second
+independent critic must approve this exact draft; root must commit the accepted
+plan before any source edit. Root owns all Git/GitHub writes and publication.
+
+## 1. Exact source, actual evidence, and decision
+
+Plan base is clean source `85dfdaeaa217cf74f5c5a6464426cd1b67c2f069`, tree
+`10d2b3810d11b8e8fe984f0ab19d28bab4317faa`, already available at
+`/tmp/uap-copilot-post-add-registry-current`. Do not retarget that evidence to a
+future source identity. No new checkout or acquired executable is needed locally.
+
+Actual run40613833246, attempt1, native job122571919197 completed with the
+intended failed-only review barrier. Admission job122571555875 passed; inherited
+Cline job122571919162 also passed. These are separate outcomes. This plan does
+not turn the native diagnostic job into a passed runtime test.
+
+Both independent fresh whole RAW reviews are complete:
+
+| Reviewer | Receipt | SHA256 |
+|---|---|---|
+| Root R1 | `/tmp/uap-copilot-85df-root-40613833246/root-raw-audit.json` | `d54a31c9bb6d772e7793ece8877eb9305bfc027cd24643ca99ea8e5ea0dbabf1` |
+| Independent R2 | `/tmp/uap-copilot-85df-independent-40613833246/copilot-independent-raw-r2.json` | `c0b45dcf49faf16452d20b8cfbd1fbbcaadfa32ae80a8b6e7b2cb54692f066ef` |
+
+Both reviews bind own original ZIP/API identities and all raw/member/stream,
+source, build, compiler, pin, public result, direct-list and metadata joins.
+
+| Original artifact | Outer SHA256 | Inner SHA256 | Members |
+|---|---|---|---:|
+| Native12784890825 | `f07b24bf429c1623e0825ba0dd7e46924914c2f284bcef61a194c48cbbfcf57b` | `1c6df23cc53a8028f18923382edcaec40e8834789a9b6ec1e9c394575634ff06` | 18 |
+| Frontend12784436728 | `017d43a3c46d84eb04b2bbc4647fc2d18512a922ceaefb900bcbcbdc3493124e` | `9f189986f8c015fd5f83d878734091ac223b51c90fa0af66844801ed0287f938` | 25 |
+
+The actual five commands were git-A, git-B, version, public add-user, and one
+direct native-list in the same original HOME/outside directory. All had exit0,
+error=false, context_error=false and ordinary descendant cleanup. Add took3509ms;
+list524ms; total7088ms. Sole failure was the deliberate review barrier at
+`agentplugins_copilot_post_add_registry_attempt_test.go:346`. No probe/provider
+evidence exists; all five qualifications and runtime/account/model flags are
+false.
+
+The 396-byte LF stdout, SHA256
+`eb239f40f75369e78916a00e3700e3a75b695d35cd0e48a52b4ce531690a1373`, has:
+
+1. the exact 56-byte fixed prefix `Built-in plugins:` plus one disabled
+   `browser-use (v0.0.4)` line;
+2. the existing exact `CopilotLiveHeader`;
+3. one `native-proof@agentplugins-71b878b366b9 (v1.0.0) (enabled)` entry;
+4. one six-space `from ` line at the independently derived managed physical
+   path `.../installer-state/managed/clients/copilot/native-proof-024a9ef8a9f0`;
+5. exactly one final LF and no other bytes.
+
+The fixed-prefix SHA256 is
+`e83a8da5c004a1bfd6aa6645aacbe882ff506bf311b6a6c8c34833533e25caa2`.
+The direct stderr is exactly empty. Dynamic path/marketplace/physical identity
+were independently recalculated from public installation UUID
+`5cfee740-c7d0-4cee-83d1-b23f462a6e63`; no raw string was adopted as ownership.
+Raw logs and original captures remain scratch evidence, not repository fixtures.
+
+Public add emitted successful mutation, but its activation is still
+`manual_activation_required`, authentication `not_checked`, policy `allowed`,
+verification `package_validated`. The generic live parser requires
+`CopilotLiveHeader` as the first line; the captured later direct document begins
+with the builtin section and has no independently valid legacy Installed
+section. Applying the current verifier to these exact captured bytes therefore
+gives Unknown. The observed public manual result and reviewed source identify
+the existing `ErrCopilotListContractUnknown` fallback as the repair boundary.
+The installer's internal verification stdout is not exported, so matching that
+internal stdout or its precise parser branch to the later direct document is a
+source-supported inference, not a separately captured branch trace.
+
+**Selected candidate:** add exact recognition only for this measured whole
+shape in eligible Copilot user requests, route both registry preflight and
+activation verification through it, and reuse the current failed-only18-member
+post-add capture unchanged to verify the real repaired public activation.
+No new mode, selector, evidence format or metadata rule is needed.
+
+## 2. Source trace and preservation boundary
+
+Source and evidence hash inventory:
+`/tmp/uap-copilot-user-live-builtin-source-context.json`, SHA256
+`96c01f919aa21ef4c7acd2ada44c6b91f78f01b15b807c4dc1e841b6ef3b9da1`.
+It contains exact source commit/tree, 27 whole-file hashes and declaration-line
+anchors, the measured prefix hash, and the relevant original review receipts.
+
+Important call sites and invariants:
+
+| Source anchor | Current behavior / requirement |
+|---|---|
+| shared/copilot_status.go:40 `CopilotLivePluginStatus` | Header-first shared Copilot/VS Code parser. Preserve this entire file byte-for-byte. |
+| shared/copilot_identity.go:39 `inspectCopilotCLI` | Runs the held `plan.NativeRegistryExecutable plugin list` via existing tree-aware registry runner; handles errors/nonzero before classification. Add only one eligible positive branch after expectedPath selection. |
+| shared/copilot_identity.go:69 `copilotUserEmptyWithDisabledBuiltin` | Existing exact empty+disabled builtin admission. Preserve function and tests whole-byte exact. |
+| shared/copilot_identity.go `CopilotRegistryFindingAt` | Shared generic grammar and owned/unowned mapping. Preserve function and all scanner helpers byte-for-byte. |
+| shared/copilot_lifecycle.go:127 `VerifyCopilotPlugin` | Executes existing read-only listing. Add eligible exact recognition before its unchanged generic status switch. |
+| shared/copilot_lifecycle.go:19 `CompleteCopilotActivation` | Existing Active/Installed success, unknown/manual, and error/failure handling. Preserve this whole function. |
+| clients/copilot/lifecycle.go `Adapter.Activate` | Checks client identity; dispatches project requests separately; user requests call shared completion. Preserve entire adapter. |
+| clients/copilot/identity.go `InspectNativeRegistry` | Dispatches project observations to component-specific inspection; user to shared inspector. Preserve entire adapter. |
+| clients/vscode/lifecycle.go / identity.go | VS Code uses the same shared completion/inspector. Preserve all dedicated source and behavior; exact new branch must be unreachable for ClientVSCode. |
+| shared/marketplace.go:13 `ManagedMarketplaceName` | `agentplugins-` + first12 hex SHA256 of trimmed physical ID. Reuse existing function; do not change derivation. |
+| shared/command.go / native_registry.go | Original command/error and tree-grace behavior. Preserve whole files; no extra command, version probe, environment gate, or wrapper. |
+| planner/planner.go | Holds detected executable in NativeRegistryExecutable. Preserve planner and all profile/ownership machinery. |
+| post_add_registry_attempt_test.go:335 exact test | Existing ordinary public phase, metadata-only defer, ordinary list phase, final barrier and prefix/member guards. Preserve entire file. |
+| readiness_completion_test.go:98 | Original readiness may complete but all five qualification flags remain false. Preserve finalization and every old reader. |
+
+Whole-file hashes most useful for final review:
+
+| Preserved file | SHA256 |
+|---|---|
+| shared/copilot_status.go | `7fb2f5f03491f036d613217284c830a87efebfe15827038fa43401417be69ec4` |
+| shared/copilot_empty_builtin_test.go | `fc746bb5b7df509c4ac931982c17d019da53cbf8e6c52c69e66e9cebfe5d1d0b` |
+| shared/copilot_identity_test.go | `aea80041bc701a5813a3be96773a7ef849701ad3ca39ee10bfa66ecdfa00005c` |
+| clients/copilot/lifecycle.go | `75aa0d8a7863d463e6c77e276084682f69e3802acb7679da8d7d5cbbeddedd72` |
+| clients/vscode/lifecycle.go | `433edd4b7b41608a90c0737d3331b39b6785cc1d4ec51a613672031316b50ff2` |
+| repotests/agentplugins_copilot_project_native_attempt_test.go | `645e31328ee73f708a45f91e891c5c3031a947c972937fa8fec04be2b1b3f14d` |
+| repotests/agentplugins_copilot_post_add_registry_attempt_test.go | `405863943f307505d90e0c91856e26e60436b486fd19d00336d49f9f6152ac9b` |
+| original empty-registry strict process contracts | `d328951b55a897eeb81783216a80d6f7f8d2fbcee3328b9f491d2d6dab210b6c` |
+| new post-add strict process contracts | `0177b11697e3a2c2e655dd7165576be564e0a2f42bd4b767e41515e646474b75` |
+| scripts/project_native_runtime.py | `2327a1f1948566ca1d3296444943d15b6d2ee0303520da823fdec6b6b0c3a0e7` |
+| scripts/project_native_copilot_post_add_registry.py | `4996d333006a3bfc4aeae8f0ead56d8c7b0953ef45844a822150ed2d4bec9666` |
+| scripts/project_native_copilot_user.py | `fe75f19d141b755bf19c1ee7605963fa2f045bdcbca5690b38ea044609bb42c5` |
+| scripts/project_native_copilot_empty_registry.py | `4bbf4e5e34ff8e908a867744beb14228fadfc5e91d8aacc60b242a8f96f1922e` |
+| scripts/project_native_copilot_readiness.py | `98cb758e0b6b1dcfe4953c8032e51f67fb2afe974e6887ca862c3c70de518cc6` |
+| .github/workflows/project-native-runtime.yml | `6d50637892ee2a387052b42d5d9a53a8db68e7a54aa2d04272f49425cb17e3df` |
+
+Do not edit old generic, VS Code, user/empty/post-add/readiness readers or
+contracts, runtime selector, production profile/ownership code, workflow or
+capability implementation. AGENTS.md, the owner scope clarification and the
+capability-preservation contract remain controlling. No legacy deletion,
+implicit YAML fallback, release or VS Code qualification is in scope.
+
+## 3. Exact new recognition and eligible routing
+
+Add a private, small Copilot-only helper in a new shared-package file. This is
+an exact positive observation; it is not a replacement generic listing parser.
+
+### Held caller and identity prerequisites
+
+The plan has ClientCopilot and explicit ScopeUser. TargetContext.Scope is user
+or the existing unspecified default, never project/local; ProjectRoot is empty.
+The held registry executable is nonempty absolute clean, NUL/CR/LF-free and
+equals the executable actually used for this existing command. No new process
+or filesystem acquisition is performed to establish that equality.
+
+The declared name is nonempty, trimmed, valid for the existing ASCII live-entry
+identity grammar, and is not case-insensitively `browser-use`. The physical ID
+is nonempty, trimmed and valid as an existing namespace identity. The expected
+marketplace comes only from `ManagedMarketplaceName(plan.PhysicalArtifactID)`;
+the expected version is the exact `MarketplaceVersion(plan.DeclaredVersion)`
+value validated by the existing live-entry version grammar. There is no version
+wildcard, environment-spoof gate, or vendor-version command.
+
+The expected managed path is an absolute clean non-root NUL/CR/LF-free path,
+equals the held plan.ActivePath, and has basename plan.PhysicalArtifactID. Bind
+the exact path; do not normalize a received path. Bound dynamic identity strings
+to256 UTF8 bytes and path/executable strings to4096 bytes; bound this new whole
+document comparison to8KiB. These are new-only refusal caps and do not modify
+any generic parser or process capture bound.
+
+For inspection with a managed binding, additionally require that this existing
+binding is Copilot/user and its physical ID and target locator equal those held
+plan values. This branch never creates ownership. The same exact expected entry
+without an owned binding is Collision, not Expected or Clear.
+
+For activation verification, require the request's Client.ClientID and
+Delivery.ClientID also equal ClientCopilot; request.DeclaredName equals the held
+plan name; request.BackendExecutable equals both the plan's held registry
+executable and request.Client.ExecutablePath; Delivery.ActivePath equals the
+held expected path. Existing identity mismatch and project dispatch stay exact.
+These checks apply to the new branch only; legacy generic behavior stays intact.
+
+### Exact whole bytes
+
+For admission through the NEW helper, require existing command success with no
+runner error/nonzero exit, a live original context at admission, and exactly
+empty stderr. Its strict identity, context, byte-cap and stream requirements
+apply only to this new branch. Accept stdout through that branch only when it
+equals the constructed whole document:
+
+```
+Built-in plugins:
+  • browser-use (v0.0.4) [disabled]
+Live Plugins (loaded from a local marketplace directory, never copied):
+  • <held name>@<derived marketplace> (v<exact held version>) (enabled)
+      from <exact held managed path>
+```
+
+There is exactly one final LF. Do not strip a prefix, split away an unknown
+section, normalize line endings, trim incoming bytes, accept another builtin,
+ignore arbitrary suffixes, accept multiple live entries, or infer absence from
+an unrelated entry. Reject empty/extra/duplicate/reordered headings or entries,
+unknown status/version/path/name/marketplace, enabled builtin, missing builtin
+state, ANSI/NUL bytes, whitespace variation, CRLF, missing final LF or extra LF.
+All such documents fail the NEW helper and continue through each old unchanged
+classifier/fallback with its exact prior result. The new helper itself grants
+neither absence nor Clear on a mismatch. Do not strengthen or broaden legacy
+behavior while adding this branch.
+
+In particular, the generic verification function CopilotPluginStatus deliberately
+skips a preamble while scanning an old `Installed plugins:` section. Appending
+an independently valid exact expected Installed entry to the measured mixed
+document can therefore still return Installed through that OLD grammar, although
+the NEW helper refuses the extra bytes. The old generic inspection function
+CopilotRegistryFindingAt instead rejects this preamble and remains Indeterminate.
+Those two historical results must stay different and unchanged. Similarly, old
+recognized verification grammar keeps its prior stderr/context/size handling;
+the new branch's empty-stderr/live-context/8KiB rules do not rewrite it. Finite
+malformed-new-shape fixtures with no independently recognized legacy section
+continue to produce their original Unknown/manual result. No new legacy
+allowance is introduced by preserving an existing positive result.
+
+### The two edits to existing production functions
+
+1. In `inspectCopilotCLI`, preserve the exact existing command and all original
+   error/exit handling. After existing expectedPath selection and before the
+   unchanged generic return, apply the new eligible exact positive check. Recheck
+   ctx.Err before a positive result. Return Expected only for the matching held
+   owned binding; otherwise Collision. Existing exact empty+builtin admission
+   and all generic classifiers/scanners remain byte-for-byte unchanged.
+2. In `VerifyCopilotPlugin`, preserve its command and all runner/exit failures.
+   Before the original generic status switch, accept the exact eligible user
+   observation above, with empty stderr and ctx.Err rechecked. Otherwise use the
+   original switch unchanged. Do not change CompleteCopilotActivation,
+   ManualCopilotVerification, install/register/update/uninstall behavior,
+   attestation, recognized-negative errors or compensation.
+
+VS Code requests fail the new branch's ClientCopilot guard before recognition.
+Direct shared generic functions still return their old results on exactly the
+same prefixed input. All existing legacy Installed and header-first live forms
+continue through their old paths and tests. Project Copilot remains the original
+component/native-config adapter, not this user marketplace route.
+
+## 4. Concrete allowed files
+
+Only these four code paths are proposed:
+
+1. NEW `install/integrationctl/agentplugins/clients/shared/copilot_user_live_builtin.go`
+   — private exact helper and small caller-context predicates.
+2. NEW `install/integrationctl/agentplugins/clients/shared/copilot_user_live_builtin_test.go`
+   — independently authored synthetic whole documents and inert runner contracts.
+3. EXISTING `.../shared/copilot_identity.go` — only the explicit positive hook in
+   `inspectCopilotCLI`; every other function remains exact.
+4. EXISTING `.../shared/copilot_lifecycle.go` — only the exact eligible check in
+   `VerifyCopilotPlugin`; every other function remains exact.
+
+Root may append the accepted plan and final measured validation to the existing
+`docs/COPILOT_POST_ADD_REGISTRY_VALIDATION.md` and the governing consolidated plan
+`docs/plans/project-install-e2e/remaining-native-qualification.md`, following the
+established precode-plan workflow. These are the two allowed existing docs paths.
+No Python, runtime selector, mode, workflow, Go process-contract, production
+adapter, VS Code, old test or raw fixture path is authorized to change. If an
+unexpected need arises, stop and report the concrete dependency before editing.
+
+## 5. Meaningful independently authored contracts
+
+Use a new pure inert runner: no native executable, installer or scanner process.
+Inputs use new `/inert/...` paths/IDs, not copied hosted captures. Keep the exact
+public fixed prefix; derive its expected test identity independently. Cover:
+
+- exact measured shape / exact name-version-marketplace-path;
+- owned inspection Expected, unowned inspection Collision, wrong owned binding
+  Indeterminate, and no Clear granted by the new branch for
+  unrelated/missing/wrong live identities;
+- one read-only verification call returns recognized success through the NEW
+  helper only in eligible Copilot/user context; shared completion then returns
+  Active/Installed while preserving authentication policy. Independent old
+  recognized-grammar success remains unchanged for its original callers;
+- both initial activation and VerifyOnly use the same exact recognition; initial
+  inert transcript keeps existing marketplace-add/install/list commands and
+  ordering, with no extra command or version probe;
+- ClientVSCode/other/empty IDs, project/local/unspecified plan scope, conflicting
+  TargetContext, executable/client/delivery/name/path mismatch, same browser-use
+  name including case variants, invalid/canonicality/byte-bound identities;
+- each finite NEW-helper whole-byte refusal in section3, disabled expected live entry,
+  builtin version0.0.5/enabled/missing state, second unrelated/duplicate entry,
+  unexpected stderr and command error/nonzero/canceled-context behavior; these
+  are new-branch admission controls, not changes to old recognized grammar;
+- malformed/unknown prefixed input retains each original fallback result and
+  explicit attestation behavior. Add the concrete measured-document-plus-valid
+  Installed-section counterexample: NEW helper=false,
+  CopilotPluginStatus=Installed, CopilotRegistryFindingAt=Indeterminate.
+  Also cover old recognized verification with nonempty stderr: the new helper
+  refuses it while the old entrypoint keeps its prior result. Cases without an
+  independently valid old section must still exercise Unknown/manual/failure;
+- direct generic CopilotLivePluginStatus, CopilotPluginStatus,
+  CopilotRegistryFindingAt still refuse the unmodified measured prefixed input
+  exactly as before, while the independently valid legacy-section counterexample
+  preserves each function's distinct prior result. All old
+  empty/Installed/header-first live tests stay unchanged;
+- inspection preserves RunNativeRegistry's existing TreeCommandRunner selection
+  and one-second grace; verification preserves RunClientCommand's existing Run
+  path and original errors. Do not silently change one runner route to another.
+
+The unit contracts must test outcomes through both affected production entry
+points, not only mirror the new helper. There is no reason to alter any Python
+grammar: run all existing affected Python contracts and historical raw readers
+unchanged. A NEW-helper positive must never be inferred from a failed command or
+nonempty diagnostic stream. Do not extend this guarantee into a change to the
+preserved old verification entrypoint's recognized-grammar stream handling.
+
+## 6. Gates on the final immutable candidate
+
+After two PLAN GOs/root precode commit, implement only the allowed paths. Freeze
+and hash source; root commits. Two independent CODE critics read the exact
+commit/tree and compare unchanged functions/files. Do not rely on author review.
+
+Run only with the parent-owned serialized slot and sufficient disk. Record every
+actual command, exit and full log hash. No native/acquired client/public installer
+or scanner may be executed locally. Never spoof a hosted environment, weaken a
+process assertion, skip a required contract or claim a local full process pass.
+
+Required checks:
+
+1. Full affected production Go package tests (shared, Copilot, providers and
+   usecase, plus the existing provider/generic regression coverage). Newly
+   authored tests are pure inert contracts; any concrete local process-interface
+   limitation must remain an actual failure and be handled through genuine
+   hosted coverage, never an exclusion disguised as a full pass.
+2. Existing repotest pure4/package compilation and all67 affected Python
+   contracts, with their source whole-byte unchanged.
+3. Affected all-enabled lint with the unchanged project policy/base revision,
+   and whole unfiltered six `revive,funlen,gocyclo,gocognit,dupl,depguard`, zero
+   issues required. Actual lint findings may justify only reviewed equivalent
+   fixes; do not weaken lint policy.
+4. Full current-module immutable original-source raw replays for189e,922,2c2,
+   5781 and85df. Preserve ZIP/CRC/member hashes and original tuples.189e remains
+   readiness-complete/test_failed=false with all5 qualifications false;922,2c2,
+   5781 and85df remain failed/runtime-incomplete/all5false. Never rewrite them as
+   repaired Active evidence. Keep actual source/tree identities from each raw.
+5. Verify all old Python reader/test files and all repotest/process files,
+   workflow, shared generic parser, dedicated adapters and owner-scope anchors
+   byte-for-byte. In the two modified production files verify all non-target
+   functions byte-for-byte. No selector literal exception is needed this time.
+6. Fresh genuine hosted full unexcluded process gate on the published candidate:
+   `go test -json -p=1 -count=1 -timeout=120s ./repotests -run
+   '^(TestCopilot|TestProjectNativeRuntime)'`, actual Go1.26.10, every original
+   and new strict phase/fatal parent RUN/PASS, zero skip/fail.137 prior passes
+   are historical, not a substitute for the fresh candidate gate. Existing
+   normal CI must also cover the changed production package tests.
+
+Actual85df hosted process proof has137RUN/137PASS/0skip/0fail and raw job log
+178857bytes SHA256
+`3cb0300849cdade6bab99db0e39c00d5b08c405b6ee95f063a54dd3605d05a76`.
+Root receipt `/tmp/uap-copilot-85df-hosted-process-gate/root-process-gate-audit.json`
+SHA256 `fb89aa706559d5163e96c741ef4b4acd82cd935dd54f7ad48145636c0273fd14`;
+independent RAW R2 re-downloaded and verified the same complete hosted log.
+
+## 7. Actual native follow-up and repair acceptance
+
+After all source/CODE/local/hosted gates and root publication, make one genuine
+current-source run of the **unchanged existing post-add selected test**. Keep the
+same Copilot1.0.103 binary/archive and scanner pins; original HOME/outside;
+30-second command bounds; original150/180-second origins; descendant/config/
+immutable/profile guards; two separate metadata-only ordinary phase defers; five
+commands;18-member maximum; and all failed-only flags. Do not schedule an
+unchanged retry or supersede an active capture.
+
+Repair acceptance is concrete and stronger than merely reaching the barrier:
+
+- all five command receipts clean and exact original argv/cwd;
+- public result successful mutation, same ordinary schema/operation/UUID/physical
+  derivations, authentication `not_checked` and policy `allowed`, but activation
+  now **Active** and verification **installation_verified** through the existing
+  recognized-success path, without activation/user attestation;
+- no observed manual-contract fallback, FailedActivation or attestation in the
+  fresh public result; the reviewed source and inert production-entrypoint
+  contracts must support the candidate recognition path;
+- native list retains the exact independently bound expected live entry and
+  fixed disabled builtin tuple, stderr empty; both opaque metadata observations
+  valid within original bounds; no config-change diagnostic or unexpected probe;
+- sole final test failure remains the deliberate review barrier; runtime and all
+  five qualifications/account/model flags remain false.
+
+The unchanged18-member capture exports the public add result and the later
+direct native listing. It does NOT export the installer's internal
+VerifyCopilotPlugin stdout. Fresh public Active/installation_verified without
+attestation, the independently bound direct listing, reviewed source and inert
+entrypoint contracts together establish the observed repair behavior. A claim
+that the internal NEW helper, rather than another preserved recognized grammar,
+handled that unexported internal document remains a source-supported inference;
+it is not an independently captured branch trace. No instrumentation, new
+capture member or evidence-format change is authorized or needed for this slice.
+
+The unchanged capture/reader intentionally permits historical manual public
+responses as diagnostic evidence. Therefore `runtime_artifact_admitted=true` or
+the barrier alone is not repair proof. Two independent fresh whole RAW reviewers
+must explicitly compare the observed public activation/verification and later
+direct listing with the reviewed source/contracts, while retaining the internal
+stdout observability limit above. A still-manual result, a new unknown document
+or an earlier fatal is a preserved new failure, not a reason to broaden this
+parser speculatively.
+
+## 8. Finite continuation toward full project E2E: deliberate tradeoff
+
+The existing189e source `189e00d364ccde805c9ffc6738e61fc58ae277fc`, tree
+`3f6dd05e28e7c6ab009c37d41cf804d6c3907743`, already has a genuine successful
+21-member installed-tool-readiness capture. It proves one project component
+installation and one fresh native27-frame/2-provider-request exchange with one
+owned write call and3probe events. Its reader/finalizer explicitly keeps all five
+project/native lifecycle qualification flags false. That useful proof stays
+preserved and replayed.
+
+Current project setup dispatches independently to repository `.github` skill/MCP
+components and Prepared activation; it does not use the user marketplace
+verification being repaired here. The current readiness test has no native
+User/A/B isolation matrix, repeat-add/unchanged-update/intact-repair/update/
+missing-repair/default-remove/repeat-remove lifecycle, fresh-session retained
+marker reads after transitions, or native post-removal absence. Its single
+observed27-frame grammar is not evidence for unseen empty/removed catalogs or
+read/update/restart wire sequences. A same-mode rerun cannot fill those gaps.
+
+Reusing the current18-member post-add mode first is the smallest candidate that
+actually tests this user registration repair. Restoring the old readiness
+selector now would exercise the separate project component path and would not
+show whether the actual manual fallback was fixed. Combining both tests under a
+regex would also collide with their exclusive output ZIP and alter the bounded
+single-test frontend contract. Adding another alias/mode or combining HOME/
+fixture authorities is unnecessary for this repair.
+
+After the repaired user capture has its own two RAW GOs, the next reviewed slice
+should construct a **proper finite project lifecycle** using the existing
+transaction/state/data/source and measured readiness seams, while retaining
+Prepared/auth-not-checked production wording. An eventual lifecycle candidate
+must author independent Go/Python semantics, exact per-phase source/binding/data
+and catalog joins, fresh native sessions for installed/updated/repaired/restarted
+and removed states, honest retained-data/marker behavior and ordinary final
+cleanup. Any newly encountered native document must first remain a bounded
+failed observation; no unseen wire shape is invented or qualified by this plan.
+The exact lifecycle sequence, budgets and new evidence schema require their own
+two source-backed precode reviews before implementation. This plan authorizes
+neither that larger implementation nor early promotion of any qualification.
+
+## 9. Exit conditions
+
+Return this frozen draft and source-context hash for two independent PLAN
+critics. Keep source clean and do not run tests/lints while another worker owns
+the gate slot. After acceptance, root commits the plan, author implements the
+four allowed paths, both CODE critics review, actual gates are recorded and root
+publishes. Fresh native review establishes whether the repair occurred. Keep all
+prior raw outcomes and every limitation visible until the later full project
+E2E evidence is actually complete.
