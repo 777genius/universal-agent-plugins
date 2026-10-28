@@ -80,7 +80,8 @@
       "coverageDiagnostics": "Diagnósticos de cobertura ({count})",
       "contextTruncated": "Contexto limitado: exibindo {references} de {referencesTotal} referências e {diagnostics} de {diagnosticsTotal} diagnósticos.",
       "unsupportedSourceDetails": "As verificações estáticas do SkillSpector não suportam este tipo de fonte. Seus arquivos não foram verificados.",
-      "checkUnavailableDetails": "Não foi possível verificar a fonte. A cobertura é desconhecida; reveja o motivo informado antes de instalar."
+      "checkUnavailableDetails": "Não foi possível verificar a fonte. A cobertura é desconhecida; reveja o motivo informado antes de instalar.",
+      "reasonContexts": "{count} contextos originais"
     }
   }
 }

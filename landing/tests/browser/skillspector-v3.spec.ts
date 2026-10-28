@@ -542,3 +542,23 @@ for (const mode of ['completeExternal', 'completeResolved'] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+test('opening a card while its report loads preserves the native disclosure and eventual evidence', async ({
+  page,
+}) => {
+  const gate = deferred();
+  const { assessment, errors } = await setup(page, 'mixed', gate.promise);
+  await expect(assessment).toHaveClass(/skillspector--loading/);
+  await assessment.locator(':scope > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(assessment).toHaveAttribute('open', '');
+  await expect(assessment.locator('.skillspector__details')).toBeVisible();
+  gate.release();
+  await expect(assessment).toHaveClass(/skillspector--incomplete/);
+  await expect(assessment).toHaveAttribute('open', '');
+  await expect(assessment.locator('.skillspector__record')).toHaveCount(13);
+  await expect(assessment.locator('.skillspector__coverage')).toContainText(
+    /reference_missing|static_parse_limit/,
+  );
+  expect(errors).toEqual([]);
+});

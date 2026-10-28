@@ -80,7 +80,8 @@
       "coverageDiagnostics": "Діагностика охоплення ({count})",
       "contextTruncated": "Контекст обмежено: показано {references} із {referencesTotal} посилань і {diagnostics} із {diagnosticsTotal} діагностичних записів.",
       "unsupportedSourceDetails": "Цей тип джерела не підтримується статичними перевірками SkillSpector. Його файли не перевірені.",
-      "checkUnavailableDetails": "Не вдалося перевірити джерело. Охоплення невідоме; перед установленням ознайомтеся з указаною причиною."
+      "checkUnavailableDetails": "Не вдалося перевірити джерело. Охоплення невідоме; перед установленням ознайомтеся з указаною причиною.",
+      "reasonContexts": "Початкові контексти: {count}"
     }
   }
 }

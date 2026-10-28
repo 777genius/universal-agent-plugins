@@ -80,7 +80,8 @@
       "coverageDiagnostics": "Coverage diagnostics ({count})",
       "contextTruncated": "Context is limited: {references} of {referencesTotal} references and {diagnostics} of {diagnosticsTotal} diagnostics are shown.",
       "unsupportedSourceDetails": "This source type is not supported by static SkillSpector checks. Its files have not been checked.",
-      "checkUnavailableDetails": "The source could not be checked. Coverage is unknown; review the reported reason before installing."
+      "checkUnavailableDetails": "The source could not be checked. Coverage is unknown; review the reported reason before installing.",
+      "reasonContexts": "{count} original contexts"
     }
   }
 }

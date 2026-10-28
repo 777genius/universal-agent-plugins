@@ -37,6 +37,12 @@ export async function hydrated(page: Page) {
     };
     return root?.__vue_app__?.config.globalProperties.$nuxt?.isHydrating === false;
   });
+  // Nuxt onNuxtReady callbacks (including theme/locale setup) run in a native
+  // idle turn after this flag flips. Hydration alone is not app readiness.
+  // Preserve the actual scheduler and all existing test/assertion timeouts.
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestIdleCallback(() => queueMicrotask(resolve));
+  }));
 }
 
 export async function navigate(page: Page, family: string, locale: PublishedLocale = 'en', suffix = '') {

@@ -80,7 +80,8 @@
       "coverageDiagnostics": "Диагностика охвата ({count})",
       "contextTruncated": "Контекст ограничен: показано {references} из {referencesTotal} ссылок и {diagnostics} из {diagnosticsTotal} диагностических записей.",
       "unsupportedSourceDetails": "Этот тип источника не поддерживается статическими проверками SkillSpector. Его файлы не проверены.",
-      "checkUnavailableDetails": "Не удалось проверить источник. Охват неизвестен; перед установкой изучите указанную причину."
+      "checkUnavailableDetails": "Не удалось проверить источник. Охват неизвестен; перед установкой изучите указанную причину.",
+      "reasonContexts": "Исходные контексты: {count}"
     }
   }
 }

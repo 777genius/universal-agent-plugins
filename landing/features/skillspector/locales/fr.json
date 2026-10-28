@@ -80,7 +80,8 @@
       "coverageDiagnostics": "Diagnostics de couverture ({count})",
       "contextTruncated": "Contexte limité : {references} références sur {referencesTotal} et {diagnostics} diagnostics sur {diagnosticsTotal} sont affichés.",
       "unsupportedSourceDetails": "Les vérifications statiques SkillSpector ne prennent pas en charge ce type de source. Ses fichiers n’ont pas été vérifiés.",
-      "checkUnavailableDetails": "La source n’a pas pu être vérifiée. La couverture est inconnue ; consultez la raison indiquée avant l’installation."
+      "checkUnavailableDetails": "La source n’a pas pu être vérifiée. La couverture est inconnue ; consultez la raison indiquée avant l’installation.",
+      "reasonContexts": "{count} contextes d’origine"
     }
   }
 }

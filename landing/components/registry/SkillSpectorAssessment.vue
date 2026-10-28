@@ -7,6 +7,7 @@ import type {
 } from '~/types/skillSpector';
 import {
   skillSpectorAssessment,
+  groupSkillSpectorReasons,
   skillSpectorFindingLocation,
   skillSpectorFindingUrl,
   skillSpectorSourceUrl,
@@ -23,6 +24,19 @@ const props = withDefaults(
   }>(),
   { applicable: true, subject: undefined },
 );
+const detailsOpen = ref(Boolean(props.expanded));
+const reasonContextsOpen = ref(new Set<string>());
+watch(
+  () => props.expanded,
+  (expanded) => {
+    detailsOpen.value = Boolean(expanded);
+  },
+);
+const onToggle = (event: Event) => {
+  if (event.target !== event.currentTarget) return;
+  detailsOpen.value = (event.currentTarget as HTMLDetailsElement).open;
+  if (!detailsOpen.value) reasonContextsOpen.value.clear();
+};
 const { t, n, locale } = useI18n({ useScope: 'local' });
 const { report, status: loadedStatus } = useSkillSpector(() =>
   props.applicable === false ? undefined : props.subject,
@@ -70,6 +84,12 @@ const reasons = computed(
     assessment.value.reasons ??
     assessment.value.records.flatMap((record) => record.coverage?.reasons ?? record.errors),
 );
+const reasonGroups = computed(() => groupSkillSpectorReasons(reasons.value));
+const onReasonToggle = (key: string, event: Event) => {
+  if (event.target !== event.currentTarget) return;
+  if ((event.currentTarget as HTMLDetailsElement).open) reasonContextsOpen.value.add(key);
+  else reasonContextsOpen.value.delete(key);
+};
 const contextRecords = computed(() =>
   assessment.value.records.filter(
     (record) =>
@@ -124,6 +144,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
     class="skillspector"
     :class="`skillspector--${displayStatus}`"
     :open="expanded || undefined"
+    @toggle="onToggle"
   >
     <summary :aria-label="`${t('registryUi.skillSpector.detailsFor', { name })}: ${label}`">
       <span class="skillspector__icon" aria-hidden="true">i</span>
@@ -144,7 +165,7 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
       >
       <span class="skillspector__arrow" aria-hidden="true">⌄</span>
     </summary>
-    <div class="skillspector__details" :aria-busy="reportStatus === 'loading'">
+    <div v-if="detailsOpen" class="skillspector__details" :aria-busy="reportStatus === 'loading'">
       <section class="skillspector__advice">
         <strong>{{ t('registryUi.skillSpector.installAdvice') }}</strong>
         <p>
@@ -353,15 +374,21 @@ const json = (value: unknown) => JSON.stringify(value, null, 2);
         class="skillspector__coverage"
       >
         <strong>{{ t('registryUi.skillSpector.coverageContext') }}</strong>
-        <ul>
-          <li v-for="(reason, index) in reasons" :key="index">
-            <code>{{ reason.code }}</code
-            >: {{ reasonMessage(reason)
-            }}<template v-if="'path' in reason && reason.path">
-              · <code>{{ reasonPosition(reason) }}</code></template
-            ><template v-if="'analyzer_id' in reason && reason.analyzer_id">
-              · <code>{{ reason.analyzer_id }}</code></template
+        <ul class="skillspector__reason-groups">
+          <li v-for="group in reasonGroups" :key="group.key">
+            <code>{{ group.code }}</code
+            >: {{ reasonMessage(group) }}
+            <details
+              class="skillspector__reason-contexts"
+              @toggle="onReasonToggle(group.key, $event)"
             >
+              <summary>
+                {{
+                  t('registryUi.skillSpector.reasonContexts', { count: n(group.contexts.length) })
+                }}
+              </summary>
+              <pre v-if="reasonContextsOpen.has(group.key)">{{ json(group.contexts) }}</pre>
+            </details>
           </li>
         </ul>
         <template v-if="contextRecords.length">

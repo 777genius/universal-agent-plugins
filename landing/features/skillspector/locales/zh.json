@@ -80,7 +80,8 @@
       "coverageDiagnostics": "覆盖范围诊断（{count}）",
       "contextTruncated": "上下文受限：显示 {references}/{referencesTotal} 条引用和 {diagnostics}/{diagnosticsTotal} 条诊断。",
       "unsupportedSourceDetails": "静态 SkillSpector 检查不支持此来源类型。其文件尚未检查。",
-      "checkUnavailableDetails": "无法检查来源。覆盖范围未知；安装前请查看报告原因。"
+      "checkUnavailableDetails": "无法检查来源。覆盖范围未知；安装前请查看报告原因。",
+      "reasonContexts": "{count} 条原始上下文"
     }
   }
 }

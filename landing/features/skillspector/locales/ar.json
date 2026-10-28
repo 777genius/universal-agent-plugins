@@ -80,7 +80,8 @@
       "coverageDiagnostics": "تشخيصات التغطية ({count})",
       "contextTruncated": "السياق محدود: يظهر {references} من {referencesTotal} مراجع و{diagnostics} من {diagnosticsTotal} تشخيصات.",
       "unsupportedSourceDetails": "لا تدعم فحوص SkillSpector الثابتة هذا النوع من المصادر. لم تُفحص ملفاته.",
-      "checkUnavailableDetails": "تعذر فحص المصدر. التغطية غير معروفة؛ راجع السبب المذكور قبل التثبيت."
+      "checkUnavailableDetails": "تعذر فحص المصدر. التغطية غير معروفة؛ راجع السبب المذكور قبل التثبيت.",
+      "reasonContexts": "{count} سياقات أصلية"
     }
   }
 }

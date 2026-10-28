@@ -80,7 +80,8 @@
       "coverageDiagnostics": "जाँच के दायरे का निदान ({count})",
       "contextTruncated": "प्रसंग सीमित है: {referencesTotal} में से {references} संदर्भ और {diagnosticsTotal} में से {diagnostics} निदान दिखाए गए हैं।",
       "unsupportedSourceDetails": "स्थैतिक SkillSpector जाँच इस स्रोत प्रकार का समर्थन नहीं करती। इसकी फ़ाइलों की जाँच नहीं हुई है।",
-      "checkUnavailableDetails": "स्रोत की जाँच नहीं हो सकी। जाँच का दायरा अज्ञात है; स्थापित करने से पहले बताया गया कारण देखें।"
+      "checkUnavailableDetails": "स्रोत की जाँच नहीं हो सकी। जाँच का दायरा अज्ञात है; स्थापित करने से पहले बताया गया कारण देखें।",
+      "reasonContexts": "{count} मूल प्रसंग"
     }
   }
 }

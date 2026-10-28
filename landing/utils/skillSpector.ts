@@ -7,6 +7,23 @@ import type {
   SkillSpectorSubject,
 } from '../types/skillSpector.ts';
 
+/** Presentation-only exact message grouping; every original context remains intact. */
+export function groupSkillSpectorReasons<T extends { code: string; message: string }>(
+  reasons: readonly T[],
+) {
+  const groups = new Map<string, { key: string; code: string; message: string; contexts: T[] }>();
+  for (const reason of reasons) {
+    const key = JSON.stringify([reason.code, reason.message]);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, code: reason.code, message: reason.message, contexts: [] };
+      groups.set(key, group);
+    }
+    group.contexts.push(reason);
+  }
+  return [...groups.values()];
+}
+
 const revisionPattern = /^[0-9a-f]{40}$/;
 const digestPattern = /^sha256:[0-9a-f]{64}$/;
 const repositoryPattern = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
