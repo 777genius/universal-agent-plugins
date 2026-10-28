@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,12 @@ func TestBootstrapExecutesQuotedPathsWithoutInjection(t *testing.T) {
 	profile := filepath.Join(root, "profile'with`quotes")
 	data := filepath.Join(root, "data');globalThis.injected=true;('")
 	sourceName := "native');globalThis.injected=true;('"
+	if runtime.GOOS != "windows" {
+		// Double quotes are valid filename bytes on these hosts. Exercise the
+		// exact quote class named by the generated-code analysis as real paths.
+		profile += `"double-quotes`
+		data += `");globalThis.injected=true;("`
+	}
 	staging := filepath.Join(profile, ".agentplugins-staging-TEST")
 	source := "globalThis.sourceEvaluations = (globalThis.sourceEvaluations || 0) + 1;\nexport default function(pi, descriptor) { pi.record(descriptor, Object.isFrozen(descriptor)); }\n"
 	writePi(t, filepath.Join(staging, sourceName, "index.js"), source)

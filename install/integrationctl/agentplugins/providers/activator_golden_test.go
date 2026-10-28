@@ -41,7 +41,7 @@ func TestActivateGoldenAcrossClients(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]activationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				runner := &recordingRunner{}
@@ -73,7 +73,7 @@ func TestActivateGoldenWhenClientsRespond(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]activationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				request := goldenActivationRequest(t, definition.ID, root)
@@ -103,7 +103,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			root := t.TempDir()
+			root := tempRoot(t)
 			records := make(map[string]deactivationRecord, len(domain.ClientDefinitions()))
 			for _, definition := range domain.ClientDefinitions() {
 				runner := &recordingRunner{}
@@ -124,7 +124,7 @@ func TestDeactivateGoldenAcrossClients(t *testing.T) {
 // reaches its removal instead of stopping at the missing-ownership guard.
 // Not parallel: the Cline settings location is read from the environment.
 func TestDeactivateGoldenWhenOwnershipIsRecorded(t *testing.T) {
-	root := t.TempDir()
+	root := tempRoot(t)
 	t.Setenv("CLINE_MCP_SETTINGS_PATH", filepath.Join(root, "cline", "cline_mcp_settings.json"))
 	records := make(map[string]deactivationRecord, len(domain.ClientDefinitions()))
 	for _, definition := range domain.ClientDefinitions() {
