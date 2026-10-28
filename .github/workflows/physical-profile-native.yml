@@ -12,6 +12,11 @@ on:
       - '.github/workflows/physical-profile-native.yml'
   workflow_dispatch:
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: physical-profile-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 

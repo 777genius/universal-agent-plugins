@@ -149,3 +149,9 @@ func manualCodexVerification(outcome domain.ActivationOutcome, request domain.Ac
 	outcome.LocalActions = []string{fmt.Sprintf("the `%s plugin list --json` output contract was not recognized; inspect %s manually", request.BackendExecutable, request.DeclaredName)}
 	return outcome
 }
+
+// SupportsIndependentActivation limits effect-only execution to the adapter's
+// user CLI flow. Project and selected native-config delivery keep serial custody.
+func (*Adapter) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	return request.Plan.Scope == domain.ScopeUser && request.Plan.SelectedDelivery.IsZero()
+}

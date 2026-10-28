@@ -114,6 +114,12 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 
 func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding) error {
 	if binding.Scope != string(domain.ScopeProject) {
+		if err := validateProfile(root, ""); err != nil {
+			return err
+		}
+		if binding.NativeProfileRoot == "" || binding.NativeProfileRoot != root {
+			return fmt.Errorf("recorded Qoder user profile differs from selected root")
+		}
 		return nil
 	}
 	project := filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(root))))

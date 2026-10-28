@@ -11,12 +11,12 @@ export const useDocsLinks = () => {
   const buildGuide = link('build');
   const supportBoundary = link('supportBoundary');
   const customLogicGuide = link('customLogicGuide');
-  // The restore section lives in the English manage page; the fragment is English-only.
+  // Released project-restore instructions live in the English manage page.
   const restoreGuide = computed(() => {
     const docsHome = String(config.public.docsUrl || '');
     const configured = docsHome ? `${docsHome}${docsAvailability.restoreOnAnotherMachine}` : undefined;
     const { url } = resolveDocsLink('restoreOnAnotherMachine', 'en', configured);
-    return { url: `${url}#restore-on-another-machine` };
+    return { url: `${url}#restore-project-dependencies` };
   });
   const docsLabel = (label: string, englishFallback = docs.value.englishFallback) =>
     englishFallback ? t('shell.docs.englishLabel', { label }) : label;

@@ -1,13 +1,46 @@
 # UAP Management API, language clients, and Agent Teams integration
 
-Status: implementation plan v10 — current-main reconciliation and matched-artifact requalification.
+Status: implementation plan v11 — scoped E2E completion and current-main reconciliation.
 Owner authorization: 2026-10-24. Implement end to end, open draft PRs early, publish
 every commit immediately, review plan revisions and implementation independently,
 verify actual Electron interaction, merge only after required gates and resolved
 review findings. This is not authorization to bypass repository protections or
 publish a new public release.
 
-## Continuation checkpoint — v10 (2026-10-26)
+## Continuation checkpoint — v11 (2026-10-28)
+
+Reconcile the existing integration with main
+`27b96f2468acae1b14b5dfeac905384bc50e8b71`, retaining both the new profile/state
+guards and Management's reviewed removal and recovery authority. Two narrow
+regressions were found while completing the existing qualification:
+
+- macOS can return EPERM when a process group contains only an unreaped zombie.
+  The native evidence helper reaps its exact exited child and retries that group
+  once; a live child or persistent denial still fails, and surviving descendants
+  must still be terminated. Existing capture limits and cleanup deadlines remain.
+- Retained Management Skill plans must preserve the explicitly selected targets
+  introduced by main's shared preparation. A real HTTPS regression installs into
+  Claude and Codex, edits the unselected Claude Skill, then repeats the Codex-only
+  request. The reviewed actions, Apply result, sibling bytes/identity and saved
+  intent must stay scoped to that selection.
+
+The completed preceding App 42c/UAP 1d desktop receipt already proves three-client
+plugin installation, version-2 update, targeted removal, local Skill recovery,
+HTTP authority and S27 admission. Its platform/package gates also completed.
+UAP 1d had 62 successful checks and two failures: the macOS helper above and the
+separate CodeQL findings check (2 Critical / 10 High). These historical results
+do not qualify this reconciled source; fresh Required/native/platform checks and
+a matched downstream SDK/native pin with actual Electron evidence are required.
+
+The accepted matrix uses engine, transport, renderer and native evidence at their
+actual layers; it does not require duplicating every lower-layer scenario in the
+desktop harness. Per-member managed Skill/plugin-MCP consumption and S25/S26
+remain separate from the qualified user-scope management lifecycle. The previously
+reserved runtime/profile architecture discussion is not resolved by this E2E
+continuation. No new installer, runtime workaround, scope capability or public
+release is introduced, and the findings gate remains authoritative.
+
+## Previous checkpoint — v10 (2026-10-26)
 
 The integration branch is reconciled with main
 `d5c16856cef67a1457704971d46765739141ab08`, including the project implementation

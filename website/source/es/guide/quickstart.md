@@ -34,26 +34,25 @@ La compatibilidad depende del paquete. Validar el esquema no demuestra ejecució
 
 ### Guardar y restaurar tus plugins
 
-**Código fuente actual, aún sin publicar:** estos comandos de transferencia
-requieren un CLI compilado desde el código actual; todavía no están cualificados
-como versión publicada. En la carpeta que quieras llevar a otro equipo, ejecuta:
+Estos comandos de transferencia están incluidos en el CLI publicado. En la carpeta
+que quieras llevar a otro equipo, ejecuta:
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 Copia la carpeta al otro equipo, ábrela e instala los agentes de destino.
 Después ejecuta:
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked --scope user
 ```
 
 O combina la importación y la instalación:
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 La ruta es opcional: se usa la carpeta actual por defecto. La exportación lee

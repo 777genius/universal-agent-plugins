@@ -362,14 +362,27 @@
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "Dependencies, connected",
+      "title": "Two plugins. One shared dependency.",
+      "description": "Install a plugin with its dependencies. Shared dependencies at the same compatible version are installed once.",
+      "demoPackage": "Demonstration package",
+      "installed": "Installed",
+      "alreadyInstalled": "Already installed",
+      "shared": "shared",
+      "caption": "Illustrative packages and dependency graph. Playwright is shared by both packages; Context7 is already installed.",
+      "graphDescription": "marketing-kit depends on Playwright, HubSpot and Notion. Web Design Kit depends on the same Playwright package, Figma and Context7. All packages are installed; Context7 was already installed."
+    },
     "restore": {
-      "title": "Same plugin versions on your next machine",
+      "title": "Same plugin versions. Across your team.",
       "guide": "Guide",
-      "from": "On this computer",
-      "to": "On your next computer",
-      "transfer": "Copy {manifest} and {lockfile} to the other computer between these commands.",
+      "from": "In your project",
+      "to": "Your teammate",
+      "transfer": "Commit {manifest} and {lockfile} with your project so teammates can restore the same versions.",
       "requirements": "Restoration requires the recorded sources to remain available and clients supported by dependency management.",
-      "excludes": "Sign-ins, secrets, settings and plugin data are not transferred."
+      "excludes": "Sign-ins, secrets, settings and plugin data are not transferred.",
+      "subtitle": "Install for a project. Commit the lockfile. Let teammates restore the same versions.",
+      "commit": "Commit uap.toml + uap.lock"
     },
     "docs": {
       "englishLabel": "{label} (documentation in English)"
@@ -581,6 +594,7 @@
       "explorePlugins": "Explore plugins",
       "searchByCapabilityComponentOrSource": "Search by capability, component, or source.",
       "allCategories": "All categories",
+      "marketingCategory": "Marketing",
       "allComponents": "All components",
       "allSources": "All sources",
       "upstreamPackages": "Upstream packages",

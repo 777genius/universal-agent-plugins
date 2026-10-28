@@ -18,9 +18,9 @@ and any reported installation identity available when diagnosing a problem.
 ## Inspect the situation first
 
 ```bash
-agentplugins list
-agentplugins doctor
-agentplugins outdated --all
+npx -y universal-agent-plugins@latest list
+npx -y universal-agent-plugins@latest doctor
+npx -y universal-agent-plugins@latest outdated --all
 ```
 
 `list` reports installations. Installer `doctor` diagnoses managed state.
@@ -41,23 +41,23 @@ Before changing anything, identify the symptom:
 ## Update deliberately
 
 ```bash
-agentplugins update context7 --target codex,cursor --dry-run
+npx -y universal-agent-plugins@latest update context7 --target codex,cursor --dry-run
 ```
 
 Review the planned source and destinations before applying the update:
 
 ```bash
-agentplugins update context7 --target codex,cursor
+npx -y universal-agent-plugins@latest update context7 --target codex,cursor
 ```
 
-The existing installer also supports `agentplugins update --all`. Use it only
+The existing installer also supports `npx -y universal-agent-plugins@latest update --all`. Use it only
 when the intended scope really is all managed update candidates. A direct
 full-SHA source stays immutable; do not expect an update to follow a branch.
 
 ## Repair recorded state
 
 ```bash
-agentplugins repair context7 --target codex,cursor --dry-run
+npx -y universal-agent-plugins@latest repair context7 --target codex,cursor --dry-run
 ```
 
 Repair reapplies the recorded source. It is useful for managed-file drift,
@@ -65,7 +65,7 @@ not for changing the authored package or selecting a different remote revision.
 After reviewing the plan, the corresponding apply command is:
 
 ```bash
-agentplugins repair context7 --target codex,cursor
+npx -y universal-agent-plugins@latest repair context7 --target codex,cursor
 ```
 
 If an operation reports a partial rollback or recovery instruction, retain that
@@ -75,13 +75,13 @@ configuration file as installer-owned.
 ## Remove the selected installation
 
 ```bash
-agentplugins remove context7 --target codex,cursor --dry-run
+npx -y universal-agent-plugins@latest remove context7 --target codex,cursor --dry-run
 ```
 
 Review what the installer owns before applying removal:
 
 ```bash
-agentplugins remove context7 --target codex,cursor
+npx -y universal-agent-plugins@latest remove context7 --target codex,cursor
 ```
 
 Removal changes files owned by the CLI. It does not revoke a service account,
@@ -96,25 +96,27 @@ destination then fetches the exact pinned packages.
 On the source machine, run this in the folder you want to carry:
 
 ```bash
-agentplugins deps export
+npx -y universal-agent-plugins@latest deps export
 ```
 
 On the destination, install the target clients, then run:
 
 ```bash
-agentplugins deps import
-agentplugins install --locked
+npx -y universal-agent-plugins@latest deps import
+npx -y universal-agent-plugins@latest install --locked --scope user
 ```
 
 Or import and restore in one step:
 
 ```bash
-agentplugins deps import --install
+npx -y universal-agent-plugins@latest deps import --install
 ```
 
 - The optional `[directory]` argument overrides the exchange folder, which
   defaults to the current folder. Export reads the global user environment;
-  import writes it. `AGENTPLUGINS_HOME` selects that environment.
+  import writes it. `AGENTPLUGINS_HOME` selects that environment. Explicit
+  `--scope user` also keeps the following install in that user environment when
+  the exchange folder contains a project-style `uap.toml`.
 - Every copy shows a preview and needs a confirmation or `--yes`. `--dry-run`
   previews without writing.
 - Import validates the pair strictly and offline. It refuses missing or
@@ -126,9 +128,9 @@ agentplugins deps import --install
   package and manifest digests. It never selects newer versions. Missing source
   bytes or mismatched digests fail the install.
 - If installation fails after import saved the agreement, fix the error and run
-  `agentplugins install --locked` again. If recovery is pending, run
-  `agentplugins deps recover` first.
-- Do not run `agentplugins deps lock` to recreate transferred pins. Moving
+  `npx -y universal-agent-plugins@latest install --locked --scope user` again. If recovery is pending, run
+  `npx -y universal-agent-plugins@latest deps recover` first.
+- Do not run `npx -y universal-agent-plugins@latest deps lock` to recreate transferred pins. Moving
   selectors could resolve differently.
 
 ## Report a problem clearly
@@ -142,10 +144,33 @@ Authoring `doctor ./my-plugin` supplies project evidence only. It cannot
 replace installer doctor, repair managed state, or complete OAuth. Authors and
 installers can compare evidence through the [handoff boundary](/en/build/handoff).
 
+## Restore project dependencies
+
+Explicit project installation is available in
+[CLI 0.1.93 and later](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
+Commit the project's `uap.toml` and `uap.lock` to version control. A teammate can
+check out the project, install the required clients, and run this from that project folder:
+
+```bash
+npx -y universal-agent-plugins@latest install --locked --scope project
+```
+
+When invoking from another directory, also select the existing project directory
+with `--project-root /path/to/project`. Recorded sources and private-source access
+must remain available. Client-side trust, authentication or activation may still
+be required; see the [project client boundaries](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
+Credentials, local receipts and plugin data stay local rather than travelling
+with the agreement.
+
 ## Maintain a project in the current source
 
-**Source only / unreleased.** Select the same scope and project on every
-maintenance command:
+**Source only / unreleased.** Argumentless `agentplugins install` selects project
+scope when a regular `uap.toml` is present in the exact current directory; it
+never searches parents. Explicit `--scope` wins. An existing `uap.lock` is
+validated strictly before changes; only a missing lock allows first-install
+resolution. `--locked` requires that lock to exist. Use `update` to advance pins.
+The install preview shows the selected scope and agreement paths. Other
+maintenance commands require explicit project selection:
 
 ```sh
 agentplugins list --scope project --project-root /path/to/project

@@ -161,6 +161,7 @@ var clientDefinitions = []ClientDefinition{
 	withProjectScope(clientDefinition(ClientQoder, "Qoder", "qoder", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:           []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:            LifecycleCLIRegistry,
+		BindsNativeProfileRoot:   true,
 		DiscoversNativeHooks:     true,
 		HonorsOpenAIMCPAuthHints: true,
 	}), LifecyclePrepared),

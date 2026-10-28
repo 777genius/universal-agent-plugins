@@ -208,7 +208,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	client, ok := adapter.detected[domain.ClientID(action.ClientID)]
 	if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
-		return nil, fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
+		return nil, fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 	}
 	view, err := adapter.app.Installer.Inspect(ctx)
 	if err != nil {

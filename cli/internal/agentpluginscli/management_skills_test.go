@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -116,5 +118,33 @@ func TestManagementWebsitePreviewFreezesOriginalBytes(t *testing.T) {
 	_, locked := j.intent(t)
 	if locked.Packages[0].Source.Web == nil || locked.Packages[0].Source.Web.IndexSHA256 == "" || locked.Packages[0].Source.Web.RawTreeDigest == "" {
 		t.Fatal("publisher provenance missing", locked)
+	}
+}
+
+func TestManagementSelectedSkillTargetPreservesUnselectedDrift(t *testing.T) {
+	backend, j, source, _ := managementMutableWebsite(t)
+	catalog, err := backend.SkillsCatalog(t.Context(), management.SourceRequest{Source: source})
+	if err != nil || len(catalog.Candidates) != 1 {
+		t.Fatal(catalog, err)
+	}
+	request := management.ChangeRequest{Action: management.InstallSkills, CatalogId: catalog.CatalogId, CandidateIds: []string{catalog.Candidates[0].Id}, TargetIds: []string{"profile-claude", "profile-codex"}}
+	managementApply(t, managementPrepare(t, backend, request))
+	claude := savedJourneyBinding(t, j.state(t), "claude")
+	dependencyWrite(t, filepath.Join(claude.TargetLocator, "user-edit.txt"), "preserve unselected content")
+	beforeTree := savedJourneyTree(t, claude.TargetLocator)
+	beforeRequirements, beforeLock := j.intent(t)
+
+	request.TargetIds = []string{"profile-codex"}
+	prepared := managementPrepare(t, backend, request)
+	if actions := prepared.Review().Actions; len(actions) != 1 || actions[0].TargetId != "profile-codex" {
+		t.Fatalf("review includes unselected target: %+v", actions)
+	}
+	managementApply(t, prepared)
+	if !reflect.DeepEqual(claude, savedJourneyBinding(t, j.state(t), "claude")) || !reflect.DeepEqual(beforeTree, savedJourneyTree(t, claude.TargetLocator)) {
+		t.Fatal("selected Skill install changed the unselected binding or content")
+	}
+	afterRequirements, afterLock := j.intent(t)
+	if !reflect.DeepEqual(beforeRequirements, afterRequirements) || !reflect.DeepEqual(beforeLock, afterLock) {
+		t.Fatal("selected Skill install changed saved targets or dependency pins")
 	}
 }

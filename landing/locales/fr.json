@@ -345,14 +345,27 @@
     "buildGuideLink": "Ouvrir le guide de création"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "Des dépendances reliées",
+      "title": "Deux plugins. Une dépendance partagée.",
+      "description": "Installez un plugin avec ses dépendances. Les dépendances partagées de même version compatible ne sont installées qu’une fois.",
+      "demoPackage": "Paquet de démonstration",
+      "installed": "Installé",
+      "alreadyInstalled": "Déjà installé",
+      "shared": "partagée",
+      "caption": "Paquets et graphe présentés à titre illustratif. Les deux paquets partagent Playwright ; Context7 est déjà installé.",
+      "graphDescription": "marketing-kit dépend de Playwright, HubSpot et Notion. Web Design Kit dépend du même paquet Playwright, de Figma et de Context7. Tous les paquets sont installés ; Context7 était déjà installé."
+    },
     "restore": {
-      "title": "Les mêmes versions de plugins sur votre prochain ordinateur",
+      "title": "Les mêmes versions. Pour toute l’équipe.",
       "guide": "Guide",
-      "from": "Sur cet ordinateur",
-      "to": "Sur votre prochain ordinateur",
-      "transfer": "Copiez {manifest} et {lockfile} sur l’autre ordinateur entre ces commandes.",
+      "from": "Dans votre projet",
+      "to": "Votre collègue",
+      "transfer": "Ajoutez {manifest} et {lockfile} à Git avec votre projet pour que votre équipe retrouve les mêmes versions.",
       "requirements": "La restauration nécessite des sources enregistrées toujours disponibles et des clients compatibles avec la gestion des dépendances.",
-      "excludes": "Les connexions aux comptes, secrets, réglages et données des plugins ne sont pas transférés."
+      "excludes": "Les connexions aux comptes, secrets, réglages et données des plugins ne sont pas transférés.",
+      "subtitle": "Installez dans le projet. Ajoutez le fichier de verrouillage à Git. Votre équipe retrouvera les mêmes versions.",
+      "commit": "Ajoutez uap.toml + uap.lock à Git"
     },
     "docs": {
       "englishLabel": "{label} (documentation en anglais)"
@@ -564,6 +577,7 @@
       "explorePlugins": "Explorer les plugins",
       "searchByCapabilityComponentOrSource": "Recherchez par fonctionnalité, composant ou source.",
       "allCategories": "Toutes les catégories",
+      "marketingCategory": "Marketing et campagnes",
       "allComponents": "Tous les composants",
       "allSources": "Toutes les sources",
       "upstreamPackages": "Forfaits en amont",

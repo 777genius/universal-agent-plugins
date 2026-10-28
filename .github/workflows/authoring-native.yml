@@ -9,6 +9,11 @@ on:
         type: boolean
         default: false
 
+# Replace ordinary CI for the same PR/ref; keep manual runs independent.
+concurrency:
+  group: authoring-native-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
 
@@ -237,8 +242,9 @@ jobs:
 
   acceptance:
     name: Authoring / required native and packed
+    # Status aggregation must not queue a runner for an obsolete cancelled run.
     needs: [native, packed]
-    if: always()
+    if: always() && !cancelled()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:

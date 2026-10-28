@@ -9,6 +9,12 @@ on:
     - cron: "20 4 * * 1"
   workflow_dispatch:
 
+# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
+# Release validation also accepts checks from the associated merged PR head.
+concurrency:
+  group: codeql-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
 permissions:
   contents: read
   security-events: write

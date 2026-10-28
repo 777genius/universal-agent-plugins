@@ -208,14 +208,27 @@
     "buildGuideLink": "افتح دليل الإنشاء"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "تبعيات مترابطة",
+      "title": "إضافتان. تبعية مشتركة واحدة.",
+      "description": "ثبّت الإضافة مع تبعياتها. تُثبّت التبعيات المشتركة ذات الإصدار المتوافق نفسه مرة واحدة فقط.",
+      "demoPackage": "حزمة توضيحية",
+      "installed": "مثبّتة",
+      "alreadyInstalled": "مثبّتة مسبقًا",
+      "shared": "مشتركة",
+      "caption": "الحزم ومخطط التبعيات للتوضيح. تشترك الحزمتان في Playwright؛ وContext7 مثبّتة مسبقًا.",
+      "graphDescription": "تعتمد marketing-kit على Playwright وHubSpot وNotion. وتعتمد Web Design Kit على حزمة Playwright نفسها وFigma وContext7. جميع الحزم مثبّتة؛ وكانت Context7 مثبّتة مسبقًا."
+    },
     "restore": {
-      "title": "إصدارات الإضافات نفسها على حاسوبك القادم",
+      "title": "إصدارات الإضافات نفسها. لكل فريقك.",
       "guide": "الدليل",
-      "from": "على هذا الحاسوب",
-      "to": "على حاسوبك القادم",
-      "transfer": "انسخ {manifest} و{lockfile} إلى الحاسوب الآخر بين تنفيذ هذين الأمرين.",
+      "from": "في مشروعك",
+      "to": "زميلك في الفريق",
+      "transfer": "أضف {manifest} و{lockfile} مع مشروعك إلى Git ليستعيد زملاؤك الإصدارات نفسها.",
       "requirements": "تتطلب الاستعادة بقاء المصادر المسجلة متاحة وعملاء تدعمهم إدارة التبعيات.",
-      "excludes": "لا تُنقل عمليات تسجيل الدخول أو الأسرار أو الإعدادات أو بيانات الإضافات."
+      "excludes": "لا تُنقل عمليات تسجيل الدخول أو الأسرار أو الإعدادات أو بيانات الإضافات.",
+      "subtitle": "ثبّت في المشروع. أضف ملف القفل إلى Git. ليستعيد زملاؤك الإصدارات نفسها.",
+      "commit": "أضف uap.toml + uap.lock إلى Git"
     },
     "docs": {
       "englishLabel": "{label} (الوثائق باللغة الإنجليزية)"
@@ -564,6 +577,7 @@
       "explorePlugins": "استكشف الإضافات",
       "searchByCapabilityComponentOrSource": "ابحث حسب القدرة أو المكون أو المصدر.",
       "allCategories": "كل الفئات",
+      "marketingCategory": "التسويق",
       "allComponents": "كل المكونات",
       "allSources": "كل المصادر",
       "upstreamPackages": "حزم المصدر الرئيسي",

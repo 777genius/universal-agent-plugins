@@ -1,3 +1,4 @@
+import { catalogCategories } from './catalogCategories.ts';
 import type {
   RegistryDiagnostic,
   ClientEvidence,
@@ -836,7 +837,10 @@ function parseSnapshot(
       description: requiredString(raw, 'description', context),
       author: productAuthor,
       license: optionalString(raw, 'license') ?? 'See source',
-      categories: stringArray(raw.categories ?? [], 'categories', context),
+      categories: catalogCategories(
+        selected.source,
+        stringArray(raw.categories ?? [], 'categories', context),
+      ),
       keywords: stringArray(raw.keywords ?? [], 'keywords', context),
       source: selected.source,
       install_source: name,
@@ -1270,6 +1274,7 @@ export function mirroredIconPath(plugin: RegistryPlugin): string | undefined {
     'hubspot-crm': 'hubspot',
     'hubspot-developer': 'hubspot',
     linear: 'linear',
+    'marketing-kit': 'marketing-kit',
     neon: 'neon',
     notion: 'notion',
     playwright: 'playwright',

@@ -212,11 +212,24 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		var eligible []domain.DetectedClient
 		var skipped []targetSkip
 		for _, client := range clients {
-			if supportsDependencyTarget(app, string(client.ClientID)) {
-				eligible = append(eligible, client)
-			} else {
+			switch {
+			case client.DetectionError != nil:
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client configuration could not be inspected safely; correct it and retry"})
+			case client.Status != domain.DetectionDetected:
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client is not detected; install or configure it before selecting it"})
+			case !supportsDependencyTarget(app, string(client.ClientID)):
 				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "use --no-save"})
+			default:
+				eligible = append(eligible, client)
 			}
+		}
+		if len(eligible) > 0 {
+			var incompatible []targetSkip
+			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), app, source, eligible)
+			if err != nil {
+				return nil, err
+			}
+			skipped = append(skipped, incompatible...)
 		}
 		if len(eligible) > 1 {
 			if app, err = withPrompter(cmd, app, opts); err != nil {
@@ -384,6 +397,10 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		}
 		attest = &environment.Attestation{Alias: dependencyNodeAlias(requirements, locked, alias), ClientID: string(targets[0]), ActivationComplete: activation, AuthComplete: auth}
 	}
-	opts.environmentOutput = map[string]any{"saved": true, "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
-	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{dependencyNodeAlias(requirements, locked, alias)}, attest)
+	selectedTargets := make([]string, 0, len(targets))
+	for _, target := range targets {
+		selectedTargets = append(selectedTargets, string(target))
+	}
+	opts.environmentOutput = map[string]any{"selected_targets": selectedTargets, "saved": true, "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
+	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{dependencyNodeAlias(requirements, locked, alias)}, attest, selectedTargets)
 }

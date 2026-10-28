@@ -524,8 +524,17 @@ func linuxDescendantIdentitiesWith(root int, deadline time.Time, maxVisits int, 
 					return result, withOrdinaryCleanupOrigin("parent_identity_read", fmt.Errorf("revalidate stable supervisor descendant %d parent %d: %w", pid, parent, parentErr))
 				}
 				if parentStillOwned {
+					// A procfs stat snapshot can straddle the child's own exit:
+					// its sampled state is still live while PPID has become zero.
+					// Require fresh proof that this exact child completed before
+					// accepting that race; live reparenting and PID reuse still fail.
+					current, currentErr := ops.readIdentity(pid)
+					if linuxProcessGone(currentErr) || (currentErr == nil && current.startTime == observedStartTime && current.zombie) {
+						_ = ops.closePidfd(pidfd)
+						continue
+					}
 					_ = ops.closePidfd(pidfd)
-					return result, withOrdinaryCleanupOrigin("parent_changed", fmt.Errorf("revalidate stable supervisor descendant %d: live parent changed from %d to %d", pid, parent, identity.ppid))
+					return result, withOrdinaryCleanupOrigin("parent_changed", errors.Join(fmt.Errorf("revalidate stable supervisor descendant %d: live parent changed from %d to %d", pid, parent, identity.ppid), currentErr))
 				}
 				// The first children snapshot proved ancestry and the pidfd plus
 				// start time proves the same child survived. If its exact parent

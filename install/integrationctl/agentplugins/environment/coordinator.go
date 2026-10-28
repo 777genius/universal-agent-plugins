@@ -108,11 +108,18 @@ func targetsFor(requirements Requirements, alias string) []string {
 // PrepareSync derives stable single-target actions. A changed canonical source
 // is refused instead of silently rebinding an installation to another source.
 func (coordinator Coordinator) PrepareSync(requirements Requirements, lock Lock, observed []BindingObservation) (PreparedSync, error) {
-	return coordinator.prepareSync(requirements, lock, observed, nil, nil)
+	return coordinator.prepareSync(requirements, lock, observed, nil, nil, nil)
 }
 
 // PrepareSyncFor limits mutations to explicit aliases while retaining global identity checks.
 func (coordinator Coordinator) PrepareSyncFor(requirements Requirements, lock Lock, observed []BindingObservation, aliases []string, attestation *Attestation) (PreparedSync, error) {
+	return coordinator.PrepareSyncForTargets(requirements, lock, observed, aliases, attestation, nil)
+}
+
+// PrepareSyncForTargets additionally constrains mutations to selected clients without
+// changing saved intent or lock targets. Empty targets preserve alias-wide sync.
+// Identity checks still see all observations, including unselected clients.
+func (coordinator Coordinator) PrepareSyncForTargets(requirements Requirements, lock Lock, observed []BindingObservation, aliases []string, attestation *Attestation, targetSelection []string) (PreparedSync, error) {
 	if len(aliases) == 0 {
 		return PreparedSync{}, errors.New("selected aliases must not be empty")
 	}
@@ -133,10 +140,17 @@ func (coordinator Coordinator) PrepareSyncFor(requirements Requirements, lock Lo
 	if attestation != nil && (!selected[attestation.Alias] || attestation.ClientID == "" || (!attestation.ActivationComplete && !attestation.AuthComplete)) {
 		return PreparedSync{}, errors.New("attestation requires its selected alias and client")
 	}
-	return coordinator.prepareSync(requirements, lock, observed, selected, attestation)
+	var targets map[string]bool
+	if len(targetSelection) > 0 {
+		targets = map[string]bool{}
+		for _, target := range targetSelection {
+			targets[target] = true
+		}
+	}
+	return coordinator.prepareSync(requirements, lock, observed, selected, attestation, targets)
 }
 
-func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock, observed []BindingObservation, selected map[string]bool, attestation *Attestation) (PreparedSync, error) {
+func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock, observed []BindingObservation, selected map[string]bool, attestation *Attestation, targets map[string]bool) (PreparedSync, error) {
 	if err := lock.Validate(requirements); err != nil {
 		return PreparedSync{}, err
 	}
@@ -145,11 +159,14 @@ func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock,
 	for _, item := range observed {
 		byAliasTarget[item.Alias+"\x00"+item.ClientID] = item
 	}
-	if err := appendDesiredBindings(&plan, lock, observed, byAliasTarget, selected, attestation); err != nil {
+	if err := appendDesiredBindings(&plan, lock, observed, byAliasTarget, selected, attestation, targets); err != nil {
 		return PreparedSync{}, err
 	}
 
 	for key, current := range byAliasTarget {
+		if targets != nil && !targets[current.ClientID] {
+			continue
+		}
 		if selected != nil && !selected[current.Alias] {
 			continue
 		}
@@ -283,12 +300,12 @@ func lockedRevision(pkg LockedPackage) string {
 	return ""
 }
 
-func appendDesiredBindings(plan *PreparedSync, lock Lock, observed []BindingObservation, byAliasTarget map[string]BindingObservation, selected map[string]bool, attestation *Attestation) error {
+func appendDesiredBindings(plan *PreparedSync, lock Lock, observed []BindingObservation, byAliasTarget map[string]BindingObservation, selected map[string]bool, attestation *Attestation, targets map[string]bool) error {
 	for _, pkg := range lock.Packages {
 		if selected != nil && !selected[pkg.Alias] {
 			continue
 		}
-		for _, target := range pkg.Targets {
+		for _, target := range selectedSyncTargets(pkg.Targets, targets) {
 			current := byAliasTarget[pkg.Alias+"\x00"+target]
 			var err error
 			current, err = validateDesiredBinding(pkg, target, current, observed)
@@ -316,6 +333,21 @@ func appendDesiredBindings(plan *PreparedSync, lock Lock, observed []BindingObse
 		}
 	}
 	return nil
+}
+
+// selectedSyncTargets constrains action iteration without narrowing the package
+// metadata or observations used by global identity checks.
+func selectedSyncTargets(desired []string, selected map[string]bool) []string {
+	if selected == nil {
+		return desired
+	}
+	var targets []string
+	for _, target := range desired {
+		if selected[target] {
+			targets = append(targets, target)
+		}
+	}
+	return targets
 }
 
 func validatePlannedAttestation(plan PreparedSync, attestation *Attestation) error {

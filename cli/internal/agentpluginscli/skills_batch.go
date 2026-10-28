@@ -74,7 +74,7 @@ func (p *PreparedSkillsBatch) check(ctx context.Context) error {
 	if err := p.checkInputs(); err != nil {
 		return err
 	}
-	actions, detected, paths, err := prepareSkillsBindings(ctx, p.preview, p.request.requirements, p.request.lock, p.request.aliases, p.request.prepared)
+	actions, detected, paths, err := prepareSkillsBindings(ctx, p.preview, p.request.requirements, p.request.lock, p.request.aliases, p.request.prepared, p.request.targets)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSkillsPlanStale, err)
 	}

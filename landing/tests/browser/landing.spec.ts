@@ -1,9 +1,16 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
 import { expect, test } from '@playwright/test';
-import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
+import { emptySkillSpectorManifest, hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-test.beforeEach(async ({ page }) => setSignedMirrorTestTime(page));
+test.beforeEach(async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  // Keep the catalog independent of optional report publication and remote availability.
+  // Dedicated SkillSpector tests exercise checked, partial and unavailable reports.
+  await page.route('**/reports/skillspector/v2/index.json', (route) =>
+    route.fulfill({ json: emptySkillSpectorManifest() }),
+  );
+});
 
 async function waitForFullDirectory(page: import('@playwright/test').Page) {
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
@@ -387,6 +394,7 @@ test('security badges explain the exact checked revision and open full findings'
   page,
 }) => {
   await page.goto('./');
+  await hydrated(page);
   await expect(page.locator('.catalog')).toHaveAttribute('data-discovery-state', /current|cached/, {
     timeout: 15_000,
   });
@@ -394,11 +402,28 @@ test('security badges explain the exact checked revision and open full findings'
   await expect(badge).toBeVisible({ timeout: 15_000 });
   await expect(badge).not.toHaveAttribute('title');
   await badge.scrollIntoViewIfNeeded();
+  // Smooth scrolling can dismiss a focused tooltip. Wait for the badge's actual
+  // position to settle before opening it, rather than accepting its exit animation.
+  await badge.evaluate(async (element) => {
+    let previous = element.getBoundingClientRect().top;
+    let stableFrames = 0;
+    while (stableFrames < 3) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const current = element.getBoundingClientRect().top;
+      stableFrames = current === previous ? stableFrames + 1 : 0;
+      previous = current;
+    }
+  });
   await badge.focus();
-  const tooltip = page.locator('.app-tooltip');
+  const tooltip = page.locator(
+    '.app-tooltip[data-state="instant-open"], .app-tooltip[data-state="delayed-open"]',
+  );
   await expect(tooltip).toBeVisible();
-  await expect(tooltip).toContainText(/SEC\d+/);
-  await expect(tooltip).toContainText(/exact indexed revision [0-9a-f]{12}/);
+  // Read once while visible: the tooltip's exit transition can finish between
+  // separate browser queries, even though both strings are already present.
+  const tooltipText = await tooltip.innerText();
+  expect(tooltipText).toMatch(/SEC\d+/);
+  expect(tooltipText).toMatch(/exact indexed revision [0-9a-f]{12}/);
   await expect(badge).toHaveAttribute('href', /plugins\/community.*#security-review/);
 
   await badge.click();

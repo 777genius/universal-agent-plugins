@@ -1,28 +1,29 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { setSignedMirrorTestTime } from './i18n-state.helpers';
+import { hydrated, setSignedMirrorTestTime } from './i18n-state.helpers';
 
-test('demo loads its player only after keyboard activation and keeps installation in place', async ({
-  page,
-}) => {
-  await setSignedMirrorTestTime(page);
-  const playerRequests: string[] = [];
-  await page.route('https://player.mux.com/**', (route) => {
-    playerRequests.push(route.request().url());
-    return route.fulfill({
-      contentType: 'text/html',
-      body: '<html><body>Player boundary</body></html>',
+for (const width of [1440, 390, 320]) {
+  test(`demo at ${width}px loads its player only after keyboard activation and keeps installation in place`, async ({
+    page,
+  }) => {
+    await setSignedMirrorTestTime(page);
+    const playerRequests: string[] = [];
+    await page.route('https://player.mux.com/**', (route) => {
+      playerRequests.push(route.request().url());
+      return route.fulfill({
+        contentType: 'text/html',
+        body: '<html><body>Player boundary</body></html>',
+      });
     });
-  });
-  for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('./');
+    await hydrated(page);
     const demo = page.locator('.hero-demo-video');
     const button = demo.getByRole('button', { name: 'Watch demo' });
     await expect(button).toBeVisible();
     await expect(demo.locator('iframe')).toHaveCount(0);
-    const requestsBefore = playerRequests.length;
+    expect(playerRequests).toHaveLength(0);
     const installBefore = (await page.locator('.hero__window').boundingBox())!;
     const demoBefore = (await demo.boundingBox())!;
     expect(demoBefore.width).toBeLessThanOrEqual(480);
@@ -44,14 +45,14 @@ test('demo loads its player only after keyboard activation and keeps installatio
     );
     await expect(frame).toHaveAttribute('title', 'Universal Agent Plugins install demo');
     await expect(frame).toHaveAttribute('allowfullscreen', '');
-    await expect.poll(() => playerRequests.length).toBe(requestsBefore + 1);
+    await expect.poll(() => playerRequests.length).toBe(1);
     const installAfter = (await page.locator('.hero__window').boundingBox())!;
     expect(Math.abs(installAfter.y - installBefore.y)).toBeLessThan(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-  }
-});
+  });
+}
 
 test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ page }) => {
   test.skip(
@@ -72,7 +73,9 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
     await page.goto('./');
     const demo = page.locator('.hero-demo-video');
     await demo.scrollIntoViewIfNeeded();
-    await expect(page.getByRole('link', { name: /^Explore [1-9]/ })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('link', { name: /^Explore [1-9]/ })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect
       .poll(
         () =>
@@ -100,7 +103,7 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
       error: element.error?.code ?? null,
       paused: element.paused,
     }));
-    expect(Math.abs(media.duration - 2030 / 30)).toBeLessThan(0.25);
+    expect(Math.abs(media.duration - 2484 / 30)).toBeLessThan(0.25);
     expect(media.error).toBeNull();
     expect(media.paused).toBe(false);
     if (directory)

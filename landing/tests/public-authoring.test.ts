@@ -112,11 +112,11 @@ test('all current quickstarts expose Agent Plugins without a legacy product jour
       expectedCommands.push('npx universal-agent-plugins deps status');
     }
     expectedCommands.push(
-      'agentplugins deps export',
-      'agentplugins deps import\nagentplugins install --locked',
+      'npx -y universal-agent-plugins@latest deps export',
+      'npx -y universal-agent-plugins@latest deps import\nnpx -y universal-agent-plugins@latest install --locked --scope user',
     );
     if (locale !== 'en') {
-      expectedCommands.push('agentplugins deps import --install');
+      expectedCommands.push('npx -y universal-agent-plugins@latest deps import --install');
     }
     if (locale === 'en') {
       expectedCommands.push(`npm install --global universal-agent-plugins

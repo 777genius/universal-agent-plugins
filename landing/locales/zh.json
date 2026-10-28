@@ -345,14 +345,27 @@
     "buildGuideLink": "打开构建指南"
   },
   "shell": {
+    "dependencies": {
+      "eyebrow": "相互连接的依赖",
+      "title": "两个插件，共享一个依赖。",
+      "description": "安装插件及其依赖。版本相同且兼容的共享依赖只安装一次。",
+      "demoPackage": "演示软件包",
+      "installed": "已安装",
+      "alreadyInstalled": "此前已安装",
+      "shared": "共享",
+      "caption": "软件包和依赖图仅作示例。两个软件包共享 Playwright；Context7 此前已安装。",
+      "graphDescription": "marketing-kit 依赖 Playwright、HubSpot 和 Notion。Web Design Kit 依赖同一个 Playwright 软件包、Figma 和 Context7。所有软件包均已安装；Context7 此前已安装。"
+    },
     "restore": {
-      "title": "在下一台电脑上使用相同的插件版本",
+      "title": "相同的插件版本，整个团队共享。",
       "guide": "指南",
-      "from": "在当前电脑上",
-      "to": "在下一台电脑上",
-      "transfer": "在运行这两条命令之间，将 {manifest} 和 {lockfile} 复制到另一台电脑。",
+      "from": "在你的项目中",
+      "to": "你的同事",
+      "transfer": "将 {manifest} 和 {lockfile} 随项目提交，让同事恢复相同版本。",
       "requirements": "恢复需要记录的源仍可访问，并且客户端支持依赖管理。",
-      "excludes": "不会传输登录状态、机密信息、设置或插件数据。"
+      "excludes": "不会传输登录状态、机密信息、设置或插件数据。",
+      "subtitle": "在项目中安装，提交锁定文件，让同事恢复相同版本。",
+      "commit": "提交 uap.toml + uap.lock"
     },
     "docs": {
       "englishLabel": "{label}（英文文档）"
@@ -564,6 +577,7 @@
       "explorePlugins": "探索插件",
       "searchByCapabilityComponentOrSource": "按功能、组件或来源搜索。",
       "allCategories": "所有类别",
+      "marketingCategory": "市场营销",
       "allComponents": "所有组件",
       "allSources": "所有来源",
       "upstreamPackages": "上游包",

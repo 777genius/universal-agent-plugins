@@ -26,6 +26,7 @@ type dependencySyncRequest struct {
 	consent                          map[string]bool
 	candidateManifest, candidateLock []byte
 	aliases                          []string
+	targets                          []string
 	attestation                      *environment.Attestation
 	repairOnly                       bool
 }
@@ -125,11 +126,27 @@ func runDependencySyncApply(cmd *cobra.Command, app App, opts *options, request 
 func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependencyAction, dryRun bool) error {
 	if opts.format == "json" {
 		data := map[string]any{"actions": dependencyActionOutput(actions, opts.dependencyComponents), "dry_run": dryRun}
+		if opts.installSelection != nil {
+			data["selection"] = opts.installSelection
+		}
 		if opts.environmentOutput != nil {
 			data["environment"] = opts.environmentOutput
 			return writeJSONResult(cmd.OutOrStdout(), "add", "success", data)
 		}
 		return renderJSON(cmd.OutOrStdout(), data)
+	}
+	if selected := opts.installSelection; selected != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Scope: %s\n", selected.Scope); err != nil {
+			return err
+		}
+		if selected.ProjectRoot != "" {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Project: %s\n", selected.ProjectRoot); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Manifest: %s\nLock: %s\n", selected.ManifestPath, selected.LockPath); err != nil {
+			return err
+		}
 	}
 	for _, action := range actions {
 		reason := ""
@@ -355,7 +372,7 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 		observed, err = environment.ObserveForEnvironment(state, app.environmentID())
 		if err == nil {
 			var selected environment.PreparedSync
-			selected, err = (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncFor(requirements, lock, observed, request.aliases, request.attestation)
+			selected, err = (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, lock, observed, request.aliases, request.attestation, request.targets)
 			actions = selected.Bindings
 		}
 	} else {

@@ -9,6 +9,9 @@ import (
 )
 
 func (session *groupSession) activateGroupTargets() (GroupResult, error) {
+	if prepared, ok := session.independentGroupActivator(); ok {
+		return session.activateIndependentGroupTargets(prepared)
+	}
 	session.externalCompleted = 0
 	session.externalFailed = 0
 	session.firstActivationErr = nil
@@ -36,8 +39,12 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 }
 
 func (session *groupSession) activateOneGroupTarget(plannedIndex int, target plannedGroupTarget) error {
-	previousObservation := target.plan.LocalEntryObservation.Clone()
 	outcome, delivery, nativeComplete, activationErr := session.activateGroupDelivery(target)
+	return session.publishGroupActivation(plannedIndex+1, target, outcome, delivery, nativeComplete, activationErr)
+}
+
+func (session *groupSession) publishGroupActivation(remainingFrom int, target plannedGroupTarget, outcome domain.ActivationOutcome, delivery domain.StagedDelivery, nativeComplete bool, activationErr error) (publicationErr error) {
+	previousObservation := target.plan.LocalEntryObservation.Clone()
 	previousNativeObjects := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previousNativeObjects = target.managed.NativeObjects
@@ -56,13 +63,15 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 		target.noChange = false
 	}
 	session.assignActivationOutcome(target, outcome, activationErr, persistErr, lifecycleChanged)
-	if err := session.reportGroupProgress(target, GroupProgressActivated); err != nil {
-		return err
-	}
+	defer func() {
+		if err := session.reportGroupProgress(target, GroupProgressActivated); err != nil {
+			publicationErr = errors.Join(publicationErr, err)
+		}
+	}()
 	if persistErr != nil {
 		session.externalFailed += len(target.resultIndexes)
 		session.classifyActivationFailure()
-		session.markRemainingNotAttempted(plannedIndex+1, "persist", "processing stopped because installation state could not be saved safely")
+		session.markRemainingNotAttempted(remainingFrom, "persist", "processing stopped because installation state could not be saved safely")
 		return session.activationFailureError(persistErr)
 	}
 	if activationErr == nil {
@@ -73,10 +82,11 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 	if session.firstActivationErr == nil {
 		session.firstActivationErr = activationErr
 	}
-	if errors.Is(activationErr, context.Canceled) || errors.Is(activationErr, context.DeadlineExceeded) || session.ctx.Err() != nil {
+	if session.ctx.Err() != nil || domain.IsUnclosedClientProbe(activationErr) || errors.Is(activationErr, context.Canceled) ||
+		(errors.Is(activationErr, context.DeadlineExceeded) && !domain.IsIsolatedProbeTimeout(activationErr)) {
 		session.classifyActivationFailure()
 		stage, message := groupActivationStopReason(session.ctx, activationErr)
-		session.markRemainingNotAttempted(plannedIndex+1, stage, message)
+		session.markRemainingNotAttempted(remainingFrom, stage, message)
 		cause := activationErr
 		if ctxErr := session.ctx.Err(); ctxErr != nil && !errors.Is(activationErr, ctxErr) {
 			cause = errors.Join(activationErr, ctxErr)
@@ -87,6 +97,15 @@ func (session *groupSession) activateOneGroupTarget(plannedIndex int, target pla
 }
 
 func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (domain.ActivationOutcome, domain.StagedDelivery, bool, error) {
+	request, outcome, delivery, nativeComplete, err := session.groupActivationRequest(target)
+	if err != nil {
+		return outcome, delivery, nativeComplete, err
+	}
+	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, target.clientBindingID, request)
+	return session.finishGroupActivation(target, outcome, delivery, nativeComplete, activationErr)
+}
+
+func (session *groupSession) groupActivationRequest(target plannedGroupTarget) (domain.ActivationRequest, domain.ActivationOutcome, domain.StagedDelivery, bool, error) {
 	delivery := target.delivery
 	nativeComplete := true
 	if target.noChange && target.managed != nil {
@@ -99,20 +118,24 @@ func (session *groupSession) activateGroupDelivery(target plannedGroupTarget) (d
 			// rather than a state refusal.
 			outcome := lifecycleOutcome(*target.managed)
 			outcome.NativeEffect = domain.NativeEffectUnchanged
-			return outcome, delivery, false, err
+			return domain.ActivationRequest{}, outcome, delivery, false, err
 		}
 	}
 	previous := []domain.NativeObjectOwnership(nil)
 	if target.managed != nil {
 		previous = append([]domain.NativeObjectOwnership(nil), target.managed.NativeObjects...)
 	}
-	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installationID, target.clientBindingID, domain.ActivationRequest{
+	return domain.ActivationRequest{
 		PackageUnchanged: target.noChange,
 		Client:           target.input.Client, Plan: target.plan, Delivery: delivery,
 		DeclaredName: target.input.Envelope.Manifest.Name, Replacing: session.replace, Interactive: target.input.Interactive,
 		BackendExecutable: target.input.BackendExecutable, PreviousNativeObjects: previous,
 		VerifyOnly: target.noChange && nativeComplete, ActivationComplete: target.input.ActivationComplete,
-	})
+	}, domain.ActivationOutcome{}, delivery, nativeComplete, nil
+}
+
+func (session *groupSession) finishGroupActivation(target plannedGroupTarget, outcome domain.ActivationOutcome, delivery domain.StagedDelivery, nativeComplete bool, activationErr error) (domain.ActivationOutcome, domain.StagedDelivery, bool, error) {
+
 	if session.input.Repair && target.managed != nil {
 		outcome = preserveManagedAuthentication(outcome, target.managed.Authentication)
 	}
@@ -196,6 +219,8 @@ func groupActivationStopReason(ctx context.Context, cause error) (string, string
 		return "deadline", "processing stopped because the operation deadline was exceeded before remaining clients could be activated safely"
 	case errors.Is(ctx.Err(), context.Canceled), errors.Is(cause, context.Canceled):
 		return "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely"
+	case domain.IsUnclosedClientProbe(cause) && !errors.Is(cause, context.DeadlineExceeded):
+		return "activation", "processing stopped because client process cleanup could not be confirmed before remaining clients could be activated safely"
 	default:
 		return "timeout", "processing stopped because a client activation timed out before remaining clients could be activated safely"
 	}

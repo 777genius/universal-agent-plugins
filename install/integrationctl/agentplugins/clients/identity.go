@@ -2,6 +2,7 @@ package clients
 
 import (
 	"context"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -61,4 +62,10 @@ var DefaultSelectionLayout = SelectionLayout{File: "mcp.json", Nested: true}
 // generic default is DefaultSelectionLayout.
 type SelectionReader interface {
 	ManagedMCPSelection() SelectionLayout
+}
+
+// NativeDiscoveryPolicy supplies an adapter's bounded CLI registry budget.
+// The observer's explicit timeout remains authoritative when supplied.
+type NativeDiscoveryPolicy interface {
+	NativeDiscoveryTimeout() time.Duration
 }

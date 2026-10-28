@@ -194,7 +194,7 @@ func (p *managementPrepared) bindingActions(ctx context.Context, view installer.
 	}
 	var prepared environment.PreparedSync
 	if len(p.request.aliases) > 0 {
-		prepared, err = (environment.Coordinator{}).PrepareSyncFor(p.request.requirements, p.request.lock, observed, p.request.aliases, nil)
+		prepared, err = (environment.Coordinator{}).PrepareSyncForTargets(p.request.requirements, p.request.lock, observed, p.request.aliases, nil, p.request.targets)
 	} else {
 		prepared, err = (environment.Coordinator{}).PrepareSync(p.request.requirements, p.request.lock, observed)
 	}

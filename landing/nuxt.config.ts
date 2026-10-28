@@ -37,7 +37,7 @@ const discoveryPublicKey =
   process.env.NUXT_PUBLIC_DISCOVERY_PUBLIC_KEY || 'IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc=';
 // Public playback ID for the owner-uploaded product film; an empty override disables it.
 const muxPlaybackId =
-  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'AAEIkquATGMB02se3H3vqNSS9esJeVbfdJHCT00Ciekl00';
+  process.env.NUXT_PUBLIC_MUX_PLAYBACK_ID ?? 'S00EgH5oQPTQzOoF7FkwuJttVnIXTKGjGaUYCuBoZzek';
 
 function resolveRegistrySnapshot(): string {
   const explicit = process.env.UAP_SIGNED_SNAPSHOT_PATH;
@@ -191,6 +191,12 @@ export default defineNuxtConfig({
       discoveryKeyID,
       discoveryPublicKey,
       muxPlaybackId,
+      skillspectorManifestUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_MANIFEST_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v2/index.json',
+      skillspectorReportsUrl:
+        process.env.NUXT_PUBLIC_SKILLSPECTOR_REPORTS_URL ||
+        'https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/skillspector-reports/reports/skillspector/v1/index.json',
       skillsCatalogEndpoint:
         process.env.NUXT_PUBLIC_SKILLS_CATALOG_ENDPOINT ||
         'https://api.universal-agent-plugins.com/v1/skills',
