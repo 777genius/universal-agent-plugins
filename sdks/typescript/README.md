@@ -245,31 +245,50 @@ using the exact engine and pinned native client from that checkout's native proo
 Its artifact includes the SDK receipt and bounded process logs; both the receipt
 and successful process termination are required.
 
-After building, run the example with explicitly provisioned UAP and OpenCode
-executables and the public fixture at an immutable source commit:
+After building, run the example with explicitly provisioned UAP and native client
+executables and the public fixture at an immutable source commit. Select
+`--client claude`, `--client codex`, or `--client opencode` (the default):
 
 ```sh
-node examples/real-engine-smoke.ts \
+node examples/real-engine-smoke.ts --client claude \
   --executable /absolute/path/to/agentplugins \
-  --client-executable /absolute/path/to/opencode \
+  --client-executable /absolute/path/to/claude \
   --source 777genius/universal-agent-plugins@4555aa53844ee0078e9036cd82638afd67f77c16//repotests/testdata/agentplugins_commands_fixture \
   --output /absolute/test-output/sdk-native-evidence.json
 ```
 
 The example creates disposable state, profile, HOME and XDG roots. It installs
-through the actual Go engine, invokes real `opencode debug skill`, checks the exact
-fixture bytes and portable command discovery, and confirms explicit-only commands
-remain withheld. It also checks targeted pinned update, repair, removal, local
+through the actual Go engine. Native observation uses Claude's `plugin list` and
+`plugin details`, Codex's `plugin list` and fresh app-server `skills/list`, or
+OpenCode's `debug skill`. It checks exact fixture bytes, portable command discovery,
+and withheld explicit-only commands. It also checks targeted pinned update, repair, removal, local
 create/edit/delete and restart-visible undo. No model or account login is used.
 
-It separately edits one disposable native Skill and requires a typed preservation
-refusal with unchanged edited bytes and pending observation. The example then
+It separately edits one disposable owned Skill or managed plugin artifact and
+requires preservation with unchanged edited bytes and pending observation. The example then
 explicitly moves that conflicting tree aside as **manual remediation** before
 preparing fresh recovery; the SDK never performs this step automatically.
 
-For crash qualification it removes one whole disposable owned Skill directory, prepares
+Codex removal first verifies the SDK's external-uninstall refusal, invokes the
+real native `plugin remove` for the exact installed identity, and independently
+confirms its absence before submitting a fresh explicit removal attestation.
+
+For crash qualification it removes one whole disposable owned artifact, prepares
 repair, drops the real accepted HTTP response and kills only the owned Go process.
 After restart it reuses the persisted request identity, observes interrupted work,
 prepares fresh recovery and requires the real native consumer to load the restored
 bytes. Transport success alone cannot satisfy that assertion. The output records
 checks incrementally, including failed stages and executable SHA-256 digests.
+
+Linux requires the engine's ordinary-process containment prerequisites, including
+`/proc/<pid>/task/<tid>/children`. Restricted containers without that interface
+cannot qualify the real installation journey; the production refusal remains.
+The existing Native Client Runtime workflow also has a manual `sdk_linux_only`
+mode that runs just the Claude and Codex SDK journeys on Ubuntu, without running
+the other native matrix cells:
+
+```sh
+gh workflow run agentplugins-native-clients.yml \
+  --repo 777genius/universal-agent-plugins \
+  --ref <committed-branch> -f sdk_linux_only=true
+```
