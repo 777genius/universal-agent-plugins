@@ -14,7 +14,8 @@ Where required, `CI_LINUX_ARM_RUNNER` selects
 `nscloud-ubuntu-24.04-arm64-4x8`, and `CI_LINUX_2204_RUNNER` selects
 `nscloud-ubuntu-22.04-amd64-4x8`. Do not route an ARM matrix leg to x86-64.
 Dedicated private-network runners and deployment procedures are outside this
-migration; existing release workflows that already use `CI_LINUX_RUNNER`
+migration. OIDC/attestation signing jobs retain their original GitHub-hosted
+runners. Existing release workflows that already use `CI_LINUX_RUNNER`
 continue following that repository setting. Frozen VS Code workflows are unchanged.
 
 To verify execution, inspect the job's labels and runner name in GitHub Actions
