@@ -8,6 +8,24 @@ import exceptions from '../features/skillspector/exceptions.json' with { type: '
 const digest = /^sha256:[0-9a-f]{64}$/;
 const revision = /^[0-9a-f]{40}$/;
 const repository = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+function sameHistoricalRepository(
+  left: string,
+  right: string,
+  targetRevision: string,
+  aliases: SkillSpectorManifestV3['repository_aliases'],
+) {
+  const canonical = (name: string) => {
+    const lower = name.toLowerCase();
+    // One verified step on each side, matching the producer's same_repository contract.
+    return String(
+      aliases.find(
+        (alias) =>
+          alias.revision === targetRevision && String(alias.repository).toLowerCase() === lower,
+      )?.canonical_repository ?? lower,
+    ).toLowerCase();
+  };
+  return canonical(left) === canonical(right);
+}
 const fail = (): never => {
   throw new Error('SkillSpector v3 report is invalid');
 };
@@ -402,12 +420,11 @@ export function decodeSkillSpectorShardV3(
       !(
         source.repository.toLowerCase() === descriptor.repository.toLowerCase() ||
         (r.freshness === 'historical' &&
-          manifest.repository_aliases.some(
-            (alias) =>
-              String(alias.repository).toLowerCase() === source.repository.toLowerCase() &&
-              String(alias.canonical_repository).toLowerCase() ===
-                descriptor.repository.toLowerCase() &&
-              alias.revision === r.target_revision,
+          sameHistoricalRepository(
+            source.repository,
+            descriptor.repository,
+            r.target_revision,
+            manifest.repository_aliases,
           ))
       ) ||
       !revision.test(source.revision) ||

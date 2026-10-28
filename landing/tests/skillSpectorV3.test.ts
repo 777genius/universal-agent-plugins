@@ -381,6 +381,48 @@ describe('SkillSpector v3 exact producer contract', () => {
     report.repository_aliases[0]!.revision = 'f'.repeat(40);
     assert.throws(() => decodeSkillSpectorShardV3(renamed, report, moved), /invalid/);
   });
+  it('accepts the verbatim published reverse historical alias with one verified step on both names', () => {
+    const record = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-historical-reverse-alias.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const metadata = JSON.parse(
+      readFileSync(
+        new URL('./fixtures/skillspector-v3-historical-reverse-alias.meta.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const index = { ...manifest, ...metadata, repository_aliases: [metadata.alias] };
+    const part = metadata.descriptor;
+    const value = {
+      schema_version: 3,
+      repository: part.repository,
+      scanner: index.scanner,
+      profile: index.profile,
+      records: [record],
+    };
+    assert.deepEqual(decodeSkillSpectorShardV3(value, index, part), [record]);
+
+    for (const aliases of [
+      [],
+      [{ ...metadata.alias, revision: 'f'.repeat(40) }],
+      [{ ...metadata.alias, repository: 'unverified/repo' }],
+      [
+        { ...metadata.alias, canonical_repository: 'intermediate/repo' },
+        { ...metadata.alias, repository: 'intermediate/repo' },
+      ],
+    ]) {
+      assert.throws(
+        () => decodeSkillSpectorShardV3(value, { ...index, repository_aliases: aliases }, part),
+        /invalid/,
+      );
+    }
+    const current = structuredClone(value);
+    current.records[0].freshness = 'current';
+    assert.throws(() => decodeSkillSpectorShardV3(current, index, part), /invalid/);
+  });
   it('preserves and verifies the two content-bound registry false-positive annotations', () => {
     const decoded = decodeSkillSpectorShardV3(shard, manifest, descriptor);
     const annotations = decoded
