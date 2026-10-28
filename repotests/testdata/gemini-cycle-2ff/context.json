@@ -1,0 +1,22 @@
+{
+  "active": "/home/runner/work/_temp/project-runtime-gemini/tmp/TestAgentpluginsGeminiNativeProjectRuntimeAttempt1887541257/001/project/.uap/managed/clients/gemini/native-proof-0c80acf7b0b7",
+  "data": "/home/runner/work/_temp/project-runtime-gemini/tmp/TestAgentpluginsGeminiNativeProjectRuntimeAttempt1887541257/001/project/.uap/plugin-data/native-proof-0c80acf7b0b7",
+  "files": {
+    "native-attempt.stdout.log": "1279f0f866308e679a4ce8ca4fb4c429e4896761742f3e8577da2ebc1355a9a9",
+    "probe-events.jsonl": "9f2c550bbfcf0bc9178402c828950e8bf3b2d9bc596fc748c1ee72acfdfc894e",
+    "provider-request-1.json": "4a07b12a038fc21e1af891c2442ff9e9cb8dba5bf0a06715c8a0559dea7cc6ea",
+    "provider-request-2.json": "6f8921ee14172d7c64f9832e20ea942bf3c3f7de9f825039e299cd17e72ac728"
+  },
+  "home": "/home/runner/work/_temp/project-runtime-gemini/tmp/TestAgentpluginsGeminiNativeProjectRuntimeAttempt1887541257/001/home",
+  "native_id": "mcp_uapgeminia_inspect_runtime__uap_8373cc75381fbabb0f093bab5d288d76_attempt",
+  "native_session": "7d3bbbe8-2e08-4906-866e-90ae12ca97e7",
+  "nonce": "8373cc75381fbabb0f093bab5d288d76",
+  "prompt": "Call only the installed inspect_runtime tool once for the fixture challenge.",
+  "revision": "A-one",
+  "root": "/home/runner/work/_temp/project-runtime-gemini/tmp/TestAgentpluginsGeminiNativeProjectRuntimeAttempt1887541257/001",
+  "sentinel": "UAP_DONE_8373cc75381fbabb0f093bab5d288d76_attempt",
+  "source_commit": "2ff752a5909c96333786cfe80454fd8bf7be3a3b",
+  "source_tree": "9a98d09f6ec25d3d22b137309035bf213f284839",
+  "tool": "mcp_uapgeminia_inspect_runtime",
+  "wire_id": "uap_8373cc75381fbabb0f093bab5d288d76_attempt"
+}

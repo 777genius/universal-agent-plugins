@@ -181,7 +181,7 @@ func assignLoadedGuidedIntent(opts *options, loaded loadedPackage, target domain
 }
 
 func preflightAddTargets(ctx context.Context, app App, opts *options, source string, targets []domain.ClientID, clients []domain.DetectedClient) ([]domain.DetectedClient, map[domain.ClientID]domain.DetectedClient, error) {
-	return preflightSelectedTargets(ctx, app, targets, clients, !opts.dryRun && isDirectorySelector(source), opts.installIntents)
+	return preflightProjectLifecycleTargets(ctx, app, opts, targets, clients, !opts.dryRun && isDirectorySelector(source), opts.installIntents)
 }
 
 func automaticInstallTargets(targets []domain.ClientID, intents map[domain.ClientID]domain.InstallIntent) []domain.ClientID {

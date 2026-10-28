@@ -123,6 +123,9 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 
 func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient, consent ...map[string]bool) ([]dependencyAction, error) {
 	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd}
+	if err := adapter.preflightProjectVersions(cmd.Context(), actions); err != nil {
+		return nil, err
+	}
 	if len(consent) > 0 {
 		adapter.consent = consent[0]
 	}
@@ -175,6 +178,27 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		claims[key] = action.Alias
 	}
 	return actions, nil
+}
+
+func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context, actions []dependencyAction) error {
+	if adapter.app.scope() != domain.ScopeProject || adapter.opts.dryRun {
+		return nil
+	}
+	var targets []domain.ClientID
+	for _, action := range actions {
+		if action.Action == environment.ActionUnchanged {
+			continue
+		}
+		id := domain.ClientID(action.ClientID)
+		client, ok := adapter.detected[id]
+		if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
+			return fmt.Errorf("target %s is not detected; nothing was changed", action.ClientID)
+		}
+		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || action.Action == "repair" {
+			targets = append(targets, id)
+		}
+	}
+	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
 }
 
 type dependencyInstaller struct {
