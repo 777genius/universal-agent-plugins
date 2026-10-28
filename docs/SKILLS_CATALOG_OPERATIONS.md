@@ -161,8 +161,7 @@ checks loading and provisioning, a stronger check than merely adapting the file.
 
 ## Persistence, limits, and normal operations
 
-The unit uses `DynamicUser` and `StateDirectory=uap-skills-catalog` with mode
-0700. Systemd preserves the state directory across stops and restarts and manages
+The unit uses `DynamicUser` and `StateDirectory=uap-skills-catalog` with mode 0700. Systemd preserves the state directory across stops and restarts and manages
 its ownership. With `DynamicUser`, the host may expose it through a symlink into
 `/var/lib/private`; do not manually chown, move, replace, or clear it. See the
 [systemd directory contract](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#StateDirectory=).
@@ -209,8 +208,12 @@ source change. Missing/invalid configuration leaves source preview unavailable
 while existing anonymous search and health continue to work.
 
 Use the reviewed unit on a Linux cgroup-v2 host, with Git and CA certificates
-installed. It mounts a **private 256 MiB tmpfs** at `/tmp`; it does not mount or
-clean the host's temporary directory. The service is unprivileged and has a
+installed. It mounts a **private 256 MiB tmpfs** at
+`/run/uap-skills-resolver`, selected by `SKILLS_RESOLVER_TEMP_DIR`; it does not
+mount or clean the host's temporary directory. Keep this dedicated mount separate
+from `/tmp`: [systemd 255 implies `PrivateTmp` for `DynamicUser`](https://www.freedesktop.org/software/systemd/man/255/systemd.exec.html#DynamicUser=),
+which can shadow a `TemporaryFileSystem=/tmp` mount with host-backed private
+storage. The resolver correctly refuses that unbounded filesystem. The service is unprivileged and has a
 512 MiB cgroup memory limit, 64-task limit and one-CPU quota. `NewHosted` verifies
 the temporary filesystem type/size and the actual current cgroup memory/PID
 limits before enabling the endpoint. Unsupported hosts fail unavailable. The
@@ -218,6 +221,12 @@ unit's Go heap target remains 192 MiB because tmpfs and Git also count toward th
 memory ceiling. Keep **one service replica**: resolver admission is one active
 request per process, burst two with one token added every five seconds. Do not
 scale this recipe without revisiting the aggregate capacity limit.
+
+The source-resolution CI exercises both the Docker envelope and a disposable
+systemd service derived from this unit. The systemd probe uses the unit's scratch
+environment and mount settings, checks actual cgroup admission, fills the tmpfs
+until `ENOSPC`, then confirms scratch is writable after cleanup. It uses no
+production token, cache or listener.
 
 `POST /v1/skills/resolve` accepts no browser Origin, query string, arbitrary URL,
 credentials, CLI arguments or local path. It requires its service bearer token
