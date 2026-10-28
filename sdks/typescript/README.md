@@ -276,10 +276,15 @@ Codex removal first verifies the SDK's external-uninstall refusal, invokes the
 real native `plugin remove` for the exact installed identity, and independently
 confirms its absence before submitting a fresh explicit removal attestation.
 
-For crash qualification it removes one whole disposable owned artifact, prepares
-repair, drops the real accepted HTTP response and kills only the owned Go process.
+Missing Claude/Codex managed packages are separately reconstructed through explicit
+reviewed repair, with assertions on both the restored artifact and native bytes.
+Generic recovery does not grant permission to replace package drift.
+
+For crash qualification it prepares repair, drops the real accepted HTTP response
+and kills only the owned Go process. OpenCode additionally starts with one missing
+separately owned native Skill; Claude/Codex use the intact managed package.
 After restart it reuses the persisted request identity, observes interrupted work,
-prepares fresh recovery and requires the real native consumer to load the restored
+prepares fresh recovery and requires the real native consumer to load the exact
 bytes. Transport success alone cannot satisfy that assertion. The output records
 checks incrementally, including failed stages and executable SHA-256 digests.
 

@@ -47,6 +47,7 @@ const evidence = {
   root, client: nativeClient, platform: process.platform, architecture: process.arch, source: values.source, engineVersion: '', environmentId: '',
   engineSHA256: sha256(await readFile(executable)), nativeSHA256: sha256(await readFile(nativeExecutable)),
   status: 'running', stage: 'startup', error: '', checks: [] as string[],
+  failureEnvironment: undefined as unknown,
   operations: [] as { action: string; operationId: string; state: string }[],
   nativeObservations: [] as { stage: string; pluginId?: string; skills: { name: string; path: string; sha256: string }[] }[],
   lostResponse: undefined as undefined | { planId: string; requestId: string; observedState?: string; operationId?: string },
@@ -167,10 +168,24 @@ async function repairModifiedArtifact() {
   assert.equal((await client().environment()).pendingOperations?.length ?? 0, 0);
   await checkpoint('modified package repair verified', 'reviewed repair replaces managed package drift and native discovery retains exact pinned fixture bytes');
 }
+async function repairAbsentArtifact() {
+  assert.ok(managedArtifact);
+  const guide = nativeClient === 'claude'
+    ? join(managedArtifact, '.agentplugins-runtime', 'skills', 'fixture-guide', 'SKILL.md')
+    : join(managedArtifact, 'skills', 'fixture-guide', 'SKILL.md');
+  const original = await readFile(guide);
+  await rm(managedArtifact, { recursive: true });
+  await assert.rejects(stat(managedArtifact), { code: 'ENOENT' });
+  await apply({ action: 'repair', aliases: ['sdk-fixture'] });
+  assert.deepEqual(await readFile(guide), original, 'Explicit repair must reconstruct the missing managed package');
+  await verifyNativeGuide();
+  await checkpoint('absent package repair verified', 'explicit reviewed repair reconstructs the missing managed package and exact native fixture bytes');
+}
 async function interruptedRepair() {
-  // A wholly absent owned directory can be safely reconstructed. An existing
-  // edited directory is a different policy case, qualified separately above.
-  await rm(nativeClient === 'opencode' ? join(skillsRoot, 'fixture-guide') : managedArtifact!, { recursive: true });
+  // OpenCode's separate native Skill can be reconstructed during convergence.
+  // Missing Claude/Codex managed packages require explicit Repair (tested above),
+  // rather than the Sync used by generic recovery after durable acceptance.
+  if (nativeClient === 'opencode') await rm(join(skillsRoot, 'fixture-guide'), { recursive: true });
   const plan = await client().prepare({ action: 'repair', aliases: ['sdk-fixture'] });
   assert.ok(plan.confirmable);
   const requestId = randomUUID();
@@ -198,7 +213,7 @@ async function interruptedRepair() {
   await verifyNativeGuide();
   const entries = (await client().environment()).entries;
   assert.equal(entries.filter((entry) => entry.alias === 'sdk-fixture').length, 1);
-  await checkpoint('crash recovery verified', 'lost accepted response plus owned-process SIGKILL preserves retry identity; fresh recovery restores real native consumer bytes without duplicate dependency');
+  await checkpoint('crash recovery verified', 'lost accepted response plus owned-process SIGKILL preserves retry identity; fresh recovery verifies exact real native consumer bytes without duplicate dependency');
 }
 try {
   await checkpoint('startup');
@@ -228,7 +243,10 @@ try {
   await checkpoint('pinned update verified', 'targeted exact-commit update preserves the lock');
   await apply({ action: 'repair', aliases: ['sdk-fixture'] });
   if (nativeClient === 'opencode') await preserveEditedNativeSkill();
-  else await repairModifiedArtifact();
+  else {
+    await repairModifiedArtifact();
+    await repairAbsentArtifact();
+  }
   await interruptedRepair();
   await host.close();
   host = await launch();
@@ -275,6 +293,10 @@ try {
 } catch (error) {
   evidence.status = 'failed';
   evidence.error = error instanceof Error ? error.message : 'Unknown qualification failure';
+  if (host && !host.hasExited) {
+    evidence.failureEnvironment = await client().environment({ signal: AbortSignal.timeout(5_000) })
+      .catch((failure: unknown) => ({ unavailable: failure instanceof Error ? failure.message : 'Environment unavailable' }));
+  }
   await checkpoint(evidence.stage);
   throw error;
 } finally {
