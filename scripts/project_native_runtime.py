@@ -446,12 +446,94 @@ def grok_title_provider_members(bodies, client):
     return names
 
 
+def grok_duplicate_object(raw):
+    """Finite refused JSON data only; never a provider/model request grammar."""
+    if type(raw) is not bytes or not 0 < len(raw) <= 1 << 20:
+        raise ValueError("Grok duplicate raw body bound")
+    value = strict_json(raw)
+    if type(value) is not dict:
+        raise ValueError("Grok duplicate raw object required")
+    nodes = 0
+    def visit(item, depth):
+        nonlocal nodes
+        nodes += 1
+        if depth > 32 or nodes > 16384:
+            raise ValueError("Grok duplicate JSON structure bound")
+        if type(item) is dict:
+            for key, child in item.items():
+                if len(key.encode("utf-8", errors="strict")) > 4096:
+                    raise ValueError("Grok duplicate JSON key bound")
+                visit(child, depth + 1)
+        elif type(item) is list:
+            for child in item: visit(child, depth + 1)
+        elif type(item) in (int, float):
+            try:
+                finite = math.isfinite(float(item))
+            except OverflowError:
+                finite = False
+            if not finite:
+                raise ValueError("Grok duplicate nonfinite JSON number")
+    visit(value, 0)
+    decoded = json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8", errors="strict")
+    if grok_private_credential(raw) or grok_private_credential(decoded):
+        raise ValueError("Grok duplicate privacy refusal")
+    return value
+
+
+def grok_duplicate_members(bodies, client):
+    names = {"grok-provider.duplicate.json", "grok-provider.duplicate-request.json"}
+    present = set(bodies) & names
+    if not present:
+        return set()
+    receipt = bodies.get("grok-provider.duplicate.json")
+    if client != "grok" or type(receipt) is not bytes or not 0 < len(receipt) <= 2048:
+        raise ValueError("Grok-only duplicate receipt required")
+    row = strict_json(receipt)
+    fields = {"schema_version", "role", "attempt_index", "status", "original_failure", "response_issued", "captured_bytes", "captured_sha256"}
+    if (type(row) is not dict or set(row) != fields or type(row["schema_version"]) is not int or row["schema_version"] != 1
+            or row["role"] != "main-duplicate-diagnostic" or type(row["attempt_index"]) is not int or row["attempt_index"] != 2
+            or row["original_failure"] != "duplicate" or row["response_issued"] is not False
+            or type(row["captured_bytes"]) is not int or type(row["captured_sha256"]) is not str
+            or type(row["status"]) is not str or row["status"] not in {"captured", "body-refused", "json-refused", "privacy-refused", "context-refused"}):
+        raise ValueError("Grok duplicate finite receipt differs")
+    # Old main/title validators remain the canonical closed parent schemas.
+    grok_provider_members(bodies, client)
+    grok_title_provider_members(bodies, client)
+    main = strict_json(bodies.get("grok-provider.json", b"null"))
+    title = strict_json(bodies.get("grok-title-provider.json", b"null"))
+    if (type(main) is not dict or main.get("requests") != 1 or main.get("responses") != 1 or main.get("failure") != "duplicate"
+            or main.get("started") is not True or main.get("credential_matched") is not True
+            or type(title) is not dict or title.get("role") != "session-title" or title.get("started") is not True):
+        raise ValueError("Grok duplicate completed first main/title join absent")
+    request = grok_duplicate_object(bodies["grok-provider.request.json"])
+    if (request.get("model") != "uap-grok-fixture" or request.get("stream") is not True
+            or type(request.get("messages")) is not list or not 1 <= len(request["messages"]) <= 128
+            or hashlib.sha256(bodies["grok-provider.response.sse"]).hexdigest() != "f2c19ea9dbc0ddbf7cc2facaa5d2d01877897afa0f6fea33cc5651c0ecc9f7b9"):
+        raise ValueError("Grok duplicate unchanged first exchange differs")
+    result = strict_json(bodies.get("runtime-attempt.json", b"null"))
+    if (type(result) is not dict or result.get("client") != "grok" or result.get("runtime_attempt_complete") is not False
+            or result.get("test_failed") is not True or result.get("vendor_authentication_qualified") is not False
+            or result.get("real_model_qualified") is not False or type(result.get("qualification")) is not dict
+            or set(result["qualification"]) != set(shared.QUALIFICATION_CASES) or any(value is not False for value in result["qualification"].values())):
+        raise ValueError("Grok duplicate remains failed and unqualified")
+    if row["status"] == "captured":
+        raw = bodies.get("grok-provider.duplicate-request.json")
+        if (type(raw) is not bytes or not 0 < len(raw) <= 1 << 20 or row["captured_bytes"] != len(raw)
+                or row["captured_sha256"] != hashlib.sha256(raw).hexdigest()):
+            raise ValueError("Grok duplicate raw byte/hash join differs")
+        grok_duplicate_object(raw)
+    elif present != {"grok-provider.duplicate.json"} or row["captured_bytes"] != 0 or row["captured_sha256"] != "":
+        raise ValueError("Grok duplicate refusal retained raw")
+    return names
+
+
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     allowed |= grok_provider_members(bodies, client)
     allowed |= grok_title_provider_members(bodies, client)
+    allowed |= grok_duplicate_members(bodies, client)
     commands = CLI_COMMANDS
     if client == "qoder":
         commands += ("native-catalog",)

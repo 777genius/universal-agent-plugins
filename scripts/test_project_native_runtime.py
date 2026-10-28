@@ -277,6 +277,104 @@ class RuntimeTests(unittest.TestCase):
             changed = {**original, "grok-title-provider.request.json": raw}
             with self.assertRaises(ValueError): runtime.cli_attempt_members(changed, self.source, "grok")
 
+    def grok_duplicate_bodies(self):
+        """Independent refused diagnostic records; no native observation."""
+        bodies = self.grok_title_bodies()
+        main = json.loads(bodies["grok-provider.json"])
+        main["failure"] = "duplicate"
+        bodies["grok-provider.json"] = json.dumps(main).encode()
+        bodies["grok-provider.response.sse"] = (b'data: {"id":"uap-grok-capture","object":"chat.completion.chunk","created":1,"model":"uap-grok-fixture","choices":[{"index":0,"delta":{"role":"assistant","content":"UAP_GROK_PROVIDER_CAPTURE"},"finish_reason":null}]}\n\n'
+            b'data: {"id":"uap-grok-capture","object":"chat.completion.chunk","created":1,"model":"uap-grok-fixture","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n')
+        raw = b'{"unfamiliar":{"purpose":"ordinary refused data"},"model":"not admitted"}'
+        bodies["grok-provider.duplicate-request.json"] = raw
+        bodies["grok-provider.duplicate.json"] = json.dumps({"schema_version": 1, "role": "main-duplicate-diagnostic", "attempt_index": 2,
+            "status": "captured", "original_failure": "duplicate", "response_issued": False, "captured_bytes": len(raw), "captured_sha256": hashlib.sha256(raw).hexdigest()}).encode()
+        return bodies
+
+    def test_grok_duplicate_capture_and_refusals_remain_failed_only(self):
+        for status in ("captured", "body-refused", "json-refused", "privacy-refused", "context-refused"):
+            with self.subTest(status=status):
+                bodies = self.grok_duplicate_bodies()
+                if status != "captured":
+                    row = json.loads(bodies["grok-provider.duplicate.json"])
+                    row.update(status=status, captured_bytes=0, captured_sha256="")
+                    bodies["grok-provider.duplicate.json"] = json.dumps(row).encode()
+                    del bodies["grok-provider.duplicate-request.json"]
+                result = runtime.cli_attempt_members(bodies, self.source, "grok")
+                self.assertTrue(result["test_failed"])
+                self.assertFalse(result["runtime_attempt_complete"])
+                self.assertFalse(any(result["qualification"].values()))
+        # Historical absence of the optional pair stays valid and unchanged.
+        self.assertTrue(runtime.cli_attempt_members(self.grok_title_bodies(), self.source, "grok")["test_failed"])
+
+    def test_grok_duplicate_receipt_has_exact_types_and_member_joins(self):
+        changes = ({"schema_version": True}, {"attempt_index": 2.0}, {"role": "session-title"}, {"status": "accepted"}, {"status": []},
+                   {"original_failure": "none"}, {"response_issued": 0}, {"response_issued": True}, {"captured_bytes": True},
+                   {"captured_bytes": 1}, {"captured_sha256": "0" * 64}, {"captured_sha256": None}, {"private_error": "forbidden"},
+                   {"status": "privacy-refused", "captured_bytes": 0, "captured_sha256": ""})
+        for change in changes:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                bodies = self.grok_duplicate_bodies()
+                row = json.loads(bodies["grok-provider.duplicate.json"])
+                row.update(change)
+                bodies["grok-provider.duplicate.json"] = json.dumps(row).encode()
+                runtime.cli_attempt_members(bodies, self.source, "grok")
+        for missing in ("grok-provider.duplicate.json", "grok-provider.duplicate-request.json", "grok-provider.json", "grok-provider.request.json", "grok-provider.response.sse", "grok-title-provider.json"):
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                bodies = self.grok_duplicate_bodies()
+                del bodies[missing]
+                runtime.cli_attempt_members(bodies, self.source, "grok")
+        for extra in ("grok-provider.duplicate-request-2.json", "grok-provider.duplicate.headers.json"):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**self.grok_duplicate_bodies(), extra: b"{}"}, self.source, "grok")
+        with self.assertRaises(ValueError):
+            runtime.cli_attempt_members(self.grok_duplicate_bodies(), self.source, "qoder")
+
+    def test_grok_duplicate_cannot_forge_first_exchange_or_success(self):
+        for kind in ("main-counter", "main-failure", "main-response", "main-model", "title-identity", "runtime", "test-failed", "authentication", "model", "qualification"):
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                bodies = self.grok_duplicate_bodies()
+                if kind in ("main-counter", "main-failure"):
+                    row = json.loads(bodies["grok-provider.json"])
+                    row.update({"requests": 0} if kind == "main-counter" else {"failure": "none"})
+                    bodies["grok-provider.json"] = json.dumps(row).encode()
+                elif kind == "main-response": bodies["grok-provider.response.sse"] += b"\n"
+                elif kind == "main-model":
+                    row = json.loads(bodies["grok-provider.request.json"])
+                    row["model"] = "foreign"
+                    bodies["grok-provider.request.json"] = json.dumps(row).encode()
+                elif kind == "title-identity":
+                    row = json.loads(bodies["grok-title-provider.json"])
+                    row["model"] = "foreign"
+                    bodies["grok-title-provider.json"] = json.dumps(row).encode()
+                else:
+                    row = json.loads(bodies["runtime-attempt.json"])
+                    if kind == "qualification": row["qualification"]["mcp-tools-call"] = True
+                    else: row[{"runtime": "runtime_attempt_complete", "test-failed": "test_failed", "authentication": "vendor_authentication_qualified", "model": "real_model_qualified"}[kind]] = kind != "test-failed"
+                    bodies["runtime-attempt.json"] = json.dumps(row).encode()
+                runtime.cli_attempt_members(bodies, self.source, "grok")
+
+    def test_grok_duplicate_coherent_hash_cannot_cover_unsafe_or_nonfinite_body(self):
+        unsafe = (b"", b"[]", b"null", b"42", b'{"unclosed":', b'{"x":1,"x":2}', b"{} {}", b'{"n":1e9999}',
+                  json.dumps({"n": 10 ** 400}).encode(), b'{"n":' + b"[" * 34 + b"0" + b"]" * 34 + b"}",
+                  b'{"nodes":[' + b"0," * 16384 + b"0]}", json.dumps({"é" * 2049: True}).encode(), b"\xff", b" " * ((1 << 20) + 1),
+                  b'{"opaque":"uap-grok-private-inert"}', b'{"opaque":"\\u0075ap-grok-private-inert"}',
+                  json.dumps({"opaque": '{"\\u0075ap-grok-private-inert":"ordinary"}'}).encode())
+        for raw in unsafe:
+            with self.subTest(raw_bytes=len(raw)), self.assertRaises(ValueError):
+                bodies = self.grok_duplicate_bodies()
+                row = json.loads(bodies["grok-provider.duplicate.json"])
+                row.update(captured_bytes=len(raw), captured_sha256=hashlib.sha256(raw).hexdigest())
+                bodies["grok-provider.duplicate.json"] = json.dumps(row).encode()
+                bodies["grok-provider.duplicate-request.json"] = raw
+                runtime.cli_attempt_members(bodies, self.source, "grok")
+        bodies = self.grok_duplicate_bodies()
+        raw = json.dumps({"é" * 2048: 10 ** 308}, ensure_ascii=False).encode()
+        row = json.loads(bodies["grok-provider.duplicate.json"])
+        row.update(captured_bytes=len(raw), captured_sha256=hashlib.sha256(raw).hexdigest())
+        bodies["grok-provider.duplicate.json"], bodies["grok-provider.duplicate-request.json"] = json.dumps(row).encode(), raw
+        self.assertTrue(runtime.cli_attempt_members(bodies, self.source, "grok")["test_failed"])
+
     def grok_route_bodies(self):
         bodies = self.grok_provider_bodies()
         row = json.loads(bodies["grok-provider.json"])

@@ -47,3 +47,54 @@ release or deferred VS Code claim.
 
 Local receipt paths identify this execution. The committed source, approved plan
 and this validation document preserve the reviewable repository history.
+
+## Refused second main request: bounded diagnostic candidate
+
+The separate accepted amendment is committed before code at
+`bb94f00bba12d59b80bdd2bfd600aa3af6e66d72`, following two independent plan GOs.
+It addresses the actual `348e2ce8` capture: one first main exchange and one title
+exchange completed, then an additional main HTTP attempt hit the original
+duplicate refusal before its body was read. That capture remains failed and
+all five qualification flags, runtime, authentication and real-model claims
+remain false. Its second body and purpose are unknown.
+
+The candidate adds one main-only observation slot. Original context, literal
+route, loopback and authentication checks run first. Under the existing mutex,
+the completed first main request/response and distinct held title fixture permit
+one atomic duplicate/failure reservation. Body reading and privacy validation
+run outside the lock, at most 1 MiB + 1, under the unchanged five-second HTTP
+read limit and original 60/150/180-second origins. No deadline is renewed.
+The unconditional deferred path settles the observation and executes the
+original HTTP 400 refusal and duplicate cancellation. A third or concurrent
+request remains immediately refused and can cancel a blocked observer; it
+cannot claim another slot, replace the first failure or increment counters.
+
+Only a complete bounded UTF8 strict JSON object that passes both held-key and
+recursive privacy checks is retained, opaquely. No field becomes a new model,
+tool, prompt or response grammar. Every refusal retains zero raw bytes. After
+the original stop settles handler/connection bookkeeping, export snapshots
+state under the lock, then validates and persists outside it through the
+unchanged evidence/privacy guards.
+
+The optional fixed `grok-provider.duplicate.json` receipt is at most 2048 bytes.
+Its closed fields are schema version 1, role `main-duplicate-diagnostic`, attempt
+index 2, a finite status, original failure `duplicate`, false response-issued,
+captured byte count and SHA256. `grok-provider.duplicate-request.json` exists only
+for a captured status, within the existing 1 MiB member bound and with its exact
+length/hash. Refused statuses have no raw member, zero length and empty digest.
+Go and Python readers join the pair to the failed all-false tuple, original
+first exchange and separate title evidence, and independently recheck structure,
+privacy, member isolation and byte/hash consistency. Historical captures without
+this optional pair retain their original admission.
+
+New inert contracts are authored for the actual loopback first/second/third HTTP
+sequence, original five-second partial read, concurrent cancellation and stop,
+ineligible/title/incomplete-first requests, finite JSON and both held-key privacy
+refusals, plus coherent hash-updated artifact mutations. These contracts are
+synthetic and have not yet been executed for this candidate. The existing
+main/title schemas and response bytes, command/config/profile/process guards,
+native pins, selection and workflow are unchanged. Before publication this
+candidate still requires exact-source executed Go/Python/lint gates, original
+capture replay and two independent CODE critics. A fresh genuine hosted capture
+and independent raw audit are required to observe any new refused body; even a
+safe captured body remains failed, unqualified diagnostic evidence.

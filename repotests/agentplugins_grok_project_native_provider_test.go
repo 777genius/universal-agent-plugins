@@ -51,6 +51,7 @@ type grokProjectProvider struct {
 	authoredConfig []byte
 	receipt        grokProjectProviderReceipt
 	title          *grokProjectTitleProvider
+	duplicate      *grokProjectDuplicateCapture
 }
 
 func newGrokProjectProvider(ctx context.Context, cancel context.CancelFunc, totalEnd time.Time) (*grokProjectProvider, error) {
@@ -144,13 +145,19 @@ func (p *grokProjectProvider) admit(w http.ResponseWriter, r *http.Request) bool
 		reason = "credential"
 	}
 	p.mu.Lock()
+	var duplicate *grokProjectDuplicateCapture
 	if reason == "none" && p.attempted {
 		reason = "duplicate"
+		duplicate = p.claimDuplicate()
 	}
 	if reason == "none" {
 		p.attempted, p.receipt.CredentialMatched = true, true
 	}
 	p.mu.Unlock()
+	if duplicate != nil {
+		p.observeDuplicate(w, r, duplicate)
+		return false
+	}
 	if reason != "none" {
 		http.Error(w, "closed Grok provider request refused", http.StatusBadRequest)
 		p.failWithRequest(reason, r)
@@ -271,6 +278,7 @@ func (p *grokProjectProvider) finish(t *testing.T, f *projectNativeCLIAttempt) {
 	if !p.stop() {
 		t.Error("Grok test provider ordinary shutdown did not complete")
 	}
+	defer p.finishDuplicate(t, f)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.request) != 0 {
