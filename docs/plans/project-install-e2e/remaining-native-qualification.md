@@ -3017,3 +3017,26 @@ and real-model=false remain truthful. Two exact CODE reviews, inert gates,
 original/current RAW replay and fresh actual hosted whole-evidence review remain
 mandatory. No artificial review barrier, local vendor run, production/VS Code/
 pin/workflow change or unchanged-source retry is introduced.
+
+### Measured Copilot User command name correction (2026-10-28)
+
+Actual d32d8fd6 run40734424271 completes the first installed-User native process
+with15 exact events, one provider exchange, ordinary shutdown and zero probe
+bytes, but fails the whole catalog check. Two independent full raw audits bind
+both API artifacts,21 native/25 frontend members,24 frontend stream joins,
+source/build/pins and exact User source/state/native/no-data receipts. The sole
+catalog mismatch is the plugin skill commandName: actual
+`native-proof:uapcopilotuser`, while the original prediction was `uapcopilotuser`.
+The independently authored manifest declares exactly `native-proof`; all other
+foreign/builtin metadata matches. No project session ran in this failed prefix.
+
+Two independent plan and exact code reviews accept only that fixed User plugin
+spelling in the Go/Python expectations. Literal positive catalogs and seven
+negative namespace/name controls preserve plain project/foreign/builtin names
+and reject bare, wrong or doubled User prefixes. The four-file reviewed
+manifest is57a5ffd6e528ac5a5f7a4d23a6810d5eaa6c0b8b7480889965c0969586eba82a.
+Both focused Go catalog contracts pass without skips;39 focused Python
+contracts pass; affected all-enabled and whole-root six-linter gates report
+zero issues. The original full archive still replays byte-for-byte to its
+failed/all-false result. A fresh complete-cycle hosted run and two full raw
+audits remain required. No native vendor executable ran locally.

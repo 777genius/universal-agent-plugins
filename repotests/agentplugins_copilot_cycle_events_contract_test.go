@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
 )
 
@@ -127,6 +128,59 @@ func TestCopilotCycleSkillCatalogCannotDropForeignOrCrossScope(t *testing.T) {
 		err = c.skillCatalog(catalog, c.f.other)
 		if (err == nil) != (kind == "complete") {
 			t.Fatal("whole skill authority widened", kind, err)
+		}
+	}
+}
+
+func TestCopilotCycleUserPluginCommandNameIsExactlyNamespaced(t *testing.T) {
+	c := copilotCycleInert(t)
+	for _, key := range []string{"user", "a"} {
+		copilotCycleStageInert(t, c, key)
+	}
+	user, project := c.recipes["user"], c.recipes["a"]
+	// Literal catalog identities are independent of the expectation constructor.
+	// Only the User plugin commandName has the measured plugin namespace.
+	catalog := []any{
+		map[string]any{"name": "uap-foreign-user", "commandName": "uap-foreign-user", "description": "Original user skill must remain unchanged", "source": "personal-copilot", "userInvocable": true, "enabled": true, "path": filepath.Join(c.f.base.Home, ".copilot", "skills", "uap-foreign-user", "SKILL.md")},
+		map[string]any{"name": "uapcopilotuser", "commandName": "native-proof:uapcopilotuser", "description": "Disposable Copilot user user-one " + user.Nonce, "source": "plugin", "userInvocable": true, "enabled": true, "path": user.SkillPath},
+		map[string]any{"name": "uapcopilota", "commandName": "uapcopilota", "description": "Disposable Copilot a a-one " + project.Nonce, "source": "project", "userInvocable": true, "enabled": true, "path": project.SkillPath},
+	}
+	f, _, raw := copilotReadinessActual(t)
+	measured, err := copilotReadinessDecode(raw, f.nativeStarted, f.nativeEnded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range measured.data[3]["skills"].([]any) {
+		row := value.(map[string]any)
+		if row["source"] == "builtin" {
+			row["path"] = filepath.Join(c.f.base.Root, "xdg-cache", "copilot", "pkg", "linux-x64", "1.0.103", "builtin", row["name"].(string), "SKILL.md")
+			catalog = append(catalog, row)
+		}
+	}
+	if err := c.skillCatalog(catalog, c.f.base.Project); err != nil {
+		t.Fatal("measured User spelling or unchanged other catalog identities refused", err)
+	}
+	for _, fault := range []struct {
+		index int
+		field string
+		value string
+	}{
+		{1, "commandName", "uapcopilotuser"},
+		{1, "commandName", "other:uapcopilotuser"},
+		{1, "commandName", "native-proof:native-proof:uapcopilotuser"},
+		{1, "name", "native-proof:uapcopilotuser"},
+		{0, "commandName", "native-proof:uap-foreign-user"},
+		{2, "commandName", "native-proof:uapcopilota"},
+		{3, "commandName", "native-proof:" + catalog[3].(map[string]any)["name"].(string)},
+	} {
+		bad := append([]any{}, catalog...)
+		entry := map[string]any{}
+		for key, value := range catalog[fault.index].(map[string]any) {
+			entry[key] = value
+		}
+		entry[fault.field], bad[fault.index] = fault.value, entry
+		if c.skillCatalog(bad, c.f.base.Project) == nil {
+			t.Fatal("User namespace correction widened a different exact identity", fault)
 		}
 	}
 }

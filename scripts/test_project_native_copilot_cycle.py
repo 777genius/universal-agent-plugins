@@ -204,6 +204,7 @@ class CopilotCycleContracts(unittest.TestCase):
         original = skill(name, description, "personal-copilot", path)
         user_path = root + "/installer-state/managed/clients/copilot/native-proof-000000000000/skills/uapcopilotuser/SKILL.md"
         user = skill("uapcopilotuser", "Disposable Copilot user user-one " + proof.nonce(base, "user"), "plugin", user_path)
+        user["commandName"] = "native-proof:uapcopilotuser"
         managed_path = root + "/project/.github/skills/uapcopilota/SKILL.md"
         managed = skill("uapcopilota", "Disposable Copilot a a-one " + n, "project", managed_path)
         builtins = copy.deepcopy(data[3]["skills"][1:])
@@ -212,6 +213,17 @@ class CopilotCycleContracts(unittest.TestCase):
         recipes = {"base_nonce": base, "proofs": {"add-user": {"skill_path": user_path}, "after-native-installed-a": {"revision": "a-one", "nonce": n, "skill_path": managed_path}}}
         data[3]["skills"] = [original, user, managed] + builtins
         self.assertEqual(exchange.catalog(data, layout, recipes, "installed-a"), layout["a"])
+        for index, field, value in ((1, "commandName", "uapcopilotuser"),
+                                    (1, "commandName", "other:uapcopilotuser"),
+                                    (1, "commandName", "native-proof:native-proof:uapcopilotuser"),
+                                    (1, "name", "native-proof:uapcopilotuser"),
+                                    (0, "commandName", "native-proof:uap-foreign-user"),
+                                    (2, "commandName", "native-proof:uapcopilota"),
+                                    (3, "commandName", "native-proof:" + builtins[0]["name"])):
+            bad = copy.deepcopy(data)
+            bad[3]["skills"][index][field] = value
+            with self.subTest(index=index, field=field, value=value), self.assertRaises(ValueError):
+                exchange.catalog(bad, layout, recipes, "installed-a")
         # Final absence retains original foreign User + measured builtins, with
         # zero fixture skills or server declarations in the whole catalog.
         empty = copy.deepcopy(data[3:7])

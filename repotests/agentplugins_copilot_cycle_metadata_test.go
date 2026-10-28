@@ -28,6 +28,9 @@ func (c *copilotProjectCycle) skills(project string) map[string]map[string]any {
 			source = "plugin"
 		}
 		add(r.Skill, fmt.Sprintf("Disposable Copilot %s %s %s", r.Key, r.Revision, r.Nonce), source, r.SkillPath, true)
+		if key == "user" {
+			want[r.Skill]["commandName"] = "native-proof:" + r.Skill
+		}
 	}
 	for _, name := range []string{"customize-cloud-agent", "github-pr-media"} {
 		add(name, "", "builtin", filepath.Join(c.f.base.Root, "xdg-cache", "copilot", "pkg", "linux-x64", "1.0.103", "builtin", name, "SKILL.md"), false)

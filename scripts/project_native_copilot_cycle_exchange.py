@@ -66,6 +66,7 @@ def catalog(data, layout, recipes, stage):
     if stage not in ("final-a", "final-b"):
         user = proofs["add-user"]
         add("uapcopilotuser", "Disposable Copilot user user-one " + nonce(base, "user"), "plugin", user["skill_path"])
+        want["uapcopilotuser"]["commandName"] = "native-proof:uapcopilotuser"
     if call:
         value = proofs[PROOF_FOR[stage]]
         skill = "uapcopilot" + key
