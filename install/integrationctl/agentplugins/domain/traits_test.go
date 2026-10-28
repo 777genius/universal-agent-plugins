@@ -123,7 +123,7 @@ func TestBackendSiblingsAgreeOnCommandDelivery(t *testing.T) {
 func TestOnlyTheFrozenFamilyWithholdsCommands(t *testing.T) {
 	for _, definition := range ClientDefinitions() {
 		withheld := definition.CommandSupport == SupportUnsupported
-		if family := definition.BackendFamily == "github-copilot"; withheld != family {
+		if family := definition.BackendFamily == "github-copilot" || definition.ID == ClientPi; withheld != family {
 			t.Errorf("%s withholds commands = %v, want %v", definition.ID, withheld, family)
 		}
 		if DeliversCommand(Command{Name: "echo"}, definition) == withheld {

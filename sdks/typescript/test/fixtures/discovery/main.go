@@ -59,6 +59,19 @@ func main() {
 		}
 	}
 	targets := []any{target}
+	if mode == "environment" {
+		for _, profile := range []struct{ client, locator string }{
+			{client: "pi", locator: "PI_CODING_AGENT_DIR"},
+			{client: "qoder", locator: "QODER_CONFIG_DIR"},
+		} {
+			targets = append(targets, map[string]any{
+				"client": profile.client, "label": profile.client, "available": true, "detectionStatus": "detected",
+				"profile": map[string]any{
+					"id": profile.client, "client": profile.client, "configRoot": os.Getenv(profile.locator), "detectionStatus": "detected",
+				},
+			})
+		}
+	}
 	if mode == "duplicate" {
 		targets = append(targets, target)
 	}

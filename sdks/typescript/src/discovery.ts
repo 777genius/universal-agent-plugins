@@ -40,6 +40,8 @@ function discoveryEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     'CODEX_HOME',
     'CLAUDE_CONFIG_DIR',
     'GEMINI_CLI_HOME',
+    'QODER_CONFIG_DIR',
+    'PI_CODING_AGENT_DIR',
     'CLINE_DATA_DIR',
     'CLINE_MCP_SETTINGS_PATH',
     'AGENTPLUGINS_HOME',

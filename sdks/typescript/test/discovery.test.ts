@@ -86,12 +86,18 @@ for (const [mode, code] of [
   });
 }
 
-test('discovery filters credentials and launch options even from an explicit environment', async () => {
+test('discovery preserves native profile locators while filtering credentials and launch options', async () => {
   const input = await options('environment');
+  const profiles = {
+    pi: join(directory, 'selected-pi-profile'),
+    qoder: join(directory, 'selected-qoder-profile'),
+  };
   const result = await discoverTargets({
     ...input,
     env: {
       ...input.env,
+      PI_CODING_AGENT_DIR: profiles.pi,
+      QODER_CONFIG_DIR: profiles.qoder,
       OPENAI_API_KEY: 'fixture-secret',
       ANTHROPIC_AUTH_TOKEN: 'fixture-secret',
       NODE_OPTIONS: '--unexpected',
@@ -102,6 +108,14 @@ test('discovery filters credentials and launch options even from an explicit env
   });
   assert.equal(result.targets[0]?.label, 'Gemini CLI');
   assert.equal(result.targets[0]?.profile?.configRoot, input.env.GEMINI_CLI_HOME);
+  for (const [client, configRoot] of Object.entries(profiles)) {
+    assert.deepEqual(result.targets.find((target) => target.client === client)?.profile, {
+      id: client,
+      client,
+      configRoot,
+      detectionStatus: 'detected',
+    });
+  }
 });
 
 test('deadline reaps only the owned discovery process even when it ignores SIGTERM', async () => {

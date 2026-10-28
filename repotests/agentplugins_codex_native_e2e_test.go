@@ -36,6 +36,7 @@ func nativeBinary(t *testing.T, key string) string {
 }
 
 type nativeRPC struct {
+	ctx      context.Context
 	cmd      *exec.Cmd
 	in       io.WriteCloser
 	messages chan []byte
@@ -77,7 +78,7 @@ func startNativeRPC(t *testing.T, f *nativeFixture, client, label string) *nativ
 		log.Close()
 		t.Fatal(err)
 	}
-	r := &nativeRPC{cmd: cmd, in: in, cancel: cancel, log: log, messages: make(chan []byte, 128)}
+	r := &nativeRPC{ctx: ctx, cmd: cmd, in: in, cancel: cancel, log: log, messages: make(chan []byte, 128)}
 	go func() {
 		defer close(r.messages)
 		scan := bufio.NewScanner(io.LimitReader(out, 16<<20))
@@ -104,6 +105,14 @@ func (r *nativeRPC) close() {
 	}
 }
 func (r *nativeRPC) request(method string, params any) (json.RawMessage, error) {
+	return r.requestContext(r.ctx, method, params)
+}
+func (r *nativeRPC) requestContext(parent context.Context, method string, params any) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(parent, 35*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r.next++
 	id := r.next
 	request := map[string]any{"id": id, "method": method, "params": params}
@@ -113,8 +122,6 @@ func (r *nativeRPC) request(method string, params any) (json.RawMessage, error) 
 	if err := json.NewEncoder(r.in).Encode(request); err != nil {
 		return nil, err
 	}
-	timer := time.NewTimer(35 * time.Second)
-	defer timer.Stop()
 	for {
 		select {
 		case b, ok := <-r.messages:
@@ -138,8 +145,8 @@ func (r *nativeRPC) request(method string, params any) (json.RawMessage, error) 
 				}
 				return row.Result, nil
 			}
-		case <-timer.C:
-			return nil, fmt.Errorf("timeout: %s", method)
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%s: %w", method, ctx.Err())
 		}
 	}
 }
