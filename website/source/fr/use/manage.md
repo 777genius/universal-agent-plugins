@@ -16,8 +16,12 @@ translationRequired: true
 
 ## Maintenir un projet dans le code actuel
 
-**Code source uniquement ; fonctionnalité non publiée.** Choisissez la même
-portée et le même projet pour chaque commande de maintenance :
+**Code source uniquement ; pas encore publié.** L’installation sans argument
+identifie le projet par son fichier de dépendances dans le répertoire courant,
+sans chercher dans les répertoires parents. Le fichier de verrouillage existant
+est validé strictement avant toute modification. Le choix explicite de la portée
+reste prioritaire ; les autres commandes de maintenance demandent de choisir
+explicitement la portée et le projet.
 
 [Les commandes de maintenance figurent dans la section anglaise](/en/use/manage#maintain-a-project-in-the-current-source).
 

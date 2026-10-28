@@ -16,8 +16,12 @@ translationRequired: true
 
 ## Mantener un proyecto en el código actual
 
-**Solo código fuente; aún no publicado.** Selecciona el mismo ámbito y proyecto
-en cada comando de mantenimiento:
+**Solo en el código fuente; aún no publicado.** La instalación sin argumento
+identifica el proyecto por su archivo de dependencias en el directorio actual,
+sin buscar en los directorios superiores. El archivo de bloqueo existente se
+valida estrictamente antes de modificar nada. La selección explícita del ámbito
+tiene prioridad; los demás comandos de mantenimiento requieren elegir el ámbito
+y el proyecto de forma explícita.
 
 [Los comandos de mantenimiento están en la sección inglesa](/en/use/manage#maintain-a-project-in-the-current-source).
 
