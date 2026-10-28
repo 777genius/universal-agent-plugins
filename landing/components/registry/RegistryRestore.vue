@@ -170,8 +170,9 @@ const { restoreGuideUrl } = useDocsLinks();
     min-width: 0;
     container-type: inline-size;
     // Coordinates refer to the immutable 1577 × 997 monitor asset.
-    // Match the approved silhouette (670 × 424) after the asset's alpha margins.
-    aspect-ratio: 1577 / 1065;
+    // Match the approved 671 × 425 silhouette after the asset's alpha margins
+    // (1496 × 872 visible pixels); compare at uniform scale, never stretch QA images.
+    aspect-ratio: 1577 / 1083;
     direction: ltr;
   }
 
