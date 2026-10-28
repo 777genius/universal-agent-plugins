@@ -42,7 +42,7 @@ jobs:
             runner: macos-15
           - target: windows-amd64
             runner: windows-2025
-    runs-on: ${{ matrix.platform.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.platform.runner || startsWith(matrix.platform.runner, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.platform.runner) || matrix.platform.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
