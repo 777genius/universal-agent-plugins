@@ -4,9 +4,6 @@
 package qoder
 
 import (
-	"path/filepath"
-	"strings"
-
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -23,14 +20,18 @@ var (
 func (*Adapter) ID() domain.ClientID { return domain.ClientQoder }
 
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
-	root := filepath.Join(host.HomeDir(), ".qoder")
-	if configured := strings.TrimSpace(host.Env("QODER_HOME")); configured != "" {
-		root = configured
+	root, err := detectedProfileRoot(host)
+	if err != nil {
+		return clients.Detection{Err: err}
+	}
+	executable := host.LookPath("qoder")
+	if executable == "" {
+		executable = host.LookPath("qodercli")
 	}
 	return clients.Detection{
-		ConfigRoot: root, ExecutablePath: host.LookPath("qoder"),
+		ConfigRoot: root, ExecutablePath: executable,
 		Surfaces: []domain.ClientSurface{
-			host.BinarySurface("qoder_cli", "qoder"),
+			host.ResolvedBinarySurface("qoder_cli", executable),
 			host.DirectorySurface("qoder_config", root),
 		},
 	}

@@ -48,3 +48,31 @@ func TestSelectedSyncAndAttestation(t *testing.T) {
 		t.Fatal("removal attestation accepted")
 	}
 }
+
+func TestSelectedSyncTargetsKeepOtherIntentAndBindings(t *testing.T) {
+	req := Requirements{SchemaVersion: 1, Dependencies: map[string]Requirement{"demo": {Alias: "demo", Git: &GitSource{Repository: "acme/demo", Selector: Selector{Kind: SelectorRef, Value: "main"}}}}, Targets: map[string][]string{"codex": {"demo"}, "claude": {"demo"}}}
+	c := Coordinator{Resolver: &countingResolver{}}
+	lock, err := c.Resolve(context.Background(), req, Lock{}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Unselected drift must neither block the selected install nor become removal.
+	observed := []BindingObservation{{Alias: "demo", ClientID: "claude", Managed: true, Drift: true, SourceKey: lock.Packages[0].SourceKey}}
+	plan, err := c.PrepareSyncForTargets(req, lock, observed, []string{"demo"}, nil, []string{"codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Bindings) != 1 || plan.Bindings[0].ClientID != "codex" || plan.Bindings[0].Action != ActionInstall {
+		t.Fatalf("unexpected actions: %+v", plan.Bindings)
+	}
+	if len(lock.Packages[0].Targets) != 2 || len(req.Targets) != 2 {
+		t.Fatal("saved targets mutated")
+	}
+	if _, err = c.PrepareSyncFor(req, lock, observed, []string{"demo"}, nil); err == nil {
+		t.Fatal("alias-wide sync ignored saved drift")
+	}
+	observed[0].SourceKey = "different-source"
+	if _, err = c.PrepareSyncForTargets(req, lock, observed, []string{"demo"}, nil, []string{"codex"}); err == nil {
+		t.Fatal("selected sync ignored global source identity conflict")
+	}
+}

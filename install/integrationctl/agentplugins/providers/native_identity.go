@@ -37,7 +37,10 @@ type NativeIdentityObserver struct {
 	Registry *clients.Registry
 }
 
-const defaultNativeDiscoveryTimeout = 15 * time.Second
+// Native CLIs can take tens of seconds on first launch (including runtime
+// initialization). Keep discovery finite without rejecting a healthy cold start;
+// context.WithTimeout still preserves an earlier caller deadline.
+const defaultNativeDiscoveryTimeout = 60 * time.Second
 
 // The finding vocabulary belongs to the client contract: these names stay here
 // as aliases so in-package tests keep reading the same tokens.
