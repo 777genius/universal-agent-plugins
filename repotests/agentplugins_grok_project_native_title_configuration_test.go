@@ -24,6 +24,11 @@ func TestGrokProjectTitleConfigurationFreezesBothHeldRoutesInOriginalHome(t *tes
 	f := &projectNativeCLIAttempt{spec: projectNativeCLISpec{client: "grok"}, ctx: ctx, cancel: cancel, started: time.Now(),
 		base: &nativeFixture{Root: root, Home: filepath.Join(root, "original-home"), Project: filepath.Join(root, "project"),
 			CodexHome: filepath.Join(root, "original-codex")}, protected: map[string]string{}, evidence: map[string]any{}}
+	for _, path := range []string{f.base.Home, f.base.Project} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	t.Cleanup(func() {
 		if f.grok != nil {
 			if f.grok.title != nil {
@@ -50,6 +55,7 @@ func TestGrokProjectTitleConfigurationFreezesBothHeldRoutesInOriginalHome(t *tes
 		},
 		"marketplace": map[string]any{"default_skills_installs_purged": true},
 		"features":    map[string]any{"turn_summary": false},
+		"plugins":     map[string]any{"enabled": []any{"uap-grok-attempt"}},
 	}
 	parsed, status := grokConfigParse(main.authoredConfig)
 	if status != "captured" || !reflect.DeepEqual(parsed, want) {

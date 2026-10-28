@@ -61,8 +61,15 @@ func (f *projectNativeCLIAttempt) configureGrokTitleProvider(t *testing.T) {
 	if err = f.grok.title.start(); err != nil {
 		t.Fatal("Grok title fixture listener could not start")
 	}
-	// Both held endpoints are authored before the original config's only freeze.
-	configuration := append(f.grok.title.configuration(f.grok.configuration()), []byte("\n[features]\nturn_summary = false\n")...)
+	trust, err := grokProjectSelectionTrust(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustPath := filepath.Join(f.base.Home, ".grok", "trusted_folders.toml")
+	projectNativeRuntimeWrite(t, trustPath, trust, 0600)
+	f.protected[trustPath] = nativeSHA(t, trustPath)
+	// Both held endpoints and the supported name selector precede the only freeze.
+	configuration := append(f.grok.title.configuration(f.grok.configuration()), []byte("\n[plugins]\nenabled = [\"uap-grok-attempt\"]\n\n[features]\nturn_summary = false\n")...)
 	path := filepath.Join(f.base.Home, ".grok", "config.toml")
 	projectNativeRuntimeWrite(t, path, configuration, 0600)
 	f.grok.authoredConfig = bytes.Clone(configuration)

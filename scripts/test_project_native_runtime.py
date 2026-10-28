@@ -129,6 +129,93 @@ class RuntimeTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         runtime.cli_attempt_members({"runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source, client)
 
+    def grok_selected_bodies(self):
+        project, name, target = "/owned/project", "uap-grok-attempt", "/owned/project/.grok/plugins/selected-artifact"
+        skill = target + "/skills/" + name + "/SKILL.md"
+        result = {**self.cli_result("grok"), "fixture_selection": "owned-project-trust-and-selected-plugin-name",
+                  "binding": {"client_id": "grok", "scope": "project", "activation": "prepared", "verification": "package_validated",
+                              "native_profile_root": project + "/.grok", "target_locator": target, "physical_artifact_id": "selected-artifact"},
+                  "installed_skill": skill, "native_inspection": {"name": name, "scope": "project", "path": target, "enabled": True,
+                      "project_trusted": True, "installed_skill": skill,
+                      "interpretation": "exact selected plugin skill listed; no skill execution or lifecycle/runtime qualification"}}
+        inspect = {"grokVersion": "1.0.70", "cwd": project, "projectRoot": project + "/", "projectTrusted": True,
+                   "plugins": [{"name": name, "scope": "project", "path": target, "enabled": True}],
+                   "skills": [{"name": name, "description": "Harmless installed startup marker", "userInvocable": True,
+                               "source": {"type": "plugin", "plugin_name": name, "path": skill}}]}
+        bodies = {"runtime-attempt.json": json.dumps(result).encode()}
+        for label, argv, cwd, output in (("version", ["/held/grok", "--version"], "/owned/outside", b"grok 1.0.70 (f50904eaee6c)\n"),
+                ("native-inspect", ["/held/grok", "inspect", "--json"], project, json.dumps(inspect).encode())):
+            bodies.update({label + ".stdout.log": output, label + ".stderr.log": b"", label + ".command.json": json.dumps({
+                "argv": argv, "cwd": cwd, "exit": 0, "error": False, "deadline": False, "elapsed_ms": 1,
+                "cleanup": "full descendant supervision; forced cleanup fails"}).encode()})
+        return bodies
+
+    def test_grok_selected_observation_is_joined_and_still_failed_only(self):
+        bodies = self.grok_selected_bodies()
+        result = runtime.cli_attempt_members(bodies, self.source, "grok")
+        self.assertTrue(result["test_failed"])
+        self.assertFalse(result["runtime_attempt_complete"])
+        self.assertFalse(any(result["qualification"].values()))
+        for change in ({"runtime_attempt_complete": True}, {"test_failed": False}, {"vendor_authentication_qualified": True},
+                       {"real_model_qualified": True}, {"fixture_selection": None}, {"fixture_selection": "global-trust"},
+                       {"native_inspection": None}, {"installed_skill": "/foreign/SKILL.md"}, {"binding": {}}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source, "grok")
+        unmarked = dict(result)
+        del unmarked["fixture_selection"]
+        with self.assertRaises(ValueError):
+            runtime.cli_attempt_members({**bodies, "runtime-attempt.json": json.dumps(unmarked).encode()}, self.source, "grok")
+        for key, value in (("enabled", 1), ("project_trusted", 1)):
+            changed = {**result, "native_inspection": {**result["native_inspection"], key: value}}
+            with self.assertRaises(ValueError):
+                runtime.cli_attempt_members({**bodies, "runtime-attempt.json": json.dumps(changed).encode()}, self.source, "grok")
+
+    def test_grok_selected_raw_cannot_replace_owned_skill_with_trust_only(self):
+        for kind in ("no-skill", "duplicate-skill", "foreign-path", "foreign-plugin", "disabled-skill", "not-invocable", "description", "alias", "trust-only", "plugin-disabled", "wrong-command", "wrong-cwd", "failed-command", "stderr", "missing-version"):
+            bodies = self.grok_selected_bodies()
+            inspect = json.loads(bodies["native-inspect.stdout.log"])
+            skill = inspect["skills"][0]
+            if kind == "no-skill": inspect["skills"] = []
+            elif kind == "duplicate-skill": inspect["skills"].append(skill)
+            elif kind == "foreign-path": skill["source"]["path"] = "/foreign/SKILL.md"
+            elif kind == "foreign-plugin": skill["source"]["plugin_name"] = "foreign"
+            elif kind == "disabled-skill": skill["disabled"] = True
+            elif kind == "not-invocable": skill["userInvocable"] = False
+            elif kind == "description": skill["description"] = "foreign"
+            elif kind == "alias": skill["source"]["plugin_Name"] = skill["name"]
+            elif kind == "trust-only": inspect["projectTrusted"] = False
+            elif kind == "plugin-disabled": inspect["plugins"][0]["enabled"] = False
+            elif kind == "stderr": bodies["native-inspect.stderr.log"] = b"diagnostic"
+            elif kind == "missing-version":
+                for suffix in (".command.json", ".stdout.log", ".stderr.log"): del bodies["version" + suffix]
+            else:
+                command = json.loads(bodies["native-inspect.command.json"])
+                if kind == "wrong-command": command["argv"] = ["/foreign/grok", "inspect", "--json"]
+                elif kind == "wrong-cwd": command["cwd"] = "/owned/b"
+                elif kind == "failed-command": command["exit"] = 1
+                bodies["native-inspect.command.json"] = json.dumps(command).encode()
+            bodies["native-inspect.stdout.log"] = json.dumps(inspect).encode()
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                runtime.cli_attempt_members(bodies, self.source, "grok")
+
+    def test_grok_selection_intent_preserves_unknown_failed_inspection(self):
+        bodies = self.grok_selected_bodies()
+        result = json.loads(bodies["runtime-attempt.json"])
+        del result["native_inspection"]
+        bodies["runtime-attempt.json"] = json.dumps(result).encode()
+        bodies["native-inspect.stdout.log"] = b'{"unknown":"actual failed diagnostic remains opaque"}'
+        self.assertTrue(runtime.cli_attempt_members(bodies, self.source, "grok")["test_failed"])
+        for label in ("native-inspect", "version"):
+            for suffix in (".command.json", ".stdout.log", ".stderr.log"): del bodies[label + suffix]
+        self.assertTrue(runtime.cli_attempt_members(bodies, self.source, "grok")["test_failed"])
+        for client in ("qoder", "kiro", "windsurf"):
+            unchanged = {**self.cli_result(client), "native_inspection": {"enabled": True, "project_trusted": True}}
+            admitted = runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(unchanged).encode()}, self.source, client)
+            self.assertEqual(admitted, unchanged)
+            changed = {**self.cli_result(client), "fixture_selection": result["fixture_selection"]}
+            with self.subTest(client=client), self.assertRaises(ValueError):
+                runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(changed).encode()}, self.source, client)
+
     def test_cli_member_table_rejects_partial_commands_provider_and_profiles(self):
         summary = {"runtime-attempt.json": json.dumps(self.cli_result("qoder")).encode()}
         for extra in ({"git-a.stdout.log": b""}, {"provider-request-1.json": b"{}"}, {"profile.json": b"{}"}):

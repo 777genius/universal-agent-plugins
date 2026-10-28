@@ -732,7 +732,7 @@ func projectNativeCLIRuntimeAttempt(t *testing.T, client string) {
 	}
 	f.setup(t)
 	if client == "grok" {
-		f.inspectGrokPrepared(t)
+		f.inspectGrokSelected(t)
 	}
 	prompt := "Describe only the installed " + f.name + " skill marker. Do not run any tool or change any file."
 	argv, err := projectNativeCLIArguments(client, f.client, f.view, prompt)

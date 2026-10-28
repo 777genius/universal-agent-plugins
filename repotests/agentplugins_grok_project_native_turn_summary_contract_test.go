@@ -21,6 +21,11 @@ func grokTurnSummaryContractFixture(t *testing.T) *projectNativeCLIAttempt {
 			CodexHome: filepath.Join(root, "original-codex")}, protected: map[string]string{}, evidence: map[string]any{},
 		files: map[string][]byte{"native-attempt.stdout.log": {}, "native-attempt.stderr.log": {}, "native-attempt.command.json": []byte(`{"inert":true}`)},
 		used:  map[string]bool{"native-attempt": true}}
+	for _, path := range []string{f.base.Home, f.base.Project} {
+		if err := os.Mkdir(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	t.Cleanup(func() {
 		if f.grok != nil {
 			if f.grok.title != nil {
@@ -36,7 +41,7 @@ func grokTurnSummaryContractFixture(t *testing.T) *projectNativeCLIAttempt {
 
 func TestGrokTurnSummarySettingIsFrozenOnceInCompleteOriginalHomeRecipe(t *testing.T) {
 	f := grokTurnSummaryContractFixture(t)
-	want := append(f.grok.title.configuration(f.grok.configuration()), []byte("\n[features]\nturn_summary = false\n")...)
+	want := append(f.grok.title.configuration(f.grok.configuration()), []byte("\n[plugins]\nenabled = [\"uap-grok-attempt\"]\n\n[features]\nturn_summary = false\n")...)
 	parsed, status := grokConfigParse(f.grok.authoredConfig)
 	if status != "captured" || !reflect.DeepEqual(parsed["features"], map[string]any{"turn_summary": false}) ||
 		!bytes.Equal(f.grok.authoredConfig, want) || bytes.Count(want, []byte("[features]")) != 1 {
@@ -46,7 +51,7 @@ func TestGrokTurnSummarySettingIsFrozenOnceInCompleteOriginalHomeRecipe(t *testi
 	body, err := os.ReadFile(path)
 	info, statErr := os.Lstat(path)
 	if err != nil || statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 ||
-		!bytes.Equal(body, want) || len(f.protected) != 1 || f.protected[path] != grokConfigSHA(want) {
+		!bytes.Equal(body, want) || len(f.protected) != 2 || f.protected[path] != grokConfigSHA(want) {
 		t.Fatal("complete recipe was not the original ordinary protected config")
 	}
 	if _, err := os.Lstat(filepath.Join(f.base.Project, ".grok", "config.toml")); !os.IsNotExist(err) {

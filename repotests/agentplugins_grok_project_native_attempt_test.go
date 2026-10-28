@@ -24,6 +24,10 @@ func TestAgentpluginsGrokNativeProjectRuntimeAttempt(t *testing.T) {
 // This reads candidate inventory only. A disabled Prepared entry is not skill
 // loading, native execution, source revision or completed lifecycle evidence.
 func projectGrokPreparedInspect(body []byte, project, name, active string) error {
+	return projectGrokInspect(body, project, name, active, false)
+}
+
+func projectGrokInspect(body []byte, project, name, active string, selected bool) error {
 	if !filepath.IsAbs(project) || filepath.Clean(project) != project || pathpolicy.ValidateLeafID(name) != nil || !filepath.IsAbs(active) || filepath.Clean(active) != active || filepath.Dir(active) != filepath.Join(project, ".grok", "plugins") || pathpolicy.ValidateLeafID(filepath.Base(active)) != nil {
 		return fmt.Errorf("Grok inspection expectation is outside the selected project")
 	}
@@ -32,8 +36,8 @@ func projectGrokPreparedInspect(body []byte, project, name, active string) error
 		return err
 	}
 	object, ok := value.(map[string]any)
-	if !ok || !projectGrokIdentityKeys(object, "grokVersion cwd projectRoot projectTrusted skills plugins") || object["grokVersion"] != "1.0.70" || object["cwd"] != project || (object["projectRoot"] != project && object["projectRoot"] != project+string(filepath.Separator)) || object["projectTrusted"] != false {
-		return fmt.Errorf("measured Grok untrusted project identity differs")
+	if !ok || !projectGrokIdentityKeys(object, "grokVersion cwd projectRoot projectTrusted skills plugins") || object["grokVersion"] != "1.0.70" || object["cwd"] != project || (object["projectRoot"] != project && object["projectRoot"] != project+string(filepath.Separator)) || object["projectTrusted"] != selected {
+		return fmt.Errorf("measured Grok project selection identity differs")
 	}
 	if _, ok := object["skills"].([]any); !ok {
 		return fmt.Errorf("Grok skill inventory is not an array")
@@ -42,7 +46,7 @@ func projectGrokPreparedInspect(body []byte, project, name, active string) error
 	if !ok {
 		return fmt.Errorf("Grok plugin inventory is not an array")
 	}
-	seen, selected := map[string]bool{}, false
+	seen, found := map[string]bool{}, false
 	for _, value := range plugins {
 		entry, ok := value.(map[string]any)
 		if !ok || !projectGrokIdentityKeys(entry, "name scope path enabled") {
@@ -58,14 +62,17 @@ func projectGrokPreparedInspect(body []byte, project, name, active string) error
 		}
 		seen[folded] = true
 		if folded == shared.FoldJSONKey(name) {
-			if entryName != name || scope != "project" || path != active || enabled {
-				return fmt.Errorf("selected Grok disabled Prepared candidate differs")
+			if entryName != name || scope != "project" || path != active || enabled != selected {
+				return fmt.Errorf("selected Grok project candidate differs")
 			}
-			selected = true
+			found = true
 		}
 	}
-	if !selected {
+	if !found {
 		return fmt.Errorf("selected Grok Prepared candidate is absent")
+	}
+	if selected {
+		return grokProjectSelectedSkill(object["skills"].([]any), name, filepath.Join(active, "skills", name, "SKILL.md"))
 	}
 	return nil
 }
@@ -155,6 +162,15 @@ func projectGrokPreparedAuthority(f *projectNativeCLIAttempt) (func() error, err
 }
 
 func (f *projectNativeCLIAttempt) inspectGrokPrepared(t *testing.T) {
+	f.inspectGrok(t, false)
+}
+
+func (f *projectNativeCLIAttempt) inspectGrokSelected(t *testing.T) {
+	f.evidence["fixture_selection"] = "owned-project-trust-and-selected-plugin-name"
+	f.inspectGrok(t, true)
+}
+
+func (f *projectNativeCLIAttempt) inspectGrok(t *testing.T, selected bool) {
 	t.Helper()
 	verify, err := projectGrokPreparedAuthority(f)
 	if err != nil {
@@ -173,8 +189,13 @@ func (f *projectNativeCLIAttempt) inspectGrokPrepared(t *testing.T) {
 	if len(r.Stderr) != 0 {
 		t.Fatal("Grok installed inspection emitted diagnostics")
 	}
-	if err := projectGrokPreparedInspect(r.Stdout, f.base.Project, f.name, f.binding.TargetLocator); err != nil {
+	if err := projectGrokInspect(r.Stdout, f.base.Project, f.name, f.binding.TargetLocator, selected); err != nil {
 		t.Fatal(err)
 	}
-	f.evidence["native_inspection"] = map[string]any{"name": f.name, "scope": "project", "path": f.binding.TargetLocator, "enabled": false, "project_trusted": false, "interpretation": "visible disabled Prepared candidate only; no skill loading or lifecycle/runtime qualification"}
+	observation := map[string]any{"name": f.name, "scope": "project", "path": f.binding.TargetLocator, "enabled": selected, "project_trusted": selected, "interpretation": "visible disabled Prepared candidate only; no skill loading or lifecycle/runtime qualification"}
+	if selected {
+		observation["installed_skill"] = f.skill
+		observation["interpretation"] = "exact selected plugin skill listed; no skill execution or lifecycle/runtime qualification"
+	}
+	f.evidence["native_inspection"] = observation
 }

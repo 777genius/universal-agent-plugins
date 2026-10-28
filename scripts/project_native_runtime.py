@@ -527,6 +527,99 @@ def grok_duplicate_members(bodies, client):
     return names
 
 
+def grok_selection_identity_keys(row, fields):
+    return type(row) is dict and all(key == expected or key.casefold() != expected.casefold()
+                                   for key in row for expected in fields.split())
+
+
+def grok_selected_skill(skills, name, path):
+    if type(skills) is not list:
+        raise ValueError("Grok selected skills must be an array")
+    found = False
+    for row in skills:
+        if (not grok_selection_identity_keys(row, "name description source userInvocable disabled")
+                or type(row.get("name")) is not str or not row["name"]
+                or not grok_selection_identity_keys(row.get("source"), "type plugin_name path")):
+            raise ValueError("Grok selected skill identity differs")
+        origin = row["source"]
+        plugin = origin.get("plugin_name", "")
+        if row["name"].casefold() != name.casefold() and (type(plugin) is not str or plugin.casefold() != name.casefold()):
+            continue
+        if (found or row["name"] != name or row.get("description") != "Harmless installed startup marker"
+                or row.get("userInvocable") is not True or row.get("disabled", False) is not False
+                or origin != {"type": "plugin", "plugin_name": name, "path": path}):
+            raise ValueError("Grok selected skill source is not the owned installation")
+        found = True
+    if not found:
+        raise ValueError("Grok selected loaded skill is absent")
+
+
+def grok_selected_inspection(bodies, result, client):
+    if client != "grok":
+        if "fixture_selection" in result:
+            raise ValueError("Grok fixture selection cannot apply to another client")
+        return
+    marker, observation = result.get("fixture_selection"), result.get("native_inspection")
+    if "fixture_selection" not in result:
+        if type(observation) is dict and (observation.get("enabled") is True or observation.get("project_trusted") is True):
+            raise ValueError("Grok selected observation requires its fixture marker")
+        return
+    if marker != "owned-project-trust-and-selected-plugin-name":
+        raise ValueError("unregistered Grok fixture selection")
+    # Authored intent is not a completed observation. Preserve failed/unknown
+    # raw inspect attempts without inventing a successful selected skill.
+    if "native_inspection" not in result:
+        return
+    binding = result.get("binding")
+    if type(binding) is not dict:
+        raise ValueError("Grok selected inspection requires its project binding")
+    profile, target, physical = (binding.get(key) for key in ("native_profile_root", "target_locator", "physical_artifact_id"))
+    if (any(type(value) is not str or not value or not os.path.isabs(value) or os.path.normpath(value) != value for value in (profile, target))
+            or type(physical) is not str or re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}", physical) is None
+            or binding.get("client_id") != "grok" or binding.get("scope") != "project"
+            or binding.get("activation") != "prepared" or binding.get("verification") != "package_validated"
+            or Path(profile).name != ".grok" or target != str(Path(profile) / "plugins" / physical)):
+        raise ValueError("Grok selected binding identity differs")
+    project, name = str(Path(profile).parent), "uap-grok-attempt"
+    skill = str(Path(target) / "skills" / name / "SKILL.md")
+    expected = {"name": name, "scope": "project", "path": target, "enabled": True, "project_trusted": True,
+                "installed_skill": skill, "interpretation": "exact selected plugin skill listed; no skill execution or lifecycle/runtime qualification"}
+    if (type(observation) is not dict or observation != expected or observation.get("enabled") is not True
+            or observation.get("project_trusted") is not True or result.get("installed_skill") != skill):
+        raise ValueError("Grok completed selected observation differs")
+    raw = bodies.get("native-inspect.stdout.log")
+    command = strict_json(bodies.get("native-inspect.command.json", b"null"))
+    version = strict_json(bodies.get("version.command.json", b"null"))
+    if (type(command) is not dict or type(version) is not dict or type(version.get("argv")) is not list
+            or len(version["argv"]) != 2 or version["argv"][1] != "--version"
+            or command.get("argv") != [version["argv"][0], "inspect", "--json"] or command.get("cwd") != project
+            or command.get("exit") != 0 or command.get("error") is not False or command.get("deadline") is not False
+            or bodies.get("native-inspect.stderr.log") != b"" or type(raw) is not bytes):
+        raise ValueError("Grok selected observation lacks its successful exact command")
+    inspect = strict_json(raw)
+    if (not grok_selection_identity_keys(inspect, "grokVersion cwd projectRoot projectTrusted skills plugins")
+            or inspect.get("grokVersion") != "1.0.70" or inspect.get("cwd") != project
+            or inspect.get("projectRoot") not in (project, project + "/") or inspect.get("projectTrusted") is not True
+            or type(inspect.get("plugins")) is not list):
+        raise ValueError("Grok selected raw project inspection differs")
+    seen, found = set(), False
+    for plugin in inspect["plugins"]:
+        if (not grok_selection_identity_keys(plugin, "name scope path enabled") or type(plugin.get("name")) is not str
+                or not plugin["name"].strip() or plugin["name"].casefold() in seen
+                or plugin.get("scope") not in ("project", "user") or type(plugin.get("path")) is not str
+                or not os.path.isabs(plugin["path"]) or os.path.normpath(plugin["path"]) != plugin["path"]
+                or type(plugin.get("enabled")) is not bool):
+            raise ValueError("Grok selected raw plugin identity differs")
+        seen.add(plugin["name"].casefold())
+        if plugin["name"].casefold() == name.casefold():
+            if plugin["name"] != name or plugin["scope"] != "project" or plugin["path"] != target or plugin["enabled"] is not True:
+                raise ValueError("Grok selected raw plugin differs")
+            found = True
+    if not found:
+        raise ValueError("Grok selected raw plugin is absent")
+    grok_selected_skill(inspect.get("skills"), name, skill)
+
+
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
@@ -569,6 +662,7 @@ def cli_attempt_members(bodies, source, client):
     if result.get("source_identity") != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
                                         "installer_source_state": "committed", "installer_patch_sha256": []}:
         raise ValueError("native CLI evidence source differs")
+    grok_selected_inspection(bodies, result, client)
     return result
 
 
