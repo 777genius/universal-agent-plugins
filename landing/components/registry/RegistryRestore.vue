@@ -276,9 +276,9 @@ const { restoreGuideUrl } = useDocsLinks();
 
   &__commit {
     margin: 4cqw 0 0;
-    color: #a5b6ed;
+    color: #9198a8;
     font-family: 'JetBrains Mono', monospace;
-    font-size: clamp(11px, 2.8cqw, 20px);
+    font-size: clamp(10px, 2.3cqw, 16px);
     line-height: 1.5;
   }
 
