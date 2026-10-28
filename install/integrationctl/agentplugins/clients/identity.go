@@ -62,3 +62,10 @@ var DefaultSelectionLayout = SelectionLayout{File: "mcp.json", Nested: true}
 type SelectionReader interface {
 	ManagedMCPSelection() SelectionLayout
 }
+
+// ScopedSelectionReader chooses the managed selection layout for an explicit
+// installation scope. It does not infer scope from artifact or native files.
+// Adapters without this policy retain their existing SelectionReader layout.
+type ScopedSelectionReader interface {
+	ManagedMCPSelectionForScope(domain.InstallScope) (SelectionLayout, error)
+}
