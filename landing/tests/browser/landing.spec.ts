@@ -653,13 +653,15 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
     'npx -y universal-agent-plugins add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
-    'Agent Plugins authoring is available',
+    'CLI 0.1.94 installer, which does not include agentplugins author',
   );
-  await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
+  await expect(page.locator('#build-plugins')).toContainText('authoring-enabled source build');
+  await expect(page.locator('#build-plugins')).toContainText('historical 0.1.65 provenance');
+  await expect(page.locator('#build-plugins')).not.toContainText('public-channel E2E are verified');
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
-test('the authoring frontdoor distinguishes Use from released Build and links to real docs journeys', async ({
+test('the authoring frontdoor distinguishes the released installer from source authoring and links to real docs journeys', async ({
   page,
 }) => {
   await page.goto('./create-plugin');
@@ -680,7 +682,9 @@ test('the authoring frontdoor distinguishes Use from released Build and links to
     'href',
     'https://github.com/777genius/universal-agent-plugins#supported-clients',
   );
-  await expect(page.locator('#build-plugins')).toContainText('public-channel E2E are verified');
+  await expect(page.locator('#build-plugins')).toContainText('authoring-enabled source build');
+  await expect(page.locator('#build-plugins')).toContainText('historical 0.1.65 provenance');
+  await expect(page.locator('#build-plugins')).not.toContainText('public-channel E2E are verified');
 
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });

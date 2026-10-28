@@ -13,7 +13,8 @@ localeDisposition: "current-translation"
 
 ## 当前版本与范围
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)于 2026 年 10 月 26 日发布，支持显式项目安装和锁定恢复。
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)于 2026 年 10 月 28 日发布，支持当前目录的自动项目安装选择和严格的已有锁文件验证。
+显式项目范围从 0.1.93 起提供。
 安装器的发布证据不能证明每个原生客户端的运行行为，也不能替代标准创作工具的可执行文件发布验收。
 当前 npm/原生安装器不包含 `agentplugins author`；源码工具见[构建指南](../build/)。
 
@@ -30,7 +31,7 @@ ChatGPT 明确不支持原生项目安装。VS Code 项目范围为单个本地�
 请参阅[逐客户端项目支持](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md)和
 [项目证据索引](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md)。
 
-下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到 0.1.93、其他客户端版本、其他安装范围或未经测试的包。
+下列历史观察对应精确的安装器、客户端、平台和测试范围。结果不会自动延伸到 0.1.94、其他客户端版本、其他安装范围或未经测试的包。
 UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂商认证或通用的生产就绪保证。
 
 ## 历史证据索引

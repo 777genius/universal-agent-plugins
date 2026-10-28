@@ -72,7 +72,7 @@ async function runSmoke(browser, base) {
     ["use overview", `${base}/en/use/`, "Follow the installation journey"],
     ["use install", `${base}/en/use/install`, "Discover the package"],
     ["use manage", `${base}/en/use/manage`, "Inspect the situation first"],
-    ["build overview", `${base}/en/build/`, "Set up the source authoring tools"],
+    ["build overview", `${base}/en/build/`, "Build from source"],
     ["build skill", `${base}/en/build/skill`, "Choose an explicit destination"],
     ["build remote MCP", `${base}/en/build/mcp-remote`, "Supply the endpoint explicitly"],
     ["build stdio MCP", `${base}/en/build/mcp-stdio`, "Create the scaffold"],
@@ -90,7 +90,7 @@ async function runSmoke(browser, base) {
       errors.push(`${name}: expected 200 but got ${response?.status() ?? "no response"}`);
       continue;
     }
-    const body = await page.textContent("body");
+    const body = await page.locator(".vp-doc").innerText();
     if (!body?.includes(expected)) {
       errors.push(`${name}: expected body to include "${expected}"`);
     }

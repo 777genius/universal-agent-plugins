@@ -6,8 +6,8 @@ import { listMarkdownFiles } from "../lib/fs.mjs";
 import { isRetiredArchive } from "../lib/public-routes.mjs";
 
 export const quickstartClaims = [
-  "Use plugins", "Build plugins", "Agent Plugins authoring is available",
-  "public-channel E2E are verified", "universal-agent-plugins", "plugin.json", "agentplugins author"
+  "Use plugins", "Build plugins", "CLI 0.1.94", "explicit project scope",
+  "source-build setup", "universal-agent-plugins", "plugin.json", "agentplugins author"
 ];
 
 function stripDelimitedBlocks(body, startMarker, endMarker) {
@@ -47,26 +47,68 @@ function stripHtmlComments(html) {
   return stripDelimitedBlocks(html, "<!--", "-->");
 }
 
+function documentContent(html) {
+  const current = stripHtmlComments(html);
+  const visible = current.match(/<main\b[\s\S]*?<\/main>/)?.[0] || current;
+  const text = visible.replace(/<\/(?:p|h[1-6]|li|div|pre|section)>/g, " ")
+    .replace(/<[^>]*>/g, "").replace(/&(?:nbsp|#160);/g, " ")
+    .replaceAll("&amp;", "&").replace(/\s+/g, " ").trim();
+  const commands = [...visible.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/g)]
+    .map((match) => match[1].replace(/<\/?span\b[^>]*>/g, ""));
+  return { visible, text, commands };
+}
+
+function staleAvailabilityErrors(text, label) {
+  return /Agent Plugins authoring (?:is )?available|public-channel E2E are verified/i.test(text)
+    ? [`${label} still claims current public-channel authoring availability`]
+    : [];
+}
+
+export function homeErrors(html) {
+  const { visible, text, commands } = documentContent(html);
+  const errors = [];
+  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.94", "explicit project scope", "locked restoration"]) {
+    if (!text.includes(claim)) errors.push(`EN home page is missing its current installer guidance: ${claim}`);
+  }
+  if (!/current installer does not include agentplugins author/i.test(text)) {
+    errors.push("EN home page must state that the current installer excludes agentplugins author");
+  }
+  if (!/implemented in current source/.test(text) || !/href=["'][^"']*\/build\/["']/.test(visible)) {
+    errors.push("EN home page must link the current-source authoring guide");
+  }
+  if (!commands.some((command) => command.includes("npx universal-agent-plugins add context7"))) {
+    errors.push("EN home page is missing its released installer command");
+  }
+  for (const retired of ["Supported Node And Python Paths", "codex-runtime --runtime", "delivery model", "repo-managed integration"]) {
+    if (text.includes(retired)) errors.push(`EN home page still promotes retired authoring framing: ${retired}`);
+  }
+  return [...errors, ...staleAvailabilityErrors(text, "EN home page")];
+}
+
 export function quickstartErrors(html) {
   const errors = [];
-  const visible = stripHtmlComments(html).match(/<main\b[\s\S]*?<\/main>/)?.[0] || html;
+  const { visible, text, commands } = documentContent(html);
   for (const claim of quickstartClaims) {
-    if (!visible.includes(claim)) errors.push(`Quickstart page is missing its public availability claim: ${claim}`);
+    if (!text.includes(claim)) errors.push(`Quickstart page is missing its current installer/source guidance: ${claim}`);
   }
-  const commands = [...html.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/g)]
-    .map((match) => match[1].replace(/<\/?span\b[^>]*>/g, ""));
+  if (!/current npm and native installer release does not include agentplugins author/i.test(text)) {
+    errors.push("Quickstart must state that the current npm/native installer excludes agentplugins author");
+  }
+  if (!/Current source implements scaffolding/.test(text) || !/href=["'][^"']*\/build\/#build-from-source["']/.test(visible)) {
+    errors.push("Quickstart must direct authoring users to the current source-build setup");
+  }
   const install = "npx universal-agent-plugins add context7";
-  if (!commands.some((text) => text.includes(install))) errors.push(`Quickstart page is missing its public availability claim: ${install}`);
+  if (!commands.some((text) => text.includes(install))) errors.push(`Quickstart page is missing its released installer command: ${install}`);
   if (commands.some((text) => /npm install (?:--global|-g) universal-agent-plugins@\d+\.\d+\.\d+/.test(text))) {
     errors.push("Quickstart page pins an npm version instead of installing the latest release");
   }
   for (const retired of ["Milestone A", "plugin-kit-ai", "plugin.yaml", "/legacy/v1/", "Historical v1 maintenance", "PyPI", "pipx"]) {
-    if (visible.includes(retired) || commands.some((text) => text.includes(retired))) errors.push(`Quickstart page still exposes retired authoring copy: ${retired}`);
+    if (text.includes(retired) || commands.some((text) => text.includes(retired))) errors.push(`Quickstart page still exposes retired authoring copy: ${retired}`);
   }
   for (const jargon of ["runtime language", "repo-managed integration"]) {
-    if (visible.includes(jargon)) errors.push(`Quickstart page still contains retired front-door wording: ${jargon}`);
+    if (text.includes(jargon)) errors.push(`Quickstart page still contains retired front-door wording: ${jargon}`);
   }
-  return errors;
+  return [...errors, ...staleAvailabilityErrors(text, "Quickstart")];
 }
 
 async function listHtmlFiles(root) {
@@ -110,12 +152,7 @@ export async function checkOutput() {
   const editPrefix = "https://github.com/777genius/universal-agent-plugins/edit/main/website/source/";
   const home = await fs.readFile(path.join(distRoot, "en", "index.html"), "utf8");
   if (!home.includes(`${editPrefix}en/index.md`)) errors.push("Hand-authored EN home page is missing its edit link.");
-  for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "agentplugins author init"]) {
-    if (!home.includes(claim)) errors.push(`EN home page is missing its current authoring claim: ${claim}`);
-  }
-  for (const retired of ["Supported Node And Python Paths", "codex-runtime --runtime", "delivery model", "repo-managed integration"]) {
-    if (home.includes(retired)) errors.push(`EN home page still promotes retired authoring framing: ${retired}`);
-  }
+  errors.push(...homeErrors(home));
   const generatedCli = await fs.readFile(path.join(distRoot, "en", "api", "cli", "prepared-authoring-v2-agentplugins-author.html"), "utf8");
   if (generatedCli.includes(`${editPrefix}en/api/cli/`)) errors.push("Generated Agent Plugins CLI page generated a hand-authored edit link.");
   if (!generatedCli.includes(">Exact source<")) errors.push("Generated Agent Plugins CLI page is missing the exact-source link.");

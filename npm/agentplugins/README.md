@@ -12,6 +12,12 @@ verified once, then prepared for every agent you selected.
 
 You need Node.js 22 or newer.
 
+The verified native baseline is CLI 0.1.94. npm and native channel versions can
+differ; check `npx universal-agent-plugins version` before relying on automatic
+current-directory project selection, which requires 0.1.94. If this channel is
+older, use the native or Homebrew installer, or the explicit project-scope
+commands supported since 0.1.93.
+
 To use the same native Go CLI without Node.js, install it with Homebrew or the
 verified scripts in the [project README](https://github.com/777genius/universal-agent-plugins#quick-start).
 
@@ -26,8 +32,11 @@ verified scripts in the [project README](https://github.com/777genius/universal-
 For the verified Context7 setup in ChatGPT and Kiro:
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt,kiro
+npx universal-agent-plugins add context7 --target chatgpt,kiro --no-save
 ```
+
+The mixed command uses `--no-save`: ChatGPT preparation is not a portable
+dependency. Prepare ChatGPT separately when saving the other clients.
 
 For ChatGPT, follow the printed Developer Mode steps, use
 `https://mcp.context7.com/mcp` with **No authentication**, and rerun the
@@ -53,7 +62,7 @@ Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code,
 and Qoder. Compatibility depends on the package, selected scope and client.
 The CLI distinguishes installed components, prepared configuration and remaining
 activation or sign-in steps. Pi support is newer source work and is not part
-of the verified 0.1.93 release baseline.
+of the verified 0.1.94 release baseline.
 
 See the [client compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for version-bound evidence and limits.
@@ -85,7 +94,7 @@ npx universal-agent-plugins info context7
 npx universal-agent-plugins add context7 --target codex,cursor,kiro
 
 # Prepare Context7 for ChatGPT and Kiro
-npx universal-agent-plugins add context7 --target chatgpt,kiro
+npx universal-agent-plugins add context7 --target chatgpt,kiro --no-save
 
 # Manage installed plugins
 npx universal-agent-plugins update context7 --target codex,cursor
@@ -128,7 +137,7 @@ npx universal-agent-plugins deps export ./plugin-setup
 npx universal-agent-plugins deps import ./plugin-setup --install
 ```
 
-The released default is the user environment. Restore requires the supported
+Export/import default to the user environment. Restore requires the supported
 clients to be installed and the exact locked sources or cached bytes to remain
 available. Credentials, native settings and plugin data need separate setup or
 backup. Read the [management guide](https://universal-agent-plugins.com/docs/en/use/manage.html)
@@ -145,7 +154,12 @@ npx universal-agent-plugins install --locked \
   --scope project --project-root /path/to/project
 ```
 
-Pass the same scope on later commands. Portable declarations and pins live at
+Pass the same scope on later maintenance commands. In CLI 0.1.94, argumentless
+`install` selects project scope for a regular `uap.toml` in the exact current
+directory; it never searches parents, and explicit scope wins. It strictly checks
+an existing lock before install or repair; only an absent lock permits initial
+resolution. `--locked` additionally requires the lock; `update` changes pins.
+Portable declarations and pins live at
 the project root; ownership, recovery and retained data stay local under `.uap/`.
 Each client has its own project component and trust limits. ChatGPT has no native
 project installation. See [project installation](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md).
@@ -153,7 +167,7 @@ project installation. See [project installation](https://github.com/777genius/un
 ## Build plugins
 
 Create a root `plugin.json` with optional `skills/` and `mcp.json`, then validate
-and install the package. The verified 0.1.93 npm/native installer does not expose
+and install the package. The verified 0.1.94 installer does not expose
 `agentplugins author`. Some examples in the
 [Build guide](https://universal-agent-plugins.com/docs/en/build/) require a
 qualified authoring build or a source build. The TypeScript Management SDK is

@@ -160,7 +160,10 @@ agentplugins skills add owner/repository --ui --scope project \
 The first command previews; omit `--dry-run` when ready to apply it. The second
 opens a scoped picker and can apply the user's selection. Without
 `--project-root`, explicit project scope uses the invocation directory. It does
-not search parent folders. The released CLI otherwise defaults to user scope.
+not search parent folders. Add and maintenance commands otherwise default to
+user scope. In CLI 0.1.94, `install` without a source argument selects project
+scope when a regular `uap.toml` exists in the exact current folder; explicit
+scope wins. See [restoration rules](./manage) for strict lock behavior.
 
 The target must support the requested project components. ChatGPT project
 installation is explicitly unsupported. VS Code prepares `.github/skills` and

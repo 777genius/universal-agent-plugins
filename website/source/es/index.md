@@ -40,7 +40,7 @@ El CLI pregunta qué agentes compatibles quieres usar. Revisa el plan y completa
 
 ## Qué está disponible
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93) es la versión actual del instalador. Incluye la selección explícita del ámbito de proyecto y la restauración mediante un archivo de bloqueo. Añade `--scope project` a cada operación sobre un proyecto; la versión publicada usa por defecto el entorno del usuario. Consulta [instalación](./use/install) y [mantenimiento](./use/manage).
+[CLI nativo 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), publicado el 28 de octubre de 2026, es la versión actual en GitHub y Homebrew. Los canales pueden actualizarse en momentos distintos. La selección explícita del ámbito de proyecto está disponible desde 0.1.93. Comprueba `agentplugins version` antes de usar funciones nuevas; si tu canal ofrece una versión anterior, usa la instalación nativa o Homebrew. En 0.1.94, `agentplugins install` sin argumentos selecciona el proyecto si existe un `uap.toml` regular en el directorio actual exacto y respeta estrictamente un bloqueo existente. Para `add` y las operaciones de mantenimiento, selecciona `--scope project` explícitamente. Consulta [instalación](./use/install) y [mantenimiento](./use/manage).
 
 El instalador actual no incluye `agentplugins author`. La [guía de creación](./build/) explica cómo preparar paquetes a mano y usar los comandos de creación implementados en el código fuente actual. Las pruebas de versiones anteriores de las herramientas de creación conservan su alcance original; no describen el instalador que se descarga hoy.
 

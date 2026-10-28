@@ -49,10 +49,16 @@ can run the same installer commands.
 4. [Maintain the installed state](./manage) with list, update, repair and removal.
 5. Restore a shared dependency set from `uap.toml` and `uap.lock` when needed.
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)
-includes explicit project scope. The released default is user scope, even when
-your current folder contains `uap.toml`. Select `--scope project` on every
-project operation. Project support and client activation differ by target.
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
+is the current native installer. Package-manager channels can lag; check
+`agentplugins version` before relying on 0.1.94 behavior. Use the native installer
+or Homebrew if the selected channel is older. Explicit project scope works
+since 0.1.93.
+Most commands default to user scope. Since 0.1.94, `install` without a source
+argument or explicit scope selects a project only when a regular `uap.toml`
+exists in the exact current folder; it does not search parents. Select
+`--scope project` on project maintenance commands. Project support and client
+activation differ by target.
 
 ## Read the result at the right level
 

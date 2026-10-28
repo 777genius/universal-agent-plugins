@@ -1,9 +1,12 @@
 # Install plugins for one project
 
 **Released:** explicit project scope is available in CLI 0.1.93 and later.
-Automatic project selection and the stricter default install behavior described
-below are **current source only / unreleased**. Until that convenience is released,
-restore with `install --locked --scope project`.
+CLI 0.1.94 also includes automatic project selection for argumentless `install`
+and strict validation of an existing lock before installation or repair.
+Explicit scope remains useful in scripts and when restoring a chosen project.
+Check `agentplugins version` before relying on 0.1.94 behavior; channels can
+update at different times. Use the [native/Homebrew installer](NATIVE_INSTALL.md)
+if your selected channel is older, or keep explicit scope with the 0.1.93 CLI.
 
 Use `--scope project` to keep a project's plugin declarations, installed
 ownership and native client configuration separate from your user environment.
@@ -36,10 +39,8 @@ the final feature-source native run; each client's activation limits still apply
 
 ## Select the environment on every command
 
-The released CLI defaults to user scope; select project scope explicitly on each
-command. A manifest in the working directory does not change that released default.
-
-**Current source only / unreleased:** argumentless `agentplugins install` selects
+Add and maintenance commands default to user scope unless project scope is
+explicitly selected. In CLI 0.1.94, argumentless `agentplugins install` selects
 project scope when the exact current directory contains a regular `uap.toml`
 file. It never searches parent folders.
 A directory or symlink named `uap.toml` is refused during automatic selection;
@@ -53,7 +54,7 @@ directory. `--project-root` requires `--scope project` and an existing directory
 The install preview shows the selected scope, project root where applicable,
 and manifest and lock paths.
 
-For that unreleased convenience, an existing `uap.lock` makes argumentless install
+In CLI 0.1.94, an existing `uap.lock` makes argumentless install
 strictly validate the manifest and locked pins before installation or repair.
 A mismatch fails without changing
 the environment; use the explicit `update` path to advance pins, or `deps lock`
@@ -162,9 +163,9 @@ directory, install the required clients, and run:
 agentplugins install --locked --scope project --project-root /path/to/new-project
 ```
 
-**Current source only / unreleased:** from the new project directory,
-`agentplugins install` infers project scope and strictly uses an existing lock.
-For that future convenience, `--locked` additionally requires the lock's presence.
+From the new project directory in CLI 0.1.94, `agentplugins install` infers
+project scope and strictly uses an existing lock. `--locked` additionally
+requires the lock's presence. Explicit scope/root flags still take priority.
 
 The explicit transfer commands support project scope too:
 

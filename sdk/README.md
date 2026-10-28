@@ -23,7 +23,7 @@ The first truthful normal-module release for this path is `v1.0.4`. `v1.0.3` rem
 
 The SDK exposes a platform-neutral runtime core with platform-specific public registrars.
 
-Current contract status in this source tree: the root SDK plus the approved Claude/Codex stable event set shipped as `public-stable` in `v1.0.0`, and Gemini's promoted 9-hook runtime surface is now also `public-stable`. Event-level support claims come from [../../docs/generated/support_matrix.md](../docs/generated/support_matrix.md). Compatibility policy lives in [STABILITY.md](./STABILITY.md).
+Current contract status in this source tree: the root SDK plus the approved Claude/Codex stable event set shipped as `public-stable` in `v1.0.0`, and Gemini's promoted 9-hook runtime surface is now also `public-stable`. Event-level support claims come from [../docs/generated/support_matrix.md](../docs/generated/support_matrix.md). Compatibility policy lives in [STABILITY.md](./STABILITY.md).
 
 `plugin-kit-ai.Supported()` returns runtime-event metadata only. Stable Claude, Codex, and Gemini runtime paths are production-ready within the declared contract. The root `(*plugin-kit-ai.App).Gemini()` registrar remains stable, and the promoted Gemini hook-level event, response, and helper surfaces now sit inside the stable runtime promise for the current 9-hook lane.
 
@@ -116,14 +116,14 @@ Host detection for multi-host binaries lives in
 wins, unknown overrides are errors, and detection fails closed with `PlatformUnknown` instead of
 silently assuming a host. The root package also exports `plugin-kit-ai.MaxPayloadBytes`, the single
 wire limit used by runtime decoders.
-Gemini's current production-ready 9-hook runtime boundary is audited in [../../docs/GEMINI_RUNTIME_AUDIT.md](../docs/GEMINI_RUNTIME_AUDIT.md).
+Gemini's current production-ready 9-hook runtime boundary is audited in [../docs/GEMINI_RUNTIME_AUDIT.md](../docs/GEMINI_RUNTIME_AUDIT.md).
 
 The additional `gemini/Notification` event is **public-beta**. Its native input
 shape follows official Gemini CLI v0.62.0 source (`b460678f3db508407554afd604cc9d6635becb2a`);
 SDK stdin/process checks do not qualify native CLI execution. Native qualification
 is pending. Runtime metadata now contains ten Gemini events: nine stable and one beta.
 
-Generated support matrix: [../../docs/generated/support_matrix.md](../docs/generated/support_matrix.md)
+Generated support matrix: [../docs/generated/support_matrix.md](../docs/generated/support_matrix.md)
 
 ## Experimental Custom Claude Hooks
 

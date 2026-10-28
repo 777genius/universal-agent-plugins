@@ -48,7 +48,7 @@ export const clientLandingPages: ClientLandingPage[] = [
     intro:
       'Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.',
     delivery:
-      'The CLI writes the supported Cursor plugin, skill, and MCP projections for the selected project.',
+      'The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. The add command defaults to user scope; select project scope explicitly for add.',
     activation: 'Reload Cursor when requested, then verify that the plugin is discovered.',
     vendorDocsUrl: 'https://docs.cursor.com/context/mcp',
   },

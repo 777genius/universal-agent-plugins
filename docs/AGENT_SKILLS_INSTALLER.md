@@ -1,7 +1,7 @@
 # Installing Agent Skills
 
 The released `agentplugins` CLI includes `skills add` for public GitHub sources
-and compatible HTTPS publishers. This guide uses the verified CLI 0.1.93
+and compatible HTTPS publishers. This guide uses the verified CLI 0.1.94
 baseline; newer source-only behavior is labelled separately. The historical
 `plugin-kit-ai` Skills commands remain documented in [SKILLS.md](./SKILLS.md).
 

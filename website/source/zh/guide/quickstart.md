@@ -36,14 +36,20 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 [原生安装指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)提供 macOS、Linux 和 Windows 可执行文件。
 原生管理器不需要 Node.js，但插件可能需要自己的运行时。
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)包含显式项目范围。预览项目安装：
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)包含显式项目范围与自动项目安装选择。预览项目安装：
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \
   --project-root /path/to/project --dry-run
 ```
 
-选择已存在的项目目录。已发布版本默认用户范围，每条项目命令都需明确指定项目范围。
+选择已存在的项目目录。add 和维护命令默认使用用户范围，应明确指定项目范围。
+无参数 `install` 则在当前目录存在普通 `uap.toml` 时自动选择项目，不向上查找；显式范围优先，已有锁文件会被严格检查。
+
+各分发渠道的版本可能不同。使用 0.1.94 的自动项目选择前，先运行 `agentplugins version` 或
+`npx universal-agent-plugins version`。若所选渠道仍较旧，可使用[原生或 Homebrew 安装](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)，
+或继续使用 0.1.93 已支持的显式项目范围命令。
+
 检查计划后再去掉 `--dry-run`。写入包文件不等于客户端已发现、授予信任、完成认证或成功调用 MCP。
 
 [完整安装流程](../use/install) · [客户端兼容性与测试边界](../reference/client-compatibility)

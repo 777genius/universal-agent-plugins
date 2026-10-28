@@ -60,6 +60,13 @@ The CLI automatically finds compatible agents, including Codex and Claude Code.
 Choose agents if several are found; a single detected agent is selected automatically.
 Follow the printed setup steps, then start a new agent session.
 
+The current verified native release is CLI **0.1.94**, also available through
+Homebrew. Distribution channels can update at different times. Check
+`agentplugins version` (or `npx universal-agent-plugins version`) before using
+0.1.94-only automatic project selection. If your selected channel is older,
+use the native/Homebrew installation below or keep the explicit project-scope
+commands supported since 0.1.93.
+
 <details>
 <summary>Other installation options</summary>
 
@@ -184,8 +191,13 @@ agentplugins skills add owner/repository --ui \
 
 The portable `uap.toml` and `uap.lock` live in that project. Local receipts,
 recovery state and retained data live under `.uap/`; the user's environment
-remains separate. The default scope is still user, and project scope without
-`--project-root` uses the current directory. Native capabilities and activation
+remains separate. Add and maintenance commands default to user scope; explicit project scope
+without `--project-root` uses the current directory. In CLI 0.1.94, argumentless
+`agentplugins install` selects project scope when that exact directory contains a
+regular `uap.toml`; it never searches parents. Explicit scope wins. An existing
+lock is checked strictly before install/repair, while a missing lock permits
+first-install resolution. Use `update` to advance pins; `--locked` also requires
+a lock to exist. Native capabilities and activation
 requirements depend on the client. ChatGPT has no native project installation.
 See [Project installation](docs/PROJECT_INSTALLATION.md)
 for supported-target reporting, update/repair/removal and portable restore.
@@ -268,8 +280,12 @@ for tested client versions, platforms, and release-specific limitations.
 <summary>Context7 setup for ChatGPT and Kiro</summary>
 
 ```bash
-npx universal-agent-plugins add context7 --target chatgpt,kiro
+npx universal-agent-plugins add context7 --target chatgpt,kiro --no-save
 ```
+
+This mixed example uses `--no-save` because ChatGPT preparation is not a saved
+portable dependency. To keep other clients in a saved environment, prepare
+ChatGPT separately.
 
 - ChatGPT: the CLI guides you to create a Developer Mode app for
   `https://mcp.context7.com/mcp` with **No authentication**, accepts the
@@ -461,16 +477,33 @@ agentplugins author test ./my-plugin
 ```
 
 Current source builds also include JSON maintenance, dependency bootstrap, and
-a continuous MCP development loop. Plan mode is read-only, and `--write` is
-required for JSON maintenance changes:
+a continuous MCP development loop. For a separate stdio MCP package, start with
+an absent `./local-tools` destination:
 
 ```bash
-agentplugins author normalize ./my-plugin --document plugin.json
-agentplugins author normalize ./my-plugin --document mcp.json --write
+agentplugins author init ./local-tools --template mcp-stdio --runtime node \
+  --name local-tools --description "Local Node MCP tools"
+agentplugins author normalize ./local-tools --document plugin.json
+agentplugins author normalize ./local-tools --document mcp.json --write
+```
+
+After reviewing the generated source and satisfying the Linux dependency and
+runtime prerequisites in the [stdio guide](https://universal-agent-plugins.com/docs/en/build/mcp-stdio.html),
+select its actual server explicitly:
+
+```bash
+agentplugins author bootstrap ./local-tools --dry-run
+agentplugins author bootstrap ./local-tools
+agentplugins author dev ./local-tools --server local-tools
+```
+
+Normalization plans are read-only until `--write`. To import an existing Claude
+MCP configuration, select its actual strict-JSON file and a new absent output:
+
+```bash
 agentplugins author import native ./claude.json --from claude \
   --output /absolute/path/to/new-plugin --name new-plugin \
   --description "Imported Claude MCP package" --write
-agentplugins author dev ./my-plugin
 ```
 
 Native import reads only the explicit strict-JSON Claude file and accepts safe

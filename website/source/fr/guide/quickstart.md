@@ -39,7 +39,7 @@ npx universal-agent-plugins add context7 --target cursor --scope project \
   --project-root /path/to/project --dry-run
 ```
 
-Choisissez un dossier de projet existant. La portée publiée par défaut est utilisateur : sélectionnez projet à chaque commande concernée. Examinez le plan avant d’omettre `--dry-run`. La découverte native, la confiance, l’authentification et les appels MCP réussis restent distincts de l’écriture des fichiers du paquet.
+Choisissez un dossier de projet existant. `add` utilise par défaut la portée utilisateur : sélectionnez projet explicitement pour cette opération. Depuis [CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), `install` sans argument détecte le projet uniquement si un fichier `uap.toml` ordinaire existe dans le dossier courant exact, sans recherche dans les parents. Une portée explicite reste prioritaire. Cette sélection automatique nécessite 0.1.94 ou une version ultérieure : vérifiez `agentplugins version` et utilisez l’installateur natif ou Homebrew si votre canal est antérieur. Les canaux peuvent être mis à jour à des moments différents ; les exemples `npx` avec portée explicite de cette page restent compatibles avec 0.1.93. Examinez le plan avant d’omettre `--dry-run`. La découverte native, la confiance, l’authentification et les appels MCP réussis restent distincts de l’écriture des fichiers du paquet.
 
 [Parcours complet d’installation](../use/install) · [Compatibilité des clients et portée des tests](../reference/client-compatibility)
 

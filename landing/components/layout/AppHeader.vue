@@ -66,7 +66,7 @@ onMounted(() => {
           class="app-header__docs-btn"
           :prepend-icon="mdiBookOpenPageVariant"
         >
-          Docs
+          {{ docsLabel('Docs') }}
         </v-btn>
         <v-btn
           variant="outlined"

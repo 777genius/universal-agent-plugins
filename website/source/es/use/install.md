@@ -67,7 +67,7 @@ agentplugins add owner/repository@0123456789abcdef0123456789abcdef01234567//path
 
 La forma `owner/repository@...` rechaza ramas, etiquetas y SHA abreviados. Sin ruta, el instalador selecciona un paquete válido en la raíz o el único candidato anidado válido. Si hay varios candidatos, exige una ruta explícita; si hay más de 16 paquetes posibles, la exige antes de descargarlos para evaluarlos. La reparación vuelve a usar el origen registrado. Cambiar una instalación inmutable a otro origen es una operación de selección independiente.
 
-CLI 0.1.93 también admite Git por HTTPS directo, SSH, URL de navegación de proveedores compatibles y archivos completos HTTPS o locales. Sustituye estos ejemplos por orígenes de paquetes que hayas revisado:
+Desde CLI 0.1.93 se admite Git por HTTPS directo, SSH, URL de navegación de proveedores compatibles y archivos completos HTTPS o locales. Sustituye estos ejemplos por orígenes de paquetes que hayas revisado:
 
 ```text
 agentplugins add 'https://git.example.com/team/tools.git#refs/heads/main//plugins/demo' --target codex --dry-run
@@ -112,7 +112,7 @@ agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
 ```
 
-El primer comando muestra una vista previa; omite `--dry-run` para aplicarla. El segundo abre un selector con ese ámbito y puede aplicar tu selección. Sin `--project-root`, el ámbito de proyecto explícito usa el directorio desde el que ejecutas el comando. No busca en carpetas superiores. En los demás casos, el CLI publicado usa por defecto el ámbito de usuario.
+El primer comando muestra una vista previa; omite `--dry-run` para aplicarla. El segundo abre un selector con ese ámbito y puede aplicar tu selección. Sin `--project-root`, el ámbito de proyecto explícito usa el directorio desde el que ejecutas el comando. No busca en carpetas superiores. Los comandos `add` y `skills add` usan por defecto el ámbito de usuario. La selección automática de proyecto de `install` sin argumentos, publicada en 0.1.94, se explica en [mantenimiento](./manage).
 
 El destino debe admitir los componentes de proyecto solicitados. La instalación de proyecto para ChatGPT no está admitida y se rechaza explícitamente. VS Code prepara `.github/skills` y las entradas `servers` que pertenecen a la instalación en `.vscode/mcp.json`, para una sola carpeta local. Su resultado sigue siendo Prepared: revisa la confianza del espacio de trabajo y de los servidores, y examina los ajustes del cliente. Esa observación de metadatos no demuestra el arranque de MCP, las llamadas a herramientas ni la ejecución de modelos.
 

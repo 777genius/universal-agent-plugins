@@ -12,7 +12,7 @@ localeDisposition: "current-translation"
 # 维护已安装插件
 
 安装器检查并修改它管理的状态。排查问题时，请记录包来源、所选客户端、范围和安装标识。
-以下例子默认使用用户范围，只有明确标注的命令使用项目范围。
+下方更新、修复和移除示例默认使用用户范围；项目维护与当前目录自动安装在后文分别说明。
 
 ## 先检查状态
 
@@ -74,7 +74,8 @@ agentplugins deps tree
 检查确认提示；可用 `--dry-run` 预览。[依赖指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md)说明清单、传递依赖、版本范围和更新规则。
 
 不要假设旧的单次安装已经进入可移植清单。转移前检查 `deps status` 和实际文件。
-普通远程 add 的默认保存行为有独立的源码可用性说明，不能仅凭安装收据推断。
+CLI 0.1.93 默认将符合条件的远程 add 保存为依赖；本地来源、discovery 选择器、ChatGPT 准备和 `--no-save` 使用单次安装流程。
+不能仅凭安装收据推断已生成可移植清单。
 
 ## 在另一台机器恢复 {#restore-on-another-machine}
 
@@ -108,6 +109,8 @@ agentplugins deps import --install
 导入已保存文件但安装失败时，处理原因后重试 `install --locked --scope user`；
 若报告待恢复状态，先运行 `deps recover --scope user`。不要用 `deps lock` 重建转移的固定版本，因为移动选择器可能解析到不同内容。
 
+<a id="restore-project-dependencies"></a>
+
 ## 恢复并维护项目
 
 显式项目范围从 [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)起可用。
@@ -126,12 +129,26 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-名称有歧义时使用 list 中的安装标识。已发布 CLI 默认用户范围，当前目录存在项目清单也不改变默认值。
-显式项目范围省略 `--project-root` 时只使用调用目录。将 `.uap/` 中的收据、恢复记录和保留数据留在本机，
+名称有歧义时使用 list 中的安装标识。add 和维护命令默认使用用户范围。CLI 0.1.94 的无参数 `install` 会识别当前目录的项目清单；
+显式范围优先。明确项目范围但省略 `--project-root` 时只使用调用目录。将 `.uap/` 中的收据、恢复记录和保留数据留在本机，
 从可移植清单重建原生组件，再完成客户端信任与激活。来源和私有来源访问权限仍须可用。
 
-## 当前源码中的便利行为
+## 当前目录的安装与严格锁定
 
-**仅源码可用，尚未发布：** 无参数 `agentplugins install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目范围，
-不会向上查找。符号链接或同名目录会被拒绝；明确范围可解决歧义。已有锁文件会被严格验证，不能用 `--locked=false` 放松。
-已发布版本仍应使用上面的显式范围命令。[项目指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)保留完整边界。
+**CLI 0.1.94 已发布：** 无参数 `agentplugins install` 在当前目录存在普通 `uap.toml` 文件时自动选择项目范围，
+不搜索父目录。符号链接或同名目录会被拒绝；显式 `--scope` 优先。没有本地清单时选择用户环境。
+有源参数的 install 与 add 相同，仍默认用户范围。
+
+先以 `agentplugins version` 确认版本为 0.1.94 或更高。若安装渠道较旧，使用[原生或 Homebrew 安装](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)，
+或继续用上面的显式范围命令。
+
+```bash
+agentplugins version
+cd /path/to/project
+agentplugins install
+```
+
+已有 `uap.lock` 会在安装或修复前严格验证，即使没有 `--locked`，或指定 `--locked=false` 也一样。
+不匹配时不会修改环境；用 `update` 推进固定版本，或在有意编辑依赖声明后明确重新生成锁。
+仅当锁缺失时，首次安装才可解析依赖并创建锁；`--locked` 还要求锁已存在。
+[项目指南](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)说明完整范围和恢复约定。

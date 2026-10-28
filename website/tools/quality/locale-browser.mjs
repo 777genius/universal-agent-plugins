@@ -10,6 +10,8 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.route("**/*", route => new URL(route.request().url()).origin === new URL(base).origin ? route.continue() : route.abort());
   const page = await context.newPage();
+  page.setDefaultTimeout(15_000);
+  page.setDefaultNavigationTimeout(30_000);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   const goto = route => page.goto(`${base}${route}`, { waitUntil: "networkidle" });
@@ -21,6 +23,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
     assert.ok(await page.locator(`[id=${JSON.stringify(id)}]`).isVisible());
   }
   try {
+    await runLocalizedBuildChecks(page, goto, evidence, artifactsRoot);
     for (const locale of locales.slice(1)) {
       const route = `/${locale}/guide/quickstart`;
       await goto(route);
@@ -74,8 +77,10 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
       }
       await goto("/?gateway=manual");
       await inspectSwitcher("/?gateway=manual", code => `/${code}/`, code => code, false, true);
-      evidence.push({ variant, fiveCounterparts: true, gatewayHomes: true });
-      async function inspectSwitcher(label, destination, language, fallback, home = false) {
+      const referenceRoute = "/en/api/cli/prepared-authoring-v2-agentplugins-author";
+      await inspectSwitcher(referenceRoute, () => referenceRoute, () => "en", true, false, "agentplugins author");
+      evidence.push({ variant, fiveCounterparts: true, gatewayHomes: true, versionedEnglishFallback: true });
+      async function inspectSwitcher(label, destination, language, fallback, home = false, identityOverride = "") {
         const homeIdentities = { en: "Agent Plugins", ru: "Agent Plugins", es: "Agent Plugins", fr: "Agent Plugins", zh: "Agent Plugins" };
         const useIdentities = { en: "Use plugins", ru: "Использовать плагины", es: "Usar plugins", fr: "Utiliser des plugins", zh: "使用插件" };
         for (const [index, code] of locales.entries()) {
@@ -118,7 +123,7 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
           }
           const expectedPath = new URL(`${base}${destination(code)}`).pathname;
           const actualLanguage = language(code);
-          const identity = home ? homeIdentities[actualLanguage] : useIdentities[actualLanguage];
+          const identity = identityOverride || (home ? homeIdentities[actualLanguage] : useIdentities[actualLanguage]);
           const selector = ".vp-doc h1";
           await links.nth(index).click();
           await page.waitForURL(url => url.pathname === expectedPath);
@@ -171,4 +176,87 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
     } finally { await ctx.close(); }
   }
   await fs.writeFile(path.join(artifactsRoot, "locale-browser.json"), JSON.stringify(evidence, null, 2) + "\n");
+}
+
+
+async function runLocalizedBuildChecks(page, goto, evidence, artifactsRoot) {
+  const copy = {
+    en: {
+      headings: ["Build plugins", "Check a package and its evidence", "Build a stdio MCP package"],
+      exclusion: /does not include\s*agentplugins author/i,
+      currentSource: /current source builds/i,
+      sourceNotice: /Source-build authoring/i,
+    },
+    ru: {
+      headings: ["Создавать плагины", "Проверить пакет и результаты", "Создать MCP-пакет со stdio"],
+      exclusion: /нет\s*agentplugins author/i,
+      currentSource: /текущей сборке из исходного кода/i,
+      sourceNotice: /Средства из исходного кода/i,
+    },
+    es: {
+      headings: ["Crear plugins", "Comprobar un paquete y sus pruebas", "Crear un paquete MCP stdio"],
+      exclusion: /no incluye\s*agentplugins author/i,
+      currentSource: /compilaciones del código fuente actual/i,
+      sourceNotice: /Creación desde el código fuente/i,
+    },
+    fr: {
+      headings: ["Créer des plugins", "Vérifier un paquet et ses preuves", "Créer un paquet MCP stdio"],
+      exclusion: /n[’']inclut pas\s*agentplugins author/i,
+      currentSource: /compilations du code source actuel/i,
+      sourceNotice: /Création depuis le code source/i,
+    },
+    zh: {
+      headings: ["构建插件", "检查包与证据", "构建 stdio MCP 包"],
+      exclusion: /不包含\s*agentplugins author/,
+      currentSource: /当前源码构建/,
+      sourceNotice: /源码创作/,
+    },
+  };
+  const routes = ["build/", "build/checks", "build/mcp-stdio"];
+  for (const [locale, expected] of Object.entries(copy)) {
+    for (const [index, suffix] of routes.entries()) {
+      const route = `/${locale}/${suffix}`;
+      const response = await goto(route);
+      assert.equal(response?.status(), 200, `${route}: HTTP response`);
+      const doc = page.locator(".vp-doc");
+      await doc.locator("h1").first().waitFor({ state: "visible", timeout: 15_000 });
+      assert.ok(await doc.locator("h1").first().isVisible(), `${route}: visible H1`);
+      assert.equal((await doc.locator("h1").first().innerText()).replace(/\u200b/g, "").trim(), expected.headings[index], `${route}: localized H1`);
+      const body = (await doc.innerText()).replace(/\s+/g, " ");
+      if (index === 0) {
+        assert.ok(await doc.locator('a[href$="/agentplugins-v0.1.94"]').isVisible(), `${route}: visible release source`);
+        assert.match(body, expected.exclusion, `${route}: installer excludes author`);
+        assert.match(body, expected.currentSource, `${route}: current-source authoring`);
+        assert.ok(await doc.locator("#build-from-source").isVisible(), `${route}: source setup anchor`);
+      } else {
+        assert.ok(await doc.locator("p").filter({ hasText: expected.sourceNotice }).first().isVisible(), `${route}: visible source notice`);
+        const sourceLink = doc.locator('a[href$="#build-from-source"]').first();
+        assert.ok(await sourceLink.isVisible(), `${route}: source setup link`);
+        const sourceURL = new URL(await sourceLink.getAttribute("href"), page.url());
+        assert.ok(sourceURL.pathname.endsWith(`/${locale}/build/`), `${route}: localized setup destination`);
+        for (const prerequisite of ["Linux", "bubblewrap", "cgroup v2"])
+          assert.ok(body.includes(prerequisite), `${route}: ${prerequisite} runtime prerequisite`);
+        if (index === 1) {
+          await sourceLink.click();
+          await page.waitForURL(url => url.pathname === sourceURL.pathname && url.hash === "#build-from-source", { timeout: 15_000 });
+          await page.locator("#build-from-source").waitFor({ state: "visible", timeout: 15_000 });
+          assert.ok(await page.locator("#build-from-source").isVisible(), `${route}: source setup activation`);
+        } else {
+          for (const prerequisite of ["bootstrap_platform_unsupported", "/usr", "/bin", "/lib", "/lib64"])
+            assert.ok(await doc.locator("code").filter({ hasText: new RegExp(`^${prerequisite}$`) }).first().isVisible(), `${route}: ${prerequisite}`);
+          await page.setViewportSize({ width: 390, height: 844 });
+          await page.reload({ waitUntil: "networkidle" });
+          await doc.locator("h1").first().waitFor({ state: "visible", timeout: 15_000 });
+          assert.ok(await doc.locator("h1").first().isVisible(), `${route}: mobile H1`);
+          assert.equal((await doc.locator("h1").first().innerText()).replace(/\u200b/g, "").trim(), expected.headings[index], `${route}: mobile localized H1`);
+          assert.ok(await doc.locator("p").filter({ hasText: expected.sourceNotice }).first().isVisible(), `${route}: mobile source notice`);
+          assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route}: mobile page overflow`);
+          await page.screenshot({ path: path.join(artifactsRoot, `journey-${locale}-stdio-mobile.png`), fullPage: true });
+          await page.setViewportSize({ width: 1440, height: 900 });
+        }
+      }
+      evidence.push({ locale, route, heading: expected.headings[index], responseStatus: response.status(),
+        visibleBuildBoundary: true, runtimePrerequisites: index > 0, mobile: index === 2 });
+    }
+  }
 }

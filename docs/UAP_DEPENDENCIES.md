@@ -1,9 +1,11 @@
 # UAP dependency environments
 
 **Released:** user dependency environments ship in CLI 0.1.90 and later;
-explicit project scope ships in CLI 0.1.93 and later. The source-only install
-conveniences below are not part of those releases. The restore guide is on the
-docs site:
+explicit project scope ships in CLI 0.1.93 and later. CLI 0.1.94 adds automatic
+project selection for argumentless install and strict existing-lock validation.
+Check `agentplugins version` before using 0.1.94 behavior; channels can differ.
+If needed, use [native/Homebrew installation](NATIVE_INSTALL.md), or explicit
+scope flags with an older compatible installer. The restore guide is on the docs site:
 [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine).
 
 `agentplugins deps` manages the selected dependency environment. By default it
@@ -156,11 +158,7 @@ independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
 `agentplugins install` is the everyday converge verb over the same machinery.
-In the released CLI, omitting `--scope` selects the user environment, even when
-the current folder contains an agreement. Use `--locked` for strict restoration
-and explicitly select project scope when restoring a project.
-
-**Current source only / unreleased:** without a source argument, install selects
+In CLI 0.1.94, without a source argument and without an explicit scope, install selects
 project scope when a regular `uap.toml` exists in the exact current directory;
 it never searches parent directories.
 Explicit `--scope` wins. An existing `uap.lock` is strictly validated before
@@ -359,10 +357,11 @@ all its bindings, including new targets. Mixing an imperative binding into it
 is refused. Conversely an environment cannot adopt an installation containing
 unmanaged bindings, even when the unmanaged target is absent from the manifest.
 
-## Ordinary commands (unreleased)
+## Ordinary commands (released in CLI 0.1.93)
 
-Eligible remote `add` commands now save exact dependency intent by default in the
-current user's `uap.toml` and `uap.lock`. For example:
+Eligible remote `add` commands save exact dependency intent by default in the
+selected environment's `uap.toml` and `uap.lock`. This behavior is present in the
+verified CLI 0.1.93 release; the exceptions below remain imperative. For example:
 
 ```sh
 agentplugins add github:acme/demo@0123456789012345678901234567890123456789 --target codex

@@ -67,7 +67,7 @@ agentplugins add owner/repository@0123456789abcdef0123456789abcdef01234567//path
 
 La forme `owner/repository@...` refuse les branches, les tags et les SHA abrégés. Sans chemin, l’installateur choisit un paquet valide à la racine ou l’unique candidat imbriqué valide. Plusieurs candidats imposent un chemin explicite ; au-delà de 16 paquets possibles, ce chemin est requis avant leur téléchargement pour évaluation. La réparation reprend la source enregistrée. Passer une installation immuable à une autre source constitue une opération de sélection distincte.
 
-CLI 0.1.93 accepte aussi Git HTTPS direct, SSH, les URL de navigation des fournisseurs pris en charge et les archives complètes HTTPS ou locales. Remplacez ces exemples par des sources de paquets examinées :
+Depuis CLI 0.1.93, Git HTTPS direct, SSH, les URL de navigation des fournisseurs pris en charge et les archives complètes HTTPS ou locales sont acceptés. Remplacez ces exemples par des sources de paquets examinées :
 
 ```text
 agentplugins add 'https://git.example.com/team/tools.git#refs/heads/main//plugins/demo' --target codex --dry-run
@@ -112,7 +112,7 @@ agentplugins skills add owner/repository --ui --scope project \
   --project-root /path/to/project
 ```
 
-La première commande prévisualise ; omettez `--dry-run` pour appliquer le plan. La seconde ouvre un sélecteur avec cette portée et peut appliquer votre sélection. Sans `--project-root`, la portée projet explicite utilise le dossier d’invocation. Elle ne recherche pas dans les dossiers parents. Dans les autres cas, le CLI publié utilise par défaut la portée utilisateur.
+La première commande prévisualise ; omettez `--dry-run` pour appliquer le plan. La seconde ouvre un sélecteur avec cette portée et peut appliquer votre sélection. Sans `--project-root`, la portée projet explicite utilise le dossier d’invocation. Elle ne recherche pas dans les dossiers parents. Les commandes `add` et `skills add` utilisent par défaut la portée utilisateur. La sélection automatique de projet par `install` sans argument, publiée dans 0.1.94, est expliquée dans [la maintenance](./manage).
 
 La cible doit prendre en charge les composants de projet demandés. L’installation de projet pour ChatGPT n’est pas prise en charge et est refusée explicitement. VS Code prépare `.github/skills` et les membres `servers` appartenant à l’installation dans `.vscode/mcp.json`, pour un seul dossier local. Son résultat reste Prepared : examinez la confiance de l’espace de travail et des serveurs, puis les réglages du client. Cette observation de métadonnées ne prouve ni le démarrage de MCP, ni les appels d’outils, ni l’exécution du modèle.
 

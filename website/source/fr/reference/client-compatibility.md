@@ -13,7 +13,7 @@ localeDisposition: "current-translation"
 
 ## Version actuelle et portée
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93), publié le 26 octobre 2026, comprend l’installation de projet explicite et la restauration verrouillée. Les preuves de sa publication comme installateur ne qualifient ni l’exécution de tous les clients natifs ni l’exécutable standard de création. L’installateur actuel npm ou natif n’inclut pas `agentplugins author` ; consultez [Créer des plugins](../build/) pour les outils source.
+[CLI natif 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), publié le 28 octobre 2026, comprend la sélection automatique de projet pour `install` sans argument et la validation stricte d’un verrouillage existant. L’installation de projet explicite était déjà disponible dans 0.1.93. La référence native et Homebrew est 0.1.94 ; les canaux peuvent être mis à jour à des moments différents. Vérifiez la version de l’exécutable avant de suivre des instructions propres à 0.1.94. Les preuves de sa publication comme installateur ne qualifient ni l’exécution de tous les clients natifs ni l’exécutable standard de création. L’installateur actuel npm ou natif n’inclut pas `agentplugins author` ; consultez [Créer des plugins](../build/) pour les outils source.
 
 Interprétez la compatibilité comme des vérifications distinctes :
 
@@ -29,7 +29,7 @@ La livraison de projet reste souvent **Prepared** tant que confiance, rechargeme
 
 ## Comment lire les preuves historiques
 
-Les enregistrements suivants conservent leurs versions, plateformes et limites d’origine. Ils ne s’appliquent pas automatiquement à 0.1.93, à un client ultérieur, à une autre portée ou à un paquet non testé. UAP est un outil communautaire indépendant ; ces observations des mainteneurs ne sont pas une certification du fournisseur.
+Les enregistrements suivants conservent leurs versions, plateformes et limites d’origine. Ils ne s’appliquent pas automatiquement à 0.1.94, à un client ultérieur, à une autre portée ou à un paquet non testé. UAP est un outil communautaire indépendant ; ces observations des mainteneurs ne sont pas une certification du fournisseur.
 
 | Enregistrement | Portée et résultat observé | Source vérifiable |
 | --- | --- | --- |

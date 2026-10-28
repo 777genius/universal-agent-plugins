@@ -93,10 +93,11 @@ The [dependency guide](https://github.com/777genius/universal-agent-plugins/blob
 explains manifest syntax, mandatory package dependencies, version ranges and
 update rules.
 
-Do not assume an older imperative installation is in the portable agreement.
-Check `deps status` and the actual files before transferring them. Default saving
-for ordinary remote `add` commands is described separately in the source guide
-and must not be inferred from an installed-state receipt.
+Eligible remote `add` operations save portable dependency intent by default in
+CLI 0.1.93. Explicit local paths, discovery sources, ChatGPT-only preparation and
+`--no-save` use the imperative flow instead. Do not assume an older imperative
+installation is in the agreement: check `deps status` and the actual files
+before transferring them.
 
 ## Restore on another machine
 
@@ -138,6 +139,8 @@ cause and repeat `install --locked --scope user`. Run `deps recover --scope user
 first when pending recovery is reported. Do not recreate transferred pins with
 `deps lock`, because a moving selector can resolve differently.
 
+<a id="restore-project-dependencies"></a>
+
 ## Restore and maintain a project
 
 Explicit project scope is available in
@@ -158,10 +161,10 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-Use the installation identity from `list` if a name is ambiguous. The released
-CLI defaults to user scope; a project manifest in the current folder does not
-change that default. Explicit `--scope project` without `--project-root` uses
-only the invocation directory.
+Use the installation identity from `list` if a name is ambiguous. Maintenance
+commands default to user scope, so select project scope explicitly. An `install`
+without a source argument has the 0.1.94 selection rule below. Explicit
+`--scope project` without `--project-root` uses only the invocation directory.
 
 Keep `.uap/` receipts, recovery journals and retained data local. Restore native
 components from the portable agreement and follow the client's trust or
@@ -169,14 +172,27 @@ activation instructions. Sources and private-source access must remain available
 See [project installation](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md)
 and [per-client limits](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
 
-## Current source convenience
+## Default install selection in CLI 0.1.94
 
-**Source only / unreleased:** argumentless `agentplugins install` selects project
-scope when a regular `uap.toml` exists in the exact current directory. It does
-not search parents. Explicit scope wins. In that source behavior, an existing
-lock is checked strictly before changes; only a missing lock allows initial
-resolution, and `--locked` requires a lock. Use explicit project selection and
-`--locked` with the released CLI.
+Check `agentplugins version` first. This behavior requires 0.1.94; if your
+package-manager channel is older, use the native installer or Homebrew. The
+explicit project-scope commands above remain compatible with 0.1.93.
+
+**Released in [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94):**
+`agentplugins install` without a source argument or explicit scope selects
+project scope when a regular `uap.toml` exists in the exact current directory.
+It does not search parents. A directory or symlink with that name is refused
+during automatic selection; choose scope explicitly to resolve the ambiguity.
+Without that local manifest, installation selects the user environment.
+Explicit `--scope user` or `--scope project` always wins. Other commands continue
+to default to user scope.
+
+An existing `uap.lock` is validated strictly before changes, even without
+`--locked`. A mismatch stops the operation; use `update` to advance pins rather
+than expecting install to refresh them. Only a missing lock permits first-install
+resolution and lock creation. `--locked` additionally requires an existing lock.
+For predictable automation and project restoration, the explicit scope and
+`--locked` examples above remain appropriate.
 
 ## Report a problem clearly
 

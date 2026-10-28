@@ -42,9 +42,14 @@ CLI 会询问要使用哪些兼容客户端。检查计划，并完成结果中�
 
 ## 当前可用功能
 
-当前已验证的安装器版本为 [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)，支持显式项目范围和锁定恢复。
-每条项目命令都要指定 `--scope project`；已发布版本默认使用用户环境。
+当前已验证的原生安装器版本为 [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)，支持显式项目范围和锁定恢复。
+add 和维护命令需明确指定 `--scope project`。无参数 `install` 在当前目录存在普通 `uap.toml` 时自动选择项目范围，不向上查找；显式范围优先，已有锁文件会被严格验证。
 请参阅[安装](./use/install)和[维护](./use/manage)。
+
+各分发渠道的版本可能不同。使用 0.1.94 的自动项目选择前，先运行 `agentplugins version` 或
+`npx universal-agent-plugins version`。若所选渠道仍较旧，可使用[原生或 Homebrew 安装](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)，
+或继续使用 0.1.93 已支持的显式项目范围命令。
+
 
 当前安装器不包含 `agentplugins author`。[构建指南](./build/)同时说明手动编写标准包的方法和当前源码中实现的创作命令。
 旧版创作工具的发布证据仍对应其原始版本，不能用于说明当前安装器下载包含哪些命令。

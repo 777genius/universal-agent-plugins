@@ -15,7 +15,7 @@ Un paquet Agent Plugins 1.0 est un dossier avec `plugin.json` à sa racine et de
 
 ## Disponibilité
 
-La version actuelle de l’installateur, [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93), peut valider et installer des paquets standard. **Elle n’inclut pas `agentplugins author`.** Les commandes de création de ce parcours décrivent des **compilations du code source actuel** où la création est activée. Les preuves de publication des outils de création 0.1.65 restent propres à cette version et ne décrivent pas l’installateur actuel.
+L’installateur natif actuel, [CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94), peut valider et installer des paquets standard. **Il n’inclut pas `agentplugins author`.** Les commandes de création de ce parcours décrivent des **compilations du code source actuel** où la création est activée. Les preuves de publication des outils de création 0.1.65 restent propres à cette version et ne décrivent pas l’installateur actuel.
 
 Vous pouvez écrire les fichiers à la main et utiliser l’installateur publié, ou compiler les outils ci-dessous pour créer une structure initiale, effectuer des vérifications statiques et lancer explicitement un cycle MCP. Une vérification statique réussie ne prouve ni l’activation par un client natif ni le bon fonctionnement d’une connexion à un service.
 

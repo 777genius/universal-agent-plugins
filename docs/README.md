@@ -10,7 +10,7 @@ assembled build input. Do not point the public site at this maintainer tree.
 
 `agentplugins` is the public CLI, distributed on npm as
 `universal-agent-plugins`. The last verified public installer baseline for this
-documentation update is [0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93).
+documentation update is [0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94).
 Main can contain features that are absent from that release; a merged change,
 source-level test or successful installer release does not by itself qualify
 an authoring release or every native client runtime.
@@ -29,10 +29,11 @@ an authoring release or every native client runtime.
 | Reproduce version-bound native evidence | [Released installer proof](released-native-client-proof.md), [project observations](evidence/PROJECT_INSTALLATION.md) |
 
 Check availability labels before using source examples. Automatic project
-selection, some authoring commands, portable commands and the TypeScript
-Management SDK have their own source/release boundaries. Read each contract's
-current qualification rather than treating every checked-in example as part
-of the npm installer.
+selection requires CLI 0.1.94; portable commands are present in the verified
+0.1.93 baseline with target-specific limits. Current-source authoring commands
+and the TypeScript Management SDK retain separate qualification boundaries.
+Read each contract rather than treating every checked-in example as part of
+the version installed from npm.
 
 ## Historical material
 

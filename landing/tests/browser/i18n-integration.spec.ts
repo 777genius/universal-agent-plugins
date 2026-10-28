@@ -31,9 +31,10 @@ for (const locale of publishedLocales) {
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('h1')).toBeVisible();
       if (family === '/') {
-        const copy = JSON.parse(
+        const messages = JSON.parse(
           readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'),
-        ).shell.restore as Record<string, string>;
+        ).shell;
+        const copy = messages.restore as Record<string, string>;
         const restore = page.locator('#restore-environment');
         await expect(restore.getByRole('heading', { level: 2 })).toHaveText(copy.title!);
         await expect(restore.locator('h1, h2, h3, h4, h5, h6')).toHaveCount(1);
@@ -41,9 +42,14 @@ for (const locale of publishedLocales) {
           'agentplugins add <git-url> --scope project',
           'agentplugins install --locked --scope project',
         ]);
-        await expect(restore.getByRole('link', { name: copy.guide! })).toHaveAttribute(
+        const docsLocale = ['en', 'ru', 'es', 'fr', 'zh'].includes(locale) ? locale : 'en';
+        const guideLabel =
+          docsLocale === locale
+            ? copy.guide!
+            : messages.docs.englishLabel.replace('{label}', copy.guide!);
+        await expect(restore.getByRole('link', { name: guideLabel })).toHaveAttribute(
           'href',
-          /\/docs\/en\/use\/manage\.html#restore-project-dependencies$/,
+          new RegExp(`/docs/${docsLocale}/use/manage\\.html#restore-project-dependencies$`),
         );
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });

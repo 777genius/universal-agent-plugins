@@ -35,20 +35,27 @@ npx universal-agent-plugins add context7 --target codex,cursor --dry-run
 
 The [native installation guide](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md)
 also provides macOS, Linux and Windows executables. The native manager needs no
-Node.js, although individual plugins may require their own runtimes.
+Node.js, although individual plugins may require their own runtimes. Check
+`npx universal-agent-plugins version` when using npm: a package-manager channel
+can still provide an older CLI. The automatic selection below requires 0.1.94;
+use the native installer or Homebrew if needed. The explicit project commands
+in this guide also work with 0.1.93.
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93)
-includes explicit project scope. To preview a project installation:
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94)
+includes explicit project scope and automatic project selection for `install`.
+To preview adding a package to a project:
 
 ```bash
 npx universal-agent-plugins add context7 --target cursor --scope project \
   --project-root /path/to/project --dry-run
 ```
 
-Choose an existing project directory. The released default is user scope, so
-select project scope on every project command. Review the plan before omitting
-`--dry-run`. Native discovery, trust, authentication and successful MCP calls
-remain separate from writing the package's files.
+Choose an existing project directory. Add and maintenance commands default to
+user scope, so select project scope explicitly. In 0.1.94, `install` without a
+source argument selects the project only if the exact current folder contains
+a regular `uap.toml`; explicit scope wins and parents are not searched. Review
+the plan before omitting `--dry-run`. Native discovery, trust, authentication
+and successful MCP calls remain separate from writing the package's files.
 
 [Complete installation journey](../use/install) ·
 [Client compatibility and test boundaries](../reference/client-compatibility)

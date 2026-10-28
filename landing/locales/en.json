@@ -270,19 +270,19 @@
     "customLogicDescription": "Choose this when your code, hooks, or runtime behavior define the product."
   },
   "pluginAuthoring": {
-    "eyebrow": "Standard-first authoring",
-    "title": "Use plugins. Build plugins.",
-    "subtitle": "Install and manage Agent Plugins 1.0 packages, or build a portable plugin.json package with the standard authoring flow.",
+    "eyebrow": "Build plugins",
+    "title": "Use plugins / Build plugins",
+    "subtitle": "Install and manage standard packages, or write your own plugin.json package and check it with the appropriate tools.",
     "use": {
-      "badge": "Available now",
+      "badge": "CLI 0.1.94",
       "title": "Use plugins",
-      "description": "Install, inspect, update, repair, and remove packages with the existing installer.",
-      "cta": "Open the Use guide"
+      "description": "Find, preview, install and maintain packages with the released installer.",
+      "cta": "Open Use guide"
     },
     "build": {
-      "badge": "Available now",
+      "badge": "Manual or source build",
       "title": "Build plugins",
-      "description": "Build a portable Agent Plugins 1.0 package: root plugin.json with optional skills/ and mcp.json, then use the offline init → validate → inspect → static test loop. Static authoring is available in universal-agent-plugins; runtime execution, export and publication are not included.",
+      "description": "Write a standard package with root plugin.json and optional skills/ and mcp.json. The released installer validates and installs it. Scaffolding and authoring checks require the source build described in the Build guide; static checks do not prove runtime or activation.",
       "cta": "Open the Build guide"
     }
   },
@@ -305,7 +305,7 @@
       "quickstartTitle": "Open quickstart",
       "quickstartBody": "The shortest supported path from install to a validated repo.",
       "buildTitle": "Open Build guide",
-      "buildBody": "Create and check plugin.json packages with agentplugins author.",
+      "buildBody": "Write plugin.json packages by hand or use source-build authoring tools, then validate and install them with the released manager.",
       "useTitle": "Open Use guide",
       "useBody": "Find, preview, install, and maintain plugins with agentplugins."
     }
@@ -356,9 +356,9 @@
     "specLink": "Read the Agent Plugins 1.0 specification",
     "compatibilityLink": "Client compatibility (English)",
     "limitations": "Compatibility is package-specific. Schema validation does not prove runtime, OAuth or activation. Codex does not support declared MCP SSE; stdio and Streamable HTTP keep their existing adapter support.",
-    "versions": "Agent Plugins authoring available: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "Agent Plugins authoring available",
-    "releaseScope": "Agent Plugins authoring is available in universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, native archives, GitHub Releases and public-channel E2E are verified. The release provides static authoring; runtime execution, development servers, dependency bootstrap, export and publication are not included.",
+    "versions": "Verified native installer: CLI 0.1.94; npm package name: universal-agent-plugins; GitHub release tags: agentplugins-v*.",
+    "availability": "Manual packages and source-build authoring",
+    "releaseScope": "GitHub Releases and Homebrew provide the CLI 0.1.94 installer, which does not include agentplugins author. npm is another installation channel; versions can differ, so check your CLI version before using 0.1.94-only behavior. Use an authoring-enabled source build for the author commands in the Build guide. The generated API reference retains its historical 0.1.65 provenance; it does not describe the current installer download.",
     "buildGuideLink": "Open the Build guide"
   },
   "shell": {
@@ -798,7 +798,7 @@
         "note": "Native Agent Plugin package",
         "status": "Supported",
         "intro": "Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.",
-        "delivery": "The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. User scope is the default; project scope must be selected explicitly.",
+        "delivery": "The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. The add command defaults to user scope; select project scope explicitly for add.",
         "activation": "Reload Cursor when requested, then verify that the plugin is discovered."
       },
       "copilot": {

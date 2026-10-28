@@ -288,7 +288,7 @@
       "quickstartTitle": "Abrir inicio rápido",
       "quickstartBody": "La ruta admitida más corta desde la instalación hasta un repositorio validado.",
       "buildTitle": "Abrir la guía Crear",
-      "buildBody": "Cree y compruebe paquetes plugin.json con agentplugins author.",
+      "buildBody": "Escribe paquetes plugin.json a mano o usa las herramientas compiladas desde el código fuente; después valídalos e instálalos con el gestor publicado.",
       "useTitle": "Abrir la guía Usar",
       "useBody": "Busque, previsualice, instale y mantenga plugins con agentplugins."
     }
@@ -339,9 +339,9 @@
     "specLink": "Especificación Agent Plugins 1.0",
     "compatibilityLink": "Compatibilidad de clientes (en inglés)",
     "limitations": "La compatibilidad depende del paquete. Validar el esquema no demuestra ejecución, OAuth ni activación. Codex no admite MCP SSE declarado; stdio y Streamable HTTP conservan el soporte de sus adaptadores actuales.",
-    "versions": "Creación de Agent Plugins disponible: universal-agent-plugins; GitHub: agentplugins-v*.",
-    "availability": "Creación de Agent Plugins disponible",
-    "releaseScope": "La creación de Agent Plugins está disponible en universal-agent-plugins; GitHub: agentplugins-v*. npm, Homebrew, archivos nativos, GitHub Releases y E2E público están verificados. La versión incluye creación estática; no incluye ejecución, servidores de desarrollo, instalación de dependencias, exportación ni publicación.",
+    "versions": "Instalador nativo verificado: CLI 0.1.94; nombre del paquete npm: universal-agent-plugins; etiquetas de GitHub: agentplugins-v*.",
+    "availability": "Paquetes manuales y herramientas desde el código fuente",
+    "releaseScope": "GitHub Releases y Homebrew ofrecen el instalador CLI 0.1.94, que no incluye agentplugins author. También puedes instalar mediante npm, pero las versiones de los canales pueden diferir: comprueba la versión del CLI antes de usar funciones exclusivas de 0.1.94. Los comandos de la guía Crear necesitan una compilación del código fuente con la creación activada. La referencia API generada conserva su procedencia histórica de 0.1.65; no describe el instalador actual.",
     "buildGuideLink": "Abrir la guía de creación"
   },
   "shell": {
@@ -781,7 +781,7 @@
         "note": "Paquete de complemento de agente nativo",
         "status": "Apoyado",
         "intro": "Instale Agent Plugins 1.0 en proyectos de Cursor sin traducir cada complemento a mano. La CLI planifica el paquete nativo antes de cambiar los archivos.",
-        "delivery": "La CLI prepara los componentes de plugin, skills y MCP compatibles con Cursor en el ámbito elegido. El ámbito de usuario es el predeterminado; el de proyecto debe seleccionarse explícitamente.",
+        "delivery": "La CLI prepara los componentes de plugin, skills y MCP compatibles con Cursor en el ámbito elegido. El comando add usa el ámbito de usuario por defecto; el ámbito de proyecto debe elegirse explícitamente para add.",
         "activation": "Vuelva a cargar el cursor cuando se le solicite y luego verifique que se haya descubierto el complemento."
       },
       "copilot": {
@@ -973,6 +973,23 @@
       "requiredDetail": "El paquete puede requerir una cuenta, token o inicio de sesión; esto no especifica OAuth ni confirma que hayas iniciado sesión.",
       "not_requiredDetail": "No se declara autenticación para estos agentes. Pueden aplicarse límites del servicio y otros requisitos de configuración.",
       "unknownDetail": "Comprueba los requisitos del paquete antes de conectar."
+    }
+  },
+  "pluginAuthoring": {
+    "eyebrow": "Crear plugins",
+    "title": "Usar plugins / Crear plugins",
+    "subtitle": "Instala y mantén paquetes estándar, o escribe tu propio paquete plugin.json y compruébalo con las herramientas adecuadas.",
+    "use": {
+      "badge": "CLI 0.1.94",
+      "title": "Usar plugins",
+      "description": "Busca, previsualiza, instala y mantén paquetes con el instalador publicado.",
+      "cta": "Abrir la guía Usar"
+    },
+    "build": {
+      "badge": "A mano o desde el código fuente",
+      "title": "Crear plugins",
+      "description": "Escribe un paquete estándar con plugin.json en la raíz y skills/ y mcp.json opcionales. El instalador publicado lo valida e instala. Las plantillas y las comprobaciones de creación requieren la compilación del código fuente descrita en la guía. Las comprobaciones estáticas no demuestran ejecución ni activación.",
+      "cta": "Abrir la guía de creación"
     }
   }
 }

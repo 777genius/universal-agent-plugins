@@ -12,9 +12,12 @@ translationRequired: false
 
 ## Current release and scope
 
-[CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93),
-published on 26 October 2026, includes explicit project installation and locked
-restoration. Its installer release evidence does not qualify every native agent
+[CLI 0.1.94](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.94),
+the native release published on 28 October 2026, adds automatic project selection for an `install`
+without a source argument when the exact current folder contains a regular
+`uap.toml`. Explicit scope wins; parent folders are not searched. Existing locks
+are checked strictly even without `--locked`. Explicit project delivery was
+introduced in 0.1.93. This installer release evidence does not qualify every native agent
 runtime or the standard authoring executable. The current npm/native installer
 excludes `agentplugins author`; see the [Build guide](../build/) for source tools.
 
@@ -36,7 +39,7 @@ See [project support by client](https://github.com/777genius/universal-agent-plu
 and the [project evidence index](https://github.com/777genius/universal-agent-plugins/blob/main/docs/evidence/PROJECT_INSTALLATION.md).
 
 The records below preserve exact historical releases, client versions, platform
-identities and observed limitations. They do not automatically apply to 0.1.93,
+identities and observed limitations. They do not automatically apply to 0.1.94,
 a later client version, another scope or an untested package. UAP is independent
 community tooling; these are bounded maintainer observations, not vendor
 certification or a claim of universal production readiness.

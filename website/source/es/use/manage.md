@@ -74,7 +74,7 @@ agentplugins deps tree
 
 Para un entorno nuevo, ejecuta `agentplugins deps init`, edita el manifiesto deliberadamente, resuélvelo con `agentplugins deps lock` y aplica el bloqueo con `agentplugins install --locked`. Revisa las confirmaciones y usa `--dry-run` para previsualizar. La [guía de dependencias](https://github.com/777genius/universal-agent-plugins/blob/main/docs/UAP_DEPENDENCIES.md) explica la sintaxis del manifiesto, las dependencias obligatorias, los rangos de versiones y las actualizaciones.
 
-No des por hecho que una instalación imperativa anterior forme parte del acuerdo portable. Consulta `deps status` y los archivos reales antes de transferirlos. El guardado por defecto de las operaciones remotas `add` se describe por separado en la guía del código fuente; un recibo de instalación no demuestra ese guardado.
+Desde CLI 0.1.93, las instalaciones remotas elegibles guardan las dependencias por defecto. `--no-save`, los orígenes locales, los selectores literales `discovery:` y la preparación de ChatGPT quedan fuera de ese guardado portable. Si una selección combina ChatGPT con otros destinos, sepárala o usa `--no-save`. No des por hecho que una instalación imperativa anterior forme parte del acuerdo: consulta `deps status` y los archivos reales antes de transferirlos.
 
 ## Restaura en otra máquina
 
@@ -103,6 +103,8 @@ Solo se transfieren los bytes originales de `uap.toml` y `uap.lock`, validados e
 
 No se transfieren perfiles, ajustes, credenciales, recibos ni `PLUGIN_DATA`. Configura la autenticación en la máquina nueva y respalda los datos por separado. Si falla la instalación después de guardar los dos archivos, corrige la causa y repite `install --locked --scope user`. Ejecuta antes `deps recover --scope user` si se informa de recuperación pendiente. No recrees las revisiones transferidas con `deps lock`: un selector móvil podría resolverse de otra forma.
 
+<a id="restore-project-dependencies"></a>
+
 ## Restaura y mantén un proyecto
 
 El ámbito de proyecto explícito está disponible desde [CLI 0.1.93](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.93). Guarda `uap.toml` y `uap.lock` del proyecto en control de versiones. En otra copia existente del repositorio, instala los clientes necesarios y ejecuta:
@@ -120,13 +122,23 @@ agentplugins repair review --target cursor --scope project --project-root /path/
 agentplugins deps recover --scope project --project-root /path/to/project
 ```
 
-Si un nombre es ambiguo, usa la identidad de instalación que devuelve `list`. La versión publicada usa por defecto el ámbito de usuario; un manifiesto de proyecto en la carpeta actual no cambia ese comportamiento. `--scope project` explícito, sin `--project-root`, usa solo el directorio de ejecución.
+Si un nombre es ambiguo, usa la identidad de instalación que devuelve `list`. `add` y los comandos de mantenimiento usan por defecto el ámbito de usuario; selecciona el proyecto explícitamente. Desde 0.1.94, `install` sin argumentos puede seleccionarlo automáticamente como se explica a continuación. `--scope project` explícito, sin `--project-root`, usa solo el directorio de ejecución.
 
 Conserva localmente los recibos, diarios de recuperación y datos de `.uap/`. Restaura los componentes nativos desde el acuerdo portable y sigue las instrucciones del cliente sobre confianza o activación. Los orígenes y el acceso a los privados deben seguir disponibles. Consulta la [instalación de proyecto](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_INSTALLATION.md) y los [límites por cliente](https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md).
 
-## Comodidad del código fuente actual
+## Instalación automática de proyecto en CLI 0.1.94
 
-**Solo en el código fuente; todavía sin publicar:** `agentplugins install` sin argumentos selecciona el ámbito de proyecto si existe un `uap.toml` regular en el directorio actual exacto. No busca en directorios superiores. El ámbito explícito tiene prioridad. En ese comportamiento del código fuente, un bloqueo existente se valida estrictamente antes de cambiar nada; solo su ausencia permite la resolución inicial, y `--locked` exige que exista. Con el CLI publicado, usa la selección explícita de proyecto y `--locked`.
+**Disponible desde CLI 0.1.94:** comprueba primero la versión del ejecutable:
+
+```bash
+agentplugins version
+```
+
+Necesitas 0.1.94 o posterior para este comportamiento. Los canales pueden actualizarse en momentos distintos; si el tuyo aún ofrece una versión anterior, usa [el instalador nativo](https://github.com/777genius/universal-agent-plugins/blob/main/docs/NATIVE_INSTALL.md) o Homebrew. Los ejemplos anteriores con ámbito explícito siguen funcionando con 0.1.93.
+
+`agentplugins install` sin argumentos selecciona el ámbito de proyecto si existe un `uap.toml` regular en el directorio actual exacto. No busca en directorios superiores. Un ámbito explícito tiene prioridad; sin ese manifiesto local, se selecciona el entorno de usuario.
+
+Un `uap.lock` existente se valida estrictamente antes de cambiar nada, incluso sin `--locked`: no se vuelven a resolver sus revisiones fijadas. Solo la ausencia del bloqueo permite resolver las dependencias iniciales y crear uno. `--locked` exige un bloqueo válido existente. Usa `update` para avanzar las revisiones fijadas; no uses una instalación ordinaria para cambiarlas. Los ejemplos anteriores con ámbito explícito y `--locked` siguen siendo una forma reproducible de restaurar el proyecto.
 
 ## Informa de un problema con claridad
 
