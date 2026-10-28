@@ -50,6 +50,7 @@ func TestEventsPreserveStableBucketOrder(t *testing.T) {
 		{platform: "qoder", event: "user_prompt_submit"},
 		{platform: "qoder", event: "post_tool_use"},
 		{platform: "qoder", event: "stop"},
+		{platform: "pi", event: "observation"},
 	}
 	if len(events) != len(want) {
 		t.Fatalf("events count = %d want %d", len(events), len(want))

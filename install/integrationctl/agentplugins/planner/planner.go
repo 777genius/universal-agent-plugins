@@ -121,6 +121,8 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 	}
 	plan.TargetAnchor, plan.TargetRoot, plan.ActivePath = target.TargetAnchor, target.TargetRoot, target.ActivePath
 	plan.Components = componentDecisions(request.Envelope, definition.Capabilities)
+	interpreter, _ := clients.As[clients.ExtensionInterpreter](planner.Registry, plan.ClientID)
+	interpretExtensionDecisions(request.Envelope, plan.Components, interpreter)
 	commandsWithheld := applyCommandDecisions(&plan, request.Envelope, definition)
 	if err := planner.qualify(input, definition.Capabilities, commandsWithheld, &plan); err != nil {
 		return plan, err

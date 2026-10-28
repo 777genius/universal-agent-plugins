@@ -138,6 +138,17 @@
       ]
     }
   },
+  "pi": {
+    "Commands": [],
+    "Error": "",
+    "Outcome": {
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
+      "LocalActions": null,
+      "UserActions": null
+    }
+  },
   "qoder": {
     "Commands": [],
     "Error": "",
