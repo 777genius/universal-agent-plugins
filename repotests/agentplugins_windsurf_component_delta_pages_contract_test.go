@@ -42,8 +42,8 @@ func windPageContractMaps(count int) (map[string]windProfileRecord, map[string]w
 	return before, after, changed
 }
 
-func TestWindsurfFixedDeltaPagesCoverOnlyFifteenAndPreserveOriginal(t *testing.T) {
-	for _, count := range []int{0, 1, 3, 4, 14, 15, 16} {
+func TestWindsurfFixedDeltaPagesCoverOnlyEighteenAndPreserveOriginal(t *testing.T) {
+	for _, count := range []int{0, 1, 3, 4, 14, 15, 16, 18, 19} {
 		before, after, expected := windPageContractMaps(count)
 		old := windProfileDifference(before, after)
 		pages := windProfileDifferencePages(before, after)
@@ -72,7 +72,7 @@ func TestWindsurfFixedDeltaPagesCoverOnlyFifteenAndPreserveOriginal(t *testing.T
 				ranks = append(ranks, fmt.Sprintf("%03d:%s", rank, detail.KeySHA256))
 			}
 		}
-		if len(seen) != min(count, 15) || count-len(seen) != max(0, count-15) || !sort.StringsAreSorted(ranks) {
+		if len(seen) != min(count, 18) || count-len(seen) != max(0, count-18) || !sort.StringsAreSorted(ranks) {
 			t.Fatal("fixed full coverage/overflow/global ordering differs", count)
 		}
 		backwards := map[string]windProfileRecord{}

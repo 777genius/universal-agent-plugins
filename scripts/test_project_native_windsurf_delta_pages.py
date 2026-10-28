@@ -7,7 +7,7 @@ import project_native_windsurf_components as component
 from test_project_native_windsurf_components import fixture, raw, sha
 
 
-def delta_pages(count=15):
+def delta_pages(count=15, page_count=6):
     roots = {role: dict(added=0, removed=0, changed=0) for role in component.DELTA_ROLES}
     details = []
     for index in range(count):
@@ -32,7 +32,7 @@ def delta_pages(count=15):
     common = dict(status="captured", before=6 + total["changed"] + total["removed"],
                   after=6 + total["changed"] + total["added"], total=total, roots=roots)
     return [dict(copy.deepcopy(common), omitted_count=count - len(details[offset:offset + 3]),
-                 details=copy.deepcopy(details[offset:offset + 3])) for offset in (0, 3, 6, 9, 12)]
+                 details=copy.deepcopy(details[offset:offset + 3])) for offset in (0, 3, 6, 9, 12, 15)[:page_count]]
 
 
 def envelope(pages=None, count=4, stage="empty-user-skills"):
@@ -50,15 +50,15 @@ def admit(bodies, source, summary):
 
 class WindsurfDeltaPagesTests(unittest.TestCase):
     def test_fixed_windows_preserve_page_zero_counts_overflow_and_failure(self):
-        for count in (1, 3, 4, 14, 15, 16):
+        for count in (1, 3, 4, 14, 15, 16, 18, 19):
             with self.subTest(count=count):
                 bodies, source, summary = envelope(delta_pages(count))
                 result = admit(bodies, source, summary)
                 pages = result["profile_delta_pages"]
                 self.assertEqual(pages[0], result["profile_delta"])
                 selected = [row for page in pages for row in page["details"]]
-                self.assertEqual(len(selected), min(count, 15))
-                self.assertEqual(count - len(selected), max(0, count - 15))
+                self.assertEqual(len(selected), min(count, 18))
+                self.assertEqual(count - len(selected), max(0, count - 18))
                 for index, page in enumerate(pages):
                     self.assertEqual(len(page["details"]), min(3, max(0, count - 3 * index)))
                     self.assertEqual(page["omitted_count"], count - len(page["details"]))
@@ -66,6 +66,18 @@ class WindsurfDeltaPagesTests(unittest.TestCase):
                     self.assertNotIn(b"PRIVATE", raw(page))
                 self.assertTrue(result["test_failed"])
                 self.assertFalse(result["runtime_attempt_complete"])
+                self.assertFalse(any(result["qualification"].values()))
+
+    def test_legacy_five_pages_remain_identical_prefix_with_truthful_omissions(self):
+        for count in (1, 15, 16, 18, 19):
+            with self.subTest(count=count):
+                legacy = delta_pages(count, page_count=5)
+                current = delta_pages(count)
+                self.assertEqual(current[:5], legacy)
+                bodies, source, summary = envelope(legacy)
+                result = admit(bodies, source, summary)
+                self.assertEqual(result["profile_delta_pages"], legacy)
+                self.assertEqual(sum(len(page["details"]) for page in legacy), min(count, 15))
                 self.assertFalse(any(result["qualification"].values()))
 
     def test_details_bound_retains_global_counts_and_all_omissions(self):
@@ -95,8 +107,9 @@ class WindsurfDeltaPagesTests(unittest.TestCase):
 
     def test_unknown_fields_types_counts_omissions_and_fixed_pages_refuse(self):
         changes = {
-            "four-pages": lambda s: s["profile_delta_pages"].pop(),
-            "six-pages": lambda s: s["profile_delta_pages"].append(copy.deepcopy(s["profile_delta_pages"][-1])),
+            "four-pages": lambda s: s["profile_delta_pages"].__delitem__(slice(4, None)),
+            "seven-pages": lambda s: s["profile_delta_pages"].append(copy.deepcopy(s["profile_delta_pages"][-1])),
+            "duplicate-sixth": lambda s: s["profile_delta_pages"].__setitem__(5, copy.deepcopy(s["profile_delta_pages"][4])),
             "unknown-page": lambda s: s["profile_delta_pages"][1].update(path="PRIVATE_PATH"),
             "boolean-count": lambda s: s["profile_delta_pages"][1].update(before=True),
             "negative-count": lambda s: s["profile_delta_pages"][1].update(after=-1),

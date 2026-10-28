@@ -159,8 +159,8 @@ def _delta_pages(result):
             or "profile_delta" not in result):
         raise ValueError("Windsurf delta pages lack their actual failed native triple")
     pages = result["profile_delta_pages"]
-    if type(pages) is not list or len(pages) != 5:
-        raise ValueError("Windsurf delta requires five fixed pages")
+    if type(pages) is not list or len(pages) not in (5, 6):
+        raise ValueError("Windsurf delta requires historical five or current six fixed pages")
     original = result["profile_delta"]
     _delta_page(original, 0)
     keys, ranks = set(), []

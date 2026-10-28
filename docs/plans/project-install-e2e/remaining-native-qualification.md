@@ -1426,3 +1426,22 @@ counts/omissions, global uniqueness/order and ordinary record bounds. This
 publication remains a failed-observation diagnostic. A new genuine hosted
 capture and whole raw review must establish all actually observed profile
 changes before any narrow initialization policy or full lifecycle claim.
+
+## Windsurf sixth bounded diagnostic window (2026-10-28)
+
+Two independent Sol reviewers approved exact amendment SHA256
+`002ccf74d04c52ec6083ce0313bf1e5e89b13f7b6bdb95fe76269c85209eddc1`.
+Actual `9a762821` run `40740022136` has two complete independent RAW audits:
+14 native/25 frontend members,24 stream joins and234 pinned file hashes.
+The exact first skills listing succeeds in185ms, then the original protected
+config guard fails. The profile has16 changes; five windows expose15 unique
+entries and omit one cache addition. All qualification flags remain false.
+
+Add only the sixth fixed diagnostic offset15, retaining three details/2KiB per
+window, the same held maps, original first five projections, global counts,
+privacy, refusals and cleanup. The failed-only reader preserves historical
+five-window captures and accepts the current six with exact ordering and joins.
+Observed16/exact18/overflow19 controls preserve truthful omissions. No profile
+ownership or unknown data/cache permission follows; no native argv, source pin,
+environment, deadline, evidence member or product behavior changes. Replay old
+failed captures unchanged and require a fresh hosted observation after review.

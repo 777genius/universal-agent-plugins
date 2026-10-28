@@ -76,9 +76,9 @@ func windProfileDifference(before, after map[string]windProfileRecord) windProfi
 	return windProfileDifferenceAt(before, after, 0)
 }
 
-func windProfileDifferencePages(before, after map[string]windProfileRecord) [5]windProfileDelta {
-	var pages [5]windProfileDelta
-	for i, offset := range [5]int{0, 3, 6, 9, 12} {
+func windProfileDifferencePages(before, after map[string]windProfileRecord) [6]windProfileDelta {
+	var pages [6]windProfileDelta
+	for i, offset := range [6]int{0, 3, 6, 9, 12, 15} {
 		pages[i] = windProfileDifferenceAt(before, after, offset)
 	}
 	return pages
