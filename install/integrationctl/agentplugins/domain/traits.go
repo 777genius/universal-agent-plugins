@@ -33,6 +33,13 @@ type ClientTraits struct {
 	ReportsMCPToolNamespaceCollision  bool
 	BindsNativeProfileRoot            bool
 	TracksNativeEffects               bool
+	// RequiresPluginData binds native extension runtime locators to an owned data receipt.
+	RequiresPluginData bool
+	// VerifiesNativeDirectory permits read-only verification of a directly discovered package.
+	VerifiesNativeDirectory bool
+	// ProtectsModifiedPackage rejects repair over edited discovery code; missing
+	// exact-owned directories remain repairable through the normal transaction.
+	ProtectsModifiedPackage bool
 	// EnforcesExplicitSkillInvocation means the client has a verified way to
 	// keep a skill out of the model's automatic choice, so an explicit-only
 	// command can be delivered. The adapter must then implement
@@ -109,6 +116,8 @@ func ShouldReadOnlyVerify(id ClientID, executable string, intent InstallIntent) 
 func ShouldReadOnlyVerifyForScope(id ClientID, scope InstallScope, executable string, intent InstallIntent) bool {
 	traits := (SelectedDelivery{}).EffectiveTraitsForScope(id, scope)
 	switch {
+	case traits.VerifiesNativeDirectory:
+		return true
 	case traits.LifecycleKind == LifecycleNativeConfig:
 		return true
 	case traits.LifecycleKind == LifecycleCLIRegistry && traits.UsesManagedStdioLauncher:

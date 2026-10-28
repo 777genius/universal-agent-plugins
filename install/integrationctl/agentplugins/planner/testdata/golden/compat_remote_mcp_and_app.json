@@ -703,6 +703,71 @@
   },
   {
     "Capabilities": {
+      "ActivationMode": "automatic",
+      "AppSupport": "unsupported",
+      "ClientID": "pi",
+      "ExtensionSupport": "native",
+      "MCPTransports": {
+        "sse": "unsupported",
+        "stdio": "unsupported",
+        "streamable-http": "unsupported"
+      },
+      "PackageMode": "native",
+      "Scopes": [
+        "user"
+      ],
+      "SkillSupport": "unsupported"
+    },
+    "ClientID": "pi",
+    "Components": [
+      {
+        "Index": 1,
+        "Kind": "app",
+        "Limitations": [
+          "component_not_supported_by_client"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "extension",
+        "Limitations": [
+          "extension_semantics_not_established"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "mcp_server",
+        "Limitations": [
+          "component_not_supported_by_client"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      },
+      {
+        "Index": 1,
+        "Kind": "skill",
+        "Limitations": [
+          "component_not_supported_by_client"
+        ],
+        "Source": "",
+        "Support": "unsupported"
+      }
+    ],
+    "Limitations": [
+      "authentication_not_checked",
+      "catalog_publication_not_checked",
+      "client_version_not_checked",
+      "installation_not_checked",
+      "runtime_not_checked",
+      "static_adapter_support_only"
+    ]
+  },
+  {
+    "Capabilities": {
       "ActivationMode": "manual",
       "AppSupport": "unsupported",
       "ClientID": "qoder",

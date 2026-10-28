@@ -46,7 +46,7 @@ func TestParseClientIDAliasesAndLenientPassThrough(t *testing.T) {
 func TestClientRegistryHasStableOrderAndSharedCopilotBackend(t *testing.T) {
 	want := []ClientID{
 		ClientCodex, ClientChatGPT, ClientCursor, ClientCopilot, ClientVSCode, ClientKiro,
-		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder,
+		ClientClaude, ClientGemini, ClientOpenCode, ClientCline, ClientWindsurf, ClientGrok, ClientKimi, ClientQoder, ClientPi,
 	}
 	if got := SupportedClientIDs(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported clients = %v, want %v", got, want)
