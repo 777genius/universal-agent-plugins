@@ -139,7 +139,13 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, _ *domain.DeliveryPl
 }
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
+	eligible := false
+	for _, component := range plan.Components {
+		if component.Kind == domain.ComponentExtension && component.Name == Namespace && component.Support == domain.SupportNative {
+			eligible = true
+		}
+	}
+	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, eligible)
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "Reload resources or restart Pi to load the managed extension; installed files do not prove runtime activation.")
 	return nil
 }
