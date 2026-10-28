@@ -336,7 +336,8 @@ a development package; it has no public npm release.
   </tr>
 </table>
 
-Build the next one yourself: [how to build with the SDK](https://universal-agent-plugins.com/docs/en/build/).
+Read the [Go SDK integration guide](sdk/README.md) for typed runtime hooks and
+client-specific handlers.
 
 ## Find and verify plugins
 

@@ -154,4 +154,9 @@ test('README retains the available installer and canonical client limitations', 
   );
   assert.ok(text.includes('For Codex, declared MCP SSE is unsupported'));
   assert.ok(text.includes('docs/CODEX_TRANSPORT_EVIDENCE.md'));
+  assert.ok(text.includes('[Go SDK integration guide](sdk/README.md)'));
+  assert.ok(existsSync(fileURLToPath(new URL('sdk/README.md', root))));
+  const showcase = read('landing/components/sections/BuiltWithSection.vue');
+  assert.ok(showcase.includes('https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md'));
+  assert.ok(showcase.includes("docsLabel(t('shell.builtWith.buildWithSdk'), locale.value !== 'en')"));
 });
