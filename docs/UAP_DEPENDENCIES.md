@@ -1,7 +1,9 @@
 # UAP dependency environments
 
-**Released:** this workflow ships in the published CLI (`agentplugins` 0.1.90 and
-later). The restore guide is on the docs site:
+**Released:** user dependency environments ship in CLI 0.1.90 and later;
+explicit project scope ships in CLI 0.1.93 and later. The source-only install
+conveniences below are not part of those releases. The restore guide is on the
+docs site:
 [Restore on another machine](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine).
 
 `agentplugins deps` manages the selected dependency environment. By default it
@@ -154,8 +156,13 @@ independently. `recover` covers one complete owned pending scope and requires
 confirmation; run `sync` separately after it succeeds.
 
 `agentplugins install` is the everyday converge verb over the same machinery.
-Without a source argument, it selects project scope when a regular `uap.toml`
-exists in the exact current directory; it never searches parent directories.
+In the released CLI, omitting `--scope` selects the user environment, even when
+the current folder contains an agreement. Use `--locked` for strict restoration
+and explicitly select project scope when restoring a project.
+
+**Current source only / unreleased:** without a source argument, install selects
+project scope when a regular `uap.toml` exists in the exact current directory;
+it never searches parent directories.
 Explicit `--scope` wins. An existing `uap.lock` is strictly validated before
 changes, even with `--locked=false`; only an absent lock permits first-install
 resolution. `--locked` additionally requires that lock to exist. The preview
@@ -277,8 +284,8 @@ The optional `[directory]` argument overrides the exchange folder, which default
 to the current working directory. Without scope flags, export reads the global
 user environment and import writes it; `AGENTPLUGINS_HOME` selects that
 environment as usual. A project manifest in the current folder does not change
-the default scope. With `--scope project`, both commands use the selected
-project environment. Choose a separate exchange directory because the portable
+the default scope of export/import. With `--scope project`, both commands use the
+selected project environment. Choose a separate exchange directory because the portable
 pair already lives in the project root; see [project restore](PROJECT_INSTALLATION.md#restore-in-another-checkout).
 
 Plain export/import transfers only `uap.toml` and `uap.lock`, preserving their
@@ -300,8 +307,9 @@ prompt; `--install` still checks and applies the locked environment.
 preflight before one action confirmation. Current security prompts and target, host, ownership
 and recovery policy still apply; `--yes` does not bypass them. A preflight refusal
 leaves the destination agreement unchanged. If existing projection drift blocks
-the combined preflight, import the files alone, then run `install --locked` to
-review repair through its normal flow.
+the combined preflight, import the files alone, then retry the locked installation
+for the same selected environment as shown below to review repair through its
+normal flow.
 
 An empty store is supported: installation fetches each exact recorded pin once
 and verifies its package and manifest digests. It does not select newer versions,
@@ -318,9 +326,20 @@ selectors could resolve differently.
 
 After import successfully saves the agreement, an installation failure keeps it
 as the new desired state and reports any partial installation. Address the error
-and retry `agentplugins install --locked --scope user`; if pending recovery is reported, run
-`agentplugins deps recover` first. The installer never falls back to unlocked
-resolution.
+and retry in the same selected environment. For a user import, retry
+`agentplugins install --locked --scope user`; if pending recovery is reported,
+run `agentplugins deps recover --scope user` first.
+
+For a project import, retain the same project root used by the original import:
+
+```sh
+agentplugins install --locked --scope project --project-root /path/to/new-project
+```
+
+If that project reports pending recovery, first run
+`agentplugins deps recover --scope project --project-root /path/to/new-project`,
+then retry the locked install for that same root. The installer never falls back
+to unlocked resolution or another environment.
 
 Configure client profiles, executable discovery and any required authentication
 on the destination. Do not copy local ownership receipts as installation proof.

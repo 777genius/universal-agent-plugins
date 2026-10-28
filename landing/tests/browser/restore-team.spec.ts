@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { hydrated } from './i18n-state.helpers';
 
 const commands = [
   'agentplugins add <git-url> --scope project',
@@ -21,6 +22,7 @@ for (const theme of ['dark', 'light']) {
       await page.setViewportSize({ width, height: 1100 });
       await context.addInitScript((value) => localStorage.setItem('theme', value), theme);
       await page.goto(locale === 'en' ? './' : `./${locale}/`);
+      await hydrated(page);
       await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       const section = page.locator('#restore-environment');
@@ -84,14 +86,15 @@ test('both monitor commands copy complete flags and support keyboard focus', asy
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('./');
+  await hydrated(page);
   const buttons = page.locator('#restore-environment button');
   for (let index = 0; index < commands.length; index++) {
     await buttons.nth(index).focus();
     await expect(buttons.nth(index)).toBeFocused();
     await page.keyboard.press('Enter');
+    await expect(buttons.nth(index)).toHaveText('Copied');
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(commands[index]);
-    await expect(buttons.nth(index)).toHaveText('Copied');
   }
 });

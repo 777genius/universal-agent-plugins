@@ -43,7 +43,7 @@ for (const locale of publishedLocales) {
         ]);
         await expect(restore.getByRole('link', { name: copy.guide! })).toHaveAttribute(
           'href',
-          /\/docs\/en\/use\/manage\.html#restore-on-another-machine$/,
+          /\/docs\/en\/use\/manage\.html#restore-project-dependencies$/,
         );
         if (locale === 'en' || locale === 'ar') {
           await page.setViewportSize({ width: locale === 'ar' ? 390 : 1440, height: 1000 });
