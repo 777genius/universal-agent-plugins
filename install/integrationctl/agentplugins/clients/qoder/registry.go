@@ -13,11 +13,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 const (
-	qoderListTimeout          = 15 * time.Second
+	qoderListTimeout          = 30 * time.Second
 	qoderListStdoutLimitBytes = 1 << 20
 )
 
@@ -137,16 +136,18 @@ func versionMatches(entry pluginEntry, declared string) bool {
 	return entry.Version != "" && entry.Version == declared
 }
 
-func listPlugins(ctx context.Context, env clients.Env, executable string) ([]pluginEntry, error) {
+func listPlugins(ctx context.Context, env clients.Env, root, executable string) ([]pluginEntry, error) {
+	command, err := qoderCommand(root, executable, "plugins", "list", "--json")
+	if err != nil {
+		return nil, err
+	}
 	if !shared.HasClientCLI(env, executable) {
 		return nil, errUnknownList
 	}
 	bounded, cancel := context.WithTimeout(ctx, qoderListTimeout)
 	defer cancel()
-	result, err := shared.RunNativeRegistry(bounded, env.Runner, legacyports.Command{
-		Argv:             []string{executable, "plugins", "list", "--json"},
-		StdoutLimitBytes: qoderListStdoutLimitBytes,
-	})
+	command.StdoutLimitBytes = qoderListStdoutLimitBytes
+	result, err := shared.RunNativeRegistry(bounded, env.Runner, command)
 	if err != nil {
 		return nil, fmt.Errorf("run Qoder plugin list: %w", err)
 	}
@@ -185,6 +186,14 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
+	if err := validateProfile(client.ConfigRoot, plan.NativeRegistryRoot); err != nil {
+		return clients.RegistryIndeterminate, err
+	}
+	if managed != nil {
+		if err := New().ValidateBindingProfile(client.ConfigRoot, *managed); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+	}
 	if env.Runner == nil {
 		return clients.RegistryIndeterminate, nil
 	}
@@ -198,7 +207,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if !qualifiedPluginName(plan.DeclaredName) {
 		return clients.RegistryIndeterminate, fmt.Errorf("plugin name %q cannot form an unambiguous Qoder plugin id", plan.DeclaredName)
 	}
-	entries, err := listPlugins(ctx, env, plan.NativeRegistryExecutable)
+	entries, err := listPlugins(ctx, env, client.ConfigRoot, plan.NativeRegistryExecutable)
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
