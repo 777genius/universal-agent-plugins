@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import { isRetiredArchive } from '../lib/public-routes.mjs';
+import { documentContent } from './check-output.mjs';
 
 const root = new URL('../../../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
@@ -44,8 +45,10 @@ test('user dependency management never lets install infer a project from the wor
     assert.ok(source.includes(boundary), `${locale}: project section boundary`);
     const userJourney = source.split(boundary, 1)[0];
     const html = await md.renderAsync(userJourney);
-    const installs = [...html.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/g)]
-      .flatMap((match) => match[1].replace(/<[^>]*>/g, '').replace(/\\\n\s*/g, ' ').split('\n'))
+    const { commands, parseErrors } = documentContent(html);
+    assert.deepEqual(parseErrors, [], `${locale}: rendered user journey HTML`);
+    const installs = commands
+      .flatMap((command) => command.replace(/\\\n\s*/g, ' ').split('\n'))
       .map((line) => line.trim())
       .filter((line) => /^(?:(?:agentplugins|npx(?: -y)? universal-agent-plugins(?:@[^ ]+)?) )?install(?: |$)/.test(line));
     assert.ok(installs.length >= 2, `${locale}: user initialization and restoration commands`);

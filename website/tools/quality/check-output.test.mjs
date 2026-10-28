@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
-import { currentSourceBody, currentSourceErrors, homeErrors, quickstartClaims, quickstartErrors } from "./check-output.mjs";
+import { currentSourceBody, currentSourceErrors, documentContent, homeErrors, quickstartClaims, quickstartErrors } from "./check-output.mjs";
 
 const highlight = (command) => `<pre><code><span class="line">${command.split(/(?= )/).map((token) => `<span>${token}</span>`).join("")}</span></code></pre>`;
 const command = "npx universal-agent-plugins add context7";
@@ -14,6 +14,37 @@ const page = (code) => `<main>${quickstartClaims.map((claim) => `<p>${claim}</p>
 test("plain and highlighted installer commands satisfy the quickstart contract", () => {
   assert.deepEqual(quickstartErrors(page(`<pre><code>${command}</code></pre>`)), []);
   assert.deepEqual(quickstartErrors(page(highlight(command))), []);
+});
+
+test("parsed document text preserves entities and highlighted code without treating attributes as content", () => {
+  const html = '<main><p title="<code>attribute command</code>">Use <strong>plugins</strong> &amp; &lt;script&gt;</p>' +
+    '<pre><code><span>agentplugins install</span> --locked --scope user</code></pre>' +
+    '<a href="../build/&#35;build-from-source">Build</a></main>';
+  assert.deepEqual(documentContent(html), {
+    text: "Use plugins & <script> agentplugins install --locked --scope user Build",
+    commands: ["agentplugins install --locked --scope user"],
+    links: ["../build/#build-from-source"],
+    parseErrors: []
+  });
+});
+
+test("comments and non-rendered containers cannot supply current claims, commands or links", () => {
+  const hidden = '<p>Agent Plugins authoring is available</p><code>hidden command</code><a href="../build/">Hidden</a>';
+  const html = `<script>"<main>${hidden}</main>"</script><main><p>Public</p><!-- ${hidden} -->` +
+    `<script>${hidden}</script><style>${hidden}</style><template>${hidden}</template>` +
+    `<noscript>${hidden}</noscript><div hidden>${hidden}</div></main>`;
+  assert.deepEqual(documentContent(html), { text: "Public", commands: [], links: [], parseErrors: [] });
+  for (const tag of ["script", "style", "template", "noscript"]) {
+    assert.ok(quickstartErrors(page(`<${tag}>${highlight(command)}</${tag}>`))
+      .some((error) => error.includes("released installer command")), tag);
+  }
+  assert.ok(quickstartErrors(page(`<p title='<code>${command}</code>'>No command</p>`))
+    .some((error) => error.includes("released installer command")));
+});
+
+test("malformed HTML cannot silently pass an output assertion", () => {
+  const invalid = page(highlight(command)).replace("</main>", "<p>");
+  assert.ok(quickstartErrors(invalid).some((error) => error.includes("invalid HTML")));
 });
 
 test("missing claims and split or incomplete commands fail", () => {

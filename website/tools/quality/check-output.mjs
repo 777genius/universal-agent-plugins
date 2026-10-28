@@ -1,9 +1,21 @@
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { docsBaseUrl, runtimeRoot, websiteRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { isRetiredArchive } from "../lib/public-routes.mjs";
+
+// Vue is a direct docs dependency and declares this compiler dependency. Resolve
+// from Vue so this also works with pnpm's isolated dependency layout.
+const requireVue = createRequire(import.meta.resolve("vue/package.json"));
+const { parse, NodeTypes } = requireVue("@vue/compiler-dom");
+const nonRenderedTags = new Set(["script", "style", "template", "noscript"]);
+const blockTags = new Set([
+  "blockquote", "br", "dd", "div", "dl", "dt", "figcaption", "figure", "footer",
+  "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav",
+  "ol", "p", "pre", "section", "table", "tbody", "td", "th", "thead", "tr", "ul"
+]);
 
 export const quickstartClaims = [
   "Use plugins", "Build plugins", "CLI 0.1.94", "explicit project scope",
@@ -43,19 +55,56 @@ export function currentSourceErrors(body, relative) {
     : [];
 }
 
-function stripHtmlComments(html) {
-  return stripDelimitedBlocks(html, "<!--", "-->");
+function readableElement(node) {
+  return node.type === NodeTypes.ELEMENT &&
+    !nonRenderedTags.has(node.tag.toLowerCase()) &&
+    !node.props.some((prop) => prop.type === NodeTypes.ATTRIBUTE && prop.name === "hidden");
 }
 
-function documentContent(html) {
-  const current = stripHtmlComments(html);
-  const visible = current.match(/<main\b[\s\S]*?<\/main>/)?.[0] || current;
-  const text = visible.replace(/<\/(?:p|h[1-6]|li|div|pre|section)>/g, " ")
-    .replace(/<[^>]*>/g, "").replace(/&(?:nbsp|#160);/g, " ")
-    .replaceAll("&amp;", "&").replace(/\s+/g, " ").trim();
-  const commands = [...visible.matchAll(/<code\b[^>]*>([\s\S]*?)<\/code>/g)]
-    .map((match) => match[1].replace(/<\/?span\b[^>]*>/g, ""));
-  return { visible, text, commands };
+function findMain(node) {
+  if (node.type === NodeTypes.ELEMENT && !readableElement(node)) return undefined;
+  if (node.type === NodeTypes.ELEMENT && node.tag.toLowerCase() === "main") return node;
+  for (const child of node.children || []) {
+    const main = findMain(child);
+    if (main) return main;
+  }
+}
+
+function nodeText(node, separateBlocks = false) {
+  if (node.type === NodeTypes.TEXT) return node.content;
+  // These are already-rendered HTML assertions, so template-looking text stays
+  // literal. Nothing in the inspected document is compiled or executed.
+  if (node.type === NodeTypes.INTERPOLATION) return node.loc.source;
+  if (node.type === NodeTypes.COMMENT ||
+      (node.type === NodeTypes.ELEMENT && !readableElement(node))) return "";
+  const text = (node.children || []).map((child) => nodeText(child, separateBlocks)).join("");
+  return separateBlocks && node.type === NodeTypes.ELEMENT && blockTags.has(node.tag.toLowerCase())
+    ? ` ${text} ` : text;
+}
+
+// Extract assertion data from a parsed document. These strings are never
+// rendered as HTML; comments, raw-text containers and hidden elements cannot
+// satisfy the visible copy, command or link requirements.
+export function documentContent(html) {
+  const parseErrors = [];
+  const document = parse(html, { comments: true, onError: (error) => parseErrors.push(error.message) });
+  const content = findMain(document) || document;
+  const commands = [];
+  const links = [];
+  const inspect = (node) => {
+    if (node.type === NodeTypes.ELEMENT) {
+      if (!readableElement(node)) return;
+      const tag = node.tag.toLowerCase();
+      if (tag === "code") commands.push(nodeText(node));
+      if (tag === "a") {
+        const href = node.props.find((prop) => prop.type === NodeTypes.ATTRIBUTE && prop.name === "href");
+        if (href?.value) links.push(href.value.content);
+      }
+    }
+    for (const child of node.children || []) inspect(child);
+  };
+  inspect(content);
+  return { text: nodeText(content, true).replace(/\s+/g, " ").trim(), commands, links, parseErrors };
 }
 
 function staleAvailabilityErrors(text, label) {
@@ -65,15 +114,15 @@ function staleAvailabilityErrors(text, label) {
 }
 
 export function homeErrors(html) {
-  const { visible, text, commands } = documentContent(html);
-  const errors = [];
+  const { text, commands, links, parseErrors } = documentContent(html);
+  const errors = parseErrors.map((error) => `EN home page has invalid HTML: ${error}`);
   for (const claim of ["Use plugins", "Build plugins", "Agent Plugins", "plugin.json", "CLI 0.1.94", "explicit project scope", "locked restoration"]) {
     if (!text.includes(claim)) errors.push(`EN home page is missing its current installer guidance: ${claim}`);
   }
   if (!/current installer does not include agentplugins author/i.test(text)) {
     errors.push("EN home page must state that the current installer excludes agentplugins author");
   }
-  if (!/implemented in current source/.test(text) || !/href=["'][^"']*\/build\/["']/.test(visible)) {
+  if (!/implemented in current source/.test(text) || !links.some((href) => /\/build\/$/.test(href))) {
     errors.push("EN home page must link the current-source authoring guide");
   }
   if (!commands.some((command) => command.includes("npx universal-agent-plugins add context7"))) {
@@ -86,15 +135,16 @@ export function homeErrors(html) {
 }
 
 export function quickstartErrors(html) {
-  const errors = [];
-  const { visible, text, commands } = documentContent(html);
+  const { text, commands, links, parseErrors } = documentContent(html);
+  const errors = parseErrors.map((error) => `Quickstart page has invalid HTML: ${error}`);
   for (const claim of quickstartClaims) {
     if (!text.includes(claim)) errors.push(`Quickstart page is missing its current installer/source guidance: ${claim}`);
   }
   if (!/current npm and native installer release does not include agentplugins author/i.test(text)) {
     errors.push("Quickstart must state that the current npm/native installer excludes agentplugins author");
   }
-  if (!/Current source implements scaffolding/.test(text) || !/href=["'][^"']*\/build\/#build-from-source["']/.test(visible)) {
+  if (!/Current source implements scaffolding/.test(text) ||
+      !links.some((href) => /\/build\/#build-from-source$/.test(href))) {
     errors.push("Quickstart must direct authoring users to the current source-build setup");
   }
   const install = "npx universal-agent-plugins add context7";
