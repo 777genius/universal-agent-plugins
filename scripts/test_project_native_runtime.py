@@ -129,6 +129,65 @@ class RuntimeTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         runtime.cli_attempt_members({"runtime-attempt.json": json.dumps({**result, **change}).encode()}, self.source, client)
 
+    def qoder_log_observation(self):
+        run_id = "2026-10-28T15-30-45-123Z-abc123-p1234"
+        return {"status": "captured", "run": {"run_id": run_id, "latest_target": "runs/" + run_id,
+            "manifest_bytes": 991, "manifest_sha256": "a" * 64, "pid": 1234, "ppid": 5678,
+            "started_at": "2026-10-28T15:30:45.123Z", "cli_version": "1.1.78", "platform": "linux", "arch": "x64",
+            "process_role": "main", "pid_provenance": "manifest-only", "run_id_matches_manifest": True,
+            "cwd_matches": True, "argv_matches": True, "exact_added_run_closure": True, "preexisting_records_stable": True}}
+
+    def test_qoder_log_projection_is_optional_finite_and_failed_only(self):
+        for client in runtime.CLI_ATTEMPTS:
+            original = {**self.cli_result(client), "native_inspection": {"enabled": client != "grok"}}
+            self.assertEqual(runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(original).encode()}, self.source, client), original)
+        for status in ("captured", "context-refused", "profile-refused", "layout-refused", "manifest-refused", "observation-bound"):
+            projection = self.qoder_log_observation() if status == "captured" else {"status": status}
+            result = {**self.cli_result("qoder"), "qoder_log_run_observation": projection}
+            admitted = runtime.cli_attempt_members({"runtime-attempt.json": json.dumps(result).encode()}, self.source, "qoder")
+            self.assertEqual(admitted, result)
+            self.assertFalse(admitted["runtime_attempt_complete"])
+            self.assertTrue(admitted["test_failed"])
+            self.assertFalse(any(admitted["qualification"].values()))
+            if status != "captured":
+                with self.assertRaises(ValueError):
+                    runtime.qoder_log_run_observation({"qoder_log_run_observation": {**projection, "PRIVATE": "PRIVATE"}}, "qoder")
+        for client in ("grok", "kiro", "windsurf"):
+            with self.assertRaises(ValueError):
+                runtime.qoder_log_run_observation({"qoder_log_run_observation": self.qoder_log_observation()}, client)
+
+    def test_qoder_log_projection_refuses_unbounded_private_and_forged_provenance(self):
+        changes = {"latest_target": "../PRIVATE", "run_id": "PRIVATE", "manifest_bytes": 4097,
+                   "manifest_sha256": "PRIVATE", "pid": True, "ppid": 0, "started_at": "PRIVATE",
+                   "cli_version": "PRIVATE", "platform": "PRIVATE", "arch": "PRIVATE", "process_role": "PRIVATE",
+                   "pid_provenance": "admitted-native-pid", "argv_matches": 1, "PRIVATE": "PRIVATE"}
+        for key, value in changes.items():
+            projection = self.qoder_log_observation()
+            projection["run"][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                runtime.qoder_log_run_observation({"qoder_log_run_observation": projection}, "qoder")
+        for key in ("status", "run"):
+            projection = self.qoder_log_observation()
+            del projection[key]
+            with self.assertRaises(ValueError):
+                runtime.qoder_log_run_observation({"qoder_log_run_observation": projection}, "qoder")
+        for key, value in (("pid", 1235), ("started_at", "2026-10-28T15:30:45.124Z")):
+            projection = self.qoder_log_observation()
+            projection["run"][key] = value
+            with self.assertRaises(ValueError):
+                runtime.qoder_log_run_observation({"qoder_log_run_observation": projection}, "qoder")
+            projection["run"]["run_id_matches_manifest"] = False
+            runtime.qoder_log_run_observation({"qoder_log_run_observation": projection}, "qoder")
+
+    def test_qoder_log_projection_calendar_and_offset_match_source_date(self):
+        for stamp in ("2026-10-28T15:30:60.123Z", "2026-10-28T15:30:61.123Z", "2026-02-30T15:30:45.123Z",
+                      "2026-10-28T15:30:45.123+24:00", "2026-10-28T15:30:45.123+05:60", "2026-10-28T15:30:45.123+00:00"):
+            projection = self.qoder_log_observation()
+            run_id = stamp.replace(":", "-").replace(".", "-") + "-abc123-p1234"
+            projection["run"].update({"started_at": stamp, "run_id": run_id, "latest_target": "runs/" + run_id})
+            with self.subTest(stamp=stamp), self.assertRaises(ValueError):
+                runtime.qoder_log_run_observation({"qoder_log_run_observation": projection}, "qoder")
+
     def test_cli_member_table_rejects_partial_commands_provider_and_profiles(self):
         summary = {"runtime-attempt.json": json.dumps(self.cli_result("qoder")).encode()}
         for extra in ({"git-a.stdout.log": b""}, {"provider-request-1.json": b"{}"}, {"profile.json": b"{}"}):

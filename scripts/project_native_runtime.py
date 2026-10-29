@@ -46,8 +46,8 @@ CASES = {
                   "file": "repotests/agentplugins_kimi_project_native_attempt_test.go",
                   "optin": "AGENTPLUGINS_KIMI_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                   "phase": "installed-single-tool-attempt"},
-    "qoder": {"test": "TestAgentpluginsQoderNativeProjectRuntimeAttempt",
-              "file": "repotests/agentplugins_qoder_project_native_attempt_test.go",
+    "qoder": {"test": "TestAgentpluginsQoderNativeProjectCompleteSkillsCycle",
+              "file": "repotests/agentplugins_qoder_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_QODER_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
     "grok": {"test": "TestAgentpluginsGrokNativeProjectRuntimeAttempt",
              "file": "repotests/agentplugins_grok_project_native_attempt_test.go",
@@ -236,9 +236,67 @@ def kimi_members(bodies, source):
     return result
 
 
+def qoder_log_run_stamp(text):
+    if (type(text) is not str or text.endswith(("+00:00", "-00:00"))
+            or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}(?:Z|[+-][0-9]{2}:[0-9]{2})", text) is None
+            or int(text[17:19]) > 59 or len(text) == 29 and (int(text[24:26]) > 23 or int(text[27:29]) > 59)):
+        raise ValueError("Qoder run timestamp shape refused")
+    time.strptime(text, "%Y-%m-%dT%H:%M:%S.%f%z")
+
+
+def qoder_log_run_observation(result, client):
+    field = "qoder_log_run_observation"
+    if field not in result:
+        return
+    if client != "qoder":
+        raise ValueError("Qoder log projection cannot apply to another client")
+    observation = result[field]
+    if type(observation) is not dict or type(observation.get("status")) is not str:
+        raise ValueError("finite Qoder log projection required")
+    statuses = {"context-refused", "profile-refused", "layout-refused", "manifest-refused", "observation-bound"}
+    if observation["status"] in statuses:
+        if set(observation) != {"status"}:
+            raise ValueError("Qoder log refusal cannot retain private details")
+        return
+    if observation["status"] != "captured" or set(observation) != {"status", "run"}:
+        raise ValueError("unregistered Qoder log projection status")
+    run = observation["run"]
+    flags = {"run_id_matches_manifest", "cwd_matches", "argv_matches", "exact_added_run_closure", "preexisting_records_stable"}
+    fields = flags | {"run_id", "latest_target", "manifest_bytes", "manifest_sha256", "pid", "ppid", "started_at",
+                      "cli_version", "platform", "arch", "process_role", "pid_provenance"}
+    if (type(run) is not dict or set(run) != fields or any(type(run[key]) is not bool for key in flags)
+            or run["cli_version"] != "1.1.78" or run["platform"] != "linux" or run["arch"] != "x64"
+            or run["process_role"] != "main" or run["pid_provenance"] != "manifest-only"
+            or type(run["manifest_bytes"]) is not int or not 1 <= run["manifest_bytes"] <= 4096
+            or type(run["manifest_sha256"]) is not str or re.fullmatch(r"[0-9a-f]{64}", run["manifest_sha256"]) is None
+            or any(type(run[key]) is not int or not 0 < run[key] < 2 ** 31 for key in ("pid", "ppid"))
+            or type(run["run_id"]) is not str or type(run["latest_target"]) is not str
+            or run["latest_target"] != "runs/" + run["run_id"]):
+        raise ValueError("bounded Qoder log identity projection differs")
+    match = re.fullmatch(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{3}(?:Z|[+-][0-9]{2}-[0-9]{2}))-([0-9a-z]{0,6})-p([1-9][0-9]{0,9})", run["run_id"])
+    if match is None or int(match[3]) >= 2 ** 31:
+        raise ValueError("source-format Qoder run identity required")
+    stamp = match[1]
+    stamp = stamp[:13] + ":" + stamp[14:16] + ":" + stamp[17:19] + "." + stamp[20:]
+    if len(stamp) == 29:
+        stamp = stamp[:26] + ":" + stamp[27:]
+    qoder_log_run_stamp(stamp)
+    qoder_log_run_stamp(run["started_at"])
+    if run["run_id_matches_manifest"] and (stamp != run["started_at"] or int(match[3]) != run["pid"]):
+        raise ValueError("Qoder manifest-only run identity join contradicts its projection")
+    if len(json.dumps(observation, separators=(",", ":"), ensure_ascii=False).encode("utf-8")) > 2048:
+        raise ValueError("Qoder log projection bound exceeded")
+
+
 def cli_attempt_members(bodies, source, client):
     if client not in CLI_ATTEMPTS:
         raise ValueError("unknown fixed native CLI attempt")
+    summary = strict_json(bodies.get("runtime-attempt.json", b"{}"))
+    if isinstance(summary, dict) and "capture_mode" in summary:
+        if client != "qoder" or summary["capture_mode"] != "qoder-complete-skills-cycle":
+            raise ValueError("unknown fixed native CLI capture mode")
+        from project_native_qoder_cycle import members
+        return members(bodies, source)
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
     for label in commands:
@@ -271,6 +329,7 @@ def cli_attempt_members(bodies, source, client):
     if result.get("source_identity") != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
                                         "installer_source_state": "committed", "installer_patch_sha256": []}:
         raise ValueError("native CLI evidence source differs")
+    qoder_log_run_observation(result, client)
     return result
 
 
@@ -305,8 +364,8 @@ def cline_cycle_complete_numeric_json(raw, budget):
     return True
 
 
-def cline_cycle_private(body):
-    if len(body) > 1 << 20 or b"uap-cline-private-" in body:
+def cline_cycle_private(body, marker=b"uap-cline-private-"):
+    if len(body) > 1 << 20 or marker in body:
         return True
     budget = [4 * len(body), 16384]
     def encoded(raw, depth):
@@ -357,7 +416,7 @@ def cline_cycle_private(body):
                 raw = value.encode("utf-8", errors="strict")
             except UnicodeError:
                 return True
-            if b"uap-cline-private-" in raw:
+            if marker in raw:
                 return True
             return encoded(raw, depth + 1)
         if type(value) is dict:
