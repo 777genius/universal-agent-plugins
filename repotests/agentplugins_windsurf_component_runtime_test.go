@@ -20,6 +20,9 @@ const windRuntimeLogs = "xdg-data\x00devin/cli/logs"
 const windRuntimeLock = windRuntimeLogs + "/.log-maintenance.lock"
 const windRuntimeTelemetry = "xdg-cache\x00devin/telemetry_state.json"
 const windRuntimeTelemetryBody = `{"is_zdr":false}`
+const windRuntimePlugins = "xdg-data\x00devin/cli/plugins"
+const windRuntimePluginLock = windRuntimePlugins + "/lock.json"
+const windRuntimePluginLockSHA = "cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88"
 
 var windRuntimeLogName = regexp.MustCompile(`^devin_(\d{8}-\d{6})_([1-9]\d{0,9})\.log$`)
 
@@ -91,6 +94,27 @@ func windRuntimeFile(record windProfileRecord, limit int64) bool {
 	return record.Kind == "file" && record.Mode == 0100644 && record.UID == uint32(os.Getuid()) && record.GID == uint32(os.Getgid()) && record.Links == 1 && record.Size >= 0 && record.Size <= limit
 }
 
+func windRuntimeCommandTimes(record windProfileRecord, start, end time.Time) bool {
+	for _, stamp := range [][2]int64{record.Modified, record.Changed} {
+		if stamp[1] < 0 || stamp[1] >= int64(time.Second) {
+			return false
+		}
+		when := time.Unix(stamp[0], stamp[1])
+		if when.Before(start) || when.After(end) {
+			return false
+		}
+	}
+	return true
+}
+
+func windRuntimeEmptyRegistry(old, now windProfileRecord, start, end time.Time) bool {
+	return windRuntimeFile(old, 57) && windRuntimeFile(now, 57) && old.Inode > 0 && now.Inode > 0 && old.Device == now.Device && old.Size == 57 && now.Size == 57 && old.SHA256 == windRuntimePluginLockSHA && now.SHA256 == old.SHA256 && windRuntimeCommandTimes(now, start, end)
+}
+
+func windRuntimeRegistryParent(old, now windProfileRecord, start, end time.Time) bool {
+	return windRuntimeAuthority(old, now) && old.Kind == "directory" && old.Mode == 040755 && old.UID == uint32(os.Getuid()) && old.GID == uint32(os.Getgid()) && old.Size == now.Size && old.SHA256 == now.SHA256 && windRuntimeCommandTimes(now, start, end)
+}
+
 func windRuntimePID(key string, start, end time.Time) (string, error) {
 	name := strings.TrimPrefix(key, windRuntimeLogs+"/")
 	parts := windRuntimeLogName.FindStringSubmatch(name)
@@ -106,6 +130,7 @@ func windRuntimePID(key string, start, end time.Time) (string, error) {
 }
 
 func (w *windComponentFixture) runtimeClosure(before, after map[string]windProfileRecord, start, end time.Time) error {
+	registryChanged := before[windRuntimePluginLock] != after[windRuntimePluginLock] && windRuntimeEmptyRegistry(before[windRuntimePluginLock], after[windRuntimePluginLock], start, end)
 	for key, old := range before {
 		now, ok := after[key]
 		if !ok {
@@ -116,6 +141,9 @@ func (w *windComponentFixture) runtimeClosure(before, after map[string]windProfi
 		}
 		if key == windRuntimeTelemetry && windRuntimeAuthority(old, now) && windRuntimeFile(now, 16) && old.Size == 16 && now.Size == 16 && old.SHA256 == windsurfConfigDigest([]byte(windRuntimeTelemetryBody)) && now.SHA256 == old.SHA256 {
 			continue // The pinned native cache writer may refresh only its timestamps.
+		}
+		if registryChanged && (key == windRuntimePluginLock || key == windRuntimePlugins && windRuntimeRegistryParent(old, now, start, end)) {
+			continue // Only the pinned empty registry may be atomically replaced.
 		}
 		if key != windRuntimeLogs && key != windRuntimeLock || !windRuntimeAuthority(old, now) {
 			return fmt.Errorf("Windsurf native changed original profile authority")

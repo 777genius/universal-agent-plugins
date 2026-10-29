@@ -1794,6 +1794,377 @@ then review and validate the combined source before merging the base PR.
 Update current-source support guidance only to the actually observed level.
 Do not publish a release or claim real-model/OAuth qualification from a fixture.
 
+## Qoder original anonymous-metadata fixture amendment
+
+Accepted bounded fixture correction. Native-finish R1 and independent CLI R2 approved exact plan SHA256 `0500e7dcd839dd3b27a70ebf3da1ae57ecdac43637d0ee6a2c1e9cba5858558b` before implementation. No native qualification or authentication claim.
+
+### Evidence and source boundary
+
+Current PR523 source 1973a9551f87a6e349c3cfd7ba6a9b8ff11118b8, tree 3e8fb0fc2c56162e6345f1797fd3c5b3419c984b, genuine runtime40566031581/job122407532341, native12761729753 and frontend12762294585, produces a successful exact flag-selected 765-byte catalog before the complete original .qoder profile guard fails. The full delta is10 additions,1 change,8 omissions. Existing file-priority diagnostic independently maps three held regular-file path hashes to published literals: installation_id (36bytes0644), .auth/.credential-transaction (0bytes0600), .auth/machine_id (36bytes0600). Actual ID contents were neither exported nor read. The unobserved eight entries remain unknown; no stability promise follows from these three observations.
+
+The published @qoder-ai/qodercli1.1.78 archive at https://registry.npmjs.org/@qoder-ai/qodercli/-/qodercli-1.1.78.tgz was checked against published SHA1 and SHA512 integrity. Its archive SHA256 is c5b237d2fd84ceb44af5427f281a7f1bcadd8c888fbed49197b5ce2f37dada4f; package/bundle/qodercli.js is34562870bytes, SHA256 ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38. The npm bundle is source guidance only: its equivalence to the independently pinned standalone executable is not established.
+
+Root independently rechecked the entire archive/bundle hashes and these source paths, without executing Node, the installer or any client:
+
+- Installation reader at byte1016117 returns existing nonempty trimmed installation_id. getInstallationId at1016392 generates/writes a UUID only when absent, caching it separately from account credentials.
+- Auth directory/transaction setup MAl at3843720 creates .auth0700, opens the empty .credential-transaction target in append mode0600 and enforces0600. The transient .credential-transaction.lock is separate and is not authored by this proposal.
+- Machine reader FT at3850006 returns existing nonempty trimmed machine_id. getMachineId at3855626 returns the held value via PpA; absent identity takes the ordinary transaction/generation path, with hardware or random generation. PpA at3847740 records consistency of the identifier in process; it is not an account grant.
+- Wet at3843328 selects distinct account credential files .auth/user or .auth/user.<environment>. No such credential file, token, login state or trust entry is created or modified here. The fixture remains without vendor account credentials; a later genuine authentication refusal stays a failure.
+
+### Proposed finite fixture change
+
+Change only the Qoder fixture constructor, before the first public/native child and before any preservation baseline. In its already-owned original disposable HOME/.qoder, create precisely these independently authored entries:
+
+1. installation_id: one fresh independent RFC4122 version4 UUID, exactly36 ASCII bytes with no newline, ordinary single-link file0644.
+2. .auth: an ordinary directory0700, owned by the current original user; refuse any preexisting entry at this previously unowned exact path.
+3. .auth/machine_id: a second fresh independent version4 UUID, distinct from installation_id, exactly36 ASCII bytes with no newline, ordinary single-link file0600.
+4. .auth/.credential-transaction: an empty ordinary single-link file0600.
+
+Use fresh cryptographic randomness from the existing inert Go fixture process, not native-observed IDs, host hardware IDs, account data, imported HOME or native output. Do not reuse the public package/probe nonce as an ID or parse/copy any existing native auth file. Use existing held-parent/no-follow/exclusive-create helpers, exact modes and owner checks. Author only the above three files and their one absent parent; no unknown cache, directory, lock, registration or auth path is inferred from omitted diagnostics. If any target is unexpectedly present, special, linked or foreign-owned, fail without replacing it.
+
+Record the three expected byte digests in existing protected-file authority immediately, before any child. Also hold the exact initial recipe authority for these three ordinary files and their .auth parent: device/inode, UID/GID, full mode, single-link files, exact byte lengths and independent byte digests. Add a narrow Qoder-only fixed-recipe verifier to the existing f.check before/after each already-selected command, activated only after this constructor recipe exists. This verifier rejects same-byte mode changes, inode replacement, changed parent/type/owner/link count or bytes from the first child onward; it must not wait until the catalog snapshot to notice a version/public-child mutation. It accepts no extra file or directory authority and reads no account credential path. Existing intraread held identity checks remain unchanged; this is not a promise of immutable access/change timestamps after ordinary reads or same-mode chmod. Keep the complete original .qoder catalog before/after snapshot and equality guard unchanged, including full modes, membership, unknown files/directories, links and existing special original-log rule. Every later byte drift or missing marker is fatal; no post-run adoption, exception, exclusions, cleanup deletion or fallback recipe. Source/native divergence, unexpected chmod or additional native file creation remains a genuine failed observation.
+
+No new child command, native argv, provider, environment, permission, trust, source/installed digest, scanner, acquisition pin, deadline, supervision, raw member, diagnostic cap or admission schema is added. Current raw diagnostics stay three details/2KiB with full counts and omissions. All five qualification flags, runtime_attempt_complete, vendor authentication and real-model flags remain false, including a successful catalog or restricted startup. Project activation remains Prepared. No public adapter or installer production code changes.
+
+### Implementation and meaningful checks
+
+Keep the helper/client-only controls in new Qoder-specific test files with one guarded constructor authoring call and one guarded invocation in the existing f.check for spec.client==qoder; do not alter other clients. The extra held recipe field is private to this fixture and absent before construction; no common permission or profile snapshot policy changes. Unit tests call the helper on ordinary inert temporary directories only, never newProjectNativeCLIAttempt, a positive hosted guard or a vendor executable.
+
+Check the exact four-entry recipe, types/modes/owner/single-link/byte counts, canonical distinct valid UUIDs, protected digests and unchanged original settings. Verify preexisting target or .auth, symlink/hardlink/special/foreign authority refuses without overwrite, including partial-recipe failures. Exercise the narrow fixed-recipe verifier to show a real same-byte chmod or inode replacement before the catalog baseline fails, as well as after a command. Exercise the existing full profile snapshot to show metadata bytes/mode or any new sibling still cause inequality/refusal. No tests may bless the current eight omitted native entries or infer native source equivalence.
+
+Two independent plan GOs precede coding; independent exact code review and focused inert Go/affected-root/full-six lint gates precede root-only publication. Align actual program base a412ba5e137fdcb7e004393229b323211ed746e1 with separate preservation review. No force push, release, new PR or VS Code work. A fresh genuine hosted capture is required to learn whether the same exact catalog now preserves the profile; any remaining mutation/authentication/tool boundary is reported honestly rather than reclassified as success.
+
+The original Qoder leaf was aligned to actual Cline-containing program base in
+`ca88f79a399f1e0f8280a38476f862fd9667eb2e`, tree
+`65edbdc10526a653d0d225a3fb531dea2910d4b3`. Independent static preservation
+review verified all 5777 nonconflicting tree entries and every nonblank plan
+line from both parents; Qoder-owned source was unchanged by this merge.
+Focused inert verification and exact-code review are recorded separately once
+completed; this accepted plan does not claim those gates or native success.
+
+### Qoder anonymous-metadata amendment: exact implementation validation
+
+Code commit `ff5c144de817423e5430b92ad9dc099ed01db760`, tree
+`0a3c1a1d2d51d1fb812b801664d8e14e1348eef7`, contains only the private
+Qoder helper, its inert contracts, twelve shared-fixture hook lines and the
+accepted record above. The helper opens the original profile and absent auth
+parent through the existing held no-follow mechanics, creates only the three
+exclusive ordinary files, and verifies their bytes against independently
+generated inputs before publishing protected digests. Each existing selected
+command retains its original before/after check. The new private recipe check
+also pins initial device/inode, owner/group, full mode, file length/link count
+and byte digest; current linked identities are checked after held reads.
+
+Root independently approved the helper/shared/accepted-record delta and
+bounded test corrections. CLI independently reviewed exact final tree
+`0a3c1a1d2d51d1fb812b801664d8e14e1348eef7` and gave CODE GO without remaining
+findings. Tests preserve all child inodes during auth/profile parent replacement,
+so those negatives specifically prove the initial parent identity check. Other
+controls cover all three files' early same-byte chmod/replacement, changed
+bytes/types/links, preexisting targets, exclusive partial-write refusal, exact
+four-entry authoring and full-profile sibling/mode/byte inequality. Foreign
+held UID/GID controls always run for all five nodes; an additional real chown
+control explicitly reports unsupported privilege/user-namespace capability.
+Ordinary reads and same-mode chmod do not pin access/change timestamps.
+
+Focused inert `^(TestQoder|TestProjectNativeCLI)` passed in 0.139 seconds with
+Go 1.26.10. The actual all-enabled root lint gate with
+`--new-from-merge-base=a412ba5e137fdcb7e004393229b323211ed746e1` reported zero
+issues. The unchanged unfiltered whole-root
+revive/funlen/gocyclo/gocognit/dupl/depguard gate reported zero issues. Gofmt and
+staged whitespace checks were clean. No client, public installer, package hook
+or positive hosted guard ran locally.
+
+No current native artifact has been relabeled or promoted. The genuine
+1973a955 runtime 40566031581 still fails complete original-profile equality,
+with all five qualification flags false and eight omitted entries unknown.
+The npm/standalone equivalence caveat remains. Fresh genuine hosted evidence
+must establish the next boundary; any additional profile drift or genuine
+account refusal remains a failed observation. Root alone owns publication.
+
+## Qoder exact auth-membership correction (2026-10-27)
+
+Independent review found that an unknown auth sibling could enter the later
+catalog baseline after setup. The [reviewed addendum](qoder-auth-membership-addendum-plan.md)
+and [actual validation](qoder-auth-membership-validation.md) close that early
+window while preserving the original metadata commits and complete-profile guard.
+This source correction supplies no native qualification; fresh hosted evidence
+and the existing lifecycle gates remain required.
+
+
+# Qoder: complete the measured four-entry profile delta diagnostic
+
+PRE-CODE draft. Read AGENTS.md, owner scope and capability-preservation rules.
+Obtain two independent GPT-6.1 Sol xhigh plan GOs before implementation. This is
+diagnostic-only work on existing PR523, not permission for native log mutation,
+profile relocation, a native retry at unchanged source, a release or VS Code.
+
+## Exact new genuine evidence
+
+Published source 4f034eb374bb585f0bc409763e62f0058bebabed, tree
+3d04ce2878cf93239cfa2f9a2564dc2c6a931bc3. Actual runtime40585824651,
+Qoder job122486483093, fails the original complete-profile equality guard after
+4.42 seconds. Every recorded prefix command exits0 without a capture/context
+error. Public add succeeds Prepared; plugins list exits0 in1149ms and selects
+the one exact receipt-owned enabled flag-view plugin with one skill and no MCP.
+No native prompt, later lifecycle or authentication/model result was reached.
+
+Native artifact12773802932 is4508B,16closed members, outer SHA256
+750064bd0a084ff22e5109e3e114f6d7ed7a21bbfe98d3cafea4f9afddc3a581;
+frontend12774277343 has25members, outer
+a8dd9a901886a9c3eb7f28a090d6aaa7a370ddc76e1898f063760c0dd4e28d3e.
+API identities, ordinary ZIP membership/CRCs, clean exact source/tree/build,
+all24frontend stream joins and unchanged exact-source failed admission pass.
+Root semantic audit independently joins official archive/executable pins,
+public source/package/binding/physical/receipt identities and native catalog.
+Record /tmp/uap-qoder-4f-current-40585824651/root-semantic-audit.json,
+SHA25636c431d8799a7ae513ef30bab98452afa3e9a3fb9283fb9b8003aae8da9e0cff.
+
+The complete delta now has15before/18after,3added/0removed/1changed.
+Its area counts are exactly3logs and1log-latest; every other area is0.
+The three retained details show changed latest symlink, added0755directory and
+added0644file of994B. One entry is still explicitly omitted. Its name, kind,
+mode and bytes remain unknown. The prior three telemetry directories no longer
+appear as differences; that correction does not authorize any remaining change.
+
+Pinned npm1.1.78 source defines a candidate per-run directory, qodercli.log,
+manifest.json and latest-link replacement before CLI argument parsing. It does
+not identify the omitted native entry or prove npm/standalone implementation
+equivalence. No quiet/telemetry setting is assumed to suppress these writes.
+
+## Proposed finite diagnostic amendment
+
+Change only qoderDeltaBound's maximum retained metadata details from3to4.
+Preserve the existing complete-object2KiB JSON bound,4096-entry input bound,
+strict inventory-record grammar, finite areas/kinds/operations, hashed keys,
+hashed file/link records, and all numeric/mode constraints. Preserve the exact
+existing other-file priority and deterministic area/hash ordering. The first
+three selected details must remain identical; the fourth is the next detail
+under that same ordering. No raw name, path, link target, contents or credential
+is added and no filesystem read, enumeration or command is added.
+
+At exactly four valid differences the existing status becomes captured and
+omitted_count becomes0; at five or more it remains entry-limit with exactly
+total-minus4 omissions. The whole-object bound still refuses oversized output;
+it is never increased or bypassed. This is a bounded formatter over the already
+held unequal maps, not a new baseline, a permission decision or log classifier.
+
+All complete-profile, auth/metadata, empty telemetry, no-follow identity,
+original HOME, immutable source, catalog, deadlines and process cleanup gates
+remain byte-identical. The original t.Fatal after collecting this diagnostic
+remains unconditional for unequal original profiles. All five/native/auth/model
+flags stay false. Python admission, commands, workflow selection and source pins
+are unchanged; historical failed raw archives must re-admit byte-identically.
+
+## Meaningful verification
+
+Update the existing independent expected metadata/count assertions only where
+the intentional fourth retained detail changes them. Keep all prior checks,
+priority cases, hostile records, actual-filesystem nonmutation, private-canary
+checks and the original fatal full-profile comparison. The existing Qoder
+controls exercise actual filesystem drift and unequal inventory maps; there is
+no separate Qoder fatal-child test. Prove the fatal caller remains unchanged
+with its complete file hash. State independent literal key and content digests
+for the fourth selected fixture entries; do not replace
+assertions with expectations computed through the formatter being tested.
+
+Exercise an actual inert filesystem with a latest-link replacement plus a new
+log directory/two files: four details, exact counters, captured/zero omissions,
+complete serialized object<=2048bytes, original maps/profile unchanged. Add a
+fifth difference and verify exact one omission and unchanged prefix ordering.
+Preserve zero/one/seven other-area cases with corrected exact fourth selection;
+verify reverse insertion gives the same result. Extend the existing largest
+valid file-record control to five entries, retaining four with truthful omission
+and the unchanged complete-object limit. Unknown records remain refused.
+
+Run focused Qoder/shared inert Go contracts, existing runtime Python contracts,
+actual full-root affected all-enabled and unfiltered six-linter gates, gofmt,
+whitespace and unchanged original4f failed-envelope replay. No native/vendor,
+scanner or public installer executable runs locally. Serialize Go/lint slots;
+do not overlap snapshot-sensitive Go with other Python fixture mutations.
+
+## Review, source and publication
+
+After both plan GOs, recheck remote head and create an isolated worktree from
+the agreed current4f. Commit this accepted amendment to the existing consolidated
+remaining-native-qualification.md before code. Limit code to the Qoder formatter
+and its affected/new inert contracts; do not merge unrelated leaf sources.
+Two independent exact implementation reviews and executed gates follow. Root
+alone publishes a normal expected-head fast-forward to existing PR523 and audits
+the resulting genuine capture. Preserve concurrent work and all failed history.
+This amendment grants no eventual log allowance or full-cycle qualification.
+
+## Accepted Qoder diagnostic amendment before implementation
+
+The exact draft SHA256 `49e8fdec9188273f924542bf13469e44c83393ade9bc5c392ad0d5ddb68bfe4a` received independent GPT-6.1 Sol xhigh plan GOs from `vscode_finish` (R1) and `native_finish` (R2) before any code edit. Both reviewers inspected the current formatter and exact failed capture; the original full-profile failure and all qualification limits remain required.
+
+### Factual pre-code correction and renewed independent acceptance
+
+Before source edits, root corrected the reference to a separate fatal-child
+control: Qoder has actual filesystem drift/unequal-map controls and an
+unconditional fatal caller, not that separate Copilot test. The revised exact
+plan SHA256 is `449e9c92195a9d3460a6a6ee7a9e76f6d94d3ccc9a7539922ed6e0c9027d21c8`.
+Independent GPT-6.1 Sol xhigh reviewers `gemini_qoder_finish` and
+`native_e2e_finish` both gave PLAN GO before implementation; receipt SHA256s
+are `55cb807030414e335b55884c2187fc03f858748397546db2a6074f67eee4750e`
+and `cd499270db43b6536fa61f197bd0bfabafee58d610fa0abc4f6c0f1f4c37c10e`.
+Both checked the actual source and unchanged unconditional full-profile fatal
+caller, whose complete file SHA256 is
+`20ba3af567f4f0499220ff6ad7202993a4a4a292d6c41493f41cf174f804ba72`.
+This factual correction changes no guard, authorized scope or intended tests.
+The previous plan-only commit remains preserved in history.
+
+### Four-detail implementation and executed validation
+
+Reviewed code `393bd1cd777eee598d48000f53c0235f34c09e08`, tree
+`782cd158b1d579da3ad8f30c44c13042d91f0619`, received independent CODE GOs
+from `gemini_qoder_finish` and `native_e2e_finish`, both GPT-6.1 Sol xhigh.
+Receipt SHA256s are `c59a544e54b12a5339e138307bf7ac2e6940d4f06ab570683676f03a1032c3dc`
+and `ca520b77c7eb95774f73fb8ef7233c8c5d31bd7234316162ab9a29ab3637d71c`.
+Only the three retained-count literals change in the formatter. Strict parsing,
+priority comparator, whole-object 2048-byte bound, runtime reader and complete
+unconditional fatal caller remain unchanged. Independently stated fourth hashes
+and actual filesystem four/five-difference controls preserve the previous prefix,
+truthful omissions, privacy and held-map/profile nonmutation. Four maximum valid
+changed-file details serialize to 1845 bytes.
+
+Executed on that exact code: focused Qoder/shared inert Go contracts PASS; full
+root affected all-enabled lint against program base `a412ba5e137fdcb7e004393229b323211ed746e1`
+and unfiltered six-linter gate both zero issues; existing runtime Python contracts
+PASS. Full command outputs and their SHA256s are retained in the gate receipt.
+Original failed4f archive re-admits with all16 members and summary byte-identical,
+all five flags false. The native reader SHA256 remains
+`f3403d72755fde23afe46aaafb709fe4a1f78be9691324c07e2bbfe3f125cdf6`.
+No native client, vendor executable, public installer executable or scanner ran
+locally. Fresh genuine hosted output is still required; this change grants no
+log allowance, lifecycle qualification, authentication or model claim.
+
+## Qoder exact run-log projection before any ownership allowance (2026-10-28)
+
+Start at 1050bbbe163abf4c60f1ea13565b72bc864c6e75/tree 5e64b064acc40f52cf362ad43b59589dc829746a.
+Run 40594441986/native 12777840418 measures exactly 3 added log entries and 1 changed latest;
+all 4 details are retained, but added names and the new target/manifest remain unobserved.
+Official npm 1.1.78 archive SHA256 c5b237d2fd84ceb44af5427f281a7f1bcadd8c888fbed49197b5ce2f37dada4f;
+bundle/qodercli.js SHA256 ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38.
+Its bytes36498/39612/40361 define timestamp-random-PID runID, logs/runs/<runID>,
+qodercli.log, manifest.json and latest replacement. This is publisher source guidance,
+not proof of standalone equivalence. No supported off/init-suppression route was found.
+
+Add only a failed-capture projection at the existing unequal-profile diagnostic before
+its unchanged unconditional fatal. Reuse the held no-follow latest/target mechanics;
+require its record to match the already-held after inventory and a source-format
+relative target runs/<runID>. Never export an arbitrary target, path or unknown name.
+Inspect only the exact manifest.json below that held ordinary owned run directory,
+at most 4096 bytes, single-link 0644, stable held/linked identity and exact inventory
+byte-count/hash. Do not read log bodies or enumerate additional profile content.
+Strictly parse the bounded source-defined manifest object; unknown/malformed shape
+returns a fixed refusal status, never raw text. Validate nested argv/env/log-file
+types privately. Emit only checked runID/relative target, manifest size/hash, numeric
+manifest pid/ppid, safe start/version/platform/arch/role, and finite equality/closure
+booleans against held A/selected argv/profile and the original before/after maps.
+No raw argv/env/project_id/full manifest/log body or path outside owned fixtures.
+Keep the complete serialized projection <=2048 bytes; refusal output is status-only.
+Label PID provenance manifest-only: no admitted native/supervisor PID is claimed.
+No runner/API, argv/env, config/auth/trust, acquisition/pin, deadline or cleanup change.
+
+Implement repotests/agentplugins_qoder_log_run_observation_test.go and _contract_test.go,
+one hook in agentplugins_project_native_cli_attempt_test.go, and optional Qoder-only
+complete-shape admission in scripts/project_native_runtime.py with matching contracts
+in scripts/test_project_native_runtime.py. Preserve unmarked archives and other clients.
+All qualification/runtime/auth/model flags stay false; no mutation allowance, adopted
+baseline, new member/command, release or VS Code work. Inert checks cover exact source
+layout/manifest joins, private canaries, unknown/duplicate/malformed/oversized data,
+aliases/hardlinks/foreign authority, unstable/mismatched held identities and unchanged
+maps/files/fatal guard. Two independent plan GOs precede code; exact code review,
+focused Go/Python and affected/full lint gates precede root-only publication and a
+fresh genuine hosted failed capture. Any ownership policy needs separate actual review.
+
+Implemented after root and independent Grok PLAN reviews; independent Grok and
+root CODE reviews found no remaining issue. Focused Qoder/shared inert Go passed
+in 0.379s; all 30 Python contracts passed, including the final valid-Grok baseline
+control. Affected all-enabled lint and unfiltered six-linter gates report zero
+issues. The original 1050 archive's 16 members and complete failed/all-false
+result replay unchanged. Timestamp and unsafe-leaf refusal controls were corrected
+without weakening admission. No vendor ran locally; fresh hosted observation is
+required before any supported log-ownership allowance or lifecycle claim.
+
+## Qoder complete supported skills catalog cycle — accepted precode amendment (2026-10-28)
+
+Root and an independent Sol reviewer read/rehashed and approved complete draft
+SHA256 `16483ff2c375042cdfb39b813e35c2fffb26220b8dc366971ff1b231bb2412a1`
+(17,922 bytes) before implementation; a third independent source review also
+approved the same complete draft. Source is published `25ea0f0d708504a914aeaf864206e98fdcfa1cc8`,
+tree `61331bbd744f447cc4cd86aabf742a2273d47e2a`. Two independent complete raw
+audits of run `40731229834` joined API native artifact `12836830994` and frontend
+`12836825965`, all16/25 members,24 stream receipts, source/tree/clean builds,
+exact supported flag catalog and the finite log-run projection. The catalog
+succeeded; the original profile guard correctly refused its four log changes.
+All qualifications/auth/model remain false. This receipt grants no qualification.
+
+The next single bounded full loop has14 public/system commands and20 fresh
+`qoder plugins list --json` catalogs in four closed members: summary,
+`qoder-cycle-public.jsonl`, `qoder-cycle-catalog.jsonl`, `qoder-cycle-proof.jsonl`.
+Only supported project lifecycle/restart-removal flags may qualify. Bindings
+remain Prepared/installation_verified; MCP/auth/model/skill execution, automatic
+cwd discovery and native import/cache replacement stay unclaimed. Preserve the
+separate old authenticated-startup test/reader. No production adapter, native
+mutation command, pin, workflow, runner API, provider or model change.
+
+Original source-authored schema2 User/foreignA/foreignB plugin records and their
+manifests/skills are disabled once before children and immutable. Publisher
+`getInstalledPluginRows` lists all three from every cwd with explicit projectPath
+for A/B. The owned row is only the exact supported `--plugin-dir` receipt view;
+never infer cwd hiding. After whole owned-package damage/removal, fresh queries
+retain the SAME old view argument and require absence of its flag row plus the
+complete original catalog. No empty replacement view or ignored stderr.
+
+Retain the original pre-native full profile map, held identities and logs-absent
+precondition separately from a derived admitted telemetry ledger. Git/UAP calls
+must preserve the full expected profile. Only explicit native version/catalog
+calls may create one exact fresh source-defined run and its manifest/log plus
+owned latest pointer; the first run may create only logs/runs parents as well.
+No other new path, old-record change, alias/hardlink/foreign leaf or baseline
+adoption is authorized. Reuse existing no-follow held root/link/manifest guards;
+join exact modes/owners/membership/hashes, fresh runID, millisecond command-time
+window, fixed version/role/platform and expected cwd. Manifest/argv/log/env stay
+private; safe finite run projection, lengths/hashes/deltas and ledger joins only.
+PID/PPID remain explicitly manifest-only, without runner/PID provenance claims.
+
+Exact publisher bundle1.1.78 SHA256
+`ec7b2a2c1be206f525ca974c3b9455fbec9ce7411bc5dfdee55f1e82eb90df38`
+(34,562,870 bytes) defines logger39612–41200, Bun normalization `f9a`8516 and
+`PGA/SJ`3529. Accept only exact held argv, or exactly one canonical bounded Linux
+`/$bunfs/…` entrypoint at index1 with held executable and exact held argument
+suffix; emit finite form without raw entrypoint. This is source guidance:
+the full genuine run must confirm the shipping form or fail all-false. Registry
+schema24599k, Boolean enabled-map24728830, resource collector24704176,
+missing-directory loader24604992 and JSON renderer27075013 support the exact
+catalog/control recipe; omit displayName in registry/manifest to avoid refresh.
+
+A/B have independent same-name local sources and stable derived identities.
+A-two changes skill metadata/body at the same version; keep its applied source
+frozen during whole exact-owned-package repair. Public grouped intact repair
+restages/mutates, unlike the single SDK Repair route. Repeat add/unchanged update
+are byte-stable no-ops. Preserve original User/B/foreign/caller authority. Verify
+installed zero DataReceipts and actual default-remove retained owner-only data;
+never invent native markers, adopt caller siblings or purge. Source/native view
+and installed payload are text-only and their framing is independently recomputed.
+
+Keep original150/180 deadlines,30s per command plus existing5s exit grace,
+1MiB stream/aggregate,16MiB total and80-member limits. Strict raw privacy before
+base64 and after decoding, exact finite DTO/stage closure, old capture replay,
+meaningful inert source/ownership/public API contracts and ordinary descendant
+cleanup remain required. No review fatal/step barrier. Root plus independent
+CODE reviews and focused Go/Python/affected/all-six gates precede root publication,
+then one genuine hosted full-cycle run and two independent complete raw audits.
+
+The actual inert public CLI contract confirms the stage-specific DTOs: repeated
+add is a singleton no-op with no operation/group ID; other successful lifecycle
+commands are grouped. Repair/removal report source `local`; add/update report
+`direct local source`. Repeat-add progress includes the transactional-apply line.
+Go and the independent reader close those measured forms without accepting a
+cross-stage union. Original profile and lifecycle authority remain unchanged.
+
 ## Gemini owned-MCP listing diagnostic amendment
 
 Accepted plan SHA256 `6c696cd8309f6da3ee9059ef887b14bb8358ed5e4fd57afe199a69b2655b3d5d`
@@ -2127,3 +2498,29 @@ the next genuine capture must satisfy every unchanged predicate or still fail.
 No temporary file, same-byte rewrite, replacement, credential, approval, config,
 command, deadline, or qualification allowance is introduced. Both independent
 reviewers approved this bounded plan before implementation.
+
+### Windsurf exact empty native registry replacement (2026-10-29)
+
+The genuine cd91f247 run40900325427 still refuses empty-A skills after six
+ordinary successful commands. The seeded lock retains the exact57-byte cbce3a
+content; its record and plugins-directory record change. All six delta paths,
+source/build identity,20native/25frontend archive members and24frontend stream
+joins close. The projection does not reveal inode or owner values, and this
+failed frame retains all five false qualification flags.
+
+A bounded same-pin static RAM read verified the full executable SHA and retained
+the complete writer continuation. It derives the same-directory json.tmp path,
+writes the canonical buffer, fsyncs, closes, renames over lock.json (syscall82),
+and syncs the parent. Both independent source/plan reviews approve only this
+fixture-owned empty registry replacement, without a same-inode claim.
+
+For this exact path require before and after ordinary0644/currentUID+GID, single
+link, positive inode, same device, and exact57-byte canonical hash. After mtime
+and ctime must both fall inside the immediate OSRun start/end window. Only when
+this exact file record changes may the exact plugins parent change timestamps;
+keep its inode/device/type0755/owner/group/link/size/hash authority unchanged and
+bound both timestamps to the same command. Keep complete membership closed,
+including refusal of temporary leftovers. Preserve all original config/User/
+foreign guards, protected digest, accepted-frame-only copy and final late check.
+No arbitrary registry content, missing file, parent replacement, unknown path,
+authentication, argv, deadline or qualification allowance is introduced.

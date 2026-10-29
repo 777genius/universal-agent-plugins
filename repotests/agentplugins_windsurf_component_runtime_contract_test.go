@@ -197,8 +197,102 @@ func TestWindsurfComponentRuntimeTelemetryRewritePreservesExactAuthorityAndBytes
 	}
 }
 
+func TestWindsurfComponentRuntimeEmptyRegistryReplacementIsCanonicalAndTimed(t *testing.T) {
+	w := windComponentInert(t)
+	path := filepath.Join(w.f.base.Root, "xdg-data", "devin", "cli", "plugins", "lock.json")
+	raw, err := projectNativeRuntimeRead(path, 57)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := w.profile(t)
+	start := time.Now()
+	// Advance the filesystem timestamp clock inside this inert command window.
+	time.Sleep(20 * time.Millisecond)
+	logs := filepath.Join(w.f.base.Root, "xdg-data", "devin", "cli", "logs")
+	projectNativeRuntimeWrite(t, filepath.Join(logs, "devin_"+start.UTC().Format("20060102-150405")+"_5805.log"), []byte("inert private log bytes\n"), 0644)
+	if err := os.WriteFile(filepath.Join(logs, ".log-maintenance.lock"), []byte("5805\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	projectNativeRuntimeWrite(t, path+".tmp", raw, 0644)
+	if err := os.Rename(path+".tmp", path); err != nil {
+		t.Fatal(err)
+	}
+	end := time.Now()
+	after := w.profile(t)
+	closureErr := w.runtimeClosure(before, after, start, end)
+	if before[windRuntimePluginLock].Inode == after[windRuntimePluginLock].Inode || before[windRuntimePlugins] == after[windRuntimePlugins] || closureErr != nil {
+		t.Fatal("actual canonical atomic registry replacement refused", closureErr)
+	}
+	w.freezeRuntime(after)
+	w.check(t)
+	if w.f.protected[path] != windRuntimePluginLockSHA {
+		t.Fatal("native empty registry replacement changed protected bytes")
+	}
+	for _, fault := range []string{"content", "old-content", "size", "kind", "mode", "device", "inode", "owner", "group", "links", "mtime-before", "mtime-after", "mtime-nsec", "ctime-before", "ctime-after", "ctime-nsec", "parent-inode", "parent-device", "parent-kind", "parent-mode", "parent-owner", "parent-group", "parent-links", "parent-size", "parent-hash", "parent-mtime", "parent-ctime", "unchanged-lock", "tmp", "unknown"} {
+		badBefore, bad := map[string]windProfileRecord{}, map[string]windProfileRecord{}
+		for key, value := range before {
+			badBefore[key] = value
+		}
+		for key, value := range after {
+			bad[key] = value
+		}
+		key := windRuntimePluginLock
+		if strings.HasPrefix(fault, "parent-") {
+			key = windRuntimePlugins
+		}
+		r := bad[key]
+		early, late := start.Add(-time.Nanosecond), end.Add(time.Nanosecond)
+		switch fault {
+		case "content", "parent-hash":
+			r.SHA256 = strings.Repeat("0", 64)
+		case "old-content":
+			old := badBefore[key]
+			old.SHA256 = strings.Repeat("0", 64)
+			badBefore[key] = old
+		case "size", "parent-size":
+			r.Size--
+		case "kind", "parent-kind":
+			r.Kind = "other"
+		case "mode", "parent-mode":
+			r.Mode--
+		case "device", "parent-device":
+			r.Device++
+		case "inode":
+			r.Inode = 0
+		case "parent-inode":
+			r.Inode++
+		case "owner", "parent-owner":
+			r.UID++
+		case "group", "parent-group":
+			r.GID++
+		case "links", "parent-links":
+			r.Links++
+		case "mtime-before", "parent-mtime":
+			r.Modified = [2]int64{early.Unix(), int64(early.Nanosecond())}
+		case "mtime-after":
+			r.Modified = [2]int64{late.Unix(), int64(late.Nanosecond())}
+		case "mtime-nsec":
+			r.Modified[1] = int64(time.Second)
+		case "ctime-before":
+			r.Changed = [2]int64{early.Unix(), int64(early.Nanosecond())}
+		case "ctime-after", "parent-ctime":
+			r.Changed = [2]int64{late.Unix(), int64(late.Nanosecond())}
+		case "ctime-nsec":
+			r.Changed[1] = -1
+		case "unchanged-lock":
+			r = before[windRuntimePluginLock]
+		case "tmp", "unknown":
+			bad[windRuntimePluginLock+"."+fault] = r
+		}
+		bad[key] = r
+		if w.runtimeClosure(badBefore, bad, start, end) == nil {
+			t.Fatal("native empty registry rule widened content/authority/time/membership", fault)
+		}
+	}
+}
+
 func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *testing.T) {
-	for _, fault := range []string{"log", "uuid", "cache", "cache-timestamp", "plugin-lock", "plugin-lock-timestamp", "oauth-file", "unknown"} {
+	for _, fault := range []string{"log", "uuid", "cache", "cache-timestamp", "plugin-lock", "plugin-lock-timestamp", "plugin-lock-inode", "oauth-file", "unknown"} {
 		w := windComponentInert(t)
 		start := time.Date(2026, 10, 28, 19, 59, 26, 0, time.UTC)
 		before := w.profile(t)
@@ -214,7 +308,7 @@ func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *test
 			path = filepath.Join(root, "installation_id")
 		case "cache", "cache-timestamp":
 			path = filepath.Join(w.f.base.Root, "xdg-cache", "devin", "telemetry_state.json")
-		case "plugin-lock", "plugin-lock-timestamp":
+		case "plugin-lock", "plugin-lock-timestamp", "plugin-lock-inode":
 			path = filepath.Join(root, "plugins", "lock.json")
 		case "oauth-file":
 			path = filepath.Join(w.f.base.Root, "xdg-data", "devin", "mcp", "oauth", "late.json")
@@ -222,9 +316,17 @@ func TestWindsurfComponentRuntimeDoesNotAdoptMutationAfterValidatedFrame(t *test
 			path = filepath.Join(root, "unknown")
 		}
 		var err error
-		if fault == "cache-timestamp" || fault == "plugin-lock-timestamp" {
+		switch fault {
+		case "plugin-lock-inode":
+			raw, readErr := projectNativeRuntimeRead(path, 57)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			projectNativeRuntimeWrite(t, path+".tmp", raw, 0644)
+			err = os.Rename(path+".tmp", path)
+		case "cache-timestamp", "plugin-lock-timestamp":
 			err = os.Chtimes(path, start, start)
-		} else {
+		default:
 			err = os.WriteFile(path, []byte("late unvalidated bytes"), 0644)
 		}
 		if err != nil {
