@@ -58,6 +58,56 @@ function decodeReference(record = referenceRecord()) {
   )[0]!;
 }
 describe('SkillSpector v3 exact producer contract', () => {
+  it('accepts a 17,715-root inventory without changing published evidence or per-plugin coverage', () => {
+    const published = JSON.parse(
+      readFileSync(new URL('./fixtures/skillspector-v3-published-home/index.json', import.meta.url), 'utf8'),
+    ) as SkillSpectorManifestV3;
+    const expanded = structuredClone(published);
+    const addedRoots = 17_715 - expanded.coverage.selected;
+    assert.ok(addedRoots > 0);
+    expanded.coverage.selected += addedRoots;
+    expanded.coverage.pending += addedRoots;
+    const decoded = decodeSkillSpectorManifestV3(expanded);
+    assert.equal(decoded.coverage.selected, 17_715);
+    assert.equal(decoded.coverage.reported, published.coverage.reported);
+    assert.deepEqual(decoded.shards, published.shards);
+    assert.deepEqual(decoded.plugin_coverage, published.plugin_coverage);
+    assert.deepEqual(decoded.source_states, published.source_states);
+  });
+
+  it('bounds v3 global and plugin coverage at 20,000 roots while preserving arithmetic', () => {
+    const bounded = structuredClone(manifest);
+    const addedRoots = 20_000 - bounded.coverage.selected;
+    bounded.coverage.selected += addedRoots;
+    bounded.coverage.pending += addedRoots;
+    bounded.plugin_coverage[0]!.selected += addedRoots;
+    bounded.plugin_coverage[0]!.pending += addedRoots;
+    assert.equal(decodeSkillSpectorManifestV3(bounded).coverage.selected, 20_000);
+    assert.equal(decodeSkillSpectorManifestV3(bounded).plugin_coverage[0]!.selected, 20_000);
+    const over = structuredClone(bounded);
+    over.coverage.selected++;
+    over.coverage.pending++;
+    assert.throws(() => decodeSkillSpectorManifestV3(over), /invalid/);
+    const inconsistent = structuredClone(bounded);
+    inconsistent.coverage.pending--;
+    assert.throws(() => decodeSkillSpectorManifestV3(inconsistent), /invalid/);
+  });
+
+  it('allows 10,000 listing observations plus 20,000 inventory states but rejects a 30,001st state', () => {
+    const combined = structuredClone(manifest);
+    const seed = combined.source_states[0]!;
+    combined.source_states = Array.from({ length: 30_000 }, (_, index) => ({
+      ...seed,
+      id: `inventory-or-listing-${index}`,
+    }));
+    assert.equal(decodeSkillSpectorManifestV3(combined).source_states.length, 30_000);
+    combined.source_states.push({ ...seed, id: 'over-source-state-budget' });
+    assert.throws(() => decodeSkillSpectorManifestV3(combined), /invalid/);
+    const packages = structuredClone(manifest);
+    packages.plugin_states = Array.from({ length: 10_001 }, () => ({ ...packages.plugin_states[0]! }));
+    assert.throws(() => decodeSkillSpectorManifestV3(packages), /invalid/);
+  });
+
   it('accepts actual complete reports with resolved and external reference context', () => {
     const fixture = JSON.parse(
       readFileSync(
