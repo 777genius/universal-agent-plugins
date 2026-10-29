@@ -41,6 +41,7 @@ type cursorProjectAttempt struct {
 	held                                           map[string]cursorProjectHeld
 	runtimeRoot                                    string
 	runtimeMembers                                 map[string]string
+	approvalParents                                map[string]os.FileInfo
 	absent                                         []string
 	evidence                                       map[string]any
 }
@@ -56,6 +57,8 @@ func (f *cursorProjectAttempt) commands() []cursorProjectCommand {
 		{"empty-outside-mcp", f.outside, []string{f.client, "mcp", "list"}},
 		{"add-a", a, []string{f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", a, "--target", "cursor", "--format", "json"}},
 		{"native-attempt", a, []string{f.client, "mcp", "list"}},
+		{"approve-a-mcp", a, []string{f.client, "mcp", "enable", "uapcursora"}},
+		{"native-tools-a", a, []string{f.client, "mcp", "list-tools", "uapcursora"}},
 		{"control-b-mcp", f.other, []string{f.client, "mcp", "list"}},
 		{"control-outside-mcp", f.outside, []string{f.client, "mcp", "list"}},
 	}
@@ -73,6 +76,9 @@ func (f *cursorProjectAttempt) hold(path string) error {
 	return nil
 }
 func (f *cursorProjectAttempt) check() error {
+	if err := f.checkApprovalParents(); err != nil {
+		return err
+	}
 	if f.runtimeRoot != "" {
 		if err := f.runtimeClosure(); err != nil {
 			return err
@@ -99,7 +105,7 @@ func (f *cursorProjectAttempt) keep(t *testing.T, name string, body []byte) {
 		total += len(previous)
 	}
 	_, exists := f.files[name]
-	if filepath.Base(name) != name || exists || len(f.files) >= 32 || len(body) > 1<<20 || total > 16<<20 {
+	if filepath.Base(name) != name || exists || len(f.files) >= 38 || len(body) > 1<<20 || total > 16<<20 {
 		t.Fatal("Cursor closed capture bound")
 	}
 	f.files[name] = body
@@ -118,6 +124,14 @@ func (f *cursorProjectAttempt) command(t *testing.T, command cursorProjectComman
 	f.keep(t, command.label+".command.json", receipt)
 	f.keep(t, command.label+".stdout.log", result.Stdout)
 	f.keep(t, command.label+".stderr.log", result.Stderr)
+	if command.label == "approve-a-mcp" {
+		if err != nil || ctx.Err() != nil || result.ExitCode != 0 {
+			t.Fatal("Cursor exact owned MCP approval command failed")
+		}
+		if err := f.acceptApproval(); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := f.check(); err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +181,12 @@ func newCursorProjectAttempt(t *testing.T) *cursorProjectAttempt {
 		}
 	}
 	f.absent = []string{filepath.Join(f.base.Home, ".cursor", "mcp.json"), filepath.Join(f.other, ".cursor", "mcp.json"), filepath.Join(f.outside, ".cursor", "mcp.json"), filepath.Join(f.base.Root, ".cursor", "mcp.json")}
-	f.evidence["other_source_absent"] = f.absent
+	f.evidence["other_source_absent"] = append([]string(nil), f.absent...)
+	for _, project := range []string{f.base.Project, f.other, f.outside} {
+		directory := cursorApprovalDirectory(f.base.Home, project)
+		f.absent = append(f.absent, filepath.Join(directory, "mcp-approvals.json"), filepath.Join(directory, "mcp-disabled.json"))
+	}
+	f.evidence["approval_controls_initially_absent"] = append([]string(nil), f.absent[4:]...)
 	scanner := nativeProvisionScanner(t, f.base)
 	f.evidence["scanner"] = scanner
 	if err := f.hold(filepath.Join(f.base.Root, "installer-state", "security", "lintai", "0.1.3", scanner["platform"], "lintai")); err != nil {
@@ -247,5 +266,5 @@ func TestAgentpluginsCursorNativeProjectRuntimeAttempt(t *testing.T) {
 			f.installed(t, result.Stdout)
 		}
 	}
-	t.Fatal("Cursor first installed MCP capture requires independent raw review; all runtime qualifications remain false")
+	t.Fatal("Cursor approved MCP tools capture requires independent raw review; all runtime qualifications remain false")
 }

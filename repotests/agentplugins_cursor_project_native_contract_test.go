@@ -20,6 +20,8 @@ func TestCursorProjectCaptureCommandAuthority(t *testing.T) {
 		{"empty-outside-mcp", "/owned/outside", []string{"/pin/dist-package/cursor-agent", "mcp", "list"}},
 		{"add-a", "/owned/A", []string{"/owned/installer", "add", "/owned/source", "--no-save", "--scope", "project", "--project-root", "/owned/A", "--target", "cursor", "--format", "json"}},
 		{"native-attempt", "/owned/A", []string{"/pin/dist-package/cursor-agent", "mcp", "list"}},
+		{"approve-a-mcp", "/owned/A", []string{"/pin/dist-package/cursor-agent", "mcp", "enable", "uapcursora"}},
+		{"native-tools-a", "/owned/A", []string{"/pin/dist-package/cursor-agent", "mcp", "list-tools", "uapcursora"}},
 		{"control-b-mcp", "/owned/B", []string{"/pin/dist-package/cursor-agent", "mcp", "list"}},
 		{"control-outside-mcp", "/owned/outside", []string{"/pin/dist-package/cursor-agent", "mcp", "list"}},
 	}

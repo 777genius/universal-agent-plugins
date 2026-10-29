@@ -77,7 +77,7 @@ class RuntimeTests(unittest.TestCase):
             test.write_text("func Other(t *testing.T) {}")
             with self.assertRaises(ValueError):
                 runtime.selected_cases()
-            test.write_text("func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T) {\n}")
+            test.write_text("func " + runtime.CASES["copilot"]["test"] + "(t *testing.T) {\n}")
             self.assertEqual(runtime.selected_cases(), {"include": [{"client": "copilot", "phase": "runtime-attempt"}]})
 
     def test_host_guard_runs_before_creating_output_or_native_child(self):
@@ -86,6 +86,26 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 runtime.run("copilot", path)
             self.assertFalse(path.exists())
+
+    def test_copilot_full_inert_process_gate_precedes_native_matrix(self):
+        workflow = (Path(__file__).resolve().parent.parent /
+                    ".github/workflows/project-native-runtime.yml").read_text()
+        contracts, native = workflow.split("\n  native:\n", 1)
+        prepare = "      - name: Prepare pinned Go for selected Copilot inert process contracts\n"
+        execute = "      - name: Verify selected Copilot inert process contracts before native execution\n"
+        selection, toolchain = contracts.split(prepare, 1)
+        toolchain, gate = toolchain.split(execute, 1)
+        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') }}\n"
+        self.assertIn("        id: selection\n", selection)
+        self.assertTrue(toolchain.startswith(condition))
+        self.assertTrue(gate.startswith(condition))
+        self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", toolchain)
+        self.assertIn("          go-version: '1.26.10'\n          cache: false\n", toolchain)
+        self.assertEqual(gate.removeprefix(condition).strip(),
+                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'")
+        self.assertIn("    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n", contracts)
+        self.assertNotIn("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED", contracts)
+        self.assertIn("    needs: contracts\n", native)
 
     def test_json_rejects_nonfinite_numbers_and_duplicate_keys(self):
         for body in (b'{"x":1e999}', b'{"x":-1e999}', b'{"x":NaN}', b'{"x":1,"x":2}'):

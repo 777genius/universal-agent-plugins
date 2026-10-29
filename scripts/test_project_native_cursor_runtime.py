@@ -21,7 +21,8 @@ class CursorRuntimeTests(unittest.TestCase):
             "test": "TestAgentpluginsCursorNativeProjectRuntimeAttempt",
             "file": "repotests/agentplugins_cursor_project_native_attempt_test.go",
             "optin": "AGENTPLUGINS_CURSOR_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"})
-        labels = ("empty-a-mcp", "empty-b-mcp", "empty-outside-mcp", "control-b-mcp", "control-outside-mcp")
+        labels = ("empty-a-mcp", "empty-b-mcp", "empty-outside-mcp", "control-b-mcp", "control-outside-mcp",
+                  "approve-a-mcp", "native-tools-a")
         row = {"argv": ["/pin/cursor-agent", "mcp", "list"], "cwd": "/owned/A", "exit": 0,
                "error": False, "deadline": False, "elapsed_ms": 1,
                "cleanup": "full descendant supervision; forced cleanup fails"}

@@ -33,8 +33,8 @@ CASES = {
               "file": "repotests/agentplugins_cline_cycle_lifecycle_test.go",
               "optin": "AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
               "phase": "runtime-attempt"},
-    "copilot": {"test": "TestAgentpluginsCopilotNativeProjectRuntimeAttempt",
-                "file": "repotests/agentplugins_copilot_project_native_attempt_test.go",
+    "copilot": {"test": "TestAgentpluginsCopilotNativeProjectCompleteCycle",
+                "file": "repotests/agentplugins_copilot_cycle_lifecycle_test.go",
                 "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
                 "phase": "runtime-attempt"},
     "gemini": {"test": "TestAgentpluginsGeminiNativeProjectCompleteCycle",
@@ -142,6 +142,23 @@ def attempt_members(bodies, source, client="copilot"):
         if envelope["capture_mode"] == complete_mode:
             return complete_members(bodies, source, envelope)
         raise ValueError("unregistered native attempt capture mode")
+    if client == "copilot" and "runtime-attempt.json" in bodies:
+        result = strict_json(bodies["runtime-attempt.json"])
+        if isinstance(result, dict) and result.get("mode") == "copilot-project-complete-cycle":
+            from project_native_copilot_cycle import members
+            return members(bodies, source)
+        if isinstance(result, dict) and result.get("mode") == "copilot-installed-tool-readiness":
+            from project_native_copilot_readiness import members
+            return members(bodies, source)
+        if isinstance(result, dict) and result.get("mode") == "copilot-user-registry-first-capture":
+            from project_native_copilot_user import members
+            return members(bodies, source)
+        if isinstance(result, dict) and result.get("mode") == "copilot-empty-registry-first-capture":
+            from project_native_copilot_empty_registry import members
+            return members(bodies, source)
+        if isinstance(result, dict) and result.get("mode") == "copilot-post-add-registry-first-capture":
+            from project_native_copilot_post_add_registry import members
+            return members(bodies, source)
     required = {"runtime-attempt.json"}
     installed = {"copilot": {"mcp.json.installed", "uapcopilota-SKILL.md.installed"},
                  "gemini": {".gemini-settings.json.installed", "uapgeminia-SKILL.md.installed"}}
@@ -303,7 +320,8 @@ def cli_attempt_members(bodies, source, client):
     allowed = {"runtime-attempt.json", "probe-events.jsonl"}
     commands = CLI_COMMANDS + (("native-catalog",) if client == "qoder" else ())
     if client == "cursor":
-        commands += ("empty-a-mcp", "empty-b-mcp", "empty-outside-mcp", "control-b-mcp", "control-outside-mcp")
+        commands += ("empty-a-mcp", "empty-b-mcp", "empty-outside-mcp", "control-b-mcp", "control-outside-mcp",
+                     "approve-a-mcp", "native-tools-a")
     for label in commands:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple

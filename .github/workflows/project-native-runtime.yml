@@ -43,6 +43,15 @@ jobs:
               output.write('count=' + str(len(matrix['include'])) + '\n')
           print(value)
           PYTHON
+      - name: Prepare pinned Go for selected Copilot inert process contracts
+        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.10'
+          cache: false
+      - name: Verify selected Copilot inert process contracts before native execution
+        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') }}
+        run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'
   native:
     name: ${{ matrix.client }} / ${{ matrix.phase }} / installed public CLI
     needs: contracts
