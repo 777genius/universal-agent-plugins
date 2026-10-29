@@ -345,7 +345,11 @@ GitHub Copilot CLI 1.0.103, Grok 1.0.67 and Qoder 1.1.78. Cline's own
 `config skills --json` and Gemini's `skills list` must observe the exact installed
 Skill bytes. Copilot, Grok and Qoder are checked through fresh native plugin and
 Skill inventories. Their version, enabled state, identity and owned package/cache
-paths must agree. When removal requires external uninstall, the example performs
+paths must agree. Copilot's admitted route supports Skills while portable commands
+remain unsupported: the journey verifies the exact fixture Skill and absence of
+both fixture commands. Other clients also verify the exact rendered portable
+command bytes and withhold the explicit-only command.
+When removal requires external uninstall, the example performs
 the exact native uninstall, verifies fresh absence, then prepares a new SDK review
 with the explicit attestation.
 

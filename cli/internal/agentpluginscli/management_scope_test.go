@@ -78,3 +78,22 @@ func TestManagementNativeProjectionAcceptsOwnedWindsurfMCPEntry(t *testing.T) {
 		t.Fatal("private artifact alone proved profile")
 	}
 }
+
+func TestManagementCopilotUserBindingRequiresRecordedProfile(t *testing.T) {
+	profile, err := managementAbsolute(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := domain.ClientBinding{ClientID: "copilot", ClientBindingID: "copilot-owned", Scope: "user", NativeProfileRoot: profile, TargetLocator: filepath.Join(t.TempDir(), "private-marketplace")}
+	if !managementBindingInProfile(binding, profile) {
+		t.Fatal("new Copilot binding did not retain captured profile authority")
+	}
+	if managementBindingInProfile(binding, t.TempDir()) {
+		t.Fatal("foreign profile inherited Copilot registration")
+	}
+	binding.NativeProfileRoot = ""
+	binding.NativeObjects = []domain.NativeObjectOwnership{{Kind: "managed_package_directory", Path: binding.TargetLocator, ProtectionClass: "managed"}}
+	if managementBindingInProfile(binding, profile) {
+		t.Fatal("legacy private artifact was adopted as Copilot profile authority")
+	}
+}

@@ -123,10 +123,16 @@ async function verifyNativeGuide() {
   const { skills: found } = await nativeObservation();
   const guide = found.get('fixture-guide');
   assert.ok(guide, `Real ${nativeClient} did not load the captured fixture Skill`);
-  assert.ok(found.has('uap-commands-fixture-echo'), `Real ${nativeClient} did not load the portable command Skill`);
   assert.equal(found.has('uap-commands-fixture-wizard'), false, 'Explicit-only command leaked into native automatic Skills');
   const fixture = await readFile(new URL('../../../repotests/testdata/agentplugins_commands_fixture/skills/fixture-guide/SKILL.md', import.meta.url));
   assert.deepEqual(await readFile(guide), fixture, 'Native consumer location must contain the pinned fixture bytes');
+  if (nativeClient === 'copilot') {
+    // Copilot admits Skills but its registered portable command support is
+    // unsupported. Both fixture commands must remain withheld by the planner.
+    assert.equal(found.has('uap-commands-fixture-echo'), false, 'Unsupported portable command leaked into Copilot native Skills');
+    return;
+  }
+  assert.ok(found.has('uap-commands-fixture-echo'), `Real ${nativeClient} did not load the portable command Skill`);
   const command = await readFile(new URL('../../../repotests/testdata/agentplugins_commands_fixture/io.github.777genius.agentplugins/commands/echo.md', import.meta.url), 'utf8');
   const header = /^---\n([\s\S]*?)\n---\n/.exec(command);
   assert.ok(header);
@@ -256,7 +262,9 @@ try {
   for (const filename of ownedPaths) await stat(filename);
   if (!separateSkills) managedArtifact = await ownedArtifact(ownedPaths);
   await verifyNativeGuide();
-  await checkpoint('native consumer verified', `real ${nativeClient} native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld`);
+  await checkpoint('native consumer verified', nativeClient === 'copilot'
+    ? 'real copilot native discovery loads exact pinned Skill bytes; unsupported portable and explicit-only commands remain withheld'
+    : `real ${nativeClient} native discovery loads exact pinned Skill bytes and portable command; explicit-only command remains withheld`);
   const manifestPath = join(root, 'dependencies', 'uap.toml');
   const lockPath = join(root, 'dependencies', 'uap.lock');
   const [manifestBefore, lockBefore] = await Promise.all([readFile(manifestPath), readFile(lockPath)]);

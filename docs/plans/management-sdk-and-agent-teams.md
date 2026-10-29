@@ -19,12 +19,16 @@ Those receipts remain tied to their original source.
 
 This continuation adds local pinned HTTPS fixture journeys for Cline and Gemini
 native Skills, Pi native extension auto-discovery, and the existing Kimi/Kiro/
-Windsurf SDK configuration lifecycles. Four real regressions are repaired:
+Windsurf SDK configuration lifecycles. Five real regressions are repaired:
 legacy user native-config attempts remain inspectable; read-only Cline preparation
 refusals report unchanged native state; owned Windsurf MCP entries prove the captured
 Management profile; Copilot's actual built-in plugin section no longer makes its
-user plugin inventory unrecognizable. The Copilot correction is confined to its
-adapter and retains the native runner's tree containment and error evidence.
+user plugin inventory unrecognizable; new Copilot user bindings retain their
+captured native profile so subsequent SDK operations can prove that same context.
+The inventory correction is confined to Copilot's adapter and retains the native
+runner's tree containment and error evidence. Profile recording applies only to
+a missing Copilot user binding; existing legacy or shared sibling bindings never
+acquire new proof. Management's foreign/missing-profile refusal remains unchanged.
 Selected/project recovery authority and later mutation failure semantics remain
 unchanged.
 
@@ -55,8 +59,18 @@ hashes. It uses a disposable hosted Ubuntu 24.04 runner after the shared AMD64
 pool had no active runners and left the native jobs unassigned; repository-wide
 runner variables and other workflows are unchanged.
 [PR #566](https://github.com/777genius/universal-agent-plugins/pull/566)
-records the current three-client results and required repository checks. Independent
-review reported no remaining P1/P2 finding; execution gates remain authoritative.
+records the current three-client results and required repository checks. On clean
+source `259fddb621c654c333ccc9b7dad78457aeca6d60`, Grok and Qoder each passed all
+eleven SDK lifecycle operations and fresh native observations in
+[run 40937772324](https://github.com/777genius/universal-agent-plugins/actions/runs/40937772324);
+the [verified receipt](../evidence/management-sdk/grok-qoder-linux-259fddb621c6.json)
+retains that exact source and its artifact boundaries. Copilot's first actual SDK
+run exposed the missing captured profile and an incorrect test expectation:
+Copilot's existing portable command support is unsupported. Its corrected journey
+must verify exact fixture Skill bytes and absence of both fixture commands through
+the full lifecycle; other clients retain exact portable command byte checks.
+Independent review reported no remaining P1/P2 finding; execution gates remain
+authoritative and the fresh Copilot result is recorded in the PR.
 The later Copilot correction has its own actual local
 [1.0.103 inventory evidence](../evidence/management-sdk/copilot-1.0.103-linux-listing.json)
 and adapter regressions; that diagnostic is not relabeled as a full SDK journey.

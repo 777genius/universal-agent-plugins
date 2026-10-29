@@ -17,6 +17,7 @@ on:
       - 'install/integrationctl/agentplugins/clients/cline/lifecycle.go'
       - 'install/integrationctl/agentplugins/clients/copilot/**'
       - 'install/integrationctl/agentplugins/installer/native_recovery*'
+      - 'install/integrationctl/agentplugins/usecase/installation.go'
       - '.github/workflows/management-sdk-packages.yml'
   workflow_dispatch:
 
