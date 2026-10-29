@@ -138,7 +138,13 @@ func windPublicProfileClosure(before, after map[string]windProfileRecord, scope 
 }
 func (w *windComponentFixture) gitFreeze(label string) error {
 	r := w.recipes[strings.TrimPrefix(label, "git-")]
+	if (label != "git-a" && label != "git-b") || r == nil {
+		return fmt.Errorf("selected initial Git setup required")
+	}
 	path := filepath.Join(r.Project, ".git")
+	if _, frozen := w.trees[path]; frozen {
+		return fmt.Errorf("Git authority already frozen")
+	}
 	info, err := os.Lstat(path)
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("ordinary Git directory required")
@@ -150,6 +156,15 @@ func (w *windComponentFixture) gitFreeze(label string) error {
 	after, err := windOwnedTree(w.f.ctx, r.Project)
 	if err != nil || windCWDMutation(w.trees[r.Project], after, "git") != nil {
 		return fmt.Errorf("Git setup escaped exact .git closure")
+	}
+	record, err := windGitExcludePrepare(filepath.Join(path, "info"), tree["info/exclude"])
+	if err != nil {
+		return err
+	}
+	tree["info/exclude"] = record
+	after[".git/info/exclude"] = record
+	if err = windFrozenTrees(w.f.ctx, map[string]map[string]windProfileRecord{path: tree, r.Project: after}); err != nil {
+		return err
 	}
 	w.trees[path] = tree
 	w.trees[r.Project] = after
