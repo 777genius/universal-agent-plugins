@@ -2,8 +2,10 @@
 
 Date: 2026-10-29. Branch: `feat/catalog-install-journey-20261029`.
 Base: `ec85ee7d759944b9799e451c96bfc1859f9d5533`.
-Status: two independent critique-and-correction rounds completed; implementation
-waits for the parent's publication and gate accounting.
+Status: two independent plan rounds completed and implementation approved.
+Source is implemented through `b11b5e9`; current main `60967b8` was integrated by
+normal merge `b485cf41abfb179e59960f33e4afbd958024d659`. Final integrated browser,
+visual, and type verification awaits the coordinated resource window.
 
 ## Outcome and boundaries
 
@@ -126,6 +128,14 @@ Owned production files: `landing/utils/commands.ts`,
 existing models; avoid its security and general visual sections. Do not change
 the capability generator, native adapters, or generated client metadata.
 
+Implementation uses three small shared files within these existing seams:
+`composables/usePluginInstallSelection.ts` owns the duplicated card/detail state
+policy; `components/registry/InstallScopeSelect.vue` shares the compact control;
+`components/registry/InstallOutcome.vue` shares resolved-release next steps. These
+replace repeated selection/watch/presentation code rather than introduce a new
+installer or state subsystem. The active homepage consumes the same registry
+cards; the unreachable legacy section was not expanded.
+
 Owned tests: focused command/scope/resolver/preference tests in `landing/tests/`,
 one focused browser journey spec plus minimal fixture additions under
 `landing/tests/browser/` and `landing/tests/fixtures/`. Do not regenerate large
@@ -195,7 +205,48 @@ the separate early draft PR. Do not touch other worktrees or remote refs.
 | Reconnaissance correction | Follow-up plan commit | Active homepage shares registry cards; legacy install section is unreachable; no generator changes; explicit project/auto transition and all-release target availability | Before independent review |
 | Independent plan round 1 | `/root/versions_owner`, current plan `2f8ddcf` | Required: exact project scope on every lifecycle command; preserve whole-alias target semantics; explicit same-package invalidation must never fall back to user commands. Nonblocking: preserve third Boolean API argument. All accepted and specified above in this correction. Parent coordinates gate accounting. | Review received and corrections committed; no source edits |
 | Independent plan round 2 | `/root/versions_owner`, corrected plan `35cc888` | Rechecked resolver/release scope facts and active card/detail consumers. All R1 corrections reflected; no remaining material plan defect. No generator/native/API expansion justified. Approved subject to parent publication/gate accounting; no further correction required. | Approved; no source edits before parent gate |
-| Early draft PR | Parent publishes initial plan commit | Separate from versions/outdated PR | Pending |
-| Implementation commits | Parent publishes each checkpoint | Preserve overlap boundaries | Pending |
-| Independent code review | Parent assigns reviewer | Resolve correctness, UX, architecture, and test findings | Pending |
-| Final draft handoff | Parent updates PR | Evidence, scope, limitations; no deploy/release | Pending |
+| Early draft PR | [PR 564](https://github.com/777genius/universal-agent-plugins/pull/564) | Separate from versions/outdated PR; published before implementation | Complete |
+| Implementation commits | Parent publishes each checkpoint below | Preserve overlap boundaries; remote mirror trees verified equal | Complete through `b11b5e9` |
+| Independent code review round 1 | `/root/plan_code_critic` reviewed `8f203c1`, `f4fbc5f`, `9497bf0`, and `b11b5e9` | No material source defect. Required actual picker recovery is authored and ran in the first successful browser pass; final corrected/integrated run remains required. Visual findings were fixed as described below. | Source approved; final evidence pending |
+| Independent code review round 2 | `/root/plan_code_critic` after integrated verification | Exact final browser/type/visual evidence required; authored cases alone are not passes | Pending |
+| Final draft handoff | Parent updates PR | Evidence, scope, limitations; no deploy/release | Pending final verification |
+
+## Implementation and evidence checkpoints
+
+| Local checkpoint | Result |
+| --- | --- |
+| `8f203c1` | Shared scoped command construction and optional release scope eligibility; legacy facade aligned; source safety and saved alias management preserved |
+| `f4fbc5f` | Shared card/detail selection policy, controls, invalidation and selected-release outcomes; nine locales and preference contracts |
+| `9497bf0` | Four focused browser cases, missing-scope refusal and existing remote app-binding source boundary; no client capability map added |
+| `b11b5e9` | Visual findings corrected: project saved notice and scoped status command; explicit card header agrees with selected release; duplicate component presentation removed |
+| `b485cf4` | Parent integrated current main `60967b8` with a normal two-parent merge; PR 561 security wording and PR 562 CTA/auth position changes preserved without conflict |
+
+The first visual inspection exposed two real inconsistencies. A project command
+still displayed the old saved-for-user notice, including an unscoped status
+example. It now says that the agreement is in this project and shows
+`deps status --scope project`, in all nine locales, while user wording remains
+unchanged. The card header also counted delivery modes from the default release
+while the expanded outcome used a project fallback. Explicit selection now
+derives both from the winning release's selected targets. Unit and browser
+assertions cover these corrections.
+
+| Verification | Exact outcome so far |
+| --- | --- |
+| Landing unit suite, `node --experimental-strip-types --test --test-isolation=none tests/*.test.ts` | 337 passed at `f4fbc5f`; no failures/skips |
+| Focused command/scope/resolver/preference checks | 19 passed after the `9497bf0` guard; 8 preference tests passed after `b11b5e9`, including the new header regression |
+| `node --experimental-strip-types scripts/check-i18n.mjs` | Passed for all nine active locales after the project notice correction |
+| `nuxt prepare` | Passed using read-only existing dependencies and an already verified registry mirror |
+| ESLint for edited production files | Zero errors; one existing `img` self-closing warning in the untouched card identity markup |
+| `vue-tsc --noEmit` | First full check ended with exit 137 and no compiler diagnostic during shared cgroup pressure; final integrated attempt pending |
+| Browser authoring/listing | Four focused cases compile/list: desktop and mobile real-picker recovery, lifecycle clipboard bytes, card/detail/back and locale remount, and feed-withdrawal refusal/recovery |
+| Initial browser attempt | Renderer crashed before loading the application; shared `oom_kill` counter rose from 20 to 21. Not counted as a functional result |
+| Coordinated first browser run on `9497bf0` | Four cases passed in 1.3 minutes, one worker; `oom_kill` remained 21 during that run |
+| Initial visual artifacts | Inspected, produced the two corrected wording findings above. Not accepted as final visual evidence: reused dependency realpaths triggered Vite CSS allow-list warnings, and one mobile capture occurred during a visual transition |
+| Final integrated browser/visual run | Pending on the merged corrected tree, using only a local ignored harness that permits the task root and the precise reused `node_modules` realpath; no production serving guard change |
+
+Resource qualification is explicit: the shared filesystem reached zero free
+space and the cgroup has an 8 GiB memory limit, including unrelated retained
+tmpfs. Dependency/mirror reuse and single-worker verification avoid creating
+another installation or broad test matrix. No foreign artifacts were deleted.
+Temporary local harnesses and runtime symlinks are not deliverables and are not
+committed. This PR is a draft implementation, not a release or deployment claim.
