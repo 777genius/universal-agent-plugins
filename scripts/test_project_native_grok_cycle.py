@@ -178,7 +178,7 @@ def container():
                 selected.append(("uap-grok-cycle-" + who, "project", p["binding"]["target_locator"], p["revision"] + " " + NONCE, True))
         plugins = [{"name": name, "scope": scope, "path": path, "enabled": True, "provides": {"skills": 1, "agents": 0, "hooks": False, "mcpServers": 0}} for name, scope, path, _, _ in selected]
         skills = [{"name": name, "description": desc, "source": {"type": "plugin", "plugin_name": name, "path": path + "/./skills/" + name + "/SKILL.md"}, "userInvocable": True} for name, _, path, desc, enabled in selected if enabled]
-        out = raw({"grokVersion": "1.0.70", "cwd": cwd, "projectRoot": cwd + "/", "projectTrusted": who != "outside", "mcpServers": [], "plugins": plugins, "skills": skills})
+        out = raw({"grokVersion": "1.0.70", "cwd": cwd, "projectRoot": cwd + "/", "projectTrusted": True, "mcpServers": [], "plugins": plugins, "skills": skills})
         inspections.append({"stage": stage, "value": command(["/held/grok", "inspect", "--json"], cwd, out)})
     result = {"client": "grok", "version": "1.0.70", "capture_mode": cycle.MODE, "attempt_stage": "complete-cycle", "runtime_attempt_complete": True,
               "activation": "prepared", "vendor_authentication_qualified": False, "real_model_qualified": False, "test_failed": False, "cycle_observed_complete": True, "elapsed_ms": 1000,
@@ -202,6 +202,25 @@ class GrokCycleContracts(unittest.TestCase):
         self.assertEqual(len(bodies), 4)
         self.assertFalse(result["real_model_qualified"])
         self.assertFalse(result["vendor_authentication_qualified"])
+
+    def test_empty_outside_requires_exact_provisional_allow_without_durable_grant(self):
+        paths, proof = inputs()
+        trust_path = paths["home"] + "/.grok/trusted_folders.toml"
+        trust = cycle.stream(proof["fixture"]["fixed"][trust_path]["."]["content"])
+        expected = "".join('[folders."' + paths[key] + '"]\ntrusted = true\n' for key in ("project_a", "project_b")).encode()
+        self.assertEqual(trust, expected)
+        self.assertNotIn(paths["outside"].encode(), trust)
+        for stage in (stage for stage in cycle.INSPECT if stage.endswith("outside")):
+            bodies = container()
+            rows = [cycle.load(line) for line in bodies[cycle.MEMBERS[1]].splitlines()]
+            row = next(row for row in rows if row["stage"] == stage)
+            inspection = cycle.load(cycle.stream(row["value"]["stdout"]))
+            self.assertIs(inspection["projectTrusted"], True)
+            inspection["projectTrusted"] = False
+            row["value"]["stdout"] = stream(raw(inspection))
+            bodies[cycle.MEMBERS[1]] = b"".join(raw(row) + b"\n" for row in rows)
+            with self.subTest(stage=stage), self.assertRaises(ValueError):
+                runtime.cli_attempt_members(bodies, SOURCE, "grok")
 
     def test_missing_stage_failed_command_forged_qualification_and_foreign_scope_refuse(self):
         for fault in ("stage", "command", "cwd", "elapsed", "flag", "source", "extra", "missing-proof", "native-absent", "public-id"):

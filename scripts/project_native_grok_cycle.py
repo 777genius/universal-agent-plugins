@@ -458,7 +458,9 @@ def complete(public, inspections, proof_rows):
                 key = "add-b" if scope == "b" else "update-a" if stage in ("updated-a", "damaged-a", "repaired-a") else "add-a"
                 selected = proof[key]
                 expected.append(("uap-grok-cycle-" + scope, "project", selected["binding"]["target_locator"], selected["revision"] + " " + nonce, 1, True))
-        inspect(raw, cwd, scope != "outside", expected)
+        # Empty outside reports the native provisional no-config allow; the
+        # separately validated durable trust-store recipe still contains A/B only.
+        inspect(raw, cwd, True, expected)
         elapsed += row["elapsed_ms"]
     return client, elapsed
 
